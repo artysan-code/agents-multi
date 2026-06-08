@@ -162,3 +162,25 @@ qual è quella attiva).
    ```
 6. Lancia `claude-work` → `/login` con account Agency
 7. Lancia `claude-personal` → `/login` con account personale
+
+## Tassonomia Agent & Command
+
+### Struttura a 3 livelli
+
+| Livello | Path | Scope | Meccanismo |
+|---------|------|-------|------------|
+| L1 Generici condivisi | `shared/agents/` e `shared/commands/` | Tutti i profili (work + personal) | Dir reale; i file qui sono visibili a ogni profilo che symlinka verso `shared/` |
+| L2 Specifici di profilo | `work/agents/` e `work/commands/` | Solo profilo work | Dir reale che contiene **symlink selettivi** verso `../../shared/agents/<file>`. `personal/agents` resta symlink diretto a `shared/agents` (personal prende tutto) |
+| L3 Specifici di progetto | `<progetto>/.claude/commands/` | Singolo progetto | File reali versionati nel repo; per comandi che usano stato live del progetto (DB, env) |
+
+### Come aggiungere un nuovo agente
+
+1. Metti il file `.md` in `shared/agents/<nome>.md` (applica il trim dei tool se dichiara Write/Edit ma è solo audit read-only).
+2. Se l'agente è specifico dello stack work (TS/pnpm/Drizzle/React), crea il symlink `work/agents/<nome>.md -> ../../shared/agents/<nome>.md`.
+3. Se è solo personal, salta lo step 2 (personal symlinka già tutto `shared/agents`).
+4. Se NON deve comparire in personal, mettilo come **file reale** in `work/agents/` (non symlink) invece che in `shared/`.
+5. Non mettere mai agenti direttamente in `personal/agents/` — è un symlink a `shared/agents`, non puoi aggiungere file lì.
+
+### Invariante symlink
+
+`work/skills` è l'implementazione di riferimento: dir reale con symlink selettivi. `work/agents` e `work/commands` replicano questo pattern dal 2026-06-08.
