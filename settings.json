@@ -175,6 +175,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node ~/.claude-multi/shared/hooks/cost-tracker.js"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash ~/.claude-multi/shared/hooks/session-persist.sh"
           }
         ]
