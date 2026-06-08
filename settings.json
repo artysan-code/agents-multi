@@ -123,12 +123,41 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/typecheck-after-edit.sh"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "bash ~/.claude-multi/shared/hooks/serena-bootstrap.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/kb-nudge.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/pre-compact.sh"
           }
         ]
       }
@@ -139,6 +168,14 @@
           {
             "type": "command",
             "command": "bash ~/.claude-multi/shared/hooks/notify-stop.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/session-persist.sh"
           }
         ]
       }
