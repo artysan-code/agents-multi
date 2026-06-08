@@ -184,3 +184,13 @@ qual è quella attiva).
 ### Invariante symlink
 
 `work/skills` è l'implementazione di riferimento: dir reale con symlink selettivi. `work/agents` e `work/commands` replicano questo pattern dal 2026-06-08.
+
+## Knowledge Base operativa (R7) — `~/brains/claude/`
+
+Vault LLM-wiki (Karpathy) con il knowledge **cross-progetto** per lavorare con questo setup: profilo Samuel, brief per-progetto, playbook operativi, e il **catalogo di agenti/skill/plugin NON caricati**. È ciò che rende possibile il setup *lean* (~7 agenti core): invece di pre-caricare tutto, si interroga la KB.
+
+- **Dove**: `~/brains/claude/` (fuori da `~/.claude-multi`, NON syncato come la config; è una vault Obsidian a sé, sorella di `brains/main`).
+- **Come si usa**: l'hook SessionStart `kb-nudge.sh` ricorda a ogni avvio che la KB esiste e nomina il brief del progetto corrente. Interrogala con la skill `wiki-query` (vault `~/brains/claude`) o leggi `index.md`.
+- **Contratto di separazione**: sta *sopra* CLAUDE.md di progetto e auto-memory (vedi `~/brains/claude/CONVENTIONS.md`). Cross-progetto qui; specifico-repo nel CLAUDE.md; fatti di sessione in auto-memory.
+- **Manutenzione** (manuale, on-demand): aggiungi pagine via `/wiki-ingest` quando hai un nuovo CLAUDE.md / post-mortem / agente da catalogare; `/wiki-lint` mensile da `~/brains/claude/`.
+- **Cuore lean**: `references/{ecc-agents-catalog,ecc-skills-catalog,anthropic-plugins-catalog}.md` — "quando usare cosa".
