@@ -1,0 +1,145 @@
+{
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh api:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh repo:*)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(ssh nuclear-reactor:*)",
+      "Bash(scp:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm update:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(pnpm tsx:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm info:*)",
+      "Bash(pnpm view:*)",
+      "Bash(pnpm search:*)",
+      "Bash(pnpm drizzle-kit:*)",
+      "Bash(pnpm --version)",
+      "Bash(npm view:*)",
+      "Bash(npm audit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(uvx:*)",
+      "Bash(cd:*)",
+      "Bash(cp:*)",
+      "Bash(jq:*)",
+      "Bash(curl:*)",
+      "Bash(openssl rand:*)",
+      "Bash(docker --version)",
+      "Bash(docker pull:*)",
+      "Bash(psql --version)",
+      "Bash(pg_dump --version)",
+      "Bash(railway:*)",
+      "Bash(systemctl is-active:*)",
+      "Bash(pacman -Qs:*)",
+      "Read(//tmp/**)",
+      "Read(//var/run/**)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:bundlephobia.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:orm.drizzle.team)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "mcp__serena__find_symbol",
+      "mcp__serena__find_referencing_symbols",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__activate_project",
+      "mcp__serena__find_declaration",
+      "mcp__serena__find_implementations",
+      "mcp__serena__replace_symbol_body",
+      "mcp__serena__insert_before_symbol",
+      "mcp__serena__insert_after_symbol",
+      "mcp__serena__list_memories",
+      "mcp__serena__read_memory",
+      "mcp__serena__get_current_config"
+    ],
+    "defaultMode": "auto"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/read-guard-global.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/graphify-nudge.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/graphify-nudge.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/serena-bootstrap.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/notify-stop.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude-multi/shared/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": false,
+    "obsidian@obsidian-skills": true
+  },
+  "effortLevel": "xhigh",
+  "tui": "fullscreen",
+  "theme": "dark",
+  "preferredNotifChannel": "auto",
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true
+}
