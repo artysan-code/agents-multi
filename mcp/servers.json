@@ -1,0 +1,44 @@
+{
+  "$schema-note": "Registry MCP condiviso tra i profili claude-multi. Sorgente di verita': modifica QUI, poi lancia shared/scripts/mcp-sync.py. Non editare mcpServers a mano nei .claude.json dei profili: il sync li sovrascrive.",
+  "profiles": ["work", "personal"],
+  "servers": {
+    "wiki-claude": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "obsidian-brain@1.7.24", "server"],
+      "env": {
+        "VAULT_PATH": "~/brains/claude",
+        "EMBEDDING_PROVIDER": "ollama",
+        "EMBEDDING_MODEL": "bge-m3",
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "OLLAMA_EMBEDDING_DIM": "1024",
+        "OBSIDIAN_BRAIN_NO_WATCH": "1"
+      }
+    },
+    "syncthing-status": {
+      "command": "deno",
+      "args": [
+        "run",
+        "--allow-net=127.0.0.1:8384",
+        "--allow-read=~",
+        "--allow-env=HOME,ST_URL,ST_CONFIG,STGUI_APIKEY",
+        "--allow-run=git",
+        "--lock=~/.claude-multi/shared/mcp/syncthing-status/deno.lock",
+        "~/.claude-multi/shared/mcp/syncthing-status/server.ts"
+      ]
+    },
+    "n8n-ark": {
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "-c",
+        "set -a; . \"$HOME/.config/n8n-ark/.env\"; set +a; exec npx -y n8n-mcp"
+      ],
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOG_LEVEL": "error",
+        "DISABLE_CONSOLE_OUTPUT": "true"
+      }
+    }
+  }
+}

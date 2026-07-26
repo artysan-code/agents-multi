@@ -57,39 +57,24 @@
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:bundlephobia.com)",
       "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:orm.drizzle.team)",
-      "mcp__plugin_context7_context7__resolve-library-id",
-      "mcp__plugin_context7_context7__query-docs",
-      "mcp__serena__find_symbol",
-      "mcp__serena__find_referencing_symbols",
-      "mcp__serena__get_symbols_overview",
-      "mcp__serena__activate_project",
-      "mcp__serena__find_declaration",
-      "mcp__serena__find_implementations",
-      "mcp__serena__replace_symbol_body",
-      "mcp__serena__insert_before_symbol",
-      "mcp__serena__insert_after_symbol",
-      "mcp__serena__list_memories",
-      "mcp__serena__read_memory",
-      "mcp__serena__get_current_config"
+      "WebFetch(domain:orm.drizzle.team)"
     ],
     "deny": [
-      "Read(~/.ssh/**)",
       "Read(~/.aws/**)",
-      "Read(**/.env)",
-      "Read(**/.env.*)",
       "Read(~/.config/secrets/**)",
-      "Write(~/.ssh/**)",
       "Write(~/.aws/**)",
-      "Write(**/.env)",
-      "Write(**/.env.*)",
+      "Bash(nc *)",
+      "Bash(ncat *)"
+    ],
+    "ask": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
       "Bash(curl * | bash*)",
       "Bash(curl * | sh*)",
       "Bash(wget * | bash*)",
-      "Bash(wget * | sh*)",
-      "Bash(nc *)",
-      "Bash(ncat *)",
-      "Bash(python3 -c *)"
+      "Bash(wget * | sh*)"
     ],
     "defaultMode": "auto"
   },
@@ -109,6 +94,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/destructive-blocker.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/branch-guard.sh"
+          },
+          {
+            "type": "command",
             "command": "bash ~/.claude-multi/shared/hooks/graphify-nudge.sh"
           }
         ]
@@ -119,6 +112,24 @@
           {
             "type": "command",
             "command": "bash ~/.claude-multi/shared/hooks/graphify-nudge.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__wiki.claude__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/wiki-write-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/memory-legacy-guard.sh"
           }
         ]
       }
@@ -139,7 +150,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/serena-bootstrap.sh"
+            "command": "bash ~/.claude-multi/shared/hooks/kb-nudge.sh"
           }
         ]
       },
@@ -147,7 +158,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/kb-nudge.sh"
+            "command": "bash ~/.claude-multi/shared/hooks/wiki-distiller-maybe.sh"
           }
         ]
       }
@@ -186,6 +197,14 @@
             "command": "bash ~/.claude-multi/shared/hooks/session-persist.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/wiki-distiller-capture.sh"
+          }
+        ]
       }
     ]
   },
@@ -194,13 +213,21 @@
     "command": "bash ~/.claude-multi/shared/statusline-command.sh"
   },
   "enabledPlugins": {
+    "pr-review-toolkit@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "obsidian@obsidian-skills": true,
     "context7@claude-plugins-official": false,
-    "obsidian@obsidian-skills": true
+    "vue-volar@claude-code-lsps": true
   },
   "effortLevel": "xhigh",
+  "promptSuggestionEnabled": false,
   "tui": "fullscreen",
+  "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "preferredNotifChannel": "auto",
+  "remoteControlAtStartup": false,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true
 }

@@ -24,7 +24,18 @@ const os = require('os');
 const path = require('path');
 
 const HARNESS_COST_MAX_AGE_SECONDS = 300;
-const COSTS_FILE = path.join(os.homedir(), '.local/share/claude-cost/costs.jsonl');
+const COSTS_DIR = path.join(os.homedir(), '.local/share/claude-cost');
+
+// Profilo (work/personal/...) derivato dal basename di CLAUDE_CONFIG_DIR
+// (~/.claude-multi/<profilo>). Separa i costi per profilo in file distinti
+// costs-<profilo>.jsonl, evitando il merge work+personal nel report.
+// Fallback 'unknown' se l'env non è impostato o ha un nome anomalo.
+function detectProfile() {
+  const base = path.basename(process.env.CLAUDE_CONFIG_DIR || '').replace(/[^A-Za-z0-9_-]/g, '');
+  return base || 'unknown';
+}
+const PROFILE = detectProfile();
+const COSTS_FILE = path.join(COSTS_DIR, `costs-${PROFILE}.jsonl`);
 
 // --- helper inline (ex lib/utils + lib/session-bridge) ---
 function sanitizeSessionId(id) {
@@ -166,6 +177,7 @@ process.stdin.on('end', () => {
 
     const row = {
       timestamp:          new Date().toISOString(),
+      profile:            PROFILE,
       session_id:         sessionId,
       transcript_path:    transcriptPath || '',
       model,
