@@ -136,7 +136,9 @@ export async function apply(opts: { force?: boolean } = {}) {
 async function ollamaModels(base: string): Promise<string[] | null> {
   try {
     const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 1500);
-    const r = await fetch(`${base.replace(/\/$/, "")}/api/tags`, { signal: ctrl.signal }); clearTimeout(to);
+    // Deno: il permesso --allow-net è per host letterale, quindi localhost e 127.0.0.1 sono due host diversi
+    const url = base.replace(/\/$/, "").replace("://localhost", "://127.0.0.1");
+    const r = await fetch(`${url}/api/tags`, { signal: ctrl.signal }); clearTimeout(to);
     if (!r.ok) return null;
     const j = await r.json() as { models?: { name: string }[] };
     return (j.models ?? []).map((m) => m.name);

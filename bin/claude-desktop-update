@@ -88,14 +88,33 @@ elif [[ -n "$arg" ]]; then
     || die "download/hash della versione $ver fallito"
 else
   # ---- Auto: ultima versione dall'indice apt ----
-  echo "==> Leggo l'indice apt Anthropic per l'ultima versione..."
+  # Verifica della firma: Anthropic firma l'InRelease del repo apt ma NON pubblica la chiave in un
+  # path noto (né nel .deb). Se un keyring locale esiste (KEYRING, da importare a mano una volta),
+  # si verifica InRelease con gpgv e si controlla lo sha256 dell'indice Packages contro l'InRelease
+  # firmato. Senza keyring: solo HTTPS, e lo si dice.
+  KEYRING="${CLAUDE_DESKTOP_KEYRING:-$HOME/.config/claude-multi/anthropic-apt.gpg}"
+  INRELEASE="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/InRelease"
+  idx="$(mktemp)"; trap 'rm -f "$idx"' EXIT
+  curl -fsSL "$APT_INDEX" -o "$idx" || die "download dell'indice apt fallito"
+  if [[ -f "$KEYRING" ]] && command -v gpgv >/dev/null; then
+    inr="$(mktemp)"
+    curl -fsSL "$INRELEASE" -o "$inr" || die "download InRelease fallito"
+    gpgv --keyring "$KEYRING" "$inr" 2>/dev/null || { rm -f "$inr"; die "firma InRelease NON valida con $KEYRING"; }
+    want="$(awk '/^SHA256:/{f=1;next} f && $3=="main/binary-amd64/Packages"{print $1; exit}' "$inr")"
+    have="$(sha256sum "$idx" | awk '{print $1}')"
+    rm -f "$inr"
+    [[ -n "$want" && "$want" == "$have" ]] || die "sha256 dell'indice Packages non corrisponde all'InRelease firmato"
+    echo "==> InRelease firmato e verificato ($KEYRING); indice Packages integro"
+  else
+    echo "==> Leggo l'indice apt Anthropic (solo HTTPS: nessun keyring in $KEYRING, firma non verificata)"
+  fi
   read -r ver sha < <(
-    curl -fsSL "$APT_INDEX" | awk '
+    awk '
       /^Version:/ {v=$2}
       /^SHA256:/  {s=$2}
       /^[[:space:]]*$/ {if(v){print v, s; v=s=""}}
       END {if(v) print v, s}
-    ' | sort -V | tail -n1
+    ' "$idx" | sort -V | tail -n1
   )
   [[ -n "$ver" && -n "$sha" ]] || die "parsing dell'indice apt fallito"
 fi

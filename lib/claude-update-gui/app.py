@@ -208,11 +208,22 @@ class UpdateGate(QDialog):
             root.addWidget(card)
 
         if self.cli.get("outdated"):
+            note = "Non serve password e non tocca le finestre aperte."
+            clf = self.cli.get("changelog_file") or ""
+            try:
+                if clf and Path(clf).is_file():
+                    lines = [l.strip() for l in Path(clf).read_text(encoding="utf-8").splitlines() if l.strip().startswith("- ")]
+                    if lines:
+                        shown = lines[:6]
+                        more = f"\n… e altre {len(lines) - 6}" if len(lines) > 6 else ""
+                        note = "Novità:\n" + "\n".join(l[:140] for l in shown) + more
+            except OSError:
+                pass
             card = Card(
                 "Claude Code (CLI)",
                 self.cli.get("current", "?"),
                 self.cli.get("latest", "?"),
-                note="Non serve password e non tocca le finestre aperte.",
+                note=note,
             )
             self.cards["cli"] = card
             root.addWidget(card)
