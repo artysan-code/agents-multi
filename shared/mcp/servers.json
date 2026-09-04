@@ -1,5 +1,5 @@
 {
-  "$schema-note": "Registry MCP condiviso tra i profili claude-multi. Sorgente di verita': modifica QUI, poi lancia shared/scripts/mcp-sync.py. Non editare mcpServers a mano nei .claude.json dei profili: il sync li sovrascrive. wiki-claude: binario pnpm globale (pnpm add -g obsidian-brain), non npx: a freddo npx falliva la connessione.",
+  "$schema-note": "Registry MCP unico dei profili claude-multi. Sorgente di verita': modifica QUI, poi `claude-multi mcp sync` (a Claude chiuso). Campi: _profiles (default tutti), _surfaces (cli|desktop, default cli). wiki-claude: binario pnpm globale (pnpm add -g obsidian-brain), non npx: a freddo npx falliva la connessione.",
   "profiles": [
     "work",
     "personal"
@@ -43,7 +43,11 @@
         "MCP_MODE": "stdio",
         "LOG_LEVEL": "error",
         "DISABLE_CONSOLE_OUTPUT": "true"
-      }
+      },
+      "_surfaces": [
+        "cli",
+        "desktop"
+      ]
     },
     "coolify-ark": {
       "_profiles": [

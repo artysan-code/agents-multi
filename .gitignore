@@ -18,3 +18,4 @@ pkg/claude-desktop/*.deb
 pkg/claude-desktop/*.pkg.tar.*
 pkg/claude-desktop/pkg/
 pkg/claude-desktop/src/
+shared/mcp/.sync-state.json

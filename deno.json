@@ -1,7 +1,7 @@
 {
   "tasks": {
     "check": "deno check cli/main.ts && bash -n bin/claude bin/claude-work bin/lib/prelaunch.sh shared/statusline-command.sh",
-    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384 cli/main.ts doctor"
+    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:11434,127.0.0.1:7331 cli/main.ts doctor"
   },
   "fmt": { "lineWidth": 120 }
 }
