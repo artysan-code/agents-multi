@@ -6,9 +6,12 @@
 //   claude-multi status  [--json]      stato completo: versioni, update, sync repo, profili, istanze attive
 //   claude-multi sync    [--fetch]     allinea il repo (fetch + pull ff-only a tree pulito); --fetch forza il fetch
 //   claude-multi update  [...]         passthrough a bin/claude-update (CLI + Desktop)
+//   claude-multi usage   [...]         token e costo-equivalente per profilo/modello/progetto/agente (SQLite, cli/usage.ts)
 //
 // Principio: il repo è la fonte di verità, ~/.claude-multi è runtime materializzato da `install`.
 // Nessuna dipendenza esterna: solo API Deno, così gira su una macchina nuova senza cache moduli.
+
+import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
 
 const HOME = Deno.env.get("HOME") ?? "";
 const REPO = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -476,6 +479,20 @@ switch (cmd) {
     const p = new Deno.Command(`${REPO}/bin/claude-update`, { args: rest, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     Deno.exit((await p.output()).code);
   }
+  case "usage": {
+    const opt = (name: string, def?: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : def; };
+    const db = openDb();
+    if (rest[0] === "ingest" || !flag("--no-ingest")) {
+      const t0 = Date.now();
+      const r = await ingest(db, { full: flag("--full") });
+      if (rest[0] === "ingest" || r.files) console.error(`ingest: ${r.files} file letti, ${r.msgs} messaggi, ${r.skipped} invariati (${((Date.now() - t0) / 1000).toFixed(1)}s) → ${DB_PATH}`);
+      if (rest[0] === "ingest") break;
+    }
+    const by = (opt("--by", "profile") as GroupBy);
+    const rep = report(db, { by, since: opt("--since", "30d"), profile: opt("--profile"), limit: Number(opt("--limit", "40")) });
+    if (flag("--json")) console.log(JSON.stringify(rep, null, 2)); else printReport(rep);
+    break;
+  }
   // deno-lint-ignore no-fallthrough
   case "help": case "--help": case "-h":
   default:
@@ -485,6 +502,9 @@ switch (cmd) {
   doctor  [--json]      verifica le invarianti del setup, con fix suggerito
   status  [--json]      versioni, aggiornamenti, sync repo, profili, istanze attive
   sync    [--fetch]     allinea il repo (fetch se stantio, pull ff-only a tree pulito)
-  update  [--cli|--desktop|--check [--json]]   aggiorna Claude Code / Claude Desktop`);
+  update  [--cli|--desktop|--check [--json]]   aggiorna Claude Code / Claude Desktop
+  usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint]
+          [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
+                        token e costo-equivalente dai transcript (SQLite in ~/.local/share/claude-multi)`);
     if (cmd !== "help" && cmd !== "--help" && cmd !== "-h") Deno.exit(2);
 }
