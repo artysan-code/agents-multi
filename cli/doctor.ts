@@ -1,6 +1,6 @@
 // doctor.ts — ogni invariante del setup come check con esito e fix. Il README descrive, il doctor verifica.
 
-import { AGENTS_SKILLS, BIN, type Check, HOME, KINDS, LIB, listDir, lstat, machine, mode, ownItems, PROFILES, profileInfo, readJson, readlink, readText, REPO, repoState, run, RUNTIME, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, LIB, listDir, lstat, machine, mode, ownItems, PROFILES, profileInfo, readJson, readlink, readText, REPO, repoState, run, RUNTIME, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
 
 export async function doctor(): Promise<Check[]> {
@@ -131,6 +131,9 @@ export async function doctor(): Promise<Check[]> {
       const t = await run("systemctl", ["--user", "is-enabled", "claude-update-check.timer"]);
       if (t.out !== "enabled") add("desktop.timer", "warn", `claude-update-check.timer: ${t.out || "assente"}`, "claude-multi install");
     }
+    if (!(await lstat(`${REPO}/pkg/claude-desktop/anthropic-apt.asc`))) add("desktop.apt-key", "warn", "chiave apt Anthropic assente dal repo: firma InRelease non verificabile", "curl -fsSL https://downloads.claude.ai/claude-desktop/key.asc -o pkg/claude-desktop/anthropic-apt.asc (fingerprint 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE)");
+    else if (!(await has("gpgv"))) add("desktop.apt-key", "warn", "gpgv assente: la firma del repo apt non viene verificata", "pacman -S gnupg");
+    else add("desktop.apt-key", "ok", "repo apt Anthropic: chiave pinnata nel repo, firma InRelease verificata a ogni update");
     const handler = await readText(`${HOME}/.local/share/applications/claude-code-url-handler.desktop`);
     if (handler && !handler.includes("claude-bin")) add("desktop.urlhandler", "fail", "url-handler claude-cli:// non punta a claude-bin", "claude-multi install");
   }

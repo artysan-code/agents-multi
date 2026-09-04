@@ -12,6 +12,7 @@
 #   claude-desktop-update ~/Downloads/claude-desktop_1.17400.0_amd64.deb   # usa un .deb locale
 #   claude-desktop-update --if-outdated   # come sopra ma NON presidiato: se già all'ultima, esce 0 senza chiedere
 #   claude-desktop-update --no-install    # SOLO build: nessun sudo, nessun rebuild Work; stampa "PKG=<path>"
+#   claude-desktop-update --verify-only   # SOLO verifica firma InRelease + indice: stampa versione e sha256, esce
 #
 # Requisiti: base-devel (makepkg), curl, bsdtar (libarchive). Niente sudo per makepkg;
 # l'installazione finale usa `sudo pacman -U` tramite makepkg -i.
@@ -53,10 +54,12 @@ command -v bsdtar  >/dev/null || die "bsdtar assente (installa libarchive)"
 
 if_outdated=0
 no_install=0
+verify_only=0
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --if-outdated) if_outdated=1; shift ;;
     --no-install)  no_install=1; if_outdated=1; shift ;;  # build-only ⇒ mai interattivo
+    --verify-only) verify_only=1; if_outdated=1; shift ;;  # solo firma+indice: stampa versione e sha, non tocca nulla
     *) die "flag sconosciuto: $1" ;;
   esac
 done
@@ -92,21 +95,32 @@ else
   # path noto (né nel .deb). Se un keyring locale esiste (KEYRING, da importare a mano una volta),
   # si verifica InRelease con gpgv e si controlla lo sha256 dell'indice Packages contro l'InRelease
   # firmato. Senza keyring: solo HTTPS, e lo si dice.
-  KEYRING="${CLAUDE_DESKTOP_KEYRING:-$HOME/.config/claude-multi/anthropic-apt.gpg}"
+  # Chiave pubblica: pkg/claude-desktop/anthropic-apt.asc nel repo (da https://downloads.claude.ai/claude-desktop/key.asc,
+  # documentata in code.claude.com/docs/en/desktop-linux), fingerprint pinnata qui sotto. Viene dearmorata in cache
+  # per gpgv. Override: CLAUDE_DESKTOP_KEYRING=<keyring binario>.
+  REPO_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+  KEY_ASC="$REPO_DIR/pkg/claude-desktop/anthropic-apt.asc"
+  KEY_FPR="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
+  KEYRING="${CLAUDE_DESKTOP_KEYRING:-$HOME/.cache/claude-update/anthropic-apt.gpg}"
   INRELEASE="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/InRelease"
   idx="$(mktemp)"; trap 'rm -f "$idx"' EXIT
   curl -fsSL "$APT_INDEX" -o "$idx" || die "download dell'indice apt fallito"
+  if [[ ! -f "$KEYRING" || "$KEY_ASC" -nt "$KEYRING" ]] && [[ -f "$KEY_ASC" ]] && command -v gpg >/dev/null; then
+    mkdir -p "$(dirname "$KEYRING")"
+    gpg --dearmor < "$KEY_ASC" > "$KEYRING.tmp" 2>/dev/null && mv -f "$KEYRING.tmp" "$KEYRING" || rm -f "$KEYRING.tmp"
+  fi
   if [[ -f "$KEYRING" ]] && command -v gpgv >/dev/null; then
     inr="$(mktemp)"
     curl -fsSL "$INRELEASE" -o "$inr" || die "download InRelease fallito"
-    gpgv --keyring "$KEYRING" "$inr" 2>/dev/null || { rm -f "$inr"; die "firma InRelease NON valida con $KEYRING"; }
+    gv="$(gpgv --keyring "$KEYRING" "$inr" 2>&1)" || { rm -f "$inr"; die "firma InRelease NON valida con $KEYRING"; }
+    grep -q "$KEY_FPR" <<<"$gv" || { rm -f "$inr"; die "InRelease firmato da una chiave diversa da quella pinnata ($KEY_FPR)"; }
     want="$(awk '/^SHA256:/{f=1;next} f && $3=="main/binary-amd64/Packages"{print $1; exit}' "$inr")"
     have="$(sha256sum "$idx" | awk '{print $1}')"
     rm -f "$inr"
     [[ -n "$want" && "$want" == "$have" ]] || die "sha256 dell'indice Packages non corrisponde all'InRelease firmato"
-    echo "==> InRelease firmato e verificato ($KEYRING); indice Packages integro"
+    echo "==> InRelease firmato da Anthropic ($KEY_FPR), verificato; indice Packages integro"
   else
-    echo "==> Leggo l'indice apt Anthropic (solo HTTPS: nessun keyring in $KEYRING, firma non verificata)"
+    echo "==> Leggo l'indice apt Anthropic (solo HTTPS: keyring assente o gpgv mancante, firma NON verificata)"
   fi
   read -r ver sha < <(
     awk '
@@ -121,6 +135,10 @@ fi
 
 echo "==> Target: claude-desktop $ver"
 echo "    sha256: $sha"
+if [[ "$verify_only" == 1 ]]; then
+  echo "Done (verify-only): nessun download del .deb, nessuna build."
+  exit 0
+fi
 
 # Versione attualmente installata, per un confronto informativo.
 cur="$(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1 || true)"

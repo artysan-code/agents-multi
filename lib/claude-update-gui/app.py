@@ -11,6 +11,12 @@ Due modi di invocazione:
 Niente si aggiorna senza che tu lo abbia spuntato: le due voci (Claude Desktop e Claude Code)
 sono indipendenti e puoi aggiornarne una sola, o nessuna.
 
+La GUI è una VISTA della CLI: lo stato del setup (versioni, doctor, istanze) arriva da
+`claude-multi status --json` in un thread dopo che la finestra è comparsa, le azioni passano da
+`claude-multi update` / `claude-multi serve`. Qui non c'è logica di setup, solo presentazione.
+In --standalone senza aggiornamenti la finestra si apre lo stesso come pannello di stato
+(voce di menu «Claude — aggiornamenti e stato»).
+
 Fasi eseguite, in base alla selezione:
   Desktop → claude-desktop-update --no-install  (repack del .deb ufficiale, nessun privilegio)
           → pkexec pacman -U <pkg>              (dialogo polkit di Plasma per la password)
@@ -36,11 +42,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QProcess, QTimer
+from PySide6.QtCore import Qt, QProcess, QThread, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon, QPalette
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel,
-    QPlainTextEdit, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout,
+    QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 EXIT_UPDATED, EXIT_LAUNCH_ASIS, EXIT_SKIP_VERSION, EXIT_ERROR = 0, 10, 20, 1
@@ -143,6 +149,148 @@ class Card(QFrame):
         return self.check.isChecked()
 
 
+# --------------------------------------------------------------------------- stato dalla CLI
+class StatusWorker(QThread):
+    """`claude-multi status --json` fuori dal thread UI: la finestra compare subito, lo stato arriva dopo."""
+    done = Signal(dict)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            out = subprocess.run([str(BIN / "claude-multi"), "status", "--json"],
+                                 capture_output=True, text=True, timeout=60)
+            if out.returncode != 0 and not out.stdout.strip():
+                raise RuntimeError(out.stderr.strip()[:200] or f"codice {out.returncode}")
+            self.done.emit(json.loads(out.stdout))
+        except Exception as exc:  # noqa: BLE001 — il pannello lo mostra, il gate resta usabile
+            self.failed.emit(str(exc))
+
+
+DEMO_STATUS = {
+    "machine": {"cliVersion": "2.1.220", "cliVersions": ["2.1.219", "2.1.220"], "desktopVersion": "1.24012.9",
+                "embeddedCode": {"personal": ["2.1.218"], "work": ["2.1.218"]}},
+    "repo": {"isRepo": True, "branch": "release", "head": "abc1234 demo", "behind": 0, "ahead": 1, "dirty": 0},
+    "running": {"cli": [{"profile": "personal", "embedded": True}], "desktop": [{"variant": "personal"}]},
+    "doctor": [
+        {"id": "repo.sync", "status": "warn", "msg": "1 commit locali non pushati", "fix": "git -C ~/.local/src/claude-multi push"},
+        {"id": "mcp.wiki", "status": "fail", "msg": "MCP wiki-claude: llama-server non risponde", "fix": "systemctl --user start llama-embed-shim.service"},
+        {"id": "ok1", "status": "ok", "msg": "~/.claude-multi/shared → repo"},
+        {"id": "ok2", "status": "ok", "msg": "Claude Desktop + variante Work allineata"},
+    ],
+}
+
+
+class StatusPanel(QFrame):
+    """Vista compatta di `claude-multi status --json`: versioni, doctor con fix copiabili, istanze."""
+
+    def __init__(self, expanded: bool):
+        super().__init__()
+        self.setObjectName("card")
+        self._status: dict | None = None
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 10, 14, 10)
+        lay.setSpacing(6)
+
+        head = QHBoxLayout()
+        title = QLabel("Stato del setup")
+        f = title.font(); f.setBold(True); title.setFont(f)
+        head.addWidget(title)
+        self.summary = QLabel("lettura in corso…")
+        self.summary.setObjectName("muted")
+        head.addWidget(self.summary, 1)
+        self.toggle = QCheckBox("Dettagli")
+        self.toggle.setChecked(expanded)
+        self.toggle.toggled.connect(self._refresh_visibility)
+        head.addWidget(self.toggle)
+        lay.addLayout(head)
+
+        self.versions = QLabel("")
+        self.versions.setObjectName("muted")
+        self.versions.setWordWrap(True)
+        lay.addWidget(self.versions)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setMaximumHeight(220)
+        self.rows_host = QWidget()
+        self.rows = QVBoxLayout(self.rows_host)
+        self.rows.setContentsMargins(0, 0, 0, 0)
+        self.rows.setSpacing(3)
+        self.scroll.setWidget(self.rows_host)
+        lay.addWidget(self.scroll)
+        self._refresh_visibility()
+
+    def _refresh_visibility(self) -> None:
+        self.scroll.setVisible(self.toggle.isChecked() and self._status is not None)
+        self.versions.setVisible(self.toggle.isChecked() and self._status is not None)
+
+    def set_error(self, msg: str) -> None:
+        self.summary.setText(f"stato non disponibile: {msg}")
+
+    def set_status(self, st: dict) -> None:
+        self._status = st
+        m = st.get("machine", {}); r = st.get("repo", {}); run = st.get("running", {})
+        checks = st.get("doctor", [])
+        n = {k: sum(1 for c in checks if c.get("status") == k) for k in ("ok", "warn", "fail")}
+        if n["fail"]:
+            self.summary.setText(f"doctor: {n['fail']} problem{'a' if n['fail'] == 1 else 'i'}, {n['warn']} avvisi")
+            self.summary.setStyleSheet(f"color: {DANGER};")
+        elif n["warn"]:
+            self.summary.setText(f"doctor: {n['warn']} avvis{'o' if n['warn'] == 1 else 'i'}, nessun problema")
+            self.summary.setStyleSheet(f"color: {ACCENT};")
+        else:
+            self.summary.setText(f"doctor: tutto ok ({n['ok']} controlli)")
+            self.summary.setStyleSheet("")
+        emb = " · ".join(f"{k} {', '.join(v)}" for k, v in (m.get("embeddedCode") or {}).items())
+        sess = run.get("cli", [])
+        active = f"{sum(1 for c in sess if not c.get('embedded'))} cli + {sum(1 for c in sess if c.get('embedded'))} desktop"
+        repo = ""
+        if r.get("isRepo"):
+            repo = f" · repo ↓{r.get('behind', 0)} ↑{r.get('ahead', 0)} ✎{r.get('dirty', 0)}"
+        self.versions.setText(
+            f"Claude Code {m.get('cliVersion') or '?'} · Claude Desktop {m.get('desktopVersion') or 'assente'}"
+            f"{' · embedded ' + emb if emb else ''}{repo} · sessioni {active}"
+        )
+        while self.rows.count():
+            item = self.rows.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        order = {"fail": 0, "warn": 1, "ok": 2}
+        for c in sorted(checks, key=lambda x: order.get(x.get("status"), 3)):
+            self.rows.addWidget(self._row(c))
+        self.rows.addStretch(1)
+        self._refresh_visibility()
+
+    def _row(self, c: dict) -> QWidget:
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+        st = c.get("status", "ok")
+        mark = QLabel({"ok": "✓", "warn": "!", "fail": "✗"}.get(st, "?"))
+        mark.setFixedWidth(14)
+        mark.setStyleSheet({"ok": "color: #3fb950;", "warn": f"color: {ACCENT};", "fail": f"color: {DANGER};"}.get(st, ""))
+        h.addWidget(mark)
+        msg = QLabel(c.get("msg", ""))
+        msg.setWordWrap(True)
+        if st == "ok":
+            msg.setObjectName("muted")
+        h.addWidget(msg, 1)
+        fix = c.get("fix")
+        if fix and st != "ok":
+            b = QPushButton("Copia fix")
+            b.setObjectName("flat")
+            b.setToolTip(fix)
+            b.clicked.connect(lambda _=False, t=fix: QApplication.clipboard().setText(t))
+            h.addWidget(b)
+        return w
+
+    @property
+    def can_rollback(self) -> bool:
+        return len((self._status or {}).get("machine", {}).get("cliVersions", [])) > 1
+
+
 # --------------------------------------------------------------------------- finestra
 class UpdateGate(QDialog):
     def __init__(self, state: dict, profile: str = "personal", demo: bool = False,
@@ -184,7 +332,8 @@ class UpdateGate(QDialog):
             badge.setPixmap(app_icon.pixmap(34, 34))
             head_row.addWidget(badge, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        head = QLabel("Aggiornamenti disponibili")
+        self.has_updates = bool(self.desktop.get("outdated") or self.cli.get("outdated"))
+        head = QLabel("Aggiornamenti disponibili" if self.has_updates else "Claude è aggiornato")
         hf = head.font()
         hf.setPointSizeF(hf.pointSizeF() + 3.5)
         hf.setWeight(QFont.Weight.DemiBold)
@@ -192,7 +341,8 @@ class UpdateGate(QDialog):
         head_row.addWidget(head, 1)
         root.addLayout(head_row)
 
-        sub = QLabel("Scegli cosa aggiornare: niente parte senza la tua spunta.")
+        sub = QLabel("Scegli cosa aggiornare: niente parte senza la tua spunta."
+                     if self.has_updates else "Nessun aggiornamento in attesa. Qui sotto lo stato del setup.")
         sub.setObjectName("muted")
         sub.setWordWrap(True)
         root.addWidget(sub)
@@ -216,7 +366,7 @@ class UpdateGate(QDialog):
                     if lines:
                         shown = lines[:6]
                         more = f"\n… e altre {len(lines) - 6}" if len(lines) > 6 else ""
-                        note = "Novità:\n" + "\n".join(l[:140] for l in shown) + more
+                        note = "Novità:\n" + "\n".join((l if len(l) <= 120 else l[:117].rsplit(" ", 1)[0] + "…") for l in shown) + more
             except OSError:
                 pass
             card = Card(
@@ -230,6 +380,10 @@ class UpdateGate(QDialog):
 
         for card in self.cards.values():
             card.check.toggled.connect(self._refresh_primary)
+
+        # --- stato del setup (vista di `claude-multi status --json`), caricato in un thread
+        self.status_panel = StatusPanel(expanded=self.standalone or not self.has_updates)
+        root.addWidget(self.status_panel)
 
         # --- avviso "Claude è aperto": solo in standalone, e solo se serve davvero
         self.warn_lbl = QLabel()
@@ -282,7 +436,21 @@ class UpdateGate(QDialog):
             "Al prossimo aggiornamento pubblicato la finestra ricompare."
         )
         self.skip_btn.clicked.connect(self._on_skip)
+        self.skip_btn.setVisible(self.has_updates)
         btns.addWidget(self.skip_btn)
+
+        self.dash_btn = QPushButton("Dashboard")
+        self.dash_btn.setObjectName("flat")
+        self.dash_btn.setToolTip("Apre la dashboard locale (claude-multi serve) nel browser.")
+        self.dash_btn.clicked.connect(self._open_dashboard)
+        btns.addWidget(self.dash_btn)
+
+        self.rollback_btn = QPushButton("Rollback Claude Code")
+        self.rollback_btn.setObjectName("flat")
+        self.rollback_btn.setToolTip("Torna alla versione precedente di Claude Code ancora in cache (claude-multi update --rollback).")
+        self.rollback_btn.setVisible(False)
+        self.rollback_btn.clicked.connect(self._rollback)
+        btns.addWidget(self.rollback_btn)
         btns.addStretch(1)
 
         self.asis_btn = QPushButton("Non ora")
@@ -294,8 +462,46 @@ class UpdateGate(QDialog):
         self.go_btn.setObjectName("primary")
         self.go_btn.setDefault(True)
         self.go_btn.clicked.connect(self.start_update)
+        self.go_btn.setVisible(self.has_updates)
         btns.addWidget(self.go_btn)
         root.addLayout(btns)
+        if not self.has_updates:
+            self.asis_btn.setText("Chiudi")
+            self.asis_btn.setDefault(True)
+
+        # lo stato arriva dopo: la finestra non aspetta la CLI
+        if self.demo:
+            QTimer.singleShot(600, lambda: self._on_status(DEMO_STATUS))
+        else:
+            self.worker = StatusWorker(self)
+            self.worker.done.connect(self._on_status)
+            self.worker.failed.connect(self.status_panel.set_error)
+            self.worker.start()
+
+    def _on_status(self, st: dict) -> None:
+        self.status_panel.set_status(st)
+        self.rollback_btn.setVisible(self.standalone and self.status_panel.can_rollback)
+        QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
+
+    def _open_dashboard(self) -> None:
+        if self.demo:
+            return
+        subprocess.Popen([str(BIN / "claude-multi"), "serve"], start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _rollback(self) -> None:
+        """Rollback della CLI come fase unica: stesso log, stessi esiti."""
+        self.phases = [("Rollback di Claude Code alla versione precedente", "rollback")]
+        self.rollback_btn.setEnabled(False)
+        self.go_btn.setEnabled(False)
+        self.skip_btn.setVisible(False)
+        self.phase_lbl.setVisible(True)
+        self.phase_lbl.setStyleSheet("")
+        self.bar.setVisible(True)
+        self.details_btn.setVisible(True)
+        self.bar.setRange(0, 0)
+        self.phase_idx = -1
+        self._next_phase()
 
     def _apply_style(self) -> None:
         dark = is_dark(QApplication.instance())
@@ -347,6 +553,8 @@ class UpdateGate(QDialog):
     def _refresh_primary(self) -> None:
         """Il pulsante primario riflette la selezione: senza spunte non c'è nulla da fare."""
         sel = self._selected()
+        if not self.has_updates:
+            return
         self.go_btn.setEnabled(bool(sel))
         if len(sel) == 2:
             self.go_btn.setText("Aggiorna entrambi")
@@ -472,8 +680,10 @@ class UpdateGate(QDialog):
             self._run("pkexec", ["pacman", "-U", "--noconfirm", self.pkg_path])
         elif key == "work":
             self._run(str(BIN / "claude-desktop-work-rebuild"), [])
+        elif key == "rollback":
+            self._run(str(BIN / "claude-multi"), ["update", "--rollback"])
         else:
-            self._run(str(BIN / "claude-update"), ["--cli"])
+            self._run(str(BIN / "claude-multi"), ["update", "--cli"])
 
     def _run(self, program: str, args: list[str]) -> None:
         self.proc = QProcess(self)
@@ -513,7 +723,13 @@ class UpdateGate(QDialog):
         self.result_code = EXIT_UPDATED
         done = ", ".join(
             "Claude Desktop" if k == "desktop" else "Claude Code" for k in self._selected()
-        )
+        ) or "Claude Code"
+        if self.phases and self.phases[0][1] == "rollback":
+            self.phase_lbl.setText("Rollback eseguito: claude-bin punta alla versione precedente.")
+            self.asis_btn.setText("Chiudi")
+            self.bar.setRange(0, 100); self.bar.setValue(100)
+            self.result_code = EXIT_LAUNCH_ASIS
+            return
         if self.standalone:
             # Qui non apriamo niente: la scelta di riaprire (e quando) resta all'utente.
             self.phase_lbl.setText(f"{done} aggiornato. Puoi riaprire Claude quando vuoi.")
@@ -572,8 +788,8 @@ def main() -> int:
 
     if demo:
         state = {
-            "cli": {"current": "2.1.220", "latest": "2.1.221", "outdated": True},
-            "desktop": {"current": "1.24012.9", "latest": "1.24013.0", "outdated": True},
+            "cli": {"current": "2.1.220", "latest": "2.1.221", "outdated": "--demo-uptodate" not in argv},
+            "desktop": {"current": "1.24012.9", "latest": "1.24013.0", "outdated": "--demo-uptodate" not in argv},
         }
     else:
         try:
@@ -581,7 +797,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 — qualunque errore qui = "apri e basta"
             print(f"claude-update-gui: check fallito ({exc})", file=sys.stderr)
             return EXIT_ERROR
-        if not (state.get("desktop", {}).get("outdated") or state.get("cli", {}).get("outdated")):
+        if not (state.get("desktop", {}).get("outdated") or state.get("cli", {}).get("outdated")) and not standalone:
             return EXIT_LAUNCH_ASIS
 
     gate = UpdateGate(state, profile, demo=demo, standalone=standalone)

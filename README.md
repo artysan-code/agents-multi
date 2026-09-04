@@ -77,7 +77,7 @@ Niente si aggiorna senza approvazione. `DISABLE_AUTOUPDATER=1` è impostato ovun
 
 - **Claude Code**: l'updater nativo scarica l'ELF in `~/.local/share/claude/versions/X.Y.Z` e riscrive `~/.local/bin/claude`. `claude-update --cli` lo invoca, ripunta `claude-bin` all'ultima versione, ripristina il wrapper `claude`, pota le versioni vecchie, sistema l'url-handler `claude-cli://`.
 - **Claude Desktop**: `claude-desktop-update` ricostruisce il pacchetto Arch dal `.deb` ufficiale Anthropic (PKGBUILD in `pkg/`), poi `claude-desktop-work-rebuild` rigenera la variante **Work** (asar con `app.setDesktopName("claude-desktop-work")` per avere icona e app_id distinti su KDE Wayland; tutto il resto è symlink a `/usr/lib/claude-desktop`).
-- **Gate grafico**: `claude-launch` controlla le versioni (cache 6 h) e, se serve, apre `claude-update-gui` prima dell'app: checkbox indipendenti per Code e Desktop, install via `pkexec`. Il Desktop va aggiornato ad app chiusa (l'install sostituisce `/usr/lib/claude-desktop`).
+- **Gate grafico**: `claude-launch` controlla le versioni (cache 6 h) e, se serve, apre `claude-update-gui` prima dell'app: checkbox indipendenti per Code e Desktop con le novità della versione, install via `pkexec`. Il Desktop va aggiornato ad app chiusa (l'install sostituisce `/usr/lib/claude-desktop`). La GUI è una **vista della CLI**: il pannello «Stato del setup» arriva da `claude-multi status --json` (versioni, doctor con fix copiabili, istanze), le azioni passano da `claude-multi update` e `claude-multi serve`. Dal menu, «Claude — aggiornamenti e stato» apre lo stesso pannello in modalità standalone anche senza aggiornamenti, con il rollback della CLI.
 - **Timer**: `claude-update-check.timer` (10 min dopo il login, poi ogni 4 h) → una notifica KDE con «Aggiorna ora». Non aggiorna nulla da sé.
 
 ## MCP
@@ -89,7 +89,7 @@ Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti
 - Un solo `claude-update` alla volta (lock in `~/.cache/claude-update/update.lock`).
 - Il prune delle versioni CLI tiene la penultima: `claude-multi update --rollback` ci torna.
 - `claude-update --check --json` allega `changelog_file` con la sezione del CHANGELOG ufficiale della versione remota: il gate lo mostra prima di chiedere l'approvazione.
-- Claude Desktop: l'`InRelease` del repo apt è firmato ma Anthropic non pubblica la chiave in un path noto. Se metti un keyring in `~/.config/claude-multi/anthropic-apt.gpg`, `claude-desktop-update` verifica la firma e lo sha256 dell'indice; altrimenti si affida a HTTPS e lo dichiara.
+- Claude Desktop: la chiave pubblica del repo apt Anthropic (`https://downloads.claude.ai/claude-desktop/key.asc`, fingerprint `31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`) è in `pkg/claude-desktop/anthropic-apt.asc`. `claude-desktop-update` verifica con `gpgv` la firma dell'`InRelease`, che sia della chiave pinnata, e lo sha256 dell'indice `Packages`; il `.deb` è poi verificato dallo sha256 preso da quell'indice. Catena completa fino al pacchetto.
 
 ## Macchina nuova
 
