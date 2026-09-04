@@ -179,23 +179,25 @@ export function sinceDate(spec: string | undefined): string | null {
   throw new Error(`--since non valido: ${spec} (usa 7d, 30d, all, YYYY-MM-DD)`);
 }
 
-export function report(db: DatabaseSync, opts: { by: GroupBy; since?: string; profile?: string; limit?: number }) {
+export function report(db: DatabaseSync, opts: { by: GroupBy; since?: string; profile?: string; limit?: number; split?: GroupBy }) {
   const where: string[] = []; const args: (string | number)[] = [];
   const since = sinceDate(opts.since);
   if (since) { where.push("day >= ?"); args.push(since); }
   if (opts.profile) { where.push("profile = ?"); args.push(opts.profile); }
   const w = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const col = GROUP_COL[opts.by];
+  // split: seconda dimensione (es. by=day, split=profile → una riga per giorno e profilo, per i grafici impilati)
+  const scol = opts.split && opts.split !== opts.by ? GROUP_COL[opts.split] : null;
   const rows = db.prepare(`
-    SELECT COALESCE(${col}, '—') AS key, COUNT(*) AS msgs, COUNT(DISTINCT session_id) AS sessions,
+    SELECT COALESCE(${col}, '—') AS key, ${scol ? `COALESCE(${scol}, '—') AS ${opts.split},` : ""} ${opts.by !== "day" ? "" : "day,"} COUNT(*) AS msgs, COUNT(DISTINCT session_id) AS sessions,
       SUM(input) AS input, SUM(output) AS output, SUM(cache_read) AS cache_read, SUM(cache_5m + cache_1h) AS cache_write,
       SUM(cost_usd) AS cost, SUM(cost_usd IS NULL) AS unpriced
-    FROM messages ${w} GROUP BY key ORDER BY cost DESC NULLS LAST, output DESC LIMIT ?`).all(...args, opts.limit ?? 40) as
-    { key: string; msgs: number; sessions: number; input: number; output: number; cache_read: number; cache_write: number; cost: number | null; unpriced: number }[];
+    FROM messages ${w} GROUP BY key${scol ? `, ${opts.split}` : ""} ORDER BY ${opts.by === "day" ? "key ASC" : "cost DESC NULLS LAST, output DESC"} LIMIT ?`).all(...args, opts.limit ?? 40) as
+    { key: string; day?: string; profile?: string; msgs: number; sessions: number; input: number; output: number; cache_read: number; cache_write: number; cost: number | null; unpriced: number }[];
   const total = db.prepare(`SELECT COUNT(*) AS msgs, SUM(input) AS input, SUM(output) AS output, SUM(cache_read) AS cache_read, SUM(cache_5m + cache_1h) AS cache_write, SUM(cost_usd) AS cost FROM messages ${w}`).get(...args) as
     { msgs: number; input: number; output: number; cache_read: number; cache_write: number; cost: number | null };
   const spawns = db.prepare(`SELECT subagent_type AS key, COUNT(*) AS n FROM agent_spawns ${w} GROUP BY key ORDER BY n DESC`).all(...args) as { key: string; n: number }[];
-  return { by: opts.by, since, profile: opts.profile ?? null, rows, total, spawns };
+  return { by: opts.by, split: opts.split ?? null, since, profile: opts.profile ?? null, rows, total, spawns };
 }
 
 const fmt = (n: number | null | undefined) => n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n);

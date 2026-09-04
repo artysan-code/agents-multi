@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>claude-multi</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%238285f0'/><text x='16' y='22' font-size='17' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='%230f1020'>cm</text></svg>">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><div class="logo">cm</div><div><b>claude-multi</b><small id="host">…</small></div></div>
+    <nav class="nav">
+      <a href="#overview" data-t="overview" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</a>
+      <a href="#profiles" data-t="profiles"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5a5 5 0 0 1 6 5"/></svg>Profili</a>
+      <a href="#doctor" data-t="doctor"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Doctor<span class="badge" id="badge-doctor" hidden></span></a>
+      <a href="#usage" data-t="usage"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="5" y="10" width="3" height="7" rx="1"/><rect x="10.5" y="5" width="3" height="12" rx="1"/><rect x="16" y="13" width="3" height="4" rx="1"/></svg>Usage</a>
+      <a href="#sync" data-t="sync"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M4 4v5h5"/><path d="M20 20v-5h-5"/></svg>Sync<span class="badge" id="badge-sync" hidden></span></a>
+      <a href="#actions" data-t="actions"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Azioni</a>
+    </nav>
+    <div class="foot">
+      <div class="row"><span>aggiornato <span id="gen" class="num">—</span></span><span class="dot" id="dot"></span></div>
+      <label class="switch"><input type="checkbox" id="auto" checked> auto-refresh 30 s</label>
+      <label class="switch"><input type="checkbox" id="theme"> tema chiaro</label>
+      <span class="faint" id="ver"></span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar"><h1 id="title">Overview</h1><div class="meta" id="meta"></div></div>
+
+    <section id="overview" class="on">
+      <div class="grid g4" id="ov-tiles"></div>
+      <div style="height:16px"></div>
+      <div class="grid g3">
+        <div class="card" style="grid-column: span 2"><div class="head"><h3>Costo equivalente per giorno · ultimi 14 giorni</h3><span class="faint" id="ov-usage-total"></span></div><div id="ov-chart"></div><div class="legend" id="ov-legend"></div></div>
+        <div class="card"><h3>Istanze attive</h3><div id="ov-running"></div><div class="sep"></div><h3>Condiviso</h3><div id="ov-shared"></div></div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="grid g2">
+        <div class="card"><div class="head"><h3>Doctor</h3><a href="#doctor" data-t="doctor" class="faint">tutti i controlli →</a></div><div id="ov-doctor"></div></div>
+        <div class="card"><h3>Repo</h3><dl class="kv" id="ov-repo"></dl></div>
+      </div>
+    </section>
+
+    <section id="profiles"><div class="grid g2" id="pf"></div><div style="height:16px"></div><div class="card"><h3>Registry MCP e condiviso</h3><div id="sh"></div></div></section>
+
+    <section id="doctor">
+      <div class="controls"><div class="seg" id="dfilter"><button data-f="all" class="on">tutti</button><button data-f="fail">fail</button><button data-f="warn">warn</button><button data-f="ok">ok</button></div><span class="muted" id="dsum"></span><span style="flex:1"></span><button class="btn" id="dre">Rilancia doctor</button></div>
+      <div class="card" id="dlist"></div>
+    </section>
+
+    <section id="usage">
+      <div class="controls">
+        <label>raggruppa <select id="uby"><option value="profile">profilo</option><option value="model">modello</option><option value="project">progetto</option><option value="agent">agente</option><option value="day">giorno</option><option value="session">sessione</option><option value="entrypoint">entrypoint</option></select></label>
+        <label>periodo <select id="usince"><option value="7d">7 giorni</option><option value="30d" selected>30 giorni</option><option value="90d">90 giorni</option><option value="all">tutto</option></select></label>
+        <label>profilo <select id="uprof"><option value="">tutti</option><option>personal</option><option>work</option></select></label>
+        <span class="faint">costo = equivalente API a listino, non fatturato</span>
+      </div>
+      <div class="grid g4" id="u-tiles"></div>
+      <div style="height:16px"></div>
+      <div class="grid g3">
+        <div class="card" style="grid-column: span 2"><div class="head"><h3>Per giorno, impilato per profilo</h3><span class="faint">costo equivalente</span></div><div id="u-chart"></div><div class="legend" id="u-legend"></div></div>
+        <div class="card"><h3>Per modello</h3><div id="u-models"></div></div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="card"><div class="head"><h3 id="u-title">Dettaglio</h3><span class="faint" id="u-spawns"></span></div><div class="tbl-wrap"><table id="ut"></table></div></div>
+    </section>
+
+    <section id="sync"><div class="grid g3" id="sy"></div></section>
+
+    <section id="actions">
+      <div class="actions" id="ax"></div>
+      <div style="height:16px"></div>
+      <div class="card"><div class="head"><h3>Output</h3><button class="btn sm" id="ax-clear">Pulisci</button></div><div class="console" id="ax-out">Pronto. Le azioni girano sulla CLI locale e l'output compare qui.</div></div>
+    </section>
+  </main>
+</div>
+<div class="tooltip" id="tip" hidden></div>
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
