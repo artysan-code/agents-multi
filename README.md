@@ -115,6 +115,17 @@ claude-work   # → /login (account work)
 
 Serve: `deno`, `git`, `jq`, `python3`; per Claude Desktop anche `base-devel`, `libarchive`, `pyside6`, `@electron/asar`. Le credenziali OAuth sono per-macchina. Claude Code si installa la prima volta con l'installer nativo, poi `claude-multi update --cli`.
 
+## Sviluppo
+
+```bash
+deno task check   # type-check CLI e test, bash -n su ogni script, py_compile della GUI
+deno task test    # test: usage (tariffe, dedupe, report), mcp (proiezione registry), manifest, changelog, prelaunch su repo git veri
+```
+
+- **Pre-commit** (`.githooks/pre-commit`, attivato da `install` via `core.hooksPath`): blocca file di stato o credenziali in staging e righe aggiunte che sembrano token (`sk-ant-…`, `accessToken`, `oauthAccount`, chiavi private, token GitHub/GitLab/AWS/Slack), poi esegue `deno task check` se sono cambiati script o TypeScript. Bypass consapevole: `git commit --no-verify`.
+- **CI** (`.forgejo/workflows/ci.yml`): check, test e guard segreti sull'intero albero a ogni push su `release`. Serve un runner Forgejo con label `docker` registrato sull'istanza.
+- Ogni invariante nuova va in `cli/doctor.ts`; ogni funzione pura nuova ha un test in `cli/tests/`.
+
 ## Cosa non fare
 
 - Non scrivere in `~/.claude/` (stub) e non cambiargli i permessi.

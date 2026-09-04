@@ -13,8 +13,8 @@ import { type Check, DESKTOP_DIR, has, lstat, PROFILES, type Profile, readJson, 
 
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[] };
 type Surface = "cli" | "desktop";
-interface Registry { profiles: string[]; servers: Record<string, ServerCfg> }
-interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
+export interface Registry { profiles: string[]; servers: Record<string, ServerCfg> }
+export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
 export interface Change { target: Target; name: string; kind: "add" | "update" | "remove" }
 
 const REGISTRY = `${REPO}/shared/mcp/servers.json`;
@@ -28,7 +28,7 @@ export async function loadRegistry(): Promise<Registry> {
   if (!r?.servers) throw new Error(`registry MCP assente o non valido: ${REGISTRY}`);
   return { profiles: r.profiles ?? [...PROFILES], servers: r.servers };
 }
-function wanted(reg: Registry, t: Target): Record<string, Record<string, unknown>> {
+export function wanted(reg: Registry, t: Target): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
   for (const [name, cfg] of Object.entries(reg.servers)) {
     const profiles = cfg._profiles ?? reg.profiles;

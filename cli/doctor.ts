@@ -20,6 +20,8 @@ export async function doctor(): Promise<Check[]> {
     if (repo.dirty) add("repo.dirty", "warn", `${repo.dirty} file modificati non committati: ${repo.dirtyFiles.slice(0, 3).map((f) => f.trim()).join(", ")}${repo.dirty > 3 ? "…" : ""}`, `git -C ${shortHome(REPO)} status`);
   }
 
+  if (repo.isRepo && (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out !== ".githooks") add("repo.hooks", "warn", "pre-commit del repo non attivo (guard segreti + check)", "claude-multi install");
+
   // --- condiviso: symlink rotti, skill installate ma non montate
   const inv = await sharedInventory();
   for (const k of KINDS) {

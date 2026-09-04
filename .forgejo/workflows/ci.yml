@@ -1,0 +1,24 @@
+# CI di claude-multi su Forgejo Actions: type-check, sintassi bash, test.
+# Serve un runner registrato sull'istanza (label `docker`); senza, il workflow resta in coda e non fa danni.
+name: ci
+on:
+  push:
+    branches: [release]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: docker
+    container:
+      image: denoland/deno:2.9.6
+    steps:
+      - uses: actions/checkout@v4
+      - name: check (type-check CLI + bash -n script)
+        run: |
+          apt-get update -qq && apt-get install -qq -y git bash curl >/dev/null
+          deno task check
+      - name: test
+        run: deno task test
+      - name: guard segreti sull'intero albero
+        run: |
+          ! git grep -nE 'sk-ant-[A-Za-z0-9_-]{10,}|"(accessToken|refreshToken|oauthAccount)"\s*:' -- ':!cli/tests' ':!.githooks' ':!.forgejo'

@@ -44,7 +44,7 @@ main() {
 
   local fetch_ok=true age=$((TTL + 1))
   [[ -f "$STAMP" ]] && age=$(( $(date +%s) - $(stat -c %Y "$STAMP" 2>/dev/null || echo 0) ))
-  if (( age > TTL )); then
+  if (( age >= TTL )); then   # TTL=0 = "fetch sempre" (anche nello stesso secondo dello stamp)
     if timeout "$FETCH_TIMEOUT" git -C "$REPO" fetch -q origin 2>/dev/null; then
       touch "$STAMP"
     else
@@ -68,5 +68,6 @@ main() {
   write_state "$behind" "$ahead" "$dirty" "$pulled" "$fetch_ok" true
 }
 
-main 2>/dev/null || true
+# stderr resta aperto: la riga "config aggiornata" deve arrivare all'utente; git ha già i suoi 2>/dev/null
+main || true
 exit 0

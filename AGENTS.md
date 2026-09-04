@@ -16,6 +16,6 @@ Il setup multi-profilo di Claude Code e Claude Desktop di Samuel (work + persona
 - **Il runtime non entra nel repo**: credenziali, `.claude.json`, sessioni, plugin cache, marketplace. Se un file contiene `oauthAccount` o token, non va committato mai. `.gitignore` copre i backup (`*.bak*`, `*.backup`).
 - **Ogni invariante nuova va in `cli/main.ts` → `doctor()`**, non nel README. Il README descrive, il doctor verifica. Le due cose hanno già divergito in passato.
 - **Il lancio resta bash puro** (`bin/claude`, `bin/claude-work`, `bin/lib/prelaunch.sh`): niente Deno nel percorso caldo, così un wrapper funziona anche su una macchina senza Deno.
-- **Verifica prima di dire fatto**: `deno task check`, poi `claude-multi doctor`. Se tocchi `install`, prima `claude-multi install --dry-run`.
+- **Verifica prima di dire fatto**: `deno task check` e `deno task test`, poi `claude-multi doctor`. Se tocchi `install`, prima `claude-multi install --dry-run`. Funzione pura nuova = test nuovo in `cli/tests/`.
 - **Modifiche a `~/.claude-multi` mentre una sessione Claude è aperta cambiano il terreno sotto i piedi della sessione.** `install` e `mcp-sync` vanno lanciati da un terminale a Claude chiuso.
 - Commit senza trailer di attribuzione (hook `commit-trailer-guard`).

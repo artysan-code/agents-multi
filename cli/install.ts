@@ -136,6 +136,10 @@ export async function install(dry: boolean) {
   await ensureDir(LIB);
   await ensureSymlink(`${REPO}/lib/claude-update-gui`, `${LIB}/claude-update-gui`, "~/.local/lib/claude-update-gui");
 
+  // 5b. hook git del repo (pre-commit: guard segreti + check)
+  const hooks = (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out;
+  if (hooks !== ".githooks") { say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`); if (!DRY) await run("git", ["-C", REPO, "config", "core.hooksPath", ".githooks"]); }
+
   // 6. stub ~/.claude (500: stat → ENOENT sui settings, nessun "Settings Error")
   const stub = await lstat(`${HOME}/.claude`);
   if (!stub) { say(`${ANSI.g}+${ANSI.x} stub ~/.claude (500)`); if (!DRY) { await Deno.mkdir(`${HOME}/.claude`); await Deno.chmod(`${HOME}/.claude`, 0o500); } }

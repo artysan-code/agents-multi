@@ -44,9 +44,9 @@ export function costUsd(model: string, u: { input: number; output: number; cache
 }
 
 // ---------------------------------------------------------------- db
-export function openDb() {
-  Deno.mkdirSync(DATA, { recursive: true });
-  const db = new DatabaseSync(DB_PATH);
+export function openDb(path: string = DB_PATH) {
+  if (path !== ":memory:") Deno.mkdirSync(path.slice(0, path.lastIndexOf("/")), { recursive: true });
+  const db = new DatabaseSync(path);
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS files (
@@ -83,11 +83,12 @@ async function* walk(dir: string): AsyncGenerator<string> {
 }
 
 function projectOf(path: string, profile: string) {
-  const rel = path.slice(`${RUNTIME}/${profile}/projects/`.length);
-  return rel.split("/")[0] ?? null;
+  const base = `${RUNTIME}/${profile}/projects/`;
+  if (!path.startsWith(base)) return null;
+  return path.slice(base.length).split("/")[0] ?? null;
 }
 
-async function ingestFile(db: DatabaseSync, profile: string, path: string) {
+export async function ingestFile(db: DatabaseSync, profile: string, path: string) {
   const text = await Deno.readTextFile(path);
   const project = projectOf(path, profile);
   const inSub = path.includes("/subagents/");
