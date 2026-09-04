@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# claude-multi — CLI di gestione del setup (install · doctor · status · sync · update).
+# La logica vive in cli/main.ts (Deno). Questo shim risolve il repo dal proprio path reale.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+command -v deno >/dev/null 2>&1 || { echo "claude-multi: serve deno (https://deno.land)" >&2; exit 1; }
+exec deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384 \
+  "$REPO/cli/main.ts" "$@"

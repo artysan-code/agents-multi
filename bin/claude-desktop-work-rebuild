@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# claude-desktop-work-rebuild — costruisce il "secondo eseguibile" Claude Desktop (profilo Work)
+# con un app_id Wayland DISTINTO (claude-desktop-work) così KDE gli dà un'icona/gruppo separati.
+#
+# PERCHÉ SERVE: il binario ufficiale si auto-assegna l'app_id "claude-desktop" e ignora --class,
+# X11 e argv[0] (verificato). L'unico punto che cambia l'app_id è, dentro l'asar, una chiamata
+# app.setDesktopName(). Qui:
+#   1) estraggo l'app.asar ufficiale
+#   2) inietto app.setDesktopName("claude-desktop-work") in testa al main (index.pre.js)
+#   3) ripacchettizzo (preservando i native modules *.node)
+#   4) assemblo ~/.local/lib/claude-desktop-work/: binario REALE copiato (necessario perché Electron
+#      risolve resources/ dal path reale dell'eseguibile) + resources con l'asar patchato; tutto il
+#      resto è SYMLINK a /usr/lib/claude-desktop → ~245 MB di cui solo il binario (208M) è copia.
+#
+# La supply chain resta pulita: il binario è quello ufficiale Anthropic, l'unica modifica è UNA riga
+# nostra e trasparente nell'asar. Rilancia questo script dopo ogni update di claude-desktop.
+set -euo pipefail
+
+SRC=/usr/lib/claude-desktop
+DST="$HOME/.local/lib/claude-desktop-work"
+APPID=claude-desktop-work
+export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/share/npm/bin:$PATH"
+
+command -v asar    >/dev/null 2>&1 || { echo "ERRORE: 'asar' assente (pnpm add -g @electron/asar)" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "ERRORE: python3 assente" >&2; exit 1; }
+[ -f "$SRC/resources/app.asar" ] || { echo "ERRORE: $SRC/resources/app.asar non trovato" >&2; exit 1; }
+
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+
+echo "==> estraggo app.asar ufficiale"
+asar extract "$SRC/resources/app.asar" "$TMP/src"
+
+echo "==> inietto app.setDesktopName(\"$APPID\") nel main"
+python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" <<'PY'
+import sys, re
+p, appid = sys.argv[1], sys.argv[2]
+s = open(p, encoding='utf-8').read()
+MARK = '/*__work_appid__*/'
+inj = MARK + 'try{const a=require("electron").app;a.setDesktopName&&a.setDesktopName("%s");}catch(e){};' % appid
+if MARK in s or 'setDesktopName("%s")' % appid in s:
+    print("    patch già presente"); sys.exit(0)
+# Assert solo su cose STRUTTURALI: il prologo emesso dal minifier è un dettaglio upstream
+# volatile (fino al 1.26831 era `"use strict";`, dal 1.26832 il file parte col banner Sentry).
+assert s.strip(), "main vuoto: layout dell'asar cambiato?"
+assert 'require(' in s[-4000:], "main non sembra CommonJS: verifica il layout dell'asar"
+m = re.match(r'''^\s*(?:(["'])use strict\1\s*;?)''', s)
+i = m.end() if m else 0
+open(p, 'w', encoding='utf-8').write(s[:i] + inj + s[i:])
+print("    patch iniettata (offset %d)" % i)
+PY
+
+echo "==> ripacchettizzo (native modules *.node unpacked)"
+asar pack "$TMP/src" "$TMP/app.asar" --unpack "*.node" >/dev/null
+
+# Post-verify: la patch DEVE essere nel pacchetto finale. Senza questo, un futuro cambio di
+# layout dell'asar produrrebbe silenziosamente una variante Work senza app_id distinto
+# (stessa icona/gruppo di quella personal) invece di fallire.
+# NB: `asar extract-file` NON scrive su stdout — deposita il file (basename) nella cwd.
+mkdir -p "$TMP/verify"
+( cd "$TMP/verify" && asar extract-file "$TMP/app.asar" .vite/build/index.pre.js )
+head -c 400 "$TMP/verify/index.pre.js" | grep -q '__work_appid__' \
+  || { echo "ERRORE: patch assente nell'asar ripacchettizzato" >&2; exit 1; }
+echo "    patch verificata nell'asar"
+
+echo "==> assemblo $DST"
+rm -rf "$DST"; mkdir -p "$DST/resources"
+# binario reale (rinominato: identifica i processi; l'app_id lo dà comunque setDesktopName)
+cp -f "$SRC/claude-desktop" "$DST/$APPID"; chmod +x "$DST/$APPID"
+# fratelli del binario: symlink (chromium .pak/.so, locales, version, chrome-sandbox SUID…)
+for f in "$SRC"/*; do
+  bn="$(basename "$f")"; [ "$bn" = "claude-desktop" ] && continue
+  ln -sfn "$f" "$DST/$bn"
+done
+# resources: asar patchato + unpacked reali, tutto il resto symlink (smol-bin.img, virtiofsd, icone…)
+cp -f "$TMP/app.asar" "$DST/resources/app.asar"
+cp -a "$TMP/app.asar.unpacked" "$DST/resources/app.asar.unpacked"
+for f in "$SRC"/resources/*; do
+  bn="$(basename "$f")"; case "$bn" in app.asar|app.asar.unpacked) continue;; esac
+  ln -sfn "$f" "$DST/resources/$bn"
+done
+
+echo "==> fatto: $DST/$APPID (app_id=$APPID)"

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# claude-personal — compatibilità: il profilo personal è il default, il comando è `claude`.
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec "$HERE/claude" "$@"

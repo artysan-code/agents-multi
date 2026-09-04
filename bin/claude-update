@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+# claude-update: orchestratore aggiornamenti dell'intero setup Claude multi-account.
+#
+#   [CLI]     Claude Code   — updater interno + ripristino di claude-bin e del wrapper ~/.local/bin/claude
+#   [Desktop] Claude Desktop — rebuild pkg Arch dal .deb UFFICIALE Anthropic; la variante "work"
+#                              (app_id distinto) viene ricostruita in coda da claude-desktop-update
+#
+# USO:
+#   claude-update              # tutto: CLI + Desktop
+#   claude-update --cli        # solo Claude Code
+#   claude-update --desktop    # solo Claude Desktop (personal + work)
+#   claude-update --check      # NON aggiorna: dice solo cosa è obsoleto (--json per gli script)
+#
+# I due sotto-aggiornamenti girano ISOLATI: il fallimento di uno NON blocca l'altro.
+# A fine run c'è un riepilogo per-componente e l'exit code è != 0 se qualcosa è fallito.
+#
+# NB: niente `set -e` a livello top — i fallimenti sono gestiti a mano (subshell + report).
+#     Ogni componente ha il proprio `set -e` dentro la sua subshell.
+set -uo pipefail
+
+VERSIONS_DIR="$HOME/.local/share/claude/versions"
+BIN_DIR="$HOME/.local/bin"
+
+# Canale usato dall'updater nativo: `stable` è indietro di qualche release (rollout graduale),
+# `latest` è ciò che `claude update` installa davvero. Confrontare con `stable` darebbe
+# falsi "aggiornamento disponibile"/"già aggiornato" rispetto a quello che poi succede.
+# (le URL sono override-abili via env: serve per testare il gate senza aspettare una release vera)
+CLI_CHANNEL_URL="${CLAUDE_CLI_CHANNEL_URL:-https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest}"
+APT_INDEX_URL="${CLAUDE_APT_INDEX_URL:-https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages}"
+NET_TIMEOUT="${CLAUDE_UPDATE_TIMEOUT:-8}"
+
+# --- [CLI] Claude Code ------------------------------------------------------
+# L'updater interno scarica in ~/.local/share/claude/versions/ e ricrea ~/.local/bin/claude
+# come symlink: questo bypassa il tripwire e lascia claude-bin (usato dai wrapper
+# claude-work/claude-personal) puntato alla vecchia versione. Qui rimettiamo a posto entrambi.
+do_cli() (
+  set -e
+  echo "==> [CLI] aggiornamento Claude Code..."
+  # NB: lo shell dell'utente esporta DISABLE_AUTOUPDATER=1 (vedi .zshrc) e i wrapper
+  # claude-work/claude-personal pure; in quel contesto il subcomando `update` può essere
+  # soppresso. Invochiamo il binario DIRETTO strippando quel flag, così l'update esplicito
+  # gira sempre. Il binario è condiviso: aggiornarlo una volta basta per entrambi i profili.
+  local cbin="$BIN_DIR/claude-bin"
+  [[ -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(ls -1v "$VERSIONS_DIR" | tail -n1)"
+
+  # Cattura l'output per filtrare il blocco Warning/Fix noto: l'updater nativo avvisa che
+  # ~/.local/bin/claude non è un suo symlink — ma è il tripwire, VOLUTO → puro rumore.
+  # Preserviamo l'exit code reale: un fallimento vero propaga (do_cli → FAIL), non lo mascheriamo.
+  # `|| rc=$?` evita che `set -e` abortisca sul non-zero prima di catturarlo; `|| true` protegge
+  # dal caso (teorico) in cui grep filtri tutto e ritorni 1 sotto pipefail.
+  local out rc=0
+  out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$HOME/.claude-multi/work" "$cbin" update 2>&1)" || rc=$?
+  printf '%s\n' "$out" \
+    | grep -vE 'was not created by the native installer|If you put a launcher wrapper there on purpose' \
+    || true
+  [[ $rc -eq 0 ]] || exit $rc
+
+  local latest
+  latest="$(ls -1v "$VERSIONS_DIR" | tail -n1)"
+  [[ -n "$latest" ]] || { echo "ERROR: nessuna versione trovata in $VERSIONS_DIR" >&2; exit 1; }
+
+  echo "    claude-bin → $latest"
+  ln -sfn "$VERSIONS_DIR/$latest" "$BIN_DIR/claude-bin"
+
+  # GC delle versioni vecchie: l'updater nativo la DISABILITA perché il launcher è custom
+  # (è il warning noto "keeps them all"). Senza questo, versions/ cresce a ogni update
+  # (~275 MB a botta).
+  # NB: le versioni sono FILE ELF singoli (`versions/2.1.220`), non directory — il glob
+  # `*/` di prima non matchava nulla e il GC era di fatto morto. Ora iteriamo su tutte le
+  # entry, filtrando per nome semver: così non tocchiamo mai file estranei finiti lì.
+  # Guardie: mai la live ($latest, validata non-vuota sopra e bersaglio di claude-bin).
+  # Cancellare l'ELF di una sessione in corso è innocuo: l'inode resta vivo fino all'exit.
+  local v bn
+  for v in "$VERSIONS_DIR"/*; do
+    [[ -e "$v" ]] || continue
+    bn="$(basename "$v")"
+    [[ "$bn" == "$latest" ]] && continue
+    [[ "$bn" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+    echo "    prune versione vecchia: $bn"
+    rm -rf -- "$v"
+  done
+
+  # L'updater nativo riscrive ~/.local/bin/claude come symlink alla nuova versione: lo
+  # rimettiamo al wrapper del repo (profilo personal). claude-work non viene toccato.
+  local repo; repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+  echo "    ripristino wrapper $BIN_DIR/claude → $repo/bin/claude"
+  ln -sfn "$repo/bin/claude" "$BIN_DIR/claude"
+
+  # Deep-link handler (claude-cli://): l'auto-generato punta a ~/.local/bin/claude, che dopo
+  # il flip è il tripwire → i deep-link (login/IDE) si romperebbero. Ripunta a claude-bin.
+  local handler="$HOME/.local/share/applications/claude-code-url-handler.desktop"
+  if [[ -f "$handler" ]] && grep -q -- '--handle-uri' "$handler"; then
+    sed -i -E 's#^Exec=.*--handle-uri#Exec="'"$BIN_DIR"'/claude-bin" --handle-uri#' "$handler"
+    echo "    url-handler → claude-bin"
+  fi
+)
+
+# --- [Desktop] Claude Desktop (personal + work) -----------------------------
+# claude-desktop-update ricostruisce il pkg dal .deb ufficiale e, in coda, la variante work.
+# --if-outdated: se è già all'ultima versione esce 0 senza prompt (run non presidiata).
+do_desktop() (
+  set -e
+  echo "==> [Desktop] aggiornamento Claude Desktop (personal + work)..."
+
+  # Guardia esplicita: se manca il PKGBUILD, claude-desktop-update morirebbe con un ERROR
+  # generico. Meglio dirlo chiaro qui (errore strutturale) e far risultare Desktop = FAIL.
+  local pkgdir="${CLAUDE_DESKTOP_PKGDIR:-$HOME/build/claude-desktop}"
+  if [[ ! -f "$pkgdir/PKGBUILD" ]]; then
+    echo "    ERROR: build dir Desktop assente o senza PKGBUILD ($pkgdir)." >&2
+    echo "           Ricrea il PKGBUILD (repackage del .deb ufficiale) prima di aggiornare." >&2
+    exit 1
+  fi
+
+  claude-desktop-update --if-outdated
+
+  # Self-heal della variante Work: claude-desktop-update la ricostruisce SOLO quando il pkg
+  # cambia versione. Se il pkg è già all'ultima (--if-outdated esce prima) ma il binario Work
+  # manca o è più vecchio dell'app.asar di sistema (pacman -U out-of-band), lo ricostruiamo qui.
+  local work_bin="$HOME/.local/lib/claude-desktop-work/claude-desktop-work"
+  local work_asar="$HOME/.local/lib/claude-desktop-work/resources/app.asar"
+  local sys_asar="/usr/lib/claude-desktop/resources/app.asar"
+  if command -v claude-desktop-work-rebuild >/dev/null 2>&1; then
+    if [[ ! -x "$work_bin" || ! -f "$work_asar" || "$sys_asar" -nt "$work_asar" ]]; then
+      echo "    variante Work assente/disallineata → rebuild"
+      claude-desktop-work-rebuild
+    else
+      echo "    variante Work già allineata (skip)"
+    fi
+  fi
+)
+
+# --- Check versioni (nessuna scrittura) -------------------------------------
+# Usato dal launcher GUI (claude-launch) per decidere se mostrare il gate di aggiornamento.
+# Deve essere ECONOMICO e non bloccante: l'indice apt è ~19 KB, il canale CLI ~10 byte.
+# Ogni fetch ha timeout; in mancanza di rete i campi `latest` restano vuoti e `outdated`
+# è false → il launcher tira dritto e apre l'app.
+
+# newer A B → vero se B è strettamente più recente di A (ordinamento semver via sort -V).
+# Evita di proporre un "aggiornamento" quando il canale remoto è più indietro del locale.
+newer() {
+  local a="$1" b="$2"
+  [[ -n "$b" ]] || return 1
+  [[ "$a" == "$b" ]] && return 1
+  [[ -z "$a" ]] && return 0
+  [[ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n1)" == "$b" ]]
+}
+
+cli_current()  { basename "$(readlink -f "$BIN_DIR/claude-bin" 2>/dev/null)" 2>/dev/null || true; }
+cli_latest()   { curl -fsSL --max-time "$NET_TIMEOUT" "$CLI_CHANNEL_URL" 2>/dev/null | tr -d '[:space:]'; }
+desk_current() { pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1; }
+desk_latest()  {
+  curl -fsSL --max-time "$NET_TIMEOUT" "$APT_INDEX_URL" 2>/dev/null | awk '
+    /^Version:/ {print $2}
+  ' | sort -V | tail -n1
+}
+
+do_check() {
+  local json=0
+  [[ "${1:-}" == "--json" ]] && json=1
+
+  local cc cl dc dl cli_out=false desk_out=false
+  cc="$(cli_current)";  cl="$(cli_latest)"
+  dc="$(desk_current)"; dl="$(desk_latest)"
+  newer "$cc" "$cl" && cli_out=true
+  newer "$dc" "$dl" && desk_out=true
+
+  if [[ $json -eq 1 ]]; then
+    printf '{"cli":{"current":"%s","latest":"%s","outdated":%s},' "$cc" "$cl" "$cli_out"
+    printf '"desktop":{"current":"%s","latest":"%s","outdated":%s}}\n' "$dc" "$dl" "$desk_out"
+  else
+    printf "  Code     %s → %s   %s\n" "${cc:-?}" "${cl:-?}" "$([[ $cli_out  == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
+    printf "  Desktop  %s → %s   %s\n" "${dc:-?}" "${dl:-?}" "$([[ $desk_out == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
+  fi
+
+  # exit 10 = c'è almeno un aggiornamento; 0 = tutto allineato. Comodo negli `if` di shell.
+  [[ $cli_out == true || $desk_out == true ]] && return 10
+  return 0
+}
+
+# --- Orchestrazione ---------------------------------------------------------
+scope="all"
+case "${1:-}" in
+  ""|--all)    scope="all" ;;
+  --cli)       scope="cli" ;;
+  --desktop)   scope="desktop" ;;
+  --check)     do_check "${2:-}"; exit $? ;;
+  -h|--help)   sed -n '2,18p' "$0"; exit 0 ;;
+  *) echo "Uso: claude-update [--cli|--desktop|--check [--json]]  (default: entrambi)" >&2; exit 2 ;;
+esac
+
+cli_res="—"; desk_res="—"
+
+# NB: do_cli/do_desktop sono subshell con `set -e` interno. NON invocarle come condizione
+# di `if` (`if do_cli; then`): in quel contesto bash DISABILITA il `set -e` della subshell
+# per tutta la sua durata → un `die`/comando fallito NON aborta e il fallimento viene
+# mascherato da un falso "ok". Le chiamiamo dirette e catturiamo $? (qui il `set -e` interno
+# è di nuovo attivo). Lo script top-level non ha `set -e`, quindi un rc!=0 non ci fa uscire.
+if [[ "$scope" == "all" || "$scope" == "cli" ]]; then
+  do_cli; rc=$?
+  if [[ $rc -eq 0 ]]; then
+    cli_res="ok    $(basename "$(readlink "$BIN_DIR/claude-bin" 2>/dev/null)" 2>/dev/null || echo '?')"
+  else
+    cli_res="FAIL"
+  fi
+fi
+
+if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
+  do_desktop; rc=$?
+  if [[ $rc -eq 0 ]]; then
+    desk_res="ok    $(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' || echo '?')"
+  else
+    desk_res="FAIL"
+  fi
+fi
+
+echo
+echo "──────── riepilogo ────────"
+[[ "$scope" == "all" || "$scope" == "cli"     ]] && printf "  Code     %s\n" "$cli_res"
+[[ "$scope" == "all" || "$scope" == "desktop" ]] && printf "  Desktop  %s\n" "$desk_res"
+
+if [[ "$cli_res" == FAIL || "$desk_res" == FAIL ]]; then
+  echo "  (qualcosa è fallito — vedi log sopra)" >&2
+  exit 1
+fi

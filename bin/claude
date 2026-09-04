@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# claude — Claude Code con il profilo PERSONAL (default della macchina).
+# Per il profilo work: `claude-work`. Fa parte del repo claude-multi (bin/).
+#
+# 1. allinea la config dal repo (prelaunch.sh: fetch se stantio, pull ff-only, mai bloccante)
+# 2. forza CLAUDE_CONFIG_DIR sul profilo e disabilita l'auto-updater nativo
+# 3. `claude update` è dirottato su `claude-multi update`: l'updater nativo riscriverebbe
+#    ~/.local/bin/claude e lascerebbe claude-bin indietro
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+PROFILE_DIR="$HOME/.claude-multi/personal"
+
+if [[ "${1:-}" == "update" ]]; then
+  echo "claude: l'update passa da 'claude-multi update' (ripristina wrapper e claude-bin)." >&2
+  exec "$HERE/claude-multi" update --cli
+fi
+
+bash "$HERE/lib/prelaunch.sh" || true
+
+CLAUDE_BIN="$HOME/.local/bin/claude-bin"
+if [[ ! -x "$CLAUDE_BIN" ]]; then
+  LATEST=$(ls -1v "$HOME/.local/share/claude/versions/" | tail -n1)
+  CLAUDE_BIN="$HOME/.local/share/claude/versions/$LATEST"
+fi
+exec env CLAUDE_CONFIG_DIR="$PROFILE_DIR" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "$@"

@@ -1,0 +1,20 @@
+# Stato runtime / cache: mai nel repo
+__pycache__/
+*.pyc
+*.bak
+*.bak.*
+*.bak-*
+*.backup
+*.sync-conflict-*
+.stversions/
+.stfolder/
+node_modules/
+# Cloni upstream dei marketplace plugin: per-macchina, riclonabili
+shared/plugins/
+# Artefatti estratti dall'asar (claude-desktop-work-rebuild)
+index.pre.js
+# Build locali
+pkg/claude-desktop/*.deb
+pkg/claude-desktop/*.pkg.tar.*
+pkg/claude-desktop/pkg/
+pkg/claude-desktop/src/

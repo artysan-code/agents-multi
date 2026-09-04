@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# claude-desktop-update: ribuilda e installa il pacchetto Arch `claude-desktop`
+# a partire dal .deb UFFICIALE Anthropic, aggiornando il PKGBUILD in ~/build/claude-desktop.
+#
+# La supply chain resta pulita: il binario è quello firmato da Anthropic, scaricato
+# dal loro repo apt (o fornito da te). Questo script si limita a: risolvere versione+sha256,
+# patchare il PKGBUILD, e lanciare makepkg.
+#
+# USO:
+#   claude-desktop-update                 # prende l'ULTIMA versione dall'indice apt Anthropic
+#   claude-desktop-update 1.17400.0       # prende una versione specifica dalla CDN
+#   claude-desktop-update ~/Downloads/claude-desktop_1.17400.0_amd64.deb   # usa un .deb locale
+#   claude-desktop-update --if-outdated   # come sopra ma NON presidiato: se già all'ultima, esce 0 senza chiedere
+#   claude-desktop-update --no-install    # SOLO build: nessun sudo, nessun rebuild Work; stampa "PKG=<path>"
+#
+# Requisiti: base-devel (makepkg), curl, bsdtar (libarchive). Niente sudo per makepkg;
+# l'installazione finale usa `sudo pacman -U` tramite makepkg -i.
+#
+# --no-install esiste per il gate GUI (claude-update-gui): makepkg -i chiamerebbe `sudo` su un
+# tty che, lanciato da un .desktop, non c'è → fallirebbe. Separando build e install, la GUI
+# builda senza privilegi e installa a parte con `pkexec pacman -U` (dialogo polkit di Plasma).
+# --no-install implica anche NON interattivo: mai un `read` che bloccherebbe una GUI.
+set -euo pipefail
+
+PKGDIR="${CLAUDE_DESKTOP_PKGDIR:-$HOME/build/claude-desktop}"
+RETAIN="${CLAUDE_DESKTOP_RETAIN:-3}"   # quante versioni di artefatti tenere in PKGDIR (0 = non potare)
+APT_INDEX="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages"
+POOL="https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# La dir di build accumula, a ogni aggiornamento, un .deb (~170 MB) + un .pkg.tar.zst (~190 MB)
+# + un PKGBUILD.bak. Dopo qualche mese sono giga di roba morta. Teniamo le ultime $RETAIN
+# versioni di ciascun tipo e buttiamo la staging di makepkg (pkg/ e src/, ricreate a ogni build).
+prune_artifacts() {
+  local keep="${RETAIN:-3}" f n pat
+  [[ "$keep" =~ ^[0-9]+$ ]] || return 0
+  (( keep > 0 )) || return 0
+  echo "==> housekeeping: tengo le ultime $keep versioni in $PKGDIR"
+  for pat in '*.pkg.tar.zst' '*_amd64.deb' 'PKGBUILD.bak.*'; do
+    n=0
+    while IFS= read -r f; do
+      n=$((n+1))
+      if (( n > keep )); then rm -f -- "$PKGDIR/$f" && echo "    prune: $f"; fi
+    done < <(cd "$PKGDIR" && ls -1t -- $pat 2>/dev/null)
+  done
+  rm -rf -- "$PKGDIR/pkg" "$PKGDIR/src"
+}
+
+[[ -f "$PKGDIR/PKGBUILD" ]] || die "PKGBUILD non trovato in $PKGDIR"
+command -v makepkg >/dev/null || die "makepkg assente (installa base-devel)"
+command -v bsdtar  >/dev/null || die "bsdtar assente (installa libarchive)"
+
+if_outdated=0
+no_install=0
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --if-outdated) if_outdated=1; shift ;;
+    --no-install)  no_install=1; if_outdated=1; shift ;;  # build-only ⇒ mai interattivo
+    *) die "flag sconosciuto: $1" ;;
+  esac
+done
+
+arg="${1:-}"
+ver=""
+sha=""
+local_deb=""
+
+deb_version() {  # legge il campo Version dal control.tar del .deb (senza dpkg)
+  local deb="$1" ct
+  ct="$(ar t "$deb" | grep '^control\.tar' | head -n1)" || return 1
+  ar p "$deb" "$ct" | bsdtar -xOf - ./control 2>/dev/null \
+    | awk -F': ' '/^Version:/{print $2; exit}'
+}
+
+if [[ -n "$arg" && -f "$arg" && "$arg" == *.deb ]]; then
+  # ---- Modalità .deb locale ----
+  local_deb="$(readlink -f "$arg")"
+  ver="$(deb_version "$local_deb")" || die "impossibile leggere Version dal .deb"
+  [[ -n "$ver" ]] || die "Version vuota nel .deb"
+  sha="$(sha256sum "$local_deb" | awk '{print $1}')"
+  echo "==> .deb locale: $local_deb"
+elif [[ -n "$arg" ]]; then
+  # ---- Versione esplicita: risolvi lo sha dalla CDN ----
+  ver="$arg"
+  echo "==> Versione richiesta: $ver — risolvo lo SHA256 dalla CDN..."
+  sha="$(curl -fsSL "$POOL/claude-desktop_${ver}_amd64.deb" | sha256sum | awk '{print $1}')" \
+    || die "download/hash della versione $ver fallito"
+else
+  # ---- Auto: ultima versione dall'indice apt ----
+  echo "==> Leggo l'indice apt Anthropic per l'ultima versione..."
+  read -r ver sha < <(
+    curl -fsSL "$APT_INDEX" | awk '
+      /^Version:/ {v=$2}
+      /^SHA256:/  {s=$2}
+      /^[[:space:]]*$/ {if(v){print v, s; v=s=""}}
+      END {if(v) print v, s}
+    ' | sort -V | tail -n1
+  )
+  [[ -n "$ver" && -n "$sha" ]] || die "parsing dell'indice apt fallito"
+fi
+
+echo "==> Target: claude-desktop $ver"
+echo "    sha256: $sha"
+
+# Versione attualmente installata, per un confronto informativo.
+cur="$(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1 || true)"
+if [[ -n "$cur" ]]; then
+  echo "    (installata ora: $cur)"
+  if [[ "$cur" == "$ver" ]]; then
+    if [[ "$no_install" == 1 ]]; then
+      # Build-only: "già installata" non è un motivo per non produrre il pacchetto — il
+      # chiamante (la GUI) ha bisogno del PKG= per la sua fase di install.
+      echo "    stessa versione già installata: procedo comunque (build-only)."
+    elif [[ "$if_outdated" == 1 ]]; then
+      echo "    già all'ultima versione — niente da fare (skip)."
+      exit 0
+    else
+      read -rp "Stessa versione già installata. Ricostruire comunque? [y/N] " a
+      [[ "${a,,}" == y ]] || { echo "Annullato."; exit 0; }
+    fi
+  fi
+fi
+
+cd "$PKGDIR"
+
+# Backup del PKGBUILD prima di patcharlo.
+cp -f PKGBUILD "PKGBUILD.bak.$(date +%Y%m%d-%H%M%S 2>/dev/null || echo prev)"
+
+# Patch pkgver / pkgrel / sha256sums_x86_64.
+sed -i \
+  -e "s/^pkgver=.*/pkgver=${ver}/" \
+  -e "s/^pkgrel=.*/pkgrel=1/" \
+  -e "s/^sha256sums_x86_64=(.*/sha256sums_x86_64=('${sha}')/" \
+  PKGBUILD
+
+# Se ho un .deb locale, mettilo dove makepkg lo cerca: così, con lo sha già
+# corretto nel PKGBUILD, makepkg lo valida e NON riscarica nulla.
+# Se il .deb passato è GIA' quello nel PKGDIR (rebuild dello stesso file), `cp` fallirebbe con
+# "are the same file" e `set -e` abortirebbe a PKGBUILD già patchato → stato inconsistente.
+if [[ -n "$local_deb" ]]; then
+  dest="$PKGDIR/claude-desktop_${ver}_amd64.deb"
+  [[ "$local_deb" -ef "$dest" ]] || cp -f "$local_deb" "$dest"
+fi
+
+if [[ "$no_install" == 1 ]]; then
+  echo "==> makepkg -sf (solo build, nessuna installazione)..."
+  makepkg -sf
+
+  # Path del pacchetto: chiediamolo a makepkg invece di ricostruirlo a mano (pkgext, arch,
+  # epoch e PKGDEST vivono nella conf, non qui). Il chiamante lo installa con pkexec.
+  pkg="$(makepkg --packagelist | head -n1)"
+  [[ -f "$pkg" ]] || die "pacchetto atteso non trovato: $pkg"
+  prune_artifacts
+  echo
+  echo "Done (build). Non installato — variante Work NON ricostruita."
+  echo "PKG=$pkg"
+  exit 0
+fi
+
+echo "==> makepkg -sif (build + install)..."
+makepkg -sif
+
+prune_artifacts
+
+echo
+echo "Done. Installata: $(pacman -Q claude-desktop 2>/dev/null || echo '?')"
+echo "Riavvia Claude Desktop per applicare l'aggiornamento."
+
+# --- Variante "Claude Work" (secondo eseguibile con app_id distinto) ---
+# Il binario ufficiale è stato appena sostituito: ricostruisco la copia patchata.
+if command -v claude-desktop-work-rebuild >/dev/null 2>&1; then
+  echo "==> ricostruisco la variante 'Claude Work' (app_id distinto)"
+  claude-desktop-work-rebuild || echo "WARN: rebuild 'Claude Work' fallito — rilancia 'claude-desktop-work-rebuild' a mano" >&2
+fi

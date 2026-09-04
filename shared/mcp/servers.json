@@ -49,8 +49,8 @@
         "--allow-net=ark.example.com",
         "--allow-read=~/.config/secrets/coolify-ark.token,~/.cache/deno",
         "--allow-env=HOME,COOLIFY_URL,COOLIFY_TOKEN,COOLIFY_TOKEN_FILE",
-        "--lock=~/.claude-multi/personal/mcp/coolify-ark/deno.lock",
-        "~/.claude-multi/personal/mcp/coolify-ark/server.ts"
+        "--lock=~/.claude-multi/shared/mcp/coolify-ark/deno.lock",
+        "~/.claude-multi/shared/mcp/coolify-ark/server.ts"
       ],
       "env": {}
     }

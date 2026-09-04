@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Aggiornamento Claude
+Comment=Gate di aggiornamento mostrato prima di aprire Claude Desktop
+Exec=~/.local/bin/claude-update-gui
+Icon=claude-desktop
+Terminal=false
+Categories=Utility;
+# Non è un'app da menu: esiste perché Wayland/xdg-portal possa risolvere l'app info
+# dell'app_id "claude-update-gui" (QApplication.setDesktopFileName). Senza questa entry
+# il portal logga "App info not found" e la finestra resta senza icona propria.
+NoDisplay=true
+StartupWMClass=claude-update-gui

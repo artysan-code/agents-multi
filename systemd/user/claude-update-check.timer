@@ -1,0 +1,14 @@
+[Unit]
+Description=Controllo periodico degli aggiornamenti Claude (ogni 4h)
+
+[Timer]
+# 10 min dopo il login: non rallenta l'avvio della sessione, e copre il caso "Claude resta
+# aperto per giorni" che il gate all'avvio dell'app da solo non vedrebbe mai.
+OnStartupSec=10min
+OnUnitActiveSec=4h
+# NB: niente Persistent= — ha effetto solo sui timer OnCalendar=, non su quelli monotonici come
+# questo. Qui il recupero è implicito: al login riparte il conteggio da OnStartupSec.
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

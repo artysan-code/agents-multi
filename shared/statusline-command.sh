@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line
-# Segments: folder │ branch+state @hash │ model │ ctx bar % tokens │ cost
+# Segments: folder │ branch+state @hash │ model │ ctx bar % tokens │ cost │ cfg (repo claude-multi) │ ⬆ update
 
 input=$(cat)
 
@@ -106,4 +106,36 @@ if [ -n "$cost" ]; then
   fi
 fi
 
-printf "${folder_part}${git_part}${model_part}${ctx_part}${cost_part}"
+# --- claude-multi: stato config (repo) + aggiornamenti disponibili ---
+# Legge solo cache locali scritte da prelaunch.sh e da claude-update --check: zero rete.
+cm_part=""
+cm_sync="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi/sync.json"
+if [ -f "$cm_sync" ]; then
+  cm=$(jq -r '[.behind,.ahead,.dirty,.fetch_ok,.upstream] | @tsv' "$cm_sync" 2>/dev/null)
+  cm_behind=$(echo "$cm" | cut -f1); cm_ahead=$(echo "$cm" | cut -f2); cm_dirty=$(echo "$cm" | cut -f3)
+  cm_fetch=$(echo "$cm" | cut -f4); cm_up=$(echo "$cm" | cut -f5)
+  cm_str=""
+  if [ "$cm_up" = "false" ]; then
+    cm_str="${RED}cfg no-remote${RESET}"
+  elif [ "${cm_behind:-0}" -gt 0 ] && [ "${cm_ahead:-0}" -gt 0 ]; then
+    cm_str="${RED}cfg ≠${RESET}"
+  else
+    [ "${cm_behind:-0}" -gt 0 ] && cm_str="${YELLOW}cfg ↓${cm_behind}${RESET}"
+    [ "${cm_ahead:-0}" -gt 0 ]  && cm_str="${cm_str}${cm_str:+ }${CYAN}cfg ↑${cm_ahead}${RESET}"
+    [ "${cm_dirty:-0}" -gt 0 ]  && cm_str="${cm_str}${cm_str:+ }${YELLOW}cfg ✎${cm_dirty}${RESET}"
+  fi
+  [ "$cm_fetch" = "false" ] && cm_str="${cm_str}${cm_str:+ }${DIM}cfg offline${RESET}"
+  [ -n "$cm_str" ] && cm_part="${SEP}${cm_str}"
+fi
+cm_upd="$HOME/.cache/claude-update/check.json"
+if [ -f "$cm_upd" ]; then
+  upd=$(jq -r '[(.cli.outdated|tostring),.cli.latest,(.desktop.outdated|tostring),.desktop.latest] | @tsv' "$cm_upd" 2>/dev/null)
+  u_cli=$(echo "$upd" | cut -f1); u_cli_v=$(echo "$upd" | cut -f2)
+  u_desk=$(echo "$upd" | cut -f3); u_desk_v=$(echo "$upd" | cut -f4)
+  u_str=""
+  [ "$u_cli" = "true" ]  && u_str="${YELLOW}⬆ code ${u_cli_v}${RESET}"
+  [ "$u_desk" = "true" ] && u_str="${u_str}${u_str:+ }${YELLOW}⬆ desktop ${u_desk_v}${RESET}"
+  [ -n "$u_str" ] && cm_part="${cm_part}${SEP}${u_str}"
+fi
+
+printf "${folder_part}${git_part}${model_part}${ctx_part}${cost_part}${cm_part}"
