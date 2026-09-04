@@ -12,7 +12,7 @@ python3 ~/.claude-multi/shared/scripts/validate_agents.py ~/.claude-multi/shared
 ## `mcp-sync.py`
 Sincronizza il registry MCP condiviso (`shared/mcp/servers.json`) nella chiave `mcpServers` dei `.claude.json` di ogni profilo — un unico posto da editare invece di due, e vale sia per la CLI che per l'embedded Claude Code del Desktop (leggono lo stesso file).
 
-Merge non distruttivo: tocca solo i server del registry. I server aggiunti a mano in un profilo restano; quelli gestiti dal registry e poi rimossi vengono puliti (tracciati in `shared/mcp/.sync-state.json`). Backup datato del `.claude.json` prima di ogni scrittura. Il campo opzionale `_profiles` limita un server a un sottoinsieme di profili.
+Merge non distruttivo: tocca solo i server del registry. I server aggiunti a mano in un profilo restano; quelli gestiti dal registry e poi rimossi vengono puliti (tracciati in `shared/mcp/.sync-state.json`). Backup del `.claude.json` prima di ogni scrittura in `~/.local/state/claude-multi/mcp-sync-backups/` (600, ultimi 5): mai nella dir del profilo. Il campo opzionale `_profiles` limita un server a un sottoinsieme di profili.
 
 Rifiuta di scrivere se rileva un'istanza Claude attiva (riscriverebbe `.claude.json` annullando il sync) — `--force` per bypassare.
 

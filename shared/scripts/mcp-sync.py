@@ -77,6 +77,28 @@ def claude_running():
     return False
 
 
+BACKUP_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "claude-multi" / "mcp-sync-backups"
+BACKUP_KEEP = 5
+
+
+def backup(profile: str, conf_path: Path):
+    """Copia di sicurezza di .claude.json PRIMA della scrittura.
+
+    Fuori dalla dir del profilo: il file contiene oauthAccount e i backup lasciati li'
+    sono finiti su Syncthing una volta (set 2026) e il doctor li segnala. Qui: XDG state,
+    dir 700, file 600, si tengono solo gli ultimi BACKUP_KEEP per profilo.
+    """
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(BACKUP_DIR, 0o700)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = BACKUP_DIR / f"{profile}.claude.json.{stamp}"
+    shutil.copy2(conf_path, dest)
+    os.chmod(dest, 0o600)
+    old = sorted(BACKUP_DIR.glob(f"{profile}.claude.json.*"))[:-BACKUP_KEEP]
+    for f in old:
+        f.unlink()
+
+
 def write_atomic(path: Path, data: dict):
     tmp = path.with_suffix(path.suffix + ".mcp-sync.tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
@@ -115,8 +137,7 @@ def sync(profile: str, wanted: dict, previously_managed: list, apply: bool):
         merged.update(wanted)
         conf["mcpServers"] = merged
 
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        shutil.copy2(conf_path, conf_path.with_suffix(f".json.bak.mcp-sync.{stamp}"))
+        backup(profile, conf_path)
         write_atomic(conf_path, conf)
 
     return changes
