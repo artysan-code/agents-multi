@@ -10,14 +10,29 @@ Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KD
 |---|---|
 | `claude` (`clp`) | Claude Code, profilo **personal** (default della macchina) |
 | `claude-work` (`cw`) | Claude Code, profilo **work** (account Agency) |
-| `claude-multi install [--dry-run]` | materializza runtime, wrapper, unit systemd, `.desktop` dal repo. Idempotente |
+| `claude-multi install [--dry-run]` | materializza runtime, wrapper, unit systemd, `.desktop` dal repo secondo i manifest dei profili. Idempotente |
 | `claude-multi doctor [--json]` | verifica ogni invariante e dice come sistemarla |
-| `claude-multi status [--json]` | versioni, update disponibili, sync del repo, cosa è montato per profilo, istanze attive |
+| `claude-multi status [--json]` | versioni, update disponibili, sync del repo, cosa è montato per profilo, istanze attive. È il contratto JSON per statusline, gate e dashboard |
 | `claude-multi sync [--fetch]` | allinea il repo dal remote (fetch se stantio, pull ff-only a tree pulito) |
-| `claude-multi update [--cli\|--desktop\|--check]` | aggiorna Claude Code e/o Claude Desktop (vedi sotto) |
-| `claude-launch <personal\|work>` | entrypoint dei `.desktop`: gate di aggiornamento, poi l'app |
+| `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e dipendenze (Ollama) |
+| `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | aggiorna Claude Code e/o Claude Desktop; `--rollback` torna alla versione precedente della CLI |
+| `claude-multi usage [--by …] [--since …]` | token e costo-equivalente per profilo, modello, progetto, agente, giorno (SQLite) |
+| `claude-multi serve` | dashboard locale in sola lettura su `http://127.0.0.1:7331` |
+| `claude-launch <personal\|work>` | entrypoint dei `.desktop`: sync del repo, gate di aggiornamento, poi l'app |
 
 `claude update` dentro un wrapper viene dirottato su `claude-multi update --cli`: l'updater nativo riscriverebbe `~/.local/bin/claude` e lascerebbe `claude-bin` indietro.
+
+## Profili: manifest
+
+Ogni profilo ha `profiles/<p>/profile.json`:
+
+```json
+{ "skills": ["graphify"], "agents": "all", "commands": "all" }
+```
+
+`"all"` monta la dir condivisa intera (un symlink); una lista monta solo quelle voci, più le voci **proprie** del profilo in `profiles/<p>/<kind>/` (es. le skill cliente `clientapp-*` in `profiles/work/skills`, che così non arrivano in personal). `install` materializza, `doctor` segnala mancanti, extra e link rotti.
+
+Le skill installate da tool esterni finiscono in `~/.agents/skills` (folder Syncthing `agents`): `install` le linka in `shared/skills` con path assoluto, e il link va committato. Le skill native del repo (`graphify`, `clientapp-*`) sono dir reali.
 
 ## Layout del repo
 
@@ -25,10 +40,10 @@ Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KD
 bin/            wrapper e script: claude, claude-work, claude-multi, claude-launch, claude-update,
                 claude-update-notify, claude-update-gui, claude-desktop-update, claude-desktop-work-rebuild
 bin/lib/        prelaunch.sh — sync del repo prima di ogni avvio (bash puro, mai bloccante)
-cli/main.ts     la CLI claude-multi (Deno, zero dipendenze): install · doctor · status · sync · update
+cli/            la CLI claude-multi (Deno, zero dipendenze): main · lib · doctor · install · status · mcp · usage · serve
 shared/         config condivisa fra i profili: agents, commands, hooks, skills, rules, mcp (registry),
                 settings.json, statusline-command.sh, scripts, tools
-profiles/       CLAUDE.md per profilo + skill solo-work (profiles/work/skills)
+profiles/       CLAUDE.md, profile.json (manifest) e voci proprie per profilo (profiles/work/skills)
 lib/            claude-update-gui (PySide6)
 systemd/user/   claude-update-check.{service,timer}
 desktop/        .desktop + icone della variante Work
@@ -67,7 +82,14 @@ Niente si aggiorna senza approvazione. `DISABLE_AUTOUPDATER=1` è impostato ovun
 
 ## MCP
 
-Registry unico `shared/mcp/servers.json` (campo `_profiles` per limitare un server a un profilo). `shared/scripts/mcp-sync.py` lo applica nei `.claude.json` dei profili, a Claude chiuso (`--check` per il solo diff, usato dal doctor). Gli MCP scritti in casa stanno in `shared/mcp/<nome>/` (Deno, permessi minimi, segreti letti da `~/.config/secrets/`).
+Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti) e `_surfaces` (`cli` = `.claude.json` del profilo, letto da Claude Code CLI ed embedded; `desktop` = `claude_desktop_config.json` dell'istanza Desktop, letto dalla chat). `claude-multi mcp sync` applica il registry a tutte le superfici, con merge non distruttivo, guard sulle istanze attive (`--force` per ignorarlo), backup in `~/.local/state/claude-multi/` e stato per-macchina. `mcp health` controlla binari, file, lock, vault e Ollama. Gli MCP scritti in casa stanno in `shared/mcp/<nome>/` (Deno, permessi minimi, segreti letti da `~/.config/secrets/`).
+
+## Aggiornamenti: dettagli
+
+- Un solo `claude-update` alla volta (lock in `~/.cache/claude-update/update.lock`).
+- Il prune delle versioni CLI tiene la penultima: `claude-multi update --rollback` ci torna.
+- `claude-update --check --json` allega `changelog_file` con la sezione del CHANGELOG ufficiale della versione remota: il gate lo mostra prima di chiedere l'approvazione.
+- Claude Desktop: l'`InRelease` del repo apt è firmato ma Anthropic non pubblica la chiave in un path noto. Se metti un keyring in `~/.config/claude-multi/anthropic-apt.gpg`, `claude-desktop-update` verifica la firma e lo sha256 dell'indice; altrimenti si affida a HTTPS e lo dichiara.
 
 ## Macchina nuova
 
