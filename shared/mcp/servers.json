@@ -1,11 +1,16 @@
 {
-  "$schema-note": "Registry MCP condiviso tra i profili claude-multi. Sorgente di verita': modifica QUI, poi lancia shared/scripts/mcp-sync.py. Non editare mcpServers a mano nei .claude.json dei profili: il sync li sovrascrive.",
-  "profiles": ["work", "personal"],
+  "$schema-note": "Registry MCP condiviso tra i profili claude-multi. Sorgente di verita': modifica QUI, poi lancia shared/scripts/mcp-sync.py. Non editare mcpServers a mano nei .claude.json dei profili: il sync li sovrascrive. wiki-claude: binario pnpm globale (pnpm add -g obsidian-brain), non npx: a freddo npx falliva la connessione.",
+  "profiles": [
+    "work",
+    "personal"
+  ],
   "servers": {
     "wiki-claude": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "obsidian-brain@1.7.24", "server"],
+      "command": "~/.local/share/pnpm/bin/obsidian-brain",
+      "args": [
+        "server"
+      ],
       "env": {
         "VAULT_PATH": "~/brains/claude",
         "EMBEDDING_PROVIDER": "ollama",
@@ -41,7 +46,9 @@
       }
     },
     "coolify-ark": {
-      "_profiles": ["personal"],
+      "_profiles": [
+        "personal"
+      ],
       "type": "stdio",
       "command": "deno",
       "args": [
