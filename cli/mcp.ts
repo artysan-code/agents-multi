@@ -133,17 +133,25 @@ export async function apply(opts: { force?: boolean } = {}) {
 }
 
 // ---------------------------------------------------------------- health
-async function ollamaModels(base: string): Promise<string[] | null> {
+// Nota: obsidian-brain (wiki-claude) parla solo il protocollo Ollama. Qui NON gira Ollama: sulla
+// 11434 risponde `llama-embed-shim` (shared/tools/llama-embed-shim, unit llama-embed-shim.service),
+// che traduce verso `llama-server` di llama.cpp (unit llama-embed.service, porta 8090, bge-m3 su Vulkan).
+async function getJson(url: string, ms = 1500): Promise<unknown | null> {
   try {
-    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 1500);
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), ms);
     // Deno: il permesso --allow-net è per host letterale, quindi localhost e 127.0.0.1 sono due host diversi
-    const url = base.replace(/\/$/, "").replace("://localhost", "://127.0.0.1");
-    const r = await fetch(`${url}/api/tags`, { signal: ctrl.signal }); clearTimeout(to);
+    const r = await fetch(url.replace("://localhost", "://127.0.0.1"), { signal: ctrl.signal }); clearTimeout(to);
     if (!r.ok) return null;
-    const j = await r.json() as { models?: { name: string }[] };
-    return (j.models ?? []).map((m) => m.name);
+    return await r.json();
   } catch { return null; }
 }
+async function embeddingModels(base: string): Promise<string[] | null> {
+  const j = await getJson(`${base.replace(/\/$/, "")}/api/tags`) as { models?: { name: string }[] } | null;
+  return j ? (j.models ?? []).map((m) => m.name) : null;
+}
+export const LLAMA_EMBED_URL = "http://127.0.0.1:8090";
+export async function llamaServerOk() { const j = await getJson(`${LLAMA_EMBED_URL}/health`) as { status?: string } | null; return j?.status === "ok"; }
+
 /** Controlli statici e leggeri per ogni server del registry: binario, file, dipendenze (Ollama). */
 export async function health(): Promise<Check[]> {
   const reg = await loadRegistry(); const out: Check[] = [];
@@ -158,16 +166,18 @@ export async function health(): Promise<Check[]> {
     }
     if (env.VAULT_PATH && !(await stat(env.VAULT_PATH))) problems.push(`vault assente: ${env.VAULT_PATH}`);
     if (env.EMBEDDING_PROVIDER === "ollama") {
-      const models = await ollamaModels(env.OLLAMA_BASE_URL ?? "http://localhost:11434");
-      if (!models) problems.push("Ollama non risponde");
-      else if (env.EMBEDDING_MODEL && !models.some((m) => m.startsWith(env.EMBEDDING_MODEL))) problems.push(`modello ${env.EMBEDDING_MODEL} non in Ollama`);
+      const base = env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+      const models = await embeddingModels(base);
+      if (!models) problems.push(`endpoint embedding ${base} (llama-embed-shim) non risponde`);
+      else if (env.EMBEDDING_MODEL && !models.some((m) => m.startsWith(env.EMBEDDING_MODEL))) problems.push(`modello ${env.EMBEDDING_MODEL} non servito dallo shim`);
+      if (!(await llamaServerOk())) problems.push(`llama-server ${LLAMA_EMBED_URL} non risponde (unit llama-embed.service)`);
     }
     const envFile = args.join(" ").match(/\. "?\$HOME\/([^"\s;]+)/); // pattern `. "$HOME/.config/x/.env"`
     if (envFile && !(await stat(`${Deno.env.get("HOME")}/${envFile[1]}`))) problems.push(`env file assente: ~/${envFile[1]}`);
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = (cfg._profiles ?? reg.profiles).join("+");
     if (problems.length) {
-      const fix = problems.some((x) => x.startsWith("Ollama")) ? "avvia Ollama (systemctl start ollama, o `ollama serve`): senza, wiki-claude non si connette"
-        : problems.some((x) => x.startsWith("modello")) ? `ollama pull ${env.EMBEDDING_MODEL}`
+      const fix = problems.some((x) => x.includes("llama-server") || x.includes("embedding")) ? "systemctl --user start llama-embed-shim.service (tira su anche llama-embed.service): senza, wiki-claude non si connette"
+        : problems.some((x) => x.startsWith("modello")) ? "controlla SHIM_MODEL in systemd/user/llama-embed-shim.service e il -hf di llama-embed.service"
         : "sistemare la dipendenza o correggere shared/mcp/servers.json";
       out.push({ id: `mcp.${name}`, status: "fail", msg: `MCP ${name}: ${problems.join("; ")}`, fix });
     }

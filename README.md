@@ -14,7 +14,7 @@ Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KD
 | `claude-multi doctor [--json]` | verifica ogni invariante e dice come sistemarla |
 | `claude-multi status [--json]` | versioni, update disponibili, sync del repo, cosa è montato per profilo, istanze attive. È il contratto JSON per statusline, gate e dashboard |
 | `claude-multi sync [--fetch]` | allinea il repo dal remote (fetch se stantio, pull ff-only a tree pulito) |
-| `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e dipendenze (Ollama) |
+| `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e l'endpoint di embedding llama.cpp |
 | `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | aggiorna Claude Code e/o Claude Desktop; `--rollback` torna alla versione precedente della CLI |
 | `claude-multi usage [--by …] [--since …]` | token e costo-equivalente per profilo, modello, progetto, agente, giorno (SQLite) |
 | `claude-multi serve` | dashboard locale in sola lettura su `http://127.0.0.1:7331` |
@@ -45,7 +45,7 @@ shared/         config condivisa fra i profili: agents, commands, hooks, skills,
                 settings.json, statusline-command.sh, scripts, tools
 profiles/       CLAUDE.md, profile.json (manifest) e voci proprie per profilo (profiles/work/skills)
 lib/            claude-update-gui (PySide6)
-systemd/user/   claude-update-check.{service,timer}
+systemd/user/   claude-update-check.{service,timer} + llama-embed.service, llama-embed-shim.service, llama-generate.service
 desktop/        .desktop + icone della variante Work
 pkg/            PKGBUILD del repack Arch del .deb ufficiale di Claude Desktop
 ```
@@ -82,7 +82,7 @@ Niente si aggiorna senza approvazione. `DISABLE_AUTOUPDATER=1` è impostato ovun
 
 ## MCP
 
-Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti) e `_surfaces` (`cli` = `.claude.json` del profilo, letto da Claude Code CLI ed embedded; `desktop` = `claude_desktop_config.json` dell'istanza Desktop, letto dalla chat). `claude-multi mcp sync` applica il registry a tutte le superfici, con merge non distruttivo, guard sulle istanze attive (`--force` per ignorarlo), backup in `~/.local/state/claude-multi/` e stato per-macchina. `mcp health` controlla binari, file, lock, vault e Ollama. Gli MCP scritti in casa stanno in `shared/mcp/<nome>/` (Deno, permessi minimi, segreti letti da `~/.config/secrets/`).
+Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti) e `_surfaces` (`cli` = `.claude.json` del profilo, letto da Claude Code CLI ed embedded; `desktop` = `claude_desktop_config.json` dell'istanza Desktop, letto dalla chat). `claude-multi mcp sync` applica il registry a tutte le superfici, con merge non distruttivo, guard sulle istanze attive (`--force` per ignorarlo), backup in `~/.local/state/claude-multi/` e stato per-macchina. `mcp health` controlla binari, file, lock, vault e l'endpoint di embedding di `wiki-claude`: **non** Ollama, ma `llama-embed-shim` (`shared/tools/llama-embed-shim`, porta 11434, parla il protocollo Ollama perché obsidian-brain conosce solo quello) davanti a `llama-server` di llama.cpp (`llama-embed.service`, porta 8090, bge-m3 su Vulkan). `llama-generate.service` è on-demand: la accende lo shim per il distiller e la spegne a riposo. Gli MCP scritti in casa stanno in `shared/mcp/<nome>/` (Deno, permessi minimi, segreti letti da `~/.config/secrets/`).
 
 ## Aggiornamenti: dettagli
 

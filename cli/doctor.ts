@@ -134,6 +134,16 @@ export async function doctor(): Promise<Check[]> {
     const handler = await readText(`${HOME}/.local/share/applications/claude-code-url-handler.desktop`);
     if (handler && !handler.includes("claude-bin")) add("desktop.urlhandler", "fail", "url-handler claude-cli:// non punta a claude-bin", "claude-multi install");
   }
+  // --- embedding locale per wiki-claude: llama.cpp + shim (niente Ollama su questa macchina)
+  if (await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`) && m.systemd) {
+    for (const u of ["llama-embed.service", "llama-embed-shim.service"]) {
+      const en = (await run("systemctl", ["--user", "is-enabled", u])).out; const act = (await run("systemctl", ["--user", "is-active", u])).out;
+      if (en !== "enabled" || act !== "active") add(`llama.${u}`, "warn", `${u}: ${en}/${act}`, `systemctl --user enable --now ${u}`);
+    }
+    const gen = (await run("systemctl", ["--user", "is-enabled", "llama-generate.service"])).out;
+    if (gen === "enabled") add("llama.generate", "warn", "llama-generate.service è abilitata al boot: deve restare on-demand (la gestisce lo shim)", "systemctl --user disable llama-generate.service");
+    if (!(await readlink(`${HOME}/.config/systemd/user/llama-embed-shim.service`))?.startsWith(REPO)) add("llama.units", "warn", "unit llama-*.service non linkate dal repo", "claude-multi install");
+  }
   if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills assente: le skill esterne non sono disponibili su questa macchina", "attiva la folder Syncthing `agents`");
   return c;
 }

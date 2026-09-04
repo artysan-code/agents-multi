@@ -1,0 +1,21 @@
+[Unit]
+Description=llama.cpp — server di embedding (bge-m3 568M, Vulkan, dGPU)
+Documentation=file://~/.local/bin/llm
+After=graphical-session.target
+
+[Service]
+Type=exec
+Environment=LLAMA_CACHE=%h/.cache/llama.cpp
+# Pinna la dGPU: Vulkan0=the dGPU, Vulkan1=the iGPU.
+Environment=GGML_VK_VISIBLE_DEVICES=0
+ExecStart=%h/.local/opt/llama-vulkan/bin/llama-server \
+  -hf gpustack/bge-m3-GGUF:Q8_0 \
+  --embedding --pooling cls \
+  --host 127.0.0.1 --port 8090 \
+  --ctx-size 32768 --batch-size 8192 --ubatch-size 8192 \
+  --parallel 4
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -152,11 +152,17 @@ export async function install(dry: boolean) {
   // 8. systemd (solo macchine grafiche: la notifica va su KDE)
   if (m.graphical && m.systemd) {
     const ud = `${HOME}/.config/systemd/user`; await ensureDir(ud);
-    for (const u of ["claude-update-check.service", "claude-update-check.timer"]) await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
+    for (const u of await listDir(`${REPO}/systemd/user`)) await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
     if (!DRY) {
       await run("systemctl", ["--user", "daemon-reload"]);
-      const en = await run("systemctl", ["--user", "is-enabled", "claude-update-check.timer"]);
-      if (en.out !== "enabled") { say(`${ANSI.g}+${ANSI.x} enable --now claude-update-check.timer`); await run("systemctl", ["--user", "enable", "--now", "claude-update-check.timer"]); }
+      // llama-generate.service resta NON abilitata di proposito: la accende lo shim on-demand e la spegne a riposo (VRAM libera).
+      const wantEnabled = ["claude-update-check.timer"];
+      if (await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
+      else console.log(`  ${ANSI.d}llama-server assente (~/.local/opt/llama-vulkan): salto llama-embed*.service — wiki-claude non avrà embedding qui${ANSI.x}`);
+      for (const u of wantEnabled) {
+        const en = await run("systemctl", ["--user", "is-enabled", u]);
+        if (en.out !== "enabled") { say(`${ANSI.g}+${ANSI.x} enable --now ${u}`); await run("systemctl", ["--user", "enable", "--now", u]); }
+      }
     }
   }
 

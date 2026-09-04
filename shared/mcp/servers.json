@@ -1,5 +1,5 @@
 {
-  "$schema-note": "Registry MCP unico dei profili claude-multi. Sorgente di verita': modifica QUI, poi `claude-multi mcp sync` (a Claude chiuso). Campi: _profiles (default tutti), _surfaces (cli|desktop, default cli). wiki-claude: binario pnpm globale (pnpm add -g obsidian-brain), non npx: a freddo npx falliva la connessione.",
+  "$schema-note": "Registry MCP unico dei profili claude-multi. Sorgente di verita': modifica QUI, poi `claude-multi mcp sync` (a Claude chiuso). Campi: _profiles (default tutti), _surfaces (cli|desktop, default cli). wiki-claude: binario pnpm globale (pnpm add -g obsidian-brain), non npx: a freddo npx falliva la connessione. EMBEDDING_PROVIDER=ollama e' solo il PROTOCOLLO: sulla 11434 risponde llama-embed-shim (shared/tools) davanti a llama-server di llama.cpp (bge-m3, Vulkan), non Ollama.",
   "profiles": [
     "work",
     "personal"

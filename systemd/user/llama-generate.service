@@ -1,0 +1,15 @@
+[Unit]
+Description=llama.cpp — server di generazione on-demand (Ministral 3 8B, per il distiller)
+Documentation=file://~/.claude-multi/shared/hooks/wiki-distiller-run.py
+# NON abilitato al boot di proposito: lo shim lo accende quando serve e lo spegne
+# dopo un periodo di inattività, così la VRAM resta libera mentre giochi.
+
+[Service]
+Type=exec
+Environment=LLAMA_CACHE=%h/.cache/llama.cpp
+Environment=GGML_VK_VISIBLE_DEVICES=0
+ExecStart=%h/.local/opt/llama-vulkan/bin/llama-server \
+  -hf mistralai/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M \
+  --host 127.0.0.1 --port 8080 \
+  --ctx-size 16384 --n-gpu-layers 999
+Restart=no
