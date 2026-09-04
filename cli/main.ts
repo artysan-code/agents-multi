@@ -49,7 +49,7 @@ switch (cmd) {
   }
   case "mcp": {
     const sub = rest[0] ?? "check";
-    if (sub === "health") { Deno.exit(printDoctor(await health())); }
+    if (sub === "health") { Deno.exit(printDoctor(await health({ live: flag("--probe") }))); }
     const { changes, skipped } = await plan();
     for (const t of skipped) console.log(`  ${ANSI.d}salto ${t.managedKey}: ${t.path} assente${ANSI.x}`);
     if (!changes.length) { console.log("registry MCP già applicato su tutte le superfici"); break; }
@@ -92,7 +92,7 @@ switch (cmd) {
   doctor  [--json]            verifica le invarianti del setup, con fix suggerito
   status  [--json]            versioni, aggiornamenti, sync repo, profili e cosa è montato, istanze attive
   sync    [--fetch]           allinea il repo (fetch se stantio, pull ff-only a tree pulito)
-  mcp     check|sync|health   registry MCP → .claude.json (cli) e claude_desktop_config.json (desktop); --force ignora le istanze attive
+  mcp     check|sync|health [--probe]   registry MCP → .claude.json (cli) e claude_desktop_config.json (desktop); --force ignora le istanze attive; --probe avvia davvero ogni server e attende initialize
   update  [--cli|--desktop|--check [--json]|--rollback]   aggiorna Claude Code / Claude Desktop
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]

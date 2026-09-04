@@ -152,12 +152,43 @@ async function embeddingModels(base: string): Promise<string[] | null> {
 export const LLAMA_EMBED_URL = "http://127.0.0.1:8090";
 export async function llamaServerOk() { const j = await getJson(`${LLAMA_EMBED_URL}/health`) as { status?: string } | null; return j?.status === "ok"; }
 
-/** Controlli statici e leggeri per ogni server del registry: binario, file, dipendenze (Ollama). */
-export async function health(): Promise<Check[]> {
+/** Sonda live: avvia il server stdio con la sua config, manda `initialize`, aspetta la risposta. Coglie ciò che i
+ *  check statici non vedono (moduli nativi con ABI sbagliata, env mancanti, crash a freddo). Costa: spawn reale. */
+export async function probe(cmd: string, args: string[], env: Record<string, string>, timeoutMs = 20000): Promise<{ ok: boolean; ms: number; detail: string }> {
+  const t0 = Date.now();
+  let child: Deno.ChildProcess | null = null;
+  try {
+    child = new Deno.Command(cmd, { args, env: { ...Deno.env.toObject(), ...env }, stdin: "piped", stdout: "piped", stderr: "piped" }).spawn();
+    const w = child.stdin.getWriter();
+    await w.write(new TextEncoder().encode(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-multi", version: "probe" } } }) + "\n"));
+    const reader = child.stdout.getReader(); const dec = new TextDecoder(); let buf = "";
+    const errChunks: string[] = []; const errReader = child.stderr.getReader();
+    (async () => { try { for (;;) { const { value, done } = await errReader.read(); if (done) break; errChunks.push(dec.decode(value)); } } catch { /* chiuso */ } })();
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const race = await Promise.race([reader.read(), new Promise<{ timeout: true }>((r) => setTimeout(() => r({ timeout: true }), Math.max(1, deadline - Date.now())))]);
+      if ("timeout" in race) break;
+      if (race.done) break;
+      buf += dec.decode(race.value);
+      if (buf.includes('"result"') && buf.includes("serverInfo")) return { ok: true, ms: Date.now() - t0, detail: (buf.match(/"name":"([^"]+)","version":"([^"]+)"/) ?? []).slice(1).join(" ") };
+      if (buf.includes('"error"')) break;
+    }
+    const err = errChunks.join("").split("\n").filter((l) => /error|Error|mismatch|ENOENT|not found/.test(l)).slice(0, 2).join(" | ");
+    return { ok: false, ms: Date.now() - t0, detail: err || (buf ? `risposta inattesa: ${buf.slice(0, 120)}` : "nessuna risposta") };
+  } catch (e) {
+    return { ok: false, ms: Date.now() - t0, detail: (e as Error).message };
+  } finally {
+    try { child?.kill("SIGTERM"); } catch { /* già morto */ }
+  }
+}
+
+/** Controlli statici e leggeri per ogni server del registry: binario, file, dipendenze. Con `live` anche la sonda initialize. */
+export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
   const reg = await loadRegistry(); const out: Check[] = [];
   for (const [name, cfg] of Object.entries(reg.servers)) {
     const cmd = String(cfg.command ?? ""); const args = (cfg.args ?? []) as string[]; const env = (cfg.env ?? {}) as Record<string, string>;
     const problems: string[] = [];
+    if (env.PATH) for (const dir of env.PATH.split(":").slice(0, 2)) if (!(await stat(dir))) problems.push(`PATH pinnato: dir assente ${dir}`);
     if (cmd.startsWith("/")) { if (!(await stat(cmd))) problems.push(`binario assente: ${cmd}`); }
     else if (cmd && !(await has(cmd))) problems.push(`comando non nel PATH: ${cmd}`);
     for (const a of args) {
@@ -175,13 +206,20 @@ export async function health(): Promise<Check[]> {
     const envFile = args.join(" ").match(/\. "?\$HOME\/([^"\s;]+)/); // pattern `. "$HOME/.config/x/.env"`
     if (envFile && !(await stat(`${Deno.env.get("HOME")}/${envFile[1]}`))) problems.push(`env file assente: ~/${envFile[1]}`);
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = (cfg._profiles ?? reg.profiles).join("+");
+    let live = "";
+    if (opts.live && !problems.length && cmd) {
+      const r = await probe(cmd, args, env);
+      if (r.ok) live = ` · initialize ok in ${(r.ms / 1000).toFixed(1)}s${r.detail ? ` (${r.detail})` : ""}`;
+      else problems.push(`non risponde a initialize: ${r.detail}`);
+    }
     if (problems.length) {
       const fix = problems.some((x) => x.includes("llama-server") || x.includes("embedding")) ? "systemctl --user start llama-embed-shim.service (tira su anche llama-embed.service): senza, wiki-claude non si connette"
         : problems.some((x) => x.startsWith("modello")) ? "controlla SHIM_MODEL in systemd/user/llama-embed-shim.service e il -hf di llama-embed.service"
+        : problems.some((x) => x.includes("ABI") || x.includes("NODE_MODULE_VERSION")) ? "modulo nativo compilato per un altro Node: ricompila con il Node del PATH pinnato (prebuild-install in node_modules/better-sqlite3) e rimuovi ~/.cache/obsidian-brain/abi-heal-attempted-*"
         : "sistemare la dipendenza o correggere shared/mcp/servers.json";
       out.push({ id: `mcp.${name}`, status: "fail", msg: `MCP ${name}: ${problems.join("; ")}`, fix });
     }
-    else out.push({ id: `mcp.${name}`, status: "ok", msg: `MCP ${name} (${profiles} · ${surfaces}) pronto` });
+    else out.push({ id: `mcp.${name}`, status: "ok", msg: `MCP ${name} (${profiles} · ${surfaces}) pronto${live}` });
   }
   return out;
 }
