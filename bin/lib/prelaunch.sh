@@ -52,9 +52,10 @@ main() {
     fi
   fi
 
-  local counts behind=0 ahead=0 dirty pulled=0
-  counts=$(g rev-list --left-right --count '@{u}...HEAD' 2>/dev/null || echo "0 0")
-  behind=${counts%% *}; ahead=${counts##* }
+  local behind=0 ahead=0 dirty pulled=0
+  # rev-list separa con un TAB: `read` splitta su qualsiasi whitespace
+  read -r behind ahead <<< "$(g rev-list --left-right --count '@{u}...HEAD' 2>/dev/null || echo "0 0")"
+  behind=${behind:-0}; ahead=${ahead:-0}
   dirty=$(g status --porcelain 2>/dev/null | wc -l)
 
   if (( behind > 0 && ahead == 0 && dirty == 0 )); then
