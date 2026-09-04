@@ -2,6 +2,8 @@
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (n) => n == null ? "—" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(Math.round(n));
+const short = (s, n = 64) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+const outdated = (u, cur) => !!(u && u.outdated && u.latest && u.latest !== cur);
 const usd = (n) => n == null ? "—" : "$" + (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
 const pct = (n) => n == null || !isFinite(n) ? "—" : (n * 100).toFixed(0) + "%";
 const SERIES = { personal: "var(--s1)", work: "var(--s2)" };
@@ -90,7 +92,8 @@ function hbars(el, rows, color, fmtVal) {
 function tile(label, value, sub, cls = "") { return `<div class="card tile ${cls}"><h3>${label}</h3><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`; }
 function renderOverview(s, u14) {
   const m = s.machine, r = s.repo, up = s.update || {};
-  const upd = (k) => up[k]?.outdated ? `<span class="delta up">⬆ ${esc(up[k].latest)}</span>` : `<span class="delta good">aggiornato</span>`;
+  const cur = { cli: m.cliVersion, desktop: m.desktopVersion };
+  const upd = (k) => outdated(up[k], cur[k]) ? `<span class="delta up">⬆ ${esc(up[k].latest)}</span>` : `<span class="delta good">aggiornato</span>`;
   const fails = s.doctor.filter((c) => c.status === "fail").length, warns = s.doctor.filter((c) => c.status === "warn").length;
   const sess = s.running.cli.length;
   $("#ov-tiles").innerHTML =
@@ -100,7 +103,7 @@ function renderOverview(s, u14) {
     tile("Sessioni attive", `${sess}<small>${s.running.desktop.length} Desktop</small>`, sess ? s.running.cli.map((c) => `${c.profile ?? "?"}${c.embedded ? " (desktop)" : " (cli)"}`).join(" · ") : "nessuna sessione Claude Code");
   // repo
   const syncCls = !r.isRepo || !r.upstream ? "crit" : (r.behind && r.ahead) ? "crit" : (r.behind || r.ahead || r.dirty) ? "warn" : "ok";
-  $("#ov-repo").innerHTML = r.isRepo ? `<dt>branch</dt><dd>${esc(r.branch)} <span class="faint">@ ${esc(r.head)}</span></dd><dt>remote</dt><dd class="mono">${esc(r.remote || "—")}</dd><dt>stato</dt><dd class="${syncCls}">↓${r.behind} ↑${r.ahead} ✎${r.dirty}${r.dirty ? ` <span class="faint">· ${esc(r.dirtyFiles.slice(0, 3).join(", "))}</span>` : ""}</dd><dt>ultimo commit</dt><dd>${r.headDate ? new Date(r.headDate).toLocaleString("it-IT") : "—"}</dd><dt>ultimo fetch</dt><dd>${s.sync?.fetched_at ? new Date(s.sync.fetched_at * 1000).toLocaleString("it-IT") : "mai"}${s.sync?.fetch_ok === false ? ' <span class="warn">fallito</span>' : ""}</dd>` : "<dt>repo</dt><dd class='crit'>non trovato</dd>";
+  $("#ov-repo").innerHTML = r.isRepo ? `<dt>branch</dt><dd>${esc(r.branch)} <span class="faint" title="${esc(r.head)}">@ ${esc(short(r.head))}</span></dd><dt>remote</dt><dd class="mono">${esc(r.remote || "—")}</dd><dt>stato</dt><dd class="${syncCls}">↓${r.behind} ↑${r.ahead} ✎${r.dirty}${r.dirty ? ` <span class="faint">· ${esc(r.dirtyFiles.slice(0, 3).join(", "))}</span>` : ""}</dd><dt>ultimo commit</dt><dd>${r.headDate ? new Date(r.headDate).toLocaleString("it-IT") : "—"}</dd><dt>ultimo fetch</dt><dd>${s.sync?.fetched_at ? new Date(s.sync.fetched_at * 1000).toLocaleString("it-IT") : "mai"}${s.sync?.fetch_ok === false ? ' <span class="warn">fallito</span>' : ""}</dd>` : "<dt>repo</dt><dd class='crit'>non trovato</dd>";
   // running + shared
   $("#ov-running").innerHTML = (s.running.cli.length ? s.running.cli.map((c) => `<div><span class="chip"><span class="k">${c.embedded ? "desktop" : "cli"}</span> ${esc(c.profile || "?")} <span class="k">${esc(c.version || "")}</span></span> <span class="faint mono">${esc((c.cwd || "").replace(/^\/home\/[^/]+/, "~"))}</span></div>`).join("") : '<div class="empty">nessuna sessione Claude Code</div>') + (s.running.desktop.length ? `<div class="faint" style="margin-top:6px">Desktop aperto: ${s.running.desktop.map((d) => d.variant).join(", ")}</div>` : "");
   const sh = s.shared;

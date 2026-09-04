@@ -258,6 +258,9 @@ if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
   fi
 fi
 
+# La cache del check (launcher, statusline, dashboard) descrive il mondo di prima: via, si rifà al prossimo giro.
+[[ "$cli_res" == ok* || "$desk_res" == ok* ]] && rm -f "$CACHE_DIR/check.json"
+
 echo
 echo "──────── riepilogo ────────"
 [[ "$scope" == "all" || "$scope" == "cli"     ]] && printf "  Code     %s\n" "$cli_res"

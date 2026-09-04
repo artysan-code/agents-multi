@@ -109,8 +109,9 @@ export async function doctor(): Promise<Check[]> {
 
   // --- aggiornamenti
   const upd = await readJson<{ cli: { outdated: boolean; latest: string }; desktop: { outdated: boolean; latest: string } }>(`${HOME}/.cache/claude-update/check.json`);
-  if (upd?.cli?.outdated) add("update.cli", "warn", `Claude Code ${upd.cli.latest} disponibile`, "claude-multi update --cli");
-  if (upd?.desktop?.outdated) add("update.desktop", "warn", `Claude Desktop ${upd.desktop.latest} disponibile`, "claude-multi update --desktop");
+  // la cache può essere stantia subito dopo un update: conta solo se la versione remota è diversa da quella installata
+  if (upd?.cli?.outdated && upd.cli.latest !== m.cliVersion) add("update.cli", "warn", `Claude Code ${upd.cli.latest} disponibile`, "claude-multi update --cli");
+  if (upd?.desktop?.outdated && upd.desktop.latest !== m.desktopVersion) add("update.desktop", "warn", `Claude Desktop ${upd.desktop.latest} disponibile`, "claude-multi update --desktop");
   if (!upd) add("update.check", "warn", "nessun check aggiornamenti in cache", "claude-multi update --check");
 
   // --- Claude Desktop

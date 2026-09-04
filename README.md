@@ -17,7 +17,7 @@ Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KD
 | `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e l'endpoint di embedding llama.cpp |
 | `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | aggiorna Claude Code e/o Claude Desktop; `--rollback` torna alla versione precedente della CLI |
 | `claude-multi usage [--by …] [--since …]` | token e costo-equivalente per profilo, modello, progetto, agente, giorno (SQLite) |
-| `claude-multi serve` | dashboard locale in sola lettura su `http://127.0.0.1:7331` |
+| `claude-multi serve` | dashboard locale su `http://127.0.0.1:7331`: overview, profili, doctor, usage con grafici, sync, azioni |
 | `claude-launch <personal\|work>` | entrypoint dei `.desktop`: sync del repo, gate di aggiornamento, poi l'app |
 
 `claude update` dentro un wrapper viene dirottato su `claude-multi update --cli`: l'updater nativo riscriverebbe `~/.local/bin/claude` e lascerebbe `claude-bin` indietro.
@@ -90,6 +90,19 @@ Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti
 - Il prune delle versioni CLI tiene la penultima: `claude-multi update --rollback` ci torna.
 - `claude-update --check --json` allega `changelog_file` con la sezione del CHANGELOG ufficiale della versione remota: il gate lo mostra prima di chiedere l'approvazione.
 - Claude Desktop: la chiave pubblica del repo apt Anthropic (`https://downloads.claude.ai/claude-desktop/key.asc`, fingerprint `31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`) è in `pkg/claude-desktop/anthropic-apt.asc`. `claude-desktop-update` verifica con `gpgv` la firma dell'`InRelease`, che sia della chiave pinnata, e lo sha256 dell'indice `Packages`; il `.deb` è poi verificato dallo sha256 preso da quell'indice. Catena completa fino al pacchetto.
+
+## Dashboard
+
+`claude-multi serve` apre `http://127.0.0.1:7331`: un processo, nessun daemon, Ctrl-C per chiudere. Pagina in `cli/dashboard/` (HTML, CSS e JS senza dipendenze né asset esterni, funziona offline), token visivi «Graphite · Indigo» dal sistema UI di Samuel, tema scuro e chiaro.
+
+- **Overview**: versioni con badge di update, doctor, sessioni attive con cwd, costo per giorno degli ultimi 14 giorni impilato per profilo, stato del repo.
+- **Profili**: manifest, cosa è montato (skill, agenti, comandi, MCP per superficie, plugin) con chip che distinguono voci proprie, da `~/.agents` e link rotti.
+- **Doctor**: tutti i controlli con filtro per esito e fix copiabile; «Rilancia doctor».
+- **Usage**: stat tile (costo equivalente, output, cache letta, messaggi), barre impilate per giorno e profilo, distribuzione per modello, tabella per profilo, modello, progetto, agente, giorno, sessione o entrypoint. Palette validata per daltonismo (dataviz).
+- **Sync**: remote, ultimo fetch, ahead/behind, working tree.
+- **Azioni**: doctor, sync, mcp check/sync (con `--force` opzionale), install dry-run e reale, usage ingest, update check. Girano sulla CLI locale via `POST /api/action` con allowlist e header anti-CSRF; l'output compare nella console. L'update **non** è un'azione: passa dal gate con polkit.
+
+Auto-refresh ogni 30 s (disattivabile), stato con cache di 5 s lato server.
 
 ## Macchina nuova
 

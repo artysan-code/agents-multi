@@ -129,9 +129,14 @@ if [ -f "$cm_sync" ]; then
 fi
 cm_upd="$HOME/.cache/claude-update/check.json"
 if [ -f "$cm_upd" ]; then
-  upd=$(jq -r '[(.cli.outdated|tostring),.cli.latest,(.desktop.outdated|tostring),.desktop.latest] | @tsv' "$cm_upd" 2>/dev/null)
+  upd=$(jq -r '[(.cli.outdated|tostring),.cli.latest,(.desktop.outdated|tostring),.desktop.latest,.cli.current,.desktop.current] | @tsv' "$cm_upd" 2>/dev/null)
   u_cli=$(echo "$upd" | cut -f1); u_cli_v=$(echo "$upd" | cut -f2)
   u_desk=$(echo "$upd" | cut -f3); u_desk_v=$(echo "$upd" | cut -f4)
+  # cache stantia dopo un update: vale solo se la versione remota differisce da quella installata ORA
+  cur_cli=$(basename "$(readlink -f "$HOME/.local/bin/claude-bin" 2>/dev/null)" 2>/dev/null)
+  cur_desk=$(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1)
+  [ -n "$cur_cli" ] && [ "$u_cli_v" = "$cur_cli" ] && u_cli=false
+  [ -n "$cur_desk" ] && [ "$u_desk_v" = "$cur_desk" ] && u_desk=false
   u_str=""
   [ "$u_cli" = "true" ]  && u_str="${YELLOW}⬆ code ${u_cli_v}${RESET}"
   [ "$u_desk" = "true" ] && u_str="${u_str}${u_str:+ }${YELLOW}⬆ desktop ${u_desk_v}${RESET}"
