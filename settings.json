@@ -62,15 +62,15 @@
     "deny": [
       "Read(~/.aws/**)",
       "Read(~/.config/secrets/**)",
-      "Write(~/.aws/**)",
+      "Edit(~/.aws/**)",
       "Bash(nc *)",
       "Bash(ncat *)"
     ],
     "ask": [
       "Read(.env)",
       "Read(.env.*)",
-      "Write(.env)",
-      "Write(.env.*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
       "Bash(curl * | bash*)",
       "Bash(curl * | sh*)",
       "Bash(wget * | bash*)",
@@ -130,6 +130,24 @@
           {
             "type": "command",
             "command": "bash ~/.claude-multi/shared/hooks/memory-legacy-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/commit-trailer-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude-multi/shared/hooks/agents-md-nested.sh"
           }
         ]
       }
@@ -218,10 +236,42 @@
     "code-review@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "obsidian@obsidian-skills": true,
-    "context7@claude-plugins-official": false,
+    "context7@claude-plugins-official": true,
     "vue-volar@claude-code-lsps": true
   },
-  "effortLevel": "xhigh",
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "claude-code-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-code"
+      }
+    },
+    "obsidian-skills": {
+      "source": {
+        "source": "github",
+        "repo": "kepano/obsidian-skills"
+      }
+    },
+    "claude-code-lsps": {
+      "source": {
+        "source": "github",
+        "repo": "Piebald-AI/claude-code-lsps"
+      }
+    },
+    "context7-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "upstash/context7"
+      }
+    }
+  },
+  "effortLevel": "medium",
   "promptSuggestionEnabled": false,
   "tui": "fullscreen",
   "skipWorkflowUsageWarning": true,

@@ -39,6 +39,20 @@
         "LOG_LEVEL": "error",
         "DISABLE_CONSOLE_OUTPUT": "true"
       }
+    },
+    "coolify-ark": {
+      "_profiles": ["personal"],
+      "type": "stdio",
+      "command": "deno",
+      "args": [
+        "run",
+        "--allow-net=ark.example.com",
+        "--allow-read=~/.config/secrets/coolify-ark.token,~/.cache/deno",
+        "--allow-env=HOME,COOLIFY_URL,COOLIFY_TOKEN,COOLIFY_TOKEN_FILE",
+        "--lock=~/.claude-multi/personal/mcp/coolify-ark/deno.lock",
+        "~/.claude-multi/personal/mcp/coolify-ark/server.ts"
+      ],
+      "env": {}
     }
   }
 }

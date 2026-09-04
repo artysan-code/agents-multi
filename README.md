@@ -152,7 +152,17 @@ qual è quella attiva).
 3. Crea i symlink: `claude-bin`, e gli script `claude`, `claude-work`,
    `claude-personal`, `claude-update` (presenti in questo repo o ricostruibili
    da questo README)
-4. Crea il tripwire: `mkdir ~/.claude && chmod 000 ~/.claude`
+4. Crea il tripwire: `mkdir ~/.claude && chmod 500 ~/.claude`
+   (dir read-only, non scrivibile → nessun profilo può scriverci per errore.
+   **Non usare `chmod 000`**: il binario fa comunque `stat` su
+   `~/.claude/settings*.json` anche con `CLAUDE_CONFIG_DIR` impostato, e con 000
+   ottiene EACCES → schermata "Settings Error" ad ogni avvio. Con 500 ottiene
+   ENOENT, che è il caso normale "nessun settings" e non genera errori. Anche
+   la variante con due `settings*.json` a `{}`/400 dentro la dir va bene, ma
+   non serve.)
+   In alternativa: `claude-multi-finalize`, che crea lo stub e il tripwire e
+   verifica i profili. È idempotente — rilancialo quando qualcosa sembra fuori
+   posto e ti dice cosa non torna.
 5. Aggiungi a `.zshrc`:
    ```bash
    export DISABLE_AUTOUPDATER=1
