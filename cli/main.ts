@@ -7,7 +7,8 @@
 //   sync    [--fetch]       allinea il repo (fetch se stantio, pull ff-only a tree pulito)
 //   mcp     check|sync|health [--force]   registry MCP → .claude.json (cli) e claude_desktop_config.json (desktop)
 //   update  [...]           passthrough a bin/claude-update (CLI + Desktop, --rollback)
-//   usage   [...]           token e costo-equivalente per profilo/modello/progetto/agente (SQLite)
+//   usage   [...]           token e costo-equivalente per profilo/modello/progetto/agente/skill/comando (SQLite)
+//   budget  [--notify]      soglie di consumo; notifica solo la spesa reale (extra credits), mai l'abbonamento
 //   serve   [--no-open]     dashboard locale su http://127.0.0.1:7331 (stato, usage, sessioni, doctor, azioni sulla CLI)
 //
 // Principio: il repo è la fonte di verità, ~/.claude-multi è runtime materializzato da `install`.
@@ -21,6 +22,7 @@ import { install } from "./install.ts";
 import { printStatus, status } from "./status.ts";
 import { apply, blockers, describe, health, plan } from "./mcp.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
+import { collect, notifyBudget, printBudget } from "./budget.ts";
 import { PORT, serve } from "./serve.ts";
 
 const [cmd = "help", ...rest] = Deno.args;
@@ -84,6 +86,12 @@ switch (cmd) {
     if (flag("--json")) console.log(JSON.stringify(rep, null, 2)); else printReport(rep);
     break;
   }
+  case "budget": {
+    const r = await collect({ ingest: !flag("--no-ingest") });
+    if (flag("--notify")) { const sent = await notifyBudget(r, { dryRun: flag("--dry-run") }); console.log(sent ? "notifica inviata" : "niente da segnalare"); break; }
+    if (flag("--json")) console.log(JSON.stringify(r, null, 2)); else printBudget(r);
+    break;
+  }
   case "serve": await serve({ open: !flag("--no-open") }); break;
   // deno-lint-ignore no-fallthrough
   case "help": case "--help": case "-h":
@@ -96,8 +104,10 @@ switch (cmd) {
   sync    [--fetch]           allinea il repo (fetch se stantio, pull ff-only a tree pulito)
   mcp     check|sync|health [--probe]   registry MCP → .claude.json (cli) e claude_desktop_config.json (desktop); --force ignora le istanze attive; --probe avvia davvero ogni server e attende initialize
   update  [--cli|--desktop|--check [--json]|--rollback]   aggiorna Claude Code / Claude Desktop
-  usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint]
+  usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
+  budget  [--notify [--dry-run]] [--json]   soglie di consumo da shared/budget.json; con notify "auto"
+          avvisa solo dove si spende davvero (extra credits), non sull'uso incluso nell'abbonamento
   serve   [--no-open]         dashboard locale su http://127.0.0.1:${PORT} (stato, usage, sessioni, doctor, azioni)`);
     if (!["help", "--help", "-h"].includes(cmd)) Deno.exit(2);
 }

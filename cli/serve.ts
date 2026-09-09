@@ -7,6 +7,7 @@
 import { ANSI, CACHE, readText, REPO } from "./lib.ts";
 import { status } from "./status.ts";
 import { type GroupBy, ingest, openDb, report, sessions } from "./usage.ts";
+import { collect } from "./budget.ts";
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 const DASH = `${REPO}/cli/dashboard`;
@@ -22,6 +23,7 @@ const ACTIONS: Record<string, { args: string[]; opts?: Record<string, string[]>;
   "install": { args: ["install"] },
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
   "update-check": { args: ["update", "--check"], timeoutMs: 40000 },
+  "budget": { args: ["budget"] },
 };
 
 async function runAction(name: string, opts: string[]) {
@@ -45,6 +47,7 @@ async function runAction(name: string, opts: string[]) {
 export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
   let cache: { at: number; body: string } | null = null;
+  let budget: { at: number; body: string } | null = null;
   const json = (v: unknown, code = 200) => new Response(JSON.stringify(v), { status: code, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   const handler = async (req: Request): Promise<Response> => {
     const u = new URL(req.url);
@@ -69,13 +72,17 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         db.close();
         return json(r);
       }
+      if (u.pathname === "/api/budget") {
+        if (!budget || u.searchParams.has("fresh") || Date.now() - budget.at > 30000) budget = { at: Date.now(), body: JSON.stringify(await collect({ ingest: false })) };
+        return new Response(budget.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      }
       if (u.pathname === "/api/sync") return new Response(await readText(`${CACHE}/sync.json`) ?? "null", { headers: { "content-type": "application/json" } });
       if (u.pathname === "/api/action") {
         if (req.method !== "POST") return json({ error: "POST" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "header mancante" }, 403);
         const body = await req.json().catch(() => ({})) as { action?: string; opts?: string[] };
         const r = await runAction(String(body.action ?? ""), body.opts ?? []);
-        cache = null;
+        cache = null; budget = null;
         return json(r);
       }
       // statici

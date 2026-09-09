@@ -112,6 +112,16 @@ section { display: none; } section.on { display: block; animation: fade var(--du
 .chip .k { color: var(--text-faint); }
 .chip.own { border-color: var(--accent-ring); } .chip.broken { border-color: var(--crit); color: var(--crit); } .chip.extern { border-style: dashed; }
 .chip.warnc { border-color: var(--warn); color: var(--warn); }
+.chip.okc { border-color: var(--ok); color: var(--ok); }
+
+/* budget: una riga per regola, barra relativa alla propria soglia */
+.rule { padding: var(--space-2) 0; border-top: 1px solid var(--border-subtle); }
+.rule:first-of-type { border-top: 0; }
+.rule .row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); font-size: var(--t-small); }
+.rule .row.faint { font-size: var(--t-micro); color: var(--text-faint); margin-top: 3px; }
+.rule .bar { position: relative; height: 6px; border-radius: var(--radius-full); background: var(--surface-3); margin: 5px 0 2px; overflow: hidden; }
+.rule .bar i { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-full); transition: width .3s ease; }
+.rule.crit .row b { color: var(--crit); } .rule.warn .row b { color: var(--warn); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: var(--t-body); }
 .kv dt { color: var(--text-lo); } .kv dd { margin: 0; color: var(--text); }
 .sep { height: 1px; background: var(--border-subtle); margin: var(--space-3) 0; }

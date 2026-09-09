@@ -44,7 +44,7 @@ export async function saveLast(current: Check[]) {
 export async function notifyDoctor(current: Check[], opts: { dryRun?: boolean } = {}) {
   const d = diffDoctor(await loadLast(), current);
   const t = notifyText(d);
-  await saveLast(current);
+  if (!opts.dryRun) await saveLast(current);
   if (!t) return false;
   if (opts.dryRun || !(await has("notify-send"))) { console.log(`[notifica${opts.dryRun ? " dry-run" : " (notify-send assente)"}] ${t.title}\n${t.body}`); return true; }
   // Nessun --wait: la unit non deve restare appesa. L'azione "apri" non è disponibile senza --wait,

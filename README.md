@@ -16,8 +16,9 @@ Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KD
 | `claude-multi sync [--fetch]` | allinea il repo dal remote (fetch se stantio, pull ff-only a tree pulito) |
 | `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e l'endpoint di embedding llama.cpp |
 | `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | aggiorna Claude Code e/o Claude Desktop; `--rollback` torna alla versione precedente della CLI |
-| `claude-multi usage [--by …] [--since …]` | token e costo-equivalente per profilo, modello, progetto, agente, giorno (SQLite) |
-| `claude-multi serve` | dashboard locale su `http://127.0.0.1:7331`: overview, profili, doctor, usage con grafici, sync, azioni |
+| `claude-multi usage [--by …] [--since …]` | token e costo-equivalente per profilo, modello, progetto, agente, giorno, **skill**, **comando** (SQLite) |
+| `claude-multi budget [--notify]` | soglie di consumo: notifica solo dove si spende davvero (extra credits), mai sull'uso incluso nell'abbonamento |
+| `claude-multi serve` | dashboard locale su `http://127.0.0.1:7331`: overview, profili, doctor, sessioni, usage con grafici, budget, sync, azioni |
 | `claude-launch <personal\|work>` | entrypoint dei `.desktop`: sync del repo, gate di aggiornamento, poi l'app |
 
 `claude update` dentro un wrapper viene dirottato su `claude-multi update --cli`: l'updater nativo riscriverebbe `~/.local/bin/claude` e lascerebbe `claude-bin` indietro.
@@ -40,7 +41,7 @@ Le skill installate da tool esterni finiscono in `~/.agents/skills` (folder Sync
 bin/            wrapper e script: claude, claude-work, claude-multi, claude-launch, claude-update,
                 claude-update-notify, claude-update-gui, claude-desktop-update, claude-desktop-work-rebuild
 bin/lib/        prelaunch.sh — sync del repo prima di ogni avvio (bash puro, mai bloccante)
-cli/            la CLI claude-multi (Deno, zero dipendenze): main · lib · doctor · install · status · mcp · usage · serve
+cli/            la CLI claude-multi (Deno, zero dipendenze): main · lib · doctor · install · status · mcp · usage · budget · notify · serve
 shared/         config condivisa fra i profili: agents, commands, hooks, skills, rules, mcp (registry),
                 settings.json, statusline-command.sh, scripts, tools
 profiles/       CLAUDE.md, profile.json (manifest) e voci proprie per profilo (profiles/work/skills)
@@ -78,7 +79,7 @@ Niente si aggiorna senza approvazione. `DISABLE_AUTOUPDATER=1` è impostato ovun
 - **Claude Code**: l'updater nativo scarica l'ELF in `~/.local/share/claude/versions/X.Y.Z` e riscrive `~/.local/bin/claude`. `claude-update --cli` lo invoca, ripunta `claude-bin` all'ultima versione, ripristina il wrapper `claude`, pota le versioni vecchie, sistema l'url-handler `claude-cli://`.
 - **Claude Desktop**: `claude-desktop-update` ricostruisce il pacchetto Arch dal `.deb` ufficiale Anthropic (PKGBUILD in `pkg/`), poi `claude-desktop-work-rebuild` rigenera la variante **Work** (asar con `app.setDesktopName("claude-desktop-work")` per avere icona e app_id distinti su KDE Wayland; tutto il resto è symlink a `/usr/lib/claude-desktop`).
 - **Gate grafico**: `claude-launch` controlla le versioni (cache 6 h) e, se serve, apre `claude-update-gui` prima dell'app: checkbox indipendenti per Code e Desktop con le novità della versione, install via `pkexec`. Il Desktop va aggiornato ad app chiusa (l'install sostituisce `/usr/lib/claude-desktop`). La GUI è una **vista della CLI**: il pannello «Stato del setup» arriva da `claude-multi status --json` (versioni, doctor con fix copiabili, istanze), le azioni passano da `claude-multi update` e `claude-multi serve`. Dal menu, «Claude — aggiornamenti e stato» apre lo stesso pannello in modalità standalone anche senza aggiornamenti, con il rollback della CLI.
-- **Timer**: `claude-update-check.timer` (10 min dopo il login, poi ogni 4 h) → una notifica KDE con «Aggiorna ora». Non aggiorna nulla da sé. Lo stesso timer lancia `claude-multi doctor --notify`: il doctor diventa un guardiano che avvisa solo sui fail nuovi (stato in `~/.local/state/claude-multi/doctor-last.json`).
+- **Timer**: `claude-update-check.timer` (10 min dopo il login, poi ogni 4 h) → una notifica KDE con «Aggiorna ora». Non aggiorna nulla da sé. Lo stesso timer lancia `claude-multi doctor --notify` e `claude-multi budget --notify`: il doctor diventa un guardiano che avvisa solo sui fail nuovi (stato in `~/.local/state/claude-multi/doctor-last.json`), il budget avvisa solo se si sta spendendo davvero.
 - **Cache del check** (`~/.cache/claude-update/check.json`): la scrive sempre `claude-update --check`, in qualunque modalità, e l'update la rigenera a fine corsa. Statusline, dashboard, doctor e launcher leggono da lì; il doctor avvisa se è più vecchia di 24 h.
 
 ## MCP
@@ -99,11 +100,38 @@ Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti
 - **Overview**: versioni con badge di update, doctor, sessioni attive con cwd, costo per giorno degli ultimi 14 giorni impilato per profilo, stato del repo.
 - **Profili**: manifest, cosa è montato (skill, agenti, comandi, MCP per superficie, plugin) con chip che distinguono voci proprie, da `~/.agents` e link rotti.
 - **Doctor**: tutti i controlli con filtro per esito e fix copiabile; «Rilancia doctor».
-- **Usage**: stat tile (costo equivalente, output, cache letta, messaggi), barre impilate per giorno e profilo, distribuzione per modello, tabella per profilo, modello, progetto, agente, giorno, sessione o entrypoint. Palette validata per daltonismo (dataviz).
+- **Sessioni**: le sessioni recenti con quando, cartella, via CLI o Desktop, arco temporale, messaggi (e quota subagent), modelli, agenti, output e costo.
+- **Usage**: stat tile (costo equivalente, output, cache letta, messaggi), barre impilate per giorno e profilo, distribuzione per modello, tabella per profilo, modello, progetto, agente, giorno, sessione, entrypoint, skill o comando. Palette validata per daltonismo (dataviz).
+- **Budget**: per profilo, chi paga davvero (solo abbonamento o extra credits), crediti del mese sul limite, finestre del piano, e ogni soglia con la sua barra e il motivo per cui notifica o tace.
 - **Sync**: remote, ultimo fetch, ahead/behind, working tree.
-- **Azioni**: doctor, sync, mcp check/sync (con `--force` opzionale), install dry-run e reale, usage ingest, update check. Girano sulla CLI locale via `POST /api/action` con allowlist e header anti-CSRF; l'output compare nella console. L'update **non** è un'azione: passa dal gate con polkit.
+- **Azioni**: doctor, sync, mcp check/sync (con `--force` opzionale), install dry-run e reale, usage ingest, budget, update check. Girano sulla CLI locale via `POST /api/action` con allowlist e header anti-CSRF; l'output compare nella console. L'update **non** è un'azione: passa dal gate con polkit.
 
 Auto-refresh ogni 30 s (disattivabile), stato con cache di 5 s lato server.
+
+## Chi paga davvero: `budget`
+
+Su abbonamento i token non sono fatturati: il «costo» di `usage` è un **equivalente a listino**, utile a confrontare profili e giornate, non una spesa. Si paga davvero solo quando un profilo consuma **extra credits**, e Claude Code lo scrive in `<profilo>/.claude.json` → `cachedUsageUtilization.utilization.extra_usage`. `budget` legge quel blocco e classifica ogni profilo:
+
+- **`included`** — extra credits spenti o disabilitati: le soglie si vedono ma non notificano mai. Svegliare qualcuno per consumo incluso è rumore.
+- **`credits`** — extra credits attivi: qui le soglie notificano, con la spesa reale in valuta.
+
+Le regole stanno in [`shared/budget.json`](shared/budget.json): per profilo o globali, ciascuna con metrica (`credits.spent.day`, `credits.utilization`, `credits.used`, `cost.day|week|month`, `plan.<kind>.percent`), soglie `warn`/`crit` e `notify` a `true` / `false` / `"auto"`. Con `"auto"` la stessa identica regola tace su un profilo a solo abbonamento e avvisa su uno a crediti: la differenza la fa il profilo, non la configurazione. I limiti dell'abbonamento (`plan.*`) non sono spesa e non notificano mai in automatico, per quanto siano al 100%.
+
+Due dettagli che contano:
+
+- La cache di stato la aggiorna Claude Code quando gli pare (qui è arrivata a essere vecchia di settimane). Un valore crediti stantio **non** fa mai scattare una notifica, il doctor lo segnala, e `"billing": "credits"` in configurazione permette di cablare la classe senza dipendere dalla cache.
+- Ogni lettura viene campionata in `credit_samples` (usage.db): da lì esce la spesa giornaliera reale come delta fra due campioni, che è l'unico numero in euro veri di tutto il sistema.
+
+`claude-multi budget` mostra tutto, `--notify` (dal timer, ogni 4 h) manda la notifica solo su una soglia che sale o rientra, con cooldown e finestra di silenzio notturna. `--dry-run` non consuma lo stato.
+
+## Skill e comandi in `usage`
+
+Una skill non consuma token da sola: li fa consumare al turno che la usa. Il **turno** (dal prompt umano al successivo, subagent compresi) è l'unità ben definita disponibile, quindi il costo del turno si divide in parti uguali fra le skill e i comandi slash che vi compaiono: `usi` conta le invocazioni, `costo` è la quota. È un'approssimazione, ed è dichiarata sia nella CLI sia nella dashboard. I messaggi fuori turno (transcript di subagent senza prompt umano) restano esclusi e vengono contati a parte.
+
+```bash
+claude-multi usage --by skill --since 30d
+claude-multi usage --by command --since all
+```
 
 ## Macchina nuova
 
@@ -120,7 +148,7 @@ Serve: `deno`, `git`, `jq`, `python3`; per Claude Desktop anche `base-devel`, `l
 
 ```bash
 deno task check   # type-check CLI e test, bash -n su ogni script, py_compile della GUI
-deno task test    # test: usage (tariffe, dedupe, report), mcp (proiezione registry), manifest, changelog, prelaunch su repo git veri
+deno task test    # test: usage (tariffe, dedupe, turni/skill), budget (classi di spesa, soglie, notifiche), mcp, manifest, changelog, prelaunch su repo git veri
 ```
 
 - **Pre-commit** (`.githooks/pre-commit`, attivato da `install` via `core.hooksPath`): blocca file di stato o credenziali in staging e righe aggiunte che sembrano token (`sk-ant-…`, `accessToken`, `oauthAccount`, chiavi private, token GitHub/GitLab/AWS/Slack), poi esegue `deno task check` se sono cambiati script o TypeScript. Bypass consapevole: `git commit --no-verify`.

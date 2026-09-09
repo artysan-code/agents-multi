@@ -1,0 +1,29 @@
+{
+  "_note": "Soglie di consumo. Regola di fondo: si notifica solo la spesa REALE. Su abbonamento il costo di `claude-multi usage` è un equivalente a listino (non fatturato) e con notify \"auto\" non fa scattare nulla; le stesse regole notificano invece su un profilo che consuma extra credits. La classe (included / credits) la legge budget.ts da cachedUsageUtilization in <profilo>/.claude.json: non è cablata qui.",
+  "_metriche": {
+    "credits.spent.day": "crediti spesi oggi, delta fra due campioni (valuta del profilo) — spesa reale",
+    "credits.utilization": "percentuale del limite crediti mensile — spesa reale",
+    "credits.used": "crediti spesi nel mese in valuta — spesa reale",
+    "cost.day | cost.week | cost.month": "costo equivalente a listino dai transcript — reale solo se il profilo è a crediti",
+    "plan.<kind>.percent": "quanto è consumata una finestra dell'abbonamento (session, weekly, weekly_all, weekly_scoped) — mai una spesa: informativa"
+  },
+  "_billing": "Per profilo: \"auto\" (default) legge la classe da cachedUsageUtilization in <profilo>/.claude.json; \"credits\" o \"included\" la forzano. Serve perché quella cache la aggiorna Claude Code quando gli pare (qui è vecchia di settimane) mentre l'impostazione crediti cambia raramente.",
+  "_notify": "true = sempre · false = mai · \"auto\" = solo se la metrica è spesa reale per quel profilo. Impostabile per profilo e per singola regola.",
+  "enabled": true,
+  "staleAfterHours": 36,
+  "cooldownMinutes": 240,
+  "quietHours": { "from": "01:30", "to": "09:00" },
+  "defaults": {
+    "notify": "auto",
+    "rules": [
+      { "id": "credits-day", "metric": "credits.spent.day", "warn": 10, "crit": 25, "label": "crediti spesi oggi" },
+      { "id": "credits-month", "metric": "credits.utilization", "warn": 60, "crit": 85, "label": "crediti del mese" },
+      { "id": "cost-day", "metric": "cost.day", "warn": 40, "crit": 120, "label": "costo equivalente oggi" },
+      { "id": "plan-weekly", "metric": "plan.weekly.percent", "warn": 85, "crit": 100, "label": "finestra settimanale del piano" }
+    ]
+  },
+  "profiles": {
+    "personal": { "note": "extra credits disabilitati a livello organizzazione: nessuna spesa reale, le soglie restano solo informative" },
+    "work": { "billing": "credits", "note": "extra credits attivi: qui le soglie notificano davvero. Classe cablata perché la cache di stato resta indietro di settimane." }
+  }
+}

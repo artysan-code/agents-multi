@@ -17,6 +17,7 @@
       <a href="#doctor" data-t="doctor"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Doctor<span class="badge" id="badge-doctor" hidden></span></a>
       <a href="#sessions" data-t="sessions"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10l3 2-3 2"/><path d="M12 15h5"/></svg>Sessioni</a>
       <a href="#usage" data-t="usage"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="5" y="10" width="3" height="7" rx="1"/><rect x="10.5" y="5" width="3" height="12" rx="1"/><rect x="16" y="13" width="3" height="4" rx="1"/></svg>Usage</a>
+      <a href="#budget" data-t="budget"><svg viewBox="0 0 24 24"><path d="M3 7h18v12H3z"/><path d="M3 11h18"/><circle cx="8" cy="15" r="1.4"/></svg>Budget<span class="badge" id="badge-budget" hidden></span></a>
       <a href="#sync" data-t="sync"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M4 4v5h5"/><path d="M20 20v-5h-5"/></svg>Sync<span class="badge" id="badge-sync" hidden></span></a>
       <a href="#actions" data-t="actions"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Azioni</a>
     </nav>
@@ -54,7 +55,7 @@
 
     <section id="usage">
       <div class="controls">
-        <label>raggruppa <select id="uby"><option value="profile">profilo</option><option value="model">modello</option><option value="project">progetto</option><option value="agent">agente</option><option value="day">giorno</option><option value="session">sessione</option><option value="entrypoint">entrypoint</option></select></label>
+        <label>raggruppa <select id="uby"><option value="profile">profilo</option><option value="model">modello</option><option value="project">progetto</option><option value="agent">agente</option><option value="skill">skill</option><option value="command">comando</option><option value="day">giorno</option><option value="session">sessione</option><option value="entrypoint">entrypoint</option></select></label>
         <label>periodo <select id="usince"><option value="7d">7 giorni</option><option value="30d" selected>30 giorni</option><option value="90d">90 giorni</option><option value="all">tutto</option></select></label>
         <label>profilo <select id="uprof"><option value="">tutti</option><option>personal</option><option>work</option></select></label>
         <span class="faint">costo = equivalente API a listino, non fatturato</span>
@@ -72,6 +73,10 @@
     <section id="sessions">
       <div class="controls"><label>periodo <select id="ssince"><option value="1d">oggi</option><option value="7d" selected>7 giorni</option><option value="30d">30 giorni</option></select></label><label>profilo <select id="sprof"><option value="">tutti</option><option>personal</option><option>work</option></select></label><span class="faint" id="ssum"></span></div>
       <div class="card"><div class="tbl-wrap"><table id="st"></table></div></div>
+    </section>
+    <section id="budget">
+      <div class="controls"><span class="muted">Le notifiche partono solo dove si spende davvero: gli extra credits. Il costo equivalente di un profilo a solo abbonamento resta informativo.</span><span style="flex:1"></span><button class="btn" id="bre">Ricalcola</button></div>
+      <div class="grid g2" id="bud"></div>
     </section>
     <section id="sync"><div class="grid g3" id="sy"></div></section>
 

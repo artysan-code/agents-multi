@@ -68,3 +68,45 @@ Deno.test("ingestFile: dedupe per message.id (max per campo), sidechain, synthet
   db.close();
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("attribuzione a skill e comandi: turno, quota divisa, prompt consecutivi", async () => {
+  const dir = await Deno.makeTempDir();
+  const f = `${dir}/session.jsonl`;
+  const asst = (uuid: string, id: string, out: number, content: unknown[] = []) =>
+    line({ type: "assistant", uuid, timestamp: "2026-09-04T10:00:00Z", sessionId: "s1", cwd: "/x", message: { id, model: "claude-opus-5", usage: usage(0, out), content } });
+  await Deno.writeTextFile(f, [
+    // turno 1: prompt umano → una sola skill → tutto il costo è suo
+    line({ type: "user", uuid: "t1", timestamp: "2026-09-04T10:00:00Z", sessionId: "s1", message: { role: "user", content: "fai una cosa" } }),
+    asst("a1", "m1", 100, [{ type: "tool_use", name: "Skill", id: "u1", input: { skill: "dataviz" } }]),
+    // un tool_result non apre un turno nuovo: il costo che segue resta su t1
+    line({ type: "user", uuid: "r1", timestamp: "2026-09-04T10:00:05Z", sessionId: "s1", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "u1" }] } }),
+    asst("a2", "m2", 100),
+    // turno 2: comando slash + la sua espansione (due user di fila) → un turno solo, con 2 skill
+    line({ type: "user", uuid: "t2", timestamp: "2026-09-04T11:00:00Z", sessionId: "s1", message: { role: "user", content: "<command-name>/pr-forge</command-name>" } }),
+    line({ type: "user", uuid: "t2b", timestamp: "2026-09-04T11:00:01Z", sessionId: "s1", message: { role: "user", content: "istruzioni del comando" } }),
+    asst("a3", "m3", 400, [{ type: "tool_use", name: "Skill", id: "u2", input: { skill: "dataviz" } }, { type: "tool_use", name: "Skill", id: "u3", input: { skill: "release-prod" } }]),
+    // un subagent lanciato dentro il turno resta nel turno: il suo costo è costo della skill che l'ha usato
+    line({ type: "assistant", uuid: "a4", isSidechain: true, timestamp: "2026-09-04T11:01:00Z", sessionId: "s1", message: { id: "m4", model: "claude-opus-5", usage: usage(0, 999), content: [] } }),
+  ].join("\n"));
+  const db = openDb(":memory:");
+  await ingestFile(db, "personal", f);
+
+  const sk = report(db, { by: "skill", since: "all" });
+  const byKey = Object.fromEntries(sk.rows.map((r) => [r.key, r]));
+  // turno 1 = 200 output, tutto a dataviz (sola skill); turno 2 = 400 + 999 del subagent, diviso 2 skill
+  assertAlmostEquals(byKey["dataviz"].output, 200 + 1399 / 2);
+  assertEquals(byKey["dataviz"].uses, 2);
+  assertAlmostEquals(byKey["release-prod"].output, 1399 / 2);
+  assertEquals(byKey["release-prod"].uses, 1);
+  // il comando è l'unico del turno 2: prende tutto quel turno, subagent compreso
+  const cm = report(db, { by: "command", since: "all" });
+  assertEquals(cm.rows.length, 1);
+  assertEquals(cm.rows[0].key, "pr-forge");
+  assertEquals(cm.rows[0].output, 1399);
+  assertEquals(sk.orphanMsgs, 0);
+  // reingest: nessun doppione
+  await ingestFile(db, "personal", f);
+  assertEquals((db.prepare("SELECT COUNT(*) c FROM turn_tools").get() as { c: number }).c, 4);
+  db.close();
+  await Deno.remove(dir, { recursive: true });
+});

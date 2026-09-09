@@ -2,6 +2,7 @@
 
 import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, LIB, listDir, lstat, machine, mode, ownItems, PROFILES, profileInfo, readJson, readlink, readText, REPO, repoState, run, RUNTIME, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
+import { collect, doctorChecks } from "./budget.ts";
 
 export async function doctor(): Promise<Check[]> {
   const c: Check[] = [];
@@ -155,5 +156,11 @@ export async function doctor(): Promise<Check[]> {
     if (!(await readlink(`${HOME}/.config/systemd/user/llama-embed-shim.service`))?.startsWith(REPO)) add("llama.units", "warn", "unit llama-*.service non linkate dal repo", "claude-multi install");
   }
   if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills assente: le skill esterne non sono disponibili su questa macchina", "attiva la folder Syncthing `agents`");
+
+  // --- budget: chi paga davvero, e se il suo stato è abbastanza fresco perché le soglie funzionino
+  try {
+    const b = await collect({ ingest: false });
+    for (const x of doctorChecks(b.profiles.map((p) => p.snap), b.cfg, b.alerts)) c.push(x);
+  } catch (e) { add("budget", "warn", `budget non valutabile: ${(e as Error).message}`, "claude-multi budget"); }
   return c;
 }
