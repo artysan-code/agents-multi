@@ -11,7 +11,7 @@ Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KD
 | `claude` (`clp`) | Claude Code, profilo **personal** (default della macchina) |
 | `claude-work` (`cw`) | Claude Code, profilo **work** (account Agency) |
 | `claude-multi install [--dry-run]` | materializza runtime, wrapper, unit systemd, `.desktop` dal repo secondo i manifest dei profili. Idempotente |
-| `claude-multi doctor [--json]` | verifica ogni invariante e dice come sistemarla |
+| `claude-multi doctor [--json\|--notify]` | verifica ogni invariante e dice come sistemarla; `--notify` (dal timer) manda una notifica KDE solo quando compare un fail nuovo o quando tutto torna ok |
 | `claude-multi status [--json]` | versioni, update disponibili, sync del repo, cosa è montato per profilo, istanze attive. È il contratto JSON per statusline, gate e dashboard |
 | `claude-multi sync [--fetch]` | allinea il repo dal remote (fetch se stantio, pull ff-only a tree pulito) |
 | `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e l'endpoint di embedding llama.cpp |
@@ -78,7 +78,8 @@ Niente si aggiorna senza approvazione. `DISABLE_AUTOUPDATER=1` è impostato ovun
 - **Claude Code**: l'updater nativo scarica l'ELF in `~/.local/share/claude/versions/X.Y.Z` e riscrive `~/.local/bin/claude`. `claude-update --cli` lo invoca, ripunta `claude-bin` all'ultima versione, ripristina il wrapper `claude`, pota le versioni vecchie, sistema l'url-handler `claude-cli://`.
 - **Claude Desktop**: `claude-desktop-update` ricostruisce il pacchetto Arch dal `.deb` ufficiale Anthropic (PKGBUILD in `pkg/`), poi `claude-desktop-work-rebuild` rigenera la variante **Work** (asar con `app.setDesktopName("claude-desktop-work")` per avere icona e app_id distinti su KDE Wayland; tutto il resto è symlink a `/usr/lib/claude-desktop`).
 - **Gate grafico**: `claude-launch` controlla le versioni (cache 6 h) e, se serve, apre `claude-update-gui` prima dell'app: checkbox indipendenti per Code e Desktop con le novità della versione, install via `pkexec`. Il Desktop va aggiornato ad app chiusa (l'install sostituisce `/usr/lib/claude-desktop`). La GUI è una **vista della CLI**: il pannello «Stato del setup» arriva da `claude-multi status --json` (versioni, doctor con fix copiabili, istanze), le azioni passano da `claude-multi update` e `claude-multi serve`. Dal menu, «Claude — aggiornamenti e stato» apre lo stesso pannello in modalità standalone anche senza aggiornamenti, con il rollback della CLI.
-- **Timer**: `claude-update-check.timer` (10 min dopo il login, poi ogni 4 h) → una notifica KDE con «Aggiorna ora». Non aggiorna nulla da sé.
+- **Timer**: `claude-update-check.timer` (10 min dopo il login, poi ogni 4 h) → una notifica KDE con «Aggiorna ora». Non aggiorna nulla da sé. Lo stesso timer lancia `claude-multi doctor --notify`: il doctor diventa un guardiano che avvisa solo sui fail nuovi (stato in `~/.local/state/claude-multi/doctor-last.json`).
+- **Cache del check** (`~/.cache/claude-update/check.json`): la scrive sempre `claude-update --check`, in qualunque modalità, e l'update la rigenera a fine corsa. Statusline, dashboard, doctor e launcher leggono da lì; il doctor avvisa se è più vecchia di 24 h.
 
 ## MCP
 

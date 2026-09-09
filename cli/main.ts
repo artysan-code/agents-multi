@@ -2,13 +2,13 @@
 // claude-multi — CLI di gestione del setup multi-profilo di Claude Code / Claude Desktop.
 //
 //   install [--dry-run]     materializza ~/.claude-multi, ~/.local/bin, unit, .desktop dal repo (idempotente)
-//   doctor  [--json]        verifica ogni invariante del setup, con il fix suggerito
+//   doctor  [--json|--notify [--dry-run]]   verifica ogni invariante; --notify manda una notifica KDE solo sui fail nuovi (timer)
 //   status  [--json]        versioni, update, sync repo, profili (cosa è montato), istanze attive
 //   sync    [--fetch]       allinea il repo (fetch se stantio, pull ff-only a tree pulito)
 //   mcp     check|sync|health [--force]   registry MCP → .claude.json (cli) e claude_desktop_config.json (desktop)
 //   update  [...]           passthrough a bin/claude-update (CLI + Desktop, --rollback)
 //   usage   [...]           token e costo-equivalente per profilo/modello/progetto/agente (SQLite)
-//   serve   [--no-open]     dashboard locale in sola lettura su http://127.0.0.1:7331
+//   serve   [--no-open]     dashboard locale su http://127.0.0.1:7331 (stato, usage, sessioni, doctor, azioni sulla CLI)
 //
 // Principio: il repo è la fonte di verità, ~/.claude-multi è runtime materializzato da `install`.
 // Il lancio di Claude resta bash puro (bin/claude, bin/claude-work, bin/lib/prelaunch.sh): qui la gestione.
@@ -16,6 +16,7 @@
 
 import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
+import { notifyDoctor } from "./notify.ts";
 import { install } from "./install.ts";
 import { printStatus, status } from "./status.ts";
 import { apply, blockers, describe, health, plan } from "./mcp.ts";
@@ -30,6 +31,7 @@ switch (cmd) {
   case "install": Deno.exit(await install(flag("--dry-run")));
   case "doctor": {
     const c = await doctor();
+    if (flag("--notify")) { const sent = await notifyDoctor(c, { dryRun: flag("--dry-run") }); console.log(sent ? "notifica inviata" : "niente di nuovo, nessuna notifica"); break; }
     if (flag("--json")) console.log(JSON.stringify(c, null, 2)); else Deno.exit(printDoctor(c));
     break;
   }
@@ -89,13 +91,13 @@ switch (cmd) {
     console.log(`claude-multi — gestione del setup multi-profilo Claude (repo ${REPO})
 
   install [--dry-run]         materializza runtime, wrapper, unit e .desktop dal repo (idempotente)
-  doctor  [--json]            verifica le invarianti del setup, con fix suggerito
+  doctor  [--json|--notify]   verifica le invarianti del setup, con fix suggerito; --notify: notifica KDE solo sui fail nuovi
   status  [--json]            versioni, aggiornamenti, sync repo, profili e cosa è montato, istanze attive
   sync    [--fetch]           allinea il repo (fetch se stantio, pull ff-only a tree pulito)
   mcp     check|sync|health [--probe]   registry MCP → .claude.json (cli) e claude_desktop_config.json (desktop); --force ignora le istanze attive; --probe avvia davvero ogni server e attende initialize
   update  [--cli|--desktop|--check [--json]|--rollback]   aggiorna Claude Code / Claude Desktop
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  serve   [--no-open]         dashboard locale read-only su http://127.0.0.1:${PORT}`);
+  serve   [--no-open]         dashboard locale su http://127.0.0.1:${PORT} (stato, usage, sessioni, doctor, azioni)`);
     if (!["help", "--help", "-h"].includes(cmd)) Deno.exit(2);
 }

@@ -201,6 +201,21 @@ export function report(db: DatabaseSync, opts: { by: GroupBy; since?: string; pr
   return { by: opts.by, split: opts.split ?? null, since, profile: opts.profile ?? null, rows, total, spawns };
 }
 
+/** Sessioni recenti: una riga per session_id con cartella, finestra temporale, messaggi, modelli e costo. */
+export function sessions(db: DatabaseSync, opts: { since?: string; profile?: string; limit?: number } = {}) {
+  const where: string[] = ["session_id IS NOT NULL"]; const args: (string | number)[] = [];
+  const since = sinceDate(opts.since ?? "7d");
+  if (since) { where.push("day >= ?"); args.push(since); }
+  if (opts.profile) { where.push("profile = ?"); args.push(opts.profile); }
+  const rows = db.prepare(`
+    SELECT session_id, profile, MAX(cwd) AS cwd, MAX(entrypoint) AS entrypoint, MIN(ts) AS started, MAX(ts) AS ended,
+      COUNT(*) AS msgs, SUM(sidechain) AS sidechain_msgs, SUM(output) AS output, SUM(cache_read) AS cache_read, SUM(cost_usd) AS cost,
+      GROUP_CONCAT(DISTINCT model) AS models, GROUP_CONCAT(DISTINCT agent) AS agents
+    FROM messages WHERE ${where.join(" AND ")} GROUP BY session_id ORDER BY ended DESC LIMIT ?`).all(...args, opts.limit ?? 50) as
+    { session_id: string; profile: string; cwd: string | null; entrypoint: string | null; started: string; ended: string; msgs: number; sidechain_msgs: number; output: number; cache_read: number; cost: number | null; models: string; agents: string }[];
+  return rows.map((r) => ({ ...r, models: r.models.split(","), agents: r.agents.split(","), minutes: Math.max(0, Math.round((new Date(r.ended).getTime() - new Date(r.started).getTime()) / 60000)) }));
+}
+
 const fmt = (n: number | null | undefined) => n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n);
 const usd = (n: number | null | undefined) => n == null ? "—" : `$${n.toFixed(2)}`;
 

@@ -205,17 +205,30 @@ do_check() {
   newer "$cc" "$cl" && cli_out=true
   newer "$dc" "$dl" && desk_out=true
 
-  if [[ $json -eq 1 ]]; then
+  # La cache (~/.cache/claude-update/check.json) la scrive SEMPRE il check, in qualunque modalità:
+  # e' cio' che leggono statusline, dashboard, doctor e launcher. Scrittura atomica, prima del changelog
+  # (che puo' essere lento): se il chiamante ci ammazza col suo timeout, la cache e' gia' a posto.
+  write_check_cache() {
+    mkdir -p "$CACHE_DIR"
+    printf '{"cli":{"current":"%s","latest":"%s","outdated":%s,"changelog_file":"%s"},"desktop":{"current":"%s","latest":"%s","outdated":%s},"checked_at":%s}\n' \
+      "$cc" "$cl" "$cli_out" "${1:-}" "$dc" "$dl" "$desk_out" "$(date +%s)" > "$CACHE_DIR/check.json.tmp" \
+      && mv -f "$CACHE_DIR/check.json.tmp" "$CACHE_DIR/check.json"
+  }
+  # senza rete (entrambi i latest vuoti) non si sovrascrive una cache buona con una vuota
+  if [[ -n "$cl" || -n "$dl" ]]; then
+    write_check_cache ""
     local clf=""
-    [[ $cli_out == true ]] && clf="$(changelog_for "$cl" || true)"
-    printf '{"cli":{"current":"%s","latest":"%s","outdated":%s,"changelog_file":"%s"},' "$cc" "$cl" "$cli_out" "$clf"
-    printf '"desktop":{"current":"%s","latest":"%s","outdated":%s}}\n' "$dc" "$dl" "$desk_out"
+    if [[ $cli_out == true ]]; then clf="$(changelog_for "$cl" || true)"; [[ -n "$clf" ]] && write_check_cache "$clf"; fi
+  fi
+
+  if [[ $json -eq 1 ]]; then
+    cat "$CACHE_DIR/check.json" 2>/dev/null || printf '{"cli":{"current":"%s","latest":"","outdated":false},"desktop":{"current":"%s","latest":"","outdated":false}}\n' "$cc" "$dc"
   else
     printf "  Code     %s → %s   %s\n" "${cc:-?}" "${cl:-?}" "$([[ $cli_out  == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
     printf "  Desktop  %s → %s   %s\n" "${dc:-?}" "${dl:-?}" "$([[ $desk_out == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
   fi
 
-  # exit 10 = c'è almeno un aggiornamento; 0 = tutto allineato. Comodo negli `if` di shell.
+  # exit 10 = c'e' almeno un aggiornamento; 0 = tutto allineato. Comodo negli `if` di shell.
   [[ $cli_out == true || $desk_out == true ]] && return 10
   return 0
 }
@@ -258,8 +271,8 @@ if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
   fi
 fi
 
-# La cache del check (launcher, statusline, dashboard) descrive il mondo di prima: via, si rifà al prossimo giro.
-[[ "$cli_res" == ok* || "$desk_res" == ok* ]] && rm -f "$CACHE_DIR/check.json"
+# La cache del check (launcher, statusline, dashboard) descrive il mondo di prima: si rigenera subito.
+[[ "$cli_res" == ok* || "$desk_res" == ok* ]] && { do_check --json >/dev/null 2>&1 || true; }
 
 echo
 echo "──────── riepilogo ────────"

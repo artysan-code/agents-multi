@@ -1,6 +1,6 @@
 // Test di usage.ts: tariffe, finestre temporali, ingest con dedupe dei chunk, report.
 import { assert, assertEquals, assertAlmostEquals } from "jsr:@std/assert@1";
-import { costUsd, ingestFile, openDb, report, sinceDate } from "../usage.ts";
+import { costUsd, ingestFile, openDb, report, sessions, sinceDate } from "../usage.ts";
 
 Deno.test("sinceDate: 7d, all, data esplicita, input non valido", () => {
   const d = sinceDate("7d")!;
@@ -58,6 +58,10 @@ Deno.test("ingestFile: dedupe per message.id (max per campo), sidechain, synthet
   // split: by day + profile
   const d = report(db, { by: "day", since: "all", split: "profile" });
   assertEquals(d.rows[0].day, "2026-09-04"); assertEquals(d.rows[0].profile, "personal");
+  // sessioni: una riga per session_id con durata, modelli e agenti
+  const ss = sessions(db, { since: "all" });
+  assertEquals(ss.length, 1); assertEquals(ss[0].session_id, "s1"); assertEquals(ss[0].minutes, 1);
+  assertEquals(ss[0].models.sort(), ["claude-opus-5", "claude-sonnet-5"]); assertEquals(ss[0].sidechain_msgs, 1);
   // reingest dello stesso file: idempotente
   await ingestFile(db, "personal", f);
   assertEquals((db.prepare("SELECT COUNT(*) c FROM messages").get() as { c: number }).c, 2);

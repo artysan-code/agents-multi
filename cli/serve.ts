@@ -6,7 +6,7 @@
 
 import { ANSI, CACHE, readText, REPO } from "./lib.ts";
 import { status } from "./status.ts";
-import { type GroupBy, ingest, openDb, report } from "./usage.ts";
+import { type GroupBy, ingest, openDb, report, sessions } from "./usage.ts";
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 const DASH = `${REPO}/cli/dashboard`;
@@ -37,13 +37,8 @@ async function runAction(name: string, opts: string[]) {
   const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
   let output = strip(dec.decode(r.stdout)); const err = strip(dec.decode(r.stderr)).trim();
   if (err) output += (output ? "\n" : "") + err;
-  // update --check ritorna 10 quando c'è un aggiornamento: non è un errore, e aggiorna la cache della statusline
-  if (name === "update-check") {
-    const j = new Deno.Command(`${REPO}/bin/claude-update`, { args: ["--check", "--json"], stdout: "piped", stderr: "null" });
-    const jr = await j.output(); const js = dec.decode(jr.stdout).trim();
-    if (js.startsWith("{")) { await Deno.mkdir(`${Deno.env.get("HOME")}/.cache/claude-update`, { recursive: true }); await Deno.writeTextFile(`${Deno.env.get("HOME")}/.cache/claude-update/check.json`, js + "\n"); }
-    return { code: r.code === 10 ? 0 : r.code, output: output + (r.code === 10 ? "\n(aggiornamenti disponibili: passa dal gate o da claude-multi update)" : ""), ms: Date.now() - t0 };
-  }
+  // update --check ritorna 10 quando c'è un aggiornamento: non è un errore (la cache la scrive il check stesso)
+  if (name === "update-check") return { code: r.code === 10 ? 0 : r.code, output: output + (r.code === 10 ? "\n(aggiornamenti disponibili: passa dal gate o da claude-multi update)" : ""), ms: Date.now() - t0 };
   return { code: r.code, output, ms: Date.now() - t0 };
 }
 
@@ -65,6 +60,12 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
           profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60),
           split: (u.searchParams.get("split") || undefined) as GroupBy | undefined,
         });
+        db.close();
+        return json(r);
+      }
+      if (u.pathname === "/api/sessions") {
+        const db = openDb(); await ingest(db, { quiet: true });
+        const r = sessions(db, { since: u.searchParams.get("since") ?? "7d", profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60) });
         db.close();
         return json(r);
       }

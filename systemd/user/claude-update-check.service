@@ -1,5 +1,5 @@
 [Unit]
-Description=Controlla se ci sono aggiornamenti di Claude (Desktop + Code) e notifica
+Description=Controlla aggiornamenti di Claude (Desktop + Code) e stato del setup (doctor), notifica
 Documentation=file://~/.local/bin/claude-update-notify
 # Serve la sessione grafica: la notifica va su KDE e l'azione apre una finestra Qt.
 After=graphical-session.target
@@ -7,7 +7,11 @@ PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
+# deno serve al secondo ExecStart (claude-multi); la sessione systemd --user non carica .zshrc
+Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
 ExecStart=~/.local/bin/claude-update-notify
+# Doctor "guardiano": notifica KDE solo quando compare un fail nuovo (stato in ~/.local/state/claude-multi)
+ExecStart=-~/.local/bin/claude-multi doctor --notify
 # notify-send --wait resta appeso finché scegli un'azione: dopo mezz'ora si lascia perdere
 # (la notifica resta comunque nello storico di Plasma).
 TimeoutStartSec=1900

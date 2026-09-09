@@ -12,12 +12,13 @@ const modelColor = (() => { const m = new Map(); return (k) => { if (!m.has(k)) 
 let S = null; let busy = 0;
 
 // ---------------------------------------------------------------- nav + tema
-const TITLES = { overview: "Overview", profiles: "Profili", doctor: "Doctor", usage: "Usage", sync: "Sync", actions: "Azioni" };
+const TITLES = { overview: "Overview", profiles: "Profili", doctor: "Doctor", sessions: "Sessioni", usage: "Usage", sync: "Sync", actions: "Azioni" };
 function show(t) {
   document.querySelectorAll("nav a[data-t]").forEach((a) => a.classList.toggle("on", a.dataset.t === t));
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === t));
   $("#title").textContent = TITLES[t] ?? t;
   if (t === "usage") loadUsage();
+  if (t === "sessions") loadSessions();
   try { localStorage.setItem("cm.tab", t); } catch { /* */ }
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("a[data-t]"); if (a) { e.preventDefault(); show(a.dataset.t); } });
@@ -209,6 +210,20 @@ async function loadUsage() {
     `</tbody><tfoot><tr><td>totale</td><td class="n">${t.msgs || 0}</td><td></td><td class="n">${fmt(t.input)}</td><td class="n">${fmt(t.output)}</td><td class="n">${fmt(t.cache_read)}</td><td class="n">${fmt(t.cache_write)}</td><td class="n">${usd(t.cost)}</td></tr></tfoot>`;
 }
 ["uby", "usince", "uprof"].forEach((id) => $("#" + id).addEventListener("change", loadUsage));
+
+// ---------------------------------------------------------------- render: sessioni
+const ago = (iso) => { const m = (Date.now() - new Date(iso).getTime()) / 60000; return m < 60 ? `${Math.round(m)} min fa` : m < 1440 ? `${Math.round(m / 60)} h fa` : `${Math.round(m / 1440)} g fa`; };
+// arco temporale della sessione (una sessione ripresa più giorni copre giorni): min → "5 g 3 h" / "2 h 10 min" / "25 min"
+const dur = (min) => min >= 1440 ? `${Math.floor(min / 1440)} g ${Math.floor((min % 1440) / 60)} h` : min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+async function loadSessions() {
+  const q = new URLSearchParams({ since: $("#ssince").value, profile: $("#sprof").value, limit: 80 });
+  const rows = await fetch("/api/sessions?" + q).then((x) => x.json());
+  const tot = rows.reduce((a, r) => a + (r.cost || 0), 0);
+  $("#ssum").textContent = rows.length ? `${rows.length} sessioni · ${usd(tot)} · ${dur(rows.reduce((a, r) => a + r.minutes, 0))} complessivi` : "";
+  $("#st").innerHTML = `<thead><tr><th>quando</th><th>profilo</th><th>cartella</th><th>via</th><th class="n">arco</th><th class="n">msg</th><th>modelli · agenti</th><th class="n">output</th><th class="n">costo</th></tr></thead><tbody>` +
+    (rows.length ? rows.map((r) => `<tr title="${esc(r.session_id)}"><td class="num" title="${esc(r.started)} → ${esc(r.ended)}">${ago(r.ended)}</td><td><span class="chip" style="border-color:${SERIES[r.profile] || "var(--border)"}">${esc(r.profile)}</span></td><td class="mono" title="${esc(r.cwd || "")}">${esc(short((r.cwd || "—").replace(/^\/home\/[^/]+/, "~"), 48))}</td><td class="faint">${esc((r.entrypoint || "cli").replace("claude-desktop", "desktop"))}</td><td class="n">${dur(r.minutes)}</td><td class="n">${r.msgs}${r.sidechain_msgs ? ` <span class="faint">(${r.sidechain_msgs} sub)</span>` : ""}</td><td>${r.models.map((m) => `<span class="chip"><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${modelColor(m)}"></i>${esc(m.replace("claude-", ""))}</span>`).join("")}${r.agents.filter((a) => a !== "main").map((a) => `<span class="chip faint">${esc(a)}</span>`).join("")}</td><td class="n">${fmt(r.output)}</td><td class="n">${usd(r.cost)}</td></tr>`).join("") : '<tr><td colspan="9" class="empty">Nessuna sessione nel periodo.</td></tr>') + "</tbody>";
+}
+["ssince", "sprof"].forEach((id) => $("#" + id).addEventListener("change", loadSessions));
 
 // ---------------------------------------------------------------- azioni
 const ACTIONS = [

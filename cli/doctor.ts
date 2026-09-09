@@ -115,6 +115,10 @@ export async function doctor(): Promise<Check[]> {
   if (upd?.cli?.outdated && upd.cli.latest !== m.cliVersion) add("update.cli", "warn", `Claude Code ${upd.cli.latest} disponibile`, "claude-multi update --cli");
   if (upd?.desktop?.outdated && upd.desktop.latest !== m.desktopVersion) add("update.desktop", "warn", `Claude Desktop ${upd.desktop.latest} disponibile`, "claude-multi update --desktop");
   if (!upd) add("update.check", "warn", "nessun check aggiornamenti in cache", "claude-multi update --check");
+  else {
+    const ageH = (Date.now() - ((await stat(`${HOME}/.cache/claude-update/check.json`))?.mtime?.getTime() ?? 0)) / 36e5;
+    if (ageH > 24) add("update.check", "warn", `check aggiornamenti vecchio di ${Math.round(ageH)} h (timer fermo?)`, "claude-multi update --check · systemctl --user status claude-update-check.timer");
+  }
 
   // --- Claude Desktop
   if (m.desktopVersion) {
