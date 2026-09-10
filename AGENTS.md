@@ -1,22 +1,43 @@
 # AGENTS.md — claude-multi
 
-## Profilo repo
-- visibilità: agenti           # solo-io | agenti | co-autore | cliente | pubblico
-- ramo stabile: release
-- lingua: italiano             # codice, commit, docs
-- layer MCP: codice
+## Repo profile
+- visibility: agents           # me-only | agents | co-author | client | public
+- stable branch: release
+- language: English            # code, commits, docs, UI
+- MCP layer: code
 
-## Cos'è
+## What this is
 
-Il setup multi-profilo di Claude Code e Claude Desktop di Samuel (work + personal sulla stessa macchina). **Questo repo è la fonte di verità**; `~/.claude-multi/` è runtime materializzato da `claude-multi install`. Dettagli operativi nel [README](README.md).
+A multi-profile setup for Claude Code and Claude Desktop: several accounts isolated on one machine.
+**This repository is the source of truth**; `~/.claude-multi/` is runtime materialised by
+`claude-multi install`. Operational detail lives in the [README](README.md).
 
-## Regole per chi lavora qui
+## Rules for working here
 
-- **Non editare `~/.claude-multi/shared` a mano**: è un symlink a `shared/` di questo repo. Si modifica nel repo, si committa, si pusha. Il portatile riceve al prossimo avvio di Claude (`bin/lib/prelaunch.sh`).
-- **Il runtime non entra nel repo**: credenziali, `.claude.json`, sessioni, plugin cache, marketplace. Se un file contiene `oauthAccount` o token, non va committato mai. `.gitignore` copre i backup (`*.bak*`, `*.backup`).
-- **Ogni invariante nuova va in `cli/doctor.ts`**, non nel README. Il README descrive, il doctor verifica. Le due cose hanno già divergito in passato.
-- **Il costo in `usage` è un equivalente a listino, non una spesa.** Tutto ciò che notifica una soglia passa da `cli/budget.ts`, che distingue i profili a solo abbonamento da quelli a extra credits: non aggiungere avvisi di spesa altrove e non far notificare l'uso incluso.
-- **Il lancio resta bash puro** (`bin/claude`, `bin/claude-work`, `bin/lib/prelaunch.sh`): niente Deno nel percorso caldo, così un wrapper funziona anche su una macchina senza Deno.
-- **Verifica prima di dire fatto**: `deno task check` e `deno task test`, poi `claude-multi doctor`. Se tocchi `install`, prima `claude-multi install --dry-run`. Funzione pura nuova = test nuovo in `cli/tests/`.
-- **Modifiche a `~/.claude-multi` mentre una sessione Claude è aperta cambiano il terreno sotto i piedi della sessione.** `install` e `claude-multi mcp sync` vanno lanciati da un terminale a Claude chiuso.
-- Commit senza trailer di attribuzione (hook `commit-trailer-guard`).
+- **Never edit `~/.claude-multi/shared` by hand**: it is a symlink to this repository's `shared/`.
+  Change it here, commit, push. Other machines pick it up on the next Claude launch
+  (`bin/lib/prelaunch.sh`).
+- **Runtime never enters the repository**: credentials, `.claude.json`, sessions, plugin cache,
+  marketplaces. A file containing `oauthAccount` or a token must never be committed. `.gitignore`
+  covers the backups (`*.bak*`, `*.backup`).
+- **Every new invariant goes in `cli/doctor.ts`**, not in the README. The README describes, the
+  doctor verifies. Those two have already drifted apart once.
+- **No per-profile constants.** Profiles are discovered from `profiles/*/profile.json`
+  (`profileNames()`), and the Desktop directory comes from the manifest (`desktopDir()`). A check
+  that names "work" or "personal" is a bug: derive it from the manifests instead.
+- **The cost in `usage` is a list-price equivalent, not a charge.** Consumption sits on three planes
+  (`cli/budget.ts`): `billed` (extra credits, real money, the only one that notifies), `plan`
+  (subscription windows), `estimate` (list price). The plane belongs to the **metric**, not to the
+  profile — do not reintroduce a per-profile billing class, and do not let anything but `billed`
+  raise a notification.
+- **The console serves itself** (`claude-multi-console.service`). UI updates arrive over SSE on
+  `/api/events`: a new panel hangs off `refresh()` by topic, never off a new polling loop.
+- **Launching stays pure bash** (`bin/claude`, `bin/claude-work`, `bin/lib/prelaunch.sh`): no Deno
+  on the hot path, so a wrapper still works on a machine without it.
+- **Verify before saying done**: `deno task check` and `deno task test`, then `claude-multi doctor`.
+  If you touched `install`, run `claude-multi install --dry-run` first. A new pure function gets a
+  new test in `cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the
+  output, not just the filter.
+- **Changing `~/.claude-multi` while a Claude session is open moves the ground under that session.**
+  Run `install` and `claude-multi mcp sync` from a terminal with Claude closed.
+- Commits carry no attribution trailer (`commit-trailer-guard` hook).

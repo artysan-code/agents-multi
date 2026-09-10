@@ -1,168 +1,292 @@
 # claude-multi
 
-Setup multi-profilo di **Claude Code** e **Claude Desktop** su Linux (CachyOS/KDE): due account Anthropic isolati (personal + work) sulla stessa macchina, configurazione condivisa versionata, aggiornamenti con approvazione esplicita.
+Run several **Claude Code** and **Claude Desktop** accounts on one Linux machine, without them
+seeing each other. Shared configuration is versioned in git, updates need explicit approval, and a
+local console shows what every profile is doing.
 
-**Questo repo è la fonte di verità.** `~/.claude-multi/` è runtime materializzato da `claude-multi install`; `~/.local/bin/claude*` sono symlink a `bin/`. Fra le macchine la config viaggia con **git** (remote Forgejo), non con Syncthing.
+**This repository is the source of truth.** `~/.claude-multi/` is runtime materialised by
+`claude-multi install`; `~/.local/bin/claude*` are symlinks into `bin/`. Configuration travels
+between machines over **git** — never over a file-sync tool, because the runtime directories hold
+credentials.
 
-## Comandi
+---
 
-| Comando | Cosa fa |
+## Getting started
+
+```bash
+git clone <your fork> ~/.local/src/claude-multi
+~/.local/src/claude-multi/bin/claude-multi install
+```
+
+`install` is idempotent and reversible: it never deletes real content, it moves it aside to
+`*.pre-repo-<stamp>` and says so. Run `install --dry-run` first if you want to read the plan.
+
+Then sign in to each profile and check the result:
+
+```bash
+claude              # the default profile → /login
+claude-multi doctor # every invariant, each with a fix
+```
+
+The console is enabled as a systemd user unit by `install`, so it is already running on
+<http://127.0.0.1:7331>.
+
+Requirements: `deno`, `git`. For Claude Desktop packaging also `base-devel`, `libarchive`,
+`pyside6`, `@electron/asar`. OAuth credentials are per-machine and never leave it.
+
+### Making it yours
+
+A fork starts with the profiles and servers of whoever you forked. Three directories are *content*,
+not code, and are meant to be replaced:
+
+| Directory | What it holds |
 |---|---|
-| `claude` (`clp`) | Claude Code, profilo **personal** (default della macchina) |
-| `claude-work` (`cw`) | Claude Code, profilo **work** (account Agency) |
-| `claude-multi install [--dry-run]` | materializza runtime, wrapper, unit systemd, `.desktop` dal repo secondo i manifest dei profili. Idempotente |
-| `claude-multi doctor [--json\|--notify]` | verifica ogni invariante e dice come sistemarla; `--notify` (dal timer) manda una notifica KDE solo quando compare un fail nuovo o quando tutto torna ok |
-| `claude-multi status [--json]` | versioni, update disponibili, sync del repo, cosa è montato per profilo, istanze attive. È il contratto JSON per statusline, gate e dashboard |
-| `claude-multi sync [--fetch]` | allinea il repo dal remote (fetch se stantio, pull ff-only a tree pulito) |
-| `claude-multi mcp check\|sync\|health` | registry MCP → `.claude.json` dei profili **e** `claude_desktop_config.json` delle istanze Desktop; `health` verifica binari, file e l'endpoint di embedding llama.cpp |
-| `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | aggiorna Claude Code e/o Claude Desktop; `--rollback` torna alla versione precedente della CLI |
-| `claude-multi usage [--by …] [--since …]` | token e costo-equivalente per profilo, modello, progetto, agente, giorno, **skill**, **comando** (SQLite) |
-| `claude-multi budget [--notify]` | soglie di consumo: notifica solo dove si spende davvero (extra credits), mai sull'uso incluso nell'abbonamento |
-| `claude-multi serve` | dashboard locale su `http://127.0.0.1:7331`: overview, profili, doctor, sessioni, usage con grafici, budget, sync, azioni |
-| `claude-launch <personal\|work>` | entrypoint dei `.desktop`: sync del repo, gate di aggiornamento, poi l'app |
+| `profiles/<name>/` | one directory per profile: `profile.json` (the manifest), `CLAUDE.md`, and any skills the profile owns |
+| `shared/` | what every profile gets: rules, skills, agents, commands, hooks, `settings.json`, the MCP registry |
+| `shared/mcp/servers.json` | the MCP registry — the servers, and which profiles and surfaces see them |
 
-`claude update` dentro un wrapper viene dirottato su `claude-multi update --cli`: l'updater nativo riscriverebbe `~/.local/bin/claude` e lascerebbe `claude-bin` indietro.
+Everything under `cli/`, `bin/`, `systemd/` and `lib/` is the machinery, and reads those three.
 
-## Profili: manifest
+---
 
-Ogni profilo ha `profiles/<p>/profile.json`:
+## Profiles
+
+A profile is a directory under `profiles/` containing a `profile.json`. That is the whole
+definition — there is no list of profile names anywhere in the code, so adding a third one is a
+matter of adding a directory.
 
 ```json
-{ "skills": ["graphify"], "agents": "all", "commands": "all" }
+{
+  "description": "Research profile.",
+  "command": "claude-research",
+  "desktopDir": "~/.config/Claude-Research",
+  "skills": ["graphify"],
+  "agents": "all",
+  "commands": "all"
+}
 ```
 
-`"all"` monta la dir condivisa intera (un symlink); una lista monta solo quelle voci, più le voci **proprie** del profilo in `profiles/<p>/<kind>/` (es. le skill cliente `clientapp-*` in `profiles/work/skills`, che così non arrivano in personal). `install` materializza, `doctor` segnala mancanti, extra e link rotti.
+`"all"` mounts the whole shared directory as one symlink; a list mounts only those entries, plus
+whatever the profile owns in `profiles/<name>/<kind>/`. Owning a skill is how work that must not
+leak into another profile stays put: `install` materialises it, and `doctor` reports it as a
+failure if it shows up somewhere else.
 
-Le skill installate da tool esterni finiscono in `~/.agents/skills` (folder Syncthing `agents`): `install` le linka in `shared/skills` con path assoluto, e il link va committato. Le skill native del repo (`graphify`, `clientapp-*`) sono dir reali.
+`desktopDir` is where Claude Desktop keeps that profile's data. Omit it and the convention applies:
+`~/.config/Claude-<Name>` when it exists, otherwise Desktop's own `~/.config/Claude`.
 
-## Layout del repo
+The easiest way to add one is the console: **Profiles → Add profile** writes the manifest, updates
+the MCP registry, and runs `install`.
 
+---
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `claude` | Claude Code on the default profile |
+| `claude-work` | Claude Code on the `work` profile (each profile can declare its own `command`) |
+| `claude-multi install [--dry-run]` | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent |
+| `claude-multi doctor [--json\|--notify]` | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a *new* failure appears, or when everything clears |
+| `claude-multi status [--json]` | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the gate and the console |
+| `claude-multi sync [--fetch]` | align the repository from the remote (fetch when stale, ff-only pull on a clean tree) |
+| `claude-multi mcp check\|sync\|health` | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server |
+| `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | update Claude Code and/or Claude Desktop |
+| `claude-multi usage [--by …] [--since …]` | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite) |
+| `claude-multi budget [--notify]` | consumption thresholds. Only billed extra usage raises an alert |
+| `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
+| `claude-launch <profile>` | the entry point desktop launchers use: repository sync, update gate, then the app |
+
+`claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
+would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
+
+---
+
+## The console
+
+`claude-multi install` enables `claude-multi-console.service`, so the console is always at
+<http://127.0.0.1:7331>. It is not tied to a graphical session — over an ssh tunnel it works
+exactly the same, which is the point on a headless box.
+
+Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
+and the page redraws the view you are actually looking at. The page itself is HTML, CSS and
+vanilla JS with no dependencies and no external assets, so it renders on a machine that has never
+been online.
+
+- **Overview** — the three billing planes, daily spend stacked per profile, top projects, what is
+  running, repository state.
+- **Profiles** — what each profile mounts and is signed in as; edit a profile, or add one.
+- **Usage** — by project, model, skill, command or agent, over any window.
+- **Sessions** — recent sessions; select one to read its transcript, with the tools each turn used
+  and what that turn cost.
+- **Health** — every doctor check, with a button for the fixes that map to a known action.
+
+`⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the
+local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating is
+deliberately *not* an action: it goes through the polkit gate.
+
+---
+
+## What you actually pay for
+
+This is the part most usage tooling gets wrong, this one included until recently. Consumption lives
+on three planes and they are not interchangeable:
+
+| Plane | What it is | Alerts? |
+|---|---|---|
+| **billed** | extra-usage credits, in real currency | yes — the only plane that can |
+| **plan** | how full a subscription window is | no: it says when you will be throttled, not what you will pay |
+| **estimate** | what the same tokens would cost at list price | never |
+
+On a subscription, tokens are not billed per token. The "cost" `usage` reports is a list-price
+equivalent — useful to compare profiles, models and days, worthless as accounting. Alerting on it
+means an alert every single day for money nobody is charged.
+
+So the plane belongs to the **metric**, not to the profile. Every profile is a subscription that
+may also spend credits; nothing is hardwired per profile. Rules live in
+[`shared/budget.json`](shared/budget.json):
+
+```json
+{ "id": "billed-month", "metric": "billed.month.percent", "warn": 60, "crit": 85 }
 ```
-bin/            wrapper e script: claude, claude-work, claude-multi, claude-launch, claude-update,
-                claude-update-notify, claude-update-gui, claude-desktop-update, claude-desktop-work-rebuild
-bin/lib/        prelaunch.sh — sync del repo prima di ogni avvio (bash puro, mai bloccante)
-cli/            la CLI claude-multi (Deno, zero dipendenze): main · lib · doctor · install · status · mcp · usage · budget · notify · serve
-shared/         config condivisa fra i profili: agents, commands, hooks, skills, rules, mcp (registry),
-                settings.json, statusline-command.sh, scripts, tools
-profiles/       CLAUDE.md, profile.json (manifest) e voci proprie per profilo (profiles/work/skills)
-lib/            claude-update-gui (PySide6)
-systemd/user/   claude-update-check.{service,timer} + llama-embed.service, llama-embed-shim.service, llama-generate.service
-desktop/        .desktop + icone della variante Work
-pkg/            PKGBUILD del repack Arch del .deb ufficiale di Claude Desktop
-```
 
-## Layout runtime (`~/.claude-multi/`, generato da `install`)
+Metrics are `billed.today`, `billed.month`, `billed.month.percent`, `plan.<kind>.percent` and
+`estimate.day|week|month`. Billed metrics notify by default; the other two stay silent unless a
+rule sets `"notify": true`. A per-profile `"cap"` overrides the reported monthly ceiling, so you
+can hear about it well before the real limit.
 
-```
-shared      → <repo>/shared
-marketplaces/          cloni dei marketplace plugin (per-macchina, riclonabili)
-personal/   CLAUDE.md → <repo>/profiles/personal/CLAUDE.md
-            settings.json agents commands hooks skills → ../shared/…
-            .claude.json .credentials.json projects/ plugins/ …   ← stato per-macchina, mai nel repo
-work/       come personal, ma skills/ è una dir reale con symlink selettivi
-            (profiles/work/skills/* + graphify): le skill cliente non arrivano in personal
-```
+Two details that matter:
 
-Isolamento: `CLAUDE_CONFIG_DIR` per profilo (binario ≥ 2.1.177, `.claude.json` per-profilo dentro la dir). `~/.claude` esiste come stub a `500` così un tool che ignora la variabile fallisce in modo visibile invece di creare un terzo profilo.
+- Claude Code refreshes the billing cache when it feels like it — here it has been weeks stale. A
+  stale reading **never** fires an alert, and the doctor says so.
+- Every reading is sampled into `credit_samples` (usage.db). Today's billed spend is the delta
+  between two samples, and it is the only figure in real currency in the whole system.
 
-## Come si propaga fra le macchine
+`--notify` (from the timer, every 4 h) alerts only on a threshold rising or clearing, with a
+cooldown and a quiet window. `--dry-run` does not consume the state.
 
-- Il fisso è dove si lavora e si committa. **Push mai automatico.**
-- A ogni avvio di `claude`, `claude-work` o `claude-launch`, `bin/lib/prelaunch.sh`: se l'ultimo fetch ha più di 12 ore fa un `git fetch` con timeout 3 s; se il repo è indietro e il working tree è pulito fa `pull --ff-only`. Poi parte Claude, già con la config nuova: non serve riavviare. Offline o storia divergente → parte comunque e non tocca nulla.
-- Lo stato finisce in `~/.cache/claude-multi/sync.json` e nella **statusline**: `cfg ↓3` indietro, `cfg ↑1` commit non pushati, `cfg ✎2` modifiche non committate, `cfg ≠` divergente, `cfg offline` fetch fallito. Accanto, `⬆ code x.y.z` / `⬆ desktop x.y.z` quando c'è un aggiornamento.
-- `claude-multi sync --fetch` forza il fetch (utile sul portatile prima di iniziare).
+---
 
-## Aggiornamenti
+## Skills and commands in `usage`
 
-Niente si aggiorna senza approvazione. `DISABLE_AUTOUPDATER=1` è impostato ovunque.
-
-- **Claude Code**: l'updater nativo scarica l'ELF in `~/.local/share/claude/versions/X.Y.Z` e riscrive `~/.local/bin/claude`. `claude-update --cli` lo invoca, ripunta `claude-bin` all'ultima versione, ripristina il wrapper `claude`, pota le versioni vecchie, sistema l'url-handler `claude-cli://`.
-- **Claude Desktop**: `claude-desktop-update` ricostruisce il pacchetto Arch dal `.deb` ufficiale Anthropic (PKGBUILD in `pkg/`), poi `claude-desktop-work-rebuild` rigenera la variante **Work** (asar con `app.setDesktopName("claude-desktop-work")` per avere icona e app_id distinti su KDE Wayland; tutto il resto è symlink a `/usr/lib/claude-desktop`).
-- **Gate grafico**: `claude-launch` controlla le versioni (cache 6 h) e, se serve, apre `claude-update-gui` prima dell'app: checkbox indipendenti per Code e Desktop con le novità della versione, install via `pkexec`. Il Desktop va aggiornato ad app chiusa (l'install sostituisce `/usr/lib/claude-desktop`). La GUI è una **vista della CLI**: il pannello «Stato del setup» arriva da `claude-multi status --json` (versioni, doctor con fix copiabili, istanze), le azioni passano da `claude-multi update` e `claude-multi serve`. Dal menu, «Claude — aggiornamenti e stato» apre lo stesso pannello in modalità standalone anche senza aggiornamenti, con il rollback della CLI.
-- **Timer**: `claude-update-check.timer` (10 min dopo il login, poi ogni 4 h) → una notifica KDE con «Aggiorna ora». Non aggiorna nulla da sé. Lo stesso timer lancia `claude-multi doctor --notify` e `claude-multi budget --notify`: il doctor diventa un guardiano che avvisa solo sui fail nuovi (stato in `~/.local/state/claude-multi/doctor-last.json`), il budget avvisa solo se si sta spendendo davvero.
-- **Cache del check** (`~/.cache/claude-update/check.json`): la scrive sempre `claude-update --check`, in qualunque modalità, e l'update la rigenera a fine corsa. Statusline, dashboard, doctor e launcher leggono da lì; il doctor avvisa se è più vecchia di 24 h.
-
-## MCP
-
-Registry unico `shared/mcp/servers.json`. Per server: `_profiles` (default tutti) e `_surfaces` (`cli` = `.claude.json` del profilo, letto da Claude Code CLI ed embedded; `desktop` = `claude_desktop_config.json` dell'istanza Desktop, letto dalla chat). `claude-multi mcp sync` applica il registry a tutte le superfici, con merge non distruttivo, guard sulle istanze attive (`--force` per ignorarlo), backup in `~/.local/state/claude-multi/` e stato per-macchina. `mcp health` controlla binari, file, lock, vault e l'endpoint di embedding di `wiki-claude`; `mcp health --probe` avvia davvero ogni server e attende la risposta a `initialize` (coglie i moduli nativi compilati per un altro Node). `wiki-claude` gira con il **PATH pinnato a Node 24 di nvm** nel registry: `better-sqlite3` è un modulo nativo legato all'ABI, e con tre Node sulla macchina (sistema 26, nvm 24/25/26) chi lanciava decideva se l'MCP partiva. L'endpoint di embedding non è Ollama: **non** Ollama, ma `llama-embed-shim` (`shared/tools/llama-embed-shim`, porta 11434, parla il protocollo Ollama perché obsidian-brain conosce solo quello) davanti a `llama-server` di llama.cpp (`llama-embed.service`, porta 8090, bge-m3 su Vulkan). `llama-generate.service` è on-demand: la accende lo shim per il distiller e la spegne a riposo. Gli MCP scritti in casa stanno in `shared/mcp/<nome>/` (Deno, permessi minimi, segreti letti da `~/.config/secrets/`).
-
-## Aggiornamenti: dettagli
-
-- Un solo `claude-update` alla volta (lock in `~/.cache/claude-update/update.lock`).
-- Il prune delle versioni CLI tiene la penultima: `claude-multi update --rollback` ci torna.
-- `claude-update --check --json` allega `changelog_file` con la sezione del CHANGELOG ufficiale della versione remota: il gate lo mostra prima di chiedere l'approvazione.
-- Claude Desktop: la chiave pubblica del repo apt Anthropic (`https://downloads.claude.ai/claude-desktop/key.asc`, fingerprint `31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`) è in `pkg/claude-desktop/anthropic-apt.asc`. `claude-desktop-update` verifica con `gpgv` la firma dell'`InRelease`, che sia della chiave pinnata, e lo sha256 dell'indice `Packages`; il `.deb` è poi verificato dallo sha256 preso da quell'indice. Catena completa fino al pacchetto.
-
-## Dashboard
-
-`claude-multi serve` apre `http://127.0.0.1:7331`: un processo, nessun daemon, Ctrl-C per chiudere. Pagina in `cli/dashboard/` (HTML, CSS e JS senza dipendenze né asset esterni, funziona offline), token visivi «Graphite · Indigo» dal sistema UI di Samuel, tema scuro e chiaro.
-
-- **Overview**: versioni con badge di update, doctor, sessioni attive con cwd, costo per giorno degli ultimi 14 giorni impilato per profilo, stato del repo.
-- **Profili**: manifest, cosa è montato (skill, agenti, comandi, MCP per superficie, plugin) con chip che distinguono voci proprie, da `~/.agents` e link rotti.
-- **Doctor**: tutti i controlli con filtro per esito e fix copiabile; «Rilancia doctor».
-- **Sessioni**: le sessioni recenti con quando, cartella, via CLI o Desktop, arco temporale, messaggi (e quota subagent), modelli, agenti, output e costo.
-- **Usage**: stat tile (costo equivalente, output, cache letta, messaggi), barre impilate per giorno e profilo, distribuzione per modello, tabella per profilo, modello, progetto, agente, giorno, sessione, entrypoint, skill o comando. Palette validata per daltonismo (dataviz).
-- **Budget**: per profilo, chi paga davvero (solo abbonamento o extra credits), crediti del mese sul limite, finestre del piano, e ogni soglia con la sua barra e il motivo per cui notifica o tace.
-- **Sync**: remote, ultimo fetch, ahead/behind, working tree.
-- **Azioni**: doctor, sync, mcp check/sync (con `--force` opzionale), install dry-run e reale, usage ingest, budget, update check. Girano sulla CLI locale via `POST /api/action` con allowlist e header anti-CSRF; l'output compare nella console. L'update **non** è un'azione: passa dal gate con polkit.
-
-Auto-refresh ogni 30 s (disattivabile), stato con cache di 5 s lato server.
-
-## Chi paga davvero: `budget`
-
-Su abbonamento i token non sono fatturati: il «costo» di `usage` è un **equivalente a listino**, utile a confrontare profili e giornate, non una spesa. Si paga davvero solo quando un profilo consuma **extra credits**, e Claude Code lo scrive in `<profilo>/.claude.json` → `cachedUsageUtilization.utilization.extra_usage`. `budget` legge quel blocco e classifica ogni profilo:
-
-- **`included`** — extra credits spenti o disabilitati: le soglie si vedono ma non notificano mai. Svegliare qualcuno per consumo incluso è rumore.
-- **`credits`** — extra credits attivi: qui le soglie notificano, con la spesa reale in valuta.
-
-Le regole stanno in [`shared/budget.json`](shared/budget.json): per profilo o globali, ciascuna con metrica (`credits.spent.day`, `credits.utilization`, `credits.used`, `cost.day|week|month`, `plan.<kind>.percent`), soglie `warn`/`crit` e `notify` a `true` / `false` / `"auto"`. Con `"auto"` la stessa identica regola tace su un profilo a solo abbonamento e avvisa su uno a crediti: la differenza la fa il profilo, non la configurazione. I limiti dell'abbonamento (`plan.*`) non sono spesa e non notificano mai in automatico, per quanto siano al 100%.
-
-Due dettagli che contano:
-
-- La cache di stato la aggiorna Claude Code quando gli pare (qui è arrivata a essere vecchia di settimane). Un valore crediti stantio **non** fa mai scattare una notifica, il doctor lo segnala, e `"billing": "credits"` in configurazione permette di cablare la classe senza dipendere dalla cache.
-- Ogni lettura viene campionata in `credit_samples` (usage.db): da lì esce la spesa giornaliera reale come delta fra due campioni, che è l'unico numero in euro veri di tutto il sistema.
-
-`claude-multi budget` mostra tutto, `--notify` (dal timer, ogni 4 h) manda la notifica solo su una soglia che sale o rientra, con cooldown e finestra di silenzio notturna. `--dry-run` non consuma lo stato.
-
-## Skill e comandi in `usage`
-
-Una skill non consuma token da sola: li fa consumare al turno che la usa. Il **turno** (dal prompt umano al successivo, subagent compresi) è l'unità ben definita disponibile, quindi il costo del turno si divide in parti uguali fra le skill e i comandi slash che vi compaiono: `usi` conta le invocazioni, `costo` è la quota. È un'approssimazione, ed è dichiarata sia nella CLI sia nella dashboard. I messaggi fuori turno (transcript di subagent senza prompt umano) restano esclusi e vengono contati a parte.
+A skill consumes no tokens by itself: it makes the turn that uses it consume them. The **turn**
+(from one human prompt to the next, subagents included) is the well-defined unit available, so the
+turn's cost is split evenly across the skills and slash commands appearing in it. `uses` counts
+invocations, `estimate` is the share. It is an approximation and it is declared as one, in the CLI
+and in the console. Messages outside any turn are excluded and counted separately.
 
 ```bash
 claude-multi usage --by skill --since 30d
 claude-multi usage --by command --since all
 ```
 
-## Macchina nuova
+---
 
-```bash
-git clone ssh://git@git.example.com:2222/owner/claude-multi.git ~/.local/src/claude-multi
-~/.local/src/claude-multi/bin/claude-multi install
-claude        # → /login (account personale)
-claude-work   # → /login (account work)
+## MCP
+
+One registry, `shared/mcp/servers.json`. Per server, `_profiles` (default: all) and `_surfaces`:
+
+- `cli` → the profile's `.claude.json`, read by Claude Code and by the copy embedded in Desktop
+- `desktop` → that profile's `claude_desktop_config.json`, read by the Desktop chat
+
+`claude-multi mcp sync` applies the registry to every surface with a non-destructive merge: only
+registry-managed servers are touched, hand-added ones survive. It refuses to run while an instance
+that would rewrite the file is open (`--force` overrides), backs up into
+`~/.local/state/claude-multi/`, and keeps its per-machine state out of the repository.
+
+`mcp health` checks binaries, files, lock files and dependencies. `mcp health --probe` actually
+starts each server and waits for its `initialize` reply, which catches what static checks cannot —
+native modules built for the wrong Node ABI, missing environment, cold-start crashes.
+
+Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege, secrets read from
+`~/.config/secrets/`).
+
+---
+
+## Repository layout
+
+```
+bin/            wrappers and scripts: claude, claude-work, claude-multi, claude-launch, claude-update, …
+bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
+cli/            the claude-multi CLI (Deno, zero dependencies)
+cli/dashboard/  the console page (HTML/CSS/JS, no build step)
+shared/         config shared across profiles: agents, commands, hooks, skills, rules, mcp, settings.json
+profiles/       one directory per profile: manifest, CLAUDE.md, owned entries
+lib/            the update GUI (PySide6)
+systemd/user/   console unit, update-check timer, optional local inference units
+desktop/        .desktop entries and icons
+pkg/            PKGBUILD repackaging Anthropic's official .deb of Claude Desktop for Arch
 ```
 
-Serve: `deno`, `git`, `jq`, `python3`; per Claude Desktop anche `base-devel`, `libarchive`, `pyside6`, `@electron/asar`. Le credenziali OAuth sono per-macchina. Claude Code si installa la prima volta con l'installer nativo, poi `claude-multi update --cli`.
+Runtime, generated by `install`:
 
-## Sviluppo
-
-```bash
-deno task check   # type-check CLI e test, bash -n su ogni script, py_compile della GUI
-deno task test    # test: usage (tariffe, dedupe, turni/skill), budget (classi di spesa, soglie, notifiche), mcp, manifest, changelog, prelaunch su repo git veri
+```
+~/.claude-multi/
+  shared         → <repo>/shared
+  marketplaces/  plugin marketplace clones (per-machine, re-clonable)
+  <profile>/     CLAUDE.md, settings.json, hooks, skills, agents, commands → shared or the repo
+                 .claude.json, .credentials.json (600), projects/  — per-machine, never committed
 ```
 
-- **Pre-commit** (`.githooks/pre-commit`, attivato da `install` via `core.hooksPath`): blocca file di stato o credenziali in staging e righe aggiunte che sembrano token (`sk-ant-…`, `accessToken`, `oauthAccount`, chiavi private, token GitHub/GitLab/AWS/Slack), poi esegue `deno task check` se sono cambiati script o TypeScript. Bypass consapevole: `git commit --no-verify`.
-- **CI** (`.forgejo/workflows/ci.yml`): check, test e guard segreti sull'intero albero a ogni push su `release`. Serve un runner Forgejo con label `docker` registrato sull'istanza.
-- Ogni invariante nuova va in `cli/doctor.ts`; ogni funzione pura nuova ha un test in `cli/tests/`.
+---
 
-## Cosa non fare
+## How it travels between machines
 
-- Non scrivere in `~/.claude/` (stub) e non cambiargli i permessi.
-- Non modificare `~/.claude-multi/shared` fuori dal repo.
-- Non lanciare `claude-work update` o `claude-bin update` a mano: usa `claude-multi update`.
-- Non rimettere `~/.claude-multi` in Syncthing: i backup con token ci sono già finiti una volta.
-- Non aggiornare Claude Desktop con l'app aperta.
+- One machine is where you work and commit. **Pushing is never automatic.**
+- On every launch, `bin/lib/prelaunch.sh` fetches if the last fetch is over 12 h old (3 s timeout),
+  and pulls `--ff-only` when the tree is clean and behind. Claude then starts with the new config —
+  no restart needed. Offline, or with diverged history, it starts anyway and touches nothing.
+- The result lands in `~/.cache/claude-multi/sync.json` and in the statusline: `cfg ↓3` behind,
+  `cfg ↑1` unpushed, `cfg ✎2` uncommitted, `cfg ≠` diverged, `cfg offline`.
+- `claude-multi sync --fetch` forces a fetch — useful on a laptop before starting.
 
-## Knowledge base
+---
 
-Il *perché* delle scelte, i post-mortem e il catalogo di agenti/skill non caricati vivono nella LLM-wiki `~/brains/claude/` (pagine `references/claude-multi-account-setup`, `claude-desktop-integration`, `claude-update-gate`). Qui c'è solo il *come*.
+## Updates
+
+Nothing updates without approval; `DISABLE_AUTOUPDATER=1` is set everywhere.
+
+- **Claude Code**: the native updater downloads into `~/.local/share/claude/versions/X.Y.Z` and
+  rewrites `~/.local/bin/claude`. `claude-update --cli` drives it, re-points `claude-bin`, restores
+  the wrapper, prunes old versions (keeping N-1 for `--rollback`) and fixes the `claude-cli://`
+  handler.
+- **Claude Desktop**: `claude-desktop-update` rebuilds the Arch package from Anthropic's official
+  `.deb`, then regenerates each profile's variant (a separate `app.setDesktopName` so icons and
+  app ids stay distinct on Wayland; everything else symlinks to the system install).
+- **Graphical gate**: `claude-launch` checks versions (6 h cache) and opens the update GUI before
+  the app when needed, with the release notes and install through `pkexec`. Desktop must be updated
+  with the app closed.
+- **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) raises a notification
+  and never updates anything by itself. The same timer runs `doctor --notify` and `budget --notify`.
+- **Supply chain**: the apt repository key is pinned in `pkg/claude-desktop/anthropic-apt.asc`.
+  `claude-desktop-update` verifies the `InRelease` signature against it with `gpgv`, then the
+  `Packages` index hash, then the `.deb` hash from that index. The chain is complete down to the
+  package.
+
+---
+
+## Development
+
+```bash
+deno task check   # type-check the CLI and tests, bash -n every script, py_compile the GUI
+deno task test    # usage (rates, dedupe, turns), budget (planes, thresholds, notifications),
+                  # mcp, manifests, changelog, prelaunch against real git repositories
+```
+
+- **Pre-commit** (`.githooks/pre-commit`, wired up by `install`): blocks staged state or credential
+  files and added lines that look like tokens, then runs `deno task check` when scripts or
+  TypeScript changed. Deliberate bypass: `git commit --no-verify`.
+- **CI** (`.forgejo/workflows/ci.yml`): check, test and a secret scan of the whole tree on every
+  push. Needs a runner with the `docker` label.
+- Every new invariant goes in `cli/doctor.ts` — the README describes, the doctor verifies. Every new
+  pure function gets a test in `cli/tests/`.
+
+---
+
+## Don't
+
+- Write into `~/.claude/` (it is a read-only stub) or change its permissions.
+- Edit `~/.claude-multi/shared` outside the repository — it is a symlink into it.
+- Run `claude update` or `claude-bin update` by hand; use `claude-multi update`.
+- Put `~/.claude-multi` into a file-sync folder: it holds credentials, and backups containing
+  tokens have leaked that way before.
+- Update Claude Desktop with the app open.
