@@ -18,7 +18,7 @@
         "OLLAMA_BASE_URL": "http://localhost:11434",
         "OLLAMA_EMBEDDING_DIM": "1024",
         "OBSIDIAN_BRAIN_NO_WATCH": "1",
-        "PATH": "~/.nvm/versions/node/v24.20.0/bin:~/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin"
+        "PATH": "~/.nvm/versions/node/v24.21.0/bin:~/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin"
       },
       "_note": "PATH pinnato: obsidian-brain carica better-sqlite3 (modulo nativo) e deve girare SEMPRE con lo stesso Node (nvm 24, ABI 137). Con /usr/bin/node (26, ABI 147) davanti nel PATH il modulo non carica e l'MCP muore in 'connection closed' (incidente 2026-09-04). Se cambi Node: aggiorna qui e ricompila (claude-multi mcp health --probe lo verifica)."
     },
