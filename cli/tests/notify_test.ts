@@ -5,7 +5,7 @@ import type { Check } from "../lib.ts";
 
 const c = (id: string, status: Check["status"], fix?: string): Check => ({ id, status, msg: `msg ${id}`, fix });
 
-Deno.test("diffDoctor: fail nuovi, spariti, persistenti, recovered", () => {
+Deno.test("diffDoctor: new failures, cleared ones, persistent ones, recovery", () => {
   const d = diffDoctor(["a", "b"], [c("b", "fail"), c("c", "fail"), c("w", "warn"), c("o", "ok")]);
   assertEquals(d.newFails.map((x) => x.id), ["c"]);
   assertEquals(d.gone, ["a"]);
@@ -15,13 +15,13 @@ Deno.test("diffDoctor: fail nuovi, spariti, persistenti, recovered", () => {
   assertEquals(diffDoctor([], [c("o", "ok")]).recovered, false);
 });
 
-Deno.test("notifyText: solo fail nuovi o recupero; i warn non notificano", () => {
+Deno.test("notifyText: only new failures or recovery; warnings never notify", () => {
   assertEquals(notifyText(diffDoctor([], [c("w", "warn")])), null);
-  assertEquals(notifyText(diffDoctor(["a"], [c("a", "fail")])), null); // fail già noto: silenzio
-  const t = notifyText(diffDoctor([], [c("x", "fail", "fai questo")]))!;
+  assertEquals(notifyText(diffDoctor(["a"], [c("a", "fail")])), null); // already-known failure: silence
+  const t = notifyText(diffDoctor([], [c("x", "fail", "do this")]))!;
   assertEquals(t.urgency, "critical");
-  assertEquals(t.title.includes("1 problema nuovo"), true);
-  assertEquals(t.body.includes("→ fai questo"), true);
+  assertEquals(t.title.includes("1 new problem"), true);
+  assertEquals(t.body.includes("→ do this"), true);
   const r = notifyText(diffDoctor(["x"], [c("o", "ok")]))!;
-  assertEquals(r.title, "claude-multi: tutto ok");
+  assertEquals(r.title, "claude-multi: all clear");
 });

@@ -2,7 +2,7 @@
 import { assert, assertEquals, assertAlmostEquals } from "jsr:@std/assert@1";
 import { costUsd, ingestFile, openDb, report, sessions, sinceDate, projectLabel } from "../usage.ts";
 
-Deno.test("sinceDate: 7d, all, data esplicita, input non valido", () => {
+Deno.test("sinceDate: 7d, all, an explicit date, and invalid input", () => {
   const d = sinceDate("7d")!;
   assert(/^\d{4}-\d{2}-\d{2}$/.test(d));
   const diff = (Date.now() - new Date(d).getTime()) / 864e5;
@@ -13,7 +13,7 @@ Deno.test("sinceDate: 7d, all, data esplicita, input non valido", () => {
   let threw = false; try { sinceDate("ieri"); } catch { threw = true; } assert(threw);
 });
 
-Deno.test("costUsd: listino, cache read/write, Fable read flat, modello ignoto", () => {
+Deno.test("costUsd: list price, cache read/write, the flat Fable read rate, an unknown model", () => {
   const u = { input: 1_000_000, output: 0, cacheRead: 0, cache5m: 0, cache1h: 0 };
   assertAlmostEquals(costUsd("claude-opus-5", u)!, 5);
   assertAlmostEquals(costUsd("claude-sonnet-5", { ...u, input: 0, output: 1_000_000 })!, 10);
@@ -27,7 +27,7 @@ Deno.test("costUsd: listino, cache read/write, Fable read flat, modello ignoto",
 const line = (o: Record<string, unknown>) => JSON.stringify(o);
 const usage = (input: number, output: number, read = 0, w5 = 0, w1 = 0) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: read, cache_creation: { ephemeral_5m_input_tokens: w5, ephemeral_1h_input_tokens: w1 } });
 
-Deno.test("ingestFile: dedupe per message.id (max per campo), sidechain, synthetic, spawn Agent", async () => {
+Deno.test("ingestFile: dedupe by message.id (max per field), sidechains, synthetic models, Agent spawns", async () => {
   const dir = await Deno.makeTempDir();
   const f = `${dir}/session.jsonl`;
   await Deno.writeTextFile(f, [
@@ -69,7 +69,7 @@ Deno.test("ingestFile: dedupe per message.id (max per campo), sidechain, synthet
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("attribuzione a skill e comandi: turno, quota divisa, prompt consecutivi", async () => {
+Deno.test("skill and command attribution: the turn, the split share, consecutive prompts", async () => {
   const dir = await Deno.makeTempDir();
   const f = `${dir}/session.jsonl`;
   const asst = (uuid: string, id: string, out: number, content: unknown[] = []) =>

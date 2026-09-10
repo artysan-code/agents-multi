@@ -1,4 +1,5 @@
-// status.ts — lo stato completo in un JSON: è il contratto per statusline, GUI, notifica e dashboard.
+// status.ts — the whole state as one JSON document: the contract for the statusline, the GUI, the
+// notifier and the console. Everything that reads state reads this shape.
 
 import { ANSI, CACHE, HOME, machine, profileInfo, profileNames, readJson, repoState, running, sharedInventory } from "./lib.ts";
 import { doctor } from "./doctor.ts";
@@ -14,7 +15,7 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
   try {
     const reg = await loadRegistry();
     registry = Object.fromEntries(Object.entries(reg.servers).map(([n, c]) => [n, { profiles: c._profiles ?? reg.profiles, surfaces: c._surfaces ?? ["cli"] }]));
-  } catch { /* registry assente */ }
+  } catch { /* no registry */ }
   return {
     generatedAt: new Date().toISOString(), machine: m, repo, sync, update,
     shared: { ...inv, mcpRegistry: registry },
@@ -29,16 +30,16 @@ export function printStatus(s: StatusReport) {
   const up = (k: "cli" | "desktop") => s.update?.[k]?.outdated ? `  ${ANSI.y}⬆ ${s.update?.[k]?.latest}${ANSI.x}` : "";
   console.log(`${ANSI.b}claude-multi status${ANSI.x} — ${m.hostname}`);
   console.log(`  Claude Code     ${m.cliVersion ?? "?"}${up("cli")}`);
-  console.log(`  Claude Desktop  ${m.desktopVersion ?? "non installato"}${up("desktop")}`);
-  for (const [variant, vs] of Object.entries(m.embeddedCode)) console.log(`  Desktop ${variant.padEnd(8)} Claude Code embedded ${vs.join(", ")}`);
-  if (r.isRepo) console.log(`  Repo            ${r.branch} @ ${r.head}  ↓${r.behind} ↑${r.ahead} ✎${r.dirty}  (${r.remote ?? "nessun remote"})`);
-  console.log(`  Condiviso       ${Object.keys(s.shared.agents).length} agenti · ${Object.keys(s.shared.commands).length} comandi · ${Object.keys(s.shared.skills).length} skill · ${s.shared.hooks.length} hook · ${Object.keys(s.shared.mcpRegistry).length} MCP nel registry`);
+  console.log(`  Claude Desktop  ${m.desktopVersion ?? "not installed"}${up("desktop")}`);
+  for (const [variant, vs] of Object.entries(m.embeddedCode)) console.log(`  Desktop ${variant.padEnd(8)} embedded Claude Code ${vs.join(", ")}`);
+  if (r.isRepo) console.log(`  Repository      ${r.branch} @ ${r.head}  ↓${r.behind} ↑${r.ahead} ✎${r.dirty}  (${r.remote ?? "no remote"})`);
+  console.log(`  Shared          ${Object.keys(s.shared.agents).length} agents · ${Object.keys(s.shared.commands).length} commands · ${Object.keys(s.shared.skills).length} skills · ${s.shared.hooks.length} hooks · ${Object.keys(s.shared.mcpRegistry).length} MCP servers`);
   for (const p of Object.keys(s.profiles)) {
     const i = s.profiles[p];
     const mine = s.running.cli.filter((c) => c.profile === p);
     const active = `${mine.filter((c) => !c.embedded).length} cli + ${mine.filter((c) => c.embedded).length} desktop`;
-    console.log(`  ${p.padEnd(15)} ${i.account ?? "—"} · mcp cli [${i.mcp.join(", ")}]${m.desktopVersion ? ` desktop [${i.mcpDesktop.join(", ")}]` : ""} · skill ${Object.keys(i.mounted.skills).length} · plugin ${i.plugins.length} · sessioni ${active}`);
+    console.log(`  ${p.padEnd(15)} ${i.account ?? "—"} · mcp cli [${i.mcp.join(", ")}]${m.desktopVersion ? ` desktop [${i.mcpDesktop.join(", ")}]` : ""} · ${Object.keys(i.mounted.skills).length} skills · ${i.plugins.length} plugins · ${active}`);
   }
-  if (s.running.desktop.length) console.log(`  Desktop attivi  ${s.running.desktop.map((d) => d.variant).join(", ")}`);
+  if (s.running.desktop.length) console.log(`  Desktop running ${s.running.desktop.map((d) => d.variant).join(", ")}`);
   console.log();
 }

@@ -1,5 +1,5 @@
-// install.ts — materializza il runtime dal repo. Idempotente: rilanciabile quando vuoi, --dry-run per vedere.
-// Regola: mai cancellare contenuto reale, si sposta in *.pre-repo-<stamp> e si dice.
+// install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
+// Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
 import { AGENTS_SKILLS, ANSI, BIN, HOME, KINDS, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
 import { doctor } from "./doctor.ts";
@@ -10,7 +10,7 @@ function say(s: string) { actions.push(s); console.log(`  ${DRY ? `${ANSI.d}(dry
 
 async function backupAway(p: string) {
   const dest = `${p}.pre-repo-${STAMP}`;
-  say(`${ANSI.y}→${ANSI.x} sposto ${p} in ${dest}`);
+  say(`${ANSI.y}→${ANSI.x} moving ${p} aside to ${dest}`);
   if (!DRY) await Deno.rename(p, dest);
 }
 async function ensureSymlink(target: string, link: string, label = link) {
@@ -34,14 +34,14 @@ async function ensureCopy(src: string, dst: string) {
   if (!DRY) { await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true }); await Deno.copyFile(src, dst); }
 }
 async function removeLink(p: string, why: string) {
-  say(`${ANSI.y}−${ANSI.x} rimuovo ${p} (${why})`);
+  say(`${ANSI.y}−${ANSI.x} removing ${p} (${why})`);
   if (!DRY) await Deno.remove(p);
 }
 
 const ZSH_BEGIN = "# >>> claude-multi (multi-account) >>>";
 const ZSH_END = "# <<< claude-multi <<<";
 const ZSH_BLOCK = `${ZSH_BEGIN}
-# Gestito da \`claude-multi install\` (repo ~/.local/src/claude-multi): non editare a mano.
+# Managed by \`claude-multi install\`: do not edit by hand.
 # \`claude\` = profilo personal (default), \`claude-work\` (cw) = profilo work.
 export CLAUDE_CONFIG_DIR="\${CLAUDE_CONFIG_DIR:-$HOME/.claude-multi/personal}"
 export DISABLE_AUTOUPDATER=1
@@ -49,27 +49,29 @@ alias cw='claude-work'
 alias clp='claude'
 ${ZSH_END}`;
 
-/** Materializza <profilo>/<kind> secondo il manifest: "all" senza voci proprie → symlink alla dir condivisa;
- *  altrimenti dir reale con symlink selettivi (shared relativi, propri assoluti verso il repo). */
+/** Materialise <profile>/<kind> from the manifest: "all" with no owned items becomes a symlink to
+ *  the shared directory; otherwise a real directory with selective symlinks (shared ones relative,
+ *  owned ones absolute into the repository). */
 async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   const dir = `${RUNTIME}/${p}/${kind}`;
   const own = await ownItems(p, kind);
   if (spec === "all" && own.length === 0) { await ensureSymlink(`../shared/${kind}`, dir, `${p}/${kind}`); return; }
   const st = await lstat(dir);
-  if (st?.isSymlink) { say(`${ANSI.y}→${ANSI.x} ${p}/${kind} era un symlink: diventa dir reale`); if (!DRY) await Deno.remove(dir); }
+  if (st?.isSymlink) { say(`${ANSI.y}→${ANSI.x} ${p}/${kind} was a symlink: becoming a real directory`); if (!DRY) await Deno.remove(dir); }
   await ensureDir(dir);
   const sharedNames = spec === "all" ? await listDir(`${REPO}/shared/${kind}`) : spec.map((n) => kind === "skills" || n.endsWith(".md") ? n : `${n}.md`);
   const expected = new Set<string>();
   for (const n of sharedNames) {
-    if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) { say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" non esiste in shared/${kind} (manifest da correggere)`); continue; }
+    if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) { say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`); continue; }
     expected.add(n); await ensureSymlink(`../../shared/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`);
   }
   for (const n of own) { expected.add(n); await ensureSymlink(`${REPO}/profiles/${p}/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`); }
-  // link non previsti dal manifest: si tolgono solo se sono symlink (contenuto reale resta e lo segnala il doctor)
+  // links the manifest does not call for: removed only when they are symlinks (real content stays,
+  // and the doctor reports it)
   for (const n of await listDir(dir)) {
     if (expected.has(n)) continue;
     const s = await lstat(`${dir}/${n}`);
-    if (s?.isSymlink) await removeLink(`${dir}/${n}`, "fuori manifest");
+    if (s?.isSymlink) await removeLink(`${dir}/${n}`, "not in the manifest");
   }
 }
 
@@ -78,31 +80,31 @@ export async function install(dry: boolean) {
   const m = await machine();
   console.log(`${ANSI.b}claude-multi install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`);
 
-  // 1. runtime + marketplaces fuori da shared (per-macchina, riclonabili)
+  // 1. runtime + marketplaces outside shared (per-machine, re-clonable)
   await ensureDir(RUNTIME);
   const sharedSt = await lstat(`${RUNTIME}/shared`);
   const oldMk = `${RUNTIME}/shared/plugins/marketplaces`;
   if (sharedSt?.isDirectory && !sharedSt.isSymlink && await lstat(oldMk) && !(await lstat(`${RUNTIME}/marketplaces`))) {
-    say(`${ANSI.y}→${ANSI.x} sposto ${oldMk} in ${RUNTIME}/marketplaces`);
+    say(`${ANSI.y}→${ANSI.x} moving ${oldMk} to ${RUNTIME}/marketplaces`);
     if (!DRY) await Deno.rename(oldMk, `${RUNTIME}/marketplaces`);
   }
   await ensureDir(`${RUNTIME}/marketplaces`);
 
-  // 2. skill installate da tool esterni in ~/.agents/skills → link assoluti in shared/skills (nel repo: poi commit)
+  // 2. skills installed by external tools in ~/.agents/skills → absolute links in shared/skills
   if (await lstat(AGENTS_SKILLS)) {
     for (const s of await listDir(AGENTS_SKILLS)) {
       if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
       if (!(await lstat(`${REPO}/shared/skills/${s}`))) await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${REPO}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
     }
   }
-  // link rotti in shared/skills (path relativi della vecchia dir, skill disinstallate)
+  // broken links in shared/skills (old relative paths, uninstalled skills)
   for (const s of await listDir(`${REPO}/shared/skills`)) {
     const p = `${REPO}/shared/skills/${s}`; const st = await lstat(p);
     if (st?.isSymlink && !(await lstat(`${p}/SKILL.md`))) {
       const t = await readlink(p) ?? "";
       const name = t.split("/").pop() ?? s;
       if (await lstat(`${AGENTS_SKILLS}/${name}/SKILL.md`)) await ensureSymlink(`${AGENTS_SKILLS}/${name}`, p, `shared/skills/${s} (ricreato)`);
-      else await removeLink(p, "link rotto, skill non più in ~/.agents");
+      else await removeLink(p, "broken link, skill no longer in ~/.agents");
     }
   }
 
@@ -136,7 +138,7 @@ export async function install(dry: boolean) {
   await ensureDir(LIB);
   await ensureSymlink(`${REPO}/lib/claude-update-gui`, `${LIB}/claude-update-gui`, "~/.local/lib/claude-update-gui");
 
-  // 5b. hook git del repo (pre-commit: guard segreti + check)
+  // 5b. the repository's git hooks (pre-commit: secret guard + type check)
   const hooks = (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out;
   if (hooks !== ".githooks") { say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`); if (!DRY) await run("git", ["-C", REPO, "config", "core.hooksPath", ".githooks"]); }
 
@@ -150,27 +152,36 @@ export async function install(dry: boolean) {
   if (zsh !== null) {
     const re = new RegExp(`${ZSH_BEGIN.replace(/[()]/g, "\\$&")}[\\s\\S]*?${ZSH_END}`);
     const next = re.test(zsh) ? zsh.replace(re, ZSH_BLOCK) : `${zsh.trimEnd()}\n\n${ZSH_BLOCK}\n`;
-    if (next !== zsh) { say(`${ANSI.y}→${ANSI.x} aggiorno il blocco claude-multi in ~/.zshrc`); if (!DRY) await Deno.writeTextFile(zp, next); }
+    if (next !== zsh) { say(`${ANSI.y}→${ANSI.x} updating the claude-multi block in ~/.zshrc`); if (!DRY) await Deno.writeTextFile(zp, next); }
   }
 
-  // 8. systemd (solo macchine grafiche: la notifica va su KDE)
-  if (m.graphical && m.systemd) {
+  // 8. systemd user units
+  if (m.systemd) {
     const ud = `${HOME}/.config/systemd/user`; await ensureDir(ud);
     for (const u of await listDir(`${REPO}/systemd/user`)) await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
     if (!DRY) {
       await run("systemctl", ["--user", "daemon-reload"]);
-      // llama-generate.service resta NON abilitata di proposito: la accende lo shim on-demand e la spegne a riposo (VRAM libera).
-      const wantEnabled = ["claude-update-check.timer"];
-      if (await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
-      else console.log(`  ${ANSI.d}llama-server assente (~/.local/opt/llama-vulkan): salto llama-embed*.service — wiki-claude non avrà embedding qui${ANSI.x}`);
+      // The console serves itself: enabled everywhere systemd exists, including headless boxes
+      // reached over an ssh tunnel. Without it you have to remember to run `serve` by hand.
+      const wantEnabled = ["claude-multi-console.service"];
+      // The update check raises desktop notifications, so it only makes sense with a session.
+      if (m.graphical) wantEnabled.push("claude-update-check.timer");
+      // llama-generate.service stays deliberately disabled: the shim starts it on demand and stops
+      // it when idle, which keeps the VRAM free.
+      if (m.graphical && await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
+      else if (m.graphical) console.log(`  ${ANSI.d}no llama-server (~/.local/opt/llama-vulkan): skipping llama-embed*.service — wiki search will have no semantic mode here${ANSI.x}`);
       for (const u of wantEnabled) {
         const en = await run("systemctl", ["--user", "is-enabled", u]);
         if (en.out !== "enabled") { say(`${ANSI.g}+${ANSI.x} enable --now ${u}`); await run("systemctl", ["--user", "enable", "--now", u]); }
       }
+      // A unit whose file changed keeps running the old command until it is restarted.
+      const st = await run("systemctl", ["--user", "show", "-p", "NeedDaemonReload", "--value", "claude-multi-console.service"]);
+      if (st.out === "yes") { say(`${ANSI.y}\u2192${ANSI.x} restart claude-multi-console.service`); await run("systemctl", ["--user", "restart", "claude-multi-console.service"]); }
     }
   }
 
-  // 9. Claude Desktop (solo dove è installato)
+
+  // 9. Claude Desktop (only where it is installed)
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
     for (const d of await listDir(`${REPO}/desktop`)) if (d.endsWith(".desktop")) await ensureCopy(`${REPO}/desktop/${d}`, `${apps}/${d}`);
@@ -188,10 +199,10 @@ export async function install(dry: boolean) {
     const pkgdir = Deno.env.get("CLAUDE_DESKTOP_PKGDIR") ?? `${HOME}/build/claude-desktop`;
     if (!(await lstat(`${pkgdir}/PKGBUILD`))) for (const f of ["PKGBUILD", "claude-desktop.install"]) await ensureCopy(`${REPO}/pkg/claude-desktop/${f}`, `${pkgdir}/${f}`);
   } else {
-    console.log(`  ${ANSI.d}Claude Desktop non installato: salto .desktop, icone, GUI, PKGBUILD${ANSI.x}`);
+    console.log(`  ${ANSI.d}Claude Desktop is not installed: skipping desktop entries, icons, GUI and package files${ANSI.x}`);
   }
 
-  if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} già tutto materializzato, nulla da fare`);
+  if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} everything already materialised, nothing to do`);
   console.log();
   return printDoctor(await doctor());
 }

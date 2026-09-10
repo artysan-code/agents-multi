@@ -1,6 +1,6 @@
 [Unit]
 Description=llama.cpp — server di embedding (bge-m3 568M, Vulkan, dGPU)
-Documentation=file://~/.local/bin/llm
+Documentation=file://%h/.local/bin/llm
 After=graphical-session.target
 
 [Service]

@@ -3,7 +3,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 
 const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 
-Deno.test("changelog_for: sezione della versione, cache, versione assente", async () => {
+Deno.test("changelog_for: the version section, the cache, and a missing version", async () => {
   const tmp = await Deno.makeTempDir();
   const md = `# Changelog\n\n## 2.1.300\n\n- Nuova cosa\n- Altra cosa\n\n## 2.1.299\n\n- Vecchia cosa\n`;
   await Deno.writeTextFile(`${tmp}/CHANGELOG.md`, md);

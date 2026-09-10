@@ -10,7 +10,7 @@ async function sh(cmd: string, cwd?: string, env: Record<string, string> = {}) {
   return { code: r.code, out: new TextDecoder().decode(r.stdout).trim(), err: new TextDecoder().decode(r.stderr).trim() };
 }
 
-Deno.test("prelaunch: fetch + pull ff-only quando indietro e pulito; niente pull se sporco; sync.json valido", async () => {
+Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when dirty; valid sync.json", async () => {
   const tmp = await Deno.makeTempDir();
   const bare = `${tmp}/remote.git`, other = `${tmp}/other`, mine = `${tmp}/mine`, cache = `${tmp}/cache`;
   await sh(`git init -q --bare -b release "${bare}" && git clone -q "${bare}" "${other}" && cd "${other}" && git checkout -q -b release && echo a > a && git add a && git commit -qm one && git push -q -u origin release`);

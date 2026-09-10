@@ -1,6 +1,6 @@
 [Unit]
 Description=Shim API Ollama -> llama-server (per l'MCP wiki-claude)
-Documentation=file://~/.claude-multi/shared/tools/llama-embed-shim/server.ts
+Documentation=file://%h/.claude-multi/shared/tools/llama-embed-shim/server.ts
 # obsidian-brain parla solo ollama o transformers: questo shim traduce.
 Requires=llama-embed.service
 After=llama-embed.service

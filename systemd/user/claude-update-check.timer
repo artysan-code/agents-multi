@@ -1,13 +1,13 @@
 [Unit]
-Description=Controllo periodico degli aggiornamenti Claude (ogni 4h)
+Description=Periodic Claude update check (every 4h)
 
 [Timer]
-# 10 min dopo il login: non rallenta l'avvio della sessione, e copre il caso "Claude resta
-# aperto per giorni" che il gate all'avvio dell'app da solo non vedrebbe mai.
+# 10 min after login: does not slow the session start, and covers the "Claude stays open for days"
+# case that a launch-time gate would never see on its own.
 OnStartupSec=10min
 OnUnitActiveSec=4h
-# NB: niente Persistent= — ha effetto solo sui timer OnCalendar=, non su quelli monotonici come
-# questo. Qui il recupero è implicito: al login riparte il conteggio da OnStartupSec.
+# NB: no Persistent= — it only affects OnCalendar= timers, not monotonic ones like this. Recovery
+# is implicit here: the count restarts from OnStartupSec at login.
 AccuracySec=1min
 
 [Install]

@@ -1,19 +1,19 @@
 [Unit]
-Description=Controlla aggiornamenti di Claude (Desktop + Code), stato del setup (doctor) e soglie di spesa (budget)
-Documentation=file://~/.local/bin/claude-update-notify
-# Serve la sessione grafica: la notifica va su KDE e l'azione apre una finestra Qt.
+Description=Check for Claude updates (Desktop + Code), setup health (doctor) and spend thresholds (budget)
+Documentation=file://%h/.local/bin/claude-update-notify
+# Needs the graphical session: the notification goes to the desktop and its action opens a window.
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
-# deno serve al secondo ExecStart (claude-multi); la sessione systemd --user non carica .zshrc
+# deno is needed by the second ExecStart (claude-multi); the systemd --user session reads no login shell
 Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
-ExecStart=~/.local/bin/claude-update-notify
-# Doctor "guardiano": notifica KDE solo quando compare un fail nuovo (stato in ~/.local/state/claude-multi)
-ExecStart=-~/.local/bin/claude-multi doctor --notify
-# Budget: campiona lo stato crediti e notifica SOLO la spesa reale (extra credits), mai l'abbonamento
-ExecStart=-~/.local/bin/claude-multi budget --notify
-# notify-send --wait resta appeso finché scegli un'azione: dopo mezz'ora si lascia perdere
-# (la notifica resta comunque nello storico di Plasma).
+ExecStart=%h/.local/bin/claude-update-notify
+# Doctor as a watchdog: notifies only when a NEW failure appears (state in ~/.local/state/claude-multi)
+ExecStart=-%h/.local/bin/claude-multi doctor --notify
+# Budget: samples the credits reading and notifies ONLY billed extra usage, never the subscription
+ExecStart=-%h/.local/bin/claude-multi budget --notify
+# notify-send --wait hangs until an action is chosen: after half an hour it gives up
+# (the notification still stays in the desktop's history).
 TimeoutStartSec=1900

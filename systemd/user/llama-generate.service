@@ -1,6 +1,6 @@
 [Unit]
 Description=llama.cpp — server di generazione on-demand (Ministral 3 8B, per il distiller)
-Documentation=file://~/.claude-multi/shared/hooks/wiki-distiller-run.py
+Documentation=file://%h/.claude-multi/shared/hooks/wiki-distiller-run.py
 # NON abilitato al boot di proposito: lo shim lo accende quando serve e lo spegne
 # dopo un periodo di inattività, così la VRAM resta libera mentre giochi.
 

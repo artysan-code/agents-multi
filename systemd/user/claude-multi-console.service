@@ -1,0 +1,17 @@
+[Unit]
+Description=claude-multi console — local dashboard on http://127.0.0.1:7331
+Documentation=file:%h/.local/src/claude-multi/README.md
+# Not tied to graphical-session: the console is just as useful over an ssh tunnel on a headless box.
+
+[Service]
+Type=simple
+# The systemd --user session does not read a login shell, so deno and claude-multi need a PATH.
+Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/claude-multi serve --no-open
+Restart=on-failure
+RestartSec=5
+# Idle it is a single Deno process holding one listening socket and a filesystem watcher.
+Nice=5
+
+[Install]
+WantedBy=default.target
