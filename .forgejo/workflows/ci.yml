@@ -1,5 +1,9 @@
-# CI di claude-multi su Forgejo Actions: type-check, sintassi bash, test.
-# Serve un runner registrato sull'istanza (label `docker`); senza, il workflow resta in coda e non fa danni.
+# CI di claude-multi su Forgejo Actions: type-check, sintassi bash, test, guard segreti.
+# Runner: "ark-docker" (label docker) su ark, dentro Coolify → risorsa «Forgejo Runner».
+#
+# Il job gira nell'immagine di default della label, node:22-bookworm, e NON in denoland/deno:
+# actions/checkout è una action JavaScript e ha bisogno di `node` dentro il container del job,
+# che l'immagine di Deno non ha (il primo run è fallito esattamente lì). Deno lo installa setup-deno.
 name: ci
 on:
   push:
@@ -9,14 +13,13 @@ on:
 jobs:
   check:
     runs-on: docker
-    container:
-      image: denoland/deno:2.9.6
     steps:
       - uses: actions/checkout@v4
+      - uses: https://github.com/denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
       - name: check (type-check CLI + bash -n script)
-        run: |
-          apt-get update -qq && apt-get install -qq -y git bash curl >/dev/null
-          deno task check
+        run: deno task check
       - name: test
         run: deno task test
       - name: guard segreti sull'intero albero
