@@ -91,7 +91,11 @@ export async function repoState() {
 
 // ---------------------------------------------------------------- macchina
 export async function machine() {
-  const graphical = !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY") || Deno.env.get("XDG_CURRENT_DESKTOP"));
+  // Da ssh le variabili di sessione non ci sono: senza questo controllo install si crederebbe su una
+  // macchina headless e salterebbe in silenzio unit systemd e voci di menu (successo al portatile).
+  const rt = Deno.env.get("XDG_RUNTIME_DIR");
+  const graphical = !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY") || Deno.env.get("XDG_CURRENT_DESKTOP")) ||
+    !!(rt && await lstat(`${rt}/wayland-0`)) || !!(await lstat("/tmp/.X11-unix/X0"));
   const desktopPkg = await run("pacman", ["-Q", "claude-desktop"]);
   const desktopVersion = desktopPkg.code === 0 ? desktopPkg.out.split(/\s+/)[1]?.split("-")[0] ?? null : null;
   const systemd = await has("systemctl");
