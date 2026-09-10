@@ -1,7 +1,11 @@
-/* claude-multi dashboard — vanilla JS, nessuna dipendenza. Dati da /api/status e /api/usage, azioni su /api/action. */
+/* claude-multi console — vanilla JS, no dependencies.
+   Data from /api/*, live updates over /api/events (SSE), actions through /api/action. */
+
 const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
 const fmt = (n) =>
   n == null
     ? "—"
@@ -12,784 +16,909 @@ const fmt = (n) =>
     : n >= 1e3
     ? (n / 1e3).toFixed(0) + "k"
     : String(Math.round(n));
-const short = (s, n = 64) => {
+const usd = (n) => n == null ? "—" : "$" + (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
+const money = (n, cur) => n == null ? "—" : `${n.toFixed(2)} ${cur || "EUR"}`;
+const pct = (n) => n == null || !isFinite(n) ? "—" : n.toFixed(n >= 10 ? 0 : 1) + "%";
+const short = (s, n = 60) => {
   s = String(s ?? "");
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 };
-const outdated = (u, cur) => !!(u && u.outdated && u.latest && u.latest !== cur);
-const usd = (n) => n == null ? "—" : "$" + (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
-const pct = (n) => n == null || !isFinite(n) ? "—" : (n * 100).toFixed(0) + "%";
-const SERIES = { personal: "var(--s1)", work: "var(--s2)" };
-const MODEL_SLOTS = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)"];
-const modelColor = (() => {
+const ago = (iso) => {
+  if (!iso) return "—";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + "m ago";
+  if (s < 172800) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+};
+const when = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+/** Model ids are long and repetitive in a table: keep the family and the version. */
+const modelShort = (m) => String(m).replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(/-(\d)-(\d)$/, "-$1.$2");
+
+const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)"];
+const colorFor = (() => {
   const m = new Map();
   return (k) => {
-    if (!m.has(k)) m.set(k, m.size < MODEL_SLOTS.length ? MODEL_SLOTS[m.size] : "var(--s-other)");
+    if (!m.has(k)) m.set(k, m.size < SERIES.length ? SERIES[m.size] : "var(--s-other)");
     return m.get(k);
   };
 })();
-let S = null;
-let busy = 0;
-// cambiare filtro in fretta lascia due fetch in volo: vince chi risponde per ultimo, non chi è stato
-// chiesto per ultimo. Un token per pannello scarta le risposte ormai superate.
-const seq = { usage: 0, sessions: 0, budget: 0 };
 
-// ---------------------------------------------------------------- nav + tema
-const TITLES = {
-  overview: "Overview",
-  profiles: "Profili",
-  doctor: "Doctor",
-  sessions: "Sessioni",
-  usage: "Usage",
-  budget: "Budget",
-  sync: "Sync",
-  actions: "Azioni",
-};
-function show(t) {
-  document.querySelectorAll("nav a[data-t]").forEach((a) => a.classList.toggle("on", a.dataset.t === t));
-  document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === t));
-  $("#title").textContent = TITLES[t] ?? t;
-  if (t === "usage") loadUsage();
-  if (t === "sessions") loadSessions();
-  if (t === "budget") loadBudget();
-  try {
-    localStorage.setItem("cm.tab", t);
-  } catch { /* */ }
-}
-document.addEventListener("click", (e) => {
-  const a = e.target.closest("a[data-t]");
-  if (a) {
-    e.preventDefault();
-    show(a.dataset.t);
-  }
-});
-(() => {
-  let t = location.hash.slice(1);
-  try {
-    t = t || localStorage.getItem("cm.tab") || "overview";
-  } catch {
-    t = t || "overview";
-  }
-  if (!TITLES[t]) t = "overview";
-  show(t);
-})();
-$("#theme").addEventListener("change", (e) => {
-  document.documentElement.dataset.theme = e.target.checked ? "light" : "dark";
-  try {
-    localStorage.setItem("cm.theme", e.target.checked ? "light" : "dark");
-  } catch { /* */ }
-});
-try {
-  const th = localStorage.getItem("cm.theme");
-  if (th) {
-    document.documentElement.dataset.theme = th;
-    $("#theme").checked = th === "light";
-  }
-} catch { /* */ }
-function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1800);
-}
-function copy(text) {
-  navigator.clipboard.writeText(text).then(() => toast("Copiato"));
-}
-window.copy = copy;
+let S = null; // last /api/status payload
+let BUDGET = null; // last /api/budget payload
+let view = "overview";
+// Switching filters quickly leaves two fetches in flight, and the winner is whichever answers
+// last rather than whichever was asked last. One token per panel discards stale answers.
+const seq = { usage: 0, sessions: 0, budget: 0, overview: 0 };
 
-// ---------------------------------------------------------------- tooltip
-const tip = $("#tip");
-function tipShow(html, x, y) {
-  tip.innerHTML = html;
-  tip.hidden = false;
-  tipMove(x, y);
-}
-function tipMove(x, y) {
-  const w = tip.offsetWidth, h = tip.offsetHeight;
-  tip.style.left = Math.min(x + 14, innerWidth - w - 8) + "px";
-  tip.style.top = Math.max(8, y - h - 12) + "px";
-}
-function tipHide() {
-  tip.hidden = true;
+/* ---------------- toast ---------------- */
+let toastEl = null, toastTimer = null;
+function toast(msg, err = false) {
+  toastEl?.remove();
+  clearTimeout(toastTimer);
+  toastEl = document.createElement("div");
+  toastEl.className = "toast" + (err ? " err" : "");
+  toastEl.textContent = msg;
+  document.body.appendChild(toastEl);
+  toastTimer = setTimeout(() => {
+    toastEl?.remove();
+    toastEl = null;
+  }, err ? 6000 : 2800);
 }
 
-// ---------------------------------------------------------------- grafici SVG
-/** Barre impilate per giorno. days: [{day, parts:{key:value}}], keys: ordine fisso delle serie. */
-function stackedBars(el, days, keys, colors, fmtVal) {
-  if (!days.length) {
-    el.innerHTML = '<div class="empty">Nessun dato nel periodo.</div>';
-    return;
-  }
-  const W = 720, H = 220, padL = 44, padR = 8, padT = 10, padB = 26;
-  const iw = W - padL - padR, ih = H - padT - padB;
-  const max = Math.max(1e-9, ...days.map((d) => keys.reduce((a, k) => a + (d.parts[k] || 0), 0)));
-  const step = iw / days.length, bw = Math.min(24, step * 0.62);
-  const y = (v) => padT + ih - (v / max) * ih;
-  const ticks = niceTicks(max, 4);
-  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="grafico a barre impilate">`;
-  svg += '<g class="grid">' +
-    ticks.map((t) => `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"/>`).join("") + "</g>";
-  svg += '<g class="axis">' +
-    ticks.map((t) => `<text x="${padL - 6}" y="${y(t) + 3.5}" text-anchor="end">${fmtVal(t)}</text>`).join("");
-  const every = Math.ceil(days.length / 10);
-  svg +=
-    days.map((d, i) =>
-      i % every === 0 || i === days.length - 1
-        ? `<text x="${padL + i * step + step / 2}" y="${H - 8}" text-anchor="middle">${d.day.slice(5)}</text>`
-        : ""
-    ).join("") + "</g>";
-  svg += days.map((d, i) => {
-    let acc = 0;
-    const x = padL + i * step + (step - bw) / 2;
-    const total = keys.reduce((a, k) => a + (d.parts[k] || 0), 0);
-    const segs = keys.map((k, ki) => {
-      const v = d.parts[k] || 0;
-      if (!v) return "";
-      const y1 = y(acc + v), y0 = y(acc);
-      acc += v;
-      const last = ki === keys.length - 1 || keys.slice(ki + 1).every((kk) => !(d.parts[kk] || 0));
-      const r = last ? 4 : 0;
-      const hgt = Math.max(0, y0 - y1 - (ki ? 2 : 0));
-      const yy = ki ? y1 + 2 : y1;
-      return `<path class="bar" fill="${colors[k]}" d="${roundTop(x, yy, bw, hgt, r)}"/>`;
-    }).join("");
-    return `<g data-i="${i}" data-day="${d.day}" data-total="${total}">${segs}<rect x="${
-      padL + i * step
-    }" y="${padT}" width="${step}" height="${ih}" fill="transparent"/></g>`;
-  }).join("");
-  svg += "</svg>";
-  el.innerHTML = svg;
-  el.querySelectorAll("g[data-i]").forEach((g) => {
-    const d = days[Number(g.dataset.i)];
-    g.addEventListener("mouseenter", (e) => {
-      g.classList.add("hover");
-      tipShow(
-        `<div class="t">${d.day}</div>` + keys.map((k) =>
-          `<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${
-            colors[k]
-          };margin-right:6px"></i>${k} <b>${fmtVal(d.parts[k] || 0)}</b></div>`
-        ).join("") + `<div class="t" style="margin-top:3px">totale ${
-          fmtVal(keys.reduce((a, k) => a + (d.parts[k] || 0), 0))
-        }</div>`,
-        e.clientX,
-        e.clientY,
-      );
-    });
-    g.addEventListener("mousemove", (e) => tipMove(e.clientX, e.clientY));
-    g.addEventListener("mouseleave", () => {
-      g.classList.remove("hover");
-      tipHide();
-    });
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
+  return r.json();
+}
+
+/* ---------------- live connection ---------------- */
+let es = null, lastEvent = 0, esRetry = 0;
+function connect() {
+  es?.close();
+  es = new EventSource("/api/events");
+  es.onopen = () => {
+    esRetry = 0;
+    lastEvent = Date.now();
+    setLive("live");
+  };
+  es.onerror = () => {
+    setLive("down");
+    // EventSource retries on its own, but a server that went away for good would leave the page
+    // silently stale; a bounded backoff makes the reconnection visible instead.
+    if (esRetry < 6) setTimeout(connect, Math.min(30000, 2000 * 2 ** esRetry++));
+  };
+  es.addEventListener("usage", () => {
+    lastEvent = Date.now();
+    onChange("usage");
+  });
+  es.addEventListener("state", () => {
+    lastEvent = Date.now();
+    onChange("state");
   });
 }
-function roundTop(x, y, w, h, r) {
-  if (h <= 0) return "";
-  r = Math.min(r, h, w / 2);
-  return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+function setLive(state) {
+  const el = $("#live");
+  el.className = "live" + (state === "down" ? " down" : state === "busy" ? " busy" : "");
+  $("#livetxt").textContent = state === "down" ? "reconnecting" : state === "busy" ? "refreshing" : "live";
 }
-function niceTicks(max, n) {
-  const raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
-  const stepv = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
-  const out = [];
-  for (let v = 0; v <= max + 1e-9; v += stepv) out.push(v);
-  return out;
+
+// Coalesce: a busy session fires events continuously, and the panel only needs the latest.
+let pending = null, changeTimer = null;
+function onChange(topic) {
+  pending = pending === "state" || topic === "state" ? "state" : "usage";
+  clearTimeout(changeTimer);
+  changeTimer = setTimeout(() => {
+    const t = pending;
+    pending = null;
+    refresh(t);
+  }, 400);
 }
-function legend(el, keys, colors) {
-  el.innerHTML = keys.map((k) => `<span><i style="background:${colors[k]}"></i>${esc(k)}</span>`).join("");
+
+/** Redraw what is actually on screen. The old page polled /api/status and redrew four panels
+    regardless of the current view, which is why Usage, Sessions and Budget looked frozen. */
+async function refresh(topic = "state") {
+  setLive("busy");
+  const jobs = [];
+  if (topic === "state") jobs.push(loadStatus());
+  if (view === "overview") jobs.push(loadOverview());
+  if (view === "usage") jobs.push(loadUsage());
+  if (view === "sessions") jobs.push(loadSessions());
+  if (view === "profiles" && topic === "state") jobs.push(loadStatus().then(renderProfiles));
+  await Promise.allSettled(jobs);
+  setLive(es && es.readyState === 1 ? "live" : "down");
 }
-function hbars(el, rows, color, fmtVal) {
-  if (!rows.length) {
-    el.innerHTML = '<div class="empty">Nessun dato.</div>';
+
+/* ---------------- status ---------------- */
+async function loadStatus() {
+  S = await api("/api/status");
+  const m = S.machine;
+  $("#host").textContent = m.hostname;
+  $("#ver").textContent = `deno ${m.deno}`;
+  $("#meta").innerHTML = [
+    `Code ${esc(m.cliVersion || "?")}`,
+    m.desktopVersion ? `Desktop ${esc(m.desktopVersion)}` : null,
+    S.repo.isRepo ? `${esc(S.repo.branch)} ↓${S.repo.behind} ↑${S.repo.ahead} ✎${S.repo.dirty}` : null,
+  ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
+
+  const names = Object.keys(S.profiles);
+  $("#n-profiles").textContent = names.length;
+  fillProfileSelects(names);
+  renderHealth(S.doctor);
+  renderShared();
+  if (view === "profiles") renderProfiles();
+  if (view === "health") renderHealth(S.doctor);
+  return S;
+}
+
+function fillProfileSelects(names) {
+  for (const id of ["#uprof", "#sprof"]) {
+    const sel = $(id);
+    if (sel.dataset.filled === names.join(",")) continue;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">all profiles</option>` +
+      names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    sel.value = cur;
+    sel.dataset.filled = names.join(",");
+  }
+}
+
+/* ---------------- overview ---------------- */
+async function loadOverview() {
+  const my = ++seq.overview;
+  const [budget, days, projects] = await Promise.all([
+    api("/api/budget").catch(() => null),
+    api("/api/usage?" + new URLSearchParams({ by: "day", since: ovDays, split: "profile", limit: 400 })).catch(() =>
+      null
+    ),
+    api("/api/usage?" + new URLSearchParams({ by: "project", since: "30d", limit: 8 })).catch(() => null),
+  ]);
+  if (my !== seq.overview) return;
+  BUDGET = budget;
+  renderPlanes(budget, days);
+  renderChart(days);
+  renderProjects(projects);
+  renderRunning();
+  renderRepo();
+}
+
+function renderPlanes(b, days) {
+  if (!b) return;
+  // Billed: the only plane that is money. Sum across profiles, and show the tightest cap in force.
+  let billed = 0, cap = 0, currency = "EUR", haveBilled = false, today = 0, haveToday = false;
+  for (const p of b.profiles) {
+    if (p.snap.extra?.used != null) {
+      billed += p.snap.extra.used;
+      haveBilled = true;
+      currency = p.snap.extra.currency || currency;
+    }
+    if (p.ctx.cap) cap += p.ctx.cap;
+    if (p.ctx.billedToday != null) {
+      today += p.ctx.billedToday;
+      haveToday = true;
+    }
+  }
+  $("#billed").textContent = haveBilled ? money(billed, currency) : "—";
+  const ratio = cap ? Math.min(100, billed / cap * 100) : 0;
+  const meter = $("#billed-meter");
+  meter.style.width = ratio + "%";
+  meter.className = ratio >= 85 ? "crit" : ratio >= 60 ? "warn" : "";
+  const on = b.profiles.filter((p) => p.snap.extra?.active).length;
+  $("#billed-sub").textContent = [
+    cap ? `of ${money(cap, currency)} cap` : "no cap reported",
+    haveToday ? `${money(today, currency)} today` : null,
+    `extra usage on for ${on}/${b.profiles.length}`,
+  ].filter(Boolean).join(" · ");
+
+  // Plan windows: worst reading per window kind across profiles.
+  const wins = new Map();
+  for (const p of b.profiles) {
+    for (const l of p.snap.plan) {
+      if (!l.percent) continue;
+      const cur = wins.get(l.kind);
+      if (!cur || l.percent > cur.percent) wins.set(l.kind, l);
+    }
+  }
+  const rows = [...wins.values()].sort((a, x) => x.percent - a.percent).slice(0, 4);
+  $("#wins").innerHTML = rows.length
+    ? rows.map((l) => {
+      const c = l.percent >= 95 ? "crit" : l.percent >= 80 ? "warn" : "";
+      return `<div class="win"><b title="${esc(l.kind)}">${esc(l.kind.replace(/_/g, " "))}</b>
+        <div class="track"><i class="${c}" style="width:${Math.min(100, l.percent)}%"></i></div>
+        <span class="v ${l.percent >= 95 ? "hot" : ""}">${pct(l.percent)}</span></div>`;
+    }).join("")
+    : `<div class="sub">no window data</div>`;
+
+  const est = days?.total?.cost;
+  $("#est").textContent = usd(est);
+  $("#est-sub").textContent = `${
+    ovDays === "all" ? "all time" : ovDays.replace("d", " days")
+  } · ${b.profiles.length} profile${b.profiles.length === 1 ? "" : "s"}`;
+}
+
+let ovDays = "14d";
+function renderChart(r) {
+  const svg = $("#chart"), legend = $("#legend");
+  if (!r || !r.rows.length) {
+    svg.innerHTML = "";
+    legend.innerHTML = `<span class="tot">no data</span>`;
     return;
   }
-  const max = Math.max(...rows.map((r) => r.v));
-  el.innerHTML = rows.map((r) =>
-    `<div class="hbar" title="${esc(r.k)}"><span class="lbl">${
-      esc(r.k)
-    }</span><div class="track"><div class="fill" style="width:${(r.v / max * 100).toFixed(1)}%;background:${
-      color(r.k)
-    }"></div></div><span class="val">${fmtVal(r.v)}</span></div>`
-  ).join("");
-}
-
-// ---------------------------------------------------------------- render: overview
-function tile(label, value, sub, cls = "") {
-  return `<div class="card tile ${cls}"><h3>${label}</h3><div class="value">${value}</div>${
-    sub ? `<div class="sub">${sub}</div>` : ""
-  }</div>`;
-}
-function renderOverview(s, u14) {
-  const m = s.machine, r = s.repo, up = s.update || {};
-  const cur = { cli: m.cliVersion, desktop: m.desktopVersion };
-  const upd = (k) =>
-    outdated(up[k], cur[k])
-      ? `<span class="delta up">⬆ ${esc(up[k].latest)}</span>`
-      : `<span class="delta good">aggiornato</span>`;
-  const fails = s.doctor.filter((c) => c.status === "fail").length,
-    warns = s.doctor.filter((c) => c.status === "warn").length;
-  const sess = s.running.cli.length;
-  $("#ov-tiles").innerHTML = tile(
-    "Claude Code",
-    `${esc(m.cliVersion || "?")}`,
-    `${upd("cli")} <span class="faint">· ${m.cliVersions.length} in cache</span>`,
-  ) +
-    tile(
-      "Claude Desktop",
-      `${esc(m.desktopVersion || "assente")}`,
-      `${upd("desktop")} <span class="faint">· embedded ${
-        Object.values(m.embeddedCode || {}).flat().filter((v, i, a) => a.indexOf(v) === i).join(", ") || "—"
-      }</span>`,
-    ) +
-    tile(
-      "Doctor",
-      fails
-        ? `<span class="crit">${fails} fail</span>`
-        : warns
-        ? `<span class="warn">${warns} warn</span>`
-        : `<span class="ok">tutto ok</span>`,
-      `${s.doctor.length} controlli`,
-    ) +
-    tile(
-      "Sessioni attive",
-      `${sess}<small>${s.running.desktop.length} Desktop</small>`,
-      sess
-        ? s.running.cli.map((c) => `${c.profile ?? "?"}${c.embedded ? " (desktop)" : " (cli)"}`).join(" · ")
-        : "nessuna sessione Claude Code",
-    );
-  // repo
-  const syncCls = !r.isRepo || !r.upstream
-    ? "crit"
-    : (r.behind && r.ahead)
-    ? "crit"
-    : (r.behind || r.ahead || r.dirty)
-    ? "warn"
-    : "ok";
-  $("#ov-repo").innerHTML = r.isRepo
-    ? `<dt>branch</dt><dd>${esc(r.branch)} <span class="faint" title="${esc(r.head)}">@ ${
-      esc(short(r.head))
-    }</span></dd><dt>remote</dt><dd class="mono">${
-      esc(r.remote || "—")
-    }</dd><dt>stato</dt><dd class="${syncCls}">↓${r.behind} ↑${r.ahead} ✎${r.dirty}${
-      r.dirty ? ` <span class="faint">· ${esc(r.dirtyFiles.slice(0, 3).join(", "))}</span>` : ""
-    }</dd><dt>ultimo commit</dt><dd>${
-      r.headDate ? new Date(r.headDate).toLocaleString("it-IT") : "—"
-    }</dd><dt>ultimo fetch</dt><dd>${
-      s.sync?.fetched_at ? new Date(s.sync.fetched_at * 1000).toLocaleString("it-IT") : "mai"
-    }${s.sync?.fetch_ok === false ? ' <span class="warn">fallito</span>' : ""}</dd>`
-    : "<dt>repo</dt><dd class='crit'>non trovato</dd>";
-  // running + shared
-  $("#ov-running").innerHTML =
-    (s.running.cli.length
-      ? s.running.cli.map((c) =>
-        `<div><span class="chip"><span class="k">${c.embedded ? "desktop" : "cli"}</span> ${
-          esc(c.profile || "?")
-        } <span class="k">${esc(c.version || "")}</span></span> <span class="faint mono">${
-          esc((c.cwd || "").replace(/^\/home\/[^/]+/, "~"))
-        }</span></div>`
-      ).join("")
-      : '<div class="empty">nessuna sessione Claude Code</div>') +
-    (s.running.desktop.length
-      ? `<div class="faint" style="margin-top:6px">Desktop aperto: ${
-        s.running.desktop.map((d) => d.variant).join(", ")
-      }</div>`
-      : "");
-  const sh = s.shared;
-  $("#ov-shared").innerHTML = `<dl class="kv"><dt>skill</dt><dd>${Object.keys(sh.skills).length} <span class="faint">(${
-    Object.values(sh.skills).filter((v) => v.link && v.link.includes("/.agents/")).length
-  } da ~/.agents)</span></dd><dt>agenti</dt><dd>${Object.keys(sh.agents).length}</dd><dt>comandi</dt><dd>${
-    Object.keys(sh.commands).length
-  }</dd><dt>hook</dt><dd>${sh.hooks.length}</dd><dt>MCP</dt><dd>${Object.keys(sh.mcpRegistry).join(", ")}</dd></dl>`;
-  // doctor excerpt
-  const bad = s.doctor.filter((c) => c.status !== "ok");
-  $("#ov-doctor").innerHTML = bad.length
-    ? bad.slice(0, 6).map(checkRow).join("")
-    : '<div class="empty ok">Tutte le invarianti sono rispettate.</div>';
-  // badge
-  const bd = $("#badge-doctor");
-  bd.hidden = !(fails || warns);
-  bd.textContent = fails ? `${fails}` : `${warns}`;
-  bd.className = "badge " + (fails ? "crit" : "warn");
-  const bs = $("#badge-sync");
-  const pend = (r.behind || 0) + (r.ahead || 0);
-  bs.hidden = !pend && !r.dirty;
-  bs.textContent = pend ? `${r.behind ? "↓" + r.behind : ""}${r.ahead ? "↑" + r.ahead : ""}` : `✎${r.dirty}`;
-  bs.className = "badge warn";
-  // usage 14d
-  if (u14) {
-    const days = groupDays(u14.rows, 14);
-    stackedBars($("#ov-chart"), days, ["personal", "work"], SERIES, usd);
-    legend($("#ov-legend"), ["personal", "work"], SERIES);
-    $("#ov-usage-total").textContent = `${usd(u14.total.cost)} · ${fmt(u14.total.output)} token di output`;
-  }
-}
-function checkRow(c) {
-  const mark = { ok: "✓", warn: "!", fail: "✕" }[c.status] || "?";
-  return `<div class="check ${c.status}"><span class="mark">${mark}</span><div><div class="msg">${esc(c.msg)}</div>${
-    c.fix && c.status !== "ok" ? `<code class="fix">${esc(c.fix)}</code>` : ""
-  }<div class="id">${esc(c.id)}</div></div>${
-    c.fix && c.status !== "ok"
-      ? `<button class="btn sm copy" onclick="copy(${
-        JSON.stringify(c.fix).replace(/"/g, "&quot;")
-      })">Copia fix</button>`
-      : "<span></span>"
-  }</div>`;
-}
-/** rows del report --by day+profile → [{day, parts}] ordinati, ultimi n giorni riempiti */
-function groupDays(rows, n) {
+  // rows are (day, profile) pairs: fold them into one stack per day
   const byDay = new Map();
-  for (const r of rows) {
-    const d = byDay.get(r.day) || {};
-    d[r.profile] = (d[r.profile] || 0) + (r.cost || 0);
-    byDay.set(r.day, d);
+  const names = new Set();
+  for (const row of r.rows) {
+    const k = row.key, p = row.profile ?? "—";
+    names.add(p);
+    if (!byDay.has(k)) byDay.set(k, {});
+    byDay.get(k)[p] = (byDay.get(k)[p] ?? 0) + (row.cost ?? 0);
   }
-  const out = [];
-  const today = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setUTCDate(d.getUTCDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    out.push({ day: key, parts: byDay.get(key) || {} });
+  const dayKeys = [...byDay.keys()].sort();
+  const series = [...names].sort();
+  series.forEach(colorFor); // claim colours in series order, not in the reversed draw order
+  const totals = dayKeys.map((d) => series.reduce((a, p) => a + (byDay.get(d)[p] ?? 0), 0));
+  const max = Math.max(1, ...totals);
+
+  const W = 620, H = 172, PL = 44, PR = 10, PT = 12, PB = 24;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const x = (i) => PL + (dayKeys.length === 1 ? iw / 2 : i * iw / (dayKeys.length - 1));
+  const y = (v) => PT + ih - (v / max) * ih;
+
+  const nice = (v) => !v ? "0" : v >= 100 ? Math.round(v) : v >= 10 ? v.toFixed(0) : v.toFixed(1);
+  let g = "";
+  for (const t of [0, max / 2, max]) {
+    g += `<line x1="${PL}" x2="${W - PR}" y1="${y(t).toFixed(1)}" y2="${
+      y(t).toFixed(1)
+    }" stroke="var(--line)" stroke-width="1"/>`;
+    g += `<text x="${PL - 8}" y="${(y(t) + 3.5).toFixed(1)}" text-anchor="end">$${nice(t)}</text>`;
   }
-  return out;
+  // stacked areas, drawn from the top of the stack down so each layer stays visible
+  let acc = dayKeys.map(() => 0);
+  const layers = [];
+  for (const p of series) {
+    const next = dayKeys.map((d, i) => acc[i] + (byDay.get(d)[p] ?? 0));
+    layers.push({ p, lower: acc, upper: next });
+    acc = next;
+  }
+  for (const { p, lower, upper } of layers.reverse()) {
+    const top = upper.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    const bottom = lower.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).reverse().map((s, i) =>
+      `${i ? "L" : "L"}${s}`
+    ).join("");
+    g += `<path d="${top}${bottom}Z" fill="${colorFor(p)}" fill-opacity="0.16"/>`;
+    g += `<path d="${top}" fill="none" stroke="${colorFor(p)}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }
+  const last = dayKeys.length - 1;
+  g += `<circle cx="${x(last).toFixed(1)}" cy="${y(totals[last]).toFixed(1)}" r="3" fill="${colorFor(series[0])}"/>`;
+  g += `<text x="${PL}" y="${H - 7}" text-anchor="start">${esc(dayKeys[0] ?? "")}</text>`;
+  if (dayKeys.length > 1) g += `<text x="${W - PR}" y="${H - 7}" text-anchor="end">${esc(dayKeys[last])}</text>`;
+  svg.innerHTML = g;
+
+  legend.innerHTML = series.map((p) => `<span><i style="background:${colorFor(p)}"></i>${esc(p)}</span>`).join("") +
+    `<span class="tot">${usd(r.total.cost)} · ${fmt(r.total.output)} out</span>`;
 }
 
-// ---------------------------------------------------------------- render: profili
-function renderProfiles(s) {
-  const chips = (o) =>
-    Object.entries(o).map(([n, v]) =>
-      `<span class="chip${
-        v.broken
-          ? " broken"
-          : v.link && v.link.includes("/.agents/")
-          ? " extern"
-          : v.link && v.link.startsWith("/") && v.link.includes("/profiles/")
-          ? " own"
-          : ""
-      }">${esc(n)}</span>`
-    ).join("") || '<span class="faint">—</span>';
-  $("#pf").innerHTML = Object.entries(s.profiles).map(([p, i]) => {
-    const mine = s.running.cli.filter((c) => c.profile === p);
-    return `<div class="card"><div class="head"><h2>${p} <span class="faint" style="font-weight:400;font-size:var(--t-small)">${
-      esc(i.account || "")
-    }</span></h2><span class="delta ${mine.length ? "good" : ""}">${mine.length} sessioni</span></div>
-      <div class="faint" style="margin:6px 0 10px">${esc(i.manifest.description || "")}</div>
-      <dl class="kv"><dt>manifest</dt><dd class="mono">skills ${esc(JSON.stringify(i.manifest.skills))} · agents ${
-      esc(JSON.stringify(i.manifest.agents))
-    } · commands ${esc(JSON.stringify(i.manifest.commands))}</dd>
-      <dt>credenziali</dt><dd>${
-      i.credentials.present
-        ? `<span class="ok">presenti</span> <span class="faint">mode ${i.credentials.mode}</span>`
-        : '<span class="warn">assenti: /login</span>'
-    }</dd></dl>
-      <div class="sep"></div>
-      <h3>Skill <span class="faint">${Object.keys(i.mounted.skills).length}</span></h3><div>${
-      chips(i.mounted.skills)
-    }</div>
-      <h3 style="margin-top:10px">Agenti <span class="faint">${Object.keys(i.mounted.agents).length}</span></h3><div>${
-      chips(i.mounted.agents)
-    }</div>
-      <h3 style="margin-top:10px">Comandi <span class="faint">${
-      Object.keys(i.mounted.commands).length
-    }</span></h3><div>${chips(i.mounted.commands)}</div>
-      <div class="sep"></div>
-      <h3>MCP</h3><div><span class="faint">cli</span> ${
-      i.mcp.map((x) => `<span class="chip">${esc(x)}</span>`).join("") || "—"
-    }</div><div style="margin-top:4px"><span class="faint">desktop</span> ${
-      i.mcpDesktop.map((x) => `<span class="chip">${esc(x)}</span>`).join("") || '<span class="faint">—</span>'
-    }</div>
-      <h3 style="margin-top:10px">Plugin <span class="faint">${i.plugins.length}</span></h3><div>${
-      i.plugins.map((x) => `<span class="chip">${esc(x)}</span>`).join("")
-    }</div>
-    </div>`;
+function renderProjects(r) {
+  const tb = $("#projects");
+  if (!r || !r.rows.length) {
+    tb.innerHTML = `<tr><td colspan="2" class="empty">no data</td></tr>`;
+    return;
+  }
+  const top = r.rows[0].cost || 1;
+  tb.innerHTML = r.rows.map((p) => {
+    const w = Math.max(2, (p.cost ?? 0) / top * 100);
+    return `<tr><td title="${esc(p.cwd ?? p.key)}">${esc(short(p.label ?? p.key, 34))}</td>
+      <td class="bar-cell">${usd(p.cost)}<i><b style="width:${w}%"></b></i></td></tr>`;
   }).join("");
-  const sh = s.shared;
-  $("#sh").innerHTML =
-    `<div class="faint" style="margin-bottom:8px">legenda chip: <span class="chip extern">da ~/.agents</span> <span class="chip own">propria del profilo</span> <span class="chip broken">link rotto</span></div>
-    <dl class="kv"><dt>registry MCP</dt><dd>${
-      Object.entries(sh.mcpRegistry).map(([n, v]) =>
-        `<span class="chip">${esc(n)} <span class="k">${v.profiles.join("+")} · ${v.surfaces.join("+")}</span></span>`
-      ).join("")
-    }</dd>
-    <dt>regole</dt><dd>${sh.rules.map((x) => `<span class="chip">${esc(x)}</span>`).join("")}</dd>
-    <dt>hook</dt><dd>${sh.hooks.map((x) => `<span class="chip">${esc(x)}</span>`).join("")}</dd>
-    <dt>~/.agents/skills</dt><dd>${
-      sh.agentsSkills.map((x) => `<span class="chip${sh.skills[x] ? "" : " warnc"}">${esc(x)}</span>`).join("")
-    }${
-      sh.agentsSkills.some((x) => !sh.skills[x])
-        ? ' <span class="faint">(giallo = non montata: claude-multi install)</span>'
-        : ""
-    }</dd></dl>`;
 }
 
-// ---------------------------------------------------------------- render: doctor
-let dfilter = "all";
-function renderDoctor(s) {
-  const ord = { fail: 0, warn: 1, ok: 2 };
-  const list = s.doctor.slice().sort((a, b) => ord[a.status] - ord[b.status]).filter((c) =>
-    dfilter === "all" || c.status === dfilter
-  );
-  $("#dlist").innerHTML = list.map(checkRow).join("") || '<div class="empty">Niente in questa categoria.</div>';
-  const n = (k) => s.doctor.filter((c) => c.status === k).length;
-  $("#dsum").textContent = `${n("ok")} ok · ${n("warn")} warn · ${n("fail")} fail`;
-}
-$("#dfilter").addEventListener("click", (e) => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  dfilter = b.dataset.f;
-  $("#dfilter").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-  if (S) renderDoctor(S);
-});
-$("#dre").addEventListener("click", () => load(true));
-
-// ---------------------------------------------------------------- render: sync
-function renderSync(s) {
-  const r = s.repo, sy = s.sync || {};
-  $("#sy").innerHTML =
-    `<div class="card tile"><h3>Remote</h3><div class="mono" style="word-break:break-all">${
-      esc(r.remote || "nessun remote")
-    }</div><div class="sub">upstream ${esc(r.upstream || "—")} · branch ${esc(r.branch || "?")}</div></div>` +
-    tile(
-      "Ultimo fetch",
-      sy.fetched_at ? new Date(sy.fetched_at * 1000).toLocaleString("it-IT") : "mai",
-      sy.fetch_ok === false
-        ? '<span class="warn">ultimo fetch fallito (offline?)</span>'
-        : "il wrapper rifà il fetch se più vecchio di 12 h",
-    ) +
-    tile(
-      "Stato",
-      `<span class="${(r.behind && r.ahead) ? "crit" : (r.behind || r.ahead) ? "warn" : "ok"}">↓${r.behind ?? 0} ↑${
-        r.ahead ?? 0
-      }</span>`,
-      r.behind && r.ahead
-        ? "divergente: risolvi a mano"
-        : r.behind
-        ? "indietro: claude-multi sync"
-        : r.ahead
-        ? "commit da pushare"
-        : "allineato",
-    ) +
-    `<div class="card" style="grid-column: span 3"><h3>Working tree</h3>${
-      r.dirty
-        ? `<div class="warn">${r.dirty} file modificati</div><pre class="mono" style="margin:6px 0 0;white-space:pre-wrap">${
-          esc(r.dirtyFiles.join("\n"))
-        }</pre>`
-        : '<div class="ok">pulito</div>'
-    }</div>`;
-}
-
-// ---------------------------------------------------------------- render: usage
-async function loadUsage() {
-  const my = ++seq.usage;
-  const q = new URLSearchParams({ by: $("#uby").value, since: $("#usince").value, profile: $("#uprof").value });
-  const [r, byDay, byModel] = await Promise.all([
-    fetch("/api/usage?" + q).then((x) => x.json()),
-    fetch(
-      "/api/usage?" +
-        new URLSearchParams({
-          by: "day",
-          since: $("#usince").value,
-          profile: $("#uprof").value,
-          split: "profile",
-          limit: 400,
-        }),
-    ).then((x) => x.json()),
-    fetch("/api/usage?" + new URLSearchParams({ by: "model", since: $("#usince").value, profile: $("#uprof").value }))
-      .then((x) => x.json()),
-  ]);
-  if (my !== seq.usage) return;
-  const byTool = r.by === "skill" || r.by === "command";
-  const t = r.total;
-  const cacheRatio = t.cache_read / Math.max(1, t.cache_read + t.input + t.cache_write);
-  $("#u-tiles").innerHTML =
-    tile("Costo equivalente", usd(t.cost), `${r.since ? "dal " + r.since : "tutto il periodo"}`, "hero") +
-    tile("Output", fmt(t.output) + "<small>token</small>", `${fmt(t.input)} input non in cache`) +
-    tile(
-      "Cache",
-      pct(cacheRatio) + "<small>letta</small>",
-      `${fmt(t.cache_read)} letti · ${fmt(t.cache_write)} scritti`,
-    ) +
-    tile("Messaggi", fmt(t.msgs), `${r.rows.reduce((a, x) => a + (x.sessions || 0), 0)} sessioni nei gruppi`);
-  const days = byDay.rows.length ? byDay.rows.map((x) => x.day).filter((v, i, a) => a.indexOf(v) === i).sort() : [];
-  const span = days.length ? Math.min(90, Math.max(7, (Date.now() - new Date(days[0]).getTime()) / 864e5 + 1)) : 14;
-  stackedBars($("#u-chart"), groupDays(byDay.rows, Math.round(span)), ["personal", "work"], SERIES, usd);
-  legend($("#u-legend"), ["personal", "work"], SERIES);
-  hbars($("#u-models"), byModel.rows.map((x) => ({ k: x.key, v: x.cost || 0 })), modelColor, usd);
-  $("#u-title").textContent = `Dettaglio per ${$("#uby").selectedOptions[0].text}`;
-  $("#u-spawns").textContent = byTool
-    ? `costo = quota del turno, divisa fra le voci dello stesso turno${
-      r.orphanMsgs ? ` · ${fmt(r.orphanMsgs)} messaggi fuori turno esclusi` : ""
-    }`
-    : r.spawns.length
-    ? "subagent lanciati: " + r.spawns.map((x) => `${x.key} ×${x.n}`).join(" · ")
-    : "";
-  $("#ut").innerHTML =
-    `<thead><tr><th>${esc(r.by)}</th>${
-      byTool ? '<th class="n">usi</th>' : ""
-    }<th class="n">msg</th><th class="n">sess</th><th class="n">input</th><th class="n">output</th><th class="n">cache rd</th><th class="n">cache wr</th><th class="n">costo</th></tr></thead><tbody>` +
-    r.rows.map((x) =>
-      `<tr><td>${esc(x.key)}</td>${
-        byTool ? `<td class="n">${x.uses ?? 0}</td>` : ""
-      }<td class="n">${x.msgs}</td><td class="n">${x.sessions}</td><td class="n">${fmt(x.input)}</td><td class="n">${
-        fmt(x.output)
-      }</td><td class="n">${fmt(x.cache_read)}</td><td class="n">${fmt(x.cache_write)}</td><td class="n">${
-        usd(x.cost)
-      }${x.unpriced ? "*" : ""}</td></tr>`
+function renderRunning() {
+  const cli = S.running.cli, desk = S.running.desktop;
+  $("#run-n").textContent = `${cli.length} cli · ${desk.length} desktop`;
+  const el = $("#running");
+  if (!cli.length && !desk.length) {
+    el.innerHTML = `<div class="sub">nothing running</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="chips">` +
+    cli.map((c) =>
+      `<span class="chip on" title="pid ${c.pid} · ${esc(c.cwd ?? "")}">${esc(c.profile ?? "?")}${
+        c.embedded ? " desktop" : ""
+      } ${esc(c.version ?? "")}</span>`
     ).join("") +
-    `</tbody><tfoot><tr><td>totale</td>${byTool ? "<td></td>" : ""}<td class="n">${
-      t.msgs || 0
-    }</td><td></td><td class="n">${fmt(t.input)}</td><td class="n">${fmt(t.output)}</td><td class="n">${
-      fmt(t.cache_read)
-    }</td><td class="n">${fmt(t.cache_write)}</td><td class="n">${usd(t.cost)}</td></tr></tfoot>`;
+    desk.map((d) => `<span class="chip" title="pid ${d.pid}">${esc(d.variant)} app</span>`).join("") +
+    `</div>`;
 }
-["uby", "usince", "uprof"].forEach((id) => $("#" + id).addEventListener("change", loadUsage));
 
-// ---------------------------------------------------------------- render: sessioni
-const ago = (iso) => {
-  const m = (Date.now() - new Date(iso).getTime()) / 60000;
-  return m < 60 ? `${Math.round(m)} min fa` : m < 1440 ? `${Math.round(m / 60)} h fa` : `${Math.round(m / 1440)} g fa`;
-};
-// arco temporale della sessione (una sessione ripresa più giorni copre giorni): min → "5 g 3 h" / "2 h 10 min" / "25 min"
-const dur = (min) =>
-  min >= 1440
-    ? `${Math.floor(min / 1440)} g ${Math.floor((min % 1440) / 60)} h`
-    : min >= 60
-    ? `${Math.floor(min / 60)} h ${min % 60} min`
-    : `${min} min`;
-async function loadSessions() {
-  const my = ++seq.sessions;
-  const q = new URLSearchParams({ since: $("#ssince").value, profile: $("#sprof").value, limit: 80 });
-  const rows = await fetch("/api/sessions?" + q).then((x) => x.json());
-  if (my !== seq.sessions) return;
-  const tot = rows.reduce((a, r) => a + (r.cost || 0), 0);
-  $("#ssum").textContent = rows.length
-    ? `${rows.length} sessioni · ${usd(tot)} · ${dur(rows.reduce((a, r) => a + r.minutes, 0))} complessivi`
-    : "";
-  $("#st").innerHTML =
-    `<thead><tr><th>quando</th><th>profilo</th><th>cartella</th><th>via</th><th class="n">arco</th><th class="n">msg</th><th>modelli · agenti</th><th class="n">output</th><th class="n">costo</th></tr></thead><tbody>` +
-    (rows.length
-      ? rows.map((r) =>
-        `<tr title="${esc(r.session_id)}"><td class="num" title="${esc(r.started)} → ${esc(r.ended)}">${
-          ago(r.ended)
-        }</td><td><span class="chip" style="border-color:${SERIES[r.profile] || "var(--border)"}">${
-          esc(r.profile)
-        }</span></td><td class="mono" title="${esc(r.cwd || "")}">${
-          esc(short((r.cwd || "—").replace(/^\/home\/[^/]+/, "~"), 48))
-        }</td><td class="faint">${
-          esc((r.entrypoint || "cli").replace("claude-desktop", "desktop"))
-        }</td><td class="n">${dur(r.minutes)}</td><td class="n">${r.msgs}${
-          r.sidechain_msgs ? ` <span class="faint">(${r.sidechain_msgs} sub)</span>` : ""
-        }</td><td>${
-          r.models.map((m) =>
-            `<span class="chip"><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${
-              modelColor(m)
-            }"></i>${esc(m.replace("claude-", ""))}</span>`
-          ).join("")
-        }${
-          r.agents.filter((a) => a !== "main").map((a) => `<span class="chip faint">${esc(a)}</span>`).join("")
-        }</td><td class="n">${fmt(r.output)}</td><td class="n">${usd(r.cost)}</td></tr>`
-      ).join("")
-      : '<tr><td colspan="9" class="empty">Nessuna sessione nel periodo.</td></tr>') +
-    "</tbody>";
+function renderRepo() {
+  const r = S.repo;
+  $("#repo-branch").textContent = r.isRepo ? r.branch : "not a repository";
+  $("#repo").innerHTML = r.isRepo
+    ? `<dl class="kv">
+        <dt>head</dt><dd>${esc(short(r.head, 40))}</dd>
+        <dt>state</dt><dd>↓${r.behind} ↑${r.ahead} ✎${r.dirty}</dd>
+        <dt>fetched</dt><dd>${esc(ago(r.fetchedAt))}</dd>
+        <dt>remote</dt><dd>${esc(short(r.remote ?? "none", 44))}</dd>
+      </dl>`
+    : `<div class="sub">${esc(r.path)}</div>`;
 }
-["ssince", "sprof"].forEach((id) => $("#" + id).addEventListener("change", loadSessions));
 
-// ---------------------------------------------------------------- render: budget
-const LEVEL_CLS = { ok: "ok", warn: "warn", crit: "fail" };
-const fmtMetric = (a) =>
-  a.value == null
-    ? "—"
-    : a.unit === "$"
-    ? usd(a.value)
-    : a.unit === "%"
-    ? a.value.toFixed(1) + "%"
-    : a.value.toFixed(2) + " " + a.unit;
-function ruleRow(a) {
-  const th = a.threshold;
-  const frac = a.value == null || !th ? 0 : Math.max(0, Math.min(1.15, a.value / th));
-  const col = a.level === "crit" ? "var(--crit)" : a.level === "warn" ? "var(--warn)" : "var(--s1)";
-  return `<div class="rule ${a.level}">
-    <div class="row"><span>${esc(a.label)}</span><b class="num">${fmtMetric(a)}</b></div>
-    <div class="bar"><i style="width:${(frac * 100).toFixed(1)}%;background:${col}"></i></div>
-    <div class="row faint"><span>${
-    th != null ? `soglia ${th}${a.unit === "$" ? "" : a.unit}` : "nessuna soglia"
-  }</span><span>${a.notify ? "→ notifica" : esc(a.why)}</span></div>
+$("#ovdays").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-d]");
+  if (!b) return;
+  $$("#ovdays button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  ovDays = b.dataset.d;
+  loadOverview();
+});
+
+/* ---------------- profiles ---------------- */
+let editing = null;
+
+function renderProfiles() {
+  if (!S) return;
+  const names = Object.keys(S.profiles);
+  const live = new Set(S.running.cli.map((c) => c.profile));
+  $("#pcards").innerHTML = names.map((n) => editing === n ? cardEdit(n) : cardView(n, live.has(n))).join("") +
+    (editing === "+"
+      ? cardEdit(null)
+      : `<div class="pcard add" id="addp"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add profile</span></div>`);
+}
+
+function cardView(name, isLive) {
+  const p = S.profiles[name];
+  const b = BUDGET?.profiles.find((x) => x.snap.profile === name);
+  const extra = b?.snap.extra;
+  const reg = S.shared.mcpRegistry ?? {};
+  const all = Object.keys(reg);
+  const mine = new Set(p.mcp);
+  const skills = Object.keys(p.mounted.skills).length;
+  return `<div class="pcard">
+    <div class="ph">
+      <span class="dot ${isLive ? "live" : ""}" title="${isLive ? "session running" : "idle"}"></span>
+      <h3>${esc(name)}</h3>
+      <span class="acct">${esc(p.account ?? "not signed in")}</span>
+      <button class="btn edit" data-edit="${esc(name)}">Edit</button>
+    </div>
+    <div class="fields">
+      <div class="f"><label>Command</label><span class="val">${esc(p.manifest.command ?? "—")}</span></div>
+      <div class="f"><label>Desktop</label><span class="val" title="${esc(p.desktopDir)}">${
+    esc(shortHome(p.desktopDir))
+  }</span></div>
+      <div class="f"><label>Billed</label><span class="val">${
+    extra ? `${money(extra.used, extra.currency)}${b.ctx.cap ? ` / ${money(b.ctx.cap, extra.currency)}` : ""}` : "—"
+  } ${extra?.active ? `<span class="chip on">extra on</span>` : `<span class="chip">subscription</span>`}</span></div>
+      <div class="f"><label>Mounted</label><span class="val">${skills} skills · ${
+    Object.keys(p.mounted.agents).length
+  } agents · ${Object.keys(p.mounted.commands).length} commands</span></div>
+      <div class="f"><label>MCP</label><div class="chips">${
+    all.length
+      ? all.map((m) => `<span class="chip${mine.has(m) ? " on" : ""}">${esc(m)}</span>`).join("")
+      : `<span class="chip">none</span>`
+  }</div></div>
+    </div>
   </div>`;
 }
-async function loadBudget(force = false) {
-  const my = ++seq.budget;
-  setBusy(true);
-  try {
-    const b = await fetch("/api/budget" + (force ? "?fresh=1" : "")).then((x) => x.json());
-    if (my !== seq.budget) return;
-    const real = b.alerts.filter((a) => a.level !== "ok" && a.notify).length;
-    const badge = $("#badge-budget");
-    badge.hidden = !real;
-    badge.textContent = real || "";
-    badge.className = "badge " + (b.alerts.some((a) => a.level === "crit" && a.notify) ? "crit" : "warn");
-    $("#bud").innerHTML = b.profiles.map((p) => {
-      const s = p.snap, c = s.credits;
-      const cls = s.billing === "credits" ? "warnc" : s.billing === "included" ? "okc" : "";
-      const age = s.ageHours == null
-        ? "mai letto"
-        : s.ageHours < 1
-        ? "aggiornato ora"
-        : `letto ${Math.round(s.ageHours)} h fa`;
-      const head = `<div class="head"><h3>${esc(s.profile)}</h3><span class="chip ${cls}">${
-        s.billing === "credits" ? "crediti a pagamento" : s.billing === "included" ? "solo abbonamento" : "stato ignoto"
-      }</span></div>`;
-      const credits = c && c.limit != null
-        ? `<div class="rule"><div class="row"><span>crediti del mese</span><b class="num">${
-          c.used?.toFixed(2) ?? "?"
-        } / ${c.limit.toFixed(0)} ${esc(c.currency)}</b></div>
-             <div class="bar"><i style="width:${
-          Math.min(100, c.utilization ?? 0).toFixed(1)
-        }%;background:var(--s2)"></i></div></div>`
-        : "";
-      const plan = s.plan.filter((l) => l.percent > 0).map((l) =>
-        `<span class="chip faint" title="${
-          l.resetsAt ? "si azzera " + new Date(l.resetsAt).toLocaleString("it-IT") : ""
-        }">${esc(l.kind)} ${l.percent}%</span>`
-      ).join("");
-      const eq = `<div class="row faint"><span>equivalente a listino</span><span>oggi ${usd(p.ctx.costDay)} · 7g ${
-        usd(p.ctx.costWeek)
-      } · 30g ${usd(p.ctx.costMonth)}</span></div>`;
-      return `<div class="card">${head}
-        <p class="faint">${esc(s.reason)} <span>· ${age}${s.stale ? " (stantio)" : ""}</span></p>
-        ${credits}${plan ? `<div>${plan}</div>` : ""}${eq}
-        <div class="sep"></div>${p.alerts.map(ruleRow).join("")}</div>`;
-    }).join("");
-  } catch (e) {
-    toast("budget non disponibile: " + e.message);
-  } finally {
-    setBusy(false);
-  }
-}
-$("#bre").addEventListener("click", () => loadBudget(true));
 
-// ---------------------------------------------------------------- azioni
-const ACTIONS = [
-  { id: "doctor", title: "Doctor", desc: "Riesegue tutti i controlli e aggiorna la pagina.", btn: "Esegui" },
-  {
-    id: "sync-fetch",
-    title: "Sync repo",
-    desc: "Fetch dal remote e pull fast-forward se il working tree è pulito.",
-    btn: "Fetch + pull",
-  },
-  {
-    id: "mcp-check",
-    title: "MCP: verifica",
-    desc: "Confronta il registry con .claude.json e claude_desktop_config.json.",
-    btn: "Verifica",
-  },
-  {
-    id: "mcp-sync",
-    title: "MCP: applica registry",
-    desc: "Scrive le superfici CLI e Desktop. Rifiuta se ci sono istanze attive che riscriverebbero i file.",
-    btn: "Applica",
-    danger: true,
-    opts: [{ id: "force", label: "ignora le istanze attive (--force)" }],
-  },
-  {
-    id: "install-dry",
-    title: "Install: anteprima",
-    desc: "Mostra cosa farebbe claude-multi install senza toccare nulla.",
-    btn: "Dry-run",
-  },
-  {
-    id: "install",
-    title: "Install: materializza",
-    desc: "Applica manifest, symlink, unit e .desktop. Meglio a Claude chiuso.",
-    btn: "Install",
-    danger: true,
-  },
-  {
-    id: "usage-ingest",
-    title: "Usage: reindicizza",
-    desc: "Rilegge tutti i transcript da zero e ricostruisce il database.",
-    btn: "Ingest --full",
-  },
-  {
-    id: "budget",
-    title: "Budget: rivaluta",
-    desc: "Rilegge lo stato crediti dei profili e rivaluta le soglie di shared/budget.json.",
-    btn: "Rivaluta",
-  },
-  {
-    id: "update-check",
-    title: "Update: controlla",
-    desc: "Interroga i canali di Claude Code e Claude Desktop e aggiorna la cache della statusline.",
-    btn: "Controlla",
-  },
-];
-$("#ax").innerHTML = ACTIONS.map((a) =>
-  `<div class="card action"><h3>${a.title}</h3><p>${a.desc}</p><div class="row"><button class="btn ${
-    a.danger ? "danger" : "primary"
-  }" data-a="${a.id}">${a.btn}</button>${
-    (a.opts || []).map((o) =>
-      `<label class="switch"><input type="checkbox" data-opt="${o.id}" data-for="${a.id}"> ${o.label}</label>`
-    ).join("")
-  }</div></div>`
-).join("");
-$("#ax").addEventListener("click", async (e) => {
-  const b = e.target.closest("button[data-a]");
-  if (!b) return;
-  const id = b.dataset.a;
-  const opts = [...document.querySelectorAll(`input[data-for="${id}"]:checked`)].map((x) => x.dataset.opt);
-  b.disabled = true;
-  setBusy(true);
-  const out = $("#ax-out");
-  out.textContent += `\n$ claude-multi ${id}${opts.length ? " " + opts.map((o) => "--" + o).join(" ") : ""}\n`;
+function cardEdit(name) {
+  const isNew = !name;
+  const p = isNew ? null : S.profiles[name];
+  const m = p?.manifest ?? {};
+  const reg = S.shared.mcpRegistry ?? {};
+  const picked = new Set(isNew ? Object.keys(reg) : p.mcp);
+  return `<form class="pcard" id="pform" data-name="${esc(name ?? "")}">
+    <div class="ph"><span class="dot"></span><h3>${isNew ? "New profile" : esc(name)}</h3></div>
+    <div class="fields">
+      <div class="f"><label>Name</label>${
+    isNew
+      ? `<input name="name" required pattern="[a-z][a-z0-9_-]{1,30}" placeholder="research" autofocus>`
+      : `<span class="val">${esc(name)}</span>`
+  }</div>
+      <div class="f"><label>Description</label><input name="description" value="${
+    esc(m.description ?? "")
+  }" placeholder="what this profile is for"></div>
+      <div class="f"><label>Command</label><input name="command" value="${
+    esc(m.command ?? "")
+  }" placeholder="claude-research"></div>
+      <div class="f"><label>Desktop</label><input name="desktopDir" value="${
+    esc(m.desktopDir ?? "")
+  }" placeholder="~/.config/Claude-Research"></div>
+      <div class="f"><label>Alert cap</label><input name="cap" type="number" min="0" step="1" value="${
+    esc(BUDGET?.cfg.profiles?.[name]?.cap ?? "")
+  }" placeholder="account limit"></div>
+      <div class="f"><label>MCP</label><div class="chips">${
+    Object.keys(reg).map((s) =>
+      `<span class="chip pick${picked.has(s) ? " on" : ""}" data-pick="${esc(s)}">${esc(s)}</span>`
+    ).join("") || `<span class="chip">registry empty</span>`
+  }</div></div>
+    </div>
+    <div class="pfoot">
+      <button class="btn primary" type="submit">${isNew ? "Create" : "Save"}</button>
+      <button class="btn ghost" type="button" data-cancel>Cancel</button>
+      <span class="hint">writes the manifest, then runs install</span>
+    </div>
+  </form>`;
+}
+
+const shortHome = (p) => {
+  const h = S?.profiles
+    ? Object.values(S.profiles)[0]?.dir?.replace(/\/[^/]+$/, "").replace(/\/\.claude-multi$/, "")
+    : null;
+  return h && p.startsWith(h) ? "~" + p.slice(h.length) : p;
+};
+
+document.addEventListener("click", async (e) => {
+  const ed = e.target.closest("[data-edit]");
+  if (ed) {
+    editing = ed.dataset.edit;
+    renderProfiles();
+    return;
+  }
+  if (e.target.closest("#addp")) {
+    editing = "+";
+    renderProfiles();
+    return;
+  }
+  if (e.target.closest("[data-cancel]")) {
+    editing = null;
+    renderProfiles();
+    return;
+  }
+  const pick = e.target.closest("[data-pick]");
+  if (pick) {
+    pick.classList.toggle("on");
+    return;
+  }
+});
+
+$("#pcards").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {
+    name: f.dataset.name || f.elements.name.value.trim(),
+    description: f.elements.description.value.trim(),
+    command: f.elements.command.value.trim(),
+    desktopDir: f.elements.desktopDir.value.trim(),
+    cap: f.elements.cap.value ? Number(f.elements.cap.value) : null,
+    mcp: $$("[data-pick].on", f).map((c) => c.dataset.pick),
+  };
+  const btn = $("button[type=submit]", f);
+  btn.disabled = true;
+  btn.textContent = "Working…";
   try {
-    const r = await fetch("/api/action", {
+    const r = await api("/api/profile", {
       method: "POST",
       headers: { "content-type": "application/json", "x-claude-multi": "1" },
-      body: JSON.stringify({ action: id, opts }),
-    }).then((x) => x.json());
-    out.textContent += (r.output || "") + `\n[exit ${r.code}]${r.ms ? ` · ${(r.ms / 1000).toFixed(1)}s` : ""}\n`;
-    toast(r.code === 0 ? `${id}: ok` : `${id}: exit ${r.code}`);
+      body: JSON.stringify(body),
+    });
+    editing = null;
+    await loadStatus();
+    renderProfiles();
+    toast(r.message ?? `Profile ${body.name} saved`);
+    if (r.output) showOutput(`Profile ${body.name}`, r.output);
   } catch (err) {
-    out.textContent += `errore: ${err}\n`;
+    btn.disabled = false;
+    btn.textContent = f.dataset.name ? "Save" : "Create";
+    toast(String(err.message ?? err), true);
   }
-  out.scrollTop = out.scrollHeight;
-  b.disabled = false;
-  setBusy(false);
-  load(true);
-});
-$("#ax-clear").addEventListener("click", () => {
-  $("#ax-out").textContent = "";
 });
 
-// ---------------------------------------------------------------- caricamento
-function setBusy(on) {
-  busy += on ? 1 : -1;
-  $("#dot").classList.toggle("busy", busy > 0);
-}
-async function load(force = false) {
-  setBusy(true);
+/* ---------------- usage ---------------- */
+const UHEAD = {
+  default: ["", "msgs", "sess", "input", "output", "cache rd", "cache wr", "estimate"],
+  tool: ["", "uses", "sess", "input", "output", "cache rd", "cache wr", "estimate"],
+};
+
+async function loadUsage() {
+  const my = ++seq.usage;
+  const by = $("#ugroup [aria-pressed=true]").dataset.g;
+  const q = new URLSearchParams({ by, since: $("#usince").value, limit: "60" });
+  if ($("#uprof").value) q.set("profile", $("#uprof").value);
+  let r;
   try {
-    const [s, u14] = await Promise.all([
-      fetch("/api/status" + (force ? "?fresh=1" : "")).then((x) => x.json()),
-      fetch("/api/usage?" + new URLSearchParams({ by: "day", since: "14d", split: "profile", limit: 200 })).then((x) =>
-        x.json()
-      ).catch(() => null),
-    ]);
-    S = s;
-    $("#host").textContent = s.machine.hostname;
-    $("#gen").textContent = new Date(s.generatedAt).toLocaleTimeString("it-IT");
-    $("#ver").textContent = `deno ${s.machine.deno}`;
-    $("#meta").innerHTML = `<span>${esc(s.machine.hostname)}</span><span>·</span><span>Code ${
-      esc(s.machine.cliVersion || "?")
-    }</span><span>·</span><span>Desktop ${esc(s.machine.desktopVersion || "—")}</span>`;
-    renderOverview(s, u14);
-    renderProfiles(s);
-    renderDoctor(s);
-    renderSync(s);
+    r = await api("/api/usage?" + q);
   } catch (e) {
-    toast("stato non disponibile: " + e.message);
+    toast(String(e.message), true);
+    return;
   }
-  setBusy(false);
+  if (my !== seq.usage) return;
+
+  const tool = by === "skill" || by === "command";
+  const head = tool ? UHEAD.tool : UHEAD.default;
+  head[0] = by[0].toUpperCase() + by.slice(1);
+  $("#uhead").innerHTML = head.map((h) => `<th>${esc(h)}</th>`).join("");
+  const top = r.rows[0]?.cost || 1;
+  $("#urows").innerHTML = r.rows.length
+    ? r.rows.map((x) => {
+      const label = x.label ?? x.key;
+      const w = Math.max(1.5, (x.cost ?? 0) / top * 100);
+      return `<tr><td title="${esc(x.cwd ?? label)}">${esc(short(label, 46))}</td>
+        <td>${tool ? (x.uses ?? 0) : x.msgs}</td><td>${x.sessions}</td>
+        <td>${fmt(x.input)}</td><td>${fmt(x.output)}</td><td>${fmt(x.cache_read)}</td><td>${fmt(x.cache_write)}</td>
+        <td class="bar-cell">${usd(x.cost)}${x.unpriced ? "*" : ""}<i><b style="width:${w}%"></b></i></td></tr>`;
+    }).join("")
+    : `<tr><td colspan="8" class="empty">nothing in this window</td></tr>`;
+
+  const notes = [`total ${usd(r.total.cost)} · ${fmt(r.total.output)} output · ${fmt(r.total.cache_read)} cache read`];
+  if (tool) {
+    notes.push(
+      `estimate is the turn's share, split across the ${by === "skill" ? "skills" : "commands"} of that turn${
+        r.orphanMsgs ? ` — ${r.orphanMsgs} messages outside any turn excluded` : ""
+      }`,
+    );
+  }
+  if (r.rows.some((x) => x.unpriced)) notes.push("* model with no rate in the table: partial estimate");
+  if (r.spawns?.length) notes.push("subagents: " + r.spawns.map((s) => `${s.key} ×${s.n}`).join(" · "));
+  $("#ufoot").innerHTML = notes.map(esc).join("<br>");
 }
-load();
-setInterval(() => {
-  if ($("#auto").checked && !document.hidden) load();
-}, 30000);
+
+$("#ugroup").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-g]");
+  if (!b) return;
+  $$("#ugroup button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  loadUsage();
+});
+["#usince", "#uprof"].forEach((id) => $(id).addEventListener("change", loadUsage));
+
+/* ---------------- sessions ---------------- */
+async function loadSessions() {
+  const my = ++seq.sessions;
+  const q = new URLSearchParams({ since: $("#ssince").value, limit: "80" });
+  if ($("#sprof").value) q.set("profile", $("#sprof").value);
+  let rows;
+  try {
+    rows = await api("/api/sessions?" + q);
+  } catch (e) {
+    toast(String(e.message), true);
+    return;
+  }
+  if (my !== seq.sessions) return;
+  $("#srows").innerHTML = rows.length
+    ? rows.map((s) =>
+      `<tr data-session="${esc(s.session_id)}" title="${esc(s.cwd ?? "")}">
+        <td>${esc(short(s.project, 34))}</td>
+        <td><span class="tag">${esc(s.profile)}</span></td>
+        <td>${esc(when(s.started))}</td>
+        <td>${s.minutes}</td>
+        <td>${s.msgs}${s.sidechain_msgs ? `<span class="sub"> +${s.sidechain_msgs}</span>` : ""}</td>
+        <td>${esc(short(s.models.map(modelShort).join(" "), 18))}</td>
+        <td>${usd(s.cost)}</td></tr>`
+    ).join("")
+    : `<tr><td colspan="7" class="empty">no sessions in this window</td></tr>`;
+}
+["#ssince", "#sprof"].forEach((id) => $(id).addEventListener("change", loadSessions));
+
+$("#srows").addEventListener("click", (e) => {
+  const tr = e.target.closest("[data-session]");
+  if (tr) openTranscript(tr.dataset.session, tr);
+});
+
+async function openTranscript(id, tr) {
+  $$("#srows tr").forEach((r) => r.removeAttribute("aria-selected"));
+  tr?.setAttribute("aria-selected", "true");
+  const cells = tr ? [...tr.children].map((c) => c.textContent) : [];
+  const host = drawer(`${cells[0] ?? "Session"}`, `<div class="empty">loading transcript…</div>`);
+  let t;
+  try {
+    t = await api("/api/transcript?" + new URLSearchParams({ session: id }));
+  } catch (e) {
+    toast(String(e.message), true);
+    host.remove();
+    return;
+  }
+  if (!document.body.contains(host)) return;
+  const body = t.turns.length
+    ? (t.total > t.turns.length
+      ? `<div class="turn"><p class="sub">${t.total - t.turns.length} earlier turns not shown</p></div>`
+      : "") +
+      t.turns.map((x) =>
+        `<div class="turn ${x.role === "user" ? "u" : ""}">
+        <div class="who">${x.role === "user" ? "You" : "Claude"}${x.model ? ` · ${esc(modelShort(x.model))}` : ""}
+          ${x.cost ? `<span class="cost">${usd(x.cost)}</span>` : ""}</div>
+        ${x.text ? `<p>${esc(short(x.text, 4000))}</p>` : ""}
+        ${
+          x.tools.length
+            ? `<div class="tools">${x.tools.map((n) => `<span class="chip">${esc(n)}</span>`).join("")}</div>`
+            : ""
+        }
+      </div>`
+      ).join("")
+    : `<div class="empty">no readable turns in this transcript</div>`;
+  $(".turns", host).innerHTML = body;
+  $(".dmeta", host).innerHTML = [
+    `<span><b>${esc(id.slice(0, 8))}</b></span>`,
+    `<span>${t.total} turns</span>`,
+    cells[2] ? `<span>${esc(cells[2])}</span>` : "",
+    cells[6] ? `<span><b>${esc(cells[6])}</b> est.</span>` : "",
+  ].join("");
+}
+
+function drawer(title, inner) {
+  $(".scrim")?.parentElement?.remove();
+  const host = document.createElement("div");
+  host.innerHTML = `<div class="scrim" data-close></div>
+    <aside class="drawer" role="dialog" aria-label="${esc(title)}">
+      <div class="dh"><h3>${esc(title)}</h3><button class="x" data-close aria-label="Close">×</button></div>
+      <div class="dmeta"></div>
+      <div class="turns">${inner}</div>
+    </aside>`;
+  document.body.appendChild(host);
+  host.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]")) host.remove();
+  });
+  const onKey = (e) => {
+    if (e.key === "Escape") {
+      host.remove();
+      document.removeEventListener("keydown", onKey);
+    }
+  };
+  document.addEventListener("keydown", onKey);
+  return host;
+}
+
+function showOutput(title, text) {
+  const host = drawer(title, `<pre class="out">${esc(text)}</pre>`);
+  $(".dmeta", host).remove();
+  return host;
+}
+
+/* ---------------- health ---------------- */
+function renderHealth(checks) {
+  const order = { fail: 0, warn: 1, ok: 2 };
+  const sorted = [...checks].sort((a, b) => order[a.status] - order[b.status]);
+  const sym = { ok: "✓", warn: "!", fail: "✕", run: "◠" };
+  $("#checks").innerHTML = sorted.map((c) =>
+    `<div class="chk">
+      <span class="ic ${c.status}">${c.status === "run" ? `<span class="spin">◠</span>` : sym[c.status]}</span>
+      <div><div class="name">${esc(c.id)}</div><div class="msg">${esc(c.msg)}</div></div>
+      ${c.fix && c.status !== "ok" ? actionButton(c.fix) : "<span></span>"}
+    </div>`
+  ).join("");
+  const n = (s) => checks.filter((c) => c.status === s).length;
+  $("#hsum").textContent = `${n("ok")} pass · ${n("warn")} warn · ${n("fail")} fail`;
+  const badge = $("#n-health");
+  const bad = n("fail") || n("warn");
+  badge.textContent = bad || "";
+  badge.className = "n" + (n("fail") ? " crit" : n("warn") ? " warn" : "");
+}
+
+/** A fix line is a shell command. When it maps to an allowlisted action we offer the button;
+    otherwise it is shown as text to copy, because running arbitrary strings from here would
+    quietly turn the console into a remote shell. */
+const FIX_ACTIONS = {
+  "claude-multi install": "install",
+  "claude-multi mcp sync": "mcp-sync",
+  "claude-multi doctor": "doctor",
+  "claude-multi budget": "budget",
+  "claude-multi sync --fetch": "sync-fetch",
+  "claude-multi usage ingest": "usage-ingest",
+};
+function actionButton(fix) {
+  const act = FIX_ACTIONS[fix.trim()];
+  return act
+    ? `<button class="fix" data-action="${esc(act)}">${esc(fix)}</button>`
+    : `<code class="fix" style="cursor:text;background:none;border-color:var(--line);color:var(--fg-faint)" title="${
+      esc(fix)
+    }">${esc(short(fix, 40))}</code>`;
+}
+
+$("#checks").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-action]");
+  if (b) runAction(b.dataset.action);
+});
+
+$("#rerun").addEventListener("click", async () => {
+  const btn = $("#rerun");
+  btn.disabled = true;
+  // stream the re-run: mark everything pending, then swap in the fresh verdicts
+  renderHealth(S.doctor.map((c) => ({ ...c, status: "run", msg: "checking…", fix: null })));
+  try {
+    await loadStatus();
+    toast("Health check complete");
+  } catch (e) {
+    toast(String(e.message), true);
+  }
+  btn.disabled = false;
+});
+
+function renderShared() {
+  const s = S.shared;
+  $("#shared").innerHTML = `<dl class="kv">
+    <dt>skills</dt><dd>${Object.keys(s.skills).length}</dd>
+    <dt>agents</dt><dd>${Object.keys(s.agents).length}</dd>
+    <dt>commands</dt><dd>${Object.keys(s.commands).length}</dd>
+    <dt>hooks</dt><dd>${s.hooks.length}</dd>
+    <dt>rules</dt><dd>${esc(s.rules.join(", ") || "none")}</dd>
+  </dl>`;
+  const reg = s.mcpRegistry ?? {};
+  const names = Object.keys(reg);
+  $("#registry").innerHTML = names.length
+    ? `<dl class="kv">` + names.map((n) =>
+      `<dt>${esc(n)}</dt><dd>${esc(reg[n].profiles.join(", "))} · ${esc(reg[n].surfaces.join(", "))}</dd>`
+    ).join("") + `</dl>`
+    : `<div class="sub">registry empty</div>`;
+}
+
+/* ---------------- actions ---------------- */
+async function runAction(action, opts = []) {
+  toast(`Running ${action}…`);
+  try {
+    const r = await api("/api/action", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-claude-multi": "1" },
+      body: JSON.stringify({ action, opts }),
+    });
+    showOutput(action, r.output || "(no output)");
+    toast(`${action} finished${r.code ? ` with exit ${r.code}` : ""} in ${(r.ms / 1000).toFixed(1)}s`, r.code !== 0);
+    await refresh("state");
+  } catch (e) {
+    toast(String(e.message), true);
+  }
+}
+
+/* ---------------- navigation ---------------- */
+const TITLES = { overview: "Overview", profiles: "Profiles", usage: "Usage", sessions: "Sessions", health: "Health" };
+function go(v) {
+  view = v;
+  $$("#nav button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.v === v)));
+  $$(".view").forEach((s) => {
+    s.hidden = s.id !== `v-${v}`;
+  });
+  $("#title").textContent = TITLES[v];
+  if (location.hash.slice(1) !== v) history.replaceState(null, "", `#${v}`);
+  if (v === "profiles") renderProfiles();
+  if (v === "usage") loadUsage();
+  if (v === "sessions") loadSessions();
+  if (v === "overview") loadOverview();
+}
+$("#nav").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-v]");
+  if (b) go(b.dataset.v);
+});
+addEventListener("hashchange", () => {
+  const v = location.hash.slice(1);
+  if (TITLES[v] && v !== view) go(v);
+});
+
+/* ---------------- theme ---------------- */
+let theme = localStorage.getItem("cm-theme") || "auto";
+function applyTheme() {
+  if (theme === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", theme);
+  $("#theme-lbl").textContent = theme;
+  localStorage.setItem("cm-theme", theme);
+}
+$("#theme-btn").addEventListener("click", () => {
+  theme = theme === "auto" ? "dark" : theme === "dark" ? "light" : "auto";
+  applyTheme();
+});
+applyTheme();
+
+/* ---------------- command palette ---------------- */
+const CMDS = [
+  ...Object.keys(TITLES).map((v) => ({ s: "Go to", n: TITLES[v], d: v, f: () => go(v) })),
+  {
+    s: "Run",
+    n: "Health check",
+    d: "doctor",
+    f: () => {
+      go("health");
+      $("#rerun").click();
+    },
+  },
+  { s: "Run", n: "Sync MCP servers", d: "mcp sync", f: () => runAction("mcp-sync") },
+  { s: "Run", n: "Check MCP registry", d: "mcp check", f: () => runAction("mcp-check") },
+  { s: "Run", n: "Re-ingest usage", d: "usage ingest --full", f: () => runAction("usage-ingest") },
+  { s: "Run", n: "Fetch git remote", d: "sync --fetch", f: () => runAction("sync-fetch") },
+  { s: "Run", n: "Preview install", d: "install --dry-run", f: () => runAction("install-dry") },
+  { s: "Run", n: "Apply install", d: "install", f: () => runAction("install") },
+  { s: "Run", n: "Budget report", d: "budget", f: () => runAction("budget") },
+  { s: "Run", n: "Check for updates", d: "update --check", f: () => runAction("update-check") },
+  {
+    s: "Do",
+    n: "Add profile",
+    d: "new",
+    f: () => {
+      go("profiles");
+      editing = "+";
+      renderProfiles();
+    },
+  },
+  { s: "Do", n: "Toggle theme", d: "theme", f: () => $("#theme-btn").click() },
+];
+
+let pal = null, sel = 0, hits = CMDS;
+function openPal() {
+  if (pal) return;
+  hits = CMDS;
+  sel = 0;
+  pal = document.createElement("div");
+  pal.className = "pal-wrap";
+  pal.innerHTML =
+    `<div class="pal"><input placeholder="Search views and commands…" aria-label="Search views and commands"><div class="pal-list"></div></div>`;
+  document.body.appendChild(pal);
+  const inp = $("input", pal);
+  const paint = () => {
+    let out = "", last = "";
+    hits.forEach((c, i) => {
+      if (c.s !== last) {
+        out += `<div class="pal-sec">${esc(c.s)}</div>`;
+        last = c.s;
+      }
+      out += `<div class="pal-i" data-i="${i}" data-sel="${i === sel ? 1 : 0}">
+        <svg viewBox="0 0 24 24">${
+        c.s === "Go to" ? `<path d="M5 12h14M13 6l6 6-6 6"/>` : `<path d="M8 6l6 6-6 6"/><path d="M15 18h4"/>`
+      }</svg>
+        ${esc(c.n)}<span class="d">${esc(c.d)}</span></div>`;
+    });
+    $(".pal-list", pal).innerHTML = out || `<div class="pal-sec">no match</div>`;
+    $(`[data-sel="1"]`, pal)?.scrollIntoView({ block: "nearest" });
+  };
+  paint();
+  inp.addEventListener("input", () => {
+    const q = inp.value.toLowerCase().trim();
+    hits = q ? CMDS.filter((c) => `${c.n} ${c.d} ${c.s}`.toLowerCase().includes(q)) : CMDS;
+    sel = 0;
+    paint();
+  });
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      sel = Math.min(sel + 1, hits.length - 1);
+      paint();
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      sel = Math.max(sel - 1, 0);
+      paint();
+      e.preventDefault();
+    } else if (e.key === "Enter" && hits[sel]) {
+      const c = hits[sel];
+      closePal();
+      c.f();
+    } else if (e.key === "Escape") closePal();
+  });
+  pal.addEventListener("click", (e) => {
+    if (e.target === pal) return closePal();
+    const it = e.target.closest("[data-i]");
+    if (it) {
+      const c = hits[+it.dataset.i];
+      closePal();
+      c.f();
+    }
+  });
+  inp.focus();
+}
+function closePal() {
+  pal?.remove();
+  pal = null;
+}
+$("#pal-open").addEventListener("click", openPal);
+addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    pal ? closePal() : openPal();
+  }
+});
+
+/* ---------------- boot ---------------- */
+(async () => {
+  const start = location.hash.slice(1);
+  try {
+    await loadStatus();
+  } catch (e) {
+    toast("cannot reach the local server: " + e.message, true);
+  }
+  go(TITLES[start] ? start : "overview");
+  connect();
+  // The heartbeat also tells the page the connection is genuinely alive: if nothing arrives for
+  // well over the server's 25s ping, the stream is dead even though EventSource still says open.
+  setInterval(() => {
+    if (es && es.readyState === 1 && lastEvent && Date.now() - lastEvent > 70000) {
+      setLive("down");
+      connect();
+    }
+  }, 15000);
+})();

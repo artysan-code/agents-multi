@@ -1,6 +1,6 @@
 // Test di usage.ts: tariffe, finestre temporali, ingest con dedupe dei chunk, report.
 import { assert, assertEquals, assertAlmostEquals } from "jsr:@std/assert@1";
-import { costUsd, ingestFile, openDb, report, sessions, sinceDate } from "../usage.ts";
+import { costUsd, ingestFile, openDb, report, sessions, sinceDate, projectLabel } from "../usage.ts";
 
 Deno.test("sinceDate: 7d, all, data esplicita, input non valido", () => {
   const d = sinceDate("7d")!;
@@ -109,4 +109,12 @@ Deno.test("attribuzione a skill e comandi: turno, quota divisa, prompt consecuti
   assertEquals((db.prepare("SELECT COUNT(*) c FROM turn_tools").get() as { c: number }).c, 4);
   db.close();
   await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("projectLabel: cwd names the project, the slug is only a fallback", () => {
+  assertEquals(projectLabel("-home-a-work-lead-qualifier", "/home/a/work/lead-qualifier"), "lead-qualifier");
+  assertEquals(projectLabel("x", "/home/a/work/lead-qualifier/"), "lead-qualifier"); // trailing slash
+  // no cwd: strip the slugified home and keep what is left, ambiguous as it is
+  assertEquals(projectLabel("-home-a-dragons-lair", null).endsWith("dragons-lair"), true);
+  assertEquals(projectLabel(null, null), "—");
 });
