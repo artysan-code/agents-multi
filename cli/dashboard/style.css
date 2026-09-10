@@ -619,34 +619,28 @@ kbd {
   padding-bottom: 4px;
 }
 
-/* running sessions */
+/* running sessions — the animation is driven by real transcript writes, never by a timer */
 .runlist {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 9px;
 }
 
 .run {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 7px;
   min-width: 0;
-}
-
-.run b {
-  font-size: 12.5px;
-  font-weight: 500;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition: border-color .2s, background .2s;
 }
 
 .run.open {
   cursor: pointer;
-  transition: border-color .12s, background .12s;
 }
 
 .run.open:hover {
@@ -654,10 +648,55 @@ kbd {
   background: var(--raised);
 }
 
-.run-model {
+.run-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.run-top b {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-bot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.run .state {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font: 400 10.5px var(--mono);
   color: var(--fg-faint);
   white-space: nowrap;
+}
+
+.run.busy {
+  border-color: var(--accent-dim);
+}
+
+.run.busy .state {
+  color: var(--accent);
+}
+
+.run-model,
+.run-stat {
+  font: 400 10.5px var(--mono);
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+.run-stat::before {
+  content: "· ";
 }
 
 .run-meta {
@@ -665,6 +704,92 @@ kbd {
   font: 400 10.5px var(--mono);
   color: var(--fg-faint);
   white-space: nowrap;
+}
+
+/* three dots, the way a session actually feels: a pause, then a burst */
+.dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: dot 1.4s ease-in-out infinite;
+}
+
+.dots i:nth-child(2) {
+  animation-delay: .18s;
+}
+
+.dots i:nth-child(3) {
+  animation-delay: .36s;
+}
+
+@keyframes dot {
+  0%,
+  60%,
+  100% {
+    opacity: .25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* a sweep along the bottom edge while the session is writing */
+.run-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity .25s;
+}
+
+.run.busy .run-scan {
+  opacity: 1;
+}
+
+.run-scan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: translateX(-100%);
+  animation: sweep 1.9s linear infinite;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.wk {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.wk::before {
+  content: "● ";
+  font-size: 8px;
+  vertical-align: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-scan {
+    display: none;
+  }
+  .dots i {
+    opacity: 1;
+  }
 }
 
 /* ---------------- panels ---------------- */

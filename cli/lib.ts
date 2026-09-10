@@ -166,6 +166,15 @@ export interface CliProc {
   /** Session id and model, parsed off the command line. Several sessions of the same profile look
    *  identical without them — which is exactly what Desktop does when you open a few tabs. */
   session: string | null; model: string | null;
+  /** When the session's transcript was last written: a running process is not a working one. */
+  lastActivity: string | null;
+}
+
+/** Claude Code stores a session at projects/<cwd with slashes turned into dashes>/<id>.jsonl, so
+ *  the transcript can be addressed directly from what the process tells us — no directory walk. */
+export function transcriptPath(profile: string, cwd: string | null, session: string | null) {
+  if (!cwd || !session) return null;
+  return `${RUNTIME}/${profile}/projects/${cwd.replace(/\//g, "-")}/${session}.jsonl`;
 }
 export async function running() {
   const cli: CliProc[] = [];
@@ -181,10 +190,13 @@ export async function running() {
     const embedded = exe.match(/\/claude-code\/([0-9.]+)\/claude$/);
     const native = exe.match(/claude\/versions\/([0-9.]+)$/);
     if (embedded || native) {
+      const session = cmd.match(/--resume[= ]([0-9a-f-]{36})/)?.[1] ?? null;
+      const tp = profile ? transcriptPath(profile, cwd, session) : null;
+      const st = tp ? await stat(tp) : null;
       cli.push({
-        pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1],
-        session: cmd.match(/--resume[= ]([0-9a-f-]{36})/)?.[1] ?? null,
+        pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1], session,
         model: cmd.match(/--model[= ]([\w.-]+)/)?.[1] ?? null,
+        lastActivity: st?.mtime?.toISOString() ?? null,
       });
       continue;
     }

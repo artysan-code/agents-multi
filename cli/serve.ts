@@ -134,10 +134,12 @@ async function applyCap(name: string, cap: number | null) {
 
 // ---------------------------------------------------------------- live updates
 type Topic = "usage" | "state";
-const clients = new Set<(topic: Topic) => void>();
+/** A usage event carries which sessions wrote, so the page can light up the one that is working
+ *  rather than repainting every row as busy. */
+const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
 
-function broadcast(topic: Topic) {
-  for (const send of clients) { try { send(topic); } catch { /* client gone, the reader removes it */ } }
+function broadcast(topic: Topic, sessions: string[] = []) {
+  for (const send of clients) { try { send(topic, sessions); } catch { /* client gone, the reader removes it */ } }
 }
 
 /**
@@ -153,14 +155,26 @@ async function watchTree(signal: AbortSignal) {
   try { watcher = Deno.watchFs([RUNTIME, `${REPO}/shared`], { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
   const pending = new Set<Topic>();
+  const sessions = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const flush = () => { timer = null; for (const t of pending) broadcast(t); pending.clear(); };
+  const flush = () => {
+    timer = null;
+    const ids = [...sessions];
+    for (const t of pending) broadcast(t, t === "usage" ? ids : []);
+    pending.clear(); sessions.clear();
+  };
   try {
     for await (const e of watcher) {
       if (e.kind === "access") continue;
       for (const p of e.paths) {
         if (p.endsWith(".tmp") || p.includes("/.git/")) continue;
-        pending.add(p.includes("/projects/") && p.endsWith(".jsonl") ? "usage" : "state");
+        const transcript = p.includes("/projects/") && p.endsWith(".jsonl");
+        pending.add(transcript ? "usage" : "state");
+        // the file is named after the session, which is what the page needs to mark it as working
+        if (transcript) {
+          const id = p.slice(p.lastIndexOf("/") + 1, -6);
+          if (/^[0-9a-f-]{36}$/.test(id)) sessions.add(id);
+        }
       }
       if (pending.size && timer == null) timer = setTimeout(flush, 1000);
     }
@@ -168,7 +182,7 @@ async function watchTree(signal: AbortSignal) {
 }
 
 function eventStream(): Response {
-  let send: ((topic: Topic) => void) | null = null;
+  let send: ((topic: Topic, sessions?: string[]) => void) | null = null;
   let ping: ReturnType<typeof setInterval> | null = null;
   const close = () => {
     if (ping != null) { clearInterval(ping); ping = null; }
@@ -181,7 +195,7 @@ function eventStream(): Response {
         try { controller.enqueue(enc.encode(s)); } catch { close(); }
       };
       write("retry: 2000\n\n");
-      send = (topic) => write(`event: ${topic}\ndata: ${Date.now()}\n\n`);
+      send = (topic, ids = []) => write(`event: ${topic}\ndata: ${JSON.stringify({ at: Date.now(), sessions: ids })}\n\n`);
       clients.add(send);
       // A proxy or a sleeping laptop can drop a silent connection: a comment every 25s keeps it
       // alive and gives the page a heartbeat to time its "last update" indicator against.

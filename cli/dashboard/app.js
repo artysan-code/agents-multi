@@ -184,6 +184,7 @@ async function loadOverview() {
   renderTokens(days);
   renderChart(days);
   renderProjects(projects);
+  await loadRunningStats();
   renderRunning();
 }
 
@@ -387,38 +388,109 @@ function renderProjects(r) {
   }).join("");
 }
 
+/** Sessions seen writing recently. A row stays "working" for a few seconds after its last write,
+ *  because a session pauses between turns and flickering would be worse than a short lag. */
+const working = new Map();
+const WORKING_MS = 12000;
+
+const WORKING_LABEL = `<span class="dots"><i></i><i></i><i></i></span>working`;
+
+function markWorking(id) {
+  working.set(id, Date.now());
+  const row = document.querySelector(`#running [data-session="${CSS.escape(id)}"]`);
+  if (row && !row.classList.contains("busy")) {
+    // Light it up now rather than waiting for the debounced redraw: the event arrived because that
+    // session just wrote, and a lit border next to the word "idle" reads as a bug.
+    row.classList.add("busy");
+    const state = row.querySelector(".state");
+    if (state) state.innerHTML = WORKING_LABEL;
+  }
+  clearTimeout(markWorking[id]);
+  markWorking[id] = setTimeout(() => {
+    working.delete(id);
+    const row = document.querySelector(`#running [data-session="${CSS.escape(id)}"]`);
+    if (!row) return;
+    row.classList.remove("busy");
+    const state = row.querySelector(".state");
+    if (state) state.textContent = idleFor(new Date(Date.now() - WORKING_MS).toISOString());
+  }, WORKING_MS);
+}
+
+const isWorking = (id, lastActivity) => {
+  if (id && working.has(id)) return true;
+  // on first paint there has been no event yet: fall back to how fresh the transcript is
+  return !!lastActivity && Date.now() - new Date(lastActivity).getTime() < WORKING_MS;
+};
+
+const idleFor = (iso) => {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return `idle ${Math.max(1, Math.round(s))}s`;
+  if (s < 5400) return `idle ${Math.round(s / 60)}m`;
+  return `idle ${Math.round(s / 3600)}h`;
+};
+
 function renderRunning() {
   const cli = S.running.cli, desk = S.running.desktop;
-  $("#run-n").textContent = `${cli.length} cli · ${desk.length} desktop`;
+  const active = cli.filter((c) => isWorking(c.session, c.lastActivity)).length;
+  $("#run-n").innerHTML = active
+    ? `<span class="wk">${active} working</span> · ${cli.length} session${
+      cli.length === 1 ? "" : "s"
+    } · ${desk.length} desktop`
+    : `${cli.length} session${cli.length === 1 ? "" : "s"} · ${desk.length} desktop`;
   const el = $("#running");
   if (!cli.length && !desk.length) {
     el.innerHTML = `<div class="sub">nothing running</div>`;
     return;
   }
+
   // Several sessions of one profile are the normal case with Desktop tabs, and profile plus
   // directory is not enough to tell them apart. Model and session id are; and since we have the
-  // session id, the row can open that transcript.
+  // session id, the row can open that transcript and light up when that session writes.
   el.innerHTML = `<div class="runlist">` +
-    cli.map((c) =>
-      `<div class="run${c.session ? " open" : ""}" ${
+    cli.map((c) => {
+      const busy = isWorking(c.session, c.lastActivity);
+      const stats = SESSION_STATS.get(c.session);
+      return `<div class="run${c.session ? " open" : ""}${busy ? " busy" : ""}" ${
         c.session ? `data-session="${esc(c.session)}"` : ""
       } title="pid ${c.pid}${c.cwd ? ` · ${esc(c.cwd)}` : ""}">
-      <span class="chip on">${esc(c.profile ?? "?")}</span>
-      <b>${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</b>
-      <span class="run-model">${esc(c.model ? modelShort(c.model) : "")}</span>
-      <span class="run-meta">${c.embedded ? "desktop" : "terminal"}${
+        <div class="run-top">
+          <span class="chip on">${esc(c.profile ?? "?")}</span>
+          <b>${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</b>
+          <span class="state">${
+        busy ? `<span class="dots"><i></i><i></i><i></i></span>working` : esc(idleFor(c.lastActivity))
+      }</span>
+        </div>
+        <div class="run-bot">
+          <span class="run-model">${esc(c.model ? modelShort(c.model) : "")}</span>
+          ${
+        stats ? `<span class="run-stat">${stats.msgs} msgs</span><span class="run-stat">${usd(stats.cost)}</span>` : ""
+      }
+          <span class="run-meta">${c.embedded ? "desktop" : "terminal"}${
         c.session ? ` · ${esc(c.session.slice(0, 8))}` : ""
       }</span>
-    </div>`
-    ).join("") +
+        </div>
+        <span class="run-scan"></span>
+      </div>`;
+    }).join("") +
     desk.map((d) =>
-      `<div class="run" title="pid ${d.pid}">
-      <span class="chip">${esc(d.variant)}</span>
-      <b>Desktop app</b>
-      <span class="run-meta">window</span>
+      `<div class="run static" title="pid ${d.pid}">
+      <div class="run-top"><span class="chip">${esc(d.variant)}</span><b>Desktop app</b></div>
+      <div class="run-bot"><span class="run-meta">window</span></div>
     </div>`
     ).join("") +
     `</div>`;
+}
+
+/** Turn counts and cost for the sessions currently running, from the same data Sessions uses. */
+const SESSION_STATS = new Map();
+async function loadRunningStats() {
+  const ids = new Set(S?.running.cli.map((c) => c.session).filter(Boolean));
+  if (!ids.size) return;
+  try {
+    const rows = await api("/api/sessions?" + new URLSearchParams({ since: "1d", limit: "80" }));
+    for (const r of rows) if (ids.has(r.session_id)) SESSION_STATS.set(r.session_id, r);
+  } catch { /* the panel works without them */ }
 }
 
 $("#running").addEventListener("click", (e) => {
