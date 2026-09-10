@@ -290,7 +290,7 @@ function renderChart(r) {
     const bottom = lower.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).reverse().map((s, i) =>
       `${i ? "L" : "L"}${s}`
     ).join("");
-    g += `<path d="${top}${bottom}Z" fill="${colorFor(p)}" fill-opacity="0.16"/>`;
+    g += `<path class="area" d="${top}${bottom}Z" fill="${colorFor(p)}"/>`;
     g += `<path d="${top}" fill="none" stroke="${colorFor(p)}" stroke-width="1.6" stroke-linejoin="round"/>`;
   }
   const last = dayKeys.length - 1;
