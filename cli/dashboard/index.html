@@ -47,61 +47,73 @@
 
         <!-- ============ OVERVIEW ============ -->
         <section class="view" id="v-overview">
-          <div class="planes">
-            <div class="plane billed">
-              <div
-                class="plane-h"><h2>Billed</h2><span class="info" title="Extra usage charged beyond your subscription. The only figure that is real money, and the only one that raises alerts.">i</span></div>
-              <div class="big" id="billed">—</div>
-              <div class="meter"><i id="billed-meter" style="width:0"></i></div>
-              <div class="sub" id="billed-sub"></div>
-            </div>
-            <div class="plane">
-              <div
-                class="plane-h"><h2>Plan windows</h2><span class="info" title="How full each subscription window is. Tells you when you will be throttled, not what you will pay.">i</span></div>
-              <div class="wins" id="wins"></div>
-            </div>
-            <div class="plane est">
-              <div
-                class="plane-h"><h2>List-price est.</h2><span class="info" title="What the same tokens would cost on pay-as-you-go pricing. Comparison only — never billed, never alerted on.">i</span></div>
-              <div class="big" id="est">—</div>
-              <div class="sub" id="est-sub"></div>
-            </div>
+          <div class="row c2">
+            <section class="panel money">
+              <div class="panel-h">
+                <h3>Extra usage</h3>
+                <span class="r" id="billed-age"></span>
+              </div>
+              <div class="panel-b">
+                <p class="lede">What you are charged on top of the subscription. Nothing else on this page is money.</p>
+                <div class="figure">
+                  <div class="big" id="billed">—</div>
+                  <div class="figure-side">
+                    <div class="meter"><i id="billed-meter" style="width:0"></i></div>
+                    <div class="sub" id="billed-sub"></div>
+                  </div>
+                </div>
+                <div class="perprofile" id="billed-rows"></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-h">
+                <h3>Plan windows</h3>
+                <span class="r" id="wins-age"></span>
+              </div>
+              <div class="panel-b">
+                <p
+                  class="lede">Subscription allowance. A full window means you are throttled until it resets — it costs nothing.</p>
+                <div class="wins" id="wins"></div>
+              </div>
+            </section>
           </div>
 
           <div class="row c2">
-            <div class="panel">
+            <section class="panel">
               <div class="panel-h">
-                <h3>Token spend</h3>
+                <h3>Tokens used</h3>
                 <div class="seg" role="group" id="ovdays">
                   <button aria-pressed="true" data-d="14d">14d</button>
                   <button aria-pressed="false" data-d="30d">30d</button>
                   <button aria-pressed="false" data-d="90d">90d</button>
                 </div>
               </div>
+              <div class="panel-b tokens">
+                <p
+                  class="lede">Consumption across every profile, and what it would have cost on pay-as-you-go pricing. You were not charged this.</p>
+                <div class="tokentiles" id="tokentiles"></div>
+                <div class="worth" id="tokenworth"></div>
+              </div>
               <svg class="chart" id="chart" viewBox="0 0 620 172" preserveAspectRatio="none" role="img"
-                aria-label="Daily list-price estimate by profile"></svg>
+                aria-label="Daily list-price value by profile"></svg>
               <div class="legend" id="legend"></div>
-            </div>
-            <div class="panel">
-              <div class="panel-h"><h3>Top projects</h3><span class="r">30d</span></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-h"><h3>Top projects</h3><span class="r">by list-price value · 30d</span></div>
               <div class="scroll">
                 <table>
                   <tbody id="projects"></tbody>
                 </table>
               </div>
-            </div>
+            </section>
           </div>
 
-          <div class="row c2">
-            <div class="panel">
-              <div class="panel-h"><h3>Running now</h3><span class="r" id="run-n"></span></div>
-              <div class="panel-b" id="running"></div>
-            </div>
-            <div class="panel">
-              <div class="panel-h"><h3>Repository</h3><span class="r" id="repo-branch"></span></div>
-              <div class="panel-b" id="repo"></div>
-            </div>
-          </div>
+          <section class="panel">
+            <div class="panel-h"><h3>Running now</h3><span class="r" id="run-n"></span></div>
+            <div class="panel-b" id="running"></div>
+          </section>
         </section>
 
         <!-- ============ PROFILES ============ -->

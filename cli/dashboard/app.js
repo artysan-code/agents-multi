@@ -143,7 +143,6 @@ async function loadStatus() {
   $("#meta").innerHTML = [
     `Code ${esc(m.cliVersion || "?")}`,
     m.desktopVersion ? `Desktop ${esc(m.desktopVersion)}` : null,
-    S.repo.isRepo ? `${esc(S.repo.branch)} ↓${S.repo.behind} ↑${S.repo.ahead} ✎${S.repo.dirty}` : null,
   ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
 
   const names = Object.keys(S.profiles);
@@ -180,65 +179,136 @@ async function loadOverview() {
   ]);
   if (my !== seq.overview) return;
   BUDGET = budget;
-  renderPlanes(budget, days);
+  renderBilling(budget);
+  renderWindows(budget);
+  renderTokens(days);
   renderChart(days);
   renderProjects(projects);
   renderRunning();
-  renderRepo();
 }
 
-function renderPlanes(b, days) {
+/** How old a reading is, in words. Every panel that shows cached numbers says this: the billing
+ *  cache is refreshed by Claude Code whenever it feels like it, and a figure from weeks ago
+ *  presented as current is worse than no figure at all. */
+function readingAge(hours) {
+  if (hours == null) return "never read";
+  if (hours < 1) return "just refreshed";
+  if (hours < 48) return `${Math.round(hours)} h old`;
+  return `${Math.round(hours / 24)} days old`;
+}
+
+function renderBilling(b) {
   if (!b) return;
-  // Billed: the only plane that is money. Sum across profiles, and show the tightest cap in force.
-  let billed = 0, cap = 0, currency = "EUR", haveBilled = false, today = 0, haveToday = false;
+  let billed = 0, cap = 0, currency = "EUR", any = false, today = 0, haveToday = false;
+  let oldest = null;
   for (const p of b.profiles) {
-    if (p.snap.extra?.used != null) {
-      billed += p.snap.extra.used;
-      haveBilled = true;
-      currency = p.snap.extra.currency || currency;
+    const x = p.snap.extra;
+    if (x?.used != null) {
+      billed += x.used;
+      any = true;
+      currency = x.currency || currency;
     }
     if (p.ctx.cap) cap += p.ctx.cap;
     if (p.ctx.billedToday != null) {
       today += p.ctx.billedToday;
       haveToday = true;
     }
+    if (p.snap.ageHours != null && (oldest == null || p.snap.ageHours > oldest)) oldest = p.snap.ageHours;
   }
-  $("#billed").textContent = haveBilled ? money(billed, currency) : "—";
+  $("#billed").textContent = any ? money(billed, currency) : "—";
   const ratio = cap ? Math.min(100, billed / cap * 100) : 0;
   const meter = $("#billed-meter");
   meter.style.width = ratio + "%";
   meter.className = ratio >= 85 ? "crit" : ratio >= 60 ? "warn" : "";
-  const on = b.profiles.filter((p) => p.snap.extra?.active).length;
   $("#billed-sub").textContent = [
-    cap ? `of ${money(cap, currency)} cap` : "no cap reported",
+    cap ? `${pct(ratio)} of the ${money(cap, currency)} cap` : "no cap reported",
     haveToday ? `${money(today, currency)} today` : null,
-    `extra usage on for ${on}/${b.profiles.length}`,
   ].filter(Boolean).join(" · ");
+  $("#billed-age").textContent = readingAge(oldest);
+  $("#billed-age").className = "r" + (b.profiles.some((p) => p.snap.stale) ? " stale" : "");
 
-  // Plan windows: worst reading per window kind across profiles.
-  const wins = new Map();
+  // One row per profile: the total above is only useful once you can see who spent it.
+  $("#billed-rows").innerHTML = b.profiles.map((p) => {
+    const x = p.snap.extra;
+    const on = x?.active;
+    const used = x?.used;
+    const capP = p.ctx.cap;
+    const r = capP && used != null ? Math.min(100, used / capP * 100) : 0;
+    return `<div class="prow">
+      <b>${esc(p.snap.profile)}</b>
+      <span class="chip${on ? " on" : ""}">${on ? "extra usage on" : "subscription only"}</span>
+      <div class="track"><i class="${r >= 85 ? "crit" : r >= 60 ? "warn" : ""}" style="width:${r}%"></i></div>
+      <span class="v">${used == null ? "—" : money(used, x.currency)}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderWindows(b) {
+  if (!b) return;
+  const now = Date.now();
+  const rows = [];
+  let oldest = null;
   for (const p of b.profiles) {
+    if (p.snap.ageHours != null && (oldest == null || p.snap.ageHours > oldest)) oldest = p.snap.ageHours;
     for (const l of p.snap.plan) {
-      if (!l.percent) continue;
-      const cur = wins.get(l.kind);
-      if (!cur || l.percent > cur.percent) wins.set(l.kind, l);
+      // A window whose reset time has passed already emptied itself: its percentage describes a
+      // period that is over. Showing a stale 100% as a red alert is how this panel lied.
+      const expired = !!l.resetsAt && new Date(l.resetsAt).getTime() < now;
+      if (!l.percent && !l.active) continue;
+      rows.push({ ...l, profile: p.snap.profile, expired });
     }
   }
-  const rows = [...wins.values()].sort((a, x) => x.percent - a.percent).slice(0, 4);
-  $("#wins").innerHTML = rows.length
-    ? rows.map((l) => {
-      const c = l.percent >= 95 ? "crit" : l.percent >= 80 ? "warn" : "";
-      return `<div class="win"><b title="${esc(l.kind)}">${esc(l.kind.replace(/_/g, " "))}</b>
-        <div class="track"><i class="${c}" style="width:${Math.min(100, l.percent)}%"></i></div>
-        <span class="v ${l.percent >= 95 ? "hot" : ""}">${pct(l.percent)}</span></div>`;
-    }).join("")
-    : `<div class="sub">no window data</div>`;
+  rows.sort((a, x) => (a.expired - x.expired) || (x.percent - a.percent));
+  const live = rows.filter((r) => !r.expired);
+  $("#wins-age").textContent = readingAge(oldest);
+  $("#wins-age").className = "r" + (b.profiles.some((p) => p.snap.stale) ? " stale" : "");
 
-  const est = days?.total?.cost;
-  $("#est").textContent = usd(est);
-  $("#est-sub").textContent = `${
-    ovDays === "all" ? "all time" : ovDays.replace("d", " days")
-  } · ${b.profiles.length} profile${b.profiles.length === 1 ? "" : "s"}`;
+  if (!rows.length) {
+    $("#wins").innerHTML = `<div class="sub">no window data in the cached reading</div>`;
+    return;
+  }
+  if (!live.length) {
+    // Every window in the reading has already reset, so no percentage here describes the present.
+    // Five greyed-out rows would just be five ways of saying the same nothing.
+    $("#wins").innerHTML = `<div class="nowin">
+      <b>Nothing current to show</b>
+      <p>Every window in this reading has reset since it was taken. Open a session to refresh it.</p>
+    </div>`;
+    return;
+  }
+  $("#wins").innerHTML = live.slice(0, 5).map((l) => {
+    const c = l.percent >= 95 ? "crit" : l.percent >= 80 ? "warn" : "";
+    const label = `${l.kind.replace(/_/g, " ")} · ${l.profile}`;
+    return `<div class="win" title="${esc(label)}">
+      <b>${esc(label)}</b>
+      <div class="track"><i class="${c}" style="width:${Math.min(100, l.percent)}%"></i></div>
+      <span class="v ${c === "crit" ? "hot" : ""}">${pct(l.percent)}</span>
+      <span class="win-when">${l.resetsAt ? esc(`resets ${resetIn(l.resetsAt)}`) : ""}</span>
+    </div>`;
+  }).join("");
+}
+
+/** "in 3 h" / "in 2 days" for a future reset. */
+function resetIn(iso) {
+  const h = (new Date(iso).getTime() - Date.now()) / 36e5;
+  if (h < 1) return "within the hour";
+  if (h < 48) return `in ${Math.round(h)} h`;
+  return `in ${Math.round(h / 24)} days`;
+}
+
+function renderTokens(days) {
+  const t = days?.total;
+  const tiles = [["output", fmt(t?.output)], ["input", fmt(t?.input)], ["cache read", fmt(t?.cache_read)], [
+    "cache written",
+    fmt(t?.cache_write),
+  ]];
+  $("#tokentiles").innerHTML = tiles.map(([k, v]) =>
+    `<div class="tile"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`
+  ).join("");
+  // Kept out of the grid on purpose: it is a different kind of number from the four beside it.
+  $("#tokenworth").innerHTML = `<span class="k">would have cost</span><span class="v">${
+    esc(usd(t?.cost))
+  }</span><span class="note-inline">at pay-as-you-go list price</span>`;
 }
 
 let ovDays = "14d";
@@ -325,27 +395,24 @@ function renderRunning() {
     el.innerHTML = `<div class="sub">nothing running</div>`;
     return;
   }
-  el.innerHTML = `<div class="chips">` +
+  // Identical chips carry no information: what distinguishes two sessions of the same profile is
+  // the directory they are working in.
+  el.innerHTML = `<div class="runlist">` +
     cli.map((c) =>
-      `<span class="chip on" title="pid ${c.pid} · ${esc(c.cwd ?? "")}">${esc(c.profile ?? "?")}${
-        c.embedded ? " desktop" : ""
-      } ${esc(c.version ?? "")}</span>`
+      `<div class="run" title="pid ${c.pid}">
+      <span class="chip on">${esc(c.profile ?? "?")}</span>
+      <b>${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</b>
+      <span class="run-meta">${c.embedded ? "in Desktop" : "terminal"} · ${esc(c.version ?? "")}</span>
+    </div>`
     ).join("") +
-    desk.map((d) => `<span class="chip" title="pid ${d.pid}">${esc(d.variant)} app</span>`).join("") +
+    desk.map((d) =>
+      `<div class="run" title="pid ${d.pid}">
+      <span class="chip">${esc(d.variant)}</span>
+      <b>Desktop app</b>
+      <span class="run-meta">window</span>
+    </div>`
+    ).join("") +
     `</div>`;
-}
-
-function renderRepo() {
-  const r = S.repo;
-  $("#repo-branch").textContent = r.isRepo ? r.branch : "not a repository";
-  $("#repo").innerHTML = r.isRepo
-    ? `<dl class="kv">
-        <dt>head</dt><dd>${esc(short(r.head, 40))}</dd>
-        <dt>state</dt><dd>↓${r.behind} ↑${r.ahead} ✎${r.dirty}</dd>
-        <dt>fetched</dt><dd>${esc(ago(r.fetchedAt))}</dd>
-        <dt>remote</dt><dd>${esc(short(r.remote ?? "none", 44))}</dd>
-      </dl>`
-    : `<div class="sub">${esc(r.path)}</div>`;
 }
 
 $("#ovdays").addEventListener("click", (e) => {

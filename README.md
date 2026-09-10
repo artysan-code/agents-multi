@@ -112,8 +112,10 @@ and the page redraws the view you are actually looking at. The page itself is HT
 vanilla JS with no dependencies and no external assets, so it renders on a machine that has never
 been online.
 
-- **Overview** — the three billing planes, daily spend stacked per profile, top projects, what is
-  running, repository state.
+- **Overview** — three separate readings, deliberately not side by side as if they were the same
+  kind of number: **Extra usage** (what you are charged), **Plan windows** (your subscription
+  allowance, and when it resets), **Tokens used** (consumption, and what it would have cost at list
+  price). Each says how old its reading is, because the billing cache is often stale.
 - **Profiles** — what each profile mounts and is signed in as; edit a profile, or add one.
 - **Usage** — by project, model, skill, command or agent, over any window.
 - **Sessions** — recent sessions; select one to read its transcript, with the tools each turn used

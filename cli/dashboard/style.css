@@ -356,141 +356,299 @@ kbd {
   max-width: 70ch;
 }
 
-/* ---------------- billing band ---------------- */
-.planes {
-  display: grid;
-  grid-template-columns: 1.05fr 1.4fr .8fr;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  overflow: hidden;
-  background: var(--surface);
+/* ---------------- overview: three separate readings, not three columns ---------------- */
+.panel.money {
+  border-color: var(--accent-dim);
 }
-.plane {
-  padding: 15px 18px;
-  min-width: 0;
-}
-.plane + .plane {
-  border-left: 1px solid var(--line);
-}
-.plane.billed {
-  background: var(--accent-wash);
-}
-.plane-h {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 4px;
-}
-.plane-h h2 {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: .075em;
-  text-transform: uppercase;
-  color: var(--fg-dim);
-}
-.plane.billed .plane-h h2 {
-  color: var(--accent);
-}
-.info {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
+
+.lede {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: var(--fg-faint);
-  font: 500 9px/11px var(--sans);
-  text-align: center;
-  cursor: help;
-  flex: none;
+  max-width: 62ch;
 }
-.info:hover {
-  border-color: var(--fg-faint);
-  color: var(--fg-dim);
+
+.figure {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
 }
+
+.figure-side {
+  flex: 1;
+  min-width: 160px;
+  padding-bottom: 4px;
+}
+
 .big {
-  font: 600 26px/1.2 var(--mono);
+  font: 600 30px/1.1 var(--mono);
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
-}
-.plane.billed .big {
   color: var(--accent);
 }
-.plane.est .big {
-  font-size: 19px;
-  font-weight: 400;
-  color: var(--fg-dim);
-}
+
 .sub {
   font-size: 12px;
   color: var(--fg-faint);
-  margin-top: 5px;
+  margin-top: 6px;
 }
+
 .meter {
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
   background: var(--line);
   overflow: hidden;
-  margin-top: 9px;
 }
+
 .meter i {
   display: block;
   height: 100%;
   border-radius: 2px;
   background: var(--accent);
-  transition: width .5s cubic-bezier(.2,.7,.3,1);
+  transition: width .5s cubic-bezier(.2, .7, .3, 1);
 }
+
 .meter i.warn {
   background: var(--warn);
 }
+
 .meter i.crit {
   background: var(--crit);
+}
+
+.perprofile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.prow {
+  display: grid;
+  grid-template-columns: 84px auto 1fr 86px;
+  align-items: center;
+  gap: 10px;
+}
+
+.prow b {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.prow .v {
+  font: 500 12px var(--mono);
+  text-align: right;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the age of a cached reading, stated wherever cached numbers are shown */
+.r.stale {
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.r.stale::before {
+  content: "! ";
+}
+
+.nowin {
+  padding: 4px 0 2px;
+}
+
+.nowin b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.nowin p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-faint);
+}
+
+.worth {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+}
+
+.worth .k {
+  font: 600 9.5px var(--sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.worth .v {
+  font: 500 18px var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-dim);
+}
+
+.note-inline {
+  font-size: 11.5px;
+  color: var(--fg-faint);
 }
 
 .wins {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 11px;
 }
+
 .win {
   display: grid;
-  grid-template-columns: 96px 1fr 46px;
+  grid-template-columns: 1fr 46px;
+  gap: 3px 10px;
   align-items: center;
-  gap: 10px;
 }
+
 .win b {
-  font: 500 11.5px var(--sans);
+  grid-column: 1;
+  font: 500 12px var(--sans);
   color: var(--fg-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.win .track {
+  grid-column: 1;
+  grid-row: 2;
+}
+
 .win .v {
-  font: 500 11.5px var(--mono);
+  grid-column: 2;
+  grid-row: 1 / 3;
+  font: 500 12px var(--mono);
   text-align: right;
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
 }
+
 .win .v.hot {
   color: var(--crit);
 }
+
+.win-when {
+  grid-column: 1 / 3;
+  grid-row: 3;
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+.win.expired {
+  opacity: .5;
+}
+
+.win.expired .win-when {
+  font-style: italic;
+}
+
 .track {
   height: 5px;
   border-radius: 3px;
   background: var(--line);
   overflow: hidden;
 }
+
 .track i {
   display: block;
   height: 100%;
   border-radius: 3px;
   background: var(--fg-faint);
-  transition: width .5s cubic-bezier(.2,.7,.3,1);
+  transition: width .5s cubic-bezier(.2, .7, .3, 1);
 }
+
 .track i.warn {
   background: var(--warn);
 }
+
 .track i.crit {
   background: var(--crit);
+}
+
+/* token tiles: consumption, then what it would have been worth */
+.tokentiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--line-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.tile {
+  background: var(--surface);
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tile .k {
+  font: 600 9.5px var(--sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.tile .v {
+  font: 500 16px var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.tile.value .v {
+  color: var(--fg-dim);
+}
+
+.tokens {
+  padding-bottom: 4px;
+}
+
+/* running sessions */
+.runlist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 9px;
+}
+
+.run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.run b {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-meta {
+  margin-left: auto;
+  font: 400 10.5px var(--mono);
+  color: var(--fg-faint);
+  white-space: nowrap;
 }
 
 /* ---------------- panels ---------------- */
