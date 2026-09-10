@@ -161,7 +161,12 @@ async function procInfo(pid: number) {
   const profile = m ? m.slice("CLAUDE_CONFIG_DIR=".length).split("/").pop() ?? null : null;
   return { exe, cwd, profile };
 }
-export interface CliProc { pid: number; profile: string | null; cwd: string | null; embedded: boolean; version: string | null }
+export interface CliProc {
+  pid: number; profile: string | null; cwd: string | null; embedded: boolean; version: string | null;
+  /** Session id and model, parsed off the command line. Several sessions of the same profile look
+   *  identical without them — which is exactly what Desktop does when you open a few tabs. */
+  session: string | null; model: string | null;
+}
 export async function running() {
   const cli: CliProc[] = [];
   const desktop: { pid: number; variant: Profile }[] = [];
@@ -175,7 +180,14 @@ export async function running() {
     if (!exe) continue;
     const embedded = exe.match(/\/claude-code\/([0-9.]+)\/claude$/);
     const native = exe.match(/claude\/versions\/([0-9.]+)$/);
-    if (embedded || native) { cli.push({ pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1] }); continue; }
+    if (embedded || native) {
+      cli.push({
+        pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1],
+        session: cmd.match(/--resume[= ]([0-9a-f-]{36})/)?.[1] ?? null,
+        model: cmd.match(/--model[= ]([\w.-]+)/)?.[1] ?? null,
+      });
+      continue;
+    }
     const desk = exe.match(/\/claude-desktop(?:-([a-z0-9-]+))?\/claude-desktop/);
     if (desk) desktop.push({ pid, variant: desk[1] ?? "personal" });
   }

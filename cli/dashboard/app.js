@@ -395,14 +395,20 @@ function renderRunning() {
     el.innerHTML = `<div class="sub">nothing running</div>`;
     return;
   }
-  // Identical chips carry no information: what distinguishes two sessions of the same profile is
-  // the directory they are working in.
+  // Several sessions of one profile are the normal case with Desktop tabs, and profile plus
+  // directory is not enough to tell them apart. Model and session id are; and since we have the
+  // session id, the row can open that transcript.
   el.innerHTML = `<div class="runlist">` +
     cli.map((c) =>
-      `<div class="run" title="pid ${c.pid}">
+      `<div class="run${c.session ? " open" : ""}" ${
+        c.session ? `data-session="${esc(c.session)}"` : ""
+      } title="pid ${c.pid}${c.cwd ? ` · ${esc(c.cwd)}` : ""}">
       <span class="chip on">${esc(c.profile ?? "?")}</span>
       <b>${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</b>
-      <span class="run-meta">${c.embedded ? "in Desktop" : "terminal"} · ${esc(c.version ?? "")}</span>
+      <span class="run-model">${esc(c.model ? modelShort(c.model) : "")}</span>
+      <span class="run-meta">${c.embedded ? "desktop" : "terminal"}${
+        c.session ? ` · ${esc(c.session.slice(0, 8))}` : ""
+      }</span>
     </div>`
     ).join("") +
     desk.map((d) =>
@@ -414,6 +420,11 @@ function renderRunning() {
     ).join("") +
     `</div>`;
 }
+
+$("#running").addEventListener("click", (e) => {
+  const r = e.target.closest("[data-session]");
+  if (r) openTranscript(r.dataset.session, null);
+});
 
 $("#ovdays").addEventListener("click", (e) => {
   const b = e.target.closest("[data-d]");

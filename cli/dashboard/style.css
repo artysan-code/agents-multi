@@ -622,7 +622,7 @@ kbd {
 /* running sessions */
 .runlist {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 9px;
 }
 
@@ -641,6 +641,22 @@ kbd {
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run.open {
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+
+.run.open:hover {
+  border-color: var(--accent-dim);
+  background: var(--raised);
+}
+
+.run-model {
+  font: 400 10.5px var(--mono);
+  color: var(--fg-faint);
   white-space: nowrap;
 }
 
