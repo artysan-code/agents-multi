@@ -24,7 +24,22 @@ const HOME = Deno.env.get("HOME") ?? "";
 const RUNTIME = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${HOME}/.claude-multi`;
 const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
 export const DB_PATH = `${DATA}/usage.db`;
-const PROFILES = ["personal", "work"];
+
+/** Profiles to ingest: every runtime directory that actually holds transcripts. Discovered rather
+ *  than declared, so a profile added by hand (or one removed) is picked up without a code change. */
+async function ingestProfiles(): Promise<string[]> {
+  const out: string[] = [];
+  try {
+    for await (const e of Deno.readDir(RUNTIME)) {
+      if (!e.isDirectory || e.name.startsWith(".")) continue;
+      try {
+        if ((await Deno.stat(`${RUNTIME}/${e.name}/projects`)).isDirectory) out.push(e.name);
+      } catch { /* no transcripts here */ }
+    }
+  } catch { /* runtime missing */ }
+  return out.sort();
+}
+
 
 // Listino Anthropic (skill claude-api, cache 2026-06-24), $/MTok. Cache: read 0.1×, write 5m 1.25×,
 // write 1h 2× dell'input, salvo Fable 5/5.1 (read a 0.25 flat).
@@ -199,7 +214,7 @@ export async function ingest(db: DatabaseSync, opts: { full?: boolean; quiet?: b
   if (!full) for (const r of db.prepare("SELECT path, size, mtime FROM files").all() as { path: string; size: number; mtime: number }[]) known.set(r.path, r);
   let files = 0, msgs = 0, skipped = 0;
   const upFile = db.prepare("INSERT OR REPLACE INTO files (path, profile, size, mtime, ingested_at) VALUES (?,?,?,?,?)");
-  for (const profile of PROFILES) {
+  for (const profile of await ingestProfiles()) {
     for await (const path of walk(`${RUNTIME}/${profile}/projects`)) {
       const st = await Deno.stat(path);
       const mtime = st.mtime?.getTime() ?? 0;

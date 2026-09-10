@@ -1,6 +1,6 @@
 // doctor.ts — ogni invariante del setup come check con esito e fix. Il README descrive, il doctor verifica.
 
-import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, LIB, listDir, lstat, machine, mode, ownItems, PROFILES, profileInfo, readJson, readlink, readText, REPO, repoState, run, RUNTIME, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, LIB, listDir, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
 import { collect, doctorChecks } from "./budget.ts";
 
@@ -40,7 +40,7 @@ export async function doctor(): Promise<Check[]> {
   else add("runtime.shared", "fail", "~/.claude-multi/shared assente", "claude-multi install");
 
   // --- profili: symlink base, manifest, credenziali, junk
-  for (const p of PROFILES) {
+  for (const p of await profileNames()) {
     const info = await profileInfo(p);
     if (!info.exists) { add(`profile.${p}`, "fail", `profilo ${p} assente`, "claude-multi install"); continue; }
     if (info.claudeMd !== `${REPO}/profiles/${p}/CLAUDE.md`) add(`profile.${p}.claudemd`, "fail", `${p}/CLAUDE.md non punta al repo`, "claude-multi install");

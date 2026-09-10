@@ -1,8 +1,8 @@
-// Test di budget.ts: la classificazione di chi paga davvero e la regola «niente notifiche
-// sull'uso incluso nell'abbonamento», che è il punto di tutto il modulo.
+// Tests for budget.ts: the three planes and the rule that follows from them — only billed extra
+// usage may ever raise an alert. That rule is the whole point of the module.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
-  announceText, applyOverride, type BudgetCfg, CFG_DEFAULT, classify, creditsSpentToday,
+  announceText, billedToday, type BudgetCfg, capFor, CFG_DEFAULT, classify,
   type Ctx, evaluate, inQuietHours, metricOf, sampleCredits, type Snapshot, toAnnounce,
 } from "../budget.ts";
 import { openDb } from "../usage.ts";
@@ -13,82 +13,101 @@ const raw = (extra: Record<string, unknown> | null, hoursAgo = 1) => ({
   utilization: { extra_usage: extra, limits: [{ kind: "weekly_all", group: "weekly", percent: 100, severity: "critical", is_active: true }] },
 });
 
-Deno.test("classify: credits, included, unknown, valuta e stale", () => {
-  const paying = classify("work", raw({ is_enabled: true, monthly_limit: 50000, used_credits: 7839, utilization: 15.678, currency: "EUR", decimal_places: 2, credits_ever_enabled: true }), null, 36, NOW);
-  assertEquals(paying.billing, "credits");
-  assertEquals(paying.credits!.used, 78.39);   // i crediti arrivano in centesimi
-  assertEquals(paying.credits!.limit, 500);
-  assertEquals(paying.stale, false);
+Deno.test("classify: extra usage on/off, currency scaling, staleness", () => {
+  const on = classify("work", raw({ is_enabled: true, monthly_limit: 50000, used_credits: 7839, utilization: 15.678, currency: "EUR", decimal_places: 2, credits_ever_enabled: true }), null, 36, NOW);
+  assertEquals(on.extra!.active, true);
+  assertEquals(on.extra!.used, 78.39); // credits arrive in cents
+  assertEquals(on.extra!.cap, 500);
+  assertEquals(on.stale, false);
 
   const off = classify("personal", raw({ is_enabled: false, user_disabled: true, credits_ever_enabled: true }), "org_level_disabled", 36, NOW);
-  assertEquals(off.billing, "included");
-  assert(off.reason.includes("disattivati dall'utente"));
+  assertEquals(off.extra!.active, false);
+  assert(off.reason.includes("disabled by user"));
 
-  assertEquals(classify("x", null, null, 36, NOW).billing, "unknown");
+  assertEquals(classify("x", null, null, 36, NOW).extra, null);
   assertEquals(classify("x", raw({ is_enabled: true }, 100), null, 36, NOW).stale, true);
   assertEquals(classify("x", raw({ is_enabled: true }, 100), null, 36, NOW).ageHours, 100);
 });
 
-Deno.test("applyOverride: la configurazione vince sulla cache (che resta indietro di settimane)", () => {
-  const cfg: BudgetCfg = { ...CFG_DEFAULT, profiles: { work: { billing: "credits" } } };
-  const snap = classify("work", raw({ is_enabled: false, user_disabled: true }), null, 36, NOW);
-  assertEquals(snap.billing, "included");
-  const o = applyOverride(cfg, snap);
-  assertEquals(o.billing, "credits");
-  assert(o.reason.includes("forzata"));
-  // senza override lo snapshot non viene toccato
-  assertEquals(applyOverride(CFG_DEFAULT, snap), snap);
+const snapOf = (extra: Record<string, unknown> | null, hoursAgo = 1) => classify("work", raw(extra, hoursAgo), null, 36, NOW);
+const spending = () => snapOf({ is_enabled: true, monthly_limit: 5000, used_credits: 4000, utilization: 80, currency: "EUR", decimal_places: 2 });
+const subOnly = () => snapOf({ is_enabled: false, user_disabled: true });
+const ctxOf = (snap: Snapshot, over: Partial<Ctx> = {}): Ctx => ({
+  snap, cap: snap.extra?.cap ?? null, estDay: 300, estWeek: 900, estMonth: 3900, billedToday: null, ...over,
 });
 
-const ctxOf = (snap: Snapshot, over: Partial<Ctx> = {}): Ctx => ({ snap, costDay: 50, costWeek: 200, costMonth: 800, creditsSpentDay: null, ...over });
-const included = () => classify("personal", raw({ is_enabled: false, user_disabled: true }), null, 36, NOW);
-const credits = () => classify("work", raw({ is_enabled: true, monthly_limit: 50000, used_credits: 40000, utilization: 80, currency: "EUR", decimal_places: 2 }), null, 36, NOW);
-
-Deno.test("metricOf: solo la spesa vera è «real»; i limiti del piano non lo sono mai", () => {
-  assertEquals(metricOf("cost.day", ctxOf(included()))!.real, false);
-  assertEquals(metricOf("cost.day", ctxOf(credits()))!.real, true);
-  assertEquals(metricOf("credits.utilization", ctxOf(credits()))!.value, 80);
-  assertEquals(metricOf("plan.weekly.percent", ctxOf(credits()))!.real, false);
-  assertEquals(metricOf("plan.weekly.percent", ctxOf(credits()))!.value, 100);
-  assertEquals(metricOf("boh", ctxOf(credits())), null);
+Deno.test("capFor: configured ceiling wins over the reported one", () => {
+  const cfg: BudgetCfg = { ...CFG_DEFAULT, profiles: { work: { cap: 20 } } };
+  assertEquals(capFor(cfg, spending()), 20);
+  assertEquals(capFor(CFG_DEFAULT, spending()), 50);
+  assertEquals(capFor(CFG_DEFAULT, snapOf(null)), null);
 });
 
-const cfgWith = (rules: BudgetCfg["defaults"]["rules"]): BudgetCfg => ({ ...CFG_DEFAULT, defaults: { notify: "auto", rules } });
-
-Deno.test("evaluate: stessa soglia, esiti opposti — l'abbonamento non sveglia nessuno", () => {
-  const cfg = cfgWith([{ id: "day", metric: "cost.day", warn: 10, crit: 40 }]);
-  const inc = evaluate(cfg, ctxOf(included()))[0];
-  assertEquals([inc.level, inc.notify], ["crit", false]);
-  assert(inc.why.includes("non fatturato"));
-  const pay = evaluate(cfg, ctxOf(credits()))[0];
-  assertEquals([pay.level, pay.notify], ["crit", true]);
+Deno.test("metricOf: every metric knows which plane it lives on", () => {
+  assertEquals(metricOf("billed.today", ctxOf(spending(), { billedToday: 3 }))!.plane, "billed");
+  assertEquals(metricOf("billed.month", ctxOf(spending()))!.value, 40);
+  assertEquals(metricOf("billed.month.percent", ctxOf(spending()))!.value, 80);
+  assertEquals(metricOf("estimate.day", ctxOf(spending()))!.plane, "estimate");
+  assertEquals(metricOf("plan.weekly.percent", ctxOf(spending()))!.plane, "plan");
+  assertEquals(metricOf("plan.weekly.percent", ctxOf(spending()))!.value, 100);
+  assertEquals(metricOf("nope", ctxOf(spending())), null);
 });
 
-Deno.test("evaluate: notify esplicito, dati stantii, budget spento, metrica assente", () => {
-  // notify:true forza la notifica anche su un profilo incluso; false la spegne ovunque
-  assertEquals(evaluate(cfgWith([{ id: "d", metric: "cost.day", crit: 10, notify: true }]), ctxOf(included()))[0].notify, true);
-  assertEquals(evaluate(cfgWith([{ id: "d", metric: "cost.day", crit: 10, notify: false }]), ctxOf(credits()))[0].notify, false);
-  // un valore crediti vecchio non fa scattare nulla: sarebbe un allarme su un numero di settimane fa
-  const old = classify("work", raw({ is_enabled: true, monthly_limit: 50000, used_credits: 45000, utilization: 90, decimal_places: 2 }, 400), null, 36, NOW);
-  const a = evaluate(cfgWith([{ id: "m", metric: "credits.utilization", crit: 50 }]), ctxOf(old))[0];
+Deno.test("billed.month.percent follows the configured cap, not just the reported one", () => {
+  // 40 EUR spent: 80% of the reported 50, but already over a 20 EUR alert ceiling
+  assertEquals(metricOf("billed.month.percent", ctxOf(spending(), { cap: 20 }))!.value, 200);
+});
+
+const cfgWith = (rules: BudgetCfg["defaults"]["rules"]): BudgetCfg => ({ ...CFG_DEFAULT, defaults: { rules } });
+
+Deno.test("evaluate: the estimate plane never notifies, however far past the threshold", () => {
+  // $300 today against a $40 threshold — the old model woke you for this every single day
+  const a = evaluate(cfgWith([{ id: "est", metric: "estimate.day", warn: 40, crit: 120 }]), ctxOf(spending()))[0];
   assertEquals([a.level, a.notify], ["crit", false]);
-  assert(a.why.includes("vecchio"));
-  // interruttore generale
-  assertEquals(evaluate({ ...cfgWith([{ id: "d", metric: "cost.day", crit: 1 }]), enabled: false }, ctxOf(credits()))[0].notify, false);
-  // regola su metrica inesistente: non esplode, resta ok
-  assertEquals(evaluate(cfgWith([{ id: "x", metric: "nope", crit: 1 }]), ctxOf(credits()))[0].level, "ok");
-  // nessun dato = nessun allarme
-  assertEquals(evaluate(cfgWith([{ id: "c", metric: "credits.spent.day", crit: 1 }]), ctxOf(credits()))[0].level, "ok");
+  assert(a.why.includes("list price"));
 });
 
-Deno.test("evaluate: le regole per profilo vincono su quelle di default", () => {
-  const cfg: BudgetCfg = { ...CFG_DEFAULT, defaults: { notify: "auto", rules: [{ id: "d", metric: "cost.day", crit: 10 }] }, profiles: { work: { rules: [{ id: "solo-mia", metric: "cost.week", crit: 1000 }] } } };
-  const rows = evaluate(cfg, ctxOf(credits()));
-  assertEquals(rows.map((r) => r.ruleId), ["solo-mia"]);
+Deno.test("evaluate: a full plan window is loud on screen and silent in notifications", () => {
+  const a = evaluate(cfgWith([{ id: "wk", metric: "plan.weekly.percent", warn: 85, crit: 100 }]), ctxOf(spending()))[0];
+  assertEquals([a.level, a.notify], ["crit", false]);
+  assert(a.why.includes("not a charge"));
+  // unless the rule explicitly opts in
+  const optedIn = evaluate(cfgWith([{ id: "wk", metric: "plan.weekly.percent", crit: 100, notify: true }]), ctxOf(spending()))[0];
+  assertEquals(optedIn.notify, true);
+});
+
+Deno.test("evaluate: billed metrics notify by default and can be silenced per rule", () => {
+  const on = evaluate(cfgWith([{ id: "b", metric: "billed.month.percent", warn: 60, crit: 85 }]), ctxOf(spending()))[0];
+  assertEquals([on.level, on.notify], ["warn", true]);
+  const muted = evaluate(cfgWith([{ id: "b", metric: "billed.month.percent", warn: 60, notify: false }]), ctxOf(spending()))[0];
+  assertEquals(muted.notify, false);
+});
+
+Deno.test("evaluate: stale billing data, master switch, unknown metric, missing value", () => {
+  // an old credits reading raises nothing: it would alert on a number from weeks ago
+  const old = classify("work", raw({ is_enabled: true, monthly_limit: 5000, used_credits: 4500, utilization: 90, decimal_places: 2 }, 400), null, 36, NOW);
+  const a = evaluate(cfgWith([{ id: "m", metric: "billed.month.percent", crit: 50 }]), ctxOf(old))[0];
+  assertEquals([a.level, a.notify], ["crit", false]);
+  assert(a.why.includes("old"));
+  assertEquals(evaluate({ ...cfgWith([{ id: "b", metric: "billed.month", crit: 1 }]), enabled: false }, ctxOf(spending()))[0].notify, false);
+  assertEquals(evaluate(cfgWith([{ id: "x", metric: "nope", crit: 1 }]), ctxOf(spending()))[0].level, "ok");
+  // no sample yet for today: no alert rather than a false zero
+  assertEquals(evaluate(cfgWith([{ id: "t", metric: "billed.today", crit: 1 }]), ctxOf(spending()))[0].level, "ok");
+});
+
+Deno.test("evaluate: a subscription-only profile has nothing billed to alert on", () => {
+  const rows = evaluate(cfgWith([{ id: "b", metric: "billed.month", warn: 1 }]), ctxOf(subOnly()));
+  assertEquals([rows[0].level, rows[0].notify], ["ok", false]);
+});
+
+Deno.test("evaluate: per-profile rules replace the defaults", () => {
+  const cfg: BudgetCfg = { ...CFG_DEFAULT, defaults: { rules: [{ id: "d", metric: "billed.month", crit: 10 }] }, profiles: { work: { rules: [{ id: "mine", metric: "estimate.week", crit: 100000 }] } } };
+  const rows = evaluate(cfg, ctxOf(spending()));
+  assertEquals(rows.map((r) => r.ruleId), ["mine"]);
   assertEquals(rows[0].level, "ok");
 });
 
-Deno.test("inQuietHours: finestra normale e a cavallo di mezzanotte", () => {
+Deno.test("inQuietHours: normal window and one crossing midnight", () => {
   const at = (h: number, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d; };
   assertEquals(inQuietHours(at(3), { from: "01:30", to: "09:00" }), true);
   assertEquals(inQuietHours(at(10), { from: "01:30", to: "09:00" }), false);
@@ -99,53 +118,48 @@ Deno.test("inQuietHours: finestra normale e a cavallo di mezzanotte", () => {
   assertEquals(inQuietHours(at(12), null), false);
 });
 
-const alert = (id: string, level: "ok" | "warn" | "crit", notify = true) => ({ profile: "work", ruleId: id, metric: "cost.day", label: "l", level, value: 1, threshold: 1, unit: "$", real: true, notify, why: "" });
+const alert = (id: string, level: "ok" | "warn" | "crit", notify = true) =>
+  ({ profile: "work", ruleId: id, metric: "billed.today", label: "billed today", level, value: 1, threshold: 1, unit: "EUR", plane: "billed" as const, notify, why: "" });
 
-Deno.test("toAnnounce: salita di livello, cooldown, rientro", () => {
+Deno.test("toAnnounce: level rise, cooldown, recovery", () => {
   const t0 = new Date("2026-09-09T10:00:00Z");
-  // primo allarme: si annuncia
   const a = toAnnounce(null, [alert("day", "warn")], t0, 240);
   assertEquals(a.rising.length, 1);
   assertEquals(a.next.levels["work/day"].level, "warn");
-  // stesso livello poco dopo: silenzio
   const t1 = new Date(t0.getTime() + 60 * 6e4);
   assertEquals(toAnnounce(a.next, [alert("day", "warn")], t1, 240).rising.length, 0);
-  // peggiora: si riannuncia subito
   assertEquals(toAnnounce(a.next, [alert("day", "crit")], t1, 240).rising.length, 1);
-  // stesso livello oltre il cooldown: si ripete
   const t2 = new Date(t0.getTime() + 300 * 6e4);
   assertEquals(toAnnounce(a.next, [alert("day", "warn")], t2, 240).rising.length, 1);
-  // rientro: annuncio di recupero e stato ripulito
   const back = toAnnounce(a.next, [alert("day", "ok")], t2, 240);
   assertEquals(back.recovered, ["work/day"]);
   assertEquals(back.next.levels["work/day"], undefined);
-  // un allarme che non va notificato non entra mai negli annunci
   assertEquals(toAnnounce(null, [alert("day", "crit", false)], t0, 240).rising.length, 0);
 });
 
-Deno.test("announceText: titolo per gravità, nota sul proxy, niente testo se non c'è nulla", () => {
+Deno.test("announceText: severity picks the title, nothing to say returns null", () => {
   const crit = announceText([alert("day", "crit")], [])!;
   assertEquals(crit.urgency, "critical");
-  assert(crit.body.includes("equivalente a listino"));
+  assert(crit.title.includes("over the limit"));
   assertEquals(announceText([alert("day", "warn")], [])!.urgency, "normal");
-  assert(announceText([], ["work/day"])!.title.includes("rientrata"));
+  assert(announceText([], ["work/day"])!.title.includes("back under"));
   assertEquals(announceText([], []), null);
 });
 
-Deno.test("campioni crediti: dedupe per fetched_at e spesa del giorno come delta", () => {
+Deno.test("credit samples: deduped by fetched_at, daily spend as a delta", () => {
   const db = openDb(":memory:");
   const snap = (used: number, at: string): Snapshot => ({
-    profile: "work", billing: "credits", reason: "", fetchedAt: at, ageHours: 1, stale: false,
-    credits: { enabled: true, userDisabled: false, spendLimitReached: false, used, limit: 500, utilization: used / 5, currency: "EUR", decimals: 2, everEnabled: true },
+    profile: "work", reason: "", fetchedAt: at, ageHours: 1, stale: false,
+    extra: { active: true, everEnabled: true, spendLimitReached: false, used, cap: 500, utilization: used / 5, currency: "EUR", decimals: 2 },
     plan: [],
   });
   assertEquals(sampleCredits(db, snap(10, "2026-09-08T22:00:00Z")), true);
-  assertEquals(sampleCredits(db, snap(10, "2026-09-08T22:00:00Z")), false); // stesso fetch: non si duplica
-  assertEquals(creditsSpentToday(db, "work", "2026-09-09"), null);          // ancora nessun campione di oggi
+  assertEquals(sampleCredits(db, snap(10, "2026-09-08T22:00:00Z")), false); // same fetch, not duplicated
+  assertEquals(billedToday(db, "work", "2026-09-09"), null);                // no sample for today yet
   sampleCredits(db, snap(26.5, "2026-09-09T09:00:00Z"));
-  assertEquals(creditsSpentToday(db, "work", "2026-09-09"), 16.5);
-  // il contatore è mensile: quando riparte da zero il delta negativo non è spesa
+  assertEquals(billedToday(db, "work", "2026-09-09"), 16.5);
+  // the counter is monthly: when it restarts at zero the negative delta is not spending
   sampleCredits(db, snap(2, "2026-09-09T23:00:00Z"));
-  assertEquals(creditsSpentToday(db, "work", "2026-09-09"), 0);
+  assertEquals(billedToday(db, "work", "2026-09-09"), 0);
   db.close();
 });

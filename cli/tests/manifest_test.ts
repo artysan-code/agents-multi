@@ -1,9 +1,9 @@
 // Test dei manifest dei profili nel repo: forma, default e coerenza con shared/ (ogni voce selezionata deve esistere).
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { KINDS, loadManifest, ownItems, PROFILES, REPO } from "../lib.ts";
+import { KINDS, loadManifest, ownItems, profileNames, REPO } from "../lib.ts";
 
 Deno.test("manifest: ogni profilo ha un profile.json valido e le voci selezionate esistono in shared/", async () => {
-  for (const p of PROFILES) {
+  for (const p of await profileNames()) {
     const m = await loadManifest(p);
     for (const k of KINDS) {
       const spec = m[k];

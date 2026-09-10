@@ -9,7 +9,7 @@
 // Backup del file prima di ogni scrittura in XDG state (600, ultimi 5): mai nella dir del profilo,
 // perché .claude.json contiene oauthAccount e i backup lasciati lì sono già finiti su Syncthing.
 
-import { type Check, DESKTOP_DIR, has, HOME, lstat, PROFILES, type Profile, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { type Check, desktopDir, has, HOME, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
 
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[] };
 type Surface = "cli" | "desktop";
@@ -26,7 +26,7 @@ const KEEP = 5;
 export async function loadRegistry(): Promise<Registry> {
   const r = await readJson<Registry>(REGISTRY);
   if (!r?.servers) throw new Error(`registry MCP assente o non valido: ${REGISTRY}`);
-  return { profiles: r.profiles ?? [...PROFILES], servers: r.servers };
+  return { profiles: r.profiles ?? await profileNames(), servers: r.servers };
 }
 export function wanted(reg: Registry, t: Target): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
@@ -41,11 +41,11 @@ export function wanted(reg: Registry, t: Target): Record<string, Record<string, 
   }
   return out;
 }
-export function targets(): Target[] {
+export async function targets(): Promise<Target[]> {
   const t: Target[] = [];
-  for (const p of PROFILES) {
+  for (const p of await profileNames()) {
     t.push({ profile: p, surface: "cli", path: `${RUNTIME}/${p}/.claude.json`, managedKey: `cli:${p}` });
-    t.push({ profile: p, surface: "desktop", path: `${DESKTOP_DIR[p]}/claude_desktop_config.json`, managedKey: `desktop:${p}` });
+    t.push({ profile: p, surface: "desktop", path: `${await desktopDir(p)}/claude_desktop_config.json`, managedKey: `desktop:${p}` });
   }
   return t;
 }
@@ -65,7 +65,7 @@ const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 export async function plan(): Promise<{ changes: Change[]; skipped: Target[] }> {
   const reg = await loadRegistry(); const state = await loadState();
   const changes: Change[] = []; const skipped: Target[] = [];
-  for (const t of targets()) {
+  for (const t of await targets()) {
     const conf = await readJson<{ mcpServers?: Record<string, unknown> }>(t.path);
     if (!conf) { skipped.push(t); continue; }
     const current = conf.mcpServers ?? {};
@@ -91,7 +91,7 @@ async function backup(t: Target) {
 /** Chi potrebbe riscrivere il file sotto i piedi: sessioni CLI/embedded del profilo (cli) o l'istanza Desktop (desktop). */
 export async function blockers(): Promise<Record<string, string[]>> {
   const r = await running(); const out: Record<string, string[]> = {};
-  for (const p of PROFILES) {
+  for (const p of await profileNames()) {
     const cli = r.cli.filter((c) => c.profile === p).map((c) => `pid ${c.pid}${c.embedded ? " (desktop)" : ""}`);
     const desk = r.desktop.filter((d) => d.variant === p).map((d) => `pid ${d.pid}`);
     if (cli.length) out[`cli:${p}`] = cli;
@@ -110,7 +110,7 @@ export async function apply(opts: { force?: boolean } = {}) {
     const msg = blocked.map((k) => `${k} (${block[k].join(", ")})`).join("; ");
     throw new Error(`istanze attive che riscriverebbero la config: ${msg}. Chiudile e rilancia, o --force.`);
   }
-  for (const t of targets()) {
+  for (const t of await targets()) {
     const mine = changes.filter((c) => c.target.managedKey === t.managedKey);
     const conf = await readJson<Record<string, unknown> & { mcpServers?: Record<string, unknown> }>(t.path);
     if (!conf) continue;

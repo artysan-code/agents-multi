@@ -1,7 +1,7 @@
 // install.ts — materializza il runtime dal repo. Idempotente: rilanciabile quando vuoi, --dry-run per vedere.
 // Regola: mai cancellare contenuto reale, si sposta in *.pre-repo-<stamp> e si dice.
 
-import { AGENTS_SKILLS, ANSI, BIN, HOME, KINDS, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, PROFILES, type Profile, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
+import { AGENTS_SKILLS, ANSI, BIN, HOME, KINDS, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 
 let DRY = false;
@@ -110,7 +110,7 @@ export async function install(dry: boolean) {
   await ensureSymlink(`${REPO}/shared`, `${RUNTIME}/shared`, "~/.claude-multi/shared");
 
   // 4. profili
-  for (const p of PROFILES) {
+  for (const p of await profileNames()) {
     const dir = `${RUNTIME}/${p}`;
     await ensureDir(dir, 0o700);
     await ensureSymlink(`${REPO}/profiles/${p}/CLAUDE.md`, `${dir}/CLAUDE.md`, `${p}/CLAUDE.md`);

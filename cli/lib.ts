@@ -1,5 +1,6 @@
-// lib.ts — costanti, utilità e letture di stato condivise da tutti i comandi.
-// Zero dipendenze: solo API Deno. Nessuna scrittura qui: leggere è di tutti, scrivere è di install/mcp.
+// lib.ts — constants, helpers and shared state reads used by every command.
+// Zero dependencies: Deno APIs only. Nothing writes here — reading is everyone's job, writing
+// belongs to install/mcp.
 
 export const HOME = Deno.env.get("HOME") ?? "";
 export const REPO = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -9,20 +10,20 @@ export const LIB = `${HOME}/.local/lib`;
 export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/claude-multi`;
 export const STATE = `${Deno.env.get("XDG_STATE_HOME") ?? `${HOME}/.local/state`}/claude-multi`;
 export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
-export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // dove i tool esterni (skills CLI) installano le skill
-export const PROFILES = ["personal", "work"] as const;
-export type Profile = typeof PROFILES[number];
+export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (skills CLI) install skills
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
-/** user-data-dir di Claude Desktop per profilo (config MCP della chat Desktop) */
-export const DESKTOP_DIR: Record<Profile, string> = { personal: `${HOME}/.config/Claude`, work: `${HOME}/.config/Claude-Work` };
 
+/** Reserved entries under RUNTIME that are not profiles. */
+export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins"]);
+
+export type Profile = string;
 export type Status = "ok" | "warn" | "fail";
 export interface Check { id: string; status: Status; msg: string; fix?: string }
 
 export const ANSI = { g: "\x1b[32m", y: "\x1b[33m", r: "\x1b[31m", d: "\x1b[2m", b: "\x1b[1m", c: "\x1b[36m", x: "\x1b[0m" };
 export const icon: Record<Status, string> = { ok: `${ANSI.g}✓${ANSI.x}`, warn: `${ANSI.y}!${ANSI.x}`, fail: `${ANSI.r}✗${ANSI.x}` };
 
-// ---------------------------------------------------------------- utilità
+// ---------------------------------------------------------------- helpers
 export async function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string> } = {}) {
   try {
     const p = new Deno.Command(cmd, { args, cwd: opts.cwd, env: opts.env, stdout: "piped", stderr: "piped" });
@@ -30,7 +31,7 @@ export async function run(cmd: string, args: string[], opts: { cwd?: string; env
     const dec = new TextDecoder();
     return { code: r.code, out: dec.decode(r.stdout).trim(), err: dec.decode(r.stderr).trim() };
   } catch {
-    return { code: 127, out: "", err: `${cmd}: non trovato` };
+    return { code: 127, out: "", err: `${cmd}: not found` };
   }
 }
 export async function has(cmd: string) { return (await run("sh", ["-c", `command -v ${cmd}`])).code === 0; }
@@ -43,29 +44,66 @@ export async function readJson<T = Record<string, unknown>>(p: string): Promise<
   try { return JSON.parse(t) as T; } catch { return null; }
 }
 export async function listDir(p: string) {
-  const out: string[] = []; try { for await (const e of Deno.readDir(p)) out.push(e.name); } catch { /* assente */ }
+  const out: string[] = []; try { for await (const e of Deno.readDir(p)) out.push(e.name); } catch { /* missing */ }
   return out.sort();
 }
 export function mode(st: Deno.FileInfo | null) { return st?.mode == null ? null : (st.mode & 0o777).toString(8); }
 export function expandHome(p: string) { return p.startsWith("~/") ? `${HOME}/${p.slice(2)}` : p; }
 export function shortHome(p: string) { return p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p; }
 
-// ---------------------------------------------------------------- manifest profilo
+// ---------------------------------------------------------------- profile manifest
 export interface Manifest {
   description?: string;
-  /** "all" = symlink alla dir condivisa intera; lista = dir reale con symlink selettivi (+ quelli propri del profilo) */
+  /** "all" = symlink the whole shared directory; a list = real directory with selective symlinks
+   *  (plus whatever the profile owns) */
   skills: "all" | string[];
   agents: "all" | string[];
   commands: "all" | string[];
+  /** Claude Desktop user-data-dir. Omitted = derived by convention, see desktopDir(). */
+  desktopDir?: string;
+  /** Launcher command that starts this profile, for docs and diagnostics. */
+  command?: string;
 }
 const MANIFEST_DEFAULT: Manifest = { skills: "all", agents: "all", commands: "all" };
+
 export async function loadManifest(p: Profile): Promise<Manifest> {
   const m = await readJson<Partial<Manifest>>(`${REPO}/profiles/${p}/profile.json`);
   return { ...MANIFEST_DEFAULT, ...(m ?? {}) };
 }
+
+/** Profiles declared in the repo — the source of truth. Any directory holding a profile.json. */
+export async function profileNames(): Promise<Profile[]> {
+  const out: Profile[] = [];
+  for (const n of await listDir(`${REPO}/profiles`)) {
+    if (n.startsWith(".")) continue;
+    if (await stat(`${REPO}/profiles/${n}/profile.json`)) out.push(n);
+  }
+  return out;
+}
+
+/** Profiles materialised under RUNTIME. Used to spot leftovers the repo no longer declares. */
+export async function runtimeProfiles(): Promise<Profile[]> {
+  const out: Profile[] = [];
+  for (const n of await listDir(RUNTIME)) {
+    if (n.startsWith(".") || NON_PROFILE_DIRS.has(n)) continue;
+    const st = await lstat(`${RUNTIME}/${n}`);
+    if (st?.isDirectory) out.push(n);
+  }
+  return out;
+}
+
+/** Claude Desktop data dir for a profile: manifest wins, otherwise convention.
+ *  `~/.config/Claude-<Name>` when it exists, else `~/.config/Claude` (Desktop's own default). */
+export async function desktopDir(p: Profile, manifest?: Manifest): Promise<string> {
+  const m = manifest ?? await loadManifest(p);
+  if (m.desktopDir) return expandHome(m.desktopDir);
+  const suffixed = `${HOME}/.config/Claude-${p.charAt(0).toUpperCase()}${p.slice(1)}`;
+  return (await lstat(suffixed)) ? suffixed : `${HOME}/.config/Claude`;
+}
+
 export const KINDS = ["skills", "agents", "commands"] as const;
 export type Kind = typeof KINDS[number];
-/** elementi propri del profilo per un kind (profiles/<p>/<kind>/*), sempre montati */
+/** Items the profile owns for a kind (profiles/<p>/<kind>/*), always mounted. */
 export async function ownItems(p: Profile, kind: Kind) { return await listDir(`${REPO}/profiles/${p}/${kind}`); }
 
 // ---------------------------------------------------------------- git / repo
@@ -89,10 +127,10 @@ export async function repoState() {
   return { path: REPO, isRepo: true as const, branch, upstream, remote, ahead, behind, dirty: dirtyFiles.length, dirtyFiles, head, headDate, fetchedAt };
 }
 
-// ---------------------------------------------------------------- macchina
+// ---------------------------------------------------------------- machine
 export async function machine() {
-  // Da ssh le variabili di sessione non ci sono: senza questo controllo install si crederebbe su una
-  // macchina headless e salterebbe in silenzio unit systemd e voci di menu (successo al portatile).
+  // Over ssh the session variables are absent: without this check install would think it is on a
+  // headless box and silently skip systemd units and menu entries.
   const rt = Deno.env.get("XDG_RUNTIME_DIR");
   const graphical = !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY") || Deno.env.get("XDG_CURRENT_DESKTOP")) ||
     !!(rt && await lstat(`${rt}/wayland-0`)) || !!(await lstat("/tmp/.X11-unix/X0"));
@@ -104,17 +142,17 @@ export async function machine() {
   const cliVersion = cliBin.code === 0 ? cliBin.out.split("/").pop() ?? null : null;
   const cliVersions = (await listDir(`${HOME}/.local/share/claude/versions`)).filter((v) => /^\d+\.\d+\.\d+$/.test(v));
   const embedded: Record<string, string[]> = {};
-  for (const p of PROFILES) {
-    const v = (await listDir(`${DESKTOP_DIR[p]}/claude-code`)).filter((x) => /^\d+\.\d+\.\d+$/.test(x));
+  for (const p of await profileNames()) {
+    const v = (await listDir(`${await desktopDir(p)}/claude-code`)).filter((x) => /^\d+\.\d+\.\d+$/.test(x));
     if (v.length) embedded[p] = v;
   }
   return { hostname: Deno.hostname(), graphical, kde, systemd, desktopVersion, embeddedCode: embedded, cliVersion, cliVersions, deno: Deno.version.deno };
 }
 
-// ---------------------------------------------------------------- istanze attive
-// Classificazione per eseguibile reale (/proc/<pid>/exe), non per riga di comando: una shell che
-// menziona "claude/versions" nel suo snapshot non è una sessione. /proc si legge via readlink/cat
-// (--allow-run) perché Deno, senza --allow-all, nega la lettura diretta di /proc/<pid>/*.
+// ---------------------------------------------------------------- running instances
+// Classified by real executable (/proc/<pid>/exe), not by command line: a shell whose snapshot
+// mentions "claude/versions" is not a session. /proc is read through readlink/cat (--allow-run)
+// because Deno without --allow-all refuses to read /proc/<pid>/* directly.
 async function procInfo(pid: number) {
   const exe = (await run("readlink", [`/proc/${pid}/exe`])).out || null;
   const cwd = (await run("readlink", [`/proc/${pid}/cwd`])).out || null;
@@ -127,28 +165,31 @@ export interface CliProc { pid: number; profile: string | null; cwd: string | nu
 export async function running() {
   const cli: CliProc[] = [];
   const desktop: { pid: number; variant: Profile }[] = [];
-  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-code/[0-9.]+/claude |claude-desktop/claude-desktop|claude-desktop-work/claude-desktop-work"]);
+  // Desktop binaries are named after the profile they serve (claude-desktop, claude-desktop-work…),
+  // so the profile is read back off the executable path rather than a fixed table.
+  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/claude-desktop"]);
   for (const line of pg.out.split("\n").filter(Boolean)) {
     const [pidS, ...rest] = line.split(" "); const pid = Number(pidS); const cmd = rest.join(" ");
-    if (cmd.includes("--type=")) continue; // sotto-processi Electron
+    if (cmd.includes("--type=")) continue; // Electron child processes
     const { exe, cwd, profile } = await procInfo(pid);
     if (!exe) continue;
     const embedded = exe.match(/\/claude-code\/([0-9.]+)\/claude$/);
     const native = exe.match(/claude\/versions\/([0-9.]+)$/);
-    if (embedded || native) cli.push({ pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1] });
-    else if (exe.endsWith("claude-desktop-work/claude-desktop-work")) desktop.push({ pid, variant: "work" });
-    else if (exe.endsWith("/claude-desktop/claude-desktop")) desktop.push({ pid, variant: "personal" });
+    if (embedded || native) { cli.push({ pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1] }); continue; }
+    const desk = exe.match(/\/claude-desktop(?:-([a-z0-9-]+))?\/claude-desktop/);
+    if (desk) desktop.push({ pid, variant: desk[1] ?? "personal" });
   }
   return { cli, desktop };
 }
 
-// ---------------------------------------------------------------- profili
+// ---------------------------------------------------------------- profiles
 export async function profileInfo(p: Profile) {
   const dir = `${RUNTIME}/${p}`;
   const link = async (name: string) => await readlink(`${dir}/${name}`);
   const conf = await readJson<{ mcpServers?: Record<string, unknown>; oauthAccount?: { emailAddress?: string } }>(`${dir}/.claude.json`);
   const plugins = await readJson<{ plugins?: Record<string, unknown> }>(`${dir}/plugins/installed_plugins.json`);
   const creds = await lstat(`${dir}/.credentials.json`);
+  const manifest = await loadManifest(p);
   const mounted: Record<Kind, Record<string, { link: string | null; broken: boolean }>> = { skills: {}, agents: {}, commands: {} };
   const kindLinks: Record<Kind, string | null> = { skills: null, agents: null, commands: null };
   for (const k of KINDS) {
@@ -159,10 +200,11 @@ export async function profileInfo(p: Profile) {
       mounted[k][k === "skills" ? n : n.slice(0, -3)] = { link: await readlink(path), broken: !(await stat(k === "skills" ? `${path}/SKILL.md` : path)) };
     }
   }
-  const desktopConf = await readJson<{ mcpServers?: Record<string, unknown> }>(`${DESKTOP_DIR[p]}/claude_desktop_config.json`);
+  const deskDir = await desktopDir(p, manifest);
+  const desktopConf = await readJson<{ mcpServers?: Record<string, unknown> }>(`${deskDir}/claude_desktop_config.json`);
   return {
-    dir, exists: !!(await lstat(dir)),
-    manifest: await loadManifest(p),
+    dir, exists: !!(await lstat(dir)), desktopDir: deskDir,
+    manifest,
     claudeMd: await link("CLAUDE.md"), settings: await link("settings.json"), hooks: await link("hooks"),
     kindLinks, mounted,
     credentials: creds ? { present: true, mode: mode(creds) } : { present: false, mode: null },
@@ -173,7 +215,7 @@ export async function profileInfo(p: Profile) {
   };
 }
 
-// ---------------------------------------------------------------- condiviso (repo)
+// ---------------------------------------------------------------- shared (repo)
 export async function sharedInventory() {
   const items = async (kind: Kind) => {
     const out: Record<string, { link: string | null; broken: boolean }> = {};
@@ -199,6 +241,6 @@ export function printDoctor(checks: Check[]) {
   console.log(`${ANSI.b}claude-multi doctor${ANSI.x}`);
   for (const c of sorted) console.log(`  ${icon[c.status]} ${c.msg}${c.fix && c.status !== "ok" ? `\n      ${ANSI.d}fix:${ANSI.x} ${c.fix}` : ""}`);
   const n = (s: Status) => checks.filter((c) => c.status === s).length;
-  console.log(`\n  ${n("ok")} ok · ${ANSI.y}${n("warn")} warn${ANSI.x} · ${ANSI.r}${n("fail")} fail${ANSI.x}`);
+  console.log(`\n  ${n("ok")} pass · ${ANSI.y}${n("warn")} warn${ANSI.x} · ${ANSI.r}${n("fail")} fail${ANSI.x}`);
   return n("fail") ? 1 : 0;
 }

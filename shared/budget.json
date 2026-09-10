@@ -1,29 +1,23 @@
 {
-  "_note": "Soglie di consumo. Regola di fondo: si notifica solo la spesa REALE. Su abbonamento il costo di `claude-multi usage` è un equivalente a listino (non fatturato) e con notify \"auto\" non fa scattare nulla; le stesse regole notificano invece su un profilo che consuma extra credits. La classe (included / credits) la legge budget.ts da cachedUsageUtilization in <profilo>/.claude.json: non è cablata qui.",
-  "_metriche": {
-    "credits.spent.day": "crediti spesi oggi, delta fra due campioni (valuta del profilo) — spesa reale",
-    "credits.utilization": "percentuale del limite crediti mensile — spesa reale",
-    "credits.used": "crediti spesi nel mese in valuta — spesa reale",
-    "cost.day | cost.week | cost.month": "costo equivalente a listino dai transcript — reale solo se il profilo è a crediti",
-    "plan.<kind>.percent": "quanto è consumata una finestra dell'abbonamento (session, weekly, weekly_all, weekly_scoped) — mai una spesa: informativa"
+  "_model": "Consumption lives on three planes and they are not interchangeable. `billed` is extra-usage credits — real money, and the only plane that raises alerts. `plan` is how full a subscription window is: it tells you when you will be throttled, never what you will pay. `estimate` is what the same tokens would cost at list price — a comparison figure. Every profile is a subscription that may also spend credits; the plane belongs to the metric, not to the profile.",
+  "_metrics": {
+    "billed.today": "credits spent today, delta between two samples (account currency)",
+    "billed.month": "credits spent this month (account currency)",
+    "billed.month.percent": "percentage of the monthly cap consumed",
+    "plan.<kind>.percent": "how full a subscription window is (session, weekly, weekly_all, weekly_scoped)",
+    "estimate.day | estimate.week | estimate.month": "list-price equivalent from the transcripts"
   },
-  "_billing": "Per profilo: \"auto\" (default) legge la classe da cachedUsageUtilization in <profilo>/.claude.json; \"credits\" o \"included\" la forzano. Serve perché quella cache la aggiorna Claude Code quando gli pare (qui è vecchia di settimane) mentre l'impostazione crediti cambia raramente.",
-  "_notify": "true = sempre · false = mai · \"auto\" = solo se la metrica è spesa reale per quel profilo. Impostabile per profilo e per singola regola.",
+  "_notify": "Billed metrics notify by default. Plan and estimate metrics stay silent unless a rule sets \"notify\": true — that is what keeps window thresholds from firing every single day.",
+  "_cap": "\"cap\" per profile overrides the reported monthly ceiling, so you can be warned well before the real limit.",
   "enabled": true,
   "staleAfterHours": 36,
   "cooldownMinutes": 240,
   "quietHours": { "from": "01:30", "to": "09:00" },
   "defaults": {
-    "notify": "auto",
     "rules": [
-      { "id": "credits-day", "metric": "credits.spent.day", "warn": 10, "crit": 25, "label": "crediti spesi oggi" },
-      { "id": "credits-month", "metric": "credits.utilization", "warn": 60, "crit": 85, "label": "crediti del mese" },
-      { "id": "cost-day", "metric": "cost.day", "warn": 40, "crit": 120, "label": "costo equivalente oggi" },
-      { "id": "plan-weekly", "metric": "plan.weekly.percent", "warn": 85, "crit": 100, "label": "finestra settimanale del piano" }
+      { "id": "billed-today", "metric": "billed.today", "warn": 5, "crit": 15, "label": "billed today" },
+      { "id": "billed-month", "metric": "billed.month.percent", "warn": 60, "crit": 85, "label": "monthly cap" }
     ]
   },
-  "profiles": {
-    "personal": { "note": "extra credits disabilitati a livello organizzazione: nessuna spesa reale, le soglie restano solo informative" },
-    "work": { "billing": "credits", "note": "extra credits attivi: qui le soglie notificano davvero. Classe cablata perché la cache di stato resta indietro di settimane." }
-  }
+  "profiles": {}
 }
