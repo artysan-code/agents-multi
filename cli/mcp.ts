@@ -9,7 +9,7 @@
 // Backup del file prima di ogni scrittura in XDG state (600, ultimi 5): mai nella dir del profilo,
 // perché .claude.json contiene oauthAccount e i backup lasciati lì sono già finiti su Syncthing.
 
-import { type Check, DESKTOP_DIR, has, lstat, PROFILES, type Profile, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { type Check, DESKTOP_DIR, has, HOME, lstat, PROFILES, type Profile, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
 
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[] };
 type Surface = "cli" | "desktop";
@@ -196,13 +196,18 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
       const lock = a.match(/^--lock=(.+)$/); if (lock && !(await stat(lock[1]))) problems.push(`lock assente: ${lock[1]}`);
     }
     if (env.VAULT_PATH && !(await stat(env.VAULT_PATH))) problems.push(`vault assente: ${env.VAULT_PATH}`);
+    // L'embedding a parte: senza, obsidian-brain si avvia lo stesso e perde solo la ricerca semantica.
+    // Su una macchina che llama.cpp non ce l'ha proprio (il portatile) è una scelta, non un guasto.
+    const embedding: string[] = [];
     if (env.EMBEDDING_PROVIDER === "ollama") {
       const base = env.OLLAMA_BASE_URL ?? "http://localhost:11434";
       const models = await embeddingModels(base);
-      if (!models) problems.push(`endpoint embedding ${base} (llama-embed-shim) non risponde`);
-      else if (env.EMBEDDING_MODEL && !models.some((m) => m.startsWith(env.EMBEDDING_MODEL))) problems.push(`modello ${env.EMBEDDING_MODEL} non servito dallo shim`);
-      if (!(await llamaServerOk())) problems.push(`llama-server ${LLAMA_EMBED_URL} non risponde (unit llama-embed.service)`);
+      if (!models) embedding.push(`endpoint embedding ${base} (llama-embed-shim) non risponde`);
+      else if (env.EMBEDDING_MODEL && !models.some((m) => m.startsWith(env.EMBEDDING_MODEL))) embedding.push(`modello ${env.EMBEDDING_MODEL} non servito dallo shim`);
+      if (!(await llamaServerOk())) embedding.push(`llama-server ${LLAMA_EMBED_URL} non risponde (unit llama-embed.service)`);
     }
+    const llamaInstalled = !!(await stat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`));
+    if (embedding.length && llamaInstalled) problems.push(...embedding);
     const envFile = args.join(" ").match(/\. "?\$HOME\/([^"\s;]+)/); // pattern `. "$HOME/.config/x/.env"`
     if (envFile && !(await stat(`${Deno.env.get("HOME")}/${envFile[1]}`))) problems.push(`env file assente: ~/${envFile[1]}`);
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = (cfg._profiles ?? reg.profiles).join("+");
@@ -219,7 +224,13 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
         : "sistemare la dipendenza o correggere shared/mcp/servers.json";
       out.push({ id: `mcp.${name}`, status: "fail", msg: `MCP ${name}: ${problems.join("; ")}`, fix });
     }
-    else out.push({ id: `mcp.${name}`, status: "ok", msg: `MCP ${name} (${profiles} · ${surfaces}) pronto${live}` });
+    else if (embedding.length) {
+      out.push({
+        id: `mcp.${name}`, status: "warn",
+        msg: `MCP ${name} (${profiles} · ${surfaces}) pronto senza ricerca semantica${live}`,
+        fix: "macchina senza llama.cpp: ricerca testuale e grafo funzionano, la semantica no. Per averla: installa llama.cpp e abilita llama-embed{,-shim}.service",
+      });
+    } else out.push({ id: `mcp.${name}`, status: "ok", msg: `MCP ${name} (${profiles} · ${surfaces}) pronto${live}` });
   }
   return out;
 }
