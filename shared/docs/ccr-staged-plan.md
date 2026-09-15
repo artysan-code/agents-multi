@@ -5,7 +5,7 @@
 
 ## Gate di attivazione
 1. T1 tiering (model: frontmatter) misurato per ≥2 settimane.
-2. Delta costo documentato in costs.jsonl e /cost-report.
+2. Delta costo documentato via `claude-multi usage` (per profilo e per modello).
 3. CCR testato SOLO su un progetto personale (mai clientapp, mai ark-project client).
 4. Chiave DeepSeek salvata PRIMA di abilitare.
 
