@@ -229,7 +229,14 @@
     "security-guidance@claude-plugins-official": true,
     "obsidian@obsidian-skills": true,
     "context7@claude-plugins-official": true,
-    "vue-volar@claude-code-lsps": true
+    "vue-volar@claude-code-lsps": true,
+    "brand-voice@synced": false,
+    "data@synced": false,
+    "engineering@synced": false,
+    "operations@synced": false,
+    "productivity@synced": false,
+    "product-management@synced": false,
+    "pdf-viewer@synced": false
   },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
@@ -264,6 +271,11 @@
     }
   },
   "effortLevel": "medium",
+  "modelSettings": {
+    "claude-opus-5": {
+      "effortLevel": "high"
+    }
+  },
   "promptSuggestionEnabled": false,
   "tui": "fullscreen",
   "skipWorkflowUsageWarning": true,
