@@ -36,8 +36,15 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   raise a notification.
 - **The console serves itself** (`claude-multi-console.service`). UI updates arrive over SSE on
   `/api/events`: a new panel hangs off `refresh()` by topic, never off a new polling loop.
-- **Launching stays pure bash** (`bin/claude`, `bin/claude-work`, `bin/lib/prelaunch.sh`): no Deno
-  on the hot path, so a wrapper still works on a machine without it.
+- **Launching stays pure bash** (`bin/claude`, `bin/claude-launch`, `bin/lib/`): no Deno on the hot
+  path, so a wrapper still works on a machine without it. The manifests are read from bash through
+  `bin/lib/profiles.sh` (`cm_command`, `cm_desktop_dir`, `cm_desktop_appid`) — one place, no jq.
+  Careful there: `set -o pipefail` plus `grep -q` reports failure even on a match, because grep
+  exits first and the producer dies of SIGPIPE. Use `cm_has_profile`, not a pipe into `grep -q`.
+- **A profile with its own `desktopDir` gets its own Desktop build.** The official binary
+  self-assigns its app_id, so a second icon needs a patched executable
+  (`bin/claude-desktop-rebuild <profile>`), and `install` writes its `.desktop` from
+  `desktop/entry.desktop.in`. Never add a per-profile `.desktop` or rebuild script by hand.
 - **Verify before saying done**: `deno task check` and `deno task test`, then `claude-multi doctor`.
   If you touched `install`, run `claude-multi install --dry-run` first. A new pure function gets a
   new test in `cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the

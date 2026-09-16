@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# claude-desktop-work-rebuild — costruisce il "secondo eseguibile" Claude Desktop (profilo Work)
-# con un app_id Wayland DISTINTO (claude-desktop-work) così KDE gli dà un'icona/gruppo separati.
+# claude-desktop-rebuild <profilo> — costruisce un eseguibile Claude Desktop dedicato a un profilo,
+# con un app_id Wayland DISTINTO (claude-desktop-<profilo>) così KDE gli dà icona e gruppo separati.
+#
+# Il profilo va dichiarato in profiles/<nome>/profile.json con una desktopDir diversa da
+# ~/.config/Claude: è quella a stabilire che serve una build propria (cm_desktop_appid).
 #
 # PERCHÉ SERVE: il binario ufficiale si auto-assegna l'app_id "claude-desktop" e ignora --class,
 # X11 e argv[0] (verificato). L'unico punto che cambia l'app_id è, dentro l'asar, una chiamata
@@ -16,9 +19,22 @@
 # nostra e trasparente nell'asar. Rilancia questo script dopo ogni update di claude-desktop.
 set -euo pipefail
 
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
+
+PROFILE="${1:-}"
+if [[ -z "$PROFILE" ]] || ! cm_has_profile "$PROFILE"; then
+  echo "Uso: claude-desktop-rebuild <profilo>   (dichiarati: $(cm_profiles | tr '\n' ' '))" >&2
+  exit 2
+fi
+APPID="$(cm_desktop_appid "$PROFILE")"
+if [[ -z "$APPID" ]]; then
+  echo "ERRORE: il profilo '$PROFILE' usa ~/.config/Claude, cioè il claude-desktop di sistema:" >&2
+  echo "        non serve (e non si può fare) una build dedicata. Dagli una desktopDir propria." >&2
+  exit 2
+fi
+
 SRC=/usr/lib/claude-desktop
-DST="$HOME/.local/lib/claude-desktop-work"
-APPID=claude-desktop-work
+DST="$HOME/.local/lib/$APPID"
 export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/share/npm/bin:$PATH"
 
 command -v asar    >/dev/null 2>&1 || { echo "ERRORE: 'asar' assente (pnpm add -g @electron/asar)" >&2; exit 1; }
@@ -35,7 +51,7 @@ python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" <<'PY'
 import sys, re
 p, appid = sys.argv[1], sys.argv[2]
 s = open(p, encoding='utf-8').read()
-MARK = '/*__work_appid__*/'
+MARK = '/*__claude_multi_appid__*/'
 inj = MARK + 'try{const a=require("electron").app;a.setDesktopName&&a.setDesktopName("%s");}catch(e){};' % appid
 if MARK in s or 'setDesktopName("%s")' % appid in s:
     print("    patch già presente"); sys.exit(0)
@@ -54,11 +70,11 @@ asar pack "$TMP/src" "$TMP/app.asar" --unpack "*.node" >/dev/null
 
 # Post-verify: la patch DEVE essere nel pacchetto finale. Senza questo, un futuro cambio di
 # layout dell'asar produrrebbe silenziosamente una variante Work senza app_id distinto
-# (stessa icona/gruppo di quella personal) invece di fallire.
+# (stessa icona/gruppo del profilo di default) invece di fallire.
 # NB: `asar extract-file` NON scrive su stdout — deposita il file (basename) nella cwd.
 mkdir -p "$TMP/verify"
 ( cd "$TMP/verify" && asar extract-file "$TMP/app.asar" .vite/build/index.pre.js )
-head -c 400 "$TMP/verify/index.pre.js" | grep -q '__work_appid__' \
+head -c 400 "$TMP/verify/index.pre.js" | grep -q '__claude_multi_appid__' \
   || { echo "ERRORE: patch assente nell'asar ripacchettizzato" >&2; exit 1; }
 echo "    patch verificata nell'asar"
 

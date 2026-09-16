@@ -2,7 +2,8 @@
 // (every selected entry has to exist). Written against whatever profiles the repository declares,
 // so adding or removing one does not break the suite.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { commandOf, KINDS, launchers, loadManifest, ownItems, profileNames, REPO, RUNTIME, zshBlock } from "../lib.ts";
+import { BIN, commandOf, KINDS, launchers, loadManifest, ownItems, profileNames, REPO, RUNTIME, zshBlock } from "../lib.ts";
+import { desktopEntry } from "../install.ts";
 
 Deno.test("manifest: every profile has a valid profile.json and its selections exist in shared/", async () => {
   const profiles = await profileNames();
@@ -89,4 +90,24 @@ Deno.test("zshBlock: one alias line per declared alias, default profile exported
   assert(block.includes(`CLAUDE_CONFIG_DIR:-${RUNTIME}/${def.profile}}`), "the default profile is not the exported CLAUDE_CONFIG_DIR");
   // No profile name may be hardcoded: the block must be shorter than the sum of its parts.
   assertEquals(block.split("\n").filter((x) => x.startsWith("alias ")).length, ls.filter((l) => l.alias).length);
+});
+
+Deno.test("desktopEntry: one entry per profile, scheme handler only on the default", async () => {
+  const tpl = await Deno.readTextFile(`${REPO}/desktop/entry.desktop.in`);
+  const body = tpl.slice(tpl.indexOf("[Desktop Entry]"));
+  const ls = await launchers();
+  const def = ls.find((l) => l.command === "claude")?.profile;
+  const files = new Set<string>();
+  for (const { profile } of ls) {
+    const e = await desktopEntry(profile, body, def);
+    // Nothing may reach the applications menu with a placeholder still in it.
+    assert(!/@[A-Z]+@/.test(e.text), `${profile}: unsubstituted placeholder in ${e.file}`);
+    assert(e.text.includes(`Exec=${BIN}/claude-launch ${profile} %U`), `${profile}: wrong Exec`);
+    assert(!files.has(e.file), `two profiles write ${e.file}`);
+    files.add(e.file);
+    const claimsScheme = e.text.includes("MimeType=x-scheme-handler/claude;");
+    assertEquals(claimsScheme, profile === def, `${profile}: claude:// handler on the wrong profile`);
+    // A variant needs its own app_id, or KDE groups it with the system build.
+    if (e.variant) assert(e.text.includes(`StartupWMClass=claude-desktop-${profile}`), `${profile}: no distinct app_id`);
+  }
 });

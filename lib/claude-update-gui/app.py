@@ -3,7 +3,7 @@
 
 Due modi di invocazione:
 
-  --profile personal|work     dal launcher `claude-launch`, prima di aprire l'app: si aggiorna
+  --profile <nome>            dal launcher `claude-launch`, prima di aprire l'app: si aggiorna
                               ciò che spunti, poi il launcher apre Claude
   --standalone                dalla notifica del timer, ad app già in uso: non apre nulla a fine
                               corsa, e se Claude è in esecuzione offre di chiuderlo prima
@@ -20,7 +20,7 @@ In --standalone senza aggiornamenti la finestra si apre lo stesso come pannello 
 Fasi eseguite, in base alla selezione:
   Desktop → claude-desktop-update --no-install  (repack del .deb ufficiale, nessun privilegio)
           → pkexec pacman -U <pkg>              (dialogo polkit di Plasma per la password)
-          → claude-desktop-work-rebuild         (riapplica il patch app_id alla variante Work)
+          → claude-desktop-rebuild <profilo>    (riapplica il patch app_id a una variante)
   Code    → claude-update --cli                 (userspace: nessuna password)
 
 Perché Desktop va aggiornato ad app chiusa: l'install sostituisce /usr/lib/claude-desktop e il
@@ -57,11 +57,41 @@ DANGER = "#d64545"
 BIN = Path.home() / ".local" / "bin"
 SKIP_FILE = Path.home() / ".config" / "claude-update" / "skipped"
 
-# Pattern dei DUE binari Claude Desktop (personal di sistema + variante Work user-local).
+def _repo() -> Path:
+    """The claude-multi checkout, found through the symlink install leaves in ~/.local/bin."""
+    try:
+        return (BIN / "claude-multi").resolve().parent.parent
+    except OSError:
+        return Path.home() / ".local" / "src" / "claude-multi"
+
+
+def desktop_variants() -> list[tuple[str, str]]:
+    """(profile, app_id) for every profile that has its own Desktop build — the ones whose
+    user-data-dir is not Desktop's own ~/.config/Claude. Mirrors cm_desktop_appid in bash."""
+    out: list[tuple[str, str]] = []
+    default_dir = str(Path.home() / ".config" / "Claude")
+    for manifest in sorted((_repo() / "profiles").glob("*/profile.json")):
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        name = manifest.parent.name
+        raw = str(data.get("desktopDir") or "")
+        if raw.startswith("~/"):
+            raw = str(Path.home() / raw[2:])
+        if not raw:
+            suffixed = Path.home() / ".config" / f"Claude-{name.capitalize()}"
+            raw = str(suffixed) if suffixed.is_dir() else default_dir
+        if raw != default_dir:
+            out.append((name, f"claude-desktop-{name}"))
+    return out
+
+
+# Pattern dei binari Claude Desktop: quello di sistema più una variante per profilo.
 # Volutamente path completi: un pkill su "claude" colpirebbe anche le sessioni Claude Code.
 DESKTOP_PROCS = (
     "/usr/lib/claude-desktop/claude-desktop",
-    f"{Path.home()}/.local/lib/claude-desktop-work/claude-desktop-work",
+    *(f"{Path.home()}/.local/lib/{appid}/{appid}" for _, appid in desktop_variants()),
 )
 
 
@@ -634,7 +664,8 @@ class UpdateGate(QDialog):
             plan += [
                 ("Ricostruzione del pacchetto dal .deb ufficiale Anthropic", "build"),
                 ("Installazione del pacchetto (serve la password)", "install"),
-                ("Aggiornamento della variante Claude Work", "work"),
+                *[(f"Aggiornamento della variante Desktop del profilo '{prof}'", f"variant:{prof}")
+                  for prof, _ in desktop_variants()],
             ]
         if "cli" in self._selected():
             plan.append(("Aggiornamento di Claude Code", "cli"))
@@ -678,8 +709,8 @@ class UpdateGate(QDialog):
                 return
             # pkexec apre il dialogo polkit di Plasma: la password non passa mai da qui.
             self._run("pkexec", ["pacman", "-U", "--noconfirm", self.pkg_path])
-        elif key == "work":
-            self._run(str(BIN / "claude-desktop-work-rebuild"), [])
+        elif key.startswith("variant:"):
+            self._run(str(BIN / "claude-desktop-rebuild"), [key.split(":", 1)[1]])
         elif key == "rollback":
             self._run(str(BIN / "claude-multi"), ["update", "--rollback"])
         else:

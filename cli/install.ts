@@ -1,7 +1,7 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
-import { AGENTS_SKILLS, ANSI, BIN, HOME, KINDS, launchers, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
+import { AGENTS_SKILLS, ANSI, BIN, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 
 let DRY = false;
@@ -13,6 +13,43 @@ async function backupAway(p: string) {
   say(`${ANSI.y}→${ANSI.x} moving ${p} aside to ${dest}`);
   if (!DRY) await Deno.rename(p, dest);
 }
+/** One .desktop per profile, written from desktop/entry.desktop.in. The profile whose data dir is
+ *  Desktop's own ~/.config/Claude uses the system build and keeps Anthropic's file name and app_id;
+ *  every other profile gets `claude-desktop-<name>`, matching the executable that
+ *  claude-desktop-rebuild produces. The claude:// scheme stays with the default profile — two
+ *  entries claiming it would make the handler ambiguous. */
+async function writeDesktopEntries(apps: string) {
+  const tpl = await readText(`${REPO}/desktop/entry.desktop.in`);
+  if (tpl === null) return;
+  const body = tpl.slice(tpl.indexOf("[Desktop Entry]"));
+  const defaultProfile = (await launchers()).find((l) => l.command === "claude")?.profile;
+  for (const p of await profileNames()) {
+    const { file, text } = await desktopEntry(p, body, defaultProfile);
+    const cur = await readText(`${apps}/${file}`);
+    if (cur === text) continue;
+    say(`${ANSI.g}+${ANSI.x} ${shortHome(`${apps}/${file}`)} (profile ${p})`);
+    if (!DRY) { await Deno.mkdir(apps, { recursive: true }); await Deno.writeTextFile(`${apps}/${file}`, text); }
+  }
+}
+
+/** The .desktop file for one profile: its name and its content. Split out of writeDesktopEntries
+ *  so the shape can be asserted in a test instead of only on a real desktop. */
+export async function desktopEntry(p: Profile, template: string, defaultProfile?: string) {
+  const man = await loadManifest(p);
+  const variant = (await desktopDir(p, man)) !== `${HOME}/.config/Claude`;
+  const title = p.charAt(0).toUpperCase() + p.slice(1);
+  const text = template
+    .replaceAll("@NAME@", variant ? `Claude ${title}` : "Claude")
+    .replaceAll("@COMMENT@", variant ? `Claude Desktop — ${title} profile (separate icon and app_id)` : "Desktop application for Claude.ai")
+    .replaceAll("@LAUNCH@", `${BIN}/claude-launch`)
+    .replaceAll("@PROFILE@", p)
+    .replaceAll("@KEYWORD@", variant ? `${title};` : "")
+    .replaceAll("@ICON@", variant ? `claude-desktop-${p}` : "claude-desktop")
+    .replaceAll("@WMCLASS@", variant ? `claude-desktop-${p}` : "com.anthropic.Claude")
+    .replaceAll("@MIME@", p === defaultProfile ? "MimeType=x-scheme-handler/claude;" : "# no scheme handler: claude:// belongs to the default profile");
+  return { file: variant ? `claude-desktop-${p}.desktop` : "com.anthropic.Claude.desktop", text, variant };
+}
+
 async function ensureSymlink(target: string, link: string, label = link) {
   const cur = await readlink(link);
   if (cur === target) return;
@@ -181,6 +218,7 @@ export async function install(dry: boolean) {
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
     for (const d of await listDir(`${REPO}/desktop`)) if (d.endsWith(".desktop")) await ensureCopy(`${REPO}/desktop/${d}`, `${apps}/${d}`);
+    await writeDesktopEntries(apps);
     for (const s of await listDir(`${REPO}/desktop/icons`)) {
       for (const f of await listDir(`${REPO}/desktop/icons/${s}`)) {
         await ensureCopy(`${REPO}/desktop/icons/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);

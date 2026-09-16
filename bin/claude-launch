@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# claude-launch: avvia Claude Desktop (profilo personal o work) passando prima dal gate
-# di aggiornamento grafico. È lo script puntato dagli Exec= dei due .desktop.
+# claude-launch: avvia Claude Desktop per un profilo qualsiasi, passando prima dal gate
+# di aggiornamento grafico. È lo script puntato dagli Exec= dei .desktop.
 #
 # USO:
-#   claude-launch personal [args...]   # Claude (account personale)
-#   claude-launch work     [args...]   # Claude Work (binario con app_id distinto)
+#   claude-launch <profilo> [args...]  # i profili sono quelli di profiles/*/profile.json
 #   claude-launch --check-only         # diagnostica: dice cosa farebbe, non apre nulla
+#
+# Quale eseguibile parte lo dice il manifest, non un ramo scritto qui: il profilo la cui
+# user-data-dir è ~/.config/Claude usa il `claude-desktop` di sistema, ogni altro ha una build
+# con app_id distinto (bin/claude-desktop-rebuild), perché il binario ufficiale si auto-assegna
+# l'app_id e KDE darebbe la stessa icona a tutti.
 #
 # COSA FA, IN ORDINE:
 #   1. legge lo stato versioni (cache TTL, così l'apertura non paga la rete a ogni click)
@@ -33,30 +37,48 @@ FETCH_TIMEOUT="${CLAUDE_LAUNCH_FETCH_TIMEOUT:-4}"   # per singolo fetch
 CHECK_TIMEOUT="${CLAUDE_LAUNCH_CHECK_TIMEOUT:-12}"  # cintura sull'intero check
 
 # Repo claude-multi: allinea la config PRIMA che parta l'app (fetch se stantio, pull ff-only,
-# mai bloccante). Stessa logica dei wrapper `claude`/`claude-work`.
-bash "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/prelaunch.sh" || true
+# mai bloccante). Stessa logica dei wrapper di lancio della CLI.
+HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+bash "$HERE/lib/prelaunch.sh" || true
+source "$HERE/lib/profiles.sh"
 
+known="$(cm_profiles | tr '\n' '|')"; known="${known%|}"
+default_profile="$(cm_profile_for claude)"; default_profile="${default_profile:-$(cm_profiles | head -n1)}"
 profile="${1:-}"; [[ $# -gt 0 ]] && shift
 check_only=0
-[[ "$profile" == "--check-only" ]] && { check_only=1; profile="personal"; }
-case "$profile" in
-  personal|work) ;;
-  *) echo "Uso: claude-launch <personal|work> [args...]" >&2; exit 2 ;;
-esac
+[[ "$profile" == "--check-only" ]] && { check_only=1; profile="$default_profile"; }
+# ...oppure dopo il nome del profilo, per poter diagnosticare una variante senza aprirla.
+[[ "${1:-}" == "--check-only" ]] && { check_only=1; shift; }
+if [[ -z "$profile" ]] || ! cm_has_profile "$profile"; then
+  echo "Uso: claude-launch <$known> [args...]" >&2; exit 2
+fi
 
 # --- lancio dell'app --------------------------------------------------------
+# Una sola strada per tutti i profili: config dir e user-data-dir dal manifest, eseguibile scelto
+# dalla presenza di un app_id dedicato.
 launch() {
-  if [[ "$profile" == "work" ]]; then
-    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/work" \
-      "$HOME/.local/lib/claude-desktop-work/claude-desktop-work" \
-      --ozone-platform=wayland --user-data-dir="$HOME/.config/Claude-Work" "$@"
+  local appid data_dir
+  appid="$(cm_desktop_appid "$profile")"
+  data_dir="$(cm_desktop_dir "$profile")"
+  if [[ -n "$appid" ]]; then
+    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" \
+      "$HOME/.local/lib/$appid/$appid" \
+      --ozone-platform=wayland --user-data-dir="$data_dir" "$@"
   else
-    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/personal" claude-desktop "$@"
+    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" claude-desktop "$@"
   fi
 }
 if [[ $check_only -eq 1 ]]; then
   # Diagnostica: stessa strada, ma invece di exec-are l'app si ferma e lo dichiara.
-  launch() { echo "(check-only: qui partirebbe Claude '$profile')"; exit 0; }
+  launch() {
+    local appid; appid="$(cm_desktop_appid "$profile")"
+    echo "(check-only) profilo '$profile'"
+    if [[ -n "$appid" ]]; then echo "  eseguibile:     $HOME/.local/lib/$appid/$appid"
+    else echo "  eseguibile:     claude-desktop (di sistema)"; fi
+    echo "  user-data-dir:  $(cm_desktop_dir "$profile")"
+    echo "  CLAUDE_CONFIG_DIR: $HOME/.claude-multi/$profile"
+    exit 0
+  }
 fi
 
 # --- stato versioni, con cache ----------------------------------------------

@@ -19,6 +19,8 @@
 #     Ogni componente ha il proprio `set -e` dentro la sua subshell.
 set -uo pipefail
 
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
+
 VERSIONS_DIR="$HOME/.local/share/claude/versions"
 BIN_DIR="$HOME/.local/bin"
 
@@ -157,16 +159,22 @@ do_desktop() (
   # Self-heal della variante Work: claude-desktop-update la ricostruisce SOLO quando il pkg
   # cambia versione. Se il pkg è già all'ultima (--if-outdated esce prima) ma il binario Work
   # manca o è più vecchio dell'app.asar di sistema (pacman -U out-of-band), lo ricostruiamo qui.
-  local work_bin="$HOME/.local/lib/claude-desktop-work/claude-desktop-work"
-  local work_asar="$HOME/.local/lib/claude-desktop-work/resources/app.asar"
+  # Una variante per ogni profilo che ne dichiara una: il ciclo viene dai manifest, non da un nome.
   local sys_asar="/usr/lib/claude-desktop/resources/app.asar"
-  if command -v claude-desktop-work-rebuild >/dev/null 2>&1; then
-    if [[ ! -x "$work_bin" || ! -f "$work_asar" || "$sys_asar" -nt "$work_asar" ]]; then
-      echo "    variante Work assente/disallineata → rebuild"
-      claude-desktop-work-rebuild
-    else
-      echo "    variante Work già allineata (skip)"
-    fi
+  if command -v claude-desktop-rebuild >/dev/null 2>&1; then
+    local p appid vbin vasar
+    while read -r p; do
+      [[ -z "$p" ]] && continue
+      appid="$(cm_desktop_appid "$p")"; [[ -n "$appid" ]] || continue
+      vbin="$HOME/.local/lib/$appid/$appid"
+      vasar="$HOME/.local/lib/$appid/resources/app.asar"
+      if [[ ! -x "$vbin" || ! -f "$vasar" || "$sys_asar" -nt "$vasar" ]]; then
+        echo "    variante '$p' assente/disallineata → rebuild"
+        claude-desktop-rebuild "$p"
+      else
+        echo "    variante '$p' già allineata (skip)"
+      fi
+    done < <(cm_profiles)
   fi
 )
 

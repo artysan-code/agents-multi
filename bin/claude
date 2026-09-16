@@ -16,17 +16,11 @@ SELF="$(basename "$0")"
 
 # Which profile answers to this name? The manifest decides; a profile that does not name its
 # command answers to claude-<name>, the same default commandOf() applies on the TypeScript side.
-PROFILE=""
-for manifest in "$HERE/../profiles"/*/profile.json; do
-  [[ -e "$manifest" ]] || continue
-  name="$(basename "$(dirname "$manifest")")"
-  cmd="$(sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1)"
-  [[ -n "$cmd" ]] || cmd="claude-$name"
-  if [[ "$cmd" == "$SELF" ]]; then PROFILE="$name"; break; fi
-done
+source "$HERE/lib/profiles.sh"
+PROFILE="$(cm_profile_for "$SELF")"
 
 if [[ -z "$PROFILE" ]]; then
-  echo "$SELF: no profile in $HERE/../profiles declares this command." >&2
+  echo "$SELF: no profile in $(cm_repo)/profiles declares this command." >&2
   echo "Add \"command\": \"$SELF\" to a profiles/<name>/profile.json, then run: claude-multi install" >&2
   exit 1
 fi

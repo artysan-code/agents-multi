@@ -204,9 +204,15 @@ echo
 echo "Done. Installata: $(pacman -Q claude-desktop 2>/dev/null || echo '?')"
 echo "Riavvia Claude Desktop per applicare l'aggiornamento."
 
-# --- Variante "Claude Work" (secondo eseguibile con app_id distinto) ---
-# Il binario ufficiale è stato appena sostituito: ricostruisco la copia patchata.
-if command -v claude-desktop-work-rebuild >/dev/null 2>&1; then
-  echo "==> ricostruisco la variante 'Claude Work' (app_id distinto)"
-  claude-desktop-work-rebuild || echo "WARN: rebuild 'Claude Work' fallito — rilancia 'claude-desktop-work-rebuild' a mano" >&2
+# --- Varianti per profilo (eseguibili con app_id distinto) ---
+# Il binario ufficiale è stato appena sostituito: ricostruisco ogni copia patchata. Quali siano
+# lo dicono i manifest, non un elenco qui.
+if command -v claude-desktop-rebuild >/dev/null 2>&1; then
+  source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
+  while read -r _p; do
+    [[ -z "$_p" ]] && continue
+    [[ -n "$(cm_desktop_appid "$_p")" ]] || continue
+    echo "==> ricostruisco la variante Desktop del profilo '$_p' (app_id distinto)"
+    claude-desktop-rebuild "$_p" || echo "WARN: rebuild della variante '$_p' fallito — rilancia 'claude-desktop-rebuild $_p' a mano" >&2
+  done < <(cm_profiles)
 fi
