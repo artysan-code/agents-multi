@@ -10,8 +10,8 @@
 # app.setDesktopName(). Qui:
 #   1) estraggo l'app.asar ufficiale
 #   2) inietto in testa al main (index.pre.js) app.setDesktopName("claude-desktop-<profilo>") per
-#      l'app_id, e app.setName("Claude <Profilo>") per il nome visibile — che è quello che finisce
-#      nel tooltip della system tray, altrimenti identico per tutti i profili
+#      l'app_id; e sostituisco la sorgente del tooltip della tray nel chunk che lo imposta, che
+#      altrimenti mostra "Claude" per ogni profilo
 #   3) ripacchettizzo (preservando i native modules *.node)
 #   4) assemblo ~/.local/lib/claude-desktop-<profilo>/: binario REALE copiato (necessario perché
 #      Electron risolve resources/ dal path reale dell'eseguibile) + resources con l'asar patchato;
@@ -50,19 +50,17 @@ echo "==> estraggo app.asar ufficiale"
 asar extract "$SRC/resources/app.asar" "$TMP/src"
 
 APPNAME="Claude ${PROFILE^}"
-echo "==> inietto app_id=$APPID e nome \"$APPNAME\" nel main"
-python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" "$APPNAME" <<'PY'
+echo "==> inietto app_id=$APPID nel main"
+python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" <<'PY'
 import sys, re
-p, appid, appname = sys.argv[1], sys.argv[2], sys.argv[3]
+p, appid = sys.argv[1], sys.argv[2]
 s = open(p, encoding='utf-8').read()
 MARK = '/*__claude_multi_appid__*/'
-# setDesktopName da' l'app_id Wayland (icona e raggruppamento nella barra); setName da' il nome
-# visibile, che e' cio' che l'app passa a tray.setToolTip(app.getName()) — senza, tre profili
-# mostrano tre tooltip identici "Claude". Il path dei dati non ne risente: il launcher passa
-# sempre --user-data-dir esplicito, che in Electron ha precedenza su quello derivato dal nome.
-inj = MARK + ('try{const a=require("electron").app;'
-              'a.setDesktopName&&a.setDesktopName("%s");'
-              'a.setName&&a.setName("%s");}catch(e){};') % (appid, appname)
+# SOLO setDesktopName: da' l'app_id Wayland (icona e raggruppamento nella barra) e non tocca
+# nient'altro. NON usare app.setName(): Electron usa il nome dell'app come chiave nel portachiavi
+# di sistema, quindi rinominarla rende irraggiungibile il token salvato e l'utente si ritrova a
+# rifare il login. Il tooltip della tray si differenzia altrove (vedi patch_tooltip piu' sotto).
+inj = MARK + 'try{const a=require("electron").app;a.setDesktopName&&a.setDesktopName("%s");}catch(e){};' % appid
 if MARK in s or 'setDesktopName("%s")' % appid in s:
     print("    patch già presente"); sys.exit(0)
 # Assert solo su cose STRUTTURALI: il prologo emesso dal minifier è un dettaglio upstream
@@ -73,6 +71,30 @@ m = re.match(r'''^\s*(?:(["'])use strict\1\s*;?)''', s)
 i = m.end() if m else 0
 open(p, 'w', encoding='utf-8').write(s[:i] + inj + s[i:])
 print("    patch iniettata (offset %d)" % i)
+PY
+
+# Il tooltip della tray e' `tray.setToolTip(app.getName())`, e app.getName() NON si tocca: e' la
+# chiave con cui Electron trova il token nel portachiavi. Si sostituisce quindi solo l'argomento,
+# nel chunk che lo imposta. Best-effort: se il pattern non c'e' piu' (bundle riorganizzato) si
+# avvisa e si prosegue — un tooltip generico e' un fastidio, un rebuild fallito no.
+echo "==> differenzio il tooltip della tray (\"$APPNAME\")"
+python3 - "$TMP/src/.vite/build" "$APPNAME" <<'PY'
+import sys, pathlib, re
+build, appname = pathlib.Path(sys.argv[1]), sys.argv[2]
+lit = '"' + appname.replace('"', '\\"') + '"'
+# Due forme nel bundle: setToolTip(X.app.getName()) e setToolTip(e?.tooltip??X.app.getName()).
+# Il prefisso opzionale (il default esplicito) si conserva: si sostituisce solo il fallback.
+PAT = re.compile(r'(setToolTip\((?:[A-Za-z_$][\w$]*\?\.[\w$]+\?\?)?)[A-Za-z_$][\w$]*\.app\.getName\(\)')
+total = 0
+for f in sorted(build.glob("*.js")):
+    s = f.read_text(encoding="utf-8", errors="surrogateescape")
+    if "setToolTip(" not in s:
+        continue
+    s2, n = PAT.subn(lambda m: m.group(1) + lit, s)
+    if n:
+        f.write_text(s2, encoding="utf-8", errors="surrogateescape")
+        total += n
+print(f"    {total} chiamate aggiornate" if total else "    ATTENZIONE: nessun setToolTip(app.getName()) trovato: il tooltip resta generico")
 PY
 
 echo "==> ripacchettizzo (native modules *.node unpacked)"
