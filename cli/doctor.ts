@@ -180,8 +180,8 @@ export async function doctor(): Promise<Check[]> {
       const bin = await lstat(`${LIB}/${variant}/${variant}`);
       const asar = await lstat(`${LIB}/${variant}/resources/app.asar`);
       const sysAsar = await lstat("/usr/lib/claude-desktop/resources/app.asar");
-      if (!bin || !asar) add(`desktop.${p}`, "fail", `Claude Desktop variant for ${p} is missing`, `${variant}-rebuild`);
-      else if (sysAsar?.mtime && asar.mtime && sysAsar.mtime > asar.mtime) add(`desktop.${p}`, "fail", `the ${p} variant is older than the system app`, `${variant}-rebuild`);
+      if (!bin || !asar) add(`desktop.${p}`, "fail", `Claude Desktop variant for ${p} is missing`, `claude-desktop-rebuild ${p}`);
+      else if (sysAsar?.mtime && asar.mtime && sysAsar.mtime > asar.mtime) add(`desktop.${p}`, "fail", `the ${p} variant is older than the system app`, `claude-desktop-rebuild ${p}`);
       else add(`desktop.${p}`, "ok", `Claude Desktop ${m.desktopVersion} + ${p} variant in step`);
     }
     for (const d of await listDir(`${REPO}/desktop`)) {
