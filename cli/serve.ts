@@ -53,7 +53,7 @@ async function runAction(name: string, opts: string[]) {
 }
 
 // ---------------------------------------------------------------- profiles
-interface ProfileBody { name?: string; description?: string; command?: string; desktopDir?: string; cap?: number | null; mcp?: string[] }
+interface ProfileBody { name?: string; description?: string; command?: string; alias?: string; desktopDir?: string; cap?: number | null; mcp?: string[] }
 
 /** Profile names become directory names and are interpolated into paths, so the shape is fixed
  *  here rather than sanitised later: lowercase, starts with a letter, no separators. */
@@ -78,6 +78,7 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
     description: b.description?.trim() || existing?.description || `Profile ${name}.`,
   };
   if (b.command?.trim()) manifest.command = b.command.trim(); else delete manifest.command;
+  if (b.alias?.trim()) manifest.alias = b.alias.trim(); else delete manifest.alias;
   if (b.desktopDir?.trim()) manifest.desktopDir = b.desktopDir.trim(); else delete manifest.desktopDir;
 
   await Deno.mkdir(dir, { recursive: true });

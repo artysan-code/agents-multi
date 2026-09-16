@@ -2,7 +2,7 @@
 // (every selected entry has to exist). Written against whatever profiles the repository declares,
 // so adding or removing one does not break the suite.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { KINDS, loadManifest, ownItems, profileNames, REPO } from "../lib.ts";
+import { commandOf, KINDS, launchers, loadManifest, ownItems, profileNames, REPO, RUNTIME, zshBlock } from "../lib.ts";
 
 Deno.test("manifest: every profile has a valid profile.json and its selections exist in shared/", async () => {
   const profiles = await profileNames();
@@ -49,4 +49,44 @@ Deno.test("manifest: desktopDir, when set, is a path and not a bare name", async
 Deno.test('manifest: a profile with no file falls back to "all" everywhere', async () => {
   const m = await loadManifest("does-not-exist");
   assertEquals(m, { skills: "all", agents: "all", commands: "all" });
+});
+
+Deno.test("launchers: every profile gets a command, unique across profiles", async () => {
+  const ls = await launchers();
+  assertEquals(ls.length, (await profileNames()).length);
+  const seen = new Set<string>();
+  for (const l of ls) {
+    assert(l.command.length > 0, `${l.profile}: empty command`);
+    assert(!seen.has(l.command), `two profiles answer to "${l.command}"`);
+    seen.add(l.command);
+  }
+  // Aliases must be distinct too, or the ~/.zshrc block would shadow one with the other.
+  const aliases = ls.map((l) => l.alias).filter(Boolean);
+  assertEquals(new Set(aliases).size, aliases.length, "duplicate alias across profiles");
+});
+
+Deno.test("commandOf: the manifest wins, otherwise claude-<name>", () => {
+  const base = { skills: "all", agents: "all", commands: "all" } as const;
+  assertEquals(commandOf("acme", { ...base }), "claude-acme");
+  assertEquals(commandOf("acme", { ...base, command: "claude-oto" }), "claude-oto");
+  // A blank command is not a command: fall back rather than link an empty name.
+  assertEquals(commandOf("acme", { ...base, command: "  " }), "claude-acme");
+});
+
+Deno.test("launchers: exactly one profile answers to the bare `claude` default", async () => {
+  const defaults = (await launchers()).filter((l) => l.command === "claude");
+  assert(defaults.length <= 1, "more than one profile claims the bare `claude` command");
+});
+
+Deno.test("zshBlock: one alias line per declared alias, default profile exported", async () => {
+  const block = await zshBlock();
+  const ls = await launchers();
+  for (const l of ls) {
+    if (l.alias) assert(block.includes(`alias ${l.alias}='${l.command}'`), `missing alias for ${l.profile}`);
+    assert(block.includes(l.command), `${l.command} not mentioned in the block`);
+  }
+  const def = ls.find((l) => l.command === "claude") ?? ls[0];
+  assert(block.includes(`CLAUDE_CONFIG_DIR:-${RUNTIME}/${def.profile}}`), "the default profile is not the exported CLAUDE_CONFIG_DIR");
+  // No profile name may be hardcoded: the block must be shorter than the sum of its parts.
+  assertEquals(block.split("\n").filter((x) => x.startsWith("alias ")).length, ls.filter((l) => l.alias).length);
 });

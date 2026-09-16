@@ -1,7 +1,7 @@
 // doctor.ts — every invariant of the setup as a check with a verdict and a fix.
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
-import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
 import { collect, doctorChecks } from "./budget.ts";
 import { PORT } from "./serve.ts";
@@ -95,12 +95,22 @@ export async function doctor(): Promise<Check[]> {
 
   // --- binaries and wrappers
   const claudeLink = await readlink(`${BIN}/claude`);
-  if (claudeLink === `${REPO}/bin/claude`) add("bin.claude", "ok", "~/.local/bin/claude → the repository's default wrapper");
+  if (claudeLink === `${REPO}/bin/claude`) add("bin.claude", "ok", "~/.local/bin/claude → the repository's launcher");
   else if (claudeLink?.includes("claude/versions/")) add("bin.claude", "fail", "~/.local/bin/claude is the native updater's symlink: `claude` would start on the wrong profile", "claude-multi install");
   else add("bin.claude", "fail", `~/.local/bin/claude → ${claudeLink ?? "a real file, or missing"}`, "claude-multi install");
-  for (const b of ["claude-work", "claude-multi", "claude-launch", "claude-update"]) {
+  // Every wrapper the repository ships, plus one launcher per profile pointed at bin/claude —
+  // both lists come from what is there, so a new profile or script needs no edit here.
+  for (const b of await listDir(`${REPO}/bin`)) {
+    if (b === "lib" || b === "claude") continue;
     if ((await readlink(`${BIN}/${b}`)) !== `${REPO}/bin/${b}`) add(`bin.${b}`, "fail", `~/.local/bin/${b} does not point at the repository`, "claude-multi install");
   }
+  const missingLaunchers = [];
+  for (const l of await launchers()) {
+    if (l.command === "claude") continue; // covered by bin.claude above
+    if ((await readlink(`${BIN}/${l.command}`)) !== `${REPO}/bin/claude`) missingLaunchers.push(`${l.command} (${l.profile})`);
+  }
+  if (missingLaunchers.length) add("bin.launchers", "fail", `launchers not pointing at the repository: ${missingLaunchers.join(", ")}`, "claude-multi install");
+  else add("bin.launchers", "ok", `launchers: ${(await launchers()).map((l) => `${l.command} (${l.profile})`).join(" · ")}`);
   if (await lstat(`${BIN}/claude-multi-finalize`)) add("bin.finalize", "warn", "claude-multi-finalize is superseded by `claude-multi doctor`", `rm ${BIN}/claude-multi-finalize`);
   if (!m.cliVersion) add("bin.claude-bin", "fail", "claude-bin resolves to no version", "claude-multi update --cli");
   else {
@@ -119,8 +129,12 @@ export async function doctor(): Promise<Check[]> {
 
   // --- shell integration
   const zsh = await readText(`${HOME}/.zshrc`) ?? "";
-  if (!zsh.includes("# >>> claude-multi")) add("zshrc", "warn", "no claude-multi block in ~/.zshrc", "claude-multi install");
-  else if (!zsh.includes("claude-multi/") || zsh.includes("alias claude=")) add("zshrc", "fail", "the claude-multi block in ~/.zshrc is outdated", "claude-multi install");
+  // Compared against the block the manifests produce, not just probed for a marker: that is what
+  // catches a profile added or renamed since the last install, whose alias is still the old one.
+  const wantBlock = await zshBlock();
+  const haveBlock = zsh.match(new RegExp(`${ZSH_BEGIN.replace(/[()]/g, "\\$&")}[\\s\\S]*?${ZSH_END}`))?.[0];
+  if (!haveBlock) add("zshrc", "warn", "no claude-multi block in ~/.zshrc", "claude-multi install");
+  else if (haveBlock !== wantBlock) add("zshrc", "warn", "the claude-multi block in ~/.zshrc no longer matches the manifests", "claude-multi install");
   else add("zshrc", "ok", "~/.zshrc block is current");
 
   // --- Syncthing: the claude-multi folder must not exist any more (config travels through git)

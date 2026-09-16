@@ -61,8 +61,10 @@ export interface Manifest {
   commands: "all" | string[];
   /** Claude Desktop user-data-dir. Omitted = derived by convention, see desktopDir(). */
   desktopDir?: string;
-  /** Launcher command that starts this profile, for docs and diagnostics. */
+  /** Launcher command that starts this profile. Omitted = `claude-<name>`, see commandOf(). */
   command?: string;
+  /** Shell alias for the launcher, written into the managed ~/.zshrc block. */
+  alias?: string;
 }
 const MANIFEST_DEFAULT: Manifest = { skills: "all", agents: "all", commands: "all" };
 
@@ -79,6 +81,45 @@ export async function profileNames(): Promise<Profile[]> {
     if (await stat(`${REPO}/profiles/${n}/profile.json`)) out.push(n);
   }
   return out;
+}
+
+/** The command that launches a profile. The manifest wins; otherwise `claude-<name>`, which is
+ *  what a profile added by hand gets without having to say so. */
+export function commandOf(p: Profile, m: Manifest): string {
+  return m.command?.trim() || `claude-${p}`;
+}
+
+/** Every declared profile with its launcher command and optional alias, in profile order.
+ *  The launcher is one script (bin/claude) linked under each command name: it identifies its
+ *  profile from the name it was invoked as, so a new profile needs no new file. */
+export async function launchers(): Promise<{ profile: Profile; command: string; alias?: string }[]> {
+  const out: { profile: Profile; command: string; alias?: string }[] = [];
+  for (const p of await profileNames()) {
+    const m = await loadManifest(p);
+    out.push({ profile: p, command: commandOf(p, m), alias: m.alias?.trim() || undefined });
+  }
+  return out;
+}
+
+export const ZSH_BEGIN = "# >>> claude-multi (multi-account) >>>";
+export const ZSH_END = "# <<< claude-multi <<<";
+
+/** The managed ~/.zshrc block, written from the manifests: launchers, their aliases, and the
+ *  default profile — the one whose command is plain `claude`, falling back to the first declared. */
+export async function zshBlock(): Promise<string> {
+  const ls = await launchers();
+  const def = ls.find((l) => l.command === "claude") ?? ls[0];
+  const lines = ls.map((l) => `# \`${l.command}\`${l.alias ? ` (${l.alias})` : ""} = ${l.profile} profile`);
+  const aliases = ls.filter((l) => l.alias).map((l) => `alias ${l.alias}='${l.command}'`);
+  return [
+    ZSH_BEGIN,
+    "# Managed by `claude-multi install`: do not edit by hand.",
+    ...lines,
+    `export CLAUDE_CONFIG_DIR="\${CLAUDE_CONFIG_DIR:-${RUNTIME}/${def?.profile ?? ""}}"`,
+    "export DISABLE_AUTOUPDATER=1",
+    ...aliases,
+    ZSH_END,
+  ].join("\n");
 }
 
 /** Profiles materialised under RUNTIME. Used to spot leftovers the repo no longer declares. */

@@ -535,7 +535,9 @@ function cardView(name, isLive) {
       <button class="btn edit" data-edit="${esc(name)}">Edit</button>
     </div>
     <div class="fields">
-      <div class="f"><label>Command</label><span class="val">${esc(p.manifest.command ?? "—")}</span></div>
+      <div class="f"><label>Command</label><span class="val">${esc(p.manifest.command ?? `claude-${name}`)}${
+    p.manifest.alias ? ` <span class="dim">${esc(p.manifest.alias)}</span>` : ""
+  }</span></div>
       <div class="f"><label>Desktop</label><span class="val" title="${esc(p.desktopDir)}">${
     esc(shortHome(p.desktopDir))
   }</span></div>
@@ -573,7 +575,10 @@ function cardEdit(name) {
   }" placeholder="what this profile is for"></div>
       <div class="f"><label>Command</label><input name="command" value="${
     esc(m.command ?? "")
-  }" placeholder="claude-research"></div>
+  }" placeholder="claude-${esc(name || "research")}"></div>
+      <div class="f"><label>Alias</label><input name="alias" value="${
+    esc(m.alias ?? "")
+  }" pattern="[a-zA-Z_][a-zA-Z0-9_-]*" placeholder="cr"></div>
       <div class="f"><label>Desktop</label><input name="desktopDir" value="${
     esc(m.desktopDir ?? "")
   }" placeholder="~/.config/Claude-Research"></div>
@@ -632,6 +637,7 @@ $("#pcards").addEventListener("submit", async (e) => {
     name: f.dataset.name || f.elements.name.value.trim(),
     description: f.elements.description.value.trim(),
     command: f.elements.command.value.trim(),
+    alias: f.elements.alias.value.trim(),
     desktopDir: f.elements.desktopDir.value.trim(),
     cap: f.elements.cap.value ? Number(f.elements.cap.value) : null,
     mcp: $$("[data-pick].on", f).map((c) => c.dataset.pick),

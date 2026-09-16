@@ -1,7 +1,7 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
-import { AGENTS_SKILLS, ANSI, BIN, HOME, KINDS, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
+import { AGENTS_SKILLS, ANSI, BIN, HOME, KINDS, launchers, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 
 let DRY = false;
@@ -38,16 +38,6 @@ async function removeLink(p: string, why: string) {
   if (!DRY) await Deno.remove(p);
 }
 
-const ZSH_BEGIN = "# >>> claude-multi (multi-account) >>>";
-const ZSH_END = "# <<< claude-multi <<<";
-const ZSH_BLOCK = `${ZSH_BEGIN}
-# Managed by \`claude-multi install\`: do not edit by hand.
-# \`claude\` = profilo personal (default), \`claude-work\` (cw) = profilo work.
-export CLAUDE_CONFIG_DIR="\${CLAUDE_CONFIG_DIR:-$HOME/.claude-multi/personal}"
-export DISABLE_AUTOUPDATER=1
-alias cw='claude-work'
-alias clp='claude'
-${ZSH_END}`;
 
 /** Materialise <profile>/<kind> from the manifest: "all" with no owned items becomes a symlink to
  *  the shared directory; otherwise a real directory with selective symlinks (shared ones relative,
@@ -132,6 +122,11 @@ export async function install(dry: boolean) {
     if (b === "lib") continue;
     await ensureSymlink(`${REPO}/bin/${b}`, `${BIN}/${b}`, `~/.local/bin/${b}`);
   }
+  // Each profile gets its launcher name pointed at the one wrapper, which identifies the profile
+  // from the name it is invoked as. A new profile needs no new file in bin/.
+  for (const l of await launchers()) {
+    await ensureSymlink(`${REPO}/bin/claude`, `${BIN}/${l.command}`, `~/.local/bin/${l.command}`);
+  }
   await ensureSymlink(`${REPO}/shared/hooks/claude-distiller`, `${BIN}/claude-distiller`, "~/.local/bin/claude-distiller");
   await ensureSymlink(`${REPO}/shared/tools/stignore-gen/stignore-gen.ts`, `${BIN}/stignore-gen`, "~/.local/bin/stignore-gen");
   if (await lstat(`${BIN}/claude-multi-finalize`)) await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
@@ -150,8 +145,9 @@ export async function install(dry: boolean) {
   // 7. ~/.zshrc
   const zp = `${HOME}/.zshrc`; const zsh = await readText(zp);
   if (zsh !== null) {
+    const block = await zshBlock();
     const re = new RegExp(`${ZSH_BEGIN.replace(/[()]/g, "\\$&")}[\\s\\S]*?${ZSH_END}`);
-    const next = re.test(zsh) ? zsh.replace(re, ZSH_BLOCK) : `${zsh.trimEnd()}\n\n${ZSH_BLOCK}\n`;
+    const next = re.test(zsh) ? zsh.replace(re, block) : `${zsh.trimEnd()}\n\n${block}\n`;
     if (next !== zsh) { say(`${ANSI.y}→${ANSI.x} updating the claude-multi block in ~/.zshrc`); if (!DRY) await Deno.writeTextFile(zp, next); }
   }
 
@@ -185,7 +181,11 @@ export async function install(dry: boolean) {
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
     for (const d of await listDir(`${REPO}/desktop`)) if (d.endsWith(".desktop")) await ensureCopy(`${REPO}/desktop/${d}`, `${apps}/${d}`);
-    for (const s of await listDir(`${REPO}/desktop/icons`)) await ensureCopy(`${REPO}/desktop/icons/${s}/claude-desktop-work.png`, `${HOME}/.local/share/icons/hicolor/${s}/apps/claude-desktop-work.png`);
+    for (const s of await listDir(`${REPO}/desktop/icons`)) {
+      for (const f of await listDir(`${REPO}/desktop/icons/${s}`)) {
+        await ensureCopy(`${REPO}/desktop/icons/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);
+      }
+    }
     const handlerP = `${apps}/claude-code-url-handler.desktop`; const handler = await readText(handlerP);
     if (handler && /Exec=.*\/claude"? --handle-uri/.test(handler) && !handler.includes("claude-bin")) {
       say(`${ANSI.y}→${ANSI.x} url-handler claude-cli:// → claude-bin`);

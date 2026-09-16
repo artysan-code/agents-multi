@@ -23,8 +23,12 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
 - **Every new invariant goes in `cli/doctor.ts`**, not in the README. The README describes, the
   doctor verifies. Those two have already drifted apart once.
 - **No per-profile constants.** Profiles are discovered from `profiles/*/profile.json`
-  (`profileNames()`), and the Desktop directory comes from the manifest (`desktopDir()`). A check
-  that names "work" or "personal" is a bug: derive it from the manifests instead.
+  (`profileNames()`), the Desktop directory comes from the manifest (`desktopDir()`), and the
+  launcher name from `commandOf()` / `launchers()`. A check that names "work" or "personal" is a
+  bug: derive it from the manifests instead. This holds for materialising a profile too, not just
+  reading one — `install` links one launcher per manifest and builds the `~/.zshrc` block from
+  them; there is a single launcher script (`bin/claude`) that identifies its profile from the name
+  it was invoked as.
 - **The cost in `usage` is a list-price equivalent, not a charge.** Consumption sits on three planes
   (`cli/budget.ts`): `billed` (extra credits, real money, the only one that notifies), `plan`
   (subscription windows), `estimate` (list price). The plane belongs to the **metric**, not to the

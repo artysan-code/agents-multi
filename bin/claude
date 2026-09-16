@@ -1,17 +1,38 @@
 #!/usr/bin/env bash
-# claude — Claude Code con il profilo PERSONAL (default della macchina).
-# Per il profilo work: `claude-work`. Fa parte del repo claude-multi (bin/).
+# claude — the single launcher for every profile.
 #
-# 1. allinea la config dal repo (prelaunch.sh: fetch se stantio, pull ff-only, mai bloccante)
-# 2. forza CLAUDE_CONFIG_DIR sul profilo e disabilita l'auto-updater nativo
-# 3. `claude update` è dirottato su `claude-multi update`: l'updater nativo riscriverebbe
-#    ~/.local/bin/claude e lascerebbe claude-bin indietro
+# It is linked into ~/.local/bin once per profile (`claude`, `claude-work`, …) and works out which
+# profile to start from the name it was invoked as, matched against the `command` field of
+# profiles/*/profile.json. Adding a profile therefore adds no file here: `claude-multi install`
+# creates the link.
+#
+# 1. align the config from the repo (prelaunch.sh: fetch when stale, ff-only pull, never blocking)
+# 2. pin CLAUDE_CONFIG_DIR to the profile and disable the native auto-updater
+# 3. `<launcher> update` is redirected to `claude-multi update`: the native updater would rewrite
+#    ~/.local/bin/claude and leave claude-bin behind
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-PROFILE_DIR="$HOME/.claude-multi/personal"
+SELF="$(basename "$0")"
+
+# Which profile answers to this name? The manifest decides; a profile that does not name its
+# command answers to claude-<name>, the same default commandOf() applies on the TypeScript side.
+PROFILE=""
+for manifest in "$HERE/../profiles"/*/profile.json; do
+  [[ -e "$manifest" ]] || continue
+  name="$(basename "$(dirname "$manifest")")"
+  cmd="$(sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1)"
+  [[ -n "$cmd" ]] || cmd="claude-$name"
+  if [[ "$cmd" == "$SELF" ]]; then PROFILE="$name"; break; fi
+done
+
+if [[ -z "$PROFILE" ]]; then
+  echo "$SELF: no profile in $HERE/../profiles declares this command." >&2
+  echo "Add \"command\": \"$SELF\" to a profiles/<name>/profile.json, then run: claude-multi install" >&2
+  exit 1
+fi
 
 if [[ "${1:-}" == "update" ]]; then
-  echo "claude: l'update passa da 'claude-multi update' (ripristina wrapper e claude-bin)." >&2
+  echo "$SELF: updates go through 'claude-multi update' (it restores the wrappers and claude-bin)." >&2
   exec "$HERE/claude-multi" update --cli
 fi
 
@@ -22,4 +43,4 @@ if [[ ! -x "$CLAUDE_BIN" ]]; then
   LATEST=$(ls -1v "$HOME/.local/share/claude/versions/" | tail -n1)
   CLAUDE_BIN="$HOME/.local/share/claude/versions/$LATEST"
 fi
-exec env CLAUDE_CONFIG_DIR="$PROFILE_DIR" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "$@"
+exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$PROFILE" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "$@"

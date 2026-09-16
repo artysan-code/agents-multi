@@ -59,12 +59,19 @@ matter of adding a directory.
 {
   "description": "Research profile.",
   "command": "claude-research",
+  "alias": "cr",
   "desktopDir": "~/.config/Claude-Research",
   "skills": ["graphify"],
   "agents": "all",
   "commands": "all"
 }
 ```
+
+`command` is the launcher name, and `install` creates it: there is one launcher script,
+`bin/claude`, linked into `~/.local/bin` once per profile. It works out which profile to start
+from the name it was invoked as, so a profile adds no file to `bin/`. Omit `command` and it
+answers to `claude-<name>`; the profile whose command is plain `claude` is the machine default.
+`alias` is optional and lands in the managed `~/.zshrc` block.
 
 `"all"` mounts the whole shared directory as one symlink; a list mounts only those entries, plus
 whatever the profile owns in `profiles/<name>/<kind>/`. Owning a skill is how work that must not
@@ -75,7 +82,13 @@ failure if it shows up somewhere else.
 `~/.config/Claude-<Name>` when it exists, otherwise Desktop's own `~/.config/Claude`.
 
 The easiest way to add one is the console: **Profiles → Add profile** writes the manifest, updates
-the MCP registry, and runs `install`.
+the MCP registry, and runs `install`. Then open the new launcher once and sign in — credentials are
+the one thing no manifest can carry.
+
+Renaming a profile is not a console operation, because it moves things `install` does not own: the
+runtime directory `~/.claude-multi/<name>` with its credentials and transcripts, the Desktop data
+dir, and the profile column already recorded in `usage.db`. Do it from a terminal with Claude
+closed, then run `claude-multi install` and `claude-multi doctor`.
 
 ---
 
