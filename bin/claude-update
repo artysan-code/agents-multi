@@ -2,13 +2,13 @@
 # claude-update: orchestratore aggiornamenti dell'intero setup Claude multi-account.
 #
 #   [CLI]     Claude Code   — updater interno + ripristino di claude-bin e del wrapper ~/.local/bin/claude
-#   [Desktop] Claude Desktop — rebuild pkg Arch dal .deb UFFICIALE Anthropic; la variante "work"
+#   [Desktop] Claude Desktop — rebuild pkg Arch dal .deb UFFICIALE Anthropic; le varianti
 #                              (app_id distinto) viene ricostruita in coda da claude-desktop-update
 #
 # USO:
 #   claude-update              # tutto: CLI + Desktop
 #   claude-update --cli        # solo Claude Code
-#   claude-update --desktop    # solo Claude Desktop (personal + work)
+#   claude-update --desktop    # solo Claude Desktop (tutte le varianti)
 #   claude-update --check      # NON aggiorna: dice solo cosa è obsoleto (--json per gli script, con changelog_file)
 #   claude-update --rollback   # claude-bin torna alla versione precedente (il prune ne tiene una)
 #
@@ -71,17 +71,24 @@ do_rollback() (
 
 # --- [CLI] Claude Code ------------------------------------------------------
 # L'updater interno scarica in ~/.local/share/claude/versions/ e ricrea ~/.local/bin/claude
-# come symlink: questo bypassa il tripwire e lascia claude-bin (usato dai wrapper
-# claude-work/claude-personal) puntato alla vecchia versione. Qui rimettiamo a posto entrambi.
+# come symlink: questo bypassa il tripwire e lascia claude-bin (usato dai wrapper di
+# profilo) puntato alla vecchia versione. Qui rimettiamo a posto entrambi.
 do_cli() (
   set -e
   echo "==> [CLI] aggiornamento Claude Code..."
-  # NB: lo shell dell'utente esporta DISABLE_AUTOUPDATER=1 (vedi .zshrc) e i wrapper
-  # claude-work/claude-personal pure; in quel contesto il subcomando `update` può essere
-  # soppresso. Invochiamo il binario DIRETTO strippando quel flag, così l'update esplicito
-  # gira sempre. Il binario è condiviso: aggiornarlo una volta basta per entrambi i profili.
+  # NB: lo shell dell'utente esporta DISABLE_AUTOUPDATER=1 (vedi .zshrc) e i wrapper di
+  # profilo pure; in quel contesto il subcomando `update` può essere soppresso. Invochiamo
+  # il binario DIRETTO strippando quel flag, così l'update esplicito gira sempre. Il binario
+  # è condiviso: aggiornarlo una volta basta per tutti i profili.
   local cbin="$BIN_DIR/claude-bin"
   [[ -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(ls -1v "$VERSIONS_DIR" | tail -n1)"
+
+  # CLAUDE_CONFIG_DIR usa-e-getta: `update` scarica solo il binario, non ha bisogno dello
+  # stato di un profilo — e scriverci dentro lo sporcherebbe. Puntava a
+  # ~/.claude-multi/work, nome morto dopo il rename del profilo (→ agency): la dir veniva
+  # RICREATA vuota a ogni update e il doctor la segnalava come runtime senza profilo.
+  local tmpcfg; tmpcfg="$(mktemp -d)"
+  trap 'rm -rf -- "$tmpcfg"' EXIT
 
   # Cattura l'output per filtrare il blocco Warning/Fix noto: l'updater nativo avvisa che
   # ~/.local/bin/claude non è un suo symlink — ma è il tripwire, VOLUTO → puro rumore.
@@ -89,7 +96,7 @@ do_cli() (
   # `|| rc=$?` evita che `set -e` abortisca sul non-zero prima di catturarlo; `|| true` protegge
   # dal caso (teorico) in cui grep filtri tutto e ritorni 1 sotto pipefail.
   local out rc=0
-  out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$HOME/.claude-multi/work" "$cbin" update 2>&1)" || rc=$?
+  out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" "$cbin" update 2>&1)" || rc=$?
   printf '%s\n' "$out" \
     | grep -vE 'was not created by the native installer|If you put a launcher wrapper there on purpose' \
     || true
@@ -124,7 +131,7 @@ do_cli() (
   [[ -n "$prev" ]] && echo "    rollback disponibile verso $prev"
 
   # L'updater nativo riscrive ~/.local/bin/claude come symlink alla nuova versione: lo
-  # rimettiamo al wrapper del repo (profilo personal). claude-work non viene toccato.
+  # rimettiamo al wrapper del repo (profilo personal). Gli altri launcher non sono toccati.
   local repo; repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
   echo "    ripristino wrapper $BIN_DIR/claude → $repo/bin/claude"
   ln -sfn "$repo/bin/claude" "$BIN_DIR/claude"
@@ -138,12 +145,12 @@ do_cli() (
   fi
 )
 
-# --- [Desktop] Claude Desktop (personal + work) -----------------------------
-# claude-desktop-update ricostruisce il pkg dal .deb ufficiale e, in coda, la variante work.
+# --- [Desktop] Claude Desktop (tutte le varianti) ---------------------------
+# claude-desktop-update ricostruisce il pkg dal .deb ufficiale e, in coda, le varianti.
 # --if-outdated: se è già all'ultima versione esce 0 senza prompt (run non presidiata).
 do_desktop() (
   set -e
-  echo "==> [Desktop] aggiornamento Claude Desktop (personal + work)..."
+  echo "==> [Desktop] aggiornamento Claude Desktop (tutte le varianti)..."
 
   # Guardia esplicita: se manca il PKGBUILD, claude-desktop-update morirebbe con un ERROR
   # generico. Meglio dirlo chiaro qui (errore strutturale) e far risultare Desktop = FAIL.

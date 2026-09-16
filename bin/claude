@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # claude — the single launcher for every profile.
 #
-# It is linked into ~/.local/bin once per profile (`claude`, `claude-work`, …) and works out which
+# It is linked into ~/.local/bin once per profile (`claude`, `claude-agency`, …) and works out which
 # profile to start from the name it was invoked as, matched against the `command` field of
 # profiles/*/profile.json. Adding a profile therefore adds no file here: `claude-multi install`
 # creates the link.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # prelaunch.sh — allinea il repo claude-multi PRIMA che parta Claude, così la config
 # nuova è già caricata e non serve mai riavviare. Chiamato dai wrapper `claude`,
-# `claude-work` e da `claude-launch`. Non fallisce mai il lancio: ogni errore → exit 0.
+# `claude-agency` e da `claude-launch`. Non fallisce mai il lancio: ogni errore → exit 0.
 #
 # Regole:
 #   - la rete si tocca solo se l'ultimo fetch è più vecchio di TTL (default 12h),

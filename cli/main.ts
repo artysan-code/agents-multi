@@ -12,7 +12,7 @@
 //   serve   [--no-open]     local console on http://127.0.0.1:7331 (state, usage, sessions, health, actions)
 //
 // Principle: the repository is the source of truth, ~/.claude-multi is runtime materialised by
-// `install`. Launching Claude stays pure bash (bin/claude, bin/claude-work, bin/lib/prelaunch.sh):
+// `install`. Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
 // management lives here. Zero external dependencies — Deno APIs plus the built-in node:sqlite — so
 // it runs on a fresh machine with no cache to warm.
 
