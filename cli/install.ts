@@ -76,25 +76,41 @@ async function removeLink(p: string, why: string) {
 }
 
 
-/** Materialise <profile>/<kind> from the manifest: "all" with no owned items becomes a symlink to
- *  the shared directory; otherwise a real directory with selective symlinks (shared ones relative,
- *  owned ones absolute into the repository). */
+/** Materialise <profile>/<kind> as a real directory of selective symlinks: shared items relative,
+ *  owned ones absolute into the repository.
+ *
+ *  It used to take a shortcut — "all" with no owned items became a single symlink to the shared
+ *  directory — and that shortcut pointed a WRITABLE runtime path straight at the repository:
+ *  ~/.claude-multi/personal/skills -> ../shared/skills -> <repo>/shared/skills. Claude Code writes
+ *  into <config dir>/skills (the account skill sync lands a synced/<uuid>/ bucket there) and into
+ *  agents/ and commands/, so its writes ended up inside the source of truth — untracked content in
+ *  the repository, flagged broken by the doctor. And shared/ is shared by every profile: one
+ *  account's cloud skills would reach the others the moment another profile mounted the lot.
+ *  A directory of symlinks costs one link per item and keeps those writes in the runtime, where
+ *  they belong. */
 async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   const dir = `${RUNTIME}/${p}/${kind}`;
   const own = await ownItems(p, kind);
-  if (spec === "all" && own.length === 0) { await ensureSymlink(`../shared/${kind}`, dir, `${p}/${kind}`); return; }
   const st = await lstat(dir);
   if (st?.isSymlink) { say(`${ANSI.y}→${ANSI.x} ${p}/${kind} was a symlink: becoming a real directory`); if (!DRY) await Deno.remove(dir); }
   await ensureDir(dir);
-  const sharedNames = spec === "all" ? await listDir(`${REPO}/shared/${kind}`) : spec.map((n) => kind === "skills" || n.endsWith(".md") ? n : `${n}.md`);
+  // "all" mounts what really is an item of that kind, exactly like sharedInventory() counts them:
+  // a skill is a directory with a SKILL.md, an agent or a command is a .md file — and AGENTS.md is
+  // the catalog of the directory, not an agent. Anything else (a sync bucket, a stray file) is left
+  // alone. The doctor still reports it: not mounting it is not the same as condoning it.
+  const sharedNames = spec === "all"
+    ? (await Promise.all((await listDir(`${REPO}/shared/${kind}`)).map(async (n) =>
+        (kind === "skills" ? !!(await lstat(`${REPO}/shared/${kind}/${n}/SKILL.md`)) : n.endsWith(".md") && n !== "AGENTS.md") ? n : null)))
+      .filter((n): n is string => n !== null)
+    : spec.map((n) => kind === "skills" || n.endsWith(".md") ? n : `${n}.md`);
   const expected = new Set<string>();
   for (const n of sharedNames) {
     if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) { say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`); continue; }
     expected.add(n); await ensureSymlink(`../../shared/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`);
   }
   for (const n of own) { expected.add(n); await ensureSymlink(`${REPO}/profiles/${p}/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`); }
-  // links the manifest does not call for: removed only when they are symlinks (real content stays,
-  // and the doctor reports it)
+  // links the manifest does not call for: removed only when they are symlinks. Real content stays
+  // untouched — it is the profile's own runtime (skills/synced/, agents created in session).
   for (const n of await listDir(dir)) {
     if (expected.has(n)) continue;
     const s = await lstat(`${dir}/${n}`);

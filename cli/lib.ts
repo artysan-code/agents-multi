@@ -262,7 +262,12 @@ export async function profileInfo(p: Profile) {
     for (const n of await listDir(`${dir}/${k}`)) {
       if (k !== "skills" && !n.endsWith(".md")) continue;
       const path = `${dir}/${k}/${n}`;
-      mounted[k][k === "skills" ? n : n.slice(0, -3)] = { link: await readlink(path), broken: !(await stat(k === "skills" ? `${path}/SKILL.md` : path)) };
+      // "mounted" is what install put there, i.e. symlinks. Whatever Claude Code writes into the
+      // runtime itself (skills/synced/<uuid>/, an agent created in session) is the profile's own
+      // content: the manifest does not claim it and the checks must not read it as a stray mount.
+      const link = await readlink(path);
+      if (link === null) continue;
+      mounted[k][k === "skills" ? n : n.slice(0, -3)] = { link, broken: !(await stat(k === "skills" ? `${path}/SKILL.md` : path)) };
     }
   }
   const deskDir = await desktopDir(p, manifest);

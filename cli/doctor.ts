@@ -61,12 +61,12 @@ export async function doctor(): Promise<Check[]> {
 
     for (const k of KINDS) {
       const spec = info.manifest[k]; const own = await ownItems(p, k);
-      if (spec === "all" && own.length === 0) {
-        if (info.kindLinks[k] !== `../shared/${k}`) add(`profile.${p}.${k}`, "fail", `${p}/${k}: manifest says "all" but points at ${info.kindLinks[k] ?? "a real directory"}`, "claude-multi install");
-        continue;
-      }
-      if (info.kindLinks[k]) { add(`profile.${p}.${k}`, "fail", `${p}/${k}: manifest is selective but the path is a symlink`, "claude-multi install"); continue; }
-      const expected = new Set([...(spec === "all" ? Object.keys(inv[k]) : spec), ...own.map((n) => n.replace(/\.md$/, ""))]);
+      // Claude Code writes into these directories (the account skill sync, agents and commands it
+      // creates): a symlink to shared/ would hand it the repository. They are real directories now.
+      if (info.kindLinks[k]) { add(`profile.${p}.${k}`, "fail", `${p}/${k} is a symlink (→ ${info.kindLinks[k]}): it must be a real directory, Claude Code writes here`, "claude-multi install"); continue; }
+      // "all" means every valid item of the kind: a broken entry in shared/ is not mounted anywhere,
+      // so it is not "missing" from a profile either — it is reported once, against shared.
+      const expected = new Set([...(spec === "all" ? Object.keys(inv[k]).filter((n) => !inv[k][n].broken) : spec), ...own.map((n) => n.replace(/\.md$/, ""))]);
       const actual = new Set(Object.keys(info.mounted[k]));
       const missing = [...expected].filter((n) => !actual.has(n)); const extra = [...actual].filter((n) => !expected.has(n));
       const broken = Object.entries(info.mounted[k]).filter(([, v]) => v.broken).map(([n]) => n);
