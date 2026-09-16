@@ -9,11 +9,14 @@
 # X11 e argv[0] (verificato). L'unico punto che cambia l'app_id è, dentro l'asar, una chiamata
 # app.setDesktopName(). Qui:
 #   1) estraggo l'app.asar ufficiale
-#   2) inietto app.setDesktopName("claude-desktop-work") in testa al main (index.pre.js)
+#   2) inietto in testa al main (index.pre.js) app.setDesktopName("claude-desktop-<profilo>") per
+#      l'app_id, e app.setName("Claude <Profilo>") per il nome visibile — che è quello che finisce
+#      nel tooltip della system tray, altrimenti identico per tutti i profili
 #   3) ripacchettizzo (preservando i native modules *.node)
-#   4) assemblo ~/.local/lib/claude-desktop-work/: binario REALE copiato (necessario perché Electron
-#      risolve resources/ dal path reale dell'eseguibile) + resources con l'asar patchato; tutto il
-#      resto è SYMLINK a /usr/lib/claude-desktop → ~245 MB di cui solo il binario (208M) è copia.
+#   4) assemblo ~/.local/lib/claude-desktop-<profilo>/: binario REALE copiato (necessario perché
+#      Electron risolve resources/ dal path reale dell'eseguibile) + resources con l'asar patchato;
+#      tutto il resto è SYMLINK a /usr/lib/claude-desktop → ~245 MB di cui solo il binario è copia
+#   5) tingo le due icone della tray col colore dell'icona applicazione del profilo
 #
 # La supply chain resta pulita: il binario è quello ufficiale Anthropic, l'unica modifica è UNA riga
 # nostra e trasparente nell'asar. Rilancia questo script dopo ogni update di claude-desktop.
@@ -46,13 +49,20 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 echo "==> estraggo app.asar ufficiale"
 asar extract "$SRC/resources/app.asar" "$TMP/src"
 
-echo "==> inietto app.setDesktopName(\"$APPID\") nel main"
-python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" <<'PY'
+APPNAME="Claude ${PROFILE^}"
+echo "==> inietto app_id=$APPID e nome \"$APPNAME\" nel main"
+python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" "$APPNAME" <<'PY'
 import sys, re
-p, appid = sys.argv[1], sys.argv[2]
+p, appid, appname = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(p, encoding='utf-8').read()
 MARK = '/*__claude_multi_appid__*/'
-inj = MARK + 'try{const a=require("electron").app;a.setDesktopName&&a.setDesktopName("%s");}catch(e){};' % appid
+# setDesktopName da' l'app_id Wayland (icona e raggruppamento nella barra); setName da' il nome
+# visibile, che e' cio' che l'app passa a tray.setToolTip(app.getName()) — senza, tre profili
+# mostrano tre tooltip identici "Claude". Il path dei dati non ne risente: il launcher passa
+# sempre --user-data-dir esplicito, che in Electron ha precedenza su quello derivato dal nome.
+inj = MARK + ('try{const a=require("electron").app;'
+              'a.setDesktopName&&a.setDesktopName("%s");'
+              'a.setName&&a.setName("%s");}catch(e){};') % (appid, appname)
 if MARK in s or 'setDesktopName("%s")' % appid in s:
     print("    patch già presente"); sys.exit(0)
 # Assert solo su cose STRUTTURALI: il prologo emesso dal minifier è un dettaglio upstream
@@ -95,4 +105,27 @@ for f in "$SRC"/resources/*; do
   ln -sfn "$f" "$DST/resources/$bn"
 done
 
-echo "==> fatto: $DST/$APPID (app_id=$APPID)"
+# --- icona della system tray -------------------------------------------------
+# Quella di serie e' monocromatica (bianca su tema scuro, nera su chiaro): con piu' profili aperti
+# la tray mostra icone identiche. Qui i due PNG smettono di essere symlink e diventano copie tinte
+# col colore dell'icona applicazione di questo profilo, cosi' tray e lanciatore dicono la stessa
+# cosa. Se Pillow manca si tiene l'icona di serie: e' un di piu', non un requisito.
+REPO_DIR="$(cm_repo)"
+HUE_SRC="$REPO_DIR/desktop/icons/256x256/$APPID.png"
+if [[ -f "$HUE_SRC" ]]; then
+  echo "==> tingo l'icona della tray col colore del profilo"
+  for icon in TrayIconLinux.png TrayIconLinux-Dark.png; do
+    [[ -e "$SRC/resources/$icon" ]] || continue
+    rm -f "$DST/resources/$icon"
+    if python3 "$REPO_DIR/shared/tools/tint-tray-icon.py" "$SRC/resources/$icon" "$DST/resources/$icon" "$HUE_SRC" 2>/dev/null; then
+      echo "    $icon tinta"
+    else
+      ln -sfn "$SRC/resources/$icon" "$DST/resources/$icon"
+      echo "    $icon: tintura non riuscita, resta quella di serie"
+    fi
+  done
+else
+  echo "    nessuna icona applicazione per $APPID: la tray resta monocromatica"
+fi
+
+echo "==> fatto: $DST/$APPID (app_id=$APPID, nome=\"$APPNAME\")"

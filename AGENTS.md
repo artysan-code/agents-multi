@@ -45,6 +45,11 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   self-assigns its app_id, so a second icon needs a patched executable
   (`bin/claude-desktop-rebuild <profile>`), and `install` writes its `.desktop` from
   `desktop/entry.desktop.in`. Never add a per-profile `.desktop` or rebuild script by hand.
+  Three things have to be set per profile or the instances are indistinguishable: the app_id
+  (`setDesktopName`, taskbar icon and grouping), the visible name (`setName`, which the app passes
+  to `tray.setToolTip`), and the tray PNGs, which ship monochrome — the rebuild replaces those two
+  symlinks with copies tinted from the profile's application icon. Data paths are unaffected:
+  `--user-data-dir` is always passed explicitly and wins over the name-derived path.
 - **Verify before saying done**: `deno task check` and `deno task test`, then `claude-multi doctor`.
   If you touched `install`, run `claude-multi install --dry-run` first. A new pure function gets a
   new test in `cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the
