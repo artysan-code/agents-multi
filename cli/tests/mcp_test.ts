@@ -1,14 +1,20 @@
 // Tests for mcp.ts: projecting the registry onto surfaces (profiles, _surfaces, private keys, `type`).
+// The profile names come from the repository, never from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
 import { type Registry, type Target, targets, wanted } from "../mcp.ts";
+import { desktopDir, profileNames } from "../lib.ts";
+
+const PROFILES = await profileNames();
+// One profile to single out, one to contrast it with. Which two does not matter.
+const [A, B] = PROFILES;
 
 const reg: Registry = {
-  profiles: ["personal", "work"],
+  profiles: PROFILES,
   servers: {
     everywhere: { type: "stdio", command: "x", args: ["a"], env: { K: "v" }, _note: "ignored" },
-    onlyPersonal: { type: "stdio", command: "y", _profiles: ["personal"] },
+    onlyA: { type: "stdio", command: "y", _profiles: [A] },
     chatToo: { type: "stdio", command: "z", _surfaces: ["cli", "desktop"] },
-    desktopOnly: { command: "w", _surfaces: ["desktop"], _profiles: ["work"] },
+    desktopOnlyB: { command: "w", _surfaces: ["desktop"], _profiles: [B] },
   },
 };
 
@@ -16,23 +22,29 @@ const reg: Registry = {
 const ALL: Target[] = await targets();
 const t = (profile: string, surface: "cli" | "desktop") => ALL.find((x) => x.profile === profile && x.surface === surface)!;
 
-Deno.test("targets: one cli and one desktop entry per profile, with path and managed key", () => {
-  assertEquals(ALL.length, 4);
-  assertEquals(ALL.map((x) => x.managedKey).sort(), ["cli:personal", "cli:work", "desktop:personal", "desktop:work"]);
-  assertEquals(t("work", "desktop").path.endsWith("/Claude-Work/claude_desktop_config.json"), true);
-  assertEquals(t("personal", "cli").path.endsWith("/personal/.claude.json"), true);
+Deno.test("targets: one cli and one desktop entry per profile, with path and managed key", async () => {
+  assertEquals(ALL.length, PROFILES.length * 2);
+  assertEquals(
+    ALL.map((x) => x.managedKey).sort(),
+    PROFILES.flatMap((p) => [`cli:${p}`, `desktop:${p}`]).sort(),
+  );
+  for (const p of PROFILES) {
+    assertEquals(t(p, "cli").path.endsWith(`/${p}/.claude.json`), true, `${p}: cli path`);
+    // The desktop target has to land in that profile's own data dir, whatever the manifest says.
+    assertEquals(t(p, "desktop").path, `${await desktopDir(p)}/claude_desktop_config.json`);
+  }
 });
 
 Deno.test("wanted: defaults to every profile on cli only; _profiles and _surfaces narrow it", () => {
-  assertEquals(Object.keys(wanted(reg, t("personal", "cli"))).sort(), ["chatToo", "everywhere", "onlyPersonal"]);
-  assertEquals(Object.keys(wanted(reg, t("work", "cli"))).sort(), ["chatToo", "everywhere"]);
-  assertEquals(Object.keys(wanted(reg, t("personal", "desktop"))), ["chatToo"]);
-  assertEquals(Object.keys(wanted(reg, t("work", "desktop"))).sort(), ["chatToo", "desktopOnly"]);
+  assertEquals(Object.keys(wanted(reg, t(A, "cli"))).sort(), ["chatToo", "everywhere", "onlyA"]);
+  assertEquals(Object.keys(wanted(reg, t(B, "cli"))).sort(), ["chatToo", "everywhere"]);
+  assertEquals(Object.keys(wanted(reg, t(A, "desktop"))), ["chatToo"]);
+  assertEquals(Object.keys(wanted(reg, t(B, "desktop"))).sort(), ["chatToo", "desktopOnlyB"]);
 });
 
 Deno.test("wanted: _private keys are stripped, and `type` is dropped on the desktop surface", () => {
-  const cli = wanted(reg, t("personal", "cli")).everywhere;
+  const cli = wanted(reg, t(A, "cli")).everywhere;
   assertEquals(cli, { type: "stdio", command: "x", args: ["a"], env: { K: "v" } });
-  const desk = wanted(reg, t("personal", "desktop")).chatToo;
+  const desk = wanted(reg, t(A, "desktop")).chatToo;
   assertEquals(desk, { command: "z" });
 });

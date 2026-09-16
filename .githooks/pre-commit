@@ -4,6 +4,9 @@
 #   1. guard segreti: il repo contiene la config viva di due account Anthropic; un token committato
 #      e pushato su Forgejo è un incidente. Si guarda SOLO lo staged (diff --cached), non il working tree.
 #   2. deno task check: type-check della CLI e sintassi degli script bash.
+#   3. deno task test: la suite gira in ~250 ms e legge i manifest veri, quindi coglie i casi in cui
+#      una modifica ai profili rompe un test che dà per scontati i nomi. Senza questo passo un
+#      commit rosso passa: è successo, rinominando un profilo.
 #
 # Bypass consapevole: `git commit --no-verify` (e sappi perché).
 set -uo pipefail
@@ -30,11 +33,13 @@ while IFS= read -r line; do
 done < <(git diff --cached -U0 --diff-filter=ACMR | awk '/^\+\+\+ b\//{f=substr($0,7)} /^\+[^+]/{print f": "substr($0,2)}' | grep -E "$PAT" | cut -c1-160)
 
 # --- 3. check (solo se sono cambiati file rilevanti: veloce sui commit di sole docs)
-if git diff --cached --name-only | grep -qE '\.(ts|sh)$|^bin/|^deno\.json$'; then
+# I manifest e il registry contano quanto il codice: cambiare un profilo può rompere un test.
+if git diff --cached --name-only | grep -qE '\.(ts|sh)$|^bin/|^deno\.json$|^profiles/|^shared/mcp/|^desktop/'; then
   if command -v deno >/dev/null; then
     deno task --quiet check >/tmp/claude-multi-precommit.log 2>&1 || { red "deno task check fallito:"; tail -20 /tmp/claude-multi-precommit.log; }
+    deno task --quiet test >/tmp/claude-multi-precommit-test.log 2>&1 || { red "deno task test fallito:"; tail -20 /tmp/claude-multi-precommit-test.log; }
   else
-    printf '\033[33m! deno assente: check saltato\033[0m\n'
+    printf '\033[33m! deno assente: check e test saltati\033[0m\n'
   fi
 fi
 
