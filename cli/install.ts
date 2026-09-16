@@ -242,5 +242,15 @@ export async function install(dry: boolean) {
 
   if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} everything already materialised, nothing to do`);
   console.log();
-  return printDoctor(await doctor());
+  // The diagnosis is printed, but it is not this command's verdict: install reports whether it
+  // materialised the runtime, not whether the machine is healthy. Returning the doctor's code made
+  // `claude-multi install && <next step>` skip the next step exactly when the doctor was
+  // complaining about something that step would have fixed — a missing Desktop variant, say.
+  // `claude-multi doctor` is the command whose exit code means "healthy".
+  const failed = printDoctor(await doctor());
+  if (failed) {
+    console.log(`  ${ANSI.d}install finished; the checks above are a diagnosis, not a failure of this command.${ANSI.x}`);
+    console.log(`  ${ANSI.d}Run their fixes, then \`claude-multi doctor\` to confirm.${ANSI.x}\n`);
+  }
+  return 0;
 }
