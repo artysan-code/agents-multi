@@ -229,7 +229,6 @@
     "code-review@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "obsidian@obsidian-skills": true,
-    "context7@claude-plugins-official": true,
     "vue-volar@claude-code-lsps": true,
     "brand-voice@synced": false,
     "data@synced": false,
