@@ -4,6 +4,7 @@
 // API key letta a runtime dal config.xml (o env STGUI_APIKEY): non viene mai persistita altrove.
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
+import { type Compiled, compilePattern, isIgnored } from "./ignore.ts";
 
 const BASE = Deno.env.get("ST_URL") ?? "http://127.0.0.1:8384";
 const HOME = Deno.env.get("HOME") ?? "";
@@ -44,38 +45,6 @@ async function* walk(root: string, pick: (e: Deno.DirEntry) => boolean, prune: (
     if (pick(e)) yield p;
     else if (e.isDirectory && !prune(e.name)) yield* walk(p, pick, prune, max, d + 1);
   }
-}
-
-// Compila un pattern .stignore in regex con la semantica Syncthing:
-//  '*' NON attraversa '/', '**' sì, '?' = un char non-'/'; pattern rooted ('/x') o con '/'
-//  ancorato alla radice, altrimenti matcha il basename a qualunque livello; flag (?d)/(?i) e
-//  negazione '!' gestiti. Il trailing (/|$) fa sì che un pattern-dir matchi anche i discendenti.
-type Compiled = { re: RegExp; negate: boolean };
-function compilePattern(raw: string): Compiled | null {
-  const stripFlags = (x: string) => x.replace(/^(\(\?[a-z]\))+/i, "");
-  let s = raw.trim();
-  if (!s || s.startsWith("//") || s.startsWith("#")) return null;
-  s = stripFlags(s);
-  let negate = false;
-  if (s.startsWith("!")) { negate = true; s = s.slice(1); }
-  s = stripFlags(s);
-  if (!s) return null;
-  const rooted = s.startsWith("/");
-  if (rooted) s = s.replace(/^\/+/, "");
-  const anchored = rooted || s.includes("/");
-  let rx = "";
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === "*") { if (s[i + 1] === "*") { rx += ".*"; i++; } else rx += "[^/]*"; }
-    else if (c === "?") rx += "[^/]";
-    else rx += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  }
-  return { re: new RegExp((anchored ? "^" : "(^|.*/)") + rx + "(/|$)"), negate };
-}
-// first-match-wins: il primo pattern che matcha decide (negato '!' => NON ignorato).
-function isIgnored(rel: string, compiled: Compiled[]): boolean {
-  for (const c of compiled) if (c.re.test(rel)) return !c.negate;
-  return false;
 }
 
 const server = new McpServer({ name: "syncthing-status", version: "0.1.0" });
@@ -150,7 +119,8 @@ server.registerTool("syncthing_git_guard", {
   for (const f of cfg.folders ?? []) {
     if (f.type !== "sendreceive") continue;
     let pats: string[] = [];
-    try { pats = (await st(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).ignore ?? []; } catch { /* */ }
+    // .expanded, non .ignore: le righe grezze sono solo `#include .stignore-common` (vedi ignore.ts)
+    try { pats = (await st(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).expanded ?? []; } catch { /* */ }
     const compiled = pats.map(compilePattern).filter((c): c is Compiled => c !== null);
     for await (const g of walk(f.path, (e) => e.isDirectory && e.name === ".git", (n) => n === "node_modules" || n === ".git" || n === ".stversions")) {
       const repoAbs = g.replace(/\/?\.git$/, "");
