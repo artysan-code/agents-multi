@@ -14,6 +14,9 @@ Environment=GEN_BASE_URL=http://127.0.0.1:8080
 Environment=GEN_UNIT=llama-generate.service
 # Spegne il server di generazione dopo 5 min di inattività: libera la VRAM.
 Environment=GEN_IDLE_SEC=300
+# Per machine (~/.config/claude-multi/llama.env): GEN_UNIT= (empty) turns generation off where no
+# generation model fits — /api/generate then answers 503 instead of starting one.
+EnvironmentFile=-%h/.config/claude-multi/llama.env
 ExecStart=%h/.deno/bin/deno run --allow-net --allow-env --allow-run=systemctl %h/.local/src/claude-multi/shared/tools/llama-embed-shim/server.ts
 Restart=on-failure
 RestartSec=5

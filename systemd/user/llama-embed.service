@@ -1,19 +1,31 @@
 [Unit]
-Description=llama.cpp — server di embedding (bge-m3 568M, Vulkan, dGPU)
+Description=llama.cpp — server di embedding (default bge-m3; per macchina: ~/.config/claude-multi/llama.env)
 Documentation=file://%h/.local/bin/llm
 After=graphical-session.target
 
 [Service]
 Type=exec
 Environment=LLAMA_CACHE=%h/.cache/llama.cpp
-# Pinna la dGPU: Vulkan0=the dGPU, Vulkan1=the iGPU.
+# Defaults = the desktop: bge-m3 on the dGPU, Vulkan0=the dGPU, Vulkan1=the iGPU.
+# A machine overrides any of these in ~/.config/claude-multi/llama.env (per machine, not in the
+# repo). The embedding size must stay 1024: OLLAMA_EMBEDDING_DIM in shared/mcp/servers.json.
 Environment=GGML_VK_VISIBLE_DEVICES=0
+Environment=EMBED_HF=gpustack/bge-m3-GGUF:Q8_0
+Environment=EMBED_POOLING=cls
+Environment=EMBED_CTX=32768
+Environment=EMBED_BATCH=8192
+# ubatch = how much of a sequence is computed at once, and so the size of the compute buffer. A
+# non-causal model (bge-m3, cls pooling) needs a whole chunk in one ubatch; a causal one with last
+# pooling (Qwen3-Embedding) can take it in pieces — that is what fits a 2 GB card.
+Environment=EMBED_UBATCH=8192
+Environment=EMBED_PARALLEL=4
+EnvironmentFile=-%h/.config/claude-multi/llama.env
 ExecStart=%h/.local/opt/llama-vulkan/bin/llama-server \
-  -hf gpustack/bge-m3-GGUF:Q8_0 \
-  --embedding --pooling cls \
+  -hf ${EMBED_HF} \
+  --embedding --pooling ${EMBED_POOLING} \
   --host 127.0.0.1 --port 8090 \
-  --ctx-size 32768 --batch-size 8192 --ubatch-size 8192 \
-  --parallel 4
+  --ctx-size ${EMBED_CTX} --batch-size ${EMBED_BATCH} --ubatch-size ${EMBED_UBATCH} \
+  --parallel ${EMBED_PARALLEL}
 Restart=on-failure
 RestartSec=5
 

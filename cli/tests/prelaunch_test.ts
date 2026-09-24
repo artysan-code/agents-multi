@@ -5,8 +5,12 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const PRELAUNCH = `${REPO}/bin/lib/prelaunch.sh`;
 
+// A git hook runs with GIT_DIR / GIT_INDEX_FILE pointing at the real repository (a commit with a
+// pathspec uses a temporary index): inherited, they would aim these throwaway repos at it.
+const cleanEnv = () => Object.fromEntries(Object.entries(Deno.env.toObject()).filter(([k]) => !k.startsWith("GIT_")));
+
 async function sh(cmd: string, cwd?: string, env: Record<string, string> = {}) {
-  const r = await new Deno.Command("bash", { args: ["-c", cmd], cwd, env: { ...Deno.env.toObject(), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ...env }, stdout: "piped", stderr: "piped" }).output();
+  const r = await new Deno.Command("bash", { args: ["-c", cmd], cwd, clearEnv: true, env: { ...cleanEnv(), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ...env }, stdout: "piped", stderr: "piped" }).output();
   return { code: r.code, out: new TextDecoder().decode(r.stdout).trim(), err: new TextDecoder().decode(r.stderr).trim() };
 }
 

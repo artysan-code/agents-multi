@@ -24,6 +24,7 @@ const PORT = Number(Deno.env.get("SHIM_PORT") ?? "11434");
 const MODEL = Deno.env.get("SHIM_MODEL") ?? "bge-m3";
 // Generazione: server SEPARATO, acceso solo quando serve (lo usa il distiller).
 const GEN = Deno.env.get("GEN_BASE_URL") ?? "http://127.0.0.1:8080";
+// GEN_UNIT set but empty = no generation on this machine (a laptop with no room for the model).
 const GEN_UNIT = Deno.env.get("GEN_UNIT") ?? "llama-generate.service";
 const GEN_IDLE_SEC = Number(Deno.env.get("GEN_IDLE_SEC") ?? "300");
 
@@ -133,6 +134,7 @@ async function handler(req: Request): Promise<Response> {
       return json({ embedding: await embed(text) });
     }
     if (pathname === "/api/generate") {
+      if (!GEN_UNIT) return json({ error: "generation is off on this machine (GEN_UNIT is empty)" }, 503);
       const b = await req.json();
       await ensureGen();
       armIdleStop();

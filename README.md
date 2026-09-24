@@ -270,6 +270,31 @@ native modules built for the wrong Node ABI, missing environment, cold-start cra
 Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege, secrets read from
 `~/.config/secrets/`).
 
+### Local inference (the wiki's semantic search)
+
+`wiki-claude` embeds through `llama-embed-shim` (the Ollama API on `:11434`) in front of
+`llama-server` (`llama-embed.service`, `:8090`), built from source with Vulkan into
+`~/.local/opt/llama-vulkan`; `install` enables both units once that binary exists. The search index
+is per machine (`~/.local/share/obsidian-brain`), so machines may embed with different models — as
+long as the vectors stay 1024-wide, the size `shared/mcp/servers.json` declares.
+
+The unit's defaults are the desktop's (bge-m3 on the discrete GPU). A machine overrides them in
+`~/.config/claude-multi/llama.env`, which stays on that machine:
+
+```
+EMBED_HF=Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0   # model (Hugging Face repo:quant)
+EMBED_POOLING=last                             # what that model expects
+EMBED_CTX=8192
+EMBED_BATCH=8192
+EMBED_UBATCH=1024                               # a causal model can take a chunk in pieces: the compute buffer shrinks
+EMBED_PARALLEL=1
+GGML_VK_VISIBLE_DEVICES=1                       # which Vulkan device (llama-server --list-devices)
+GEN_UNIT=                                       # empty: no generation model here, the distiller waits
+```
+
+With `GEN_UNIT` empty the shim answers 503 to `/api/generate` instead of starting
+`llama-generate.service`, whose 8B model does not fit a small machine.
+
 ---
 
 ## Repository layout
