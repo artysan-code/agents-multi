@@ -29,10 +29,12 @@ claude-multi doctor # every invariant, each with a fix
 ```
 
 The console is enabled as a systemd user unit by `install`, so it is already running on
-<http://127.0.0.1:7331>.
+<http://127.0.0.1:7331>. On a desktop, the **claude-multi** app starts in the tray at login and
+opens it in a window of its own.
 
 Requirements: `deno`, `git`. For Claude Desktop packaging also `base-devel`, `libarchive`,
-`pyside6`, `@electron/asar`. OAuth credentials are per-machine and never leave it.
+`@electron/asar`. For the desktop app and the update gate `pyside6` **and** `qt6-webengine` —
+the second is only an optional dependency of the first on Arch, so install it explicitly. OAuth credentials are per-machine and never leave it.
 
 ### Making it yours
 
@@ -163,6 +165,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi budget [--notify]` | consumption thresholds. Only billed extra usage raises an alert |
 | `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
 | `claude-launch <profile>` | the entry point desktop launchers use: repository sync, update gate, then the app |
+| `claude-multi-app [--tray\|--updates]` | the desktop app: console window, tray icon, update gate (below) |
 
 `claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -193,6 +196,36 @@ been online.
 `⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the
 local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating is
 deliberately *not* an action: it goes through the polkit gate.
+
+---
+
+## The desktop app
+
+`claude-multi-app` (`lib/claude-multi-app/`, PySide6) makes the console an application. It is a
+**view**, like everything that is not the CLI: its state is the console's, its actions are the
+commands a terminal would run. The console server stays its own unit, so a browser or an ssh
+tunnel still reaches it.
+
+- **Window** — the console in a window with its own icon and menu entry (`claude-multi`). Links
+  that leave it open in the system browser. With the server down it says so and offers to start
+  it. Closing the window destroys it: the web engine is the heavy part, and the tray alone stays
+  light.
+- **Tray** — the state at a glance, from `/api/summary` (a pure function of `status`, tested):
+  no dot when all is well, **blue** for a pending update, **red** for a failing doctor check,
+  **grey** when the console does not answer. Warnings are listed, not coloured: some are standing
+  conditions of a machine, and an icon that is always yellow says nothing. It refreshes on the
+  console's `state` events and when the menu opens, never on a timer. The menu opens the console,
+  a profile's Claude Desktop, the update gate and the Health view.
+- **Update gate** — the same Qt dialog as before, now a window of the app: from the tray, from the
+  timer's notification (`--updates`), or before Claude Desktop opens (`claude-launch` runs
+  `claude-multi-app --gate`, a process of its own whose exit code is the answer).
+- **At login** — `claude-multi-app.service` (graphical session only, enabled by `install`) runs
+  `--tray`. One instance per session: a second start hands its request to the first over
+  `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
+
+Without a system tray (GNOME needs the AppIndicator extension) the windows still work and the app
+quits with the last one; `--tray` waits a minute for a tray to appear, then exits cleanly and the
+doctor says why. After pulling new app code: `systemctl --user restart claude-multi-app`.
 
 ---
 
@@ -306,7 +339,7 @@ cli/            the claude-multi CLI (Deno, zero dependencies)
 cli/dashboard/  the console page (HTML/CSS/JS, no build step)
 shared/         config shared across profiles: agents, commands, hooks, skills, rules, mcp, settings.json
 profiles/       one directory per profile: manifest, CLAUDE.md, owned entries
-lib/            the update GUI (PySide6)
+lib/            the desktop app: tray, console window, update gate (PySide6)
 systemd/user/   console unit, update-check timer, optional local inference units
 desktop/        .desktop entries and icons
 pkg/            PKGBUILD repackaging Anthropic's official .deb of Claude Desktop for Arch
@@ -348,7 +381,7 @@ Nothing updates without approval; `DISABLE_AUTOUPDATER=1` is set everywhere.
 - **Claude Desktop**: `claude-desktop-update` rebuilds the Arch package from Anthropic's official
   `.deb`, then regenerates each profile's variant (a separate `app.setDesktopName` so icons and
   app ids stay distinct on Wayland; everything else symlinks to the system install).
-- **Graphical gate**: `claude-launch` checks versions (6 h cache) and opens the update GUI before
+- **Graphical gate**: `claude-launch` checks versions (6 h cache) and opens the update gate before
   the app when needed, with the release notes and install through `pkexec`. Desktop must be updated
   with the app closed.
 - **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) raises a notification
@@ -363,7 +396,7 @@ Nothing updates without approval; `DISABLE_AUTOUPDATER=1` is set everywhere.
 ## Development
 
 ```bash
-deno task check   # type-check the CLI and tests, bash -n every script, py_compile the GUI
+deno task check   # type-check the CLI and tests, bash -n every script, py_compile the app
 deno task test    # usage (rates, dedupe, turns), budget (planes, thresholds, notifications),
                   # mcp, manifests, changelog, prelaunch against real git repositories
 ```

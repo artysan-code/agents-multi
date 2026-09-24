@@ -17,7 +17,7 @@
 # Requisiti: base-devel (makepkg), curl, bsdtar (libarchive). Niente sudo per makepkg;
 # l'installazione finale usa `sudo pacman -U` tramite makepkg -i.
 #
-# --no-install esiste per il gate GUI (claude-update-gui): makepkg -i chiamerebbe `sudo` su un
+# --no-install esiste per il gate GUI (claude-multi-app): makepkg -i chiamerebbe `sudo` su un
 # tty che, lanciato da un .desktop, non c'è → fallirebbe. Separando build e install, la GUI
 # builda senza privilegi e installa a parte con `pkexec pacman -U` (dialogo polkit di Plasma).
 # --no-install implica anche NON interattivo: mai un `read` che bloccherebbe una GUI.

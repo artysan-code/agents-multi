@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# Shim: la GUI vera è ~/.local/lib/claude-update-gui/app.py (PySide6, pacchetto di sistema).
-# Sta in ~/.local/lib e non qui perché ~/.local/bin è per gli eseguibili, non per i moduli.
-exec python3 "$HOME/.local/lib/claude-update-gui/app.py" "$@"

@@ -25,6 +25,38 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
 }
 export type StatusReport = Awaited<ReturnType<typeof status>>;
 
+/** What the tray icon says: one level, and the lines behind it. */
+export interface Summary {
+  level: "ok" | "update" | "fail";
+  fails: string[];
+  warns: string[];
+  updates: { cli: string | null; desktop: string | null };
+  running: { cli: number; desktop: number };
+  generatedAt: string;
+}
+
+/** Pure: the report to the tray's summary. `skipped` holds the "<component> <version>" lines the
+ *  update gate set aside (~/.config/claude-update/skipped): those are not pending any more.
+ *  A warn does not colour the icon. Some warns are standing conditions of a machine (no semantic
+ *  search on a laptop without llama.cpp), and an icon that is always yellow says nothing; they are
+ *  listed instead. */
+export function summarize(s: Pick<StatusReport, "doctor" | "update" | "running" | "generatedAt">, skipped: string[] = []): Summary {
+  const skip = new Set(skipped.map((l) => l.trim()).filter(Boolean));
+  const pending = (k: "cli" | "desktop") => {
+    const u = s.update?.[k];
+    return u?.outdated && u.latest && !skip.has(`${k} ${u.latest}`) ? u.latest : null;
+  };
+  const updates = { cli: pending("cli"), desktop: pending("desktop") };
+  const fails = s.doctor.filter((c) => c.status === "fail").map((c) => c.msg);
+  const warns = s.doctor.filter((c) => c.status === "warn").map((c) => c.msg);
+  return {
+    level: fails.length ? "fail" : updates.cli || updates.desktop ? "update" : "ok",
+    fails, warns, updates,
+    running: { cli: s.running.cli.filter((c) => !c.embedded).length, desktop: s.running.desktop.length },
+    generatedAt: s.generatedAt,
+  };
+}
+
 export function printStatus(s: StatusReport) {
   const m = s.machine; const r = s.repo;
   const up = (k: "cli" | "desktop") => s.update?.[k]?.outdated ? `  ${ANSI.y}⬆ ${s.update?.[k]?.latest}${ANSI.x}` : "";

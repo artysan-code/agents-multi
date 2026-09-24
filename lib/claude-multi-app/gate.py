@@ -1,21 +1,20 @@
-#!/usr/bin/env python3
-"""claude-update-gui — gate di aggiornamento di Claude, con approvazione esplicita.
+"""gate.py — il gate di aggiornamento di Claude, con approvazione esplicita.
 
-Due modi di invocazione:
+Una finestra dell'app (app.py), aperta per due strade:
 
-  --profile <nome>            dal launcher `claude-launch`, prima di aprire l'app: si aggiorna
-                              ciò che spunti, poi il launcher apre Claude
-  --standalone                dalla notifica del timer, ad app già in uso: non apre nulla a fine
-                              corsa, e se Claude è in esecuzione offre di chiuderlo prima
+  app.py --gate --profile <nome>  dal launcher `claude-launch`, prima di aprire l'app: si aggiorna
+                                  ciò che spunti, poi il launcher apre Claude. Processo a sé,
+                                  bloccante, con i codici di uscita sotto
+  app.py --updates / il tray      ad app già in uso (standalone): non apre nulla a fine corsa, e
+                                  se Claude è in esecuzione offre di chiuderlo prima
 
 Niente si aggiorna senza che tu lo abbia spuntato: le due voci (Claude Desktop e Claude Code)
 sono indipendenti e puoi aggiornarne una sola, o nessuna.
 
 La GUI è una VISTA della CLI: lo stato del setup (versioni, doctor, istanze) arriva da
 `claude-multi status --json` in un thread dopo che la finestra è comparsa, le azioni passano da
-`claude-multi update` / `claude-multi serve`. Qui non c'è logica di setup, solo presentazione.
-In --standalone senza aggiornamenti la finestra si apre lo stesso come pannello di stato
-(voce di menu «Claude — aggiornamenti e stato»).
+`claude-multi update`. Qui non c'è logica di setup, solo presentazione.
+In standalone senza aggiornamenti la finestra si apre lo stesso come pannello di stato.
 
 Fasi eseguite, in base alla selezione:
   Desktop → claude-desktop-update --no-install  (repack del .deb ufficiale, nessun privilegio)
@@ -26,7 +25,7 @@ Fasi eseguite, in base alla selezione:
 Perché Desktop va aggiornato ad app chiusa: l'install sostituisce /usr/lib/claude-desktop e il
 rebuild ricopia il binario — con l'app aperta si crasha al primo lazy-load di risorse.
 
-Exit code (contratto con claude-launch):
+Exit code di --gate (contratto con claude-launch):
     0   aggiornamento eseguito   → lancia l'app
     10  "avvia com'è"            → lancia l'app senza aggiornare
     20  "salta queste versioni"  → lancia l'app, e non richiedere più per quelle versioni
@@ -49,21 +48,14 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
+from common import BIN, repo as _repo
+
 EXIT_UPDATED, EXIT_LAUNCH_ASIS, EXIT_SKIP_VERSION, EXIT_ERROR = 0, 10, 20, 1
 
 ACCENT = "#D97757"          # arancione Anthropic, usato per il pulsante primario
 ACCENT_HOVER = "#C86647"
 DANGER = "#d64545"
-BIN = Path.home() / ".local" / "bin"
 SKIP_FILE = Path.home() / ".config" / "claude-update" / "skipped"
-
-def _repo() -> Path:
-    """The claude-multi checkout, found through the symlink install leaves in ~/.local/bin."""
-    try:
-        return (BIN / "claude-multi").resolve().parent.parent
-    except OSError:
-        return Path.home() / ".local" / "src" / "claude-multi"
-
 
 def desktop_variants() -> list[tuple[str, str]]:
     """(profile, app_id) for every profile that has its own Desktop build — the ones whose
@@ -323,9 +315,10 @@ class StatusPanel(QFrame):
 
 # --------------------------------------------------------------------------- finestra
 class UpdateGate(QDialog):
-    def __init__(self, state: dict, profile: str = "personal", demo: bool = False,
-                 standalone: bool = False):
+    def __init__(self, state: dict, profile: str, demo: bool = False,
+                 standalone: bool = False, on_console=None):
         super().__init__()
+        self.on_console = on_console
         self.state = state
         self.profile = profile
         self.demo = demo
@@ -469,9 +462,9 @@ class UpdateGate(QDialog):
         self.skip_btn.setVisible(self.has_updates)
         btns.addWidget(self.skip_btn)
 
-        self.dash_btn = QPushButton("Dashboard")
+        self.dash_btn = QPushButton("Console")
         self.dash_btn.setObjectName("flat")
-        self.dash_btn.setToolTip("Apre la dashboard locale (claude-multi serve) nel browser.")
+        self.dash_btn.setToolTip("Apre la console di claude-multi.")
         self.dash_btn.clicked.connect(self._open_dashboard)
         btns.addWidget(self.dash_btn)
 
@@ -516,7 +509,11 @@ class UpdateGate(QDialog):
     def _open_dashboard(self) -> None:
         if self.demo:
             return
-        subprocess.Popen([str(BIN / "claude-multi"), "serve"], start_new_session=True,
+        if self.on_console:
+            self.on_console()
+            return
+        # Processo a sé (--gate): l'istanza dell'app, se c'è, riceve la richiesta e mostra la console.
+        subprocess.Popen([str(BIN / "claude-multi-app")], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _rollback(self) -> None:
@@ -793,51 +790,3 @@ class UpdateGate(QDialog):
         self.asis_btn.setText("Chiudi" if self.standalone else "Avvia com'è")
         for card in self.cards.values():
             card.check.setEnabled(True)
-
-
-# --------------------------------------------------------------------------- entry point
-def load_state(argv: list[str]) -> dict:
-    """Stato versioni: dal chiamante via --state (evita un secondo giro di rete), o rifatto qui."""
-    if "--state" in argv:
-        return json.loads(argv[argv.index("--state") + 1])
-    out = subprocess.run(
-        [str(BIN / "claude-update"), "--check", "--json"],
-        capture_output=True, text=True, timeout=40,
-    ).stdout
-    return json.loads(out)
-
-
-def main() -> int:
-    argv = sys.argv[1:]
-    demo = "--demo" in argv
-    standalone = "--standalone" in argv
-    profile = argv[argv.index("--profile") + 1] if "--profile" in argv else "personal"
-
-    app = QApplication(sys.argv)
-    app.setApplicationName("Aggiornamento Claude")
-    app.setDesktopFileName("claude-update-gui")
-
-    if demo:
-        state = {
-            "cli": {"current": "2.1.220", "latest": "2.1.221", "outdated": "--demo-uptodate" not in argv},
-            "desktop": {"current": "1.24012.9", "latest": "1.24013.0", "outdated": "--demo-uptodate" not in argv},
-        }
-    else:
-        try:
-            state = drop_skipped(load_state(argv))
-        except Exception as exc:  # noqa: BLE001 — qualunque errore qui = "apri e basta"
-            print(f"claude-update-gui: check fallito ({exc})", file=sys.stderr)
-            return EXIT_ERROR
-        if not (state.get("desktop", {}).get("outdated") or state.get("cli", {}).get("outdated")) and not standalone:
-            return EXIT_LAUNCH_ASIS
-
-    gate = UpdateGate(state, profile, demo=demo, standalone=standalone)
-    gate.show()
-    gate.raise_()
-    gate.activateWindow()
-    app.exec()
-    return gate.result_code
-
-
-if __name__ == "__main__":
-    sys.exit(main())

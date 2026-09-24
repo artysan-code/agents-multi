@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=claude-multi
+GenericName=Claude profiles
+Comment=Console, tray and update gate for the claude-multi profiles
+Exec=@BIN@/claude-multi-app
+Icon=claude-desktop
+Terminal=false
+Categories=Utility;
+# The app sets its desktop file name to this one (QApplication.setDesktopFileName): Wayland and the
+# xdg portal resolve the window's icon and name through it.
+StartupWMClass=claude-multi
+Keywords=Claude;update;doctor;profiles;console;
+Actions=updates;
+
+[Desktop Action updates]
+Name=Check for updates
+Exec=@BIN@/claude-multi-app --updates

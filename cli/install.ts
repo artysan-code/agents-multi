@@ -71,6 +71,14 @@ async function ensureCopy(src: string, dst: string) {
   say(`${ANSI.g}+${ANSI.x} copio ${dst}`);
   if (!DRY) { await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true }); await Deno.copyFile(src, dst); }
 }
+/** A text file with @BIN@ filled in: a .desktop Exec= needs an absolute path, and the repository
+ *  must not carry this machine's home directory. */
+async function ensureRendered(src: string, dst: string) {
+  const a = (await readText(src))?.replaceAll("@BIN@", BIN) ?? null; const b = await readText(dst);
+  if (a === null || a === b) return;
+  say(`${ANSI.g}+${ANSI.x} writing ${dst}`);
+  if (!DRY) { await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true }); await Deno.writeTextFile(dst, a); }
+}
 async function removeLink(p: string, why: string) {
   say(`${ANSI.y}−${ANSI.x} removing ${p} (${why})`);
   if (!DRY) await Deno.remove(p);
@@ -190,7 +198,8 @@ export async function install(dry: boolean) {
   await ensureSymlink(`${REPO}/shared/tools/stignore-gen/stignore-gen.ts`, `${BIN}/stignore-gen`, "~/.local/bin/stignore-gen");
   if (await lstat(`${BIN}/claude-multi-finalize`)) await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
   await ensureDir(LIB);
-  await ensureSymlink(`${REPO}/lib/claude-update-gui`, `${LIB}/claude-update-gui`, "~/.local/lib/claude-update-gui");
+  // The update GUI became the desktop app (bin/claude-multi-app finds its code through the repo).
+  for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");
 
   // 5b. the repository's git hooks (pre-commit: secret guard + type check)
   const hooks = (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out;
@@ -221,6 +230,8 @@ export async function install(dry: boolean) {
       const wantEnabled = ["claude-multi-console.service"];
       // The update check raises desktop notifications, so it only makes sense with a session.
       if (m.graphical) wantEnabled.push("claude-update-check.timer");
+      // The desktop app sits in the tray from login (it exits by itself where there is no tray).
+      if (m.graphical) wantEnabled.push("claude-multi-app.service");
       // llama-generate.service stays deliberately disabled: the shim starts it on demand and stops
       // it when idle, which keeps the VRAM free.
       if (m.graphical && await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
@@ -239,7 +250,9 @@ export async function install(dry: boolean) {
   // 9. Claude Desktop (only where it is installed)
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
-    for (const d of await listDir(`${REPO}/desktop`)) if (d.endsWith(".desktop")) await ensureCopy(`${REPO}/desktop/${d}`, `${apps}/${d}`);
+    for (const d of await listDir(`${REPO}/desktop`)) if (d.endsWith(".desktop")) await ensureRendered(`${REPO}/desktop/${d}`, `${apps}/${d}`);
+    // a copy install wrote itself, of a file the repository no longer has
+    if (await lstat(`${apps}/claude-update-gui.desktop`)) await removeLink(`${apps}/claude-update-gui.desktop`, "replaced by claude-multi.desktop");
     await writeDesktopEntries(apps);
     for (const s of await listDir(`${REPO}/desktop/icons`)) {
       for (const f of await listDir(`${REPO}/desktop/icons/${s}`)) {

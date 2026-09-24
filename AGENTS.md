@@ -36,6 +36,11 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   raise a notification.
 - **The console serves itself** (`claude-multi-console.service`). UI updates arrive over SSE on
   `/api/events`: a new panel hangs off `refresh()` by topic, never off a new polling loop.
+- **The desktop app is a view** (`lib/claude-multi-app/`, PySide6): what it shows comes from the
+  console's API, what it does is a CLI command. A colour or a rule the tray applies is TypeScript
+  (`summarize()` in `cli/status.ts`, with its test), not Python. Its name and identifiers derive
+  from `NAME` in `common.py`. Qt aborts the whole process when a running `QThread` is destroyed:
+  a window that owns a worker is not deleted before the worker finishes.
 - **Launching stays pure bash** (`bin/claude`, `bin/claude-launch`, `bin/lib/`): no Deno on the hot
   path, so a wrapper still works on a machine without it. The manifests are read from bash through
   `bin/lib/profiles.sh` (`cm_command`, `cm_desktop_dir`, `cm_desktop_appid`) — one place, no jq.

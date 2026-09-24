@@ -10,5 +10,5 @@ for f in bin/* bin/lib/*.sh shared/statusline-command.sh shared/hooks/*.sh .gith
   head -n1 "$f" | grep -q '^#!.*\(bash\|sh\)$' || continue
   bash -n "$f" || { echo "bash syntax: $f" >&2; exit 1; }
 done
-python3 -m py_compile lib/claude-update-gui/app.py
+python3 -m py_compile lib/claude-multi-app/*.py
 echo "check ok"

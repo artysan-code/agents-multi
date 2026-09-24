@@ -1,7 +1,7 @@
 // doctor.ts — every invariant of the setup as a check with a verdict and a fix.
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
-import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, type Status } from "./lib.ts";
 import { settingsState } from "./settings.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
 import { collect, doctorChecks } from "./budget.ts";
@@ -201,7 +201,18 @@ export async function doctor(): Promise<Check[]> {
         add(`desktop.entry.${d}`, "fail", `${d} does not go through claude-launch`, "claude-multi install");
       }
     }
-    if ((await readlink(`${LIB}/claude-update-gui`)) !== `${REPO}/lib/claude-update-gui`) add("desktop.gui", "fail", "~/.local/lib/claude-update-gui does not point at the repository", "claude-multi install");
+    // The desktop app (tray, console window, update gate). WebEngine is only an optional
+    // dependency of pyside6 on Arch: present here by accident of KDE, missing on a bare install.
+    const qt = await run("pacman", ["-Q", "pyside6", "qt6-webengine"]);
+    const missing = ["pyside6", "qt6-webengine"].filter((p) => !qt.out.split("\n").some((l) => l.startsWith(`${p} `)));
+    if (missing.length) add("app.deps", "fail", `the desktop app and the update gate need ${missing.join(" and ")}`, `sudo pacman -S --needed ${missing.join(" ")}`);
+    if (m.systemd && m.graphical) {
+      const u = await run("systemctl", ["--user", "is-enabled", "claude-multi-app.service"]);
+      if (u.out !== "enabled") add("app.unit", "warn", `claude-multi-app.service: ${u.out || "not installed"} — no tray icon at login`, "claude-multi install");
+    }
+    const app = await readJson<{ tray?: boolean }>(`${STATE}/app.json`);
+    if (app?.tray === false) add("app.tray", "warn", "the desktop app found no system tray in this session: it runs without its icon", "GNOME: enable the AppIndicator extension, then systemctl --user restart claude-multi-app");
+    if (!missing.length && app?.tray !== false) add("app", "ok", "desktop app: pyside6 + qt6-webengine" + (app?.tray ? ", tray available" : ""));
     if (m.systemd && m.graphical) {
       const t = await run("systemctl", ["--user", "is-enabled", "claude-update-check.timer"]);
       if (t.out !== "enabled") add("desktop.timer", "warn", `claude-update-check.timer: ${t.out || "not installed"}`, "claude-multi install");

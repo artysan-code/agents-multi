@@ -72,7 +72,8 @@ if [[ "$choice" == "update" ]]; then
   # processo dell'unit e morirebbe al TimeoutStartSec mentre la stai ancora usando.
   # Nessun --state: fra la notifica e il click possono passare ore (expire-time 30 min, più la
   # cronologia di Plasma che la conserva). Il gate rifà il check e mostra le versioni di ADESSO.
-  setsid nohup "${CLAUDE_UPDATE_GUI:-$BIN/claude-update-gui}" --standalone \
+  # Se l'app è già nel tray, --updates le passa la richiesta ed esce.
+  setsid nohup "${CLAUDE_MULTI_APP:-$BIN/claude-multi-app}" --updates \
     >/dev/null 2>&1 < /dev/null &
 fi
 exit 0

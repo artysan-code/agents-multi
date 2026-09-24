@@ -12,9 +12,9 @@
 // Actions (POST /api/action): an allowlist of CLI subcommands, localhost only, behind the
 // `x-claude-multi` anti-CSRF header. Update is deliberately not among them: it goes through polkit.
 
-import { ANSI, CACHE, profileNames, readJson, readText, REPO, RUNTIME } from "./lib.ts";
+import { ANSI, CACHE, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME } from "./lib.ts";
 import { type RawRegistry, selectServers } from "./mcp.ts";
-import { status } from "./status.ts";
+import { status, summarize } from "./status.ts";
 import { type GroupBy, ingest, openDb, report, sessions, transcript } from "./usage.ts";
 import { collect } from "./budget.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
@@ -148,8 +148,12 @@ function broadcast(topic: Topic, sessions: string[] = []) {
  * second is plenty for a dashboard.
  */
 async function watchTree(signal: AbortSignal) {
+  // The update check's cache and the gate's skipped versions decide the tray's "update" state.
+  // watchFs refuses a path that does not exist, so those two are watched only where they are.
+  const paths = [RUNTIME, `${REPO}/shared`];
+  for (const d of [`${HOME}/.cache/claude-update`, `${HOME}/.config/claude-update`]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
-  try { watcher = Deno.watchFs([RUNTIME, `${REPO}/shared`], { recursive: true }); } catch { return; }
+  try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
   const pending = new Set<Topic>();
   const sessions = new Set<string>();
@@ -208,7 +212,10 @@ function eventStream(): Response {
 // ---------------------------------------------------------------- server
 export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
-  let cache: { at: number; body: string } | null = null;
+  let cache: { at: number; body: string; report: Awaited<ReturnType<typeof status>> } | null = null;
+  const statusCache = async (fresh: boolean) => {
+    if (!cache || fresh || Date.now() - cache.at > 5000) { const report = await status(); cache = { at: Date.now(), body: JSON.stringify(report), report }; }
+  };
   let budget: { at: number; body: string } | null = null;
   let plugins: { at: number; body: string } | null = null;
   const ac = new AbortController();
@@ -223,8 +230,14 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
       if (u.pathname === "/api/events") return eventStream();
 
       if (u.pathname === "/api/status") {
-        if (!cache || u.searchParams.has("fresh") || Date.now() - cache.at > 5000) cache = { at: Date.now(), body: JSON.stringify(await status()) };
-        return new Response(cache.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+        await statusCache(u.searchParams.has("fresh"));
+        return new Response(cache!.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      }
+      // the tray's view of the same report: one level and the lines behind it
+      if (u.pathname === "/api/summary") {
+        await statusCache(u.searchParams.has("fresh"));
+        const skipped = (await readText(`${HOME}/.config/claude-update/skipped`) ?? "").split("\n");
+        return json(summarize(cache!.report, skipped));
       }
       if (u.pathname === "/api/usage") {
         const db = openDb(); await ingest(db, { quiet: true });

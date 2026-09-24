@@ -13,7 +13,7 @@
 #
 # COSA FA, IN ORDINE:
 #   1. legge lo stato versioni (cache TTL, così l'apertura non paga la rete a ogni click)
-#   2. se Claude Desktop O Claude Code è obsoleto → mostra claude-update-gui PRIMA di aprire
+#   2. se Claude Desktop O Claude Code è obsoleto → mostra il gate (claude-multi-app --gate) PRIMA di aprire
 #      l'app, dove SCEGLI cosa aggiornare: niente parte senza spunta. Il gate sta prima perché
 #      l'install di Desktop sostituisce /usr/lib/claude-desktop, e ad app aperta la fa crashare
 #   3. exec dell'app, sempre — qualunque cosa vada storta sopra, Claude si apre
@@ -27,7 +27,7 @@ BIN="$HOME/.local/bin"
 CACHE_DIR="$HOME/.cache/claude-update"
 CACHE="$CACHE_DIR/check.json"
 SKIP_FILE="$HOME/.config/claude-update/skipped"
-GUI="${CLAUDE_UPDATE_GUI:-$BIN/claude-update-gui}"   # override per test (o per sostituire il gate)
+APP="${CLAUDE_MULTI_APP:-$BIN/claude-multi-app}"   # override per test (o per sostituire il gate)
 TTL="${CLAUDE_LAUNCH_TTL:-21600}"        # 6h: oltre, si ricontrolla
 # Due budget annidati, e il primo DEVE stare dentro il secondo: claude-update fa due fetch
 # indipendenti (canale CLI + indice apt), ognuno con il suo timeout. Con 8s di default per
@@ -115,8 +115,8 @@ skipped desktop "$desk_latest" && desk_outdated=false
 skipped cli     "$cli_latest"  && cli_outdated=false
 
 # --- 1) gate GUI: scegli tu cosa aggiornare (bloccante, prima del launch) ----
-if [[ "$desk_outdated" == "true" || "$cli_outdated" == "true" ]] && [[ -x "$GUI" ]]; then
-  "$GUI" --profile "$profile" --state "$state"
+if [[ "$desk_outdated" == "true" || "$cli_outdated" == "true" ]] && [[ -x "$APP" ]]; then
+  "$APP" --gate --profile "$profile" --state "$state"
   case $? in
     0|20) rm -f "$CACHE" ;;   # aggiornato o messo da parte: la cache è da rifare
   esac
