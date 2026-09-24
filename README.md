@@ -132,7 +132,8 @@ never by editing its files.
   read-only: the plugins follow **Account MCP**.
 
 The doctor fails on an installed plugin whose files are gone (records hold absolute paths, so a
-moved profile directory breaks them).
+moved profile directory breaks them). A project or local record whose project directory is gone
+is only a warning: it loads nowhere, and the CLI can remove it only from inside that project.
 
 `desktopDir` is where Claude Desktop keeps that profile's data. Omit it and the convention applies:
 `~/.config/Claude-<Name>` when it exists, otherwise Desktop's own `~/.config/Claude`.

@@ -268,17 +268,39 @@ export async function syncedPlugins(dir: string): Promise<string[]> {
   return [...names].sort();
 }
 
+/** One record of installed_plugins.json, as far as the checks read it. */
+export interface PluginRecord { scope?: string; installPath?: string; projectPath?: string }
+
+/** The two ways an install record goes wrong. `exists` answers for the paths the records name.
+ *  - broken: its cache directory is gone, so Claude lists the plugin as "failed to load". It happens
+ *    when a profile directory is moved, since the records hold absolute paths.
+ *  - stale: a project or local record whose project directory is gone. It loads nowhere, and
+ *    `claude plugin uninstall --scope …` reaches it only from inside that directory.
+ *  A stale record is not also broken: nothing would ever load it. */
+export function pluginRecordState(plugins: Record<string, unknown>, exists: (path: string) => boolean) {
+  const broken: string[] = [];
+  const stale: { id: string; scope: string; project: string }[] = [];
+  for (const [id, recs] of Object.entries(plugins)) {
+    for (const r of Array.isArray(recs) ? recs as PluginRecord[] : []) {
+      if ((r.scope === "project" || r.scope === "local") && r.projectPath && !exists(r.projectPath)) stale.push({ id, scope: r.scope, project: r.projectPath });
+      else if (r.installPath && !exists(r.installPath) && !broken.includes(id)) broken.push(id);
+    }
+  }
+  return { broken, stale };
+}
+
 export async function profileInfo(p: Profile) {
   const dir = `${RUNTIME}/${p}`;
   const link = async (name: string) => await readlink(`${dir}/${name}`);
   const conf = await readJson<{ mcpServers?: Record<string, unknown>; oauthAccount?: { emailAddress?: string } }>(`${dir}/.claude.json`);
-  const plugins = await readJson<{ plugins?: Record<string, { installPath?: string }[]> }>(`${dir}/plugins/installed_plugins.json`);
-  // an install record whose cache directory is gone: Claude lists the plugin as "failed to load".
-  // It happens when a profile directory is moved, since the records hold absolute paths.
-  const brokenPlugins: string[] = [];
-  for (const [id, recs] of Object.entries(plugins?.plugins ?? {})) {
-    for (const r of Array.isArray(recs) ? recs : []) if (r.installPath && !(await lstat(r.installPath))) { brokenPlugins.push(id); break; }
+  const plugins = await readJson<{ plugins?: Record<string, unknown> }>(`${dir}/plugins/installed_plugins.json`);
+  const present = new Set<string>();
+  for (const recs of Object.values(plugins?.plugins ?? {})) {
+    for (const r of Array.isArray(recs) ? recs as PluginRecord[] : []) {
+      for (const path of [r.installPath, r.projectPath]) if (path && await lstat(path)) present.add(path);
+    }
   }
+  const { broken: brokenPlugins, stale: stalePlugins } = pluginRecordState(plugins?.plugins ?? {}, (path) => present.has(path));
   const creds = await lstat(`${dir}/.credentials.json`);
   const manifest = await loadManifest(p);
   const mounted: Record<Kind, Record<string, { link: string | null; broken: boolean }>> = { skills: {}, agents: {}, commands: {} };
@@ -309,6 +331,7 @@ export async function profileInfo(p: Profile) {
     mcpDesktop: Object.keys(desktopConf?.mcpServers ?? {}),
     plugins: Object.keys(plugins?.plugins ?? {}),
     brokenPlugins,
+    stalePlugins,
     synced: await syncedPlugins(dir),
   };
 }
