@@ -1,0 +1,196 @@
+// settings.ts — each profile's settings.json is generated, not linked.
+//
+//   shared/settings.json            what every profile gets
+//   profiles/<p>/settings.json      that profile's differences, as a JSON Merge Patch (RFC 7386:
+//                                   objects merge, anything else replaces, null deletes the key)
+//   the manifest                    what it implies (disableAccountMcp)
+//     → ~/.claude-multi/<p>/settings.json
+//
+// Claude Code writes into its settings.json (/plugin, /config, "always allow"): those writes land in
+// the generated file. Before regenerating, the difference between the file and the last generated
+// copy (kept in XDG state, per machine) is adopted into the profile's patch — nothing Claude wrote
+// is lost, and it stays with the profile it was written in. Moving a change to every profile means
+// moving it into shared/settings.json.
+//
+// Plugins are why this exists: Claude Code installs every plugin `enabledPlugins` marks true when a
+// session starts, so a plugin is off for one profile only if that profile's own file says false.
+
+import { loadManifest, lstat, type Manifest, type Profile, profileNames, readJson, REPO, RUNTIME, STAMP, STATE, syncedPlugins } from "./lib.ts";
+
+type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
+export type Obj = { [k: string]: Json };
+
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+/** Key order is not meaning: Claude Code may rewrite the file with its keys in another order. */
+const canon = (v: unknown): unknown =>
+  Array.isArray(v) ? v.map(canon) : isObj(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v;
+const same = (a: unknown, b: unknown) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+
+/** RFC 7386: apply a merge patch. Never mutates its inputs. */
+export function mergePatch(target: Json | undefined, patch: Json): Json {
+  if (!isObj(patch)) return structuredClone(patch);
+  const out: Obj = isObj(target) ? structuredClone(target) : {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete out[k];
+    else out[k] = mergePatch(out[k], v);
+  }
+  return out;
+}
+
+/** The smallest merge patch that turns `from` into `to` (both objects). Arrays are compared whole:
+ *  a merge patch can only replace them. */
+export function diffPatch(from: Obj, to: Obj): Obj {
+  const out: Obj = {};
+  for (const k of Object.keys(from)) if (!(k in to)) out[k] = null;
+  for (const [k, v] of Object.entries(to)) {
+    const f = from[k];
+    if (same(f, v)) continue;
+    out[k] = isObj(f) && isObj(v) ? diffPatch(f, v) : structuredClone(v);
+  }
+  return out;
+}
+
+/** What the manifest implies. disableAccountMcp: connectors off, every synced plugin disabled —
+ *  here it reaches Desktop's Code tab too, which the launcher's --settings overlay cannot. */
+export function manifestPatch(m: Pick<Manifest, "disableAccountMcp">, synced: string[]): Obj {
+  if (!m.disableAccountMcp) return {};
+  return { disableClaudeAiConnectors: true, enabledPlugins: Object.fromEntries(synced.map((id) => [id, false])) };
+}
+
+/** shared ⊕ profile patch ⊕ manifest. */
+export function buildSettings(shared: Obj, patch: Obj, derived: Obj): Obj {
+  return mergePatch(mergePatch(shared, patch), derived) as Obj;
+}
+
+/** Fold what Claude wrote (the difference between the last generated file and the current one)
+ *  into the profile patch. The difference is applied to the current shared ⊕ patch, so a shared
+ *  change pulled since the last build is not undone. The result is kept minimal against the base:
+ *  an entry that says what shared already says is dropped, so reverting a change in a session also
+ *  clears it from the repository. A write to a key the manifest derives is kept, but the manifest
+ *  still wins on every build. */
+export function adopt(shared: Obj, patch: Obj, lastBuilt: Obj, current: Obj): { patch: Obj; changed: string[] } {
+  const d = diffPatch(lastBuilt, current);
+  const changed = paths(d);
+  if (!changed.length) return { patch, changed };
+  // the effective settings the user now has, minus the base, is the new patch
+  const effective = mergePatch(mergePatch(shared, patch), d) as Obj;
+  return { patch: diffPatch(shared, effective), changed };
+}
+
+/** Dotted leaf paths of a patch, for reporting ("enabledPlugins.context7@claude-plugins-official"). */
+export function paths(p: Obj, prefix = ""): string[] {
+  return Object.entries(p).flatMap(([k, v]) => isObj(v) && Object.keys(v).length ? paths(v, `${prefix}${k}.`) : [`${prefix}${k}`]);
+}
+
+// ---------------------------------------------------------------- files
+export const SHARED_SETTINGS = `${REPO}/shared/settings.json`;
+export const patchPath = (p: Profile) => `${REPO}/profiles/${p}/settings.json`;
+export const runtimePath = (p: Profile) => `${RUNTIME}/${p}/settings.json`;
+export const builtPath = (p: Profile) => `${STATE}/settings/${p}.json`;
+
+async function readObj(path: string): Promise<Obj | null> {
+  const v = await readJson<Json>(path);
+  return isObj(v) ? v : null;
+}
+async function writeJson(path: string, v: Json) {
+  await Deno.mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true });
+  const tmp = `${path}.tmp-${Deno.pid}`;
+  await Deno.writeTextFile(tmp, JSON.stringify(v, null, 2) + "\n");
+  await Deno.rename(tmp, path);
+}
+
+export interface SettingsResult {
+  profile: Profile;
+  /** paths adopted from Claude's writes into profiles/<p>/settings.json */
+  adopted: string[];
+  /** the runtime file was (or, dry, would be) rewritten */
+  wrote: boolean;
+  /** it was still a symlink to shared/settings.json */
+  migrated: boolean;
+  /** a regular file with no record of what was generated: kept aside, not adopted */
+  orphan?: string;
+}
+
+/** The inputs and the expected file for one profile, without touching anything. */
+export async function expectedSettings(p: Profile) {
+  const shared = await readObj(SHARED_SETTINGS) ?? {};
+  const patch = await readObj(patchPath(p)) ?? {};
+  const derived = manifestPatch(await loadManifest(p), await syncedPlugins(`${RUNTIME}/${p}`));
+  return { shared, patch, derived, built: buildSettings(shared, patch, derived) };
+}
+
+/**
+ * Regenerate one profile's settings.json. With `adopt`, Claude's writes since the last build are
+ * first folded into the profile patch (repository); without it they are discarded — used right
+ * after the console ran a `claude plugin` command whose effect is already recorded in the repo.
+ */
+export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: boolean } = {}): Promise<SettingsResult> {
+  const adoptWrites = opts.adopt ?? true;
+  const res: SettingsResult = { profile: p, adopted: [], wrote: false, migrated: false };
+  const rt = runtimePath(p);
+  const st = await lstat(rt);
+  res.migrated = !!st?.isSymlink;
+  const current = st && !st.isSymlink ? await readObj(rt) : null;
+  const lastBuilt = await readObj(builtPath(p));
+
+  let { shared, patch, derived } = await expectedSettings(p);
+  if (current && lastBuilt && adoptWrites) {
+    const a = adopt(shared, patch, lastBuilt, current);
+    if (a.changed.length) {
+      res.adopted = a.changed;
+      patch = a.patch;
+      if (!opts.dry) {
+        if (Object.keys(patch).length) await writeJson(patchPath(p), patch);
+        else if (await lstat(patchPath(p))) await Deno.remove(patchPath(p));
+      }
+    }
+  } else if (current && !lastBuilt && !same(current, buildSettings(shared, patch, derived))) {
+    // A real file nobody recorded generating (state wiped, or hand-made): what in it is Claude's
+    // cannot be told apart from what is stale, so it is kept aside rather than guessed at.
+    res.orphan = `${STATE}/settings/${p}.orphan-${STAMP}.json`;
+    if (!opts.dry) await writeJson(res.orphan, current);
+  }
+
+  const built = buildSettings(shared, patch, derived);
+  res.wrote = res.migrated || !current || !same(current, built);
+  if (opts.dry) return res;
+  if (res.migrated) await Deno.remove(rt);
+  if (res.wrote) await writeJson(rt, built);
+  if (!same(lastBuilt, built)) await writeJson(builtPath(p), built);
+  return res;
+}
+
+export async function syncAllSettings(opts: { adopt?: boolean; dry?: boolean } = {}) {
+  const out: SettingsResult[] = [];
+  for (const p of await profileNames()) {
+    if (!(await lstat(`${RUNTIME}/${p}`))) continue; // not materialised yet: install creates it first
+    out.push(await syncSettings(p, opts));
+  }
+  return out;
+}
+
+/** State of one profile's file, for the doctor: generated and current, Claude wrote into it since,
+ *  or the inputs moved on and it has not been regenerated. */
+export async function settingsState(p: Profile): Promise<{ kind: "symlink" | "missing" | "ok" | "local-writes" | "stale"; changed: string[] }> {
+  const st = await lstat(runtimePath(p));
+  if (!st) return { kind: "missing", changed: [] };
+  if (st.isSymlink) return { kind: "symlink", changed: [] };
+  const current = await readObj(runtimePath(p)) ?? {};
+  const lastBuilt = await readObj(builtPath(p));
+  if (lastBuilt && !same(current, lastBuilt)) return { kind: "local-writes", changed: paths(diffPatch(lastBuilt, current)) };
+  const { built } = await expectedSettings(p);
+  if (!same(current, built)) return { kind: "stale", changed: paths(diffPatch(current, built)) };
+  return { kind: "ok", changed: [] };
+}
+
+/** Read-modify-write of a settings source in the repository (shared, or a profile's patch). */
+export async function editSettingsSource(target: "shared" | Profile, edit: (o: Obj) => void) {
+  const path = target === "shared" ? SHARED_SETTINGS : patchPath(target);
+  const o = await readObj(path) ?? {};
+  const before = JSON.stringify(o);
+  edit(o);
+  if (JSON.stringify(o) === before) return false;
+  if (target !== "shared" && !Object.keys(o).length) { if (await lstat(path)) await Deno.remove(path); return true; }
+  await writeJson(path, o); // 2-space JSON, as Claude Code itself writes it
+  return true;
+}

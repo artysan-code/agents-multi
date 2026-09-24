@@ -68,6 +68,26 @@ main() {
   write_state "$behind" "$ahead" "$dirty" "$pulled" "$fetch_ok" true
 }
 
+# Ogni profilo ha un settings.json GENERATO (cli/settings.ts): shared ⊕ patch del profilo ⊕ manifest.
+# Si rigenera quando una sorgente è più recente dell'ultima generazione: un pull, una modifica nel
+# repo, un plugin sincronizzato dall'account, o Claude che ha scritto nel file generato (quelle
+# scritture vengono adottate nella patch del profilo). Serve Deno: senza, Claude parte col file
+# generato l'ultima volta. Lock a parte, e mai bloccante.
+regen_settings() {
+  local runtime="${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}" stamp="$CACHE/settings.stamp"
+  [[ -x "$REPO/bin/claude-multi" ]] && command -v deno >/dev/null 2>&1 || return 0
+  mkdir -p "$CACHE"
+  exec 8>"$CACHE/settings.lock"
+  flock -n 8 || return 0
+  if [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/profiles" \
+        "$runtime"/*/settings.json "$runtime"/*/plugins/synced -newer "$stamp" -print -quit 2>/dev/null)" ]]; then
+    return 0
+  fi
+  touch "$stamp.next"
+  "$REPO/bin/claude-multi" settings --quiet && mv -f "$stamp.next" "$stamp"
+}
+
 # stderr resta aperto: la riga "config aggiornata" deve arrivare all'utente; git ha già i suoi 2>/dev/null
 main || true
+regen_settings || true
 exit 0

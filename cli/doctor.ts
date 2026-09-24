@@ -2,6 +2,7 @@
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
 import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, type Status } from "./lib.ts";
+import { settingsState } from "./settings.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
 import { collect, doctorChecks } from "./budget.ts";
 import { PORT } from "./serve.ts";
@@ -56,7 +57,11 @@ export async function doctor(): Promise<Check[]> {
     const info = await profileInfo(p);
     if (!info.exists) { add(`profile.${p}`, "fail", `profile ${p} is not materialised`, "claude-multi install"); continue; }
     if (info.claudeMd !== `${REPO}/profiles/${p}/CLAUDE.md`) add(`profile.${p}.claudemd`, "fail", `${p}/CLAUDE.md does not point at the repository`, "claude-multi install");
-    if (info.settings !== "../shared/settings.json") add(`profile.${p}.settings`, "fail", `${p}/settings.json → ${info.settings ?? "not a symlink"}`, "claude-multi install");
+    const set = await settingsState(p);
+    const list = (xs: string[]) => xs.slice(0, 4).join(", ") + (xs.length > 4 ? ` +${xs.length - 4}` : "");
+    if (set.kind === "symlink" || set.kind === "missing") add(`profile.${p}.settings`, "fail", `${p}/settings.json is ${set.kind === "symlink" ? "still a link to shared/: it is generated now" : "missing"}`, "claude-multi install");
+    else if (set.kind === "local-writes") add(`profile.${p}.settings`, "warn", `${p}: Claude changed settings.json (${list(set.changed)}), not yet adopted into profiles/${p}/settings.json`, "claude-multi settings (or just launch Claude)");
+    else if (set.kind === "stale") add(`profile.${p}.settings`, "warn", `${p}/settings.json is behind its sources (${list(set.changed)})`, "claude-multi settings (or just launch Claude)");
     if (info.hooks !== "../shared/hooks") add(`profile.${p}.hooks`, "fail", `${p}/hooks → ${info.hooks ?? "not a symlink"}`, "claude-multi install");
 
     for (const k of KINDS) {

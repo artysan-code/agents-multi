@@ -2,6 +2,7 @@
 // claude-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
 //
 //   install [--dry-run]     materialise ~/.claude-multi, ~/.local/bin, units and .desktop entries (idempotent)
+//   settings [--dry-run] [--quiet]   regenerate each profile's settings.json, adopting what Claude wrote into it
 //   doctor  [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only
 //   status  [--json]        versions, updates, repo sync, profiles (what is mounted), running instances
 //   sync    [--fetch]       align the repository (fetch when stale, ff-only pull on a clean tree)
@@ -20,6 +21,7 @@ import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
 import { install } from "./install.ts";
+import { syncAllSettings } from "./settings.ts";
 import { printStatus, status } from "./status.ts";
 import { apply, blockers, describe, health, plan } from "./mcp.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
@@ -32,6 +34,16 @@ const opt = (name: string, def?: string) => { const i = rest.indexOf(name); retu
 
 switch (cmd) {
   case "install": Deno.exit(await install(flag("--dry-run")));
+  case "settings": {
+    const dry = flag("--dry-run");
+    for (const r of await syncAllSettings({ dry })) {
+      const pre = dry ? `${ANSI.d}(dry)${ANSI.x} ` : "";
+      if (r.adopted.length) console.log(`  ${pre}${r.profile}: adopted into profiles/${r.profile}/settings.json: ${r.adopted.join(", ")}`);
+      if (r.orphan) console.log(`  ${pre}${r.profile}: settings.json had no record of being generated, kept aside as ${r.orphan}`);
+      if (r.wrote && !flag("--quiet")) console.log(`  ${pre}${r.profile}/settings.json ${r.migrated ? "generated (was a link to shared/)" : "regenerated"}`);
+    }
+    break;
+  }
   case "doctor": {
     const c = await doctor();
     if (flag("--notify")) { const sent = await notifyDoctor(c, { dryRun: flag("--dry-run") }); console.log(sent ? "notification sent" : "nothing new, no notification"); break; }

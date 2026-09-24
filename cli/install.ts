@@ -3,6 +3,7 @@
 
 import { AGENTS_SKILLS, ANSI, BIN, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
 import { doctor } from "./doctor.ts";
+import { syncSettings } from "./settings.ts";
 
 let DRY = false;
 const actions: string[] = [];
@@ -159,7 +160,12 @@ export async function install(dry: boolean) {
     const dir = `${RUNTIME}/${p}`;
     await ensureDir(dir, 0o700);
     await ensureSymlink(`${REPO}/profiles/${p}/CLAUDE.md`, `${dir}/CLAUDE.md`, `${p}/CLAUDE.md`);
-    await ensureSymlink("../shared/settings.json", `${dir}/settings.json`, `${p}/settings.json`);
+    // settings.json is generated (settings.ts): shared ⊕ the profile's patch ⊕ the manifest.
+    const set = await syncSettings(p, { dry: DRY });
+    if (set.adopted.length) say(`${ANSI.y}→${ANSI.x} ${p}: adopting what Claude wrote into profiles/${p}/settings.json: ${set.adopted.join(", ")}`);
+    if (set.orphan) say(`${ANSI.r}!${ANSI.x} ${p}/settings.json was a file with no record of generating it: kept aside as ${shortHome(set.orphan)}`);
+    if (set.migrated) say(`${ANSI.y}→${ANSI.x} ${p}/settings.json: from a link to shared/ to a generated file`);
+    else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
     await ensureSymlink("../shared/hooks", `${dir}/hooks`, `${p}/hooks`);
     await ensureDir(`${dir}/plugins`);
     await ensureSymlink("../../marketplaces", `${dir}/plugins/marketplaces`, `${p}/plugins/marketplaces`);

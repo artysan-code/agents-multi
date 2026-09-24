@@ -39,8 +39,9 @@ if [[ ! -x "$CLAUDE_BIN" ]]; then
   LATEST=$(ls -1v "$HOME/.local/share/claude/versions/" | tail -n1)
   CLAUDE_BIN="$HOME/.local/share/claude/versions/$LATEST"
 fi
-# disableAccountMcp: layer the overlay over the shared settings.json (a --settings file merges
-# into it, enabledPlugins included), so only this profile loses what the account brings in.
+# disableAccountMcp: the generated settings.json already says it (cli/settings.ts); the overlay,
+# rebuilt here at every launch, also catches a plugin the organisation synced since the last
+# regeneration. A --settings file merges into the settings, enabledPlugins included.
 CONFIG_DIR="$HOME/.claude-multi/$PROFILE"
 OVERLAY=()
 # If the overlay cannot be written, Claude still starts, just without it.
