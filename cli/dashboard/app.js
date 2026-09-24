@@ -552,6 +552,11 @@ function cardView(name, isLive) {
       ? all.map((m) => `<span class="chip${mine.has(m) ? " on" : ""}">${esc(m)}</span>`).join("")
       : `<span class="chip">none</span>`
   }</div></div>
+      <div class="f"><label>Account MCP</label><span class="val">${
+    p.manifest.disableAccountMcp
+      ? `<span class="chip on">disabled</span> connectors · ${(p.synced ?? []).length} synced plugins`
+      : `<span class="chip">enabled</span>`
+  }</span></div>
     </div>
   </div>`;
 }
@@ -590,6 +595,9 @@ function cardEdit(name) {
       `<span class="chip pick${picked.has(s) ? " on" : ""}" data-pick="${esc(s)}">${esc(s)}</span>`
     ).join("") || `<span class="chip">registry empty</span>`
   }</div></div>
+      <div class="f"><label>Account MCP</label><label class="check"><input type="checkbox" name="disableAccountMcp"${
+    m.disableAccountMcp ? " checked" : ""
+  }> disable claude.ai connectors and the organisation's plugins</label></div>
     </div>
     <div class="pfoot">
       <button class="btn primary" type="submit">${isNew ? "Create" : "Save"}</button>
@@ -641,6 +649,7 @@ $("#pcards").addEventListener("submit", async (e) => {
     desktopDir: f.elements.desktopDir.value.trim(),
     cap: f.elements.cap.value ? Number(f.elements.cap.value) : null,
     mcp: $$("[data-pick].on", f).map((c) => c.dataset.pick),
+    disableAccountMcp: f.elements.disableAccountMcp.checked,
   };
   const btn = $("button[type=submit]", f);
   btn.disabled = true;

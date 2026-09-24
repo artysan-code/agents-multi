@@ -65,6 +65,9 @@ export interface Manifest {
   command?: string;
   /** Shell alias for the launcher, written into the managed ~/.zshrc block. */
   alias?: string;
+  /** Switch off what the account brings in: the claude.ai connectors and the organisation's synced
+   *  plugins. Applied by the launchers (bin/claude, bin/claude-launch), not by install. */
+  disableAccountMcp?: boolean;
 }
 const MANIFEST_DEFAULT: Manifest = { skills: "all", agents: "all", commands: "all" };
 
@@ -248,6 +251,23 @@ export async function running() {
 }
 
 // ---------------------------------------------------------------- profiles
+/** Plugin names in one of Claude Code's sync manifests (plugins/synced/<uuid>/manifest.json). */
+export function syncedPluginNames(manifest: unknown): string[] {
+  const plugins = (manifest as { plugins?: unknown } | null)?.plugins;
+  if (!Array.isArray(plugins)) return [];
+  return plugins.map((p) => (p as { name?: unknown })?.name).filter((n): n is string => typeof n === "string" && n.length > 0);
+}
+
+/** Plugins the organisation syncs into a profile, as `<name>@synced` — the ids enabledPlugins takes.
+ *  Mirrors cm_account_mcp_settings in bin/lib/profiles.sh. */
+export async function syncedPlugins(dir: string): Promise<string[]> {
+  const names = new Set<string>();
+  for (const bucket of await listDir(`${dir}/plugins/synced`)) {
+    for (const n of syncedPluginNames(await readJson(`${dir}/plugins/synced/${bucket}/manifest.json`))) names.add(`${n}@synced`);
+  }
+  return [...names].sort();
+}
+
 export async function profileInfo(p: Profile) {
   const dir = `${RUNTIME}/${p}`;
   const link = async (name: string) => await readlink(`${dir}/${name}`);
@@ -282,6 +302,7 @@ export async function profileInfo(p: Profile) {
     mcp: Object.keys(conf?.mcpServers ?? {}),
     mcpDesktop: Object.keys(desktopConf?.mcpServers ?? {}),
     plugins: Object.keys(plugins?.plugins ?? {}),
+    synced: await syncedPlugins(dir),
   };
 }
 

@@ -33,6 +33,29 @@ cm_field() {
   sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$f" | head -n1
 }
 
+# cm_flag <profile> <key> — succeeds when the manifest sets this boolean key to true.
+cm_flag() {
+  local f="$(cm_repo)/profiles/$1/profile.json"
+  [[ -f "$f" ]] && grep -Eq "\"$2\"[[:space:]]*:[[:space:]]*true" "$f"
+}
+
+# cm_account_mcp_settings <config dir> — the --settings overlay for a profile with
+# disableAccountMcp: the claude.ai connectors off, and every plugin the organisation syncs into
+# the account (`<name>@synced`, read from the sync manifests under plugins/synced/) disabled.
+# Rebuilt at every launch, so a plugin the organisation adds later is caught on the next start.
+# Mirrors syncedPlugins() on the TypeScript side.
+cm_account_mcp_settings() {
+  local m names=""
+  for m in "$1"/plugins/synced/*/manifest.json; do
+    [[ -f "$m" ]] || continue
+    # `|| true`: a manifest with no plugin is not an error, and the launcher runs under set -e.
+    names+="$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$m" | sed 's/.*"\([^"]*\)"$/\1/' || true)"$'\n'
+  done
+  local entries
+  entries="$(printf '%s' "$names" | sed '/^$/d' | sort -u | sed 's/.*/"&@synced": false/' | paste -sd, -)"
+  printf '{"disableClaudeAiConnectors": true, "enabledPlugins": {%s}}\n' "$entries"
+}
+
 # cm_command <profile> — launcher name; claude-<profile> when the manifest does not say.
 cm_command() {
   local c; c="$(cm_field "$1" command)"

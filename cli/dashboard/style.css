@@ -1141,6 +1141,18 @@ tbody tr[aria-selected="true"] {
 .f input:invalid {
   border-color: var(--crit);
 }
+.f .check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.f .check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

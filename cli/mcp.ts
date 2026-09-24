@@ -14,6 +14,8 @@ import { type Check, desktopDir, has, HOME, lstat, type Profile, profileNames, r
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[] };
 type Surface = "cli" | "desktop";
 export interface Registry { profiles: string[]; servers: Record<string, ServerCfg> }
+/** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
+export interface RawRegistry { profiles?: string[]; servers: Record<string, ServerCfg> }
 export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
 export interface Change { target: Target; name: string; kind: "add" | "update" | "remove" }
 
@@ -28,6 +30,26 @@ export async function loadRegistry(): Promise<Registry> {
   if (!r?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
   return { profiles: r.profiles ?? await profileNames(), servers: r.servers };
 }
+/**
+ * A profile's server selection applied to the raw registry file. `everyone` is what an absent
+ * top-level `profiles` stands for (loadRegistry: every declared profile), and an absent list stays
+ * absent — writing one in would freeze the set of profiles and cut out every other one.
+ */
+export function selectServers(reg: RawRegistry, everyone: string[], name: string, picked: string[]): RawRegistry {
+  const out = structuredClone(reg);
+  if (out.profiles && !out.profiles.includes(name)) out.profiles = [...out.profiles, name].sort();
+  const all = out.profiles ?? everyone;
+  const want = new Set(picked);
+  for (const [server, cfg] of Object.entries(out.servers)) {
+    const set = new Set(cfg._profiles ?? all);
+    if (want.has(server)) set.add(name); else set.delete(name);
+    // back to the implicit form when the list covers everyone: the file stays readable
+    if (all.every((p) => set.has(p))) delete cfg._profiles;
+    else cfg._profiles = [...set].sort();
+  }
+  return out;
+}
+
 export function wanted(reg: Registry, t: Target): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
   for (const [name, cfg] of Object.entries(reg.servers)) {

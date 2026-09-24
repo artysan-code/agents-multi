@@ -56,16 +56,20 @@ fi
 # --- lancio dell'app --------------------------------------------------------
 # Una sola strada per tutti i profili: config dir e user-data-dir dal manifest, eseguibile scelto
 # dalla presenza di un app_id dedicato.
+# disableAccountMcp: Desktop runs its own bundled Claude Code for the Code tab, not bin/claude, so
+# the --settings overlay cannot reach it; the environment does, and this variable switches off the
+# claude.ai connectors there. The organisation's synced plugins stay on inside Desktop.
 launch() {
-  local appid data_dir
+  local appid data_dir account_env=()
   appid="$(cm_desktop_appid "$profile")"
   data_dir="$(cm_desktop_dir "$profile")"
+  cm_flag "$profile" disableAccountMcp && account_env=(ENABLE_CLAUDEAI_MCP_SERVERS=false)
   if [[ -n "$appid" ]]; then
-    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" \
+    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" "${account_env[@]}" \
       "$HOME/.local/lib/$appid/$appid" \
       --ozone-platform=wayland --user-data-dir="$data_dir" "$@"
   else
-    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" claude-desktop "$@"
+    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" "${account_env[@]}" claude-desktop "$@"
   fi
 }
 if [[ $check_only -eq 1 ]]; then
@@ -77,6 +81,7 @@ if [[ $check_only -eq 1 ]]; then
     else echo "  eseguibile:     claude-desktop (di sistema)"; fi
     echo "  user-data-dir:  $(cm_desktop_dir "$profile")"
     echo "  CLAUDE_CONFIG_DIR: $HOME/.claude-multi/$profile"
+    cm_flag "$profile" disableAccountMcp && echo "  ENABLE_CLAUDEAI_MCP_SERVERS=false (disableAccountMcp)"
     exit 0
   }
 fi

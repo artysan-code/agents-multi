@@ -78,6 +78,16 @@ whatever the profile owns in `profiles/<name>/<kind>/`. Owning a skill is how wo
 leak into another profile stays put: `install` materialises it, and `doctor` reports it as a
 failure if it shows up somewhere else.
 
+`"disableAccountMcp": true` switches off what the account brings in: the claude.ai connectors
+and the plugins the organisation syncs (`<name>@synced`). `settings.json` is shared by every
+profile, so this cannot live there: `bin/claude` builds a `--settings` overlay
+(`<profile>/account-mcp-off.settings.json`) at each launch from the sync manifests, which catches a
+plugin the organisation adds later. Desktop runs its own Claude Code for the Code tab and never
+goes through `bin/claude`: `claude-launch` passes `ENABLE_CLAUDEAI_MCP_SERVERS=false` instead,
+which turns the connectors off there, but the synced plugins stay on inside Desktop. The Desktop
+chat takes its connectors from the claude.ai account and is not affected. It is the
+**Account MCP** checkbox in the console.
+
 `desktopDir` is where Claude Desktop keeps that profile's data. Omit it and the convention applies:
 `~/.config/Claude-<Name>` when it exists, otherwise Desktop's own `~/.config/Claude`.
 

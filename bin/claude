@@ -8,7 +8,9 @@
 #
 # 1. align the config from the repo (prelaunch.sh: fetch when stale, ff-only pull, never blocking)
 # 2. pin CLAUDE_CONFIG_DIR to the profile and disable the native auto-updater
-# 3. `<launcher> update` is redirected to `claude-multi update`: the native updater would rewrite
+# 3. with `disableAccountMcp` in the manifest, pass a --settings overlay that switches off the
+#    claude.ai connectors and the organisation's synced plugins
+# 4. `<launcher> update` is redirected to `claude-multi update`: the native updater would rewrite
 #    ~/.local/bin/claude and leave claude-bin behind
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -37,4 +39,13 @@ if [[ ! -x "$CLAUDE_BIN" ]]; then
   LATEST=$(ls -1v "$HOME/.local/share/claude/versions/" | tail -n1)
   CLAUDE_BIN="$HOME/.local/share/claude/versions/$LATEST"
 fi
-exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$PROFILE" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "$@"
+# disableAccountMcp: layer the overlay over the shared settings.json (a --settings file merges
+# into it, enabledPlugins included), so only this profile loses what the account brings in.
+CONFIG_DIR="$HOME/.claude-multi/$PROFILE"
+OVERLAY=()
+# If the overlay cannot be written, Claude still starts, just without it.
+if cm_flag "$PROFILE" disableAccountMcp &&
+   cm_account_mcp_settings "$CONFIG_DIR" > "$CONFIG_DIR/account-mcp-off.settings.json" 2>/dev/null; then
+  OVERLAY=(--settings "$CONFIG_DIR/account-mcp-off.settings.json")
+fi
+exec env CLAUDE_CONFIG_DIR="$CONFIG_DIR" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "${OVERLAY[@]}" "$@"

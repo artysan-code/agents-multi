@@ -12,7 +12,8 @@
 // Actions (POST /api/action): an allowlist of CLI subcommands, localhost only, behind the
 // `x-claude-multi` anti-CSRF header. Update is deliberately not among them: it goes through polkit.
 
-import { ANSI, CACHE, readJson, readText, REPO, RUNTIME } from "./lib.ts";
+import { ANSI, CACHE, profileNames, readJson, readText, REPO, RUNTIME } from "./lib.ts";
+import { type RawRegistry, selectServers } from "./mcp.ts";
 import { status } from "./status.ts";
 import { type GroupBy, ingest, openDb, report, sessions, transcript } from "./usage.ts";
 import { collect } from "./budget.ts";
@@ -53,7 +54,7 @@ async function runAction(name: string, opts: string[]) {
 }
 
 // ---------------------------------------------------------------- profiles
-interface ProfileBody { name?: string; description?: string; command?: string; alias?: string; desktopDir?: string; cap?: number | null; mcp?: string[] }
+interface ProfileBody { name?: string; description?: string; command?: string; alias?: string; desktopDir?: string; cap?: number | null; mcp?: string[]; disableAccountMcp?: boolean }
 
 /** Profile names become directory names and are interpolated into paths, so the shape is fixed
  *  here rather than sanitised later: lowercase, starts with a letter, no separators. */
@@ -80,6 +81,9 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
   if (b.command?.trim()) manifest.command = b.command.trim(); else delete manifest.command;
   if (b.alias?.trim()) manifest.alias = b.alias.trim(); else delete manifest.alias;
   if (b.desktopDir?.trim()) manifest.desktopDir = b.desktopDir.trim(); else delete manifest.desktopDir;
+  if (b.disableAccountMcp !== undefined) {
+    if (b.disableAccountMcp) manifest.disableAccountMcp = true; else delete manifest.disableAccountMcp;
+  }
 
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
@@ -103,21 +107,10 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
  *  "every profile", so opting one out has to materialise the list rather than just remove a name. */
 async function applyRegistrySelection(name: string, picked: string[]) {
   const path = `${REPO}/shared/mcp/servers.json`;
-  const reg = await readJson<{ profiles?: string[]; servers?: Record<string, Record<string, unknown>> }>(path);
+  const reg = await readJson<RawRegistry>(path);
   if (!reg?.servers) return;
-  const all = new Set(reg.profiles ?? []);
-  all.add(name);
-  reg.profiles = [...all].sort();
-  const want = new Set(picked);
-  for (const [server, cfg] of Object.entries(reg.servers)) {
-    const current: string[] = Array.isArray(cfg._profiles) ? cfg._profiles as string[] : reg.profiles;
-    const set = new Set(current);
-    if (want.has(server)) set.add(name); else set.delete(name);
-    // back to the implicit form when the list covers everyone: the file stays readable
-    if (reg.profiles.every((p) => set.has(p))) delete cfg._profiles;
-    else cfg._profiles = [...set].sort();
-  }
-  await Deno.writeTextFile(path, JSON.stringify(reg, null, 2) + "\n");
+  const next = selectServers(reg, await profileNames(), name, picked);
+  if (JSON.stringify(next) !== JSON.stringify(reg)) await Deno.writeTextFile(path, JSON.stringify(next, null, 2) + "\n");
 }
 
 /** Store the per-profile alert ceiling in shared/budget.json (null clears it). */
@@ -125,12 +118,14 @@ async function applyCap(name: string, cap: number | null) {
   const path = `${REPO}/shared/budget.json`;
   const cfg = await readJson<Record<string, unknown>>(path);
   if (!cfg) return;
+  const before = JSON.stringify(cfg.profiles ?? {});
   const profiles = (cfg.profiles ?? {}) as Record<string, Record<string, unknown>>;
   const entry = profiles[name] ?? {};
   if (cap == null || !(cap > 0)) delete entry.cap; else entry.cap = cap;
   if (Object.keys(entry).length) profiles[name] = entry; else delete profiles[name];
   cfg.profiles = profiles;
-  await Deno.writeTextFile(path, JSON.stringify(cfg, null, 2) + "\n");
+  // unchanged → no write: the file is hand-formatted, and a rewrite would only reflow it
+  if (JSON.stringify(profiles) !== before) await Deno.writeTextFile(path, JSON.stringify(cfg, null, 2) + "\n");
 }
 
 // ---------------------------------------------------------------- live updates

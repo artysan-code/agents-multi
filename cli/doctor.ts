@@ -85,7 +85,7 @@ export async function doctor(): Promise<Check[]> {
     else if (info.credentials.mode !== "600") add(`profile.${p}.creds`, "fail", `${p}/.credentials.json mode ${info.credentials.mode}`, `chmod 600 ${info.dir}/.credentials.json`);
     const junk = (await listDir(info.dir)).filter((f) => /\.(bak|backup|pre-|tmp\.)/.test(f) && /credentials|claude\.json|settings/.test(f));
     if (junk.length) add(`profile.${p}.junk`, "fail", `backups holding tokens or an account in the profile: ${junk.join(", ")}`, `rm ${junk.map((f) => `${info.dir}/${f}`).join(" ")}`);
-    add(`profile.${p}`, "ok", `${p}: ${info.account ?? "no account"} · ${Object.keys(info.mounted.skills).length} skills · mcp cli ${info.mcp.length}${m.desktopVersion ? ` / desktop ${info.mcpDesktop.length}` : ""} · ${info.plugins.length} plugins`);
+    add(`profile.${p}`, "ok", `${p}: ${info.account ?? "no account"} · ${Object.keys(info.mounted.skills).length} skills · mcp cli ${info.mcp.length}${m.desktopVersion ? ` / desktop ${info.mcpDesktop.length}` : ""} · ${info.plugins.length} plugins${info.manifest.disableAccountMcp ? ` · account MCP off (connectors + ${info.synced.length} synced plugin${info.synced.length === 1 ? "" : "s"})` : ""}`);
   }
 
   // A runtime directory the repository no longer declares keeps its credentials and transcripts

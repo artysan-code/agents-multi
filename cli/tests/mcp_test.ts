@@ -1,7 +1,7 @@
 // Tests for mcp.ts: projecting the registry onto surfaces (profiles, _surfaces, private keys, `type`).
 // The profile names come from the repository, never from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
-import { type Registry, type Target, targets, wanted } from "../mcp.ts";
+import { type RawRegistry, type Registry, selectServers, type Target, targets, wanted } from "../mcp.ts";
 import { desktopDir, profileNames } from "../lib.ts";
 
 const PROFILES = await profileNames();
@@ -47,4 +47,25 @@ Deno.test("wanted: _private keys are stripped, and `type` is dropped on the desk
   assertEquals(cli, { type: "stdio", command: "x", args: ["a"], env: { K: "v" } });
   const desk = wanted(reg, t(A, "desktop")).chatToo;
   assertEquals(desk, { command: "z" });
+});
+
+Deno.test("selectServers: an implicit profile list stays implicit and still means everyone", () => {
+  const raw: RawRegistry = { servers: { a: { command: "a" }, b: { command: "b" }, c: { command: "c", _profiles: [B] } } };
+  // A drops b and picks c: b gains an explicit list without A, c gains A, the top level stays absent
+  const next = selectServers(raw, PROFILES, A, ["a", "c"]);
+  assertEquals("profiles" in next, false);
+  assertEquals(next.servers.a._profiles, undefined);
+  assertEquals(next.servers.b._profiles, PROFILES.filter((p) => p !== A).sort());
+  const ab = [A, B].sort();
+  assertEquals(next.servers.c._profiles, ab.length === PROFILES.length ? undefined : ab);
+  // picking b again folds it back to the implicit form
+  assertEquals(selectServers(next, PROFILES, A, ["a", "b", "c"]).servers.b._profiles, undefined);
+  // the input is not mutated
+  assertEquals(raw.servers.c._profiles, [B]);
+});
+
+Deno.test("selectServers: an explicit profile list gains a new profile", () => {
+  const next = selectServers({ profiles: [A], servers: { a: { command: "a" } } }, PROFILES, B, ["a"]);
+  assertEquals(next.profiles, [A, B].sort());
+  assertEquals(next.servers.a._profiles, undefined);
 });
