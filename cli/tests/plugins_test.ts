@@ -1,7 +1,7 @@
 // Tests for plugins.ts: reading the CLI's output, the table the console shows, and the command
 // confirmation that must never be accepted on the person's behalf.
 import { assertEquals } from "jsr:@std/assert@1";
-import { parseJson, pendingCommand, plugTable, sourceArg } from "../plugins.ts";
+import { ID_RE, NAME_RE, parseJson, pendingCommand, plugTable, sourceArg, validSource } from "../plugins.ts";
 
 Deno.test("parseJson: whole output, else the last line after a notice, else null", () => {
   assertEquals(parseJson('[{"id":"a@m"}]'), [{ id: "a@m" }]);
@@ -38,4 +38,12 @@ Deno.test("sourceArg: a declared marketplace source as `marketplace add` takes i
   assertEquals(sourceArg({ source: "directory", path: "/srv/m" }), "/srv/m");
   assertEquals(sourceArg({ source: "github" }), null);
   assertEquals(sourceArg("nope"), null);
+});
+
+Deno.test("argument injection: nothing that reaches the CLI can start with a dash", () => {
+  for (const id of ["-x@m", "x@-m", "--scope@m", "x@m --yes", "@m", "x@"]) assertEquals(ID_RE.test(id), false, id);
+  assertEquals(ID_RE.test("code-review@claude-plugins-official"), true);
+  for (const n of ["-x", "--claudeai", ""]) assertEquals(NAME_RE.test(n), false, n);
+  for (const s of ["--claudeai", "-x", "a b", ""]) assertEquals(validSource(s), false, s);
+  for (const s of ["anthropics/claude-code", "https://example.com/m.git", "/srv/m"]) assertEquals(validSource(s), true, s);
 });

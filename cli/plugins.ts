@@ -18,8 +18,11 @@ import { BIN, listDir, lstat, type Profile, profileNames, readJson, RUNTIME, STA
 import { editSettingsSource, expectedSettings, type Obj, runtimePath, syncAllSettings, syncSettings } from "./settings.ts";
 
 const CLAUDE = `${BIN}/claude-bin`;
-const ID_RE = /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+$/;
-const NAME_RE = /^[A-Za-z0-9._-]+$/;
+// Every value reaches `claude plugin` as an argument: one starting with "-" would be read as an
+// option (`--claudeai`, `--scope`), so names start with a letter or digit and a source never with "-".
+export const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const validSource = (s: string) => !!s && !s.startsWith("-") && !/\s/.test(s);
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** `claude plugin …` for one profile. cwd is the state dir so no project's .claude/ is read. */
@@ -243,7 +246,7 @@ async function ensureMarketplace(p: Profile, id: string, log: string[]) {
   const { shared } = await expectedSettings(p);
   const decl = isObj(shared.extraKnownMarketplaces) ? (shared.extraKnownMarketplaces as Obj)[name] : undefined;
   const arg = sourceArg(isObj(decl) ? decl.source : undefined);
-  if (!arg) return; // not declared by the repository: the install will say what is missing
+  if (!arg || !validSource(arg)) return; // not (validly) declared: the install will say what is missing
   const r = await claude(p, ["plugin", "marketplace", "add", arg]);
   log.push(`${p}: marketplace ${name} → ${said(r)}`);
 }
@@ -261,6 +264,7 @@ async function runOp(op: PluginOp): Promise<OpResult> {
   const log: string[] = [];
   const fail = (message: string, extra: Partial<OpResult> = {}): OpResult => ({ ok: false, message, log, ...extra });
   if ("id" in op && !ID_RE.test(op.id)) return fail("invalid plugin id (name@marketplace)");
+  if ("accept" in op && op.accept !== undefined && !/^[0-9a-f]{64}$/i.test(op.accept)) return fail("invalid command hash");
   // (1) whatever sessions wrote so far becomes the repository's before anything else moves
   for (const r of await syncAllSettings()) if (r.adopted.length) log.push(`${r.profile}: adopted ${r.adopted.join(", ")}`);
   const regenerate = async () => { for (const p of await livingProfiles()) await syncSettings(p, { adopt: false }); };
@@ -337,7 +341,7 @@ async function runOp(op: PluginOp): Promise<OpResult> {
     }
     case "marketplace-add": {
       const source = op.source.trim();
-      if (!source || /[\s\n]/.test(source)) return fail("a marketplace source is one URL, path or owner/repo");
+      if (!validSource(source)) return fail("a marketplace source is one URL, path or owner/repo, and does not start with -");
       const ps = await livingProfiles();
       const knownNames = async (p: Profile) => Object.keys(await readJson<Obj>(`${RUNTIME}/${p}/plugins/known_marketplaces.json`) ?? {});
       const before = new Set(await knownNames(ps[0]));
