@@ -85,6 +85,7 @@ export async function doctor(): Promise<Check[]> {
       add(`profile.${p}.leak`, "fail", `${p} mounts skills owned by another profile: ${leak.map((s) => `${s} (${ownedElsewhere.get(s)})`).join(", ")}`, "claude-multi install");
     }
 
+    if (info.brokenPlugins.length) add(`profile.${p}.plugins`, "fail", `${p}: installed plugins whose files are gone (they fail to load): ${info.brokenPlugins.join(", ")}`, "console → Plugins: Remove, then install again (or claude plugin install <id> in that profile)");
     const cmd = info.manifest.command;
     if (!info.credentials.present) add(`profile.${p}.login`, "warn", `${p}: no stored credentials, sign-in needed`, `${cmd ?? "claude"} → /login`);
     else if (info.credentials.mode !== "600") add(`profile.${p}.creds`, "fail", `${p}/.credentials.json mode ${info.credentials.mode}`, `chmod 600 ${info.dir}/.credentials.json`);

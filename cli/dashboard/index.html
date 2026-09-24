@@ -22,6 +22,8 @@
           <button
             data-v="profiles"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.3"/><path d="M2.8 20a6.2 6.2 0 0 1 12.4 0"/><circle cx="17.5" cy="9.5" r="2.3"/><path d="M16 14.6a4.8 4.8 0 0 1 5.5 4.8"/></svg>Profiles<span class="n" id="n-profiles"></span></button>
           <button
+            data-v="plugins"><svg viewBox="0 0 24 24"><path d="M9 3v4M15 3v4"/><rect x="6" y="7" width="12" height="7" rx="2"/><path d="M12 14v2.5a3.5 3.5 0 0 1-3.5 3.5H7"/></svg>Plugins<span class="n" id="n-plugins"></span></button>
+          <button
             data-v="usage"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="5" y="10" width="3" height="7" rx="1"/><rect x="10.5" y="5" width="3" height="12" rx="1"/><rect x="16" y="13" width="3" height="4" rx="1"/></svg>Usage</button>
           <button
             data-v="sessions"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10l2.5 2L7 14"/><path d="M12.5 15H17"/></svg>Sessions</button>
@@ -121,6 +123,58 @@
           <div class="pcards" id="pcards"></div>
           <p
             class="note">A profile is a directory under <code>profiles/</code> in the repository. Adding one writes its manifest, then <code>install</code> materialises the runtime and links the shared config.</p>
+        </section>
+
+        <!-- ============ PLUGINS ============ -->
+        <section class="view" id="v-plugins" hidden>
+          <div class="panel">
+            <div class="panel-h">
+              <h3>Plugins</h3>
+              <span class="r" id="pl-sum"></span>
+              <button class="btn" id="pl-refresh">Refresh</button>
+            </div>
+            <div class="scroll">
+              <table class="pl">
+                <thead><tr id="pl-head"></tr></thead>
+                <tbody id="pl-rows"><tr><td class="empty">loading…</td></tr></tbody>
+              </table>
+            </div>
+            <div class="panel-f">A cell cycles <b>inherit → on → off</b>. <b>All</b> writes <code>shared/settings.json</code>, a profile
+              cell writes <code>profiles/&lt;p&gt;/settings.json</code>. Claude installs what is on when a session starts; turning a
+              plugin on here installs it right away. ● installed · ○ not installed · ⚠ installed but broken.</div>
+          </div>
+          <div class="panel">
+            <div class="panel-h">
+              <h3>Catalog</h3>
+              <input id="cat-q" class="search" type="search" placeholder="search plugins…" autocomplete="off">
+              <select id="cat-mk" class="sel"><option value="">all marketplaces</option></select>
+              <span class="r" id="cat-sum"></span>
+            </div>
+            <div class="scroll">
+              <table class="cat"><tbody id="cat-rows"><tr><td class="empty">loading the marketplaces…</td></tr></tbody></table>
+            </div>
+          </div>
+          <div class="row c2">
+            <div class="panel">
+              <div class="panel-h">
+                <h3>Marketplaces</h3>
+                <span class="r">shared <code>extraKnownMarketplaces</code></span>
+                <button class="btn" id="mk-update">Update all</button>
+              </div>
+              <div class="scroll"><table><tbody id="mk-rows"></tbody></table></div>
+              <form class="panel-f mkadd" id="mk-add">
+                <input name="source" class="search" placeholder="owner/repo, git URL or path" required autocomplete="off">
+                <button class="btn" type="submit">Add</button>
+              </form>
+            </div>
+            <div class="panel">
+              <div class="panel-h">
+                <h3>From the account</h3>
+                <span class="r">read-only</span>
+              </div>
+              <div class="panel-b" id="acct"></div>
+            </div>
+          </div>
         </section>
 
         <!-- ============ USAGE ============ -->

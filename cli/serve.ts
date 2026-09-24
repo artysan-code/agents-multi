@@ -17,6 +17,7 @@ import { type RawRegistry, selectServers } from "./mcp.ts";
 import { status } from "./status.ts";
 import { type GroupBy, ingest, openDb, report, sessions, transcript } from "./usage.ts";
 import { collect } from "./budget.ts";
+import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 const DASH = `${REPO}/cli/dashboard`;
@@ -209,6 +210,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
   let cache: { at: number; body: string } | null = null;
   let budget: { at: number; body: string } | null = null;
+  let plugins: { at: number; body: string } | null = null;
   const ac = new AbortController();
   const json = (v: unknown, code = 200) => new Response(JSON.stringify(v), { status: code, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
@@ -261,6 +263,20 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         broadcast("state");
         return json(r, r.error ? 400 : 200);
       }
+      // plugins: GET the table / the catalog / one plugin's details, POST an operation
+      if (u.pathname === "/api/plugins") {
+        if (req.method === "POST") {
+          if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+          const r = await pluginOp(await req.json().catch(() => ({})) as PluginOp);
+          plugins = null; cache = null;
+          broadcast("state");
+          return json(r); // a refused operation is a result (ok: false, message), not an HTTP error
+        }
+        if (!plugins || u.searchParams.has("fresh") || Date.now() - plugins.at > 15000) plugins = { at: Date.now(), body: JSON.stringify(await inventory()) };
+        return new Response(plugins.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      }
+      if (u.pathname === "/api/plugins/catalog") return json(await catalog(u.searchParams.has("fresh")));
+      if (u.pathname === "/api/plugins/details") return json({ text: await details(u.searchParams.get("id") ?? "") });
       if (u.pathname === "/api/action") {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);

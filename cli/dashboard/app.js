@@ -130,6 +130,7 @@ async function refresh(topic = "state") {
   if (view === "usage") jobs.push(loadUsage());
   if (view === "sessions") jobs.push(loadSessions());
   if (view === "profiles" && topic === "state") jobs.push(loadStatus().then(renderProfiles));
+  if (view === "plugins" && topic === "state" && !plBusy) jobs.push(loadPlugins());
   await Promise.allSettled(jobs);
   setLive(es && es.readyState === 1 ? "live" : "down");
 }
@@ -925,8 +926,189 @@ async function runAction(action, opts = []) {
   }
 }
 
+/* ---------------- plugins ---------------- */
+let PL = null, CAT = null, plBusy = false;
+
+async function loadPlugins(fresh = false) {
+  PL = await api("/api/plugins" + (fresh ? "?fresh" : ""));
+  renderPlugins();
+}
+async function loadCatalog(fresh = false) {
+  CAT = await api("/api/plugins/catalog" + (fresh ? "?fresh" : ""));
+  const sel = $("#cat-mk"), cur = sel.value;
+  const mks = [...new Set(CAT.map((c) => c.marketplace))].sort();
+  sel.innerHTML = `<option value="">all marketplaces</option>` +
+    mks.map((m) => `<option${m === cur ? " selected" : ""}>${esc(m)}</option>`).join("");
+  renderCatalog();
+}
+
+/** One toggle: `value` is the entry this source holds (true/false, or null/undefined = none). */
+function plToggle(id, target, value, cell) {
+  const own = value === true || value === false;
+  const on = cell ? cell.enabled : value === true;
+  const label = own ? (value ? "on" : "off") : cell ? (on ? "on" : "off") : "—";
+  const mark = !cell ? "" : cell.broken ? `<span class="inst bad" title="installed, but its files are gone">⚠</span>` : cell.installed
+    ? `<span class="inst" title="installed${cell.version ? " · " + esc(cell.version) : ""}">●</span>`
+    : `<span class="inst no" title="not installed">○</span>`;
+  const title = own ? `${target}: ${value ? "on" : "off"} (set here)` : cell ? `${target}: inherits shared (${on ? "on" : "off"})` : "not in shared";
+  return `<button class="tg ${own ? "own" : "inh"} ${on ? "on" : "off"}" data-tg="${esc(id)}" data-target="${esc(target)}" data-val="${own ? String(value) : "inherit"}" title="${esc(title)}">${mark}${label}</button>`;
+}
+
+function renderPlugins() {
+  if (!PL) return;
+  const profs = PL.profiles;
+  const rows = PL.plugins.filter((r) => !r.synced);
+  $("#n-plugins").textContent = rows.length || "";
+  const inst = rows.filter((r) => profs.some((p) => r.profiles[p].installed)).length;
+  const broken = rows.filter((r) => profs.some((p) => r.profiles[p].broken)).length;
+  $("#pl-sum").textContent = `${rows.length} plugins · ${inst} installed somewhere${broken ? ` · ${broken} broken` : ""}`;
+  $("#pl-head").innerHTML = `<th>Plugin</th><th>All</th>${profs.map((p) => `<th>${esc(p)}</th>`).join("")}<th></th>`;
+  $("#pl-rows").innerHTML = rows.map((r) =>
+    `<tr>
+      <td><span class="pname">${esc(r.name)}</span> <span class="dim">${esc(r.marketplace)}</span></td>
+      <td>${plToggle(r.id, "shared", r.shared)}</td>
+      ${profs.map((p) => `<td>${plToggle(r.id, p, r.profiles[p].override, r.profiles[p])}</td>`).join("")}
+      <td class="acts">
+        <button class="btn ghost sm" data-pl-details="${esc(r.id)}">Details</button>
+        <button class="btn ghost sm" data-pl-update="${esc(r.id)}">Update</button>
+        <button class="btn ghost sm danger" data-pl-remove="${esc(r.id)}">Remove</button>
+      </td>
+    </tr>`
+  ).join("") || `<tr><td class="empty" colspan="${profs.length + 3}">no plugins</td></tr>`;
+
+  $("#mk-rows").innerHTML = PL.marketplaces.map((m) =>
+    `<tr>
+      <td><span class="pname">${esc(m.name)}</span> <span class="dim">${esc(m.source)}</span></td>
+      <td>${m.declared ? `<span class="chip on">shared</span>` : `<span class="chip" title="known to a profile, not declared in shared settings">local</span>`}</td>
+      <td title="profiles that registered it">${m.known.length}/${profs.length}</td>
+      <td class="acts">
+        <button class="btn ghost sm" data-mk-update="${esc(m.name)}">Update</button>
+        <button class="btn ghost sm danger" data-mk-remove="${esc(m.name)}">Remove</button>
+      </td>
+    </tr>`
+  ).join("") || `<tr><td class="empty">no marketplaces</td></tr>`;
+
+  // only what an account really syncs today: shared keeps `false` entries for plugins long gone
+  const synced = PL.plugins.filter((r) => r.synced && profs.some((p) => r.profiles[p].installed));
+  $("#acct").innerHTML = `
+    <div class="acct-h">Plugins the organisation syncs</div>
+    ${synced.map((r) => `<div class="acct-row"><span>${esc(r.name)}</span><span class="chips">${
+      profs.map((p) => `<span class="chip${r.profiles[p].enabled ? " on" : ""}" title="${esc(p)}: ${r.profiles[p].enabled ? "on" : "off"}${r.profiles[p].installed ? ", synced here" : ""}">${esc(p)}</span>`).join("")
+    }</span></div>`).join("") || `<div class="dim">none</div>`}
+    <div class="acct-h">claude.ai skills synced into each profile</div>
+    ${profs.map((p) => {
+      const sk = PL.syncedSkills[p] ?? [];
+      return sk.length
+        ? `<details class="acct-row"><summary><span>${esc(p)}</span><span class="dim">${sk.length} skills</span></summary><div class="skl">${sk.map(esc).join(" · ")}</div></details>`
+        : `<div class="acct-row"><span>${esc(p)}</span><span class="dim">none</span></div>`;
+    }).join("")}
+    <p class="note">The organisation's plugins follow <b>Account MCP</b> (Profiles → Edit). Synced skills come with the claude.ai account and load into every session.</p>`;
+  if (CAT) renderCatalog();
+}
+
+function renderCatalog() {
+  if (!CAT) return;
+  const q = $("#cat-q").value.trim().toLowerCase(), mk = $("#cat-mk").value;
+  const hits = CAT.filter((c) => (!mk || c.marketplace === mk) && (!q || `${c.id} ${c.description}`.toLowerCase().includes(q)));
+  $("#cat-sum").textContent = `${hits.length} of ${CAT.length}`;
+  const profs = PL?.profiles ?? [];
+  const where = (id) => profs.filter((p) => PL?.plugins.find((r) => r.id === id)?.profiles[p]?.installed);
+  $("#cat-rows").innerHTML = hits.slice(0, 80).map((c) => {
+    const w = where(c.id);
+    return `<tr>
+      <td class="cdesc"><span class="pname">${esc(c.name)}</span> <span class="dim">${esc(c.marketplace)}${c.installs ? ` · ${fmt(c.installs)} installs` : ""}</span>
+        <div class="desc">${esc(short(c.description, 220))}</div></td>
+      <td>${w.length ? `<span class="chip on" title="installed on ${esc(w.join(", "))}">${w.length}/${profs.length}</span>` : ""}</td>
+      <td class="acts">
+        ${w.length ? `<button class="btn ghost sm" data-pl-details="${esc(c.id)}">Details</button>` : ""}
+        <select class="sel" data-cat-scope="${esc(c.id)}"><option value="all">all profiles</option>${profs.map((p) => `<option>${esc(p)}</option>`).join("")}</select>
+        <button class="btn sm" data-cat-install="${esc(c.id)}">Install</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td class="empty">nothing matches</td></tr>`;
+}
+
+/** Run one operation. A marketplace-declared command comes back as `confirm`: it is shown, and
+    runs only if accepted here — the server never accepts one on its own. */
+async function plOp(body, label) {
+  if (plBusy) return toast("another plugin operation is still running", true);
+  plBusy = true;
+  document.body.classList.add("plbusy");
+  toast(`${label}…`);
+  const post = (b) => api("/api/plugins", { method: "POST", headers: { "content-type": "application/json", "x-claude-multi": "1" }, body: JSON.stringify(b) });
+  try {
+    let r = await post(body);
+    if (r.confirm) {
+      const ok = confirm(`${r.message}\n\nThe marketplace declares this command, which would run on this machine:\n\n${r.confirm.command}\n\nRun it?`);
+      if (!ok) return toast("not installed: the command was not accepted");
+      const retry = body.op === "set"
+        ? { op: "install", id: body.id, profiles: body.target === "shared" ? "all" : [body.target], accept: r.confirm.sha256 }
+        : { ...body, accept: r.confirm.sha256 };
+      r = await post(retry);
+    }
+    toast(r.message, !r.ok);
+    if (!r.ok && r.log?.length) showOutput(r.message, r.log.join("\n"));
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    plBusy = false;
+    document.body.classList.remove("plbusy");
+    await loadPlugins(true).catch(() => {});
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  const tg = e.target.closest("[data-tg]");
+  if (tg) {
+    // inherit → on → off → inherit
+    const next = { inherit: true, true: false, false: null }[tg.dataset.val];
+    const t = tg.dataset.target;
+    return plOp({ op: "set", id: tg.dataset.tg, target: t, value: next },
+      `${tg.dataset.tg}: ${next === null ? (t === "shared" ? "out of shared" : "inherit") : next ? "on" : "off"} for ${t}`);
+  }
+  const det = e.target.closest("[data-pl-details]");
+  if (det) {
+    const host = showOutput(det.dataset.plDetails, "loading…");
+    const r = await api(`/api/plugins/details?id=${encodeURIComponent(det.dataset.plDetails)}`).catch((err) => ({ text: err.message }));
+    $("pre.out", host).textContent = r.text || "no details";
+    return;
+  }
+  const up = e.target.closest("[data-pl-update]");
+  if (up) return plOp({ op: "update", id: up.dataset.plUpdate }, `updating ${up.dataset.plUpdate}`);
+  const rm = e.target.closest("[data-pl-remove]");
+  if (rm) {
+    const id = rm.dataset.plRemove;
+    if (!confirm(`Remove ${id} from every profile?\n\nIt is uninstalled everywhere and taken out of shared and per-profile settings.`)) return;
+    return plOp({ op: "uninstall", id, profiles: "all" }, `removing ${id}`);
+  }
+  const ins = e.target.closest("[data-cat-install]");
+  if (ins) {
+    const id = ins.dataset.catInstall;
+    const scope = $(`[data-cat-scope="${CSS.escape(id)}"]`).value;
+    return plOp({ op: "install", id, profiles: scope === "all" ? "all" : [scope] }, `installing ${id} on ${scope === "all" ? "every profile" : scope}`);
+  }
+  const mu = e.target.closest("[data-mk-update]");
+  if (mu) return plOp({ op: "marketplace-update", name: mu.dataset.mkUpdate }, `updating ${mu.dataset.mkUpdate}`).then(() => loadCatalog(true));
+  const mr = e.target.closest("[data-mk-remove]");
+  if (mr) {
+    const n = mr.dataset.mkRemove;
+    if (!confirm(`Remove the marketplace ${n}?\n\nIts plugins go with it, in every profile.`)) return;
+    return plOp({ op: "marketplace-remove", name: n }, `removing ${n}`).then(() => loadCatalog(true));
+  }
+});
+$("#pl-refresh").addEventListener("click", () => { loadPlugins(true); loadCatalog(true); });
+$("#mk-update").addEventListener("click", () => plOp({ op: "marketplace-update" }, "updating every marketplace").then(() => loadCatalog(true)));
+$("#mk-add").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const source = e.target.elements.source.value.trim();
+  plOp({ op: "marketplace-add", source }, `adding ${source}`).then(() => { e.target.reset(); loadCatalog(true); });
+});
+let catTimer = null;
+$("#cat-q").addEventListener("input", () => { clearTimeout(catTimer); catTimer = setTimeout(renderCatalog, 120); });
+$("#cat-mk").addEventListener("change", renderCatalog);
+
 /* ---------------- navigation ---------------- */
-const TITLES = { overview: "Overview", profiles: "Profiles", usage: "Usage", sessions: "Sessions", health: "Health" };
+const TITLES = { overview: "Overview", profiles: "Profiles", plugins: "Plugins", usage: "Usage", sessions: "Sessions", health: "Health" };
 function go(v) {
   view = v;
   $$("#nav button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.v === v)));
@@ -936,6 +1118,10 @@ function go(v) {
   $("#title").textContent = TITLES[v];
   if (location.hash.slice(1) !== v) history.replaceState(null, "", `#${v}`);
   if (v === "profiles") renderProfiles();
+  if (v === "plugins") {
+    loadPlugins().catch((e) => toast(e.message, true));
+    if (!CAT) loadCatalog().catch((e) => toast(e.message, true));
+  }
   if (v === "usage") loadUsage();
   if (v === "sessions") loadSessions();
   if (v === "overview") loadOverview();

@@ -272,7 +272,13 @@ export async function profileInfo(p: Profile) {
   const dir = `${RUNTIME}/${p}`;
   const link = async (name: string) => await readlink(`${dir}/${name}`);
   const conf = await readJson<{ mcpServers?: Record<string, unknown>; oauthAccount?: { emailAddress?: string } }>(`${dir}/.claude.json`);
-  const plugins = await readJson<{ plugins?: Record<string, unknown> }>(`${dir}/plugins/installed_plugins.json`);
+  const plugins = await readJson<{ plugins?: Record<string, { installPath?: string }[]> }>(`${dir}/plugins/installed_plugins.json`);
+  // an install record whose cache directory is gone: Claude lists the plugin as "failed to load".
+  // It happens when a profile directory is moved, since the records hold absolute paths.
+  const brokenPlugins: string[] = [];
+  for (const [id, recs] of Object.entries(plugins?.plugins ?? {})) {
+    for (const r of Array.isArray(recs) ? recs : []) if (r.installPath && !(await lstat(r.installPath))) { brokenPlugins.push(id); break; }
+  }
   const creds = await lstat(`${dir}/.credentials.json`);
   const manifest = await loadManifest(p);
   const mounted: Record<Kind, Record<string, { link: string | null; broken: boolean }>> = { skills: {}, agents: {}, commands: {} };
@@ -302,6 +308,7 @@ export async function profileInfo(p: Profile) {
     mcp: Object.keys(conf?.mcpServers ?? {}),
     mcpDesktop: Object.keys(desktopConf?.mcpServers ?? {}),
     plugins: Object.keys(plugins?.plugins ?? {}),
+    brokenPlugins,
     synced: await syncedPlugins(dir),
   };
 }

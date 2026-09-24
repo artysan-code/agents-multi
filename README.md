@@ -109,6 +109,29 @@ profile it was made in. To give it to every profile, move it into `shared/settin
 when Deno is there and a source is newer than the last run (`bin/lib/prelaunch.sh`). The doctor
 reports a file Claude wrote into and that is not adopted yet, and one that is behind its sources.
 
+### Plugins
+
+The console's **Plugins** view is the plugin manager. The repository decides which plugin is on
+where: `enabledPlugins` in `shared/settings.json` for every profile (the **All** column), in
+`profiles/<p>/settings.json` for one (a profile's column; each cell cycles inherit → on → off). The
+marketplaces are the shared `extraKnownMarketplaces`. Claude Code owns the runtime — plugin cache,
+marketplace clones — and every change there goes through its CLI (`claude plugin … --json`),
+never by editing its files.
+
+- **Install** from the catalog (every marketplace the profiles know, searchable) on every profile
+  or on one; **Update**, **Remove** (from every profile), **Details** (components and token cost).
+- Turning a plugin on installs it right away where the change reaches; otherwise Claude installs
+  it at the next session start. Off means `false` in that profile's file, so it is not reinstalled.
+- A declared marketplace a profile has never registered (a profile not opened since) is
+  registered before installing from it.
+- A marketplace-declared command (a command-source install or update) is shown on the page and
+  runs only if you accept it there: the server never accepts one on its own.
+- The organisation's synced plugins and the claude.ai skills synced into each profile are listed
+  read-only: the plugins follow **Account MCP**.
+
+The doctor fails on an installed plugin whose files are gone (records hold absolute paths, so a
+moved profile directory breaks them).
+
 `desktopDir` is where Claude Desktop keeps that profile's data. Omit it and the convention applies:
 `~/.config/Claude-<Name>` when it exists, otherwise Desktop's own `~/.config/Claude`.
 
