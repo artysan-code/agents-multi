@@ -262,12 +262,6 @@
         "source": "github",
         "repo": "Piebald-AI/claude-code-lsps"
       }
-    },
-    "context7-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "upstash/context7"
-      }
     }
   },
   "effortLevel": "medium",
