@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Installed in every new repository by `git config --global init.templateDir` (claude-multi install).
+# On a clone (the previous HEAD is the null sha) it runs stignore-gen in the background, so a repository
+# cloned inside a Syncthing folder gets its block before Syncthing (watcher delay ~10 s) picks the files up.
+# Never blocks or fails the clone.
+[[ "${1:-}" =~ ^0+$ ]] || exit 0
+export PATH="$HOME/.deno/bin:$HOME/.local/bin:$PATH"
+command -v stignore-gen >/dev/null || exit 0
+(stignore-gen --apply --quiet >/dev/null 2>&1 &)
+exit 0

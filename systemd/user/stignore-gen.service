@@ -1,0 +1,9 @@
+[Unit]
+Description=Exclude the git repositories inside Syncthing folders (stignore-gen)
+Documentation=file://%h/.local/bin/stignore-gen
+
+[Service]
+Type=oneshot
+# the systemd --user session reads no login shell: deno is not on the default PATH
+Environment=PATH=%h/.deno/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/stignore-gen --apply --quiet

@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic stignore-gen run (every 15 min): the safety net behind the post-checkout hook
+
+[Timer]
+# A `git init` (no hook fires) or a repository moved in by hand is caught here. The run also rescans
+# .stignore-common, which loads rules that arrived from the other machine.
+OnStartupSec=2min
+OnUnitActiveSec=15min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

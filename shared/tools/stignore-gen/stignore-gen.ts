@@ -1,129 +1,163 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env
-// stignore-gen — genera la sezione gestita di .stignore dai .gitignore dei repo.
-// MODE B (massimalista): sincronizza TUTTO il gitignorato TRANNE derivato/spazzatura.
-// Partizione: git possiede i file tracciati; Syncthing sincronizza il gitignorato-prezioso;
-// .git + tracciato + derivato => ignorati da Syncthing (zero rischio corruzione).
+#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-env --allow-run=notify-send --allow-net=127.0.0.1
+// stignore-gen — keeps the git-repository section of every Syncthing folder's .stignore-common current.
 //
-// INVARIANTE DI SICUREZZA: re-include solo path che git IGNORA (dal .gitignore, denylist a parte);
-// salta le righe '!' del .gitignore (sono file TRACCIATI) => non sincronizza mai file tracciati.
+// Git owns a repository; Syncthing only carries the files git ignores on purpose, which would otherwise
+// exist on one machine only: `.env`, `.env.*` (at any depth) and `.claude/settings.local.json`. Every
+// repository found inside a sendreceive folder gets the block of `repoBlock()` in the managed section.
+// The first matching rule wins, so the re-inclusions come before `/<repo>/*`; excluding the children
+// rather than the directory is what lets Syncthing walk in and find them (verified 2026-09-24).
 //
-// Dry-run di default. --apply scrive (con backup). --folder <path> limita a una folder.
-// Legge i folder da config.xml (niente API key: servono solo i path).
-const ARGS = Deno.args;
-const APPLY = ARGS.includes("--apply");
-const onlyFolder = ARGS.includes("--folder") ? ARGS[ARGS.indexOf("--folder") + 1] : null;
-const HOME = Deno.env.get("HOME") ?? "";
-const STAMP = Deno.args.includes("--stamp") ? ARGS[ARGS.indexOf("--stamp") + 1] : "manual-run";
-const MARK_A = "# >>> stignore-gen (auto) >>>";
-const MARK_B = "# <<< stignore-gen (auto) <<<";
+// The section only grows. A repository cloned on one machine is added there and reaches the other with
+// the file; dropping the entries of repositories gone from disk is explicit (`--prune`), otherwise two
+// machines holding different sets would rewrite the file back and forth.
+// A repository whose root is excluded by hand outside the markers (`/<repo>`, `/<repo>/*`, `/<repo>/**`)
+// is left alone. Per-repository exceptions (an extra re-included file, a tracked `.env` to keep out) are
+// written by hand ABOVE the markers, so they match first.
+//
+//   stignore-gen                    dry run: what would change
+//   stignore-gen --apply            write (previous copy in ~/.local/state/stignore-gen/) and rescan
+//   stignore-gen --apply --quiet    from the timer and the git hook: silent, desktop notification per new repo
+//   --prune                         also drop entries whose repository is no longer on this machine
+//   --folder <label|id|path>        one folder only
+//
+// --apply always asks Syncthing to rescan `.stignore-common`: that is also how a file changed on the
+// other machine gets its rules loaded here without waiting for the hourly full scan.
 
-// derivato/spazzatura: gitignorato ma NON da sincronizzare (rigenerabile / per-macchina / junk)
-const DENY_NAMES = new Set([
-  "node_modules", ".pnpm-store", "bower_components", "vendor", ".venv", "venv", "env",
-  "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", "target", ".gradle",
-  "dist", "build", "out", ".next", ".nuxt", ".svelte-kit", ".turbo", ".wrangler",
-  ".cache", ".parcel-cache", "coverage", ".nyc_output", ".trash", ".stversions",
-]);
-const DENY_GLOBS = [
-  /^\*\.log$/, /^\*\.tmp$/, /^\*\.temp$/, /^\*\.bak$/, /^\*~$/, /^\*\.sw[op]$/, /^\*\.tsbuildinfo$/,
-  /\.DS_Store$/, /^Thumbs\.db$/,
-  /^\*\.pyc$/, /^\*\.pyo$/, /^\*\.class$/, /^\*\.o$/, /^\*\.so$/, /^\*\.a$/, /^\*\.egg-info$/, // compilati/derivati
-];
-const isDenied = (core: string) => DENY_NAMES.has(core) || DENY_GLOBS.some((r) => r.test(core));
+export const MARK_BEGIN = "// >>> stignore-gen: git repositories (generated, do not edit between the markers) >>>";
+export const MARK_END = "// <<< stignore-gen <<<";
+const REPO_TAG = "// repo: ";
 
-function folders(): { label: string; path: string }[] {
-  const xml = Deno.readTextFileSync(`${HOME}/.local/state/syncthing/config.xml`);
-  return [...xml.matchAll(/<folder\b([^>]*)>/g)].map((m) => {
-    const a = m[1];
-    return {
-      path: a.match(/\bpath="([^"]*)"/)?.[1] ?? "",
-      label: a.match(/\blabel="([^"]*)"/)?.[1] ?? "",
-      type: a.match(/\btype="([^"]*)"/)?.[1] ?? "sendreceive",
-    };
-  }).filter((f) => f.path && f.type === "sendreceive");
+export function repoBlock(repo: string): string[] {
+  const r = `/${repo}`;
+  return [
+    `${REPO_TAG}${repo}`,
+    `${r}/.claude/worktrees`,
+    `${r}/.env.example`,
+    `${r}/**/.env.example`,
+    `!${r}/.env`,
+    `!${r}/.env.*`,
+    `!${r}/**/.env`,
+    `!${r}/**/.env.*`,
+    `!${r}/.claude/settings.local.json`,
+    `${r}/*`,
+  ];
 }
 
-function findRepos(root: string): string[] {
-  const repos: string[] = [];
-  const rec = (dir: string, depth: number) => {
-    if (depth > 7) return;
-    let entries: Deno.DirEntry[];
-    try { entries = [...Deno.readDirSync(dir)]; } catch { return; }
-    let hasGit = false;
-    for (const e of entries) if (e.name === ".git") hasGit = true;
-    if (hasGit) repos.push(dir);
-    for (const e of entries) {
-      if (!e.isDirectory) continue;
-      if (e.name === ".git" || e.name === "node_modules" || e.name === ".stversions") continue;
-      rec(`${dir}/${e.name}`, depth + 1);
-    }
-  };
-  rec(root, 0);
-  return repos;
+export type Split = { before: string; section: string | null; after: string };
+export function split(text: string): Split {
+  const a = text.indexOf(MARK_BEGIN), b = text.indexOf(MARK_END);
+  if (a < 0 || b < a) return { before: text, section: null, after: "" };
+  return { before: text.slice(0, a), section: text.slice(a + MARK_BEGIN.length, b), after: text.slice(b + MARK_END.length) };
 }
 
-function preciousIncludes(R: string, gitignore: string): string[] {
-  const out: string[] = [];
-  for (const raw of gitignore.split("\n")) {
-    let line = raw.replace(/(^|[^\\])#.*$/, "$1").trim(); // toglie commenti non-escaped
-    if (!line || line.startsWith("!")) continue;          // '!' = tracciato => salta (mai syncare tracciati)
-    const rooted = line.startsWith("/");
-    const isDir = line.endsWith("/");
-    const core = line.replace(/^\/+/, "").replace(/\/+$/, "");
-    if (!core || isDenied(core)) continue;                // derivato/spazzatura => resta ignorato
-    const base = rooted ? `/${R}/${core}` : `/${R}/**/${core}`;
-    out.push(`!${base}`, `!${base}/**`);                  // file: il /** non matcha nulla (innocuo); dir: include il contenuto
+export function listedRepos(section: string | null): string[] {
+  if (!section) return [];
+  return section.split("\n").filter((l) => l.startsWith(REPO_TAG)).map((l) => l.slice(REPO_TAG.length).trim());
+}
+
+/** Repository roots excluded by hand outside the markers: those are not generated. */
+export function handManaged(manual: string): Set<string> {
+  const out = new Set<string>();
+  for (const raw of manual.split("\n")) {
+    const l = raw.trim().replace(/^(\(\?[a-z]\))+/i, "");
+    if (!l.startsWith("/") || l.startsWith("//")) continue; // comments start with "//" too
+    out.add(l.replace(/^\/+/, "").replace(/\/\*\*?$/, "").replace(/\/+$/, ""));
   }
   return out;
 }
 
-function genSection(folderPath: string): string {
-  const repos = findRepos(folderPath)
-    .map((d) => d.slice(folderPath.length).replace(/^\/+/, ""))
-    .filter((r) => r) // niente repo alla radice della folder (gestione a mano)
-    .sort((a, b) => b.split("/").length - a.split("/").length); // PIÙ PROFONDI PRIMA (nesting: il figlio vince sul catch-all del padre)
-  const lines: string[] = [];
-  for (const R of repos) {
-    let gi = "";
-    try { gi = Deno.readTextFileSync(`${folderPath}/${R}/.gitignore`); } catch { /* nessun .gitignore */ }
-    const inc = gi ? preciousIncludes(R, gi) : [];
-    lines.push(`// repo: ${R}${inc.length ? "" : "  (nessun gitignorato-prezioso: solo esclusione tracciato+.git)"}`);
-    lines.push(...inc);
-    lines.push(`/${R}/**`); // ignora tutto il resto del repo (tracciato + .git + derivato)
-    lines.push("");
-  }
-  return lines.join("\n").trimEnd();
+export function render(text: string, repos: string[]): string {
+  const body = repos.flatMap((r) => [...repoBlock(r), ""]).join("\n").trimEnd();
+  const section = `${MARK_BEGIN}\n${body}${body ? "\n" : ""}${MARK_END}`;
+  const s = split(text);
+  if (s.section !== null) return `${s.before}${section}${s.after}`;
+  return `${text.trimEnd()}\n\n${section}\n`;
 }
 
-function rebuild(existing: string, section: string): string {
-  // preserva tutto FUORI dai marker; rigenera solo la sezione gestita
-  let manual = existing;
-  const a = existing.indexOf(MARK_A), b = existing.indexOf(MARK_B);
-  if (a >= 0 && b > a) manual = (existing.slice(0, a) + existing.slice(b + MARK_B.length)).trimEnd();
-  manual = manual.trimEnd();
-  return `${manual}\n\n${MARK_A}\n// Generato da stignore-gen (mode B) — ${STAMP}. NON editare a mano questa sezione.\n${section}\n${MARK_B}\n`;
+/** The repositories the section should hold, and which of them are new. */
+export function plan(text: string, found: string[], prune: boolean): { repos: string[]; added: string[] } {
+  const s = split(text);
+  const listed = listedRepos(s.section);
+  const hand = handManaged(s.before + s.after);
+  const keep = prune ? [] : listed;
+  const repos = [...new Set([...keep, ...found])].filter((r) => r && !hand.has(r)).sort();
+  return { repos, added: repos.filter((r) => !listed.includes(r)) };
 }
 
-// ---- run ----
-let targets = folders();
-if (onlyFolder) targets = targets.filter((f) => f.path === onlyFolder || f.label === onlyFolder);
-for (const f of targets) {
-  const stPath = `${f.path}/.stignore`;
-  let existing = "";
-  try { existing = Deno.readTextFileSync(stPath); } catch { /* nuovo */ }
-  const section = genSection(f.path);
-  const next = rebuild(existing, section);
-  console.log(`\n${"=".repeat(60)}\nFOLDER: ${f.label}  (${f.path})`);
-  if (next === (existing.endsWith("\n") ? existing : existing + (existing ? "\n" : ""))) {
-    console.log("(nessuna modifica)");
-  }
-  if (APPLY) {
-    if (existing) Deno.writeTextFileSync(`${stPath}.bak.${Date.now()}`, existing);
-    Deno.writeTextFileSync(stPath, next);
-    console.log(`✔ scritto ${stPath}${existing ? " (backup .bak.*)" : ""}`);
-  } else {
-    console.log("--- .stignore risultante (DRY-RUN, non scritto) ---");
-    console.log(next);
-  }
+// ---------------------------------------------------------------- I/O
+
+const HOME = Deno.env.get("HOME") ?? "";
+const CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
+const SKIP_DIRS = new Set([".git", "node_modules", ".stversions", ".venv", "venv", ".cache"]);
+
+type Folder = { id: string; label: string; path: string; type: string };
+function folders(xml: string): Folder[] {
+  return [...xml.matchAll(/<folder\b([^>]*)>/g)].map((m) => {
+    const at = (k: string) => m[1].match(new RegExp(`\\b${k}="([^"]*)"`))?.[1] ?? "";
+    return { id: at("id"), label: at("label"), path: at("path").replace(/^~/, HOME), type: at("type") || "sendreceive" };
+  }).filter((f) => f.path && f.type === "sendreceive");
 }
-console.log(APPLY ? "\n=== APPLY completato ===" : "\n=== DRY-RUN (usa --apply per scrivere) ===");
+
+/** Directories holding a `.git` entry (dir, or file for worktrees), without descending into a repository. */
+export function findRepos(root: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    let entries: Deno.DirEntry[];
+    try { entries = [...Deno.readDirSync(dir)]; } catch { return; }
+    if (dir !== root && entries.some((e) => e.name === ".git")) { out.push(dir.slice(root.length + 1)); return; }
+    if (depth >= 7) return;
+    for (const e of entries) if (e.isDirectory && !SKIP_DIRS.has(e.name)) walk(`${dir}/${e.name}`, depth + 1);
+  };
+  walk(root, 0);
+  return out;
+}
+
+async function rescan(xml: string, folder: string) {
+  const key = xml.match(/<apikey>([^<]+)<\/apikey>/)?.[1];
+  const addr = xml.match(/<gui\b[^>]*>[\s\S]*?<address>([^<]+)<\/address>/)?.[1] ?? "127.0.0.1:8384";
+  if (!key) return;
+  const url = `http://${addr}/rest/db/scan?folder=${encodeURIComponent(folder)}&sub=.stignore-common`;
+  try { await fetch(url, { method: "POST", headers: { "X-API-Key": key }, signal: AbortSignal.timeout(5000) }); }
+  catch { /* Syncthing down: the next scan loads the rules anyway */ }
+}
+
+async function notify(body: string) {
+  try { await new Deno.Command("notify-send", { args: ["-a", "Syncthing", "Syncthing: repository excluded", body] }).output(); }
+  catch { /* no desktop session */ }
+}
+
+async function main() {
+  const args = Deno.args;
+  const APPLY = args.includes("--apply"), QUIET = args.includes("--quiet"), PRUNE = args.includes("--prune");
+  const only = args.includes("--folder") ? args[args.indexOf("--folder") + 1] : null;
+  const log = (s: string) => { if (!QUIET) console.log(s); };
+  let xml: string;
+  try { xml = await Deno.readTextFile(CONFIG); } catch { log(`no Syncthing config at ${CONFIG}`); return; }
+
+  for (const f of folders(xml)) {
+    if (only && ![f.id, f.label, f.path].includes(only)) continue;
+    const file = `${f.path}/.stignore-common`;
+    let text: string;
+    try { text = await Deno.readTextFile(file); } catch { continue; } // folder without shared rules: not ours
+    const found = findRepos(f.path);
+    if (!found.length && split(text).section === null) continue;
+    const { repos, added } = plan(text, found, PRUNE);
+    const next = render(text, repos);
+    if (next === text) { log(`${f.label}: up to date (${repos.length} repositories)`); }
+    else {
+      const dropped = listedRepos(split(text).section).filter((r) => !repos.includes(r));
+      log(`${f.label}: ${added.map((r) => `+ ${r}`).concat(dropped.map((r) => `- ${r}`)).join("  ") || "section rewritten"}`);
+      if (APPLY) {
+        const bak = `${HOME}/.local/state/stignore-gen`;
+        await Deno.mkdir(bak, { recursive: true });
+        await Deno.writeTextFile(`${bak}/${f.id}.${new Date().toISOString().replace(/[:.]/g, "-")}.stignore-common`, text);
+        await Deno.writeTextFile(file, next);
+        if (QUIET) for (const r of added) await notify(`${f.label}/${r}: git carries it, Syncthing only its .env files`);
+      }
+    }
+    if (APPLY) await rescan(xml, f.id);
+  }
+  if (!APPLY) log("(dry run: --apply writes)");
+}
+
+if (import.meta.main) await main();
