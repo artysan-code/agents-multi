@@ -10,6 +10,9 @@ export const LIB = `${HOME}/.local/lib`;
 export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/claude-multi`;
 export const STATE = `${Deno.env.get("XDG_STATE_HOME") ?? `${HOME}/.local/state`}/claude-multi`;
 export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
+// stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
+export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
+export const STIGNORE_GEN_TEMPLATE = `${REPO}/shared/tools/stignore-gen/git-template`;
 export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (skills CLI) install skills
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
 

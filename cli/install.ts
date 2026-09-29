@@ -1,7 +1,7 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
-import { AGENTS_SKILLS, ANSI, BIN, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has } from "./lib.ts";
+import { AGENTS_SKILLS, ANSI, BIN, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { syncSettings } from "./settings.ts";
 
@@ -205,6 +205,13 @@ export async function install(dry: boolean) {
   const hooks = (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out;
   if (hooks !== ".githooks") { say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`); if (!DRY) await run("git", ["-C", REPO, "config", "core.hooksPath", ".githooks"]); }
 
+  // 5c. stignore-gen's git template: a repository cloned inside a Syncthing folder gets its .stignore block
+  // from the post-checkout hook before Syncthing picks its files up (the timer of step 8 is the safety net).
+  if (await lstat(SYNCTHING_CONFIG)) {
+    const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
+    if (tpl !== STIGNORE_GEN_TEMPLATE) { say(`${ANSI.g}+${ANSI.x} git init.templateDir → stignore-gen template${tpl ? ` (was ${tpl})` : ""}`); if (!DRY) await run("git", ["config", "--global", "init.templateDir", STIGNORE_GEN_TEMPLATE]); }
+  }
+
   // 6. stub ~/.claude (500: stat → ENOENT sui settings, nessun "Settings Error")
   const stub = await lstat(`${HOME}/.claude`);
   if (!stub) { say(`${ANSI.g}+${ANSI.x} stub ~/.claude (500)`); if (!DRY) { await Deno.mkdir(`${HOME}/.claude`); await Deno.chmod(`${HOME}/.claude`, 0o500); } }
@@ -232,6 +239,8 @@ export async function install(dry: boolean) {
       if (m.graphical) wantEnabled.push("claude-update-check.timer");
       // The desktop app sits in the tray from login (it exits by itself where there is no tray).
       if (m.graphical) wantEnabled.push("claude-multi-app.service");
+      // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
+      if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
       // llama-generate.service stays deliberately disabled: the shim starts it on demand and stops
       // it when idle, which keeps the VRAM free.
       if (m.graphical && await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
