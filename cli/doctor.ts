@@ -194,6 +194,8 @@ export async function doctor(): Promise<Check[]> {
       if (l.conflicts) add("vault.conflicts", "warn", `${l.conflicts} Syncthing conflict copies in the vault`, `ls ${vaultDir()}/secrets/*sync-conflict*`);
       if (l.unreadable) add("vault.unreadable", "fail", `${l.unreadable} vault entries this key cannot open`, "claude-multi vault status");
       if (!missing.length && !l.conflicts && !l.unreadable) add("vault", "ok", `secret vault: ${accounts.length} accounts, every secret here`);
+      if (accounts.some((a) => a.service === "google") && !l.entries.some((e) => e.service === "google-oauth" && e.account === "client"))
+        add("google.client", "warn", "Google accounts are listed but the OAuth client is not in the vault: none of them can connect", "console › Connections › Import the JSON, or claude-multi google client <file.json>");
     }
     // The key sits in the keyring, readable by any process of this user — Claude's Bash included.
     // These deny rules are what keeps a session from reading it, or the entries it opens.

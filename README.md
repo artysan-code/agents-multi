@@ -280,6 +280,23 @@ native modules built for the wrong Node ABI, missing environment, cold-start cra
 Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege). The ones that work on
 an external service share `shared/mcp/lib/`: `coolify` and `n8n` today.
 
+### Google (Gmail, Calendar, Drive)
+
+The `google` server works on every Google account in `accounts.json` (service `google`: personal,
+acme…), each profile seeing its own. One OAuth client serves them all: create it once in a Google
+Cloud project (APIs: Gmail, Calendar, Drive; consent screen *External* and **published** — in
+*Testing* refresh tokens expire after seven days; client type *Desktop app*), download its JSON and
+import it (console › Connections, or `claude-multi google client <file.json>`). Then each account:
+add it, press **Connect**, grant access in the browser (loopback redirect with PKCE); the refresh
+token goes to the vault and the address next to the account's name.
+
+- **Scopes**: Gmail read + compose (drafts and sending them), Calendar events read/write and the
+  calendar list, Drive read-only (shared files included), and the account's address.
+- **Mail goes out in two steps**: `gmail_draft` writes a draft, `gmail_send` sends an existing one —
+  and `mcp__google__gmail_send` is in the shared `ask` permissions, so it always asks.
+- **Calendar writes** send no invitation unless asked (`sendUpdates` defaults to `none`).
+- Nothing deletes: no mail, event or file removal tools.
+
 ### Tasks
 
 Samuel's tasks live in `~/brains/tasks` (`CLAUDE_MULTI_TASKS`): one Markdown file per task in

@@ -80,7 +80,8 @@
       "Bash(curl * | bash*)",
       "Bash(curl * | sh*)",
       "Bash(wget * | bash*)",
-      "Bash(wget * | sh*)"
+      "Bash(wget * | sh*)",
+      "mcp__google__gmail_send"
     ],
     "defaultMode": "auto"
   },

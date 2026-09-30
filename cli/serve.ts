@@ -16,7 +16,8 @@
 import { ANSI, CACHE, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
 import { ACCOUNTS, loadRegistry, type RawRegistry, selectServers } from "./mcp.ts";
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
-import { deleteSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
+import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
+import { startConnect, storeClient } from "./google.ts";
 import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
@@ -140,7 +141,9 @@ async function accountsView() {
     }
   } catch (e) { state = "no-key"; detail = (e as Error).message; }
   const initialised = !!(await readText(`${vaultDir()}/key-check.json`));
+  const googleClient = state === "ok" && !!(await getSecret("google-oauth", "client", "id").catch(() => null));
   return {
+    google: { client: googleClient, last: lastConnect },
     vault: { dir: vaultDir(), state, detail, initialised, conflicts, unreadable },
     services,
     profiles: await profileNames(),
@@ -149,6 +152,8 @@ async function accountsView() {
 }
 
 const ACCOUNT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
+/** How the last Google connection ended: the page shows it when the browser comes back. */
+let lastConnect: { account: string; ok: boolean; message: string; at: string } | null = null;
 
 /** Add or change an account (and its secret), or remove one. The secret, when given, is checked
  *  against the service first: a wrong one is refused rather than stored. */
@@ -300,6 +305,25 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         const r = sessions(db, { since: u.searchParams.get("since") ?? "7d", profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60) });
         db.close();
         return json(r);
+      }
+      if (u.pathname === "/api/google/client" || u.pathname === "/api/google/connect") {
+        if (req.method !== "POST") return json({ error: "POST required" }, 405);
+        if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+        try {
+          if (u.pathname === "/api/google/client") {
+            const prefix = await storeClient(await req.text());
+            broadcast("state");
+            return json({ ok: true, message: `OAuth client ${prefix}… stored` });
+          }
+          const { account } = await req.json() as { account: string };
+          const url = await startConnect(String(account), (r) => {
+            lastConnect = { account, ...r, at: new Date().toISOString() };
+            broadcast("state");
+          });
+          return json({ ok: true, url });
+        } catch (e) {
+          return json({ ok: false, message: (e as Error).message });
+        }
       }
       if (u.pathname === "/api/accounts") {
         if (req.method === "POST") {

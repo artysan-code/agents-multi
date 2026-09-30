@@ -16,6 +16,8 @@ export interface Account {
   url?: string;
   /** absent = every profile */
   profiles?: string[];
+  /** the address the account signed in as (Google): shown, and used as the login hint */
+  email?: string;
   note?: string;
 }
 

@@ -626,7 +626,7 @@ $("#b-note").addEventListener("submit", async (e) => {
 });
 
 /* ---------------- connections ---------------- */
-let ACC = null;
+let ACC = null, seenConnect;
 async function loadAccounts() {
   ACC = await api("/api/accounts");
   renderAccounts();
@@ -647,6 +647,20 @@ function renderAccounts() {
       esc(v.dir)
     }</code></div></div>`;
   }
+  // Google: the OAuth client is imported once, before any account can connect
+  const g = $("#gclient");
+  const wantsGoogle = ACC.services.includes("google") && v.state === "ok";
+  g.hidden = !wantsGoogle || ACC.google.client;
+  if (!g.hidden) {
+    g.className = "status-card update";
+    g.innerHTML = `<i></i><div><b>${esc(t("google.client"))}</b><div class="sub">${esc(t("google.client.how"))}</div></div>
+      <label class="btn">${esc(t("google.client.import"))}<input type="file" accept=".json,application/json" id="gclient-file" hidden></label>`;
+  }
+  const last = ACC.google.last;
+  if (last && last.at !== seenConnect) {
+    if (seenConnect !== undefined) toast(last.message, !last.ok);
+    seenConnect = last.at;
+  }
   $("#acc-sum").textContent = t("acc.sum", { n: ACC.accounts.length });
   $("#acc-rows").innerHTML = ACC.accounts.map((a, i) =>
     `<tr>
@@ -654,8 +668,16 @@ function renderAccounts() {
       <td><code>${esc(a.name)}</code></td>
       <td>${esc(a.url ?? "—")}</td>
       <td>${a.profiles ? a.profiles.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ") : `<span class="sub">${esc(t("acc.allProfiles"))}</span>`}</td>
-      <td>${a.hasSecret ? `<span class="ok-t">${esc(t("acc.hasSecret"))}</span>` : `<span class="warn-t">${esc(t("acc.noSecret"))}</span>`}</td>
-      <td class="acts"><button class="btn sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></td>
+      <td>${
+      a.service === "google"
+        ? (a.hasSecret ? `<span class="ok-t">${esc(a.email ?? t("google.connected"))}</span>` : `<span class="warn-t">${esc(t("google.notConnected"))}</span>`)
+        : a.hasSecret ? `<span class="ok-t">${esc(t("acc.hasSecret"))}</span>` : `<span class="warn-t">${esc(t("acc.noSecret"))}</span>`
+    }</td>
+      <td class="acts">${
+      a.service === "google" && ACC.google.client
+        ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button> `
+        : ""
+    }<button class="btn sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></td>
     </tr>`
   ).join("") || `<tr><td class="empty" colspan="6">${esc(t("acc.none"))}</td></tr>`;
 }
@@ -680,7 +702,8 @@ function openAccountForm(i) {
         `<button type="button" class="chip pick${a?.profiles?.includes(p) ? " on" : ""}" data-pick="${esc(p)}" aria-pressed="${!!a?.profiles?.includes(p)}">${esc(p)}</button>`
       ).join("")
     }</div></div>
-      ${field(t("acc.secret"), `<input name="secret" type="password" autocomplete="off" ${a ? "" : "required"} placeholder="${esc(t(a ? "acc.secret.keep" : "acc.secret.ph"))}">`, t("acc.secret.hint"))}
+      <div class="acc-secret">${field(t("acc.secret"), `<input name="secret" type="password" autocomplete="off" placeholder="${esc(t(a ? "acc.secret.keep" : "acc.secret.ph"))}">`, t("acc.secret.hint"))}</div>
+      <p class="sub acc-google" hidden>${esc(t("google.form.hint"))}</p>
       <div class="pform-foot">
         <button class="btn primary" type="submit">${esc(t("profile.save"))}</button>
         ${a ? `<button class="btn ghost danger" type="button" data-acc-del>${esc(t("pl.remove"))}</button>` : ""}
@@ -689,6 +712,15 @@ function openAccountForm(i) {
     </form>`,
   );
   const f = $("#aform", host);
+  // a Google account has no secret to paste: it is connected through its consent page
+  const syncKind = () => {
+    const isGoogle = f.elements.service.value === "google";
+    $(".acc-secret", f).hidden = isGoogle;
+    $(".acc-google", f).hidden = !isGoogle;
+    f.elements.secret.required = !isGoogle && !a;
+  };
+  f.elements.service.addEventListener?.("change", syncKind);
+  syncKind();
   const send = async (op) => {
     const body = {
       op,
@@ -716,6 +748,21 @@ function openAccountForm(i) {
 }
 
 $("#acc-add").addEventListener("click", () => ACC && openAccountForm(null));
+document.addEventListener("click", async (e) => {
+  const c = e.target.closest("[data-g-connect]");
+  if (!c) return;
+  const r = await post("/api/google/connect", { account: c.dataset.gConnect }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) return toast(r.message, true);
+  window.open(r.url, "_blank", "noopener");
+  toast(t("google.finish"));
+});
+document.addEventListener("change", async (e) => {
+  if (e.target.id !== "gclient-file" || !e.target.files[0]) return;
+  const r = await api("/api/google/client", { method: "POST", headers: { "x-claude-multi": "1" }, body: await e.target.files[0].text() })
+    .catch((err) => ({ ok: false, message: err.message }));
+  toast(r.message, !r.ok);
+  if (r.ok) loadAccounts();
+});
 document.addEventListener("click", (e) => {
   const ed = e.target.closest("[data-acc-edit]");
   if (ed) openAccountForm(+ed.dataset.accEdit);

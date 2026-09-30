@@ -80,6 +80,25 @@
         "cli",
         "desktop"
       ]
+    },
+    "google": {
+      "_service": "google",
+      "type": "stdio",
+      "command": "deno",
+      "args": [
+        "run",
+        "--quiet",
+        "--allow-net=oauth2.googleapis.com,gmail.googleapis.com,www.googleapis.com",
+        "--allow-read=~/vault/claude-multi,~/.claude-multi/shared/mcp/accounts.json,~/.cache/deno",
+        "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
+        "--allow-run=/usr/bin/secret-tool",
+        "--lock=~/.claude-multi/shared/mcp/google/deno.lock",
+        "~/.claude-multi/shared/mcp/google/server.ts"
+      ],
+      "_surfaces": [
+        "cli",
+        "desktop"
+      ]
     }
   }
 }

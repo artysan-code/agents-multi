@@ -20,6 +20,7 @@
 
 import { vaultCommand } from "./vault.ts";
 import { tasksCommand } from "./tasks.ts";
+import { googleCommand } from "./google.ts";
 import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
@@ -104,6 +105,7 @@ switch (cmd) {
   case "serve": await serve({ open: !flag("--no-open") }); break;
   case "vault": Deno.exit(await vaultCommand(rest));
   case "tasks": Deno.exit(await tasksCommand(rest));
+  case "google": Deno.exit(await googleCommand(rest));
   // deno-lint-ignore no-fallthrough
   case "help": case "--help": case "-h":
   default:
@@ -119,6 +121,7 @@ switch (cmd) {
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
   vault   [status|init|pair|recovery-code|set|delete|import-legacy]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
+  google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind]   the task list (~/brains/tasks); remind is what claude-tasks.timer runs
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
 

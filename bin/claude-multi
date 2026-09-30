@@ -5,5 +5,5 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 command -v deno >/dev/null 2>&1 || { echo "claude-multi: serve deno (https://deno.land)" >&2; exit 1; }
-exec deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:11434,localhost:11434,127.0.0.1:8090,127.0.0.1:7331 \
+exec deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,localhost:11434,oauth2.googleapis.com \
   "$REPO/cli/main.ts" "$@"
