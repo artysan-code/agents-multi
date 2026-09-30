@@ -171,7 +171,7 @@ function renderView() {
   if (view === "today") renderToday();
   if (view === "tasks") loadBoard().catch((e) => toast(e.message, true));
   if (view === "connections") renderConnections();
-  if (view === "brain" && !BRAIN) loadBrain().catch((e) => toast(e.message, true));
+  if (view === "brain") (BRAIN ? Promise.resolve(renderBrainAll()) : loadBrain()).catch((e) => toast(e.message, true));
   if (view === "system") {
     if (sub === "profiles") renderProfiles();
     if (sub === "permissions") loadPermissions().catch((e) => toast(e.message, true));
@@ -382,157 +382,23 @@ $("#resume").addEventListener("click", async (e) => {
   }
 });
 
-/* ---------------- brain ---------------- */
-const GROUPS = ["projects", "references", "concepts", "skills", "entities", "synthesis", "journal"];
-const groupOf = (g) => GROUPS.includes(g) ? g : "other";
-let BRAIN = null, bSel = null, bPos = new Map(), bView = null;
-
-async function loadBrain() {
-  BRAIN = await api("/api/brain");
-  const deg = new Map();
-  for (const [a, b] of BRAIN.links) {
-    deg.set(a, (deg.get(a) ?? 0) + 1);
-    deg.set(b, (deg.get(b) ?? 0) + 1);
-  }
-  for (const p of BRAIN.pages) p.deg = deg.get(p.path) ?? 0;
-  layoutBrain();
-  renderBrain();
-}
-
-/** A force layout, run once per change of the page set: a hundred nodes settle in a few hundred
-    steps, well under a frame budget. Known pages keep their place, so a new one does not reshuffle
-    the whole picture. */
-function layoutBrain() {
-  const nodes = BRAIN.pages;
-  const idx = new Map(nodes.map((n, i) => [n.path, i]));
-  const P = nodes.map((n, i) => {
-    const old = bPos.get(n.path);
-    if (old) return { ...old };
-    const a = (GROUPS.indexOf(groupOf(n.group)) + 1) / (GROUPS.length + 1) * Math.PI * 2 + i * 0.01;
-    return { x: Math.cos(a) * 200 + (Math.random() - 0.5) * 40, y: Math.sin(a) * 200 + (Math.random() - 0.5) * 40 };
-  });
-  const E = BRAIN.links.map(([a, b]) => [idx.get(a), idx.get(b)]).filter(([a, b]) => a != null && b != null);
-  const fresh = nodes.some((n) => !bPos.has(n.path));
-  for (let step = 0, steps = fresh ? 350 : 60; step < steps; step++) {
-    const t = 1 - step / steps;
-    const F = P.map(() => ({ x: 0, y: 0 }));
-    for (let i = 0; i < P.length; i++) {
-      for (let j = i + 1; j < P.length; j++) {
-        let dx = P[i].x - P[j].x, dy = P[i].y - P[j].y;
-        const d2 = Math.max(dx * dx + dy * dy, 25), f = 2200 / d2, d = Math.sqrt(d2);
-        dx /= d; dy /= d;
-        F[i].x += dx * f; F[i].y += dy * f; F[j].x -= dx * f; F[j].y -= dy * f;
-      }
-    }
-    for (const [a, b] of E) {
-      const dx = P[b].x - P[a].x, dy = P[b].y - P[a].y, d = Math.sqrt(dx * dx + dy * dy) || 1, f = (d - 55) * 0.04;
-      F[a].x += dx / d * f; F[a].y += dy / d * f; F[b].x -= dx / d * f; F[b].y -= dy / d * f;
-    }
-    for (let i = 0; i < P.length; i++) {
-      F[i].x -= P[i].x * 0.012; F[i].y -= P[i].y * 0.012;
-      const m = Math.min(12 * t + 1, Math.hypot(F[i].x, F[i].y)) / (Math.hypot(F[i].x, F[i].y) || 1);
-      P[i].x += F[i].x * m; P[i].y += F[i].y * m;
-    }
-  }
-  bPos = new Map(nodes.map((n, i) => [n.path, P[i]]));
-  if (!bView) {
-    const xs = P.map((p) => p.x), ys = P.map((p) => p.y), pad = 40;
-    const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
-    bView = { x: x0, y: y0, w: Math.max(...xs) + pad - x0, h: Math.max(...ys) + pad - y0 };
-  }
-}
-
-function brainMatches() {
-  const q = $("#b-q").value.trim().toLowerCase();
-  if (!q) return null;
-  return new Set(BRAIN.pages.filter((p) => `${p.title} ${p.path} ${p.summary} ${p.tags.join(" ")}`.toLowerCase().includes(q)).map((p) => p.path));
-}
-
-function renderBrain() {
-  if (!BRAIN) return;
-  const svg = $("#graph");
-  svg.setAttribute("viewBox", `${bView.x} ${bView.y} ${bView.w} ${bView.h}`);
-  const hits = brainMatches();
-  const near = new Set(bSel ? [bSel] : []);
-  if (bSel) for (const [a, b] of BRAIN.links) { if (a === bSel) near.add(b); if (b === bSel) near.add(a); }
-  const focus = hits ?? (bSel ? near : null);
-  const r = (p) => 3 + Math.sqrt(p.deg) * 1.7;
-  const top = new Set([...BRAIN.pages].sort((a, b) => b.deg - a.deg).slice(0, 10).map((p) => p.path));
-  const pos = (path) => bPos.get(path);
-  svg.innerHTML =
-    BRAIN.links.map(([a, b]) => {
-      const A = pos(a), B = pos(b);
-      const hot = bSel && (a === bSel || b === bSel);
-      const dim = focus && !(focus.has(a) && focus.has(b)) && !hot;
-      return `<line x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}" class="${hot ? "hot" : ""}${dim ? " dim" : ""}"/>`;
-    }).join("") +
-    BRAIN.pages.map((p) => {
-      const P = pos(p.path), dim = focus && !focus.has(p.path);
-      return `<circle cx="${P.x.toFixed(1)}" cy="${P.y.toFixed(1)}" r="${r(p).toFixed(1)}" fill="var(--g-${groupOf(p.group)})" data-node="${esc(p.path)}" class="${p.path === bSel ? "sel" : ""}${dim ? " dim" : ""}"><title>${esc(p.title)}</title></circle>`;
-    }).join("") +
-    BRAIN.pages.filter((p) => (focus ? focus.has(p.path) && (focus.size <= 25 || top.has(p.path)) : top.has(p.path)) || p.path === bSel).map((p) => {
-      const P = pos(p.path);
-      return `<text x="${(P.x + r(p) + 3).toFixed(1)}" y="${(P.y + 3).toFixed(1)}">${esc(short(p.title, 34))}</text>`;
-    }).join("");
-  $("#b-sum").textContent = t("brain.sum", { p: BRAIN.pages.length, l: BRAIN.links.length });
-  $("#b-hits").innerHTML = hits
-    ? [...hits].slice(0, 8).map((h) => `<button class="chip" data-node="${esc(h)}">${esc(short(BRAIN.pages.find((p) => p.path === h).title, 40))}</button>`).join("") +
-      (hits.size > 8 ? `<span class="sub">+${hits.size - 8}</span>` : "") + (hits.size ? "" : `<span class="sub">${esc(t("cat.nothing"))}</span>`)
-    : "";
-  const present = new Set(BRAIN.pages.map((p) => groupOf(p.group)));
-  $("#b-legend").innerHTML = [...GROUPS, "other"].filter((g) => present.has(g))
-    .map((g) => `<span><i style="background:var(--g-${g})"></i>${esc(t(`brain.g.${g}`))}</span>`).join("");
-  renderBrainPage();
-  renderInbox();
-}
-
-function renderBrainPage() {
-  const el = $("#b-page");
-  const p = bSel && BRAIN.pages.find((x) => x.path === bSel);
-  if (!p) {
-    el.innerHTML = `<div class="panel-b sub">${esc(t("brain.pick"))}</div>`;
-    return;
-  }
-  const out = BRAIN.links.filter(([a]) => a === p.path).map(([, b]) => b);
-  const inn = BRAIN.links.filter(([, b]) => b === p.path).map(([a]) => a);
-  const linkList = (xs) => xs.map((x) => `<button data-node="${esc(x)}">${esc(x.split("/").pop())}</button>`).join("");
-  const vault = BRAIN.root.split("/").pop();
-  el.innerHTML = `<div class="panel-b">
-    <span class="sub">${esc(p.path)}</span>
-    <h2>${esc(p.title)}</h2>
-    ${p.summary ? `<p class="sub" style="margin:0;color:var(--fg)">${esc(p.summary)}</p>` : ""}
-    <div class="sub">${esc([p.category, p.lifecycle, p.updated].filter(Boolean).join(" · "))}</div>
-    ${out.length || inn.length ? `<div class="b-links">${linkList([...new Set([...out, ...inn])])}</div>` : ""}
-    <div style="display:flex;gap:8px;padding-top:4px">
-      <button class="btn" data-read="${esc(p.path)}">${esc(t("brain.read"))}</button>
-      <a class="btn" href="obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(p.path)}">${esc(t("brain.obsidian"))}</a>
-    </div>
-  </div>`;
-}
-
-function renderInbox() {
-  const items = BRAIN.inbox;
-  const cmd = "/wiki-ingest process my drafts";
-  $("#b-inbox").innerHTML = items.length
-    ? `<div class="b-inbox"><b>${esc(t("brain.inbox", { n: items.length }))}</b>
-      ${items.slice(0, 8).map((f) => `<code title="${esc(f.name)}">${esc(f.name)}</code>`).join("")}
-      <span class="sub">${esc(t("brain.inbox.how"))}</span>
-      <div class="b-cmd"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">${esc(t("today.copy"))}</button></div></div>`
-    : "";
-}
-
-/** Markdown to HTML for the reader: escaped first, then a handful of forms. Wikilinks become
-    buttons into the graph; external links open outside. Enough to read a wiki page, no more. */
+/* ---------------- markdown ---------------- */
+/** Markdown to HTML for the readers (brain pages, task descriptions): escaped first, then the forms
+    the wiki uses. Wikilinks become [data-page] links the brain opens; web links open outside. Enough
+    to read a page well, not a renderer. */
 function mdToHtml(src) {
   const inline = (s) => esc(s)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, "$1<i>$2</i>")
+    .replace(/~~([^~]+)~~/g, "<s>$1</s>")
     .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, target, label) => `<a data-page="${target.trim()}">${label ?? target.trim().split("/").pop()}</a>`)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\(&lt;?([^)]+?)(?:&gt;)?\)/g, '<span class="lnk" title="$2">$1</span>');
   const out = [];
-  let list = false, code = null, table = null;
+  let list = null, code = null, table = null;
   const flush = () => {
-    if (list) { out.push("</ul>"); list = false; }
+    if (list) { out.push(`</${list}>`); list = null; }
     if (table) { out.push(`<table>${table.join("")}</table>`); table = null; }
   };
   for (const line of src.split("\n")) {
@@ -541,10 +407,17 @@ function mdToHtml(src) {
       continue;
     }
     if (line.startsWith("```")) { flush(); code = []; continue; }
-    const h = line.match(/^(#{1,3})\s+(.*)/);
-    if (h) { flush(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); continue; }
-    const li = line.match(/^\s*[-*]\s+(.*)/);
-    if (li) { if (!list) { flush(); out.push("<ul>"); list = true; } out.push(`<li>${inline(li[1])}</li>`); continue; }
+    const h = line.match(/^(#{1,6})\s+(.*)/);
+    if (h) { flush(); const n = Math.min(h[1].length, 4); out.push(`<h${n}>${inline(h[2])}</h${n}>`); continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flush(); out.push("<hr>"); continue; }
+    const li = line.match(/^\s*(?:([-*+])|(\d+)[.)])\s+(.*)/);
+    if (li) {
+      const kind = li[2] ? "ol" : "ul";
+      if (list !== kind) { flush(); out.push(`<${kind}>`); list = kind; }
+      const box = li[3].match(/^\[([ xX])\]\s+(.*)/);
+      out.push(box ? `<li class="task${box[1] !== " " ? " done" : ""}"><span class="cb">${box[1] !== " " ? "✓" : ""}</span>${inline(box[2])}</li>` : `<li>${inline(li[3])}</li>`);
+      continue;
+    }
     if (/^\|.*\|\s*$/.test(line)) {
       if (/^\|[\s:|-]+\|\s*$/.test(line)) continue;
       if (!table) { flush(); table = []; }
@@ -559,91 +432,6 @@ function mdToHtml(src) {
   if (code) out.push(`<pre>${esc(code.join("\n"))}</pre>`);
   return out.join("");
 }
-
-async function readPage(path) {
-  const host = drawer(path, `<div class="md">${esc(t("pl.loading"))}</div>`);
-  try {
-    const page = await api(`/api/brain/page?path=${encodeURIComponent(path)}`);
-    $(".md", host).innerHTML = mdToHtml(page.body);
-  } catch (e) {
-    $(".md", host).textContent = e.message;
-  }
-  host.addEventListener("click", (e) => {
-    const a = e.target.closest("[data-page]");
-    if (!a) return;
-    const target = BRAIN.pages.find((p) => p.path === a.dataset.page) ?? BRAIN.pages.find((p) => p.path.split("/").pop() === a.dataset.page);
-    if (target) { host.remove(); selectNode(target.path); readPage(target.path); }
-  });
-}
-
-function selectNode(path) {
-  bSel = bSel === path ? null : path;
-  renderBrain();
-}
-
-async function sendToInbox(body, headers = {}) {
-  const r = await api("/api/brain/inbox", { method: "POST", headers: { "x-claude-multi": "1", ...headers }, body }).catch((e) => ({ ok: false, message: e.message }));
-  toast(r.ok ? t("brain.added", { n: r.message }) : r.message, !r.ok);
-  return r.ok;
-}
-async function sendFiles(files) {
-  for (const f of files) await sendToInbox(f, { "x-filename": encodeURIComponent(f.name) });
-  await loadBrain();
-}
-
-// the graph: click selects, drag pans, wheel zooms around the pointer
-{
-  const svg = $("#graph");
-  let drag = null;
-  svg.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("[data-node]")) return;
-    drag = { x: e.clientX, y: e.clientY, v: { ...bView } };
-    svg.classList.add("panning");
-    svg.setPointerCapture(e.pointerId);
-  });
-  svg.addEventListener("pointermove", (e) => {
-    if (!drag) return;
-    const k = bView.w / svg.clientWidth;
-    bView = { ...drag.v, x: drag.v.x - (e.clientX - drag.x) * k, y: drag.v.y - (e.clientY - drag.y) * k };
-    svg.setAttribute("viewBox", `${bView.x} ${bView.y} ${bView.w} ${bView.h}`);
-  });
-  const end = () => { drag = null; svg.classList.remove("panning"); };
-  svg.addEventListener("pointerup", end);
-  svg.addEventListener("pointercancel", end);
-  svg.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const f = e.deltaY > 0 ? 1.12 : 1 / 1.12, rect = svg.getBoundingClientRect();
-    const px = bView.x + (e.clientX - rect.left) / rect.width * bView.w, py = bView.y + (e.clientY - rect.top) / rect.height * bView.h;
-    bView = { x: px - (px - bView.x) * f, y: py - (py - bView.y) * f, w: bView.w * f, h: bView.h * f };
-    svg.setAttribute("viewBox", `${bView.x} ${bView.y} ${bView.w} ${bView.h}`);
-  }, { passive: false });
-}
-document.addEventListener("click", (e) => {
-  if (view !== "brain") return;
-  const n = e.target.closest("[data-node]");
-  if (n) return selectNode(n.dataset.node);
-  const rd = e.target.closest("[data-read]");
-  if (rd) return readPage(rd.dataset.read);
-  const cp = e.target.closest("[data-copy]");
-  if (cp) navigator.clipboard.writeText(cp.dataset.copy).then(() => toast(t("today.copied")), () => toast(cp.dataset.copy, true));
-});
-let bqTimer = null;
-$("#b-q").addEventListener("input", () => { clearTimeout(bqTimer); bqTimer = setTimeout(renderBrain, 120); });
-{
-  const zone = $("#b-zone");
-  $("#b-file").addEventListener("change", (e) => { sendFiles([...e.target.files]); e.target.value = ""; });
-  zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("over"); });
-  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
-  zone.addEventListener("drop", (e) => { e.preventDefault(); zone.classList.remove("over"); sendFiles([...e.dataTransfer.files]); });
-}
-$("#b-link").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (await sendToInbox(JSON.stringify({ kind: "link", url: e.target.elements.url.value.trim() }), { "content-type": "application/json" })) { e.target.reset(); loadBrain(); }
-});
-$("#b-note").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (await sendToInbox(JSON.stringify({ kind: "note", text: e.target.elements.text.value }), { "content-type": "application/json" })) { e.target.reset(); loadBrain(); }
-});
 
 /* ---------------- connections ---------------- */
 let ACC = null, seenConnect;
@@ -1442,7 +1230,7 @@ function applyLang() {
   renderTitle();
   renderView();
   if (PL) renderPlugins();
-  if (BRAIN) renderBrain();
+  if (BRAIN) renderBrainAll();
   if (TK) renderTasks();
 }
 $("#lang-btn").addEventListener("click", () => {
@@ -1550,7 +1338,8 @@ addEventListener("keydown", (e) => {
 });
 
 /* ---------------- boot ---------------- */
-(async () => {
+// after every script of the page (brain.js and tasks.js come after this one) has run
+addEventListener("DOMContentLoaded", async () => {
   applyTheme();
   applyLang();
   try {
@@ -1569,4 +1358,4 @@ addEventListener("keydown", (e) => {
       connect();
     }
   }, 15000);
-})();
+});

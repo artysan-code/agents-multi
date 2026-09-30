@@ -96,43 +96,38 @@
           </div>
         </section>
         <!-- ============ BRAIN ============ -->
-        <section class="view" id="v-brain" hidden>
-          <div class="brain">
-            <section class="panel brain-graph">
-              <div class="panel-h">
-                <input id="b-q" class="search" type="search" data-i18n-ph="brain.search" autocomplete="off">
-                <span class="r" id="b-sum"></span>
-              </div>
-              <div class="b-hits" id="b-hits"></div>
-              <svg id="graph" role="img" data-i18n-title="brain.graph"></svg>
-              <div class="b-legend" id="b-legend"></div>
-            </section>
-            <aside class="brain-side">
-              <section class="panel" id="b-page"></section>
-              <section class="panel b-drop" id="b-drop">
-                <div class="panel-h"><h3 data-i18n="brain.add"></h3></div>
-                <div class="panel-b">
-                  <p class="sub" data-i18n="brain.add.lede"></p>
-                  <label class="b-zone" id="b-zone">
-                    <input type="file" id="b-file" multiple accept=".pdf,.md,.txt,.html,.htm,.docx,.csv,.json" hidden>
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-                    <span data-i18n="brain.drop"></span>
-                  </label>
-                  <form class="b-row" id="b-link">
-                    <input name="url" class="search" type="url" data-i18n-ph="brain.link.ph" required>
-                    <button class="btn" type="submit" data-i18n="mk.add"></button>
-                  </form>
-                  <form class="b-row" id="b-note">
-                    <textarea name="text" class="search" rows="2" data-i18n-ph="brain.note.ph" required></textarea>
-                    <button class="btn" type="submit" data-i18n="mk.add"></button>
-                  </form>
-                  <div id="b-inbox"></div>
-                </div>
+        <section class="view wide" id="v-brain" hidden>
+          <div class="tb-bar">
+            <div class="seg" id="bn-modes" role="group">
+              <button data-bmode="read" data-i18n="brain.m.read"></button>
+              <button data-bmode="graph" data-i18n="brain.m.graph"></button>
+            </div>
+            <input id="b-q" class="search" type="search" data-i18n-ph="brain.search" autocomplete="off">
+            <span class="r sub" id="b-sum"></span>
+            <button class="btn" id="b-add"></button>
+          </div>
+          <div class="bn-read" id="bn-read">
+            <nav class="bn-tree" id="bn-tree" aria-label="Pages"></nav>
+            <article class="panel bn-page" id="bn-page"></article>
+            <aside class="bn-side">
+              <section class="panel">
+                <div class="panel-h"><h3 data-i18n="brain.near"></h3><label class="r sub bn-opt"><input type="checkbox" id="bn-d2"><span data-i18n="brain.depth2"></span></label></div>
+                <canvas id="bn-local" class="bn-local" role="img" data-i18n-title="brain.graph"></canvas>
               </section>
+              <section class="panel" id="bn-links"></section>
             </aside>
           </div>
+          <div class="bn-graph panel" id="bn-graph" hidden>
+            <div class="bn-gtools">
+              <div class="bn-legend" id="bn-legend"></div>
+              <label class="sub bn-opt"><input type="checkbox" id="bn-hubs"><span data-i18n="brain.hubs"></span></label>
+              <button class="btn sm" id="bn-fit" data-i18n="brain.fit"></button>
+            </div>
+            <canvas id="bn-canvas" class="bn-canvas" role="img" data-i18n-title="brain.graph"></canvas>
+            <div class="bn-card" id="bn-card" hidden></div>
+            <p class="bn-help sub" data-i18n="brain.help"></p>
+          </div>
         </section>
-
         <!-- ============ CONNECTIONS ============ -->
         <section class="view" id="v-connections" hidden>
           <p class="lede" data-i18n="conn.lede"></p>
@@ -291,6 +286,7 @@
     </div>
     <script src="/i18n.js"></script>
     <script src="/app.js"></script>
+    <script src="/brain.js"></script>
     <script src="/tasks.js"></script>
   </body>
 </html>

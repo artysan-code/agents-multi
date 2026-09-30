@@ -268,7 +268,11 @@ async function openTask(id) {
   const host = drawer(t("title.tasks"), `<div class="tsheet"></div>`);
   $(".drawer", host).classList.add("wide");
   sheet = { id, host, data, mode: "view" };
-  const gone = new MutationObserver(() => { if (!host.isConnected) { sheet = null; gone.disconnect(); } });
+  const gone = new MutationObserver(() => {
+    if (host.isConnected) return;
+    if (sheet?.host === host) sheet = null; // not a newer page that replaced this one
+    gone.disconnect();
+  });
   gone.observe(document.body, { childList: true });
   wireSheet(host);
   renderSheet(data);
@@ -429,6 +433,9 @@ function wireSheet(host) {
     }
   });
   box.addEventListener("click", async (e) => {
+    // a [[wiki page]] in the description opens the brain, before the click edits the text
+    const pg = e.target.closest("[data-page]");
+    if (pg) return openAttachment({ kind: "page", target: pg.dataset.page });
     const d = e.target.closest("[data-desc]");
     if (d) {
       sheet.mode = d.dataset.desc;
