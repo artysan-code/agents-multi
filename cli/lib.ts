@@ -406,6 +406,8 @@ export async function profileInfo(p: Profile) {
     account: conf?.oauthAccount?.emailAddress ?? null,
     mcp: Object.keys(conf?.mcpServers ?? {}),
     mcpDesktop: Object.keys(desktopConf?.mcpServers ?? {}),
+    /** false until this profile's Desktop has been opened once: no config to apply servers to yet */
+    desktopConfig: !!desktopConf,
     plugins: Object.keys(plugins?.plugins ?? {}),
     brokenPlugins,
     stalePlugins,

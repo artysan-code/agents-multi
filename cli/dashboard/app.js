@@ -583,12 +583,16 @@ function renderConnections() {
   $("#conn-rows").innerHTML = names.map((n) => {
     const r = reg[n];
     // what the registry promises against what each profile actually mounted at its last sync
-    const missing = r.profiles.filter((p) => {
+    const missing = [], noDesk = [];
+    for (const p of r.profiles) {
       const info = S.profiles[p];
-      if (!info) return false;
-      return (r.surfaces.includes("cli") && !info.mcp.includes(n)) ||
-        (r.surfaces.includes("desktop") && S.machine.desktopVersion && !info.mcpDesktop.includes(n));
-    });
+      if (!info) continue;
+      if (r.surfaces.includes("cli") && !info.mcp.includes(n)) missing.push(p);
+      else if (r.surfaces.includes("desktop") && S.machine.desktopVersion && !info.mcpDesktop.includes(n)) {
+        // a Desktop never opened for this profile has no config yet: nothing is wrong, sync applies on first use
+        (info.desktopConfig ? missing : noDesk).push(p);
+      }
+    }
     return `<tr>
       <td><b>${esc(n)}</b></td>
       <td>${r.profiles.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ")}</td>
@@ -597,7 +601,7 @@ function renderConnections() {
       missing.length
         ? `<span class="warn-t">${esc(t("conn.missing", { p: missing.join(", ") }))}</span>`
         : `<span class="ok-t">${esc(t("conn.mounted"))}</span>`
-    }</td>
+    }${noDesk.length ? `<div class="sub">${esc(t("conn.noDesktop", { p: noDesk.join(", ") }))}</div>` : ""}</td>
     </tr>`;
   }).join("") || `<tr><td class="empty" colspan="4">${esc(t("conn.empty"))}</td></tr>`;
 }
