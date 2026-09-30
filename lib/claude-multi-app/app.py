@@ -7,6 +7,7 @@ through the same commands a terminal would run. There is no setup logic here.
 
   claude-multi-app              open the console window (starting the app if it is not running)
   claude-multi-app --tray       start in the tray, no window: what the login unit runs
+  claude-multi-app --hey        «Hey Claude»: the quick entry (bind it to a global shortcut)
 
 Updates need no window: the timer installs them (bin/claude-update --auto) and the console's
 System › Updates shows what happened.
@@ -29,7 +30,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from common import BIN, CONSOLE_UNIT, NAME, SOCKET, write_state
+from common import BIN, CONSOLE_UNIT, CONSOLE_URL, NAME, SOCKET, write_state
 
 TRAY_WAIT_S = 60  # at login the tray host can come up after us
 
@@ -40,11 +41,14 @@ class Controller(QObject):
         self.app = app
         self.tray = None
         self.window = None
+        self.hey = None
         self._profile = None
 
     # ------------------------------------------------------------------ requests
     def handle(self, cmd: str) -> None:
-        if cmd.startswith("show"):
+        if cmd.startswith("hey"):
+            self.show_hey(cmd.partition(":")[2])
+        elif cmd.startswith("show"):
             self.show_console(cmd.partition(":")[2] or None)
         # "tray": already running, nothing to do
 
@@ -69,6 +73,29 @@ class Controller(QObject):
             self.window.closed.connect(self._window_closed)
         self.window.open(view)
 
+    def show_hey(self, text: str = "") -> None:
+        """The quick entry. `text` arrives base64-encoded (the console's Today bar prefills it)."""
+        import base64
+        from hey import HeyPanel
+        try:
+            text = base64.b64decode(text).decode() if text else ""
+        except ValueError:
+            text = ""
+        if self.hey is None:
+            self.hey = HeyPanel(recent_folders(), text)
+            self.hey.closed.connect(self._hey_closed)
+        elif text:
+            self.hey.set_text(text)
+        self.hey.show()
+        self.hey.raise_()
+        self.hey.activateWindow()
+        self.hey.text.setFocus()
+
+    def _hey_closed(self) -> None:
+        self.hey.deleteLater()
+        self.hey = None
+        QTimer.singleShot(0, self._maybe_quit)
+
     def _window_closed(self) -> None:
         self.window = None
         QTimer.singleShot(0, self._maybe_quit)
@@ -85,11 +112,27 @@ class Controller(QObject):
 
     def _maybe_quit(self) -> None:
         """Without a tray nothing keeps the app alive but its windows."""
-        if not self.tray and not self.window:
+        if not self.tray and not self.window and not self.hey:
             self.app.quit()
 
     def quit(self) -> None:
         self.app.quit()
+
+
+def recent_folders() -> list[str]:
+    """The folders of the last sessions, for the panel's folder list (the console knows them)."""
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"{CONSOLE_URL}/api/sessions?since=14d&limit=60", timeout=2) as r:
+            rows = json.loads(r.read())
+    except (OSError, ValueError):
+        return []
+    seen: list[str] = []
+    for row in rows:
+        if row.get("cwd") and row["cwd"] not in seen:
+            seen.append(row["cwd"])
+    return seen[:12]
 
 
 # ---------------------------------------------------------------------- single instance
@@ -126,7 +169,7 @@ def listen(ctl: Controller) -> QLocalServer:
 
 # ---------------------------------------------------------------------- entry points
 def main() -> int:
-    cmd = "tray" if "--tray" in sys.argv[1:] else "show"
+    cmd = "tray" if "--tray" in sys.argv[1:] else "hey" if "--hey" in sys.argv[1:] else "show"
 
     app = QApplication(sys.argv)
     app.setApplicationName(NAME)
@@ -156,6 +199,8 @@ def main() -> int:
     attach_tray()
     if cmd == "show":
         ctl.show_console()
+    elif cmd == "hey":
+        ctl.show_hey()
     return app.exec()
 
 

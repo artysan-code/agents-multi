@@ -41,7 +41,12 @@
 
         <!-- ============ TODAY ============ -->
         <section class="view" id="v-today" hidden>
-          <div class="status-card" id="status"></div>
+          <form class="hey-bar" id="hey-bar">
+            <svg viewBox="0 0 24 24" class="ico"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            <input name="text" data-i18n-ph="hey.ph" autocomplete="off">
+            <kbd>Ctrl Space</kbd>
+          </form>
+          <div class="status-card" id="status" style="margin-top:16px"></div>
           <section class="panel" style="margin-top:16px">
             <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span></div>
             <div id="tk-list"></div>

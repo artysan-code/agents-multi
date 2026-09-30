@@ -64,6 +64,7 @@ const I18N = {
     "status.warns": "{n} notes in Health, none urgent.",
 
     "today.running": "Running now",
+    "hey.ph": "Say «Hey Claude», or write here what there is to do…",
     "tasks.title": "To do",
     "tasks.event": "calendar event",
     "tasks.overdue": "Overdue",
@@ -362,6 +363,7 @@ const I18N = {
     "status.warns": "{n} note in Salute, niente di urgente.",
 
     "today.running": "In esecuzione",
+    "hey.ph": "Di' «Hey Claude», oppure scrivi qui cosa c'è da fare…",
     "tasks.title": "Da fare",
     "tasks.event": "evento del calendario",
     "tasks.overdue": "In ritardo",

@@ -232,6 +232,13 @@ tunnel still reaches it.
   `--tray`. One instance per session: a second start hands its request to the first over
   `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
 
+- **Hey Claude** — `claude-multi-app --hey` (also in the tray menu, and the bar on Today) opens a
+  quick entry: what you write goes to Claude Code in a terminal in the chosen folder (Enter), to a
+  new Claude Desktop chat (Ctrl+Enter; the text is on the clipboard too), or is answered in the
+  panel by `claude -p` (Alt+Enter), under the chosen profile. Bind it to a global shortcut in KDE:
+  System Settings › Keyboard › Shortcuts › Add New › Command, `claude-multi-app --hey`. The voice
+  (a local wake word and whisper.cpp) will fill the same field.
+
 Without a system tray (GNOME needs the AppIndicator extension) the windows still work and the app
 quits with the last one; `--tray` waits a minute for a tray to appear, then exits cleanly and the
 doctor says why. After pulling new app code: `systemctl --user restart claude-multi-app`.

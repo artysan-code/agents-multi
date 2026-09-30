@@ -345,6 +345,22 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         }
         return json(await permissionsView());
       }
+      if (u.pathname === "/api/hey") {
+        // the desktop app owns the panel: the request goes over its socket, as a second start would
+        if (req.method !== "POST") return json({ error: "POST required" }, 405);
+        if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+        const { text = "" } = await req.json().catch(() => ({})) as { text?: string };
+        const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(String(text).slice(0, 4000))));
+        try {
+          const sock = await Deno.connect({ transport: "unix", path: `${Deno.env.get("XDG_RUNTIME_DIR") ?? "/tmp"}/claude-multi-app.sock` });
+          await sock.write(new TextEncoder().encode(`hey:${b64}\n`));
+          sock.close();
+          return json({ ok: true });
+        } catch (e) {
+          const gone = e instanceof Deno.errors.NotFound || e instanceof Deno.errors.ConnectionRefused;
+          return json({ ok: false, message: gone ? "the desktop app is not running (claude-multi-app --tray)" : (e as Error).message });
+        }
+      }
       if (u.pathname === "/api/tasks") {
         if (req.method === "POST") {
           if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);

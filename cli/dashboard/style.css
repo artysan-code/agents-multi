@@ -699,6 +699,28 @@ kbd {
   padding: 4px 8px;
 }
 
+/* ---------------- Hey Claude bar (Today) ---------------- */
+.hey-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.hey-bar .ico {
+  color: var(--accent);
+}
+.hey-bar input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font: 400 15px var(--sans);
+}
+
 /* ---------------- tasks (Today) ---------------- */
 .tk-group {
   padding: 6px 20px 10px;

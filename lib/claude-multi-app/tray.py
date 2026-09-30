@@ -155,6 +155,7 @@ class Tray(QObject):
         for line in lines[:6]:
             self._label(line)
         m.addSeparator()
+        m.addAction("Hey Claude…", lambda: self.ctl.show_hey())
         m.addAction("Open console", lambda: self.ctl.show_console())
         launch = m.addMenu("Open Claude Desktop")
         for p in manifests():

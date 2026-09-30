@@ -196,6 +196,15 @@ function renderToday() {
   loadTasks().catch(() => {});
 }
 
+/* ---------------- Hey Claude ---------------- */
+// the bar hands the text to the desktop app's panel, where the three ways out are
+$("#hey-bar").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await post("/api/hey", { text: e.target.elements.text.value }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) return toast(r.message, true);
+  e.target.reset();
+});
+
 /* ---------------- tasks ---------------- */
 let TK = null;
 async function loadTasks() {
