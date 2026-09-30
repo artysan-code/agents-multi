@@ -167,3 +167,24 @@ Deno.test("updateTask: concurrent changes to the notes in one process are all ke
   assertEquals(T.steps(got?.notes).map((s) => s.text), ["uno", "due"]);
   assertEquals(T.attachments(got?.notes).length, 1);
 });
+
+Deno.test("attachments: names with parentheses and spaces survive a round trip; line breaks are refused", () => {
+  const n = T.addAttachment("", "files/t-1/Screenshot (1).png");
+  assertEquals(T.attachments(n), [{ label: "Screenshot (1).png", target: "files/t-1/Screenshot (1).png", kind: "file" }]);
+  assertEquals(T.attachments(T.addAttachment("", "report(1).pdf"))[0].target, "report(1).pdf");
+  assertThrows(() => T.addAttachment("", "a\nb"));
+  assertThrows(() => T.addAttachment("", "a<b>"));
+});
+
+Deno.test("fromFile: CRLF files keep their steps; unknown frontmatter keys are written back", () => {
+  const crlf = '---\r\nid: "t-1"\r\ntitle: "x"\r\nstatus: "todo"\r\ntags: ["a","b"]\r\ncreated: "c"\r\nupdated: "u"\r\n---\r\n\r\n# x\r\n\r\n- [ ] uno\r\n- [x] due\r\n';
+  const t = T.fromFile(crlf)!;
+  assertEquals(T.progress(t.notes), { done: 1, total: 2, pct: 50 });
+  assert(T.toFile(t).includes('tags: ["a","b"]'));
+});
+
+Deno.test("applyInput: null clears project, owner and notes", () => {
+  const base = task({ project: "work/acme", owner: "ariel", notes: "testo" });
+  const t = T.applyInput(base, { project: null, owner: null, notes: null }, at("2026-09-30T10:00:00"));
+  assertEquals([t.project, t.owner, t.notes], [undefined, undefined, undefined]);
+});

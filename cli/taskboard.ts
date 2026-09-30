@@ -13,6 +13,22 @@ import {
 } from "../shared/mcp/lib/tasks.ts";
 
 export const TASK_FILE_MAX = 50 * 1024 * 1024;
+const OPENABLE = /\.(pdf|txt|md|csv|json|odt|ods|odp|docx?|xlsx?|pptx?|rtf|epub|png|jpe?g|gif|webp|svg|heic|avif|bmp|tiff?|mp3|wav|ogg|opus|flac|m4a|mp4|mkv|webm|mov|avi|zip|7z|tar|gz)$/i;
+
+/** A request body read up to `max` bytes; null past it, whatever the Content-Length claimed. */
+async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of req.body ?? []) {
+    size += chunk.length;
+    if (size > max) return null;
+    parts.push(chunk);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
 type Json = (o: unknown, status?: number) => Response;
 
 /** A task as the board shows it: the folder its project means, the checklist's progress, how many
@@ -35,8 +51,10 @@ async function localPath(target: string): Promise<string | null> {
   const inside = target.startsWith("files/") ? real.startsWith(`${await Deno.realPath(root)}/files/`) : real.startsWith(`${HOME}/`);
   if (!inside) return null;
   const st = await Deno.stat(real);
-  // a launcher or an executable would run, not open: those stay closed
-  if (st.isFile && (real.endsWith(".desktop") || ((st.mode ?? 0) & 0o111))) return null;
+  if (st.isDirectory) return real;
+  // a file opens only when its default program is a viewer: documents, images, sound, video.
+  // Anything else (.desktop, .jar, scripts, executables) could run instead of opening.
+  if (!OPENABLE.test(real) || ((st.mode ?? 0) & 0o111)) return null;
   return real;
 }
 
@@ -77,10 +95,16 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
       let r: { task: Task };
       if (op === "add") r = { task: await addTask(input) };
       else if (op === "update") r = await updateTask(id, input, new Date(), base);
-      else if (op === "step") r = await updateTask(id, (t) => ({ notes: setStep(t.notes ?? "", Number(index), done) }));
+      else if (op === "step") {
+        if (!Number.isInteger(index)) return json({ ok: false, message: "a step is chosen by its index" });
+        r = await updateTask(id, (t) => ({ notes: setStep(t.notes ?? "", index!, done) }));
+      }
       else if (op === "addstep") r = await updateTask(id, (t) => ({ notes: addStep(t.notes ?? "", String(text ?? "")) }));
       else if (op === "attach") r = await updateTask(id, (t) => ({ notes: addAttachment(t.notes ?? "", String(target ?? ""), label) }));
-      else if (op === "detach") r = await updateTask(id, (t) => ({ notes: removeAttachment(t.notes ?? "", Number(index)) }));
+      else if (op === "detach") {
+        if (!Number.isInteger(index)) return json({ ok: false, message: "an attachment is chosen by its index" });
+        r = await updateTask(id, (t) => ({ notes: removeAttachment(t.notes ?? "", index!) }));
+      }
       else return json({ ok: false, message: "unknown operation" });
       changed();
       return json({ ok: true, ...full(r.task) });
@@ -95,7 +119,9 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
     if (Number(req.headers.get("content-length") ?? 0) > TASK_FILE_MAX) return json({ ok: false, message: "over 50 MB" });
     try {
       if (!(await getTask(id))) return json({ ok: false, message: "no such task" });
-      const rel = await storeFile(id, name, new Uint8Array(await req.arrayBuffer()));
+      const bytes = await bodyUpTo(req, TASK_FILE_MAX);
+      if (!bytes) return json({ ok: false, message: "over 50 MB" });
+      const rel = await storeFile(id, name, bytes);
       const r = await updateTask(id, (t) => ({ notes: addAttachment(t.notes ?? "", rel, name) }));
       changed();
       return json({ ok: true, ...full(r.task) });

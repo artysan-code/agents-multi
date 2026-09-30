@@ -49,7 +49,8 @@ function renderBrainAll() {
 }
 
 /** Opens a page in the reader from elsewhere (a task's attachment, a link). */
-function openBrainPage(target) {
+async function openBrainPage(target) {
+  if (!BRAIN) await loadBrain().catch((e) => toast(e.message, true)); // the tab may never have been opened
   const path = resolvePage(target);
   if (!path) return toast(t("brain.missing", { p: target }), true);
   bMode = "read";
@@ -515,6 +516,8 @@ function openAddDrawer() {
     bMode = b.dataset.bmode;
     remember();
     renderBrainAll();
+    // a page picked in the graph is the one to read
+    if (bMode === "read" && bSel && bPage?.path !== bSel) readInto(bSel);
   });
   let qTimer = null;
   $("#b-q").addEventListener("input", () => {

@@ -277,19 +277,42 @@ function eventStream(): Response {
 // ---------------------------------------------------------------- server
 export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
-  let cache: { at: number; body: string; report: Awaited<ReturnType<typeof status>> } | null = null;
+  // The status report takes a second or more (it runs the doctor). Pages must not wait for it on
+  // every open: it is computed at start, kept, and refreshed behind the scenes when it ages; a
+  // request waits only when something changed (a state event, an action) and the old report would
+  // be wrong. Concurrent requests share one computation.
+  let cache: { at: number; gen: number; body: string; report: Awaited<ReturnType<typeof status>> } | null = null;
+  // `gen` counts changes: a report computed before the last one is not served where freshness matters
+  let gen = 0, inflight: Promise<void> | null = null;
+  const refreshStatus = () => inflight ??= (async () => {
+    const g = gen;
+    try {
+      const report = await status();
+      cache = { at: Date.now(), gen: g, body: JSON.stringify(report), report };
+    } finally { inflight = null; }
+  })();
+  const invalidate = () => { gen++; };
   const statusCache = async (fresh: boolean) => {
-    if (!cache || fresh || Date.now() - cache.at > 5000) { const report = await status(); cache = { at: Date.now(), body: JSON.stringify(report), report }; }
+    if (fresh) invalidate();
+    while (!cache || cache.gen !== gen) await refreshStatus();
+    if (Date.now() - cache.at > 5000) void refreshStatus().catch(() => {});
   };
   let plugins: { at: number; body: string } | null = null;
   const ac = new AbortController();
   const json = (v: unknown, code = 200) => new Response(JSON.stringify(v), { status: code, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
   // a state change invalidates the cached snapshots, so the next request after an event is fresh
-  clients.add((topic) => { if (topic === "state") cache = null; });
+  // lazily: state events can be frequent while sessions run, and only a page asking needs the report
+  clients.add((topic) => { if (topic === "state") invalidate(); });
+  void refreshStatus().catch(() => {}); // warm: the first page after a start is not the one to wait
 
   const handler = async (req: Request): Promise<Response> => {
     const u = new URL(req.url);
+    // DNS rebinding: a web page whose name resolves to 127.0.0.1 would be same-origin with the
+    // console, and the anti-CSRF header would not stop it. Only local names are served (any port,
+    // so an ssh tunnel on another local port still works).
+    const host = (req.headers.get("host") ?? "").replace(/:\d+$/, "").toLowerCase();
+    if (!["127.0.0.1", "localhost", "[::1]"].includes(host)) return new Response("forbidden host", { status: 403 });
     try {
       if (u.pathname === "/api/events") return eventStream();
 
@@ -331,7 +354,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         if (req.method === "POST") {
           if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
           const r = await accountOp(await req.json().catch(() => ({})));
-          cache = null;
+          invalidate();
           broadcast("state");
           return json(r);
         }
@@ -406,7 +429,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
         const r = await saveProfile(await req.json().catch(() => ({})));
-        cache = null;
+        invalidate();
         broadcast("state");
         return json(r, r.error ? 400 : 200);
       }
@@ -415,7 +438,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         if (req.method === "POST") {
           if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
           const r = await pluginOp(await req.json().catch(() => ({})) as PluginOp);
-          plugins = null; cache = null;
+          plugins = null; invalidate();
           broadcast("state");
           return json(r); // a refused operation is a result (ok: false, message), not an HTTP error
         }
@@ -429,7 +452,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
         const body = await req.json().catch(() => ({})) as { action?: string; opts?: string[] };
         const r = await runAction(String(body.action ?? ""), body.opts ?? []);
-        cache = null;
+        invalidate();
         broadcast("state");
         return json(r);
       }

@@ -19,6 +19,7 @@ A view like the rest of the app: every action is a command a terminal would run.
 
 from __future__ import annotations
 
+import codecs
 import json
 import re
 import shutil
@@ -33,8 +34,9 @@ from PySide6.QtWidgets import (
 
 from common import BIN, HOME, NAME, default_profile, manifests
 
-# Tools the answer may use without asking: the tasks (all of them), and reading the rest. Anything
-# else — sending mail, creating events, the other servers' writes — is refused in a headless run.
+# The only tools the answer may use: the tasks (all of them), and reading the rest. With
+# --permission-mode dontAsk anything else — sending mail, creating events, the other servers'
+# writes — is refused, whatever the profile's own permission mode.
 ALLOWED = [
     "mcp__tasks",
     "mcp__google__calendar_list", "mcp__google__calendar_events",
@@ -113,6 +115,11 @@ QPushButton#code {{
 """
 
 
+def arg(text: str) -> str:
+    """The user's text as a positional argument: a leading "-" would read as an option."""
+    return f" {text}" if text.startswith("-") else text
+
+
 def command_of(profile: str) -> str:
     """The launcher a profile runs under (claude, claude-agency…), from its manifest."""
     return manifests().get(profile, {}).get("command") or f"claude-{profile}"
@@ -142,6 +149,7 @@ class HeyPanel(QWidget):
         self.session: str | None = None
         self.first_ask = ""  # the request that started the conversation, for Claude Code
         self.code_dir: str | None = None
+        self.code_ask = ""
         self._buf = self._line = ""
         self._streamed = False
 
@@ -266,8 +274,8 @@ class HeyPanel(QWidget):
         self._set_state("Ci penso")
         self._resize()
 
-        args = ["-p", q, "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-                "--tools", "", "--allowedTools", *ALLOWED,
+        args = ["-p", arg(q), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+                "--tools", "", "--permission-mode", "dontAsk", "--allowedTools", *ALLOWED,
                 "--append-system-prompt", PROMPT.format(today=datetime.now().strftime("%A %d %B %Y, %H:%M"))]
         if self.session:
             args += ["--resume", self.session]
@@ -276,10 +284,13 @@ class HeyPanel(QWidget):
         self.proc.setWorkingDirectory(str(HOME))
         self.proc.readyReadStandardOutput.connect(self._read)
         self.proc.finished.connect(self._done)
+        self.proc.errorOccurred.connect(self._failed)
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self.proc.start(str(BIN / command_of(self.profile)), args)
 
     def _read(self) -> None:
-        self._line += bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        # incremental: a character split across two reads is not lost
+        self._line += self._decoder.decode(bytes(self.proc.readAllStandardOutput()))
         *lines, self._line = self._line.split("\n")
         for raw in lines:
             try:
@@ -323,6 +334,7 @@ class HeyPanel(QWidget):
         shown = CODE.sub("", self._buf).strip()
         if m:
             self.code_dir = m.group(1).strip()
+            self.code_ask = self._question  # the request that asked for the project, not the first one
         self.answer.setMarkdown(shown)
         # Markdown import leaves the lines tight: give every block the same air
         cur = QTextCursor(self.answer.document())
@@ -343,12 +355,19 @@ class HeyPanel(QWidget):
         self._state = ""
         self.status.setText("Invio per continuare la conversazione")
         if self.code_dir:
-            name = Path(self.code_dir.replace("~", str(HOME), 1)).name or "~"
+            name = Path(self.code_dir).expanduser().name or "~"
             self.b_code.setText(f"Apri Claude Code in {name}  →")
             self.b_code.show()
         self.b_term.setVisible(bool(self.session))
         self.ask.setFocus()
         self._resize()
+
+    def _failed(self, err) -> None:
+        # a program that cannot start never emits finished: without this the dots would run forever
+        if err == QProcess.ProcessError.FailedToStart:
+            self.dots.stop()
+            self._state = ""
+            self.status.setText(f"Non riesco ad avviare {command_of(self.profile)}.")
 
     def _set_state(self, s: str) -> None:
         self._state = s
@@ -376,11 +395,11 @@ class HeyPanel(QWidget):
         self.close()
 
     def open_code(self) -> None:
-        folder = Path((self.code_dir or "~").replace("~", str(HOME), 1)).expanduser()
+        folder = Path(self.code_dir or "~").expanduser()
         if not folder.is_dir():
             self.status.setText(f"La cartella non esiste: {folder}")
             return
-        self._launch(str(folder), [str(BIN / command_of(self.profile)), self.first_ask])
+        self._launch(str(folder), [str(BIN / command_of(self.profile)), arg(self.code_ask or self.first_ask)])
 
     def open_terminal(self) -> None:
         if self.session:

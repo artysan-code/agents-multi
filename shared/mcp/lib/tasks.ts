@@ -87,9 +87,11 @@ const ORDER: (keyof Task)[] = ["id", "title", "status", "due", "time", "remind",
 /** Pure: a task as its file. Values are JSON-quoted where YAML could misread them. */
 export function toFile(t: Task): string {
   const lines = ["---"];
-  for (const k of ORDER) {
-    const v = t[k];
-    if (v === undefined || v === "") continue;
+  // the known fields in their order, then whatever else the file had (Obsidian's tags, say)
+  const extra = Object.keys(t).filter((k) => !ORDER.includes(k as keyof Task) && k !== "notes" && k !== "source" && /^\w+$/.test(k));
+  for (const k of [...ORDER, ...extra]) {
+    const v = (t as unknown as Record<string, unknown>)[k];
+    if (v === undefined || v === "" || v === null) continue;
     lines.push(`${k}: ${typeof v === "number" ? v : JSON.stringify(v)}`);
   }
   lines.push("---", "", `# ${t.title}`, "");
@@ -99,10 +101,11 @@ export function toFile(t: Task): string {
 
 /** Pure: a file back to a task; null when it is not one. Notes are the body after the title. */
 export function fromFile(text: string): Task | null {
-  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  // one line ending from here on: a file saved on Windows would otherwise hide its steps
+  const m = text.replace(/\r\n?/g, "\n").match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!m) return null;
   const t: Record<string, unknown> = {};
-  for (const line of m[1].split(/\r?\n/)) {
+  for (const line of m[1].split("\n")) {
     const kv = line.match(/^(\w+):\s*(.*)$/);
     if (!kv) continue;
     let v: unknown = kv[2].trim();
@@ -110,7 +113,7 @@ export function fromFile(text: string): Task | null {
     t[kv[1]] = v;
   }
   if (typeof t.id !== "string" || typeof t.title !== "string") return null;
-  const body = m[2].replace(/^\s*#\s.*\r?\n?/, "").trim();
+  const body = m[2].replace(/^\s*#\s.*\n?/, "").trim();
   return {
     ...(t as unknown as Task),
     status: STATUSES.includes(t.status as Status) ? t.status as Status : "todo",
@@ -183,11 +186,11 @@ export function applyInput(base: Task, input: TaskInput, now: Date): Task {
   set("due", input.due, !input.due || validDay(input.due), "due is a day, YYYY-MM-DD");
   set("time", input.time, !input.time || validTime(input.time), "time is HH:MM");
   set("remind", input.remind, input.remind == null || (Number.isInteger(input.remind) && input.remind >= 0 && input.remind <= 1440), "remind is minutes, 0 to 1440");
-  set("owner", input.owner?.trim().toLowerCase());
-  set("project", input.project?.trim());
+  set("owner", input.owner === null ? null : input.owner?.trim().toLowerCase());
+  set("project", input.project === null ? null : input.project?.trim());
   set("priority", input.priority, input.priority == null || [1, 2, 3].includes(input.priority), "priority is 1 (high), 2 or 3");
   set("repeat", input.repeat, input.repeat == null || REPEATS.includes(input.repeat), `repeat is one of ${REPEATS.join(", ")}`);
-  set("notes", input.notes ?? undefined);
+  set("notes", input.notes);
   if (t.time && !t.due) throw new Error("a time needs a day: set due too");
   if (t.repeat && !t.due) throw new Error("a repeating task needs a first day: set due");
   t.updated = now.toISOString();
@@ -315,8 +318,8 @@ export function attachments(notes = ""): Attachment[] {
     if (!item) continue;
     const page = item.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
     if (page) { out.push({ label: page[2] ?? page[1].split("/").pop()!, target: page[1], kind: "page" }); continue; }
-    const md = item.match(/^\[([^\]]*)\]\(<?([^>)]+)>?\)$/);
-    const target = (md ? md[2] : item.replace(/^`|`$/g, "")).trim();
+    const md = item.match(/^\[([^\]]*)\]\((?:<([^>]+)>|([^)\s]+))\)$/);
+    const target = (md ? md[2] ?? md[3] : item.replace(/^`|`$/g, "")).trim();
     out.push({ label: md?.[1] || target.split("/").filter(Boolean).pop() || target, target, kind: kindOf(target) });
   }
   return out;
@@ -325,9 +328,11 @@ export function attachments(notes = ""): Attachment[] {
 export function addAttachment(notes: string, target: string, label?: string): string {
   const t = target.trim();
   if (!t) throw new Error("an attachment needs a link or a path");
-  const page = t.match(/^\[\[.+\]\]$/);
-  const name = (label ?? "").trim() || t.split("/").filter(Boolean).pop() || t;
-  const line = page ? `- ${t}` : `- [${name.replace(/[[\]]/g, "")}](${/\s/.test(t) ? `<${t}>` : t})`;
+  if (/[\n<>]/.test(t)) throw new Error("an attachment cannot contain a line break, < or >");
+  const page = t.match(/^\[\[[^\]\n]+\]\]$/);
+  const name = ((label ?? "").trim() || t.split("/").filter(Boolean).pop() || t).replace(/[[\]\n]/g, "");
+  // spaces and parentheses need the <…> form of a Markdown link target
+  const line = page ? `- ${t}` : `- [${name}](${/[\s()]/.test(t) ? `<${t}>` : t})`;
   return appendTo(notes, ATT_HEAD, "Attachments", line);
 }
 /** Pure: attachment `index` removed. */
@@ -346,7 +351,7 @@ export function removeAttachment(notes: string, index: number): string {
 /** A file stored with a task: under files/<id>/, the name kept readable and made safe. */
 export async function storeFile(id: string, name: string, bytes: Uint8Array): Promise<string> {
   if (!/^t-[\w-]+$/.test(id)) throw new Error("bad task id");
-  const safe = name.replace(/[/\\\0]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
+  const safe = name.replace(/[/\\\0<>\n\r]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
   const dir = `${tasksRoot()}/files/${id}`;
   await Deno.mkdir(dir, { recursive: true });
   let rel = `files/${id}/${safe}`;

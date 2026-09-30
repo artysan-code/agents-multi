@@ -375,43 +375,46 @@ function renderSheet(data) {
 
 function wireSheet(host) {
   const box = $(".tsheet", host);
-  const cur = () => sheet?.data.task;
-  const save = async (input) => {
-    const r = await taskOp({ op: "update", id: sheet.id, base: cur().updated, ...input });
-    if (r) { renderSheet(r); loadBoard().catch(() => {}); }
-  };
+  const me = sheet; // this page's state: a later page replaces the global, not this
+  // Writes of this page run one after the other, each with the version the previous one returned:
+  // a status change right after a description edit would otherwise carry a stale base.
+  let queue = Promise.resolve();
+  const enqueue = (job) => (queue = queue.then(job, job));
+  const alive = () => sheet === me;
+  const save = (input) => enqueue(async () => {
+    const r = await taskOp({ op: "update", id: me.id, base: me.data.task.updated, ...input });
+    if (r) { me.data = r; if (alive()) renderSheet(r); loadBoard().catch(() => {}); }
+  });
   box.addEventListener("change", async (e) => {
     const f = e.target;
     if (f.matches("[data-step]")) {
-      const r = await taskOp({ op: "step", id: sheet.id, index: Number(f.dataset.step), done: f.checked });
-      if (r) { renderSheet(r); loadBoard().catch(() => {}); }
-      return;
+      return enqueue(async () => {
+        const r = await taskOp({ op: "step", id: me.id, index: Number(f.dataset.step), done: f.checked });
+        if (r) { me.data = r; if (alive()) renderSheet(r); loadBoard().catch(() => {}); }
+      });
     }
     if (f.type === "file") return uploadFiles([...f.files]);
     const name = f.name;
     if (!["title", "status", "due", "time", "priority", "owner", "project", "repeat", "remind"].includes(name)) return;
     const v = f.value.trim();
-    if (name === "title" && !v) return renderSheet(sheet.data);
+    if (name === "title" && !v) return renderSheet(me.data);
     const input = { [name]: v === "" ? null : name === "priority" || name === "remind" ? Number(v) : v };
     // a time needs a day: the page's own date field decides it, today when empty
-    if (name === "time" && v && !cur().due) input.due = TB?.today;
+    if (name === "time" && v && !me.data.task.due) input.due = TB?.today;
     await save(input);
   });
-  // the description saves itself a moment after typing stops (and on leaving the field), without
-  // redrawing the page under the cursor
-  let descTimer = null, descSaving = null;
-  const saveDesc = async (ta) => {
+  // The description saves itself a moment after typing stops, on leaving the field, and on Esc.
+  // It never redraws the page: a redraw between a button's press and release loses the click.
+  let descTimer = null;
+  const saveDesc = (ta) => {
     clearTimeout(descTimer);
-    const { desc, rest } = splitNotes(cur().notes);
     const next = ta.value.trim();
-    if (next === desc || descSaving === next) return;
-    descSaving = next;
-    const r = await taskOp({ op: "update", id: sheet.id, base: cur().updated, notes: [next, rest].filter(Boolean).join("\n\n") || null });
-    descSaving = null;
-    if (!r || !sheet) return;
-    if (sheet.host.contains(document.activeElement) && document.activeElement === ta) sheet.data = r;
-    else renderSheet(r);
-    loadBoard().catch(() => {});
+    return enqueue(async () => {
+      const { desc, rest } = splitNotes(me.data.task.notes);
+      if (next === desc) return;
+      const r = await taskOp({ op: "update", id: me.id, base: me.data.task.updated, notes: [next, rest].filter(Boolean).join("\n\n") || null });
+      if (r) { me.data = r; loadBoard().catch(() => {}); }
+    });
   };
   box.addEventListener("input", (e) => {
     if (!e.target.matches("textarea[name=desc]")) return;
@@ -421,13 +424,26 @@ function wireSheet(host) {
   box.addEventListener("focusout", (e) => {
     if (e.target.matches("textarea[name=desc]")) saveDesc(e.target);
   });
+  // Esc closes the drawer by removing it, and a removed field gets no focusout: save first
+  const onEsc = (e) => {
+    if (e.key !== "Escape") return;
+    const ta = $("textarea[name=desc]", box);
+    if (ta && document.activeElement === ta) saveDesc(ta);
+  };
+  document.addEventListener("keydown", onEsc, true);
+  new MutationObserver((_, obs) => {
+    if (host.isConnected) return;
+    document.removeEventListener("keydown", onEsc, true);
+    obs.disconnect();
+  }).observe(document.body, { childList: true });
   box.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target, v = f.elements[0].value.trim();
     if (!v) return;
     f.elements[0].value = ""; // before the redraw, which keeps drafts
-    const r = await taskOp(f.dataset.form === "step" ? { op: "addstep", id: sheet.id, text: v } : { op: "attach", id: sheet.id, target: v });
+    const r = await taskOp(f.dataset.form === "step" ? { op: "addstep", id: me.id, text: v } : { op: "attach", id: me.id, target: v });
     if (r) {
+      me.data = r;
       renderSheet(r);
       loadBoard().catch(() => {});
       $(`form[data-form="${f.dataset.form}"] input`, box)?.focus();
@@ -437,21 +453,22 @@ function wireSheet(host) {
     // a [[wiki page]] in the description opens the brain, before the click edits the text
     const pg = e.target.closest("[data-page]");
     if (pg) return openAttachment({ kind: "page", target: pg.dataset.page });
+    if (e.target.closest("a[href]")) return; // a web link in the description opens, it does not edit
     const d = e.target.closest("[data-desc]");
     if (d) {
-      sheet.mode = d.dataset.desc;
-      renderSheet(sheet.data);
-      if (sheet.mode === "edit") $("textarea[name=desc]", box)?.focus();
+      me.mode = d.dataset.desc;
+      renderSheet(me.data);
+      if (me.mode === "edit") $("textarea[name=desc]", box)?.focus();
       return;
     }
     const s = e.target.closest("[data-set]");
     if (s) return save({ status: s.dataset.set });
     const a = e.target.closest("[data-att]");
-    if (a) return openAttachment(sheet.data.attachments[Number(a.dataset.att)]);
+    if (a) return openAttachment(me.data.attachments[Number(a.dataset.att)]);
     const x = e.target.closest("[data-detach]");
     if (x) {
-      const r = await taskOp({ op: "detach", id: sheet.id, index: Number(x.dataset.detach) });
-      if (r) { renderSheet(r); loadBoard().catch(() => {}); }
+      const r = await taskOp({ op: "detach", id: me.id, index: Number(x.dataset.detach) });
+      if (r) { me.data = r; renderSheet(r); loadBoard().catch(() => {}); }
     }
   });
   const drop = () => $(".ts-drop", box);
@@ -466,16 +483,17 @@ function wireSheet(host) {
 }
 
 async function uploadFiles(files) {
-  if (!sheet || !files.length) return;
+  const me = sheet; // the files belong to the task whose page they were dropped on
+  if (!me || !files.length) return;
   toast(t("ts.uploading", { n: files.length }));
   let last = null;
   for (const f of files) {
-    const r = await api("/api/tasks/file", { method: "POST", headers: { "x-claude-multi": "1", "x-task-id": sheet.id, "x-filename": encodeURIComponent(f.name) }, body: f })
+    const r = await api("/api/tasks/file", { method: "POST", headers: { "x-claude-multi": "1", "x-task-id": me.id, "x-filename": encodeURIComponent(f.name) }, body: f })
       .catch((e) => ({ ok: false, message: e.message }));
     if (!r.ok) { toast(`${f.name}: ${r.message}`, true); continue; }
     last = r;
   }
-  if (last) { renderSheet(last); loadBoard().catch(() => {}); }
+  if (last) { me.data = last; if (sheet === me) renderSheet(last); loadBoard().catch(() => {}); }
 }
 
 async function openAttachment(a) {
@@ -484,7 +502,7 @@ async function openAttachment(a) {
   if (a.kind === "page") {
     $(".scrim")?.parentElement?.remove();
     location.hash = "brain";
-    return void setTimeout(() => typeof openBrainPage === "function" && openBrainPage(a.target), 50);
+    return void openBrainPage(a.target);
   }
   const r = await post("/api/open", { target: a.target }).catch((e) => ({ ok: false, message: e.message }));
   if (!r.ok) toast(r.message, true);

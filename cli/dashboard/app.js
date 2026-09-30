@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
+// deno-lint-ignore-file no-window no-unused-vars no-control-regex -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
 /* claude-multi console — vanilla JS, no dependencies.
    Data from /api/*, live updates over /api/events (SSE), actions through /api/action.
    Text comes from i18n.js (`t`), loaded before this file. */
@@ -168,11 +168,12 @@ function renderState() {
 }
 
 function renderView() {
-  if (!S) return;
+  // tasks, the brain and Today's lists have their own data: they do not wait for the status report
   if (view === "today") renderToday();
   if (view === "tasks") loadBoard().catch((e) => toast(e.message, true));
-  if (view === "connections") renderConnections();
   if (view === "brain") (BRAIN ? Promise.resolve(renderBrainAll()) : loadBrain()).catch((e) => toast(e.message, true));
+  if (!S) return;
+  if (view === "connections") renderConnections();
   if (view === "system") {
     if (sub === "profiles") renderProfiles();
     if (sub === "permissions") loadPermissions().catch((e) => toast(e.message, true));
@@ -200,7 +201,7 @@ function renderToday() {
   } else {
     box.innerHTML = `<i></i><div><b>${esc(t("status.ok"))}</b><div class="sub">${esc(t("status.ok.sub"))}</div>${extra}</div>`;
   }
-  renderRunning();
+  if (S) renderRunning();
   loadResume();
   loadTasks().catch(() => {});
 }
@@ -390,14 +391,22 @@ $("#resume").addEventListener("click", async (e) => {
     the wiki uses. Wikilinks become [data-page] links the brain opens; web links open outside. Enough
     to read a page well, not a renderer. */
 function mdToHtml(src) {
-  const inline = (s) => esc(s)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-    .replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, "$1<i>$2</i>")
-    .replace(/~~([^~]+)~~/g, "<s>$1</s>")
-    .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, target, label) => `<a data-page="${target.trim()}">${label ?? target.trim().split("/").pop()}</a>`)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/\[([^\]]+)\]\(&lt;?([^)]+?)(?:&gt;)?\)/g, '<span class="lnk" title="$2">$1</span>');
+  // Every piece of markup is made from escaped text and parked as a token (\u0000n\u0000) before
+  // the next rule runs, so no rule can reach into markup another one produced.
+  const inline = (s) => {
+    const toks = [];
+    const park = (html) => `\u0000${toks.push(html) - 1}\u0000`;
+    let x = esc(String(s).replace(/\u0000/g, ""));
+    x = x.replace(/`([^`]+)`/g, (_, c) => park(`<code>${c}</code>`));
+    x = x.replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, target, label) => park(`<a data-page="${target.trim()}">${label ?? target.trim().split("/").pop()}</a>`));
+    x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => park(`<a href="${url}" target="_blank" rel="noopener">${label}</a>`));
+    x = x.replace(/\[([^\]]+)\]\((?:&lt;(.+?)&gt;|([^)\s]+))\)/g, (_, label, a, b) => park(`<span class="lnk" title="${a ?? b}">${label}</span>`));
+    x = x
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, "$1<i>$2</i>")
+      .replace(/~~([^~]+)~~/g, "<s>$1</s>");
+    return x.replace(/\u0000(\d+)\u0000/g, (_, i) => toks[Number(i)]);
+  };
   const out = [];
   let list = null, code = null, table = null;
   const flush = () => {
@@ -1351,13 +1360,14 @@ addEventListener("keydown", (e) => {
 addEventListener("DOMContentLoaded", async () => {
   applyTheme();
   applyLang();
+  go(location.hash.slice(1)); // what needs no status report draws now
   try {
     await loadStatus();
+    renderView();
   } catch (e) {
     renderState();
     toast(t("err.server", { e: e.message }), true);
   }
-  go(location.hash.slice(1));
   connect();
   // The heartbeat also tells the page the connection is genuinely alive: if nothing arrives for
   // well over the server's 25s ping, the stream is dead even though EventSource still says open.
