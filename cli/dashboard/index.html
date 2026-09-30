@@ -129,6 +129,7 @@
         <section class="view" id="v-system" hidden>
           <div class="tabs" role="tablist" id="tabs">
             <a href="#system/profiles" role="tab" data-t="profiles" data-i18n="sys.profiles"></a>
+            <a href="#system/permissions" role="tab" data-t="permissions" data-i18n="sys.permissions"></a>
             <a href="#system/plugins" role="tab" data-t="plugins" data-i18n="sys.plugins"></a>
             <a href="#system/updates" role="tab" data-t="updates" data-i18n="sys.updates"></a>
             <a href="#system/health" role="tab" data-t="health" data-i18n="sys.health"></a>
@@ -145,6 +146,22 @@
               <div id="plist"></div>
             </div>
             <p class="note" data-i18n-html="profiles.note"></p>
+          </div>
+
+          <!-- permissions -->
+          <div class="sub-view" id="s-permissions" role="tabpanel" hidden>
+            <p class="lede" data-i18n="perm.lede"></p>
+            <div class="perm-mode" style="margin-top:18px">
+              <label class="fld" style="flex-direction:row;align-items:center;gap:10px"><span data-i18n="perm.mode"></span>
+                <select id="perm-mode" class="sel" style="font-size:13px;padding:6px 8px">
+                  <option value="default" data-i18n="perm.m.default"></option>
+                  <option value="acceptEdits" data-i18n="perm.m.acceptEdits"></option>
+                  <option value="plan" data-i18n="perm.m.plan"></option>
+                  <option value="auto" data-i18n="perm.m.auto"></option>
+                </select></label>
+            </div>
+            <div class="perm-lists" id="perm-lists"></div>
+            <div id="perm-profiles"></div>
           </div>
 
           <!-- plugins & skills -->

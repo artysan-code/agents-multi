@@ -19,6 +19,7 @@ import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
+import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
 import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
@@ -306,6 +307,15 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
           return json(r);
         }
         return json(await accountsView());
+      }
+      if (u.pathname === "/api/permissions") {
+        if (req.method === "POST") {
+          if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+          const r = await permissionsOp(await req.json().catch(() => ({})) as PermOp);
+          broadcast("state");
+          return json(r);
+        }
+        return json(await permissionsView());
       }
       if (u.pathname === "/api/brain") return json(await brainGraph());
       if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));

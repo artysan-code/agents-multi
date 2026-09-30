@@ -164,6 +164,7 @@ function renderView() {
   if (view === "brain" && !BRAIN) loadBrain().catch((e) => toast(e.message, true));
   if (view === "system") {
     if (sub === "profiles") renderProfiles();
+    if (sub === "permissions") loadPermissions().catch((e) => toast(e.message, true));
     if (sub === "plugins") renderShared();
     if (sub === "updates") renderUpdates();
     if (sub === "health") renderHealth(S.doctor);
@@ -809,6 +810,64 @@ async function saveProfile(e, host) {
   }
 }
 
+/* ---------------- permissions ---------------- */
+let PERM = null;
+async function loadPermissions() {
+  PERM = await api("/api/permissions");
+  renderPermissions();
+}
+
+function renderPermissions() {
+  if (!PERM) return;
+  $("#perm-mode").value = PERM.mode;
+  $("#perm-lists").innerHTML = ["allow", "ask", "deny"].map((l) =>
+    `<section class="panel perm-list">
+      <div class="panel-h"><h3>${esc(t(`perm.${l}`))}</h3><span class="r">${PERM.rules[l].length}</span></div>
+      <div class="panel-b">
+        <span class="sub">${esc(t(`perm.${l}.what`))}</span>
+        ${PERM.rules[l].map((r) => `<div class="perm-rule"><code>${esc(r)}</code><button data-perm-rm="${esc(l)}" data-rule="${esc(r)}" aria-label="${esc(t("pl.remove"))}">×</button></div>`).join("") || `<span class="sub">—</span>`}
+      </div>
+      <form class="perm-add" data-perm-add="${esc(l)}">
+        <input name="rule" class="search" placeholder="Bash(npm test:*)" required autocomplete="off">
+        <button class="btn sm" type="submit">${esc(t("mk.add"))}</button>
+      </form>
+    </section>`
+  ).join("");
+  const profs = Object.entries(PERM.profiles).filter(([, v]) => v.mode || Object.keys(v.lists).length);
+  $("#perm-profiles").innerHTML = profs.map(([p, v]) =>
+    `<section class="panel perm-prof">
+      <div class="panel-h"><h3>${esc(p)}</h3><span class="r">${esc(t("perm.own"))}</span>
+        ${Object.keys(v.lists).length ? `<button class="btn sm" data-perm-promote="${esc(p)}">${esc(t("perm.promote"))}</button>` : ""}</div>
+      <div class="panel-b">
+        ${v.mode ? `<div>${esc(t("perm.mode"))}: <code>${esc(v.mode)}</code></div>` : ""}
+        ${Object.entries(v.lists).map(([l, d]) => `<div><b>${esc(t(`perm.${l}`))}</b>
+          ${d.added.length ? `<div class="sub">${esc(t("perm.added"))}: ${d.added.map((r) => `<code>${esc(r)}</code>`).join(" · ")}</div>` : ""}
+          ${d.dropped.length ? `<div class="sub">${esc(t("perm.dropped"))}: ${d.dropped.map((r) => `<code>${esc(r)}</code>`).join(" · ")}</div>` : ""}
+        </div>`).join("")}
+      </div>
+    </section>`
+  ).join("");
+}
+
+async function permOp(body) {
+  const r = await post("/api/permissions", body).catch((e) => ({ ok: false, message: e.message }));
+  toast(r.message, !r.ok);
+  if (r.ok) await loadPermissions();
+}
+$("#perm-mode").addEventListener("change", (e) => permOp({ op: "mode", mode: e.target.value }));
+document.addEventListener("submit", (e) => {
+  const f = e.target.closest("[data-perm-add]");
+  if (!f) return;
+  e.preventDefault();
+  permOp({ op: "add", list: f.dataset.permAdd, rule: f.elements.rule.value.trim() });
+});
+document.addEventListener("click", (e) => {
+  const rm = e.target.closest("[data-perm-rm]");
+  if (rm) return permOp({ op: "remove", list: rm.dataset.permRm, rule: rm.dataset.rule });
+  const pr = e.target.closest("[data-perm-promote]");
+  if (pr && confirm(t("perm.promote.confirm", { p: pr.dataset.permPromote }))) permOp({ op: "promote", profile: pr.dataset.permPromote });
+});
+
 /* ---------------- updates ---------------- */
 function renderUpdates() {
   const m = S.machine;
@@ -1206,7 +1265,7 @@ $("#cat-mk").addEventListener("change", renderCatalog);
 /* ---------------- navigation ---------------- */
 // #today · #connections · #system/<tab>. The tray opens a view by setting the hash.
 const VIEWS = ["today", "brain", "connections", "system"];
-const TABS = ["profiles", "plugins", "updates", "health"];
+const TABS = ["profiles", "permissions", "plugins", "updates", "health"];
 
 function go(hash) {
   const [v, s] = String(hash).split("/");

@@ -195,6 +195,12 @@ export async function doctor(): Promise<Check[]> {
       if (l.unreadable) add("vault.unreadable", "fail", `${l.unreadable} vault entries this key cannot open`, "claude-multi vault status");
       if (!missing.length && !l.conflicts && !l.unreadable) add("vault", "ok", `secret vault: ${accounts.length} accounts, every secret here`);
     }
+    // The key sits in the keyring, readable by any process of this user — Claude's Bash included.
+    // These deny rules are what keeps a session from reading it, or the entries it opens.
+    const deny = (await readJson<{ permissions?: { deny?: string[] } }>(`${REPO}/shared/settings.json`))?.permissions?.deny ?? [];
+    const needed = ["Bash(secret-tool:*)", "Bash(kwallet-query:*)", "Bash(claude-multi vault recovery-code:*)", "Read(~/vault/claude-multi/**)", "Edit(~/vault/claude-multi/**)"];
+    const absent = needed.filter((r) => !deny.includes(r));
+    if (absent.length) add("vault.deny", "fail", `Claude sessions could read the vault key or entries: shared deny lacks ${absent.join(", ")}`, "console › System › Permissions › Denied");
     const legacy = await legacyFilesPresent();
     if (legacy.length) add("vault.legacy", "warn", `secrets still outside the vault: ${legacy.map(shortHome).join(", ")}`, "claude-multi vault import-legacy (imports, checks, then removes them)");
   }

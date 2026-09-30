@@ -197,7 +197,9 @@ the globe button in the rail overrides it per browser.
 - **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
   where, and whether each profile actually mounted it at its last sync.
 - **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or
-  add), **Plugins & skills**, **Updates** (versions, and what is pending), **Health** (every doctor
+  add), **Permissions** (the shared allow / ask / deny rules and default mode, what each profile
+  adds or leaves out — "always allow" answers land there — and a button to move a profile's own
+  rules to every profile), **Plugins & skills**, **Updates** (versions, and what is pending), **Health** (every doctor
   check, with a button for the fixes that map to a known action).
 
 Consumption is not on the page: `claude-multi usage` reports it in the terminal.

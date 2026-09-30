@@ -721,6 +721,65 @@ kbd {
   font-weight: 500;
 }
 
+/* ---------------- permissions ---------------- */
+.perm-lists {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.perm-list .panel-b {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.perm-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 12.5px var(--mono);
+  padding: 3px 0;
+}
+.perm-rule code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.perm-rule button {
+  flex: none;
+  color: var(--fg-faint);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+.perm-rule button:hover {
+  color: var(--crit);
+  background: var(--crit-wash);
+}
+.perm-add {
+  display: flex;
+  gap: 6px;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--line-soft);
+}
+.perm-add input {
+  flex: 1;
+  min-width: 0;
+  font: 12.5px var(--mono);
+}
+.perm-prof {
+  margin-top: 16px;
+}
+.perm-prof .panel-b {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
 /* ---------------- updates ---------------- */
 .log-row {
   display: grid;

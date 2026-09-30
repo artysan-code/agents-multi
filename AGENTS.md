@@ -40,7 +40,10 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
   A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A
   server that returns data masks it (`lib/mask.ts`), and one that writes whole objects back refuses
-  payloads carrying the mask marker. No deletion tools on external services.
+  payloads carrying the mask marker. No deletion tools on external services. The vault key is in
+  the keyring, where any process of the user can ask for it: the shared deny rules on
+  `secret-tool`, `kwallet-query`, `vault recovery-code` and `~/vault/claude-multi` are what keeps a
+  session out (the doctor checks they are there).
 - **Notifications go through `desktopNotify()`** (`cli/notify.ts`): normal urgency, eight seconds,
   once per event. Never `-u critical` — on KDE it ignores the expiry and stays on screen.
 - **The desktop app is a view** (`lib/claude-multi-app/`, PySide6): what it shows comes from the
