@@ -1,0 +1,34 @@
+# claude-desktop-shims — what Claude Desktop needs from the system, now that the app itself lives in
+# user space (~/.local/lib/claude-desktop, bin/claude-desktop-update). It replaces the old
+# `claude-desktop` package, which it conflicts with: installing this one removes that one.
+#
+# Two things only, both unchanged between Desktop versions, so this is installed once:
+#   - the runtime libraries Electron and the VM mode load (the depends below);
+#   - three links at the Debian paths the app looks for: virtiofsd and the OVMF firmware live
+#     elsewhere on Arch, and without them Claude Code's VM mode does not start.
+#
+#   cd pkg/claude-desktop-shims && makepkg -f && sudo pacman -U claude-desktop-shims-*.pkg.tar.zst
+
+pkgname=claude-desktop-shims
+pkgver=1
+pkgrel=1
+pkgdesc="System pieces for a user-space Claude Desktop: runtime dependencies and Debian-path shims"
+arch=('any')
+url="https://claude.ai/download"
+license=('MIT')
+depends=(
+  'alsa-lib' 'at-spi2-core' 'cairo' 'dbus' 'expat' 'gcc-libs' 'glib2' 'glibc'
+  'gtk3' 'hicolor-icon-theme' 'libcap-ng' 'libcups' 'libdrm' 'libnotify'
+  'libseccomp' 'libsecret' 'libx11' 'libxcb' 'libxcomposite' 'libxdamage'
+  'libxext' 'libxfixes' 'libxkbcommon' 'libxrandr' 'libxtst' 'mesa' 'nspr'
+  'nss' 'pango' 'socat' 'systemd-libs' 'util-linux-libs' 'virtiofsd'
+  'xdg-desktop-portal' 'xdg-utils' 'qemu-system-x86' 'edk2-ovmf'
+)
+conflicts=('claude-desktop')
+
+package() {
+  install -d "$pkgdir/usr/bin" "$pkgdir/usr/share/edk2"
+  ln -s ../lib/virtiofsd "$pkgdir/usr/bin/virtiofsd"
+  ln -s x64/OVMF_CODE.4m.fd "$pkgdir/usr/share/edk2/OVMF_CODE_4M.fd"
+  ln -s x64/OVMF_VARS.4m.fd "$pkgdir/usr/share/edk2/OVMF_VARS_4M.fd"
+}

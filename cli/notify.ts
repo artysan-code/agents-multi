@@ -21,14 +21,14 @@ export function diffDoctor(prevFailIds: string[], current: Check[]): DoctorDiff 
   };
 }
 
-export function notifyText(d: DoctorDiff): { title: string; body: string; urgency: "normal" | "critical" } | null {
+export function notifyText(d: DoctorDiff): { title: string; body: string } | null {
   if (d.newFails.length) {
     const lines = d.newFails.slice(0, 3).map((c) => `• ${c.msg}${c.fix ? `\n   → ${c.fix}` : ""}`);
     const more = d.newFails.length > 3 ? `\n… and ${d.newFails.length - 3} more` : "";
     const still = d.stillFails.length ? `\n(${d.stillFails.length} already known)` : "";
-    return { title: `claude-multi: ${d.newFails.length} new problem${d.newFails.length === 1 ? "" : "s"}`, body: lines.join("\n") + more + still, urgency: "critical" };
+    return { title: `claude-multi: ${d.newFails.length} new problem${d.newFails.length === 1 ? "" : "s"}`, body: lines.join("\n") + more + still };
   }
-  if (d.recovered) return { title: "claude-multi: all clear", body: `Resolved: ${d.gone.join(", ")}`, urgency: "normal" };
+  if (d.recovered) return { title: "claude-multi: all clear", body: `Resolved: ${d.gone.join(", ")}` };
   return null;
 }
 
@@ -46,9 +46,17 @@ export async function notifyDoctor(current: Check[], opts: { dryRun?: boolean } 
   const t = notifyText(d);
   if (!opts.dryRun) await saveLast(current);
   if (!t) return false;
-  if (opts.dryRun || !(await has("notify-send"))) { console.log(`[notification${opts.dryRun ? " dry-run" : " (notify-send missing)"}] ${t.title}\n${t.body}`); return true; }
-  // No --wait: the unit must not hang. Without it there is no clickable action, so the body carries
-  // the fix itself.
-  await run("notify-send", ["-a", "claude-multi", "-i", "claude-desktop", "-u", t.urgency, "--expire-time=600000", t.title, t.body]);
+  return await desktopNotify(t.title, t.body, opts);
+}
+
+/**
+ * The one way claude-multi reaches the desktop. Never `-u critical`: on KDE a critical notification
+ * ignores its expiry and stays on screen until dismissed. Eight seconds, then it waits in the notification centre.
+ * No --wait: the timer's unit must not hang, so there is no clickable action and the body carries
+ * whatever the reader needs to act. True if something was shown (or printed).
+ */
+export async function desktopNotify(title: string, body: string, opts: { dryRun?: boolean } = {}) {
+  if (opts.dryRun || !(await has("notify-send"))) { console.log(`[notification${opts.dryRun ? " dry-run" : " (notify-send missing)"}] ${title}\n${body}`); return true; }
+  await run("notify-send", ["-a", "claude-multi", "-i", "claude-desktop", "-u", "normal", "--expire-time=8000", title, body]);
   return true;
 }

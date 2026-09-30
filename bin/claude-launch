@@ -1,40 +1,23 @@
 #!/usr/bin/env bash
-# claude-launch: avvia Claude Desktop per un profilo qualsiasi, passando prima dal gate
-# di aggiornamento grafico. È lo script puntato dagli Exec= dei .desktop.
+# claude-launch: avvia Claude Desktop per un profilo qualsiasi. È lo script puntato dagli Exec= dei
+# .desktop.
 #
 # USO:
 #   claude-launch <profilo> [args...]  # i profili sono quelli di profiles/*/profile.json
 #   claude-launch --check-only         # diagnostica: dice cosa farebbe, non apre nulla
 #
 # Quale eseguibile parte lo dice il manifest, non un ramo scritto qui: il profilo la cui
-# user-data-dir è ~/.config/Claude usa il `claude-desktop` di sistema, ogni altro ha una build
-# con app_id distinto (bin/claude-desktop-rebuild), perché il binario ufficiale si auto-assegna
-# l'app_id e KDE darebbe la stessa icona a tutti.
+# user-data-dir è ~/.config/Claude usa il Claude Desktop di serie (~/.local/lib/claude-desktop/current),
+# ogni altro ha una build con app_id distinto (bin/claude-desktop-rebuild), perché il binario
+# ufficiale si auto-assegna l'app_id e KDE darebbe la stessa icona a tutti.
 #
-# COSA FA, IN ORDINE:
-#   1. legge lo stato versioni (cache TTL, così l'apertura non paga la rete a ogni click)
-#   2. se Claude Desktop O Claude Code è obsoleto → mostra il gate (claude-multi-app --gate) PRIMA di aprire
-#      l'app, dove SCEGLI cosa aggiornare: niente parte senza spunta. Il gate sta prima perché
-#      l'install di Desktop sostituisce /usr/lib/claude-desktop, e ad app aperta la fa crashare
-#   3. exec dell'app, sempre — qualunque cosa vada storta sopra, Claude si apre
-#
-# Il gate non compare più per le versioni messe da parte con "Salta queste versioni"
-# (~/.config/claude-update/skipped) e non compare affatto se il check fallisce (offline).
-# Fuori dall'avvio ci pensa il timer claude-update-check.timer → claude-update-notify.
+# Aggiornamenti: nessuna domanda. Il timer scarica e verifica le versioni nuove in background; qui,
+# prima di aprire l'app, una versione già pronta entra in uso se nessun Claude Desktop è aperto
+# (claude-desktop-update --apply: è il momento in cui sostituirla non fa crashare niente). Se
+# qualcosa va storto, l'app si apre comunque sulla versione di prima.
 set -uo pipefail
 
-BIN="$HOME/.local/bin"
-CACHE_DIR="$HOME/.cache/claude-update"
-CACHE="$CACHE_DIR/check.json"
-SKIP_FILE="$HOME/.config/claude-update/skipped"
-APP="${CLAUDE_MULTI_APP:-$BIN/claude-multi-app}"   # override per test (o per sostituire il gate)
-TTL="${CLAUDE_LAUNCH_TTL:-21600}"        # 6h: oltre, si ricontrolla
-# Due budget annidati, e il primo DEVE stare dentro il secondo: claude-update fa due fetch
-# indipendenti (canale CLI + indice apt), ognuno con il suo timeout. Con 8s di default per
-# fetch il worst case è 16s: un `timeout 10` esterno li ammazzerebbe a metà e lo stato
-# tornerebbe vuoto anche con la rete a posto.
-FETCH_TIMEOUT="${CLAUDE_LAUNCH_FETCH_TIMEOUT:-4}"   # per singolo fetch
-CHECK_TIMEOUT="${CLAUDE_LAUNCH_CHECK_TIMEOUT:-12}"  # cintura sull'intero check
+DESKTOP="${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}/current/claude-desktop"
 
 # Repo claude-multi: allinea la config PRIMA che parta l'app (fetch se stantio, pull ff-only,
 # mai bloccante). Stessa logica dei wrapper di lancio della CLI.
@@ -69,7 +52,9 @@ launch() {
       "$HOME/.local/lib/$appid/$appid" \
       --ozone-platform=wayland --user-data-dir="$data_dir" "$@"
   else
-    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" "${account_env[@]}" claude-desktop "$@"
+    # prima della migrazione a user space c'è solo il pacchetto di sistema
+    local bin="$DESKTOP"; [[ -x "$bin" ]] || bin=claude-desktop
+    exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" "${account_env[@]}" "$bin" "$@"
   fi
 }
 if [[ $check_only -eq 1 ]]; then
@@ -78,7 +63,10 @@ if [[ $check_only -eq 1 ]]; then
     local appid; appid="$(cm_desktop_appid "$profile")"
     echo "(check-only) profilo '$profile'"
     if [[ -n "$appid" ]]; then echo "  eseguibile:     $HOME/.local/lib/$appid/$appid"
-    else echo "  eseguibile:     claude-desktop (di sistema)"; fi
+    elif [[ -x "$DESKTOP" ]]; then echo "  eseguibile:     $DESKTOP"
+    else echo "  eseguibile:     claude-desktop (pacchetto di sistema)"; fi
+    local staged; staged="$("$HERE/claude-desktop-update" --staged 2>/dev/null)"
+    [[ -n "$staged" ]] && echo "  versione pronta: $staged (entra in uso all'avvio, se nessun Desktop è aperto)"
     echo "  user-data-dir:  $(cm_desktop_dir "$profile")"
     echo "  CLAUDE_CONFIG_DIR: $HOME/.claude-multi/$profile"
     cm_flag "$profile" disableAccountMcp && echo "  ENABLE_CLAUDEAI_MCP_SERVERS=false (disableAccountMcp)"
@@ -86,41 +74,9 @@ if [[ $check_only -eq 1 ]]; then
   }
 fi
 
-# --- stato versioni, con cache ----------------------------------------------
-mkdir -p "$CACHE_DIR"
-state=""
-if [[ -f "$CACHE" ]]; then
-  age=$(( $(date +%s) - $(stat -c %Y "$CACHE" 2>/dev/null || echo 0) ))
-  [[ $age -lt $TTL ]] && state="$(cat "$CACHE" 2>/dev/null)"
-fi
+# --- una versione pronta entra in uso adesso, se si può ------------------------
+# Quiet e senza rete: al massimo qualche secondo per ricostruire le varianti. Qualunque esito
+# (niente da fare, lock occupato, un altro Desktop aperto, errore), l'app parte lo stesso.
+[[ $check_only -eq 1 ]] || QUIET=1 "$HERE/claude-desktop-update" --apply >/dev/null 2>&1 || true
 
-if [[ -z "$state" ]]; then
-  # `timeout` è la cintura di sicurezza: anche con DNS che pende, l'app si apre comunque.
-  state="$(CLAUDE_UPDATE_TIMEOUT="$FETCH_TIMEOUT" timeout "$CHECK_TIMEOUT" \
-           "$BIN/claude-update" --check --json 2>/dev/null)"
-  [[ -n "$state" ]] && printf '%s\n' "$state" > "$CACHE"
-fi
-[[ -n "$state" ]] || launch "$@"   # nessuno stato (offline/timeout) → apri e basta
-
-# Estrazione senza jq (non è tra le dipendenze del setup): campi piatti, regex sufficiente.
-field() { printf '%s' "$state" | grep -o "\"$1\":{[^}]*}" | grep -o "\"$2\":\"\?[^,\"}]*" | cut -d: -f2 | tr -d '"'; }
-desk_outdated="$(field desktop outdated)"
-desk_latest="$(field desktop latest)"
-cli_outdated="$(field cli outdated)"
-cli_latest="$(field cli latest)"
-
-# skipped? → quel componente non conta come obsoleto ai fini del gate
-skipped() { [[ -f "$SKIP_FILE" ]] && grep -qxF "$1 $2" "$SKIP_FILE"; }
-skipped desktop "$desk_latest" && desk_outdated=false
-skipped cli     "$cli_latest"  && cli_outdated=false
-
-# --- 1) gate GUI: scegli tu cosa aggiornare (bloccante, prima del launch) ----
-if [[ "$desk_outdated" == "true" || "$cli_outdated" == "true" ]] && [[ -x "$APP" ]]; then
-  "$APP" --gate --profile "$profile" --state "$state"
-  case $? in
-    0|20) rm -f "$CACHE" ;;   # aggiornato o messo da parte: la cache è da rifare
-  esac
-fi
-
-# --- 2) l'app parte comunque ------------------------------------------------
 launch "$@"

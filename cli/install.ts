@@ -197,6 +197,8 @@ export async function install(dry: boolean) {
   await ensureSymlink(`${REPO}/shared/hooks/claude-distiller`, `${BIN}/claude-distiller`, "~/.local/bin/claude-distiller");
   await ensureSymlink(`${REPO}/shared/tools/stignore-gen/stignore-gen.ts`, `${BIN}/stignore-gen`, "~/.local/bin/stignore-gen");
   if (await lstat(`${BIN}/claude-multi-finalize`)) await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
+  // updates install themselves now: the notifier that offered to install them is gone
+  if ((await lstat(`${BIN}/claude-update-notify`))?.isSymlink) await removeLink(`${BIN}/claude-update-notify`, "updates install themselves");
   await ensureDir(LIB);
   // The update GUI became the desktop app (bin/claude-multi-app finds its code through the repo).
   for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");

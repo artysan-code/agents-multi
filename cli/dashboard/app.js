@@ -1,5 +1,6 @@
 /* claude-multi console — vanilla JS, no dependencies.
-   Data from /api/*, live updates over /api/events (SSE), actions through /api/action. */
+   Data from /api/*, live updates over /api/events (SSE), actions through /api/action.
+   Text comes from i18n.js (`t`), loaded before this file. */
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -16,45 +17,34 @@ const fmt = (n) =>
     : n >= 1e3
     ? (n / 1e3).toFixed(0) + "k"
     : String(Math.round(n));
-const usd = (n) => n == null ? "—" : "$" + (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
-const money = (n, cur) => n == null ? "—" : `${n.toFixed(2)} ${cur || "EUR"}`;
-const pct = (n) => n == null || !isFinite(n) ? "—" : n.toFixed(n >= 10 ? 0 : 1) + "%";
 const short = (s, n = 60) => {
   s = String(s ?? "");
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 };
+/** "3 hours ago", in the interface language. */
 const ago = (iso) => {
   if (!iso) return "—";
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 90) return "just now";
-  if (s < 5400) return Math.round(s / 60) + "m ago";
-  if (s < 172800) return Math.round(s / 3600) + "h ago";
-  return Math.round(s / 86400) + "d ago";
+  const s = (new Date(iso).getTime() - Date.now()) / 1000;
+  const rtf = new Intl.RelativeTimeFormat(lang(), { numeric: "auto" });
+  const a = Math.abs(s);
+  if (a < 90) return rtf.format(Math.round(s), "second");
+  if (a < 5400) return rtf.format(Math.round(s / 60), "minute");
+  if (a < 172800) return rtf.format(Math.round(s / 3600), "hour");
+  return rtf.format(Math.round(s / 86400), "day");
 };
-const when = (iso) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+/** A compact duration ("40s", "12m", "3h"): the same in every language. */
+const dur = (iso) => {
+  const s = Math.max(1, (Date.now() - new Date(iso).getTime()) / 1000);
+  return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`;
 };
 
-/** Model ids are long and repetitive in a table: keep the family and the version. */
+/** Model ids are long and repetitive: keep the family and the version. */
 const modelShort = (m) => String(m).replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(/-(\d)-(\d)$/, "-$1.$2");
 
-const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)"];
-const colorFor = (() => {
-  const m = new Map();
-  return (k) => {
-    if (!m.has(k)) m.set(k, m.size < SERIES.length ? SERIES[m.size] : "var(--s-other)");
-    return m.get(k);
-  };
-})();
-
 let S = null; // last /api/status payload
-let BUDGET = null; // last /api/budget payload
-let view = "overview";
-// Switching filters quickly leaves two fetches in flight, and the winner is whichever answers
-// last rather than whichever was asked last. One token per panel discards stale answers.
-const seq = { usage: 0, sessions: 0, budget: 0, overview: 0 };
+let SUM = null; // last /api/summary payload
+let view = "today";
+let sub = "profiles"; // the System tab
 
 /* ---------------- toast ---------------- */
 let toastEl = null, toastTimer = null;
@@ -76,9 +66,15 @@ async function api(path, opts) {
   if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
   return r.json();
 }
+const post = (path, body) =>
+  api(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-claude-multi": "1" },
+    body: JSON.stringify(body),
+  });
 
 /* ---------------- live connection ---------------- */
-let es = null, lastEvent = 0, esRetry = 0;
+let es = null, lastEvent = 0, esRetry = 0, liveState = "busy";
 function connect() {
   es?.close();
   es = new EventSource("/api/events");
@@ -93,8 +89,12 @@ function connect() {
     // silently stale; a bounded backoff makes the reconnection visible instead.
     if (esRetry < 6) setTimeout(connect, Math.min(30000, 2000 * 2 ** esRetry++));
   };
-  es.addEventListener("usage", () => {
+  es.addEventListener("usage", (e) => {
     lastEvent = Date.now();
+    // the event names the sessions that just wrote: light those up now, redraw the rest later
+    try {
+      for (const id of JSON.parse(e.data).sessions ?? []) markWorking(id);
+    } catch { /* an event without a body is still a change */ }
     onChange("usage");
   });
   es.addEventListener("state", () => {
@@ -103,9 +103,9 @@ function connect() {
   });
 }
 function setLive(state) {
-  const el = $("#live");
-  el.className = "live" + (state === "down" ? " down" : state === "busy" ? " busy" : "");
-  $("#livetxt").textContent = state === "down" ? "reconnecting" : state === "busy" ? "refreshing" : "live";
+  liveState = state;
+  $("#live").className = "live" + (state === "down" ? " down" : state === "busy" ? " busy" : "");
+  $("#livetxt").textContent = t(`live.${state}`);
 }
 
 // Coalesce: a busy session fires events continuously, and the panel only needs the latest.
@@ -114,287 +114,82 @@ function onChange(topic) {
   pending = pending === "state" || topic === "state" ? "state" : "usage";
   clearTimeout(changeTimer);
   changeTimer = setTimeout(() => {
-    const t = pending;
+    const topic = pending;
     pending = null;
-    refresh(t);
+    refresh(topic);
   }, 400);
 }
 
-/** Redraw what is actually on screen. The old page polled /api/status and redrew four panels
-    regardless of the current view, which is why Usage, Sessions and Budget looked frozen. */
+/** Redraw what is on screen, and only that. */
 async function refresh(topic = "state") {
   setLive("busy");
   const jobs = [];
-  if (topic === "state") jobs.push(loadStatus());
-  if (view === "overview") jobs.push(loadOverview());
-  if (view === "usage") jobs.push(loadUsage());
-  if (view === "sessions") jobs.push(loadSessions());
-  if (view === "profiles" && topic === "state") jobs.push(loadStatus().then(renderProfiles));
-  if (view === "plugins" && topic === "state" && !plBusy) jobs.push(loadPlugins());
+  if (topic === "state") jobs.push(loadStatus().then(renderView));
+  if (topic === "usage" && view === "today") jobs.push(loadResume());
+  if (view === "system" && sub === "plugins" && topic === "state" && !plBusy) jobs.push(loadPlugins());
   await Promise.allSettled(jobs);
   setLive(es && es.readyState === 1 ? "live" : "down");
 }
 
 /* ---------------- status ---------------- */
 async function loadStatus() {
-  S = await api("/api/status");
-  const m = S.machine;
-  $("#host").textContent = m.hostname;
-  $("#ver").textContent = `deno ${m.deno}`;
-  $("#meta").innerHTML = [
-    `Code ${esc(m.cliVersion || "?")}`,
-    m.desktopVersion ? `Desktop ${esc(m.desktopVersion)}` : null,
-  ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
-
-  const names = Object.keys(S.profiles);
-  $("#n-profiles").textContent = names.length;
-  fillProfileSelects(names);
-  renderHealth(S.doctor);
-  renderShared();
-  if (view === "profiles") renderProfiles();
-  if (view === "health") renderHealth(S.doctor);
+  [S, SUM] = await Promise.all([api("/api/status"), api("/api/summary")]);
+  if (S.language && S.language !== machineLang) {
+    machineLang = S.language;
+    applyLang();
+  }
+  renderState();
   return S;
 }
 
-function fillProfileSelects(names) {
-  for (const id of ["#uprof", "#sprof"]) {
-    const sel = $(id);
-    if (sel.dataset.filled === names.join(",")) continue;
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">all profiles</option>` +
-      names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-    sel.value = cur;
-    sel.dataset.filled = names.join(",");
+/** The line at the foot of the rail, and the System badge: the same verdict the tray shows. */
+function renderState() {
+  const el = $("#state");
+  const level = SUM ? SUM.level : "down";
+  el.className = "state-line " + level;
+  $("span", el).textContent = t(`state.${level}`);
+  const badge = $("#n-health");
+  badge.textContent = SUM?.fails.length || "";
+  badge.className = "n" + (SUM?.fails.length ? " crit" : "");
+}
+
+function renderView() {
+  if (!S) return;
+  if (view === "today") renderToday();
+  if (view === "connections") renderConnections();
+  if (view === "system") {
+    if (sub === "profiles") renderProfiles();
+    if (sub === "plugins") renderShared();
+    if (sub === "updates") renderUpdates();
+    if (sub === "health") renderHealth(S.doctor);
   }
 }
 
-/* ---------------- overview ---------------- */
-async function loadOverview() {
-  const my = ++seq.overview;
-  const [budget, days, projects] = await Promise.all([
-    api("/api/budget").catch(() => null),
-    api("/api/usage?" + new URLSearchParams({ by: "day", since: ovDays, split: "profile", limit: 400 })).catch(() =>
-      null
-    ),
-    api("/api/usage?" + new URLSearchParams({ by: "project", since: "30d", limit: 8 })).catch(() => null),
-  ]);
-  if (my !== seq.overview) return;
-  BUDGET = budget;
-  renderBilling(budget);
-  renderWindows(budget);
-  renderTokens(days);
-  renderChart(days);
-  renderProjects(projects);
-  await loadRunningStats();
+/* ---------------- today ---------------- */
+function renderToday() {
+  const level = SUM?.level ?? "ok";
+  const box = $("#status");
+  box.className = "status-card " + level;
+  const extra = [
+    SUM?.staged ? t("status.staged", { v: SUM.staged }) : null,
+    SUM?.warns.length ? t("status.warns", { n: SUM.warns.length }) : null,
+  ].filter(Boolean).map((x) => `<div class="sub">${esc(x)}</div>`).join("");
+  if (level === "fail") {
+    box.innerHTML = `<i></i><div><b>${esc(t("status.fail"))}</b><ul>${
+      SUM.fails.map((f) => `<li>${esc(f)}</li>`).join("")
+    }</ul>${extra}</div><a class="btn" href="#system/health">${esc(t("status.open"))}</a>`;
+  } else {
+    box.innerHTML = `<i></i><div><b>${esc(t("status.ok"))}</b><div class="sub">${esc(t("status.ok.sub"))}</div>${extra}</div>`;
+  }
   renderRunning();
-}
-
-/** How old a reading is, in words. Every panel that shows cached numbers says this: the billing
- *  cache is refreshed by Claude Code whenever it feels like it, and a figure from weeks ago
- *  presented as current is worse than no figure at all. */
-function readingAge(hours) {
-  if (hours == null) return "never read";
-  if (hours < 1) return "just refreshed";
-  if (hours < 48) return `${Math.round(hours)} h old`;
-  return `${Math.round(hours / 24)} days old`;
-}
-
-function renderBilling(b) {
-  if (!b) return;
-  let billed = 0, cap = 0, currency = "EUR", any = false, today = 0, haveToday = false;
-  let oldest = null;
-  for (const p of b.profiles) {
-    const x = p.snap.extra;
-    if (x?.used != null) {
-      billed += x.used;
-      any = true;
-      currency = x.currency || currency;
-    }
-    if (p.ctx.cap) cap += p.ctx.cap;
-    if (p.ctx.billedToday != null) {
-      today += p.ctx.billedToday;
-      haveToday = true;
-    }
-    if (p.snap.ageHours != null && (oldest == null || p.snap.ageHours > oldest)) oldest = p.snap.ageHours;
-  }
-  $("#billed").textContent = any ? money(billed, currency) : "—";
-  const ratio = cap ? Math.min(100, billed / cap * 100) : 0;
-  const meter = $("#billed-meter");
-  meter.style.width = ratio + "%";
-  meter.className = ratio >= 85 ? "crit" : ratio >= 60 ? "warn" : "";
-  $("#billed-sub").textContent = [
-    cap ? `${pct(ratio)} of the ${money(cap, currency)} cap` : "no cap reported",
-    haveToday ? `${money(today, currency)} today` : null,
-  ].filter(Boolean).join(" · ");
-  $("#billed-age").textContent = readingAge(oldest);
-  $("#billed-age").className = "r" + (b.profiles.some((p) => p.snap.stale) ? " stale" : "");
-
-  // One row per profile: the total above is only useful once you can see who spent it.
-  $("#billed-rows").innerHTML = b.profiles.map((p) => {
-    const x = p.snap.extra;
-    const on = x?.active;
-    const used = x?.used;
-    const capP = p.ctx.cap;
-    const r = capP && used != null ? Math.min(100, used / capP * 100) : 0;
-    return `<div class="prow">
-      <b>${esc(p.snap.profile)}</b>
-      <span class="chip${on ? " on" : ""}">${on ? "extra usage on" : "subscription only"}</span>
-      <div class="track"><i class="${r >= 85 ? "crit" : r >= 60 ? "warn" : ""}" style="width:${r}%"></i></div>
-      <span class="v">${used == null ? "—" : money(used, x.currency)}</span>
-    </div>`;
-  }).join("");
-}
-
-function renderWindows(b) {
-  if (!b) return;
-  const now = Date.now();
-  const rows = [];
-  let oldest = null;
-  for (const p of b.profiles) {
-    if (p.snap.ageHours != null && (oldest == null || p.snap.ageHours > oldest)) oldest = p.snap.ageHours;
-    for (const l of p.snap.plan) {
-      // A window whose reset time has passed already emptied itself: its percentage describes a
-      // period that is over. Showing a stale 100% as a red alert is how this panel lied.
-      const expired = !!l.resetsAt && new Date(l.resetsAt).getTime() < now;
-      if (!l.percent && !l.active) continue;
-      rows.push({ ...l, profile: p.snap.profile, expired });
-    }
-  }
-  rows.sort((a, x) => (a.expired - x.expired) || (x.percent - a.percent));
-  const live = rows.filter((r) => !r.expired);
-  $("#wins-age").textContent = readingAge(oldest);
-  $("#wins-age").className = "r" + (b.profiles.some((p) => p.snap.stale) ? " stale" : "");
-
-  if (!rows.length) {
-    $("#wins").innerHTML = `<div class="sub">no window data in the cached reading</div>`;
-    return;
-  }
-  if (!live.length) {
-    // Every window in the reading has already reset, so no percentage here describes the present.
-    // Five greyed-out rows would just be five ways of saying the same nothing.
-    $("#wins").innerHTML = `<div class="nowin">
-      <b>Nothing current to show</b>
-      <p>Every window in this reading has reset since it was taken. Open a session to refresh it.</p>
-    </div>`;
-    return;
-  }
-  $("#wins").innerHTML = live.slice(0, 5).map((l) => {
-    const c = l.percent >= 95 ? "crit" : l.percent >= 80 ? "warn" : "";
-    const label = `${l.kind.replace(/_/g, " ")} · ${l.profile}`;
-    return `<div class="win" title="${esc(label)}">
-      <b>${esc(label)}</b>
-      <div class="track"><i class="${c}" style="width:${Math.min(100, l.percent)}%"></i></div>
-      <span class="v ${c === "crit" ? "hot" : ""}">${pct(l.percent)}</span>
-      <span class="win-when">${l.resetsAt ? esc(`resets ${resetIn(l.resetsAt)}`) : ""}</span>
-    </div>`;
-  }).join("");
-}
-
-/** "in 3 h" / "in 2 days" for a future reset. */
-function resetIn(iso) {
-  const h = (new Date(iso).getTime() - Date.now()) / 36e5;
-  if (h < 1) return "within the hour";
-  if (h < 48) return `in ${Math.round(h)} h`;
-  return `in ${Math.round(h / 24)} days`;
-}
-
-function renderTokens(days) {
-  const t = days?.total;
-  const tiles = [["output", fmt(t?.output)], ["input", fmt(t?.input)], ["cache read", fmt(t?.cache_read)], [
-    "cache written",
-    fmt(t?.cache_write),
-  ]];
-  $("#tokentiles").innerHTML = tiles.map(([k, v]) =>
-    `<div class="tile"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`
-  ).join("");
-  // Kept out of the grid on purpose: it is a different kind of number from the four beside it.
-  $("#tokenworth").innerHTML = `<span class="k">would have cost</span><span class="v">${
-    esc(usd(t?.cost))
-  }</span><span class="note-inline">at pay-as-you-go list price</span>`;
-}
-
-let ovDays = "14d";
-function renderChart(r) {
-  const svg = $("#chart"), legend = $("#legend");
-  if (!r || !r.rows.length) {
-    svg.innerHTML = "";
-    legend.innerHTML = `<span class="tot">no data</span>`;
-    return;
-  }
-  // rows are (day, profile) pairs: fold them into one stack per day
-  const byDay = new Map();
-  const names = new Set();
-  for (const row of r.rows) {
-    const k = row.key, p = row.profile ?? "—";
-    names.add(p);
-    if (!byDay.has(k)) byDay.set(k, {});
-    byDay.get(k)[p] = (byDay.get(k)[p] ?? 0) + (row.cost ?? 0);
-  }
-  const dayKeys = [...byDay.keys()].sort();
-  const series = [...names].sort();
-  series.forEach(colorFor); // claim colours in series order, not in the reversed draw order
-  const totals = dayKeys.map((d) => series.reduce((a, p) => a + (byDay.get(d)[p] ?? 0), 0));
-  const max = Math.max(1, ...totals);
-
-  const W = 620, H = 172, PL = 44, PR = 10, PT = 12, PB = 24;
-  const iw = W - PL - PR, ih = H - PT - PB;
-  const x = (i) => PL + (dayKeys.length === 1 ? iw / 2 : i * iw / (dayKeys.length - 1));
-  const y = (v) => PT + ih - (v / max) * ih;
-
-  const nice = (v) => !v ? "0" : v >= 100 ? Math.round(v) : v >= 10 ? v.toFixed(0) : v.toFixed(1);
-  let g = "";
-  for (const t of [0, max / 2, max]) {
-    g += `<line x1="${PL}" x2="${W - PR}" y1="${y(t).toFixed(1)}" y2="${
-      y(t).toFixed(1)
-    }" stroke="var(--line)" stroke-width="1"/>`;
-    g += `<text x="${PL - 8}" y="${(y(t) + 3.5).toFixed(1)}" text-anchor="end">$${nice(t)}</text>`;
-  }
-  // stacked areas, drawn from the top of the stack down so each layer stays visible
-  let acc = dayKeys.map(() => 0);
-  const layers = [];
-  for (const p of series) {
-    const next = dayKeys.map((d, i) => acc[i] + (byDay.get(d)[p] ?? 0));
-    layers.push({ p, lower: acc, upper: next });
-    acc = next;
-  }
-  for (const { p, lower, upper } of layers.reverse()) {
-    const top = upper.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
-    const bottom = lower.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).reverse().map((s, i) =>
-      `${i ? "L" : "L"}${s}`
-    ).join("");
-    g += `<path class="area" d="${top}${bottom}Z" fill="${colorFor(p)}"/>`;
-    g += `<path d="${top}" fill="none" stroke="${colorFor(p)}" stroke-width="1.6" stroke-linejoin="round"/>`;
-  }
-  const last = dayKeys.length - 1;
-  g += `<circle cx="${x(last).toFixed(1)}" cy="${y(totals[last]).toFixed(1)}" r="3" fill="${colorFor(series[0])}"/>`;
-  g += `<text x="${PL}" y="${H - 7}" text-anchor="start">${esc(dayKeys[0] ?? "")}</text>`;
-  if (dayKeys.length > 1) g += `<text x="${W - PR}" y="${H - 7}" text-anchor="end">${esc(dayKeys[last])}</text>`;
-  svg.innerHTML = g;
-
-  legend.innerHTML = series.map((p) => `<span><i style="background:${colorFor(p)}"></i>${esc(p)}</span>`).join("") +
-    `<span class="tot">${usd(r.total.cost)} · ${fmt(r.total.output)} out</span>`;
-}
-
-function renderProjects(r) {
-  const tb = $("#projects");
-  if (!r || !r.rows.length) {
-    tb.innerHTML = `<tr><td colspan="2" class="empty">no data</td></tr>`;
-    return;
-  }
-  const top = r.rows[0].cost || 1;
-  tb.innerHTML = r.rows.map((p) => {
-    const w = Math.max(2, (p.cost ?? 0) / top * 100);
-    return `<tr><td title="${esc(p.cwd ?? p.key)}">${esc(short(p.label ?? p.key, 34))}</td>
-      <td class="bar-cell">${usd(p.cost)}<i><b style="width:${w}%"></b></i></td></tr>`;
-  }).join("");
+  loadResume();
 }
 
 /** Sessions seen writing recently. A row stays "working" for a few seconds after its last write,
  *  because a session pauses between turns and flickering would be worse than a short lag. */
 const working = new Map();
 const WORKING_MS = 12000;
-
-const WORKING_LABEL = `<span class="dots"><i></i><i></i><i></i></span>working`;
+const workingLabel = () => `<span class="dots"><i></i><i></i><i></i></span>${esc(t("run.working"))}`;
 
 function markWorking(id) {
   working.set(id, Date.now());
@@ -404,7 +199,7 @@ function markWorking(id) {
     // session just wrote, and a lit border next to the word "idle" reads as a bug.
     row.classList.add("busy");
     const state = row.querySelector(".state");
-    if (state) state.innerHTML = WORKING_LABEL;
+    if (state) state.innerHTML = workingLabel();
   }
   clearTimeout(markWorking[id]);
   markWorking[id] = setTimeout(() => {
@@ -413,7 +208,7 @@ function markWorking(id) {
     if (!row) return;
     row.classList.remove("busy");
     const state = row.querySelector(".state");
-    if (state) state.textContent = idleFor(new Date(Date.now() - WORKING_MS).toISOString());
+    if (state) state.textContent = t("run.idle", { d: dur(new Date(Date.now() - WORKING_MS).toISOString()) });
   }, WORKING_MS);
 }
 
@@ -423,189 +218,187 @@ const isWorking = (id, lastActivity) => {
   return !!lastActivity && Date.now() - new Date(lastActivity).getTime() < WORKING_MS;
 };
 
-const idleFor = (iso) => {
-  if (!iso) return "";
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 90) return `idle ${Math.max(1, Math.round(s))}s`;
-  if (s < 5400) return `idle ${Math.round(s / 60)}m`;
-  return `idle ${Math.round(s / 3600)}h`;
-};
-
 function renderRunning() {
   const cli = S.running.cli, desk = S.running.desktop;
   const active = cli.filter((c) => isWorking(c.session, c.lastActivity)).length;
-  $("#run-n").innerHTML = active
-    ? `<span class="wk">${active} working</span> · ${cli.length} session${
-      cli.length === 1 ? "" : "s"
-    } · ${desk.length} desktop`
-    : `${cli.length} session${cli.length === 1 ? "" : "s"} · ${desk.length} desktop`;
+  $("#run-n").textContent = active
+    ? t("run.countBusy", { w: active, c: cli.length, d: desk.length })
+    : t("run.count", { c: cli.length, d: desk.length });
   const el = $("#running");
   if (!cli.length && !desk.length) {
-    el.innerHTML = `<div class="sub">nothing running</div>`;
+    el.innerHTML = `<div class="sub">${esc(t("today.nothing"))}</div>`;
     return;
   }
-
   // Several sessions of one profile are the normal case with Desktop tabs, and profile plus
-  // directory is not enough to tell them apart. Model and session id are; and since we have the
-  // session id, the row can open that transcript and light up when that session writes.
+  // directory is not enough to tell them apart: model and session id are.
   el.innerHTML = `<div class="runlist">` +
     cli.map((c) => {
       const busy = isWorking(c.session, c.lastActivity);
-      const stats = SESSION_STATS.get(c.session);
-      return `<div class="run${c.session ? " open" : ""}${busy ? " busy" : ""}" ${
-        c.session ? `data-session="${esc(c.session)}"` : ""
-      } title="pid ${c.pid}${c.cwd ? ` · ${esc(c.cwd)}` : ""}">
+      return `<div class="run${busy ? " busy" : ""}" ${c.session ? `data-session="${esc(c.session)}"` : ""} title="pid ${c.pid}${
+        c.cwd ? ` · ${esc(c.cwd)}` : ""
+      }">
         <div class="run-top">
           <span class="chip on">${esc(c.profile ?? "?")}</span>
           <b>${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</b>
-          <span class="state">${
-        busy ? `<span class="dots"><i></i><i></i><i></i></span>working` : esc(idleFor(c.lastActivity))
-      }</span>
+          <span class="state">${busy ? workingLabel() : c.lastActivity ? esc(t("run.idle", { d: dur(c.lastActivity) })) : ""}</span>
         </div>
         <div class="run-bot">
           <span class="run-model">${esc(c.model ? modelShort(c.model) : "")}</span>
-          ${
-        stats ? `<span class="run-stat">${stats.msgs} msgs</span><span class="run-stat">${usd(stats.cost)}</span>` : ""
-      }
-          <span class="run-meta">${c.embedded ? "desktop" : "terminal"}${
-        c.session ? ` · ${esc(c.session.slice(0, 8))}` : ""
-      }</span>
+          <span class="run-meta">${esc(t(c.embedded ? "run.desktop" : "run.terminal"))}${c.session ? ` · ${esc(c.session.slice(0, 8))}` : ""}</span>
         </div>
         <span class="run-scan"></span>
       </div>`;
     }).join("") +
     desk.map((d) =>
       `<div class="run static" title="pid ${d.pid}">
-      <div class="run-top"><span class="chip">${esc(d.variant)}</span><b>Desktop app</b></div>
-      <div class="run-bot"><span class="run-meta">window</span></div>
+      <div class="run-top"><span class="chip">${esc(d.variant)}</span><b>${esc(t("run.desktopApp"))}</b></div>
+      <div class="run-bot"><span class="run-meta">${esc(t("run.window"))}</span></div>
     </div>`
     ).join("") +
     `</div>`;
 }
 
-/** Turn counts and cost for the sessions currently running, from the same data Sessions uses. */
-const SESSION_STATS = new Map();
-async function loadRunningStats() {
-  const ids = new Set(S?.running.cli.map((c) => c.session).filter(Boolean));
-  if (!ids.size) return;
+/** The last sessions, one per directory, each with the command that reopens it. A busy session
+    writes every second: the list is re-read at most every 15 s. */
+let RESUME = [], resumeAt = 0;
+async function loadResume(force = false) {
+  if (!force && Date.now() - resumeAt < 15000) return renderResume();
+  resumeAt = Date.now();
   try {
-    const rows = await api("/api/sessions?" + new URLSearchParams({ since: "1d", limit: "80" }));
-    for (const r of rows) if (ids.has(r.session_id)) SESSION_STATS.set(r.session_id, r);
-  } catch { /* the panel works without them */ }
+    const rows = await api("/api/sessions?" + new URLSearchParams({ since: "7d", limit: "40" }));
+    const seen = new Set();
+    RESUME = rows.filter((r) => r.cwd && !seen.has(r.cwd) && seen.add(r.cwd)).slice(0, 6);
+  } catch { /* the panel stays as it was */ }
+  renderResume();
 }
 
-$("#running").addEventListener("click", (e) => {
-  const r = e.target.closest("[data-session]");
-  if (r) openTranscript(r.dataset.session, null);
+function resumeCommand(r) {
+  const cmd = S?.profiles[r.profile]?.manifest.command ?? `claude-${r.profile}`;
+  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  return `cd ${q(r.cwd)} && ${cmd} --resume ${r.session_id}`;
+}
+
+function renderResume() {
+  const el = $("#resume");
+  if (!RESUME.length) {
+    el.innerHTML = `<div class="panel-b sub">${esc(t("today.noResume"))}</div>`;
+    return;
+  }
+  el.innerHTML = RESUME.map((r, i) =>
+    `<div class="resume-row">
+      <span class="chip">${esc(r.profile)}</span>
+      <b title="${esc(r.cwd)}">${esc(r.project)}</b>
+      <span class="when">${esc(ago(r.ended))}</span>
+      <button class="btn sm" data-resume="${i}">${esc(t("today.copy"))}</button>
+    </div>`
+  ).join("");
+}
+
+$("#resume").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-resume]");
+  if (!b) return;
+  const cmd = resumeCommand(RESUME[+b.dataset.resume]);
+  try {
+    await navigator.clipboard.writeText(cmd);
+    toast(t("today.copied"));
+  } catch {
+    toast(t("today.copyFailed", { cmd }), true);
+  }
 });
 
-$("#ovdays").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-d]");
-  if (!b) return;
-  $$("#ovdays button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  ovDays = b.dataset.d;
-  loadOverview();
-});
+/* ---------------- connections ---------------- */
+function renderConnections() {
+  const reg = S.shared.mcpRegistry ?? {};
+  const names = Object.keys(reg);
+  $("#conn-rows").innerHTML = names.map((n) => {
+    const r = reg[n];
+    // what the registry promises against what each profile actually mounted at its last sync
+    const missing = r.profiles.filter((p) => {
+      const info = S.profiles[p];
+      if (!info) return false;
+      return (r.surfaces.includes("cli") && !info.mcp.includes(n)) ||
+        (r.surfaces.includes("desktop") && S.machine.desktopVersion && !info.mcpDesktop.includes(n));
+    });
+    return `<tr>
+      <td><b>${esc(n)}</b></td>
+      <td>${r.profiles.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ")}</td>
+      <td>${esc(r.surfaces.map((s) => s === "cli" ? "CLI" : "Desktop").join(" · "))}</td>
+      <td>${
+      missing.length
+        ? `<span class="warn-t">${esc(t("conn.missing", { p: missing.join(", ") }))}</span>`
+        : `<span class="ok-t">${esc(t("conn.mounted"))}</span>`
+    }</td>
+    </tr>`;
+  }).join("") || `<tr><td class="empty" colspan="4">${esc(t("conn.empty"))}</td></tr>`;
+}
 
 /* ---------------- profiles ---------------- */
-let editing = null;
-
 function renderProfiles() {
   if (!S) return;
   const names = Object.keys(S.profiles);
   const live = new Set(S.running.cli.map((c) => c.profile));
-  $("#pcards").innerHTML = names.map((n) => editing === n ? cardEdit(n) : cardView(n, live.has(n))).join("") +
-    (editing === "+"
-      ? cardEdit(null)
-      : `<div class="pcard add" id="addp"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add profile</span></div>`);
+  $("#p-count").textContent = t("profile.count", { n: names.length });
+  $("#plist").innerHTML = names.map((n) => {
+    const p = S.profiles[n];
+    const isLive = live.has(n);
+    return `<div class="plist-row">
+      <div class="pwho">
+        <span class="dot${isLive ? " active" : ""}" title="${esc(t(isLive ? "profile.live" : "profile.idle"))}"></span>
+        <div style="min-width:0"><b>${esc(n)}</b><small>${esc(p.account ?? t("profile.notSignedIn"))}</small></div>
+      </div>
+      <div class="pcell"><code>${esc(p.manifest.command ?? `claude-${n}`)}</code>${
+      p.manifest.alias ? ` <span class="chip">${esc(p.manifest.alias)}</span>` : ""
+    }<small title="${esc(p.desktopDir)}">${esc(shortHome(p.desktopDir))}</small></div>
+      <div class="pcell">${
+      esc(t("profile.mountedVal", {
+        s: Object.keys(p.mounted.skills).length,
+        a: Object.keys(p.mounted.agents).length,
+        c: Object.keys(p.mounted.commands).length,
+      }))
+    }<small>${esc(t(p.manifest.disableAccountMcp ? "profile.accountMcpOff" : "profile.accountMcpOn"))}</small></div>
+      <div class="pcell chips">${
+      p.mcp.length ? p.mcp.map((m) => `<span class="chip on">${esc(m)}</span>`).join("") : `<small>${esc(t("profile.noMcp"))}</small>`
+    }</div>
+      <button class="btn" data-edit="${esc(n)}">${esc(t("profile.edit"))}</button>
+    </div>`;
+  }).join("");
 }
 
-function cardView(name, isLive) {
-  const p = S.profiles[name];
-  const b = BUDGET?.profiles.find((x) => x.snap.profile === name);
-  const extra = b?.snap.extra;
-  const reg = S.shared.mcpRegistry ?? {};
-  const all = Object.keys(reg);
-  const mine = new Set(p.mcp);
-  const skills = Object.keys(p.mounted.skills).length;
-  return `<div class="pcard">
-    <div class="ph">
-      <span class="dot ${isLive ? "live" : ""}" title="${isLive ? "session running" : "idle"}"></span>
-      <h3>${esc(name)}</h3>
-      <span class="acct">${esc(p.account ?? "not signed in")}</span>
-      <button class="btn edit" data-edit="${esc(name)}">Edit</button>
-    </div>
-    <div class="fields">
-      <div class="f"><label>Command</label><span class="val">${esc(p.manifest.command ?? `claude-${name}`)}${
-    p.manifest.alias ? ` <span class="dim">${esc(p.manifest.alias)}</span>` : ""
-  }</span></div>
-      <div class="f"><label>Desktop</label><span class="val" title="${esc(p.desktopDir)}">${
-    esc(shortHome(p.desktopDir))
-  }</span></div>
-      <div class="f"><label>Billed</label><span class="val">${
-    extra ? `${money(extra.used, extra.currency)}${b.ctx.cap ? ` / ${money(b.ctx.cap, extra.currency)}` : ""}` : "—"
-  } ${extra?.active ? `<span class="chip on">extra on</span>` : `<span class="chip">subscription</span>`}</span></div>
-      <div class="f"><label>Mounted</label><span class="val">${skills} skills · ${
-    Object.keys(p.mounted.agents).length
-  } agents · ${Object.keys(p.mounted.commands).length} commands</span></div>
-      <div class="f"><label>MCP</label><div class="chips">${
-    all.length
-      ? all.map((m) => `<span class="chip${mine.has(m) ? " on" : ""}">${esc(m)}</span>`).join("")
-      : `<span class="chip">none</span>`
-  }</div></div>
-      <div class="f"><label>Account MCP</label><span class="val">${
-    p.manifest.disableAccountMcp
-      ? `<span class="chip on">disabled</span> connectors · ${(p.synced ?? []).length} synced plugins`
-      : `<span class="chip">enabled</span>`
-  }</span></div>
-    </div>
-  </div>`;
-}
-
-function cardEdit(name) {
+/** The profile form, in the drawer: `name` null for a new one. */
+function openProfileForm(name) {
   const isNew = !name;
   const p = isNew ? null : S.profiles[name];
   const m = p?.manifest ?? {};
   const reg = S.shared.mcpRegistry ?? {};
   const picked = new Set(isNew ? Object.keys(reg) : p.mcp);
-  return `<form class="pcard" id="pform" data-name="${esc(name ?? "")}">
-    <div class="ph"><span class="dot"></span><h3>${isNew ? "New profile" : esc(name)}</h3></div>
-    <div class="fields">
-      <div class="f"><label>Name</label>${
-    isNew
-      ? `<input name="name" required pattern="[a-z][a-z0-9_-]{1,30}" placeholder="research" autofocus>`
-      : `<span class="val">${esc(name)}</span>`
-  }</div>
-      <div class="f"><label>Description</label><input name="description" value="${
-    esc(m.description ?? "")
-  }" placeholder="what this profile is for"></div>
-      <div class="f"><label>Command</label><input name="command" value="${
-    esc(m.command ?? "")
-  }" placeholder="claude-${esc(name || "research")}"></div>
-      <div class="f"><label>Alias</label><input name="alias" value="${
-    esc(m.alias ?? "")
-  }" pattern="[a-zA-Z_][a-zA-Z0-9_-]*" placeholder="cr"></div>
-      <div class="f"><label>Desktop</label><input name="desktopDir" value="${
-    esc(m.desktopDir ?? "")
-  }" placeholder="~/.config/Claude-Research"></div>
-      <div class="f"><label>Alert cap</label><input name="cap" type="number" min="0" step="1" value="${
-    esc(BUDGET?.cfg.profiles?.[name]?.cap ?? "")
-  }" placeholder="account limit"></div>
-      <div class="f"><label>MCP</label><div class="chips">${
-    Object.keys(reg).map((s) =>
-      `<span class="chip pick${picked.has(s) ? " on" : ""}" data-pick="${esc(s)}">${esc(s)}</span>`
-    ).join("") || `<span class="chip">registry empty</span>`
-  }</div></div>
-      <div class="f"><label>Account MCP</label><label class="check"><input type="checkbox" name="disableAccountMcp"${
-    m.disableAccountMcp ? " checked" : ""
-  }> disable claude.ai connectors and the organisation's plugins</label></div>
-    </div>
-    <div class="pfoot">
-      <button class="btn primary" type="submit">${isNew ? "Create" : "Save"}</button>
-      <button class="btn ghost" type="button" data-cancel>Cancel</button>
-      <span class="hint">writes the manifest, then runs install</span>
-    </div>
-  </form>`;
+  const field = (label, input, hint = "") =>
+    `<label class="fld">${esc(label)}${hint ? ` <small>${esc(hint)}</small>` : ""}${input}</label>`;
+  const host = drawer(
+    isNew ? t("profile.new") : name,
+    `<form class="pform" id="pform" data-name="${esc(name ?? "")}">
+      ${
+      isNew ? field(t("profile.name"), `<input name="name" required pattern="[a-z][a-z0-9_-]{1,30}" placeholder="research" autofocus>`) : ""
+    }
+      ${field(t("profile.description"), `<input name="description" value="${esc(m.description ?? "")}" placeholder="${esc(t("profile.description.ph"))}">`)}
+      ${field(t("profile.command"), `<input name="command" value="${esc(m.command ?? "")}" placeholder="claude-${esc(name || "research")}">`)}
+      ${field(t("profile.alias"), `<input name="alias" value="${esc(m.alias ?? "")}" pattern="[a-zA-Z_][a-zA-Z0-9_-]*" placeholder="cr">`)}
+      ${field(t("profile.desktop"), `<input name="desktopDir" value="${esc(m.desktopDir ?? "")}" placeholder="~/.config/Claude-Research">`)}
+      <div class="fld">MCP<div class="chips">${
+      Object.keys(reg).map((s) =>
+        `<button type="button" class="chip pick${picked.has(s) ? " on" : ""}" data-pick="${esc(s)}" aria-pressed="${picked.has(s)}">${esc(s)}</button>`
+      ).join("") || `<small>${esc(t("profile.registryEmpty"))}</small>`
+    }</div></div>
+      <label class="fld check"><input type="checkbox" name="disableAccountMcp"${m.disableAccountMcp ? " checked" : ""}> ${
+      esc(t("profile.disableAccountMcp"))
+    }</label>
+      <div class="pform-foot">
+        <button class="btn primary" type="submit">${esc(t(isNew ? "profile.create" : "profile.save"))}</button>
+        <button class="btn ghost" type="button" data-close>${esc(t("profile.cancel"))}</button>
+        <span class="hint">${esc(t("profile.hint"))}</span>
+      </div>
+    </form>`,
+  );
+  $("#pform", host).addEventListener("submit", (e) => saveProfile(e, host));
 }
 
 const shortHome = (p) => {
@@ -615,31 +408,15 @@ const shortHome = (p) => {
   return h && p.startsWith(h) ? "~" + p.slice(h.length) : p;
 };
 
-document.addEventListener("click", async (e) => {
+document.addEventListener("click", (e) => {
   const ed = e.target.closest("[data-edit]");
-  if (ed) {
-    editing = ed.dataset.edit;
-    renderProfiles();
-    return;
-  }
-  if (e.target.closest("#addp")) {
-    editing = "+";
-    renderProfiles();
-    return;
-  }
-  if (e.target.closest("[data-cancel]")) {
-    editing = null;
-    renderProfiles();
-    return;
-  }
+  if (ed) return openProfileForm(ed.dataset.edit);
+  if (e.target.closest("#addp")) return openProfileForm(null);
   const pick = e.target.closest("[data-pick]");
-  if (pick) {
-    pick.classList.toggle("on");
-    return;
-  }
+  if (pick) pick.setAttribute("aria-pressed", String(pick.classList.toggle("on")));
 });
 
-$("#pcards").addEventListener("submit", async (e) => {
+async function saveProfile(e, host) {
   e.preventDefault();
   const f = e.target;
   const body = {
@@ -648,188 +425,94 @@ $("#pcards").addEventListener("submit", async (e) => {
     command: f.elements.command.value.trim(),
     alias: f.elements.alias.value.trim(),
     desktopDir: f.elements.desktopDir.value.trim(),
-    cap: f.elements.cap.value ? Number(f.elements.cap.value) : null,
     mcp: $$("[data-pick].on", f).map((c) => c.dataset.pick),
     disableAccountMcp: f.elements.disableAccountMcp.checked,
   };
   const btn = $("button[type=submit]", f);
   btn.disabled = true;
-  btn.textContent = "Working…";
+  btn.textContent = t("profile.working");
   try {
-    const r = await api("/api/profile", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-claude-multi": "1" },
-      body: JSON.stringify(body),
-    });
-    editing = null;
+    const r = await post("/api/profile", body);
+    host.remove();
     await loadStatus();
     renderProfiles();
-    toast(r.message ?? `Profile ${body.name} saved`);
-    if (r.output) showOutput(`Profile ${body.name}`, r.output);
+    toast(r.message ?? t("profile.saved", { name: body.name }));
+    if (r.output) showOutput(body.name, r.output);
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = f.dataset.name ? "Save" : "Create";
+    btn.textContent = t(f.dataset.name ? "profile.save" : "profile.create");
     toast(String(err.message ?? err), true);
   }
-});
-
-/* ---------------- usage ---------------- */
-const UHEAD = {
-  default: ["", "msgs", "sess", "input", "output", "cache rd", "cache wr", "estimate"],
-  tool: ["", "uses", "sess", "input", "output", "cache rd", "cache wr", "estimate"],
-};
-
-async function loadUsage() {
-  const my = ++seq.usage;
-  const by = $("#ugroup [aria-pressed=true]").dataset.g;
-  const q = new URLSearchParams({ by, since: $("#usince").value, limit: "60" });
-  if ($("#uprof").value) q.set("profile", $("#uprof").value);
-  let r;
-  try {
-    r = await api("/api/usage?" + q);
-  } catch (e) {
-    toast(String(e.message), true);
-    return;
-  }
-  if (my !== seq.usage) return;
-
-  const tool = by === "skill" || by === "command";
-  const head = tool ? UHEAD.tool : UHEAD.default;
-  head[0] = by[0].toUpperCase() + by.slice(1);
-  $("#uhead").innerHTML = head.map((h) => `<th>${esc(h)}</th>`).join("");
-  const top = r.rows[0]?.cost || 1;
-  $("#urows").innerHTML = r.rows.length
-    ? r.rows.map((x) => {
-      const label = x.label ?? x.key;
-      const w = Math.max(1.5, (x.cost ?? 0) / top * 100);
-      return `<tr><td title="${esc(x.cwd ?? label)}">${esc(short(label, 46))}</td>
-        <td>${tool ? (x.uses ?? 0) : x.msgs}</td><td>${x.sessions}</td>
-        <td>${fmt(x.input)}</td><td>${fmt(x.output)}</td><td>${fmt(x.cache_read)}</td><td>${fmt(x.cache_write)}</td>
-        <td class="bar-cell">${usd(x.cost)}${x.unpriced ? "*" : ""}<i><b style="width:${w}%"></b></i></td></tr>`;
-    }).join("")
-    : `<tr><td colspan="8" class="empty">nothing in this window</td></tr>`;
-
-  const notes = [`total ${usd(r.total.cost)} · ${fmt(r.total.output)} output · ${fmt(r.total.cache_read)} cache read`];
-  if (tool) {
-    notes.push(
-      `estimate is the turn's share, split across the ${by === "skill" ? "skills" : "commands"} of that turn${
-        r.orphanMsgs ? ` — ${r.orphanMsgs} messages outside any turn excluded` : ""
-      }`,
-    );
-  }
-  if (r.rows.some((x) => x.unpriced)) notes.push("* model with no rate in the table: partial estimate");
-  if (r.spawns?.length) notes.push("subagents: " + r.spawns.map((s) => `${s.key} ×${s.n}`).join(" · "));
-  $("#ufoot").innerHTML = notes.map(esc).join("<br>");
 }
 
-$("#ugroup").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-g]");
-  if (!b) return;
-  $$("#ugroup button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  loadUsage();
-});
-["#usince", "#uprof"].forEach((id) => $(id).addEventListener("change", loadUsage));
-
-/* ---------------- sessions ---------------- */
-async function loadSessions() {
-  const my = ++seq.sessions;
-  const q = new URLSearchParams({ since: $("#ssince").value, limit: "80" });
-  if ($("#sprof").value) q.set("profile", $("#sprof").value);
-  let rows;
-  try {
-    rows = await api("/api/sessions?" + q);
-  } catch (e) {
-    toast(String(e.message), true);
-    return;
-  }
-  if (my !== seq.sessions) return;
-  $("#srows").innerHTML = rows.length
-    ? rows.map((s) =>
-      `<tr data-session="${esc(s.session_id)}" title="${esc(s.cwd ?? "")}">
-        <td>${esc(short(s.project, 34))}</td>
-        <td><span class="tag">${esc(s.profile)}</span></td>
-        <td>${esc(when(s.started))}</td>
-        <td>${s.minutes}</td>
-        <td>${s.msgs}${s.sidechain_msgs ? `<span class="sub"> +${s.sidechain_msgs}</span>` : ""}</td>
-        <td>${esc(short(s.models.map(modelShort).join(" "), 18))}</td>
-        <td>${usd(s.cost)}</td></tr>`
-    ).join("")
-    : `<tr><td colspan="7" class="empty">no sessions in this window</td></tr>`;
-}
-["#ssince", "#sprof"].forEach((id) => $(id).addEventListener("change", loadSessions));
-
-$("#srows").addEventListener("click", (e) => {
-  const tr = e.target.closest("[data-session]");
-  if (tr) openTranscript(tr.dataset.session, tr);
-});
-
-async function openTranscript(id, tr) {
-  $$("#srows tr").forEach((r) => r.removeAttribute("aria-selected"));
-  tr?.setAttribute("aria-selected", "true");
-  const cells = tr ? [...tr.children].map((c) => c.textContent) : [];
-  const host = drawer(`${cells[0] ?? "Session"}`, `<div class="empty">loading transcript…</div>`);
-  let t;
-  try {
-    t = await api("/api/transcript?" + new URLSearchParams({ session: id }));
-  } catch (e) {
-    toast(String(e.message), true);
-    host.remove();
-    return;
-  }
-  if (!document.body.contains(host)) return;
-  const body = t.turns.length
-    ? (t.total > t.turns.length
-      ? `<div class="turn"><p class="sub">${t.total - t.turns.length} earlier turns not shown</p></div>`
-      : "") +
-      t.turns.map((x) =>
-        `<div class="turn ${x.role === "user" ? "u" : ""}">
-        <div class="who">${x.role === "user" ? "You" : "Claude"}${x.model ? ` · ${esc(modelShort(x.model))}` : ""}
-          ${x.cost ? `<span class="cost">${usd(x.cost)}</span>` : ""}</div>
-        ${x.text ? `<p>${esc(short(x.text, 4000))}</p>` : ""}
-        ${
-          x.tools.length
-            ? `<div class="tools">${x.tools.map((n) => `<span class="chip">${esc(n)}</span>`).join("")}</div>`
-            : ""
-        }
-      </div>`
-      ).join("")
-    : `<div class="empty">no readable turns in this transcript</div>`;
-  $(".turns", host).innerHTML = body;
-  $(".dmeta", host).innerHTML = [
-    `<span><b>${esc(id.slice(0, 8))}</b></span>`,
-    `<span>${t.total} turns</span>`,
-    cells[2] ? `<span>${esc(cells[2])}</span>` : "",
-    cells[6] ? `<span><b>${esc(cells[6])}</b> est.</span>` : "",
-  ].join("");
+/* ---------------- updates ---------------- */
+function renderUpdates() {
+  const m = S.machine;
+  const u = S.update ?? {};
+  const card = (name, current, lines, rollback) =>
+    `<div class="vcard"><i></i><div style="flex:1;min-width:0"><b>${esc(name)}</b><code>${esc(current ?? "—")}</code>
+      ${lines.filter(Boolean).map((l) => `<div class="sub">${esc(l)}</div>`).join("")}</div>${
+      rollback ? `<button class="btn sm" data-action="${rollback}">${esc(t("up.rollback"))}</button>` : ""
+    }</div>`;
+  const cliPrev = m.cliVersions.filter((v) => v !== m.cliVersion).sort().pop();
+  $("#vcards").innerHTML = card(
+    "Claude Code",
+    m.cliVersion,
+    [
+      u.cli?.latest && u.cli.latest !== m.cliVersion ? t("up.next", { v: u.cli.latest }) : t("up.uptodate"),
+      cliPrev ? t("up.previous", { v: cliPrev }) : null,
+    ],
+    cliPrev ? "rollback-cli" : null,
+  ) + card(
+    "Claude Desktop",
+    m.desktopVersion,
+    [
+      m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : t("up.uptodate"),
+      m.desktopSystem ? t("up.system") : null,
+      m.desktopPrevious ? t("up.previous", { v: m.desktopPrevious }) : null,
+    ],
+    m.desktopPrevious ? "rollback-desktop" : null,
+  );
+  $("#embedded").textContent = Object.entries(m.embeddedCode ?? {})
+    .map(([v, vs]) => t("up.embedded", { v, vs: vs.join(", ") })).join(" · ");
+  const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  $("#uplog").innerHTML = (S.updateLog ?? []).map((e) => {
+    const bad = e.event === "failed" || e.event === "verify-failed";
+    return `<div class="log-row${bad ? " bad" : ""}">
+      <span class="when">${esc(when(e.at))}</span>
+      <span>${esc(e.component === "cli" ? "Claude Code" : "Claude Desktop")}</span>
+      <span>${esc(e.from || "—")} → ${esc(e.to || "—")}</span>
+      <span>${esc(t(`up.ev.${e.event}`))}${e.detail ? ` · ${esc(e.detail)}` : ""}</span>
+    </div>`;
+  }).join("") || `<div class="panel-b sub">${esc(t("up.noLog"))}</div>`;
 }
 
+/* ---------------- output drawer ---------------- */
 function drawer(title, inner) {
   $(".scrim")?.parentElement?.remove();
   const host = document.createElement("div");
   host.innerHTML = `<div class="scrim" data-close></div>
     <aside class="drawer" role="dialog" aria-label="${esc(title)}">
-      <div class="dh"><h3>${esc(title)}</h3><button class="x" data-close aria-label="Close">×</button></div>
-      <div class="dmeta"></div>
-      <div class="turns">${inner}</div>
+      <div class="dh"><h3>${esc(title)}</h3><button class="x" data-close aria-label="${esc(t("close"))}">×</button></div>
+      <div class="dbody">${inner}</div>
     </aside>`;
   document.body.appendChild(host);
-  host.addEventListener("click", (e) => {
-    if (e.target.closest("[data-close]")) host.remove();
-  });
-  const onKey = (e) => {
-    if (e.key === "Escape") {
-      host.remove();
-      document.removeEventListener("keydown", onKey);
-    }
+  const close = () => {
+    host.remove();
+    document.removeEventListener("keydown", onKey);
   };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  host.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]")) close();
+  });
   document.addEventListener("keydown", onKey);
   return host;
 }
 
 function showOutput(title, text) {
-  const host = drawer(title, `<pre class="out">${esc(text)}</pre>`);
-  $(".dmeta", host).remove();
-  return host;
+  return drawer(title, `<pre class="out">${esc(text)}</pre>`);
 }
 
 /* ---------------- health ---------------- */
@@ -845,11 +528,7 @@ function renderHealth(checks) {
     </div>`
   ).join("");
   const n = (s) => checks.filter((c) => c.status === s).length;
-  $("#hsum").textContent = `${n("ok")} pass · ${n("warn")} warn · ${n("fail")} fail`;
-  const badge = $("#n-health");
-  const bad = n("fail") || n("warn");
-  badge.textContent = bad || "";
-  badge.className = "n" + (n("fail") ? " crit" : n("warn") ? " warn" : "");
+  $("#hsum").textContent = t("health.sum", { ok: n("ok"), w: n("warn"), f: n("fail") });
 }
 
 /** A fix line is a shell command. When it maps to an allowlisted action we offer the button;
@@ -859,7 +538,6 @@ const FIX_ACTIONS = {
   "claude-multi install": "install",
   "claude-multi mcp sync": "mcp-sync",
   "claude-multi doctor": "doctor",
-  "claude-multi budget": "budget",
   "claude-multi sync --fetch": "sync-fetch",
   "claude-multi usage ingest": "usage-ingest",
 };
@@ -872,19 +550,15 @@ function actionButton(fix) {
     }">${esc(short(fix, 40))}</code>`;
 }
 
-$("#checks").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-action]");
-  if (b) runAction(b.dataset.action);
-});
-
 $("#rerun").addEventListener("click", async () => {
   const btn = $("#rerun");
   btn.disabled = true;
   // stream the re-run: mark everything pending, then swap in the fresh verdicts
-  renderHealth(S.doctor.map((c) => ({ ...c, status: "run", msg: "checking…", fix: null })));
+  renderHealth(S.doctor.map((c) => ({ ...c, status: "run", msg: t("health.checking"), fix: null })));
   try {
     await loadStatus();
-    toast("Health check complete");
+    renderHealth(S.doctor);
+    toast(t("health.done"));
   } catch (e) {
     toast(String(e.message), true);
   }
@@ -894,37 +568,33 @@ $("#rerun").addEventListener("click", async () => {
 function renderShared() {
   const s = S.shared;
   $("#shared").innerHTML = `<dl class="kv">
-    <dt>skills</dt><dd>${Object.keys(s.skills).length}</dd>
-    <dt>agents</dt><dd>${Object.keys(s.agents).length}</dd>
-    <dt>commands</dt><dd>${Object.keys(s.commands).length}</dd>
-    <dt>hooks</dt><dd>${s.hooks.length}</dd>
-    <dt>rules</dt><dd>${esc(s.rules.join(", ") || "none")}</dd>
+    <dt>${esc(t("shared.skills"))}</dt><dd>${Object.keys(s.skills).length}</dd>
+    <dt>${esc(t("shared.agents"))}</dt><dd>${Object.keys(s.agents).length}</dd>
+    <dt>${esc(t("shared.commands"))}</dt><dd>${Object.keys(s.commands).length}</dd>
+    <dt>${esc(t("shared.hooks"))}</dt><dd>${s.hooks.length}</dd>
+    <dt>${esc(t("shared.rules"))}</dt><dd>${esc(s.rules.join(", ") || "—")}</dd>
   </dl>`;
-  const reg = s.mcpRegistry ?? {};
-  const names = Object.keys(reg);
-  $("#registry").innerHTML = names.length
-    ? `<dl class="kv">` + names.map((n) =>
-      `<dt>${esc(n)}</dt><dd>${esc(reg[n].profiles.join(", "))} · ${esc(reg[n].surfaces.join(", "))}</dd>`
-    ).join("") + `</dl>`
-    : `<div class="sub">registry empty</div>`;
 }
 
 /* ---------------- actions ---------------- */
 async function runAction(action, opts = []) {
-  toast(`Running ${action}…`);
+  toast(t("act.running", { a: action }));
   try {
-    const r = await api("/api/action", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-claude-multi": "1" },
-      body: JSON.stringify({ action, opts }),
-    });
-    showOutput(action, r.output || "(no output)");
-    toast(`${action} finished${r.code ? ` with exit ${r.code}` : ""} in ${(r.ms / 1000).toFixed(1)}s`, r.code !== 0);
+    const r = await post("/api/action", { action, opts });
+    showOutput(action, r.output || t("act.noOutput"));
+    const s = (r.ms / 1000).toFixed(1);
+    toast(r.code ? t("act.doneExit", { a: action, c: r.code, s }) : t("act.done", { a: action, s }), r.code !== 0);
     await refresh("state");
   } catch (e) {
     toast(String(e.message), true);
   }
 }
+
+// any element carrying data-action runs that allowlisted action: health fixes, connection buttons
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-action]");
+  if (b) runAction(b.dataset.action);
+});
 
 /* ---------------- plugins ---------------- */
 let PL = null, CAT = null, plBusy = false;
@@ -935,116 +605,154 @@ async function loadPlugins(fresh = false) {
 }
 async function loadCatalog(fresh = false) {
   CAT = await api("/api/plugins/catalog" + (fresh ? "?fresh" : ""));
-  const sel = $("#cat-mk"), cur = sel.value;
-  const mks = [...new Set(CAT.map((c) => c.marketplace))].sort();
-  sel.innerHTML = `<option value="">all marketplaces</option>` +
-    mks.map((m) => `<option${m === cur ? " selected" : ""}>${esc(m)}</option>`).join("");
+  renderCatalogSelect();
   renderCatalog();
+}
+function renderCatalogSelect() {
+  const sel = $("#cat-mk"), cur = sel.value;
+  const mks = CAT ? [...new Set(CAT.map((c) => c.marketplace))].sort() : [];
+  sel.innerHTML = `<option value="">${esc(t("cat.allMk"))}</option>` +
+    mks.map((m) => `<option${m === cur ? " selected" : ""}>${esc(m)}</option>`).join("");
 }
 
 /** One toggle: `value` is the entry this source holds (true/false, or null/undefined = none). */
 function plToggle(id, target, value, cell) {
   const own = value === true || value === false;
   const on = cell ? cell.enabled : value === true;
-  const label = own ? (value ? "on" : "off") : cell ? (on ? "on" : "off") : "—";
-  const mark = !cell ? "" : cell.broken ? `<span class="inst bad" title="installed, but its files are gone">⚠</span>` : cell.installed
-    ? `<span class="inst" title="installed${cell.version ? " · " + esc(cell.version) : ""}">●</span>`
-    : `<span class="inst no" title="not installed">○</span>`;
-  const title = own ? `${target}: ${value ? "on" : "off"} (set here)` : cell ? `${target}: inherits shared (${on ? "on" : "off"})` : "not in shared";
-  return `<button class="tg ${own ? "own" : "inh"} ${on ? "on" : "off"}" data-tg="${esc(id)}" data-target="${esc(target)}" data-val="${own ? String(value) : "inherit"}" title="${esc(title)}">${mark}${label}</button>`;
+  const label = own ? t(value ? "pl.on" : "pl.off") : cell ? t(on ? "pl.on" : "pl.off") : "—";
+  const mark = !cell
+    ? ""
+    : cell.broken
+    ? `<span class="inst bad" title="${esc(t("pl.broken"))}">⚠</span>`
+    : cell.installed
+    ? `<span class="inst" title="${esc(t("pl.installed"))}${cell.version ? " · " + esc(cell.version) : ""}">●</span>`
+    : `<span class="inst no" title="${esc(t("pl.notInstalled"))}">○</span>`;
+  const title = own
+    ? t("pl.setHere", { t: target, v: t(value ? "pl.on" : "pl.off") })
+    : cell
+    ? t("pl.inherits", { t: target, v: t(on ? "pl.on" : "pl.off") })
+    : t("pl.notShared");
+  return `<button class="tg ${own ? "own" : "inh"} ${on ? "on" : "off"}" data-tg="${esc(id)}" data-target="${
+    esc(target)
+  }" data-val="${own ? String(value) : "inherit"}" title="${esc(title)}">${mark}${label}</button>`;
 }
 
 function renderPlugins() {
   if (!PL) return;
   const profs = PL.profiles;
   const rows = PL.plugins.filter((r) => !r.synced);
-  $("#n-plugins").textContent = rows.length || "";
   const inst = rows.filter((r) => profs.some((p) => r.profiles[p].installed)).length;
   const broken = rows.filter((r) => profs.some((p) => r.profiles[p].broken)).length;
-  $("#pl-sum").textContent = `${rows.length} plugins · ${inst} installed somewhere${broken ? ` · ${broken} broken` : ""}`;
-  $("#pl-head").innerHTML = `<th>Plugin</th><th>All</th>${profs.map((p) => `<th>${esc(p)}</th>`).join("")}<th></th>`;
+  $("#pl-sum").textContent = t("pl.sum", { n: rows.length, i: inst }) + (broken ? t("pl.sumBroken", { b: broken }) : "");
+  $("#pl-head").innerHTML = `<th>${esc(t("pl.plugin"))}</th><th>${esc(t("pl.all"))}</th>${
+    profs.map((p) => `<th>${esc(p)}</th>`).join("")
+  }<th></th>`;
   $("#pl-rows").innerHTML = rows.map((r) =>
     `<tr>
       <td><span class="pname">${esc(r.name)}</span> <span class="dim">${esc(r.marketplace)}</span></td>
       <td>${plToggle(r.id, "shared", r.shared)}</td>
       ${profs.map((p) => `<td>${plToggle(r.id, p, r.profiles[p].override, r.profiles[p])}</td>`).join("")}
       <td class="acts">
-        <button class="btn ghost sm" data-pl-details="${esc(r.id)}">Details</button>
-        <button class="btn ghost sm" data-pl-update="${esc(r.id)}">Update</button>
-        <button class="btn ghost sm danger" data-pl-remove="${esc(r.id)}">Remove</button>
+        <button class="btn ghost sm" data-pl-details="${esc(r.id)}">${esc(t("pl.details"))}</button>
+        <button class="btn ghost sm" data-pl-update="${esc(r.id)}">${esc(t("pl.update"))}</button>
+        <button class="btn ghost sm danger" data-pl-remove="${esc(r.id)}">${esc(t("pl.remove"))}</button>
       </td>
     </tr>`
-  ).join("") || `<tr><td class="empty" colspan="${profs.length + 3}">no plugins</td></tr>`;
+  ).join("") || `<tr><td class="empty" colspan="${profs.length + 3}">${esc(t("pl.none"))}</td></tr>`;
 
   $("#mk-rows").innerHTML = PL.marketplaces.map((m) =>
     `<tr>
       <td><span class="pname">${esc(m.name)}</span> <span class="dim">${esc(m.source)}</span></td>
-      <td>${m.declared ? `<span class="chip on">shared</span>` : `<span class="chip" title="known to a profile, not declared in shared settings">local</span>`}</td>
-      <td title="profiles that registered it">${m.known.length}/${profs.length}</td>
+      <td>${
+      m.declared
+        ? `<span class="chip on">${esc(t("mk.shared"))}</span>`
+        : `<span class="chip" title="${esc(t("mk.localTitle"))}">${esc(t("mk.local"))}</span>`
+    }</td>
+      <td title="${esc(t("mk.known"))}">${m.known.length}/${profs.length}</td>
       <td class="acts">
-        <button class="btn ghost sm" data-mk-update="${esc(m.name)}">Update</button>
-        <button class="btn ghost sm danger" data-mk-remove="${esc(m.name)}">Remove</button>
+        <button class="btn ghost sm" data-mk-update="${esc(m.name)}">${esc(t("pl.update"))}</button>
+        <button class="btn ghost sm danger" data-mk-remove="${esc(m.name)}">${esc(t("pl.remove"))}</button>
       </td>
     </tr>`
-  ).join("") || `<tr><td class="empty">no marketplaces</td></tr>`;
+  ).join("") || `<tr><td class="empty">${esc(t("mk.none"))}</td></tr>`;
 
   // only what an account really syncs today: shared keeps `false` entries for plugins long gone
   const synced = PL.plugins.filter((r) => r.synced && profs.some((p) => r.profiles[p].installed));
   $("#acct").innerHTML = `
-    <div class="acct-h">Plugins the organisation syncs</div>
-    ${synced.map((r) => `<div class="acct-row"><span>${esc(r.name)}</span><span class="chips">${
-      profs.map((p) => `<span class="chip${r.profiles[p].enabled ? " on" : ""}" title="${esc(p)}: ${r.profiles[p].enabled ? "on" : "off"}${r.profiles[p].installed ? ", synced here" : ""}">${esc(p)}</span>`).join("")
-    }</span></div>`).join("") || `<div class="dim">none</div>`}
-    <div class="acct-h">claude.ai skills synced into each profile</div>
-    ${profs.map((p) => {
+    <div class="acct-h">${esc(t("acct.plugins"))}</div>
+    ${
+    synced.map((r) =>
+      `<div class="acct-row"><span>${esc(r.name)}</span><span class="chips">${
+        profs.map((p) =>
+          `<span class="chip${r.profiles[p].enabled ? " on" : ""}" title="${esc(p)}: ${
+            esc(t(r.profiles[p].enabled ? "pl.on" : "pl.off"))
+          }">${esc(p)}</span>`
+        ).join("")
+      }</span></div>`
+    ).join("") || `<div class="dim">${esc(t("profile.none"))}</div>`
+  }
+    <div class="acct-h">${esc(t("acct.skills"))}</div>
+    ${
+    profs.map((p) => {
       const sk = PL.syncedSkills[p] ?? [];
       return sk.length
-        ? `<details class="acct-row"><summary><span>${esc(p)}</span><span class="dim">${sk.length} skills</span></summary><div class="skl">${sk.map(esc).join(" · ")}</div></details>`
-        : `<div class="acct-row"><span>${esc(p)}</span><span class="dim">none</span></div>`;
-    }).join("")}
-    <p class="note">The organisation's plugins follow <b>Account MCP</b> (Profiles → Edit). Synced skills come with the claude.ai account and load into every session.</p>`;
+        ? `<details class="acct-row"><summary><span>${esc(p)}</span><span class="dim">${
+          esc(t("acct.skillsN", { n: sk.length }))
+        }</span></summary><div class="skl">${sk.map(esc).join(" · ")}</div></details>`
+        : `<div class="acct-row"><span>${esc(p)}</span><span class="dim">${esc(t("profile.none"))}</span></div>`;
+    }).join("")
+  }
+    <p class="note">${t("acct.note")}</p>`;
   if (CAT) renderCatalog();
 }
 
 function renderCatalog() {
   if (!CAT) return;
   const q = $("#cat-q").value.trim().toLowerCase(), mk = $("#cat-mk").value;
-  const hits = CAT.filter((c) => (!mk || c.marketplace === mk) && (!q || `${c.id} ${c.description}`.toLowerCase().includes(q)));
-  $("#cat-sum").textContent = `${hits.length} of ${CAT.length}`;
+  const hits = CAT.filter((c) =>
+    (!mk || c.marketplace === mk) && (!q || `${c.id} ${c.description}`.toLowerCase().includes(q))
+  );
+  $("#cat-sum").textContent = t("cat.sum", { n: hits.length, t: CAT.length });
   const profs = PL?.profiles ?? [];
   const where = (id) => profs.filter((p) => PL?.plugins.find((r) => r.id === id)?.profiles[p]?.installed);
   $("#cat-rows").innerHTML = hits.slice(0, 80).map((c) => {
     const w = where(c.id);
     return `<tr>
-      <td class="cdesc"><span class="pname">${esc(c.name)}</span> <span class="dim">${esc(c.marketplace)}${c.installs ? ` · ${fmt(c.installs)} installs` : ""}</span>
+      <td class="cdesc"><span class="pname">${esc(c.name)}</span> <span class="dim">${esc(c.marketplace)}${
+      c.installs ? ` · ${esc(t("cat.installs", { n: fmt(c.installs) }))}` : ""
+    }</span>
         <div class="desc">${esc(short(c.description, 220))}</div></td>
-      <td>${w.length ? `<span class="chip on" title="installed on ${esc(w.join(", "))}">${w.length}/${profs.length}</span>` : ""}</td>
+      <td>${
+      w.length
+        ? `<span class="chip on" title="${esc(t("cat.installedOn", { p: w.join(", ") }))}">${w.length}/${profs.length}</span>`
+        : ""
+    }</td>
       <td class="acts">
-        ${w.length ? `<button class="btn ghost sm" data-pl-details="${esc(c.id)}">Details</button>` : ""}
-        <select class="sel" data-cat-scope="${esc(c.id)}"><option value="all">all profiles</option>${profs.map((p) => `<option>${esc(p)}</option>`).join("")}</select>
-        <button class="btn sm" data-cat-install="${esc(c.id)}">Install</button>
+        ${w.length ? `<button class="btn ghost sm" data-pl-details="${esc(c.id)}">${esc(t("pl.details"))}</button>` : ""}
+        <select class="sel" data-cat-scope="${esc(c.id)}"><option value="all">${esc(t("cat.allProfiles"))}</option>${
+      profs.map((p) => `<option>${esc(p)}</option>`).join("")
+    }</select>
+        <button class="btn sm" data-cat-install="${esc(c.id)}">${esc(t("pl.install"))}</button>
       </td>
     </tr>`;
-  }).join("") || `<tr><td class="empty">nothing matches</td></tr>`;
+  }).join("") || `<tr><td class="empty">${esc(t("cat.nothing"))}</td></tr>`;
 }
 
 /** Run one operation. A marketplace-declared command comes back as `confirm`: it is shown, and
     runs only if accepted here — the server never accepts one on its own. */
 async function plOp(body, label) {
-  if (plBusy) return toast("another plugin operation is still running", true);
+  if (plBusy) return toast(t("pl.busy"), true);
   plBusy = true;
   document.body.classList.add("plbusy");
   toast(`${label}…`);
-  const post = (b) => api("/api/plugins", { method: "POST", headers: { "content-type": "application/json", "x-claude-multi": "1" }, body: JSON.stringify(b) });
   try {
-    let r = await post(body);
+    let r = await post("/api/plugins", body);
     if (r.confirm) {
-      const ok = confirm(`${r.message}\n\nThe marketplace declares this command, which would run on this machine:\n\n${r.confirm.command}\n\nRun it?`);
-      if (!ok) return toast("not installed: the command was not accepted");
+      if (!confirm(t("pl.confirmCmd", { msg: r.message, cmd: r.confirm.command }))) return toast(t("pl.notAccepted"));
       const retry = body.op === "set"
         ? { op: "install", id: body.id, profiles: body.target === "shared" ? "all" : [body.target], accept: r.confirm.sha256 }
         : { ...body, accept: r.confirm.sha256 };
-      r = await post(retry);
+      r = await post("/api/plugins", retry);
     }
     toast(r.message, !r.ok);
     if (!r.ok && r.log?.length) showOutput(r.message, r.log.join("\n"));
@@ -1062,157 +770,199 @@ document.addEventListener("click", async (e) => {
   if (tg) {
     // inherit → on → off → inherit
     const next = { inherit: true, true: false, false: null }[tg.dataset.val];
-    const t = tg.dataset.target;
-    return plOp({ op: "set", id: tg.dataset.tg, target: t, value: next },
-      `${tg.dataset.tg}: ${next === null ? (t === "shared" ? "out of shared" : "inherit") : next ? "on" : "off"} for ${t}`);
+    const target = tg.dataset.target;
+    const state = next === null
+      ? t(target === "shared" ? "pl.opOutOfShared" : "pl.opInherit")
+      : t(next ? "pl.on" : "pl.off");
+    return plOp(
+      { op: "set", id: tg.dataset.tg, target, value: next },
+      t("pl.opSet", { id: tg.dataset.tg, state, t: target }),
+    );
   }
   const det = e.target.closest("[data-pl-details]");
   if (det) {
-    const host = showOutput(det.dataset.plDetails, "loading…");
-    const r = await api(`/api/plugins/details?id=${encodeURIComponent(det.dataset.plDetails)}`).catch((err) => ({ text: err.message }));
-    $("pre.out", host).textContent = r.text || "no details";
+    const host = showOutput(det.dataset.plDetails, t("pl.loading"));
+    const r = await api(`/api/plugins/details?id=${encodeURIComponent(det.dataset.plDetails)}`)
+      .catch((err) => ({ text: err.message }));
+    $("pre.out", host).textContent = r.text || t("pl.noDetails");
     return;
   }
   const up = e.target.closest("[data-pl-update]");
-  if (up) return plOp({ op: "update", id: up.dataset.plUpdate }, `updating ${up.dataset.plUpdate}`);
+  if (up) return plOp({ op: "update", id: up.dataset.plUpdate }, t("pl.opUpdating", { id: up.dataset.plUpdate }));
   const rm = e.target.closest("[data-pl-remove]");
   if (rm) {
     const id = rm.dataset.plRemove;
-    if (!confirm(`Remove ${id} from every profile?\n\nIt is uninstalled everywhere and taken out of shared and per-profile settings.`)) return;
-    return plOp({ op: "uninstall", id, profiles: "all" }, `removing ${id}`);
+    if (!confirm(t("pl.confirmRemove", { id }))) return;
+    return plOp({ op: "uninstall", id, profiles: "all" }, t("pl.opRemoving", { id }));
   }
   const ins = e.target.closest("[data-cat-install]");
   if (ins) {
     const id = ins.dataset.catInstall;
     const scope = $(`[data-cat-scope="${CSS.escape(id)}"]`).value;
-    return plOp({ op: "install", id, profiles: scope === "all" ? "all" : [scope] }, `installing ${id} on ${scope === "all" ? "every profile" : scope}`);
+    return plOp(
+      { op: "install", id, profiles: scope === "all" ? "all" : [scope] },
+      t("pl.opInstalling", { id, where: scope === "all" ? t("pl.everyProfile") : scope }),
+    );
   }
   const mu = e.target.closest("[data-mk-update]");
-  if (mu) return plOp({ op: "marketplace-update", name: mu.dataset.mkUpdate }, `updating ${mu.dataset.mkUpdate}`).then(() => loadCatalog(true));
+  if (mu) {
+    return plOp({ op: "marketplace-update", name: mu.dataset.mkUpdate }, t("pl.opUpdating", { id: mu.dataset.mkUpdate }))
+      .then(() => loadCatalog(true));
+  }
   const mr = e.target.closest("[data-mk-remove]");
   if (mr) {
     const n = mr.dataset.mkRemove;
-    if (!confirm(`Remove the marketplace ${n}?\n\nIts plugins go with it, in every profile.`)) return;
-    return plOp({ op: "marketplace-remove", name: n }, `removing ${n}`).then(() => loadCatalog(true));
+    if (!confirm(t("mk.confirmRemove", { n }))) return;
+    return plOp({ op: "marketplace-remove", name: n }, t("pl.opRemoving", { id: n })).then(() => loadCatalog(true));
   }
 });
-$("#pl-refresh").addEventListener("click", () => { loadPlugins(true); loadCatalog(true); });
-$("#mk-update").addEventListener("click", () => plOp({ op: "marketplace-update" }, "updating every marketplace").then(() => loadCatalog(true)));
+$("#pl-refresh").addEventListener("click", () => {
+  loadPlugins(true);
+  loadCatalog(true);
+});
+$("#mk-update").addEventListener(
+  "click",
+  () => plOp({ op: "marketplace-update" }, t("mk.opUpdateAll")).then(() => loadCatalog(true)),
+);
 $("#mk-add").addEventListener("submit", (e) => {
   e.preventDefault();
   const source = e.target.elements.source.value.trim();
-  plOp({ op: "marketplace-add", source }, `adding ${source}`).then(() => { e.target.reset(); loadCatalog(true); });
+  plOp({ op: "marketplace-add", source }, t("mk.opAdding", { s: source })).then(() => {
+    e.target.reset();
+    loadCatalog(true);
+  });
 });
 let catTimer = null;
-$("#cat-q").addEventListener("input", () => { clearTimeout(catTimer); catTimer = setTimeout(renderCatalog, 120); });
+$("#cat-q").addEventListener("input", () => {
+  clearTimeout(catTimer);
+  catTimer = setTimeout(renderCatalog, 120);
+});
 $("#cat-mk").addEventListener("change", renderCatalog);
 
 /* ---------------- navigation ---------------- */
-const TITLES = { overview: "Overview", profiles: "Profiles", plugins: "Plugins", usage: "Usage", sessions: "Sessions", health: "Health" };
-function go(v) {
-  view = v;
-  $$("#nav button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.v === v)));
-  $$(".view").forEach((s) => {
-    s.hidden = s.id !== `v-${v}`;
-  });
-  $("#title").textContent = TITLES[v];
-  if (location.hash.slice(1) !== v) history.replaceState(null, "", `#${v}`);
-  if (v === "profiles") renderProfiles();
-  if (v === "plugins") {
+// #today · #connections · #system/<tab>. The tray opens a view by setting the hash.
+const VIEWS = ["today", "connections", "system"];
+const TABS = ["profiles", "plugins", "updates", "health"];
+
+function go(hash) {
+  const [v, s] = String(hash).split("/");
+  view = VIEWS.includes(v) ? v : "today";
+  if (view === "system") sub = TABS.includes(s) ? s : sub;
+  const want = view === "system" ? `system/${sub}` : view;
+  if (location.hash.slice(1) !== want) history.replaceState(null, "", `#${want}`);
+
+  $$("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.v === view));
+  $$("#nav a[aria-current]").forEach((a) => a.setAttribute("aria-current", "page"));
+  $$(".view").forEach((el) => el.hidden = el.id !== `v-${view}`);
+  $$("#tabs a").forEach((a) => a.setAttribute("aria-selected", String(a.dataset.t === sub)));
+  $$(".sub-view").forEach((el) => el.hidden = el.id !== `s-${sub}`);
+  renderTitle();
+  renderView();
+  if (view === "system" && sub === "plugins") {
     loadPlugins().catch((e) => toast(e.message, true));
     if (!CAT) loadCatalog().catch((e) => toast(e.message, true));
   }
-  if (v === "usage") loadUsage();
-  if (v === "sessions") loadSessions();
-  if (v === "overview") loadOverview();
 }
-$("#nav").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-v]");
-  if (b) go(b.dataset.v);
-});
-addEventListener("hashchange", () => {
-  const v = location.hash.slice(1);
-  if (TITLES[v] && v !== view) go(v);
-});
 
-/* ---------------- theme ---------------- */
-let theme = localStorage.getItem("cm-theme") || "auto";
+function renderTitle() {
+  $("#title").textContent = t(`title.${view}`);
+  $("#eyebrow").textContent = view === "today"
+    ? new Date().toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long" })
+    : S?.machine.hostname ?? "";
+}
+
+addEventListener("hashchange", () => go(location.hash.slice(1)));
+
+/* ---------------- theme and language ---------------- */
+let theme = "auto";
+try {
+  theme = localStorage.getItem("cm-theme") || "auto";
+} catch { /* storage blocked: follow the system */ }
 function applyTheme() {
   if (theme === "auto") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", theme);
-  $("#theme-lbl").textContent = theme;
-  localStorage.setItem("cm-theme", theme);
+  $("#theme-lbl").textContent = t(`theme.${theme}`);
+  try {
+    localStorage.setItem("cm-theme", theme);
+  } catch { /* not remembered, still applied */ }
 }
 $("#theme-btn").addEventListener("click", () => {
   theme = theme === "auto" ? "dark" : theme === "dark" ? "light" : "auto";
   applyTheme();
 });
-applyTheme();
+
+/** Re-render every string: the static markup through data-i18n, the rest by drawing again. */
+function applyLang() {
+  applyI18n();
+  $("#lang-lbl").textContent = langPref === "auto" ? `${t("lang.auto")} · ${lang().toUpperCase()}` : langPref.toUpperCase();
+  $("#theme-lbl").textContent = t(`theme.${theme}`);
+  setLive(liveState);
+  if (CAT) renderCatalogSelect();
+  if (SUM) renderState();
+  renderTitle();
+  renderView();
+  if (PL) renderPlugins();
+}
+$("#lang-btn").addEventListener("click", () => {
+  const order = ["auto", ...Object.keys(I18N)];
+  langPref = order[(order.indexOf(langPref) + 1) % order.length];
+  try {
+    localStorage.setItem("cm-lang", langPref);
+  } catch { /* not remembered, still applied */ }
+  applyLang();
+});
 
 /* ---------------- command palette ---------------- */
-const CMDS = [
-  ...Object.keys(TITLES).map((v) => ({ s: "Go to", n: TITLES[v], d: v, f: () => go(v) })),
-  {
-    s: "Run",
-    n: "Health check",
-    d: "doctor",
-    f: () => {
-      go("health");
-      $("#rerun").click();
-    },
-  },
-  { s: "Run", n: "Sync MCP servers", d: "mcp sync", f: () => runAction("mcp-sync") },
-  { s: "Run", n: "Check MCP registry", d: "mcp check", f: () => runAction("mcp-check") },
-  { s: "Run", n: "Re-ingest usage", d: "usage ingest --full", f: () => runAction("usage-ingest") },
-  { s: "Run", n: "Fetch git remote", d: "sync --fetch", f: () => runAction("sync-fetch") },
-  { s: "Run", n: "Preview install", d: "install --dry-run", f: () => runAction("install-dry") },
-  { s: "Run", n: "Apply install", d: "install", f: () => runAction("install") },
-  { s: "Run", n: "Budget report", d: "budget", f: () => runAction("budget") },
-  { s: "Run", n: "Check for updates", d: "update --check", f: () => runAction("update-check") },
-  {
-    s: "Do",
-    n: "Add profile",
-    d: "new",
-    f: () => {
-      go("profiles");
-      editing = "+";
-      renderProfiles();
-    },
-  },
-  { s: "Do", n: "Toggle theme", d: "theme", f: () => $("#theme-btn").click() },
+const CMDS = () => [
+  { s: "pal.goto", n: t("nav.today"), d: "today", f: () => go("today") },
+  { s: "pal.goto", n: t("nav.connections"), d: "connections", f: () => go("connections") },
+  ...TABS.map((x) => ({ s: "pal.goto", n: `${t("nav.system")} · ${t(`sys.${x}`)}`, d: `system/${x}`, f: () => go(`system/${x}`) })),
+  { s: "pal.run", n: t("cmd.health"), d: "doctor", f: () => { go("system/health"); $("#rerun").click(); } },
+  { s: "pal.run", n: t("cmd.mcpSync"), d: "mcp sync", f: () => runAction("mcp-sync") },
+  { s: "pal.run", n: t("cmd.mcpCheck"), d: "mcp check", f: () => runAction("mcp-check") },
+  { s: "pal.run", n: t("cmd.fetch"), d: "sync --fetch", f: () => runAction("sync-fetch") },
+  { s: "pal.run", n: t("cmd.installDry"), d: "install --dry-run", f: () => runAction("install-dry") },
+  { s: "pal.run", n: t("cmd.install"), d: "install", f: () => runAction("install") },
+  { s: "pal.run", n: t("cmd.updateCheck"), d: "update --check", f: () => runAction("update-check") },
+  { s: "pal.run", n: t("cmd.updateNow"), d: "update --auto", f: () => runAction("update-now") },
+  { s: "pal.do", n: t("cmd.addProfile"), d: "new", f: () => { go("system/profiles"); openProfileForm(null); } },
+  { s: "pal.do", n: t("cmd.theme"), d: "theme", f: () => $("#theme-btn").click() },
+  { s: "pal.do", n: t("cmd.lang"), d: "language", f: () => $("#lang-btn").click() },
 ];
 
-let pal = null, sel = 0, hits = CMDS;
+let pal = null, sel = 0, hits = [];
 function openPal() {
   if (pal) return;
-  hits = CMDS;
+  const all = CMDS();
+  hits = all;
   sel = 0;
   pal = document.createElement("div");
   pal.className = "pal-wrap";
-  pal.innerHTML =
-    `<div class="pal"><input placeholder="Search views and commands…" aria-label="Search views and commands"><div class="pal-list"></div></div>`;
+  pal.innerHTML = `<div class="pal"><input placeholder="${esc(t("pal.ph"))}" aria-label="${
+    esc(t("pal.ph"))
+  }"><div class="pal-list"></div></div>`;
   document.body.appendChild(pal);
   const inp = $("input", pal);
   const paint = () => {
     let out = "", last = "";
     hits.forEach((c, i) => {
       if (c.s !== last) {
-        out += `<div class="pal-sec">${esc(c.s)}</div>`;
+        out += `<div class="pal-sec">${esc(t(c.s))}</div>`;
         last = c.s;
       }
       out += `<div class="pal-i" data-i="${i}" data-sel="${i === sel ? 1 : 0}">
         <svg viewBox="0 0 24 24">${
-        c.s === "Go to" ? `<path d="M5 12h14M13 6l6 6-6 6"/>` : `<path d="M8 6l6 6-6 6"/><path d="M15 18h4"/>`
+        c.s === "pal.goto" ? `<path d="M5 12h14M13 6l6 6-6 6"/>` : `<path d="M8 6l6 6-6 6"/><path d="M15 18h4"/>`
       }</svg>
         ${esc(c.n)}<span class="d">${esc(c.d)}</span></div>`;
     });
-    $(".pal-list", pal).innerHTML = out || `<div class="pal-sec">no match</div>`;
+    $(".pal-list", pal).innerHTML = out || `<div class="pal-sec">${esc(t("pal.none"))}</div>`;
     $(`[data-sel="1"]`, pal)?.scrollIntoView({ block: "nearest" });
   };
   paint();
   inp.addEventListener("input", () => {
     const q = inp.value.toLowerCase().trim();
-    hits = q ? CMDS.filter((c) => `${c.n} ${c.d} ${c.s}`.toLowerCase().includes(q)) : CMDS;
+    hits = q ? all.filter((c) => `${c.n} ${c.d} ${t(c.s)}`.toLowerCase().includes(q)) : all;
     sel = 0;
     paint();
   });
@@ -1256,13 +1006,15 @@ addEventListener("keydown", (e) => {
 
 /* ---------------- boot ---------------- */
 (async () => {
-  const start = location.hash.slice(1);
+  applyTheme();
+  applyLang();
   try {
     await loadStatus();
   } catch (e) {
-    toast("cannot reach the local server: " + e.message, true);
+    renderState();
+    toast(t("err.server", { e: e.message }), true);
   }
-  go(TITLES[start] ? start : "overview");
+  go(location.hash.slice(1));
   connect();
   // The heartbeat also tells the page the connection is genuinely alive: if nothing arrives for
   // well over the server's 25s ping, the stream is dead even though EventSource still says open.

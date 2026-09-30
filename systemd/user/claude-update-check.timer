@@ -1,9 +1,9 @@
 [Unit]
-Description=Periodic Claude update check (every 4h)
+Description=Background Claude updates and health check (every 4h)
 
 [Timer]
 # 10 min after login: does not slow the session start, and covers the "Claude stays open for days"
-# case that a launch-time gate would never see on its own.
+# case that the launch-time switch (claude-launch) would never see on its own.
 OnStartupSec=10min
 OnUnitActiveSec=4h
 # NB: no Persistent= — it only affects OnCalendar= timers, not monotonic ones like this. Recovery

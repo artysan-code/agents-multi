@@ -32,8 +32,9 @@ The console is enabled as a systemd user unit by `install`, so it is already run
 <http://127.0.0.1:7331>. On a desktop, the **claude-multi** app starts in the tray at login and
 opens it in a window of its own.
 
-Requirements: `deno`, `git`. For Claude Desktop packaging also `base-devel`, `libarchive`,
-`@electron/asar`. For the desktop app and the update gate `pyside6` **and** `qt6-webengine` —
+Requirements: `deno`, `git`. For Claude Desktop also `gnupg`, `binutils` (`ar`), `libarchive`
+(`bsdtar`) and `@electron/asar` (the profile variants), plus `base-devel` once, for the shims
+package. For the desktop app `pyside6` **and** `qt6-webengine` —
 the second is only an optional dependency of the first on Arch, so install it explicitly. OAuth credentials are per-machine and never leave it.
 
 ### Making it yours
@@ -158,15 +159,14 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi install [--dry-run]` | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent |
 | `claude-multi settings [--dry-run]` | regenerate each profile's `settings.json`, adopting into `profiles/<p>/settings.json` what Claude wrote into it |
 | `claude-multi doctor [--json\|--notify]` | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a *new* failure appears, or when everything clears |
-| `claude-multi status [--json]` | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the gate and the console |
+| `claude-multi status [--json]` | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
 | `claude-multi sync [--fetch]` | align the repository from the remote (fetch when stale, ff-only pull on a clean tree) |
 | `claude-multi mcp check\|sync\|health` | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server |
 | `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | update Claude Code and/or Claude Desktop |
 | `claude-multi usage [--by …] [--since …]` | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite) |
-| `claude-multi budget [--notify]` | consumption thresholds. Only billed extra usage raises an alert |
 | `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
-| `claude-launch <profile>` | the entry point desktop launchers use: repository sync, update gate, then the app |
-| `claude-multi-app [--tray\|--updates]` | the desktop app: console window, tray icon, update gate (below) |
+| `claude-launch <profile>` | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app |
+| `claude-multi-app [--tray]` | the desktop app: console window and tray icon (below) |
 
 `claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -184,19 +184,23 @@ and the page redraws the view you are actually looking at. The page itself is HT
 vanilla JS with no dependencies and no external assets, so it renders on a machine that has never
 been online.
 
-- **Overview** — three separate readings, deliberately not side by side as if they were the same
-  kind of number: **Extra usage** (what you are charged), **Plan windows** (your subscription
-  allowance, and when it resets), **Tokens used** (consumption, and what it would have cost at list
-  price). Each says how old its reading is, because the billing cache is often stale.
-- **Profiles** — what each profile mounts and is signed in as; edit a profile, or add one.
-- **Usage** — by project, model, skill, command or agent, over any window.
-- **Sessions** — recent sessions; select one to read its transcript, with the tools each turn used
-  and what that turn cost.
-- **Health** — every doctor check, with a button for the fixes that map to a known action.
+Three sections, in English or Italian. The language follows the machine's locale — the regional
+format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
+the globe button in the rail overrides it per browser.
+
+- **Today** (`#today`) — the tray's verdict in words (what needs you, if anything), the sessions
+  running now, and the last sessions per directory with the command that reopens each one.
+- **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
+  where, and whether each profile actually mounted it at its last sync.
+- **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or
+  add), **Plugins & skills**, **Updates** (versions, and what is pending), **Health** (every doctor
+  check, with a button for the fixes that map to a known action).
+
+Consumption is not on the page: `claude-multi usage` reports it in the terminal.
 
 `⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the
-local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating is
-deliberately *not* an action: it goes through the polkit gate.
+local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating and
+rolling back are actions like the others: nothing in them needs root.
 
 ---
 
@@ -212,14 +216,12 @@ tunnel still reaches it.
   it. Closing the window destroys it: the web engine is the heavy part, and the tray alone stays
   light.
 - **Tray** — the state at a glance, from `/api/summary` (a pure function of `status`, tested):
-  no dot when all is well, **blue** for a pending update, **red** for a failing doctor check,
+  no dot when all is well, **red** for a failing doctor check,
   **grey** when the console does not answer. Warnings are listed, not coloured: some are standing
   conditions of a machine, and an icon that is always yellow says nothing. It refreshes on the
   console's `state` events and when the menu opens, never on a timer. The menu opens the console,
-  a profile's Claude Desktop, the update gate and the Health view.
-- **Update gate** — the same Qt dialog as before, now a window of the app: from the tray, from the
-  timer's notification (`--updates`), or before Claude Desktop opens (`claude-launch` runs
-  `claude-multi-app --gate`, a process of its own whose exit code is the answer).
+  a profile's Claude Desktop, the Updates tab and the Health view. A Claude Desktop version waiting
+  to switch is listed there, not coloured: it needs nothing from you.
 - **At login** — `claude-multi-app.service` (graphical session only, enabled by `install`) runs
   `--tray`. One instance per session: a second start hands its request to the first over
   `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
@@ -230,43 +232,11 @@ doctor says why. After pulling new app code: `systemctl --user restart claude-mu
 
 ---
 
-## What you actually pay for
+## Consumption
 
-This is the part most usage tooling gets wrong, this one included until recently. Consumption lives
-on three planes and they are not interchangeable:
-
-| Plane | What it is | Alerts? |
-|---|---|---|
-| **billed** | extra-usage credits, in real currency | yes — the only plane that can |
-| **plan** | how full a subscription window is | no: it says when you will be throttled, not what you will pay |
-| **estimate** | what the same tokens would cost at list price | never |
-
-On a subscription, tokens are not billed per token. The "cost" `usage` reports is a list-price
-equivalent — useful to compare profiles, models and days, worthless as accounting. Alerting on it
-means an alert every single day for money nobody is charged.
-
-So the plane belongs to the **metric**, not to the profile. Every profile is a subscription that
-may also spend credits; nothing is hardwired per profile. Rules live in
-[`shared/budget.json`](shared/budget.json):
-
-```json
-{ "id": "billed-month", "metric": "billed.month.percent", "warn": 60, "crit": 85 }
-```
-
-Metrics are `billed.today`, `billed.month`, `billed.month.percent`, `plan.<kind>.percent` and
-`estimate.day|week|month`. Billed metrics notify by default; the other two stay silent unless a
-rule sets `"notify": true`. A per-profile `"cap"` overrides the reported monthly ceiling, so you
-can hear about it well before the real limit.
-
-Two details that matter:
-
-- Claude Code refreshes the billing cache when it feels like it — here it has been weeks stale. A
-  stale reading **never** fires an alert, and the doctor says so.
-- Every reading is sampled into `credit_samples` (usage.db). Today's billed spend is the delta
-  between two samples, and it is the only figure in real currency in the whole system.
-
-`--notify` (from the timer, every 4 h) alerts only on a threshold rising or clearing, with a
-cooldown and a quiet window. `--dry-run` does not consume the state.
+`claude-multi usage` reports tokens by profile, model, project, agent, day, skill or command, with
+what they would cost at list price. On a subscription tokens are not billed one by one, so that
+figure is for comparing, not accounting. Nothing here watches billing or raises alerts on spending.
 
 ---
 
@@ -340,10 +310,10 @@ cli/            the claude-multi CLI (Deno, zero dependencies)
 cli/dashboard/  the console page (HTML/CSS/JS, no build step)
 shared/         config shared across profiles: agents, commands, hooks, skills, rules, mcp, settings.json
 profiles/       one directory per profile: manifest, CLAUDE.md, owned entries
-lib/            the desktop app: tray, console window, update gate (PySide6)
+lib/            the desktop app: tray and console window (PySide6)
 systemd/user/   console unit, update-check timer, optional local inference units
 desktop/        .desktop entries and icons
-pkg/            PKGBUILD repackaging Anthropic's official .deb of Claude Desktop for Arch
+pkg/            the pinned Anthropic apt key, and claude-desktop-shims (the system half of Claude Desktop)
 ```
 
 Runtime, generated by `install`:
@@ -373,24 +343,33 @@ Runtime, generated by `install`:
 
 ## Updates
 
-Nothing updates without approval; `DISABLE_AUTOUPDATER=1` is set everywhere.
+Everything updates itself, in the background, with no approval and no window. `DISABLE_AUTOUPDATER=1`
+stays set everywhere: the updates are driven from here, not by each binary on its own.
 
-- **Claude Code**: the native updater downloads into `~/.local/share/claude/versions/X.Y.Z` and
-  rewrites `~/.local/bin/claude`. `claude-update --cli` drives it, re-points `claude-bin`, restores
-  the wrapper, prunes old versions (keeping N-1 for `--rollback`) and fixes the `claude-cli://`
-  handler.
-- **Claude Desktop**: `claude-desktop-update` rebuilds the Arch package from Anthropic's official
-  `.deb`, then regenerates each profile's variant (a separate `app.setDesktopName` so icons and
-  app ids stay distinct on Wayland; everything else symlinks to the system install).
-- **Graphical gate**: `claude-launch` checks versions (6 h cache) and opens the update gate before
-  the app when needed, with the release notes and install through `pkexec`. Desktop must be updated
-  with the app closed.
-- **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) raises a notification
-  and never updates anything by itself. The same timer runs `doctor --notify` and `budget --notify`.
+- **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) runs
+  `claude-update --auto`, then `doctor --notify`. Nice and idle I/O: it should not be felt.
+- **Claude Code** is installed as soon as a new version is out. The native updater downloads into
+  `~/.local/share/claude/versions/X.Y.Z`; `claude-update` re-points `claude-bin`, restores the
+  wrapper, prunes old versions (keeping N-1) and fixes the `claude-cli://` handler. Open sessions
+  keep running on the version they started with.
+- **Claude Desktop** lives in user space, `~/.local/lib/claude-desktop/versions/<ver>` with
+  `current` pointing at the one in use — no root at any step. `claude-desktop-update` *stages* a
+  new version (download, verify, extract) at any time, and *applies* it (flip `current`, rebuild
+  each profile's variant, install the icons) only when no Claude Desktop runs: replacing files
+  under a running Electron app crashes it. `claude-launch` applies a staged version right before it
+  starts the app, so in practice an update lands at the next launch. The previous version is kept.
+- **Rollback**: `claude-multi update --rollback [--desktop]`, or the button in System › Updates.
+- **Log**: every result is a line in `~/.local/state/claude-multi/updates.jsonl`, shown in
+  System › Updates. The doctor turns a failed last attempt into a warning, a failed verification
+  into a failure.
 - **Supply chain**: the apt repository key is pinned in `pkg/claude-desktop/anthropic-apt.asc`.
-  `claude-desktop-update` verifies the `InRelease` signature against it with `gpgv`, then the
-  `Packages` index hash, then the `.deb` hash from that index. The chain is complete down to the
-  package.
+  The `InRelease` signature is checked against it with `gpgv`, then the `Packages` index hash, then
+  the `.deb` hash from that index. Anything missing or different stops the update before a file is
+  extracted, and raises the only notification the updater ever sends.
+- **System half**: `pkg/claude-desktop-shims` holds the runtime dependencies and the links the app
+  expects at Debian paths (virtiofsd, OVMF). It is installed once and never changes.
+  `claude-desktop-migrate` moves a machine that still has the old system package: run it once, in
+  a terminal, with every Claude Desktop closed.
 
 ---
 
@@ -398,7 +377,7 @@ Nothing updates without approval; `DISABLE_AUTOUPDATER=1` is set everywhere.
 
 ```bash
 deno task check   # type-check the CLI and tests, bash -n every script, py_compile the app
-deno task test    # usage (rates, dedupe, turns), budget (planes, thresholds, notifications),
+deno task test    # usage (rates, dedupe, turns), notifications,
                   # mcp, manifests, changelog, prelaunch against real git repositories
 ```
 

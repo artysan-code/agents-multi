@@ -1,218 +1,191 @@
 #!/usr/bin/env bash
-# claude-desktop-update: ribuilda e installa il pacchetto Arch `claude-desktop`
-# a partire dal .deb UFFICIALE Anthropic, aggiornando il PKGBUILD in ~/build/claude-desktop.
+# claude-desktop-update — Claude Desktop in user space, from Anthropic's signed apt repository.
+# No root at any step: nothing is installed under /usr.
 #
-# La supply chain resta pulita: il binario è quello firmato da Anthropic, scaricato
-# dal loro repo apt (o fornito da te). Questo script si limita a: risolvere versione+sha256,
-# patchare il PKGBUILD, e lanciare makepkg.
+# Layout (CLAUDE_DESKTOP_ROOT, default ~/.local/lib/claude-desktop):
+#   versions/<ver>/   the .deb's usr/lib/claude-desktop as it ships, plus .icons/ (its hicolor icons)
+#   current           → versions/<ver>: what the launchers run
 #
-# USO:
-#   claude-desktop-update                 # prende l'ULTIMA versione dall'indice apt Anthropic
-#   claude-desktop-update 1.17400.0       # prende una versione specifica dalla CDN
-#   claude-desktop-update ~/Downloads/claude-desktop_1.17400.0_amd64.deb   # usa un .deb locale
-#   claude-desktop-update --if-outdated   # come sopra ma NON presidiato: se già all'ultima, esce 0 senza chiedere
-#   claude-desktop-update --no-install    # SOLO build: nessun sudo, nessun rebuild Work; stampa "PKG=<path>"
-#   claude-desktop-update --verify-only   # SOLO verifica firma InRelease + indice: stampa versione e sha256, esce
+# A new version is STAGED (downloaded, verified, extracted) whenever the timer finds one, and
+# APPLIED (current flipped, profile variants rebuilt, icons installed) only while no Claude Desktop
+# runs: replacing files under a running Electron app crashes it. claude-launch applies a staged
+# version right before it starts the app, so in practice an update lands at the next launch.
 #
-# Requisiti: base-devel (makepkg), curl, bsdtar (libarchive). Niente sudo per makepkg;
-# l'installazione finale usa `sudo pacman -U` tramite makepkg -i.
+# Verification is not optional: the InRelease file must carry a valid signature from the pinned
+# key (pkg/claude-desktop/anthropic-apt.asc, fingerprint below), the Packages index must match its
+# hash in InRelease, and the .deb must match its hash in Packages. Anything missing or different
+# stops the update before a single file is extracted, and says so (exit 4).
 #
-# --no-install esiste per il gate GUI (claude-multi-app): makepkg -i chiamerebbe `sudo` su un
-# tty che, lanciato da un .desktop, non c'è → fallirebbe. Separando build e install, la GUI
-# builda senza privilegi e installa a parte con `pkexec pacman -U` (dialogo polkit di Plasma).
-# --no-install implica anche NON interattivo: mai un `read` che bloccherebbe una GUI.
-set -euo pipefail
+# usage:
+#   claude-desktop-update              stage the latest version if it is newer, then apply it if possible
+#   claude-desktop-update --stage      only download, verify and extract
+#   claude-desktop-update --apply      only switch to a staged version (no network)
+#   claude-desktop-update --rollback   back to the previous version
+#   claude-desktop-update --current    print the version in use
+#   claude-desktop-update --staged     print the version staged and waiting, if any
+# exit: 0 done or nothing to do · 3 another update is running · 4 verification failed
+#       5 staged, waiting for every Claude Desktop to close · 1 anything else
+set -uo pipefail
 
-PKGDIR="${CLAUDE_DESKTOP_PKGDIR:-$HOME/build/claude-desktop}"
-RETAIN="${CLAUDE_DESKTOP_RETAIN:-3}"   # quante versioni di artefatti tenere in PKGDIR (0 = non potare)
-APT_INDEX="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages"
-POOL="https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop"
+HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+REPO_DIR="$(cd "$HERE/.." && pwd)"
+source "$HERE/lib/profiles.sh"
+source "$HERE/lib/updates.sh"
 
-die() { echo "ERROR: $*" >&2; exit 1; }
+ROOT="$CM_DESKTOP_ROOT"
+APT="${CLAUDE_DESKTOP_APT:-https://downloads.claude.ai/claude-desktop/apt/stable}"
+KEY_ASC="$REPO_DIR/pkg/claude-desktop/anthropic-apt.asc"
+KEY_FPR="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
+CACHE="$HOME/.cache/claude-update"
+NET_TIMEOUT="${CLAUDE_UPDATE_TIMEOUT:-20}"
+ICONS="$HOME/.local/share/icons"
 
-# La dir di build accumula, a ogni aggiornamento, un .deb (~170 MB) + un .pkg.tar.zst (~190 MB)
-# + un PKGBUILD.bak. Dopo qualche mese sono giga di roba morta. Teniamo le ultime $RETAIN
-# versioni di ciascun tipo e buttiamo la staging di makepkg (pkg/ e src/, ricreate a ogni build).
-prune_artifacts() {
-  local keep="${RETAIN:-3}" f n pat
-  [[ "$keep" =~ ^[0-9]+$ ]] || return 0
-  (( keep > 0 )) || return 0
-  echo "==> housekeeping: tengo le ultime $keep versioni in $PKGDIR"
-  for pat in '*.pkg.tar.zst' '*_amd64.deb' 'PKGBUILD.bak.*'; do
-    n=0
-    while IFS= read -r f; do
-      n=$((n+1))
-      if (( n > keep )); then rm -f -- "$PKGDIR/$f" && echo "    prune: $f"; fi
-    done < <(cd "$PKGDIR" && ls -1t -- $pat 2>/dev/null)
-  done
-  rm -rf -- "$PKGDIR/pkg" "$PKGDIR/src"
+say() { [[ -n "${QUIET:-}" ]] || echo "$@"; }
+err() { echo "claude-desktop-update: $*" >&2; }
+
+# versions newest first, semver names only
+versions() { ls -1 "$ROOT/versions" 2>/dev/null | grep -E '^[0-9]+(\.[0-9]+)+$' | sort -rV; }
+current() { local c; c="$(readlink -f "$ROOT/current" 2>/dev/null)" && [[ -x "$c/claude-desktop" ]] && basename "$c"; }
+newer() { [[ -n "$2" && "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$2" ]]; }
+# the newest extracted version above the current one: staged and waiting
+staged() {
+  local cur top; cur="$(current)"; top="$(versions | head -n1)"
+  [[ -n "$top" ]] && { [[ -z "$cur" ]] || newer "$cur" "$top"; } && echo "$top"
 }
 
-[[ -f "$PKGDIR/PKGBUILD" ]] || die "PKGBUILD non trovato in $PKGDIR"
-command -v makepkg >/dev/null || die "makepkg assente (installa base-devel)"
-command -v bsdtar  >/dev/null || die "bsdtar assente (installa libarchive)"
-
-if_outdated=0
-no_install=0
-verify_only=0
-while [[ "${1:-}" == --* ]]; do
-  case "$1" in
-    --if-outdated) if_outdated=1; shift ;;
-    --no-install)  no_install=1; if_outdated=1; shift ;;  # build-only ⇒ mai interattivo
-    --verify-only) verify_only=1; if_outdated=1; shift ;;  # solo firma+indice: stampa versione e sha, non tocca nulla
-    *) die "flag sconosciuto: $1" ;;
-  esac
-done
-
-arg="${1:-}"
-ver=""
-sha=""
-local_deb=""
-
-deb_version() {  # legge il campo Version dal control.tar del .deb (senza dpkg)
-  local deb="$1" ct
-  ct="$(ar t "$deb" | grep '^control\.tar' | head -n1)" || return 1
-  ar p "$deb" "$ct" | bsdtar -xOf - ./control 2>/dev/null \
-    | awk -F': ' '/^Version:/{print $2; exit}'
+lock() {
+  mkdir -p "$ROOT"
+  exec 7>"$ROOT/.lock"
+  flock -n 7 || { err "another Desktop update is running"; exit 3; }
 }
 
-if [[ -n "$arg" && -f "$arg" && "$arg" == *.deb ]]; then
-  # ---- Modalità .deb locale ----
-  local_deb="$(readlink -f "$arg")"
-  ver="$(deb_version "$local_deb")" || die "impossibile leggere Version dal .deb"
-  [[ -n "$ver" ]] || die "Version vuota nel .deb"
-  sha="$(sha256sum "$local_deb" | awk '{print $1}')"
-  echo "==> .deb locale: $local_deb"
-elif [[ -n "$arg" ]]; then
-  # ---- Versione esplicita: risolvi lo sha dalla CDN ----
-  ver="$arg"
-  echo "==> Versione richiesta: $ver — risolvo lo SHA256 dalla CDN..."
-  sha="$(curl -fsSL "$POOL/claude-desktop_${ver}_amd64.deb" | sha256sum | awk '{print $1}')" \
-    || die "download/hash della versione $ver fallito"
-else
-  # ---- Auto: ultima versione dall'indice apt ----
-  # Verifica della firma: Anthropic firma l'InRelease del repo apt ma NON pubblica la chiave in un
-  # path noto (né nel .deb). Se un keyring locale esiste (KEYRING, da importare a mano una volta),
-  # si verifica InRelease con gpgv e si controlla lo sha256 dell'indice Packages contro l'InRelease
-  # firmato. Senza keyring: solo HTTPS, e lo si dice.
-  # Chiave pubblica: pkg/claude-desktop/anthropic-apt.asc nel repo (da https://downloads.claude.ai/claude-desktop/key.asc,
-  # documentata in code.claude.com/docs/en/desktop-linux), fingerprint pinnata qui sotto. Viene dearmorata in cache
-  # per gpgv. Override: CLAUDE_DESKTOP_KEYRING=<keyring binario>.
-  REPO_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
-  KEY_ASC="$REPO_DIR/pkg/claude-desktop/anthropic-apt.asc"
-  KEY_FPR="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
-  KEYRING="${CLAUDE_DESKTOP_KEYRING:-$HOME/.cache/claude-update/anthropic-apt.gpg}"
-  INRELEASE="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/InRelease"
-  idx="$(mktemp)"; trap 'rm -f "$idx"' EXIT
-  curl -fsSL "$APT_INDEX" -o "$idx" || die "download dell'indice apt fallito"
-  if [[ ! -f "$KEYRING" || "$KEY_ASC" -nt "$KEYRING" ]] && [[ -f "$KEY_ASC" ]] && command -v gpg >/dev/null; then
-    mkdir -p "$(dirname "$KEYRING")"
-    gpg --dearmor < "$KEY_ASC" > "$KEYRING.tmp" 2>/dev/null && mv -f "$KEYRING.tmp" "$KEYRING" || rm -f "$KEYRING.tmp"
+# --------------------------------------------------------------------------- stage
+# Prints "<version> <sha256> <pool path>" of the newest package, from a verified index.
+verified_latest() {
+  local tmp inr idx keyring gv want have
+  command -v gpgv >/dev/null && command -v gpg >/dev/null || { err "gpg/gpgv missing: cannot verify the repository"; return 4; }
+  [[ -f "$KEY_ASC" ]] || { err "pinned key missing: $KEY_ASC"; return 4; }
+  tmp="$(mktemp -d)"; inr="$tmp/InRelease"; idx="$tmp/Packages"; keyring="$tmp/key.gpg"
+  gpg --dearmor < "$KEY_ASC" > "$keyring" 2>/dev/null || { rm -rf "$tmp"; err "cannot read the pinned key"; return 4; }
+  curl -fsSL --max-time "$NET_TIMEOUT" "$APT/dists/stable/InRelease" -o "$inr" \
+    && curl -fsSL --max-time "$NET_TIMEOUT" "$APT/dists/stable/main/binary-amd64/Packages" -o "$idx" \
+    || { rm -rf "$tmp"; err "cannot reach the repository"; return 1; }
+  gv="$(gpgv --keyring "$keyring" "$inr" 2>&1)" || { rm -rf "$tmp"; err "InRelease signature is NOT valid"; return 4; }
+  grep -q "$KEY_FPR" <<<"$gv" || { rm -rf "$tmp"; err "InRelease signed by a key other than the pinned one"; return 4; }
+  want="$(awk '/^SHA256:/{f=1;next} /^[^ ]/{f=0} f && $3=="main/binary-amd64/Packages"{print $1; exit}' "$inr")"
+  have="$(sha256sum "$idx" | awk '{print $1}')"
+  [[ -n "$want" && "$want" == "$have" ]] || { rm -rf "$tmp"; err "Packages index does not match the signed InRelease"; return 4; }
+  awk '/^Package:/{p=$2} /^Version:/{v=$2} /^SHA256:/{s=$2} /^Filename:/{f=$2}
+       /^[[:space:]]*$/{if(p=="claude-desktop"&&v)print v, s, f; p=v=s=f=""}
+       END{if(p=="claude-desktop"&&v)print v, s, f}' "$idx" | sort -V | tail -n1
+  rm -rf "$tmp"
+}
+
+do_stage() {
+  local line ver sha path cur deb tmp got rc
+  line="$(verified_latest)"; rc=$?
+  if [[ $rc -ne 0 ]]; then
+    [[ $rc -eq 4 ]] && { cm_update_log desktop verify-failed "$(current)" "" "repository verification failed"; cm_notify "Claude Desktop not updated" "The repository failed verification: nothing was installed."; }
+    return $rc
   fi
-  if [[ -f "$KEYRING" ]] && command -v gpgv >/dev/null; then
-    inr="$(mktemp)"
-    curl -fsSL "$INRELEASE" -o "$inr" || die "download InRelease fallito"
-    gv="$(gpgv --keyring "$KEYRING" "$inr" 2>&1)" || { rm -f "$inr"; die "firma InRelease NON valida con $KEYRING"; }
-    grep -q "$KEY_FPR" <<<"$gv" || { rm -f "$inr"; die "InRelease firmato da una chiave diversa da quella pinnata ($KEY_FPR)"; }
-    want="$(awk '/^SHA256:/{f=1;next} f && $3=="main/binary-amd64/Packages"{print $1; exit}' "$inr")"
-    have="$(sha256sum "$idx" | awk '{print $1}')"
-    rm -f "$inr"
-    [[ -n "$want" && "$want" == "$have" ]] || die "sha256 dell'indice Packages non corrisponde all'InRelease firmato"
-    echo "==> InRelease firmato da Anthropic ($KEY_FPR), verificato; indice Packages integro"
-  else
-    echo "==> Leggo l'indice apt Anthropic (solo HTTPS: keyring assente o gpgv mancante, firma NON verificata)"
+  read -r ver sha path <<<"$line"
+  [[ -n "$ver" && -n "$sha" && -n "$path" ]] || { err "cannot parse the package index"; return 1; }
+  cur="$(current)"
+  if [[ -d "$ROOT/versions/$ver" ]]; then say "Claude Desktop $ver already here"; return 0; fi
+  if [[ -n "$cur" ]] && ! newer "$cur" "$ver"; then say "Claude Desktop $cur is up to date"; return 0; fi
+
+  mkdir -p "$CACHE/desktop" "$ROOT/versions"
+  deb="$CACHE/desktop/claude-desktop_${ver}_amd64.deb"
+  if [[ ! -f "$deb" ]] || [[ "$(sha256sum "$deb" | awk '{print $1}')" != "$sha" ]]; then
+    say "downloading Claude Desktop $ver"
+    curl -fsSL --max-time 900 "$APT/$path" -o "$deb.part" || { rm -f "$deb.part"; err "download failed"; cm_update_log desktop failed "$cur" "$ver" "download failed"; return 1; }
+    mv -f "$deb.part" "$deb"
   fi
-  read -r ver sha < <(
-    awk '
-      /^Version:/ {v=$2}
-      /^SHA256:/  {s=$2}
-      /^[[:space:]]*$/ {if(v){print v, s; v=s=""}}
-      END {if(v) print v, s}
-    ' "$idx" | sort -V | tail -n1
-  )
-  [[ -n "$ver" && -n "$sha" ]] || die "parsing dell'indice apt fallito"
-fi
-
-echo "==> Target: claude-desktop $ver"
-echo "    sha256: $sha"
-if [[ "$verify_only" == 1 ]]; then
-  echo "Done (verify-only): nessun download del .deb, nessuna build."
-  exit 0
-fi
-
-# Versione attualmente installata, per un confronto informativo.
-cur="$(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1 || true)"
-if [[ -n "$cur" ]]; then
-  echo "    (installata ora: $cur)"
-  if [[ "$cur" == "$ver" ]]; then
-    if [[ "$no_install" == 1 ]]; then
-      # Build-only: "già installata" non è un motivo per non produrre il pacchetto — il
-      # chiamante (la GUI) ha bisogno del PKG= per la sua fase di install.
-      echo "    stessa versione già installata: procedo comunque (build-only)."
-    elif [[ "$if_outdated" == 1 ]]; then
-      echo "    già all'ultima versione — niente da fare (skip)."
-      exit 0
-    else
-      read -rp "Stessa versione già installata. Ricostruire comunque? [y/N] " a
-      [[ "${a,,}" == y ]] || { echo "Annullato."; exit 0; }
-    fi
+  got="$(sha256sum "$deb" | awk '{print $1}')"
+  if [[ "$got" != "$sha" ]]; then
+    rm -f "$deb"
+    err "the downloaded package does not match the signed index"
+    cm_update_log desktop verify-failed "$cur" "$ver" "package hash mismatch"
+    cm_notify "Claude Desktop not updated" "Version $ver failed verification: nothing was installed."
+    return 4
   fi
-fi
 
-cd "$PKGDIR"
+  # extract: the application directory and the icons, nothing else from the package
+  tmp="$ROOT/versions/.$ver.tmp"; rm -rf "$tmp"; mkdir -p "$tmp"
+  local data; data="$(ar t "$deb" | grep '^data\.tar' | head -n1)"
+  if [[ -z "$data" ]] || ! ar p "$deb" "$data" | bsdtar -xf - -C "$tmp" ./usr/lib/claude-desktop ./usr/share/icons 2>/dev/null \
+    || [[ ! -x "$tmp/usr/lib/claude-desktop/claude-desktop" ]]; then
+    rm -rf "$tmp"; err "cannot extract $deb"; cm_update_log desktop failed "$cur" "$ver" "extraction failed"; return 1
+  fi
+  mv "$tmp/usr/lib/claude-desktop" "$ROOT/versions/.$ver.app"
+  [[ -d "$tmp/usr/share/icons" ]] && mv "$tmp/usr/share/icons" "$ROOT/versions/.$ver.app/.icons"
+  rm -rf "$tmp"
+  mv -T "$ROOT/versions/.$ver.app" "$ROOT/versions/$ver"
+  # only the newest package stays in the cache: the extracted versions are the rollback
+  find "$CACHE/desktop" -name 'claude-desktop_*_amd64.deb' ! -name "claude-desktop_${ver}_amd64.deb" -delete 2>/dev/null
+  cm_update_log desktop staged "$cur" "$ver" ""
+  say "Claude Desktop $ver staged"
+}
 
-# Backup del PKGBUILD prima di patcharlo.
-cp -f PKGBUILD "PKGBUILD.bak.$(date +%Y%m%d-%H%M%S 2>/dev/null || echo prev)"
+# --------------------------------------------------------------------------- apply
+# The profiles that run a variant of their own (a distinct app_id): each is rebuilt against the
+# new version. CLAUDE_DESKTOP_VARIANTS overrides the list (tests: empty).
+variant_profiles() {
+  if [[ -n "${CLAUDE_DESKTOP_VARIANTS+x}" ]]; then tr ' ' '\n' <<<"$CLAUDE_DESKTOP_VARIANTS" | grep -v '^$'; return; fi
+  local p; while read -r p; do [[ -n "$p" && -n "$(cm_desktop_appid "$p")" ]] && echo "$p"; done < <(cm_profiles)
+}
 
-# Patch pkgver / pkgrel / sha256sums_x86_64.
-sed -i \
-  -e "s/^pkgver=.*/pkgver=${ver}/" \
-  -e "s/^pkgrel=.*/pkgrel=1/" \
-  -e "s/^sha256sums_x86_64=(.*/sha256sums_x86_64=('${sha}')/" \
-  PKGBUILD
+switch_to() {  # <version> <event>
+  local ver="$1" event="$2" from p failed=()
+  from="$(current)"
+  ln -sfn "versions/$ver" "$ROOT/.current.tmp" && mv -T "$ROOT/.current.tmp" "$ROOT/current" \
+    || { err "cannot switch to $ver"; cm_update_log desktop failed "$from" "$ver" "switch failed"; return 1; }
+  if [[ -d "$ROOT/versions/$ver/.icons" ]]; then
+    mkdir -p "$ICONS" && cp -rf "$ROOT/versions/$ver/.icons/." "$ICONS/"
+  fi
+  while read -r p; do
+    [[ -z "$p" ]] && continue
+    QUIET=1 "$HERE/claude-desktop-rebuild" "$p" >/dev/null 2>&1 || failed+=("$p")
+  done < <(variant_profiles)
+  # keep the version in use and the one before it (the rollback); the rest goes
+  local keep_prev v; keep_prev="$(versions | grep -vx "$ver" | head -n1)"
+  [[ "$event" == rollback ]] && keep_prev="$from"
+  while read -r v; do
+    [[ -z "$v" || "$v" == "$ver" || "$v" == "$keep_prev" ]] && continue
+    newer "$ver" "$v" && continue   # a newer staged version is never pruned
+    rm -rf -- "${ROOT:?}/versions/$v"
+  done < <(versions)
+  if (( ${#failed[@]} )); then
+    cm_update_log desktop failed "$from" "$ver" "variant rebuild failed: ${failed[*]}"
+    err "switched to $ver, but the variant for ${failed[*]} failed to rebuild (claude-desktop-rebuild <profile>)"
+    return 1
+  fi
+  cm_update_log desktop "$event" "$from" "$ver" ""
+  if [[ -n "$from" ]]; then say "Claude Desktop $from → $ver"; else say "Claude Desktop $ver in use"; fi
+}
 
-# Se ho un .deb locale, mettilo dove makepkg lo cerca: così, con lo sha già
-# corretto nel PKGBUILD, makepkg lo valida e NON riscarica nulla.
-# Se il .deb passato è GIA' quello nel PKGDIR (rebuild dello stesso file), `cp` fallirebbe con
-# "are the same file" e `set -e` abortirebbe a PKGBUILD già patchato → stato inconsistente.
-if [[ -n "$local_deb" ]]; then
-  dest="$PKGDIR/claude-desktop_${ver}_amd64.deb"
-  [[ "$local_deb" -ef "$dest" ]] || cp -f "$local_deb" "$dest"
-fi
+do_apply() {
+  local ver; ver="$(staged)" || true
+  [[ -n "$ver" ]] || return 0
+  if cm_desktop_running; then say "Claude Desktop $ver is ready: it switches when every Claude Desktop is closed"; return 5; fi
+  switch_to "$ver" applied
+}
 
-if [[ "$no_install" == 1 ]]; then
-  echo "==> makepkg -sf (solo build, nessuna installazione)..."
-  makepkg -sf
+do_rollback() {
+  local cur prev; cur="$(current)"
+  prev="$(versions | while read -r v; do [[ -n "$cur" ]] && newer "$v" "$cur" && { echo "$v"; break; }; done)"
+  [[ -n "$prev" ]] || { err "no previous version to go back to"; return 1; }
+  if cm_desktop_running; then err "close every Claude Desktop first"; return 5; fi
+  switch_to "$prev" rollback
+}
 
-  # Path del pacchetto: chiediamolo a makepkg invece di ricostruirlo a mano (pkgext, arch,
-  # epoch e PKGDEST vivono nella conf, non qui). Il chiamante lo installa con pkexec.
-  pkg="$(makepkg --packagelist | head -n1)"
-  [[ -f "$pkg" ]] || die "pacchetto atteso non trovato: $pkg"
-  prune_artifacts
-  echo
-  echo "Done (build). Non installato — variante Work NON ricostruita."
-  echo "PKG=$pkg"
-  exit 0
-fi
-
-echo "==> makepkg -sif (build + install)..."
-makepkg -sif
-
-prune_artifacts
-
-echo
-echo "Done. Installata: $(pacman -Q claude-desktop 2>/dev/null || echo '?')"
-echo "Riavvia Claude Desktop per applicare l'aggiornamento."
-
-# --- Varianti per profilo (eseguibili con app_id distinto) ---
-# Il binario ufficiale è stato appena sostituito: ricostruisco ogni copia patchata. Quali siano
-# lo dicono i manifest, non un elenco qui.
-if command -v claude-desktop-rebuild >/dev/null 2>&1; then
-  source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
-  while read -r _p; do
-    [[ -z "$_p" ]] && continue
-    [[ -n "$(cm_desktop_appid "$_p")" ]] || continue
-    echo "==> ricostruisco la variante Desktop del profilo '$_p' (app_id distinto)"
-    claude-desktop-rebuild "$_p" || echo "WARN: rebuild della variante '$_p' fallito — rilancia 'claude-desktop-rebuild $_p' a mano" >&2
-  done < <(cm_profiles)
-fi
+case "${1:-}" in
+  --current) current; exit 0 ;;
+  --staged) staged; exit 0 ;;
+  --stage) lock; do_stage; exit $? ;;
+  --apply) lock; do_apply; exit $? ;;
+  --rollback) lock; do_rollback; exit $? ;;
+  "") lock; do_stage || exit $?; do_apply; exit $? ;;
+  -h | --help) sed -n '2,27p' "$0"; exit 0 ;;
+  *) err "unknown option $1"; exit 2 ;;
+esac

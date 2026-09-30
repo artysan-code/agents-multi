@@ -2,15 +2,18 @@
 # claude-update: orchestratore aggiornamenti dell'intero setup Claude multi-account.
 #
 #   [CLI]     Claude Code   — updater interno + ripristino di claude-bin e del wrapper ~/.local/bin/claude
-#   [Desktop] Claude Desktop — rebuild pkg Arch dal .deb UFFICIALE Anthropic; le varianti
-#                              (app_id distinto) viene ricostruita in coda da claude-desktop-update
+#   [Desktop] Claude Desktop — claude-desktop-update: .deb ufficiale verificato, in user space, niente root
 #
 # USO:
 #   claude-update              # tutto: CLI + Desktop
 #   claude-update --cli        # solo Claude Code
 #   claude-update --desktop    # solo Claude Desktop (tutte le varianti)
-#   claude-update --check      # NON aggiorna: dice solo cosa è obsoleto (--json per gli script, con changelog_file)
-#   claude-update --rollback   # claude-bin torna alla versione precedente (il prune ne tiene una)
+#   claude-update --auto       # quello che fa il timer: controlla e aggiorna ciò che è indietro, in silenzio
+#   claude-update --check      # NON aggiorna: dice solo cosa è obsoleto (--json per gli script)
+#   claude-update --rollback [--desktop]   # torna alla versione precedente (Code, o Desktop)
+#
+# Ogni esito finisce nel registro (~/.local/state/claude-multi/updates.jsonl, bin/lib/updates.sh).
+# L'unica notifica è una verifica fallita: tutto il resto si legge nella console.
 #
 # I due sotto-aggiornamenti girano ISOLATI: il fallimento di uno NON blocca l'altro.
 # A fine run c'è un riepilogo per-componente e l'exit code è != 0 se qualcosa è fallito.
@@ -20,6 +23,7 @@
 set -uo pipefail
 
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/updates.sh"
 
 VERSIONS_DIR="$HOME/.local/share/claude/versions"
 BIN_DIR="$HOME/.local/bin"
@@ -27,15 +31,14 @@ BIN_DIR="$HOME/.local/bin"
 # Canale usato dall'updater nativo: `stable` è indietro di qualche release (rollout graduale),
 # `latest` è ciò che `claude update` installa davvero. Confrontare con `stable` darebbe
 # falsi "aggiornamento disponibile"/"già aggiornato" rispetto a quello che poi succede.
-# (le URL sono override-abili via env: serve per testare il gate senza aspettare una release vera)
+# (le URL sono override-abili via env: per provare un aggiornamento senza aspettare una release vera)
 CLI_CHANNEL_URL="${CLAUDE_CLI_CHANNEL_URL:-https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest}"
 APT_INDEX_URL="${CLAUDE_APT_INDEX_URL:-https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages}"
 NET_TIMEOUT="${CLAUDE_UPDATE_TIMEOUT:-8}"
 CACHE_DIR="$HOME/.cache/claude-update"
 LOCK_FILE="$CACHE_DIR/update.lock"
-CHANGELOG_URL="${CLAUDE_CLI_CHANGELOG_URL:-https://api.github.com/repos/anthropics/claude-code/contents/CHANGELOG.md}"
 
-# Un solo aggiornamento alla volta (gate GUI + timer + terminale possono coincidere).
+# Un solo aggiornamento alla volta (timer, avvio e terminale possono coincidere).
 take_lock() {
   mkdir -p "$CACHE_DIR"
   exec 8>"$LOCK_FILE"
@@ -43,18 +46,6 @@ take_lock() {
     echo "ERROR: un altro claude-update è in corso (lock $LOCK_FILE)" >&2
     exit 3
   fi
-}
-
-# Changelog della versione remota (sezione "## X.Y.Z" del CHANGELOG ufficiale), salvato in cache:
-# il gate GUI lo mostra prima di chiedere l'approvazione. Fallimenti silenziosi: è solo informativo.
-changelog_for() {
-  local ver="$1" out="$CACHE_DIR/changelog-$1.md"
-  [[ -n "$ver" ]] || return 1
-  [[ -s "$out" ]] && { echo "$out"; return 0; }
-  mkdir -p "$CACHE_DIR"
-  curl -fsSL --max-time "$NET_TIMEOUT" -H "Accept: application/vnd.github.raw" "$CHANGELOG_URL" 2>/dev/null \
-    | awk -v v="## $ver" 'found && /^## /{exit} $0==v{found=1} found' > "$out.tmp" 2>/dev/null
-  if [[ -s "$out.tmp" ]]; then mv -f "$out.tmp" "$out"; echo "$out"; else rm -f "$out.tmp"; return 1; fi
 }
 
 # Rollback: claude-bin torna alla versione precedente ancora in cache (il prune ne tiene una).
@@ -66,6 +57,7 @@ do_rollback() (
   [[ -n "$prev" ]] || { echo "ERROR: nessuna versione precedente in $VERSIONS_DIR (il prune tiene solo N-1)" >&2; exit 1; }
   echo "==> [CLI] rollback $cur → $prev"
   ln -sfn "$VERSIONS_DIR/$prev" "$BIN_DIR/claude-bin"
+  cm_update_log cli rollback "$cur" "$prev" ""
   echo "    claude-bin → $prev (la $cur resta in cache: claude-multi update --cli per tornare avanti)"
 )
 
@@ -146,50 +138,19 @@ do_cli() (
 )
 
 # --- [Desktop] Claude Desktop (tutte le varianti) ---------------------------
-# claude-desktop-update ricostruisce il pkg dal .deb ufficiale e, in coda, le varianti.
-# --if-outdated: se è già all'ultima versione esce 0 senza prompt (run non presidiata).
-do_desktop() (
-  set -e
+# claude-desktop-update scarica, verifica ed estrae in user space; la versione nuova entra in uso
+# (con le varianti ricostruite) solo quando nessun Claude Desktop è aperto. Exit 5 = pronta ma in
+# attesa: non è un fallimento.
+do_desktop() {
   echo "==> [Desktop] aggiornamento Claude Desktop (tutte le varianti)..."
-
-  # Guardia esplicita: se manca il PKGBUILD, claude-desktop-update morirebbe con un ERROR
-  # generico. Meglio dirlo chiaro qui (errore strutturale) e far risultare Desktop = FAIL.
-  local pkgdir="${CLAUDE_DESKTOP_PKGDIR:-$HOME/build/claude-desktop}"
-  if [[ ! -f "$pkgdir/PKGBUILD" ]]; then
-    echo "    ERROR: build dir Desktop assente o senza PKGBUILD ($pkgdir)." >&2
-    echo "           Ricrea il PKGBUILD (repackage del .deb ufficiale) prima di aggiornare." >&2
-    exit 1
-  fi
-
-  claude-desktop-update --if-outdated
-
-  # Self-heal della variante Work: claude-desktop-update la ricostruisce SOLO quando il pkg
-  # cambia versione. Se il pkg è già all'ultima (--if-outdated esce prima) ma il binario Work
-  # manca o è più vecchio dell'app.asar di sistema (pacman -U out-of-band), lo ricostruiamo qui.
-  # Una variante per ogni profilo che ne dichiara una: il ciclo viene dai manifest, non da un nome.
-  local sys_asar="/usr/lib/claude-desktop/resources/app.asar"
-  if command -v claude-desktop-rebuild >/dev/null 2>&1; then
-    local p appid vbin vasar
-    while read -r p; do
-      [[ -z "$p" ]] && continue
-      appid="$(cm_desktop_appid "$p")"; [[ -n "$appid" ]] || continue
-      vbin="$HOME/.local/lib/$appid/$appid"
-      vasar="$HOME/.local/lib/$appid/resources/app.asar"
-      if [[ ! -x "$vbin" || ! -f "$vasar" || "$sys_asar" -nt "$vasar" ]]; then
-        echo "    variante '$p' assente/disallineata → rebuild"
-        claude-desktop-rebuild "$p"
-      else
-        echo "    variante '$p' già allineata (skip)"
-      fi
-    done < <(cm_profiles)
-  fi
-)
+  "$BIN_DIR/claude-desktop-update"; local rc=$?
+  [[ $rc -eq 5 ]] && return 0
+  return $rc
+}
 
 # --- Check versioni (nessuna scrittura) -------------------------------------
-# Usato dal launcher GUI (claude-launch) per decidere se mostrare il gate di aggiornamento.
-# Deve essere ECONOMICO e non bloccante: l'indice apt è ~19 KB, il canale CLI ~10 byte.
-# Ogni fetch ha timeout; in mancanza di rete i campi `latest` restano vuoti e `outdated`
-# è false → il launcher tira dritto e apre l'app.
+# Economico e non bloccante: l'indice apt è ~19 KB, il canale CLI ~10 byte. Ogni fetch ha timeout;
+# in mancanza di rete i campi `latest` restano vuoti e `outdated` è false.
 
 # newer A B → vero se B è strettamente più recente di A (ordinamento semver via sort -V).
 # Evita di proporre un "aggiornamento" quando il canale remoto è più indietro del locale.
@@ -203,7 +164,12 @@ newer() {
 
 cli_current()  { basename "$(readlink -f "$BIN_DIR/claude-bin" 2>/dev/null)" 2>/dev/null || true; }
 cli_latest()   { curl -fsSL --max-time "$NET_TIMEOUT" "$CLI_CHANNEL_URL" 2>/dev/null | tr -d '[:space:]'; }
-desk_current() { pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1; }
+# la versione in uso in user space; prima della migrazione, quella del pacchetto di sistema
+desk_current() {
+  local v; v="$("$BIN_DIR/claude-desktop-update" --current 2>/dev/null)"
+  [[ -n "$v" ]] && { echo "$v"; return; }
+  pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1
+}
 desk_latest()  {
   curl -fsSL --max-time "$NET_TIMEOUT" "$APT_INDEX_URL" 2>/dev/null | awk '
     /^Version:/ {print $2}
@@ -221,19 +187,13 @@ do_check() {
   newer "$dc" "$dl" && desk_out=true
 
   # La cache (~/.cache/claude-update/check.json) la scrive SEMPRE il check, in qualunque modalità:
-  # e' cio' che leggono statusline, dashboard, doctor e launcher. Scrittura atomica, prima del changelog
-  # (che puo' essere lento): se il chiamante ci ammazza col suo timeout, la cache e' gia' a posto.
-  write_check_cache() {
-    mkdir -p "$CACHE_DIR"
-    printf '{"cli":{"current":"%s","latest":"%s","outdated":%s,"changelog_file":"%s"},"desktop":{"current":"%s","latest":"%s","outdated":%s},"checked_at":%s}\n' \
-      "$cc" "$cl" "$cli_out" "${1:-}" "$dc" "$dl" "$desk_out" "$(date +%s)" > "$CACHE_DIR/check.json.tmp" \
-      && mv -f "$CACHE_DIR/check.json.tmp" "$CACHE_DIR/check.json"
-  }
-  # senza rete (entrambi i latest vuoti) non si sovrascrive una cache buona con una vuota
+  # è ciò che leggono statusline, console e doctor. Scrittura atomica. Senza rete (entrambi i
+  # latest vuoti) non si sovrascrive una cache buona con una vuota.
   if [[ -n "$cl" || -n "$dl" ]]; then
-    write_check_cache ""
-    local clf=""
-    if [[ $cli_out == true ]]; then clf="$(changelog_for "$cl" || true)"; [[ -n "$clf" ]] && write_check_cache "$clf"; fi
+    mkdir -p "$CACHE_DIR"
+    printf '{"cli":{"current":"%s","latest":"%s","outdated":%s},"desktop":{"current":"%s","latest":"%s","outdated":%s},"checked_at":%s}\n' \
+      "$cc" "$cl" "$cli_out" "$dc" "$dl" "$desk_out" "$(date +%s)" > "$CACHE_DIR/check.json.tmp" \
+      && mv -f "$CACHE_DIR/check.json.tmp" "$CACHE_DIR/check.json"
   fi
 
   if [[ $json -eq 1 ]]; then
@@ -254,11 +214,33 @@ case "${1:-}" in
   ""|--all)    scope="all" ;;
   --cli)       scope="cli" ;;
   --desktop)   scope="desktop" ;;
+  --auto)      scope="auto" ;;
   --check)     do_check "${2:-}"; exit $? ;;
-  --rollback)  take_lock; do_rollback; exit $? ;;
-  -h|--help)   sed -n '2,18p' "$0"; exit 0 ;;
-  *) echo "Uso: claude-update [--cli|--desktop|--check [--json]|--rollback]  (default: entrambi)" >&2; exit 2 ;;
+  --rollback)
+    if [[ "${2:-}" == "--desktop" ]]; then "$BIN_DIR/claude-desktop-update" --rollback; exit $?; fi
+    take_lock; do_rollback; exit $? ;;
+  -h|--help)   sed -n '2,19p' "$0"; exit 0 ;;
+  *) echo "Uso: claude-update [--cli|--desktop|--auto|--check [--json]|--rollback [--desktop]]  (default: entrambi)" >&2; exit 2 ;;
 esac
+
+# --auto: il giro del timer. Aggiorna ciò che il check trova indietro, senza chiedere e senza
+# output (i fallimenti vanno nel registro e nel journal). Desktop si aggiorna anche quando il check
+# fallisce: una versione già pronta aspetta solo che l'app venga chiusa.
+if [[ "$scope" == "auto" ]]; then
+  take_lock
+  do_check >/dev/null; state="$(cat "$CACHE_DIR/check.json" 2>/dev/null)"
+  if grep -q '"cli":{[^}]*"outdated":true' <<<"$state"; then
+    from="$(cli_current)"
+    # non come condizione di `if`: lì bash spegnerebbe il `set -e` della subshell (vedi sotto)
+    out="$(do_cli 2>&1)"; rc=$?
+    if [[ $rc -eq 0 ]]; then cm_update_log cli installed "$from" "$(cli_current)" ""
+    else cm_update_log cli failed "$from" "" "$(tail -n 3 <<<"$out")"; echo "$out" >&2; fi
+  fi
+  QUIET=1 "$BIN_DIR/claude-desktop-update" >/dev/null; rc=$?
+  do_check >/dev/null 2>&1 || true
+  [[ $rc -eq 0 || $rc -eq 5 ]] || exit 1
+  exit 0
+fi
 
 take_lock
 cli_res="—"; desk_res="—"
@@ -269,24 +251,27 @@ cli_res="—"; desk_res="—"
 # mascherato da un falso "ok". Le chiamiamo dirette e catturiamo $? (qui il `set -e` interno
 # è di nuovo attivo). Lo script top-level non ha `set -e`, quindi un rc!=0 non ci fa uscire.
 if [[ "$scope" == "all" || "$scope" == "cli" ]]; then
+  from="$(cli_current)"
   do_cli; rc=$?
   if [[ $rc -eq 0 ]]; then
-    cli_res="ok    $(basename "$(readlink "$BIN_DIR/claude-bin" 2>/dev/null)" 2>/dev/null || echo '?')"
+    cli_res="ok    $(cli_current)"
+    [[ "$from" != "$(cli_current)" ]] && cm_update_log cli installed "$from" "$(cli_current)" ""
   else
     cli_res="FAIL"
+    cm_update_log cli failed "$from" "" "manual update failed"
   fi
 fi
 
 if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
   do_desktop; rc=$?
   if [[ $rc -eq 0 ]]; then
-    desk_res="ok    $(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' || echo '?')"
+    desk_res="ok    $(desk_current)"
   else
     desk_res="FAIL"
   fi
 fi
 
-# La cache del check (launcher, statusline, dashboard) descrive il mondo di prima: si rigenera subito.
+# La cache del check (statusline, console) descrive il mondo di prima: si rigenera subito.
 [[ "$cli_res" == ok* || "$desk_res" == ok* ]] && { do_check --json >/dev/null 2>&1 || true; }
 
 echo

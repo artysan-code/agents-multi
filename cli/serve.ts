@@ -1,7 +1,7 @@
 // serve.ts — the local console: `claude-multi serve` listens on http://127.0.0.1:7331.
 //
 // Page in cli/dashboard/ (HTML/CSS/JS, no dependencies, no build step: works offline). Data comes
-// from status(), usage.ts and budget.ts.
+// from status() and usage.ts.
 //
 // Live updates are pushed, not polled. The browser holds one EventSource on /api/events; the
 // server watches the transcript tree and the runtime config and emits an event when something
@@ -10,13 +10,13 @@
 // frozen on Usage, Sessions and Budget.
 //
 // Actions (POST /api/action): an allowlist of CLI subcommands, localhost only, behind the
-// `x-claude-multi` anti-CSRF header. Update is deliberately not among them: it goes through polkit.
+// `x-claude-multi` anti-CSRF header. Updating needs no privilege any more (Claude Desktop lives in
+// user space), so it is an action like the others.
 
-import { ANSI, CACHE, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME } from "./lib.ts";
+import { ANSI, CACHE, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
 import { type RawRegistry, selectServers } from "./mcp.ts";
 import { status, summarize } from "./status.ts";
-import { type GroupBy, ingest, openDb, report, sessions, transcript } from "./usage.ts";
-import { collect } from "./budget.ts";
+import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
@@ -33,7 +33,9 @@ const ACTIONS: Record<string, { args: string[]; opts?: Record<string, string[]>;
   "install": { args: ["install"] },
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
   "update-check": { args: ["update", "--check"], timeoutMs: 40000 },
-  "budget": { args: ["budget"] },
+  "update-now": { args: ["update", "--auto"], timeoutMs: 900000 },
+  "rollback-cli": { args: ["update", "--rollback"] },
+  "rollback-desktop": { args: ["update", "--rollback", "--desktop"], timeoutMs: 180000 },
 };
 
 async function runAction(name: string, opts: string[]) {
@@ -50,20 +52,20 @@ async function runAction(name: string, opts: string[]) {
   let output = strip(dec.decode(r.stdout)); const err = strip(dec.decode(r.stderr)).trim();
   if (err) output += (output ? "\n" : "") + err;
   // update --check exits 10 when an update exists: not an error (the check writes its own cache)
-  if (name === "update-check") return { code: r.code === 10 ? 0 : r.code, output: output + (r.code === 10 ? "\n(updates available: use the gate, or claude-multi update)" : ""), ms: Date.now() - t0 };
+  if (name === "update-check") return { code: r.code === 10 ? 0 : r.code, output, ms: Date.now() - t0 };
   return { code: r.code, output, ms: Date.now() - t0 };
 }
 
 // ---------------------------------------------------------------- profiles
-interface ProfileBody { name?: string; description?: string; command?: string; alias?: string; desktopDir?: string; cap?: number | null; mcp?: string[]; disableAccountMcp?: boolean }
+interface ProfileBody { name?: string; description?: string; command?: string; alias?: string; desktopDir?: string; mcp?: string[]; disableAccountMcp?: boolean }
 
 /** Profile names become directory names and are interpolated into paths, so the shape is fixed
  *  here rather than sanitised later: lowercase, starts with a letter, no separators. */
 const NAME_RE = /^[a-z][a-z0-9_-]{1,30}$/;
 
 /**
- * Create or update a profile: write its manifest, point the MCP registry at it, record the alert
- * cap, then run `install` to materialise the runtime. Every write lands in the repository, which
+ * Create or update a profile: write its manifest, point the MCP registry at it, then run
+ * `install` to materialise the runtime. Every write lands in the repository, which
  * is the source of truth — nothing here touches ~/.claude-multi directly.
  */
 async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: string; output?: string }> {
@@ -93,7 +95,6 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
   }
 
   if (Array.isArray(b.mcp)) await applyRegistrySelection(name, b.mcp);
-  if (b.cap !== undefined) await applyCap(name, b.cap);
 
   const r = await runAction("install", []);
   // install reports its own diagnosis, so a non-zero exit is surfaced as output rather than
@@ -114,21 +115,6 @@ async function applyRegistrySelection(name: string, picked: string[]) {
   if (JSON.stringify(next) !== JSON.stringify(reg)) await Deno.writeTextFile(path, JSON.stringify(next, null, 2) + "\n");
 }
 
-/** Store the per-profile alert ceiling in shared/budget.json (null clears it). */
-async function applyCap(name: string, cap: number | null) {
-  const path = `${REPO}/shared/budget.json`;
-  const cfg = await readJson<Record<string, unknown>>(path);
-  if (!cfg) return;
-  const before = JSON.stringify(cfg.profiles ?? {});
-  const profiles = (cfg.profiles ?? {}) as Record<string, Record<string, unknown>>;
-  const entry = profiles[name] ?? {};
-  if (cap == null || !(cap > 0)) delete entry.cap; else entry.cap = cap;
-  if (Object.keys(entry).length) profiles[name] = entry; else delete profiles[name];
-  cfg.profiles = profiles;
-  // unchanged → no write: the file is hand-formatted, and a rewrite would only reflow it
-  if (JSON.stringify(profiles) !== before) await Deno.writeTextFile(path, JSON.stringify(cfg, null, 2) + "\n");
-}
-
 // ---------------------------------------------------------------- live updates
 type Topic = "usage" | "state";
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
@@ -141,17 +127,18 @@ function broadcast(topic: Topic, sessions: string[] = []) {
 
 /**
  * Watch what the console displays and say which half moved.
- * `usage`  new transcript lines — sessions, usage, budget estimates
+ * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
  * second is plenty for a dashboard.
  */
 async function watchTree(signal: AbortSignal) {
-  // The update check's cache and the gate's skipped versions decide the tray's "update" state.
-  // watchFs refuses a path that does not exist, so those two are watched only where they are.
+  // The update check's cache, and the state directory where every update result is logged
+  // (updates.jsonl): the Updates tab follows both. watchFs refuses a path that does not exist, so
+  // those two are watched only where they are.
   const paths = [RUNTIME, `${REPO}/shared`];
-  for (const d of [`${HOME}/.cache/claude-update`, `${HOME}/.config/claude-update`]) if (await lstat(d)) paths.push(d);
+  for (const d of [`${HOME}/.cache/claude-update`, STATE]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
   try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
@@ -216,13 +203,12 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   const statusCache = async (fresh: boolean) => {
     if (!cache || fresh || Date.now() - cache.at > 5000) { const report = await status(); cache = { at: Date.now(), body: JSON.stringify(report), report }; }
   };
-  let budget: { at: number; body: string } | null = null;
   let plugins: { at: number; body: string } | null = null;
   const ac = new AbortController();
   const json = (v: unknown, code = 200) => new Response(JSON.stringify(v), { status: code, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
   // a state change invalidates the cached snapshots, so the next request after an event is fresh
-  clients.add((topic) => { if (topic === "state") cache = null; budget = null; });
+  clients.add((topic) => { if (topic === "state") cache = null; });
 
   const handler = async (req: Request): Promise<Response> => {
     const u = new URL(req.url);
@@ -236,18 +222,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
       // the tray's view of the same report: one level and the lines behind it
       if (u.pathname === "/api/summary") {
         await statusCache(u.searchParams.has("fresh"));
-        const skipped = (await readText(`${HOME}/.config/claude-update/skipped`) ?? "").split("\n");
-        return json(summarize(cache!.report, skipped));
-      }
-      if (u.pathname === "/api/usage") {
-        const db = openDb(); await ingest(db, { quiet: true });
-        const r = report(db, {
-          by: (u.searchParams.get("by") ?? "profile") as GroupBy, since: u.searchParams.get("since") ?? "30d",
-          profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60),
-          split: (u.searchParams.get("split") || undefined) as GroupBy | undefined,
-        });
-        db.close();
-        return json(r);
+        return json(summarize(cache!.report));
       }
       if (u.pathname === "/api/sessions") {
         const db = openDb(); await ingest(db, { quiet: true });
@@ -255,24 +230,12 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         db.close();
         return json(r);
       }
-      if (u.pathname === "/api/transcript") {
-        const id = u.searchParams.get("session");
-        if (!id) return json({ error: "session parameter required" }, 400);
-        const db = openDb();
-        const r = await transcript(db, id, Number(u.searchParams.get("limit") ?? 200));
-        db.close();
-        return json(r);
-      }
-      if (u.pathname === "/api/budget") {
-        if (!budget || u.searchParams.has("fresh") || Date.now() - budget.at > 30000) budget = { at: Date.now(), body: JSON.stringify(await collect({ ingest: false })) };
-        return new Response(budget.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
-      }
       if (u.pathname === "/api/sync") return new Response(await readText(`${CACHE}/sync.json`) ?? "null", { headers: { "content-type": "application/json" } });
       if (u.pathname === "/api/profile") {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
         const r = await saveProfile(await req.json().catch(() => ({})));
-        cache = null; budget = null;
+        cache = null;
         broadcast("state");
         return json(r, r.error ? 400 : 200);
       }
@@ -295,7 +258,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
         const body = await req.json().catch(() => ({})) as { action?: string; opts?: string[] };
         const r = await runAction(String(body.action ?? ""), body.opts ?? []);
-        cache = null; budget = null;
+        cache = null;
         broadcast("state");
         return json(r);
       }

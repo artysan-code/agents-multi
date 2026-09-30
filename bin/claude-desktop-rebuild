@@ -15,11 +15,12 @@
 #   3) ripacchettizzo (preservando i native modules *.node)
 #   4) assemblo ~/.local/lib/claude-desktop-<profilo>/: binario REALE copiato (necessario perché
 #      Electron risolve resources/ dal path reale dell'eseguibile) + resources con l'asar patchato;
-#      tutto il resto è SYMLINK a /usr/lib/claude-desktop → ~245 MB di cui solo il binario è copia
+#      tutto il resto è SYMLINK alla versione in uso (~/.local/lib/claude-desktop/versions/<ver>,
+#      risolta da `current`): una variante resta legata alla sua versione finché non la si ricostruisce
 #   5) tingo le due icone della tray col colore dell'icona applicazione del profilo
 #
 # La supply chain resta pulita: il binario è quello ufficiale Anthropic, l'unica modifica è UNA riga
-# nostra e trasparente nell'asar. Rilancia questo script dopo ogni update di claude-desktop.
+# nostra e trasparente nell'asar. claude-desktop-update la rilancia a ogni cambio di versione.
 set -euo pipefail
 
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
@@ -31,12 +32,13 @@ if [[ -z "$PROFILE" ]] || ! cm_has_profile "$PROFILE"; then
 fi
 APPID="$(cm_desktop_appid "$PROFILE")"
 if [[ -z "$APPID" ]]; then
-  echo "ERRORE: il profilo '$PROFILE' usa ~/.config/Claude, cioè il claude-desktop di sistema:" >&2
+  echo "ERRORE: il profilo '$PROFILE' usa ~/.config/Claude, cioè il Claude Desktop di serie:" >&2
   echo "        non serve (e non si può fare) una build dedicata. Dagli una desktopDir propria." >&2
   exit 2
 fi
 
-SRC=/usr/lib/claude-desktop
+SRC="$(readlink -f "${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}/current" 2>/dev/null)"
+[[ -n "$SRC" && -x "$SRC/claude-desktop" ]] || { echo "ERRORE: nessun Claude Desktop in uso (claude-desktop-update)" >&2; exit 1; }
 DST="$HOME/.local/lib/$APPID"
 export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/share/npm/bin:$PATH"
 

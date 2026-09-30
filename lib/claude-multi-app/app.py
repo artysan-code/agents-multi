@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""claude-multi-app — the desktop app: tray icon, console window, update gate.
+"""claude-multi-app — the desktop app: tray icon and console window.
 
 A view of the CLI, like everything that is not the CLI: state comes from the console server
 (`claude-multi serve`, its own systemd unit, still reachable from a browser or over ssh), actions go
@@ -7,15 +7,12 @@ through the same commands a terminal would run. There is no setup logic here.
 
   claude-multi-app              open the console window (starting the app if it is not running)
   claude-multi-app --tray       start in the tray, no window: what the login unit runs
-  claude-multi-app --updates    open the update gate (the timer's notification uses this)
-  claude-multi-app --gate --profile <p> [--state <json>]
-                                the gate before Claude Desktop opens, as a process of its own:
-                                blocking, with the exit codes claude-launch reads (see gate.py)
-  claude-multi-app --gate --demo [--demo-uptodate] [--standalone]
-                                the gate with invented versions, to look at it
+
+Updates need no window: the timer installs them (bin/claude-update --auto) and the console's
+System › Updates shows what happened.
 
 One instance per session: a second start hands its request to the first over a local socket and
-exits. `--gate` is the exception — claude-launch waits on that process and reads its exit code.
+exits.
 
 Without a system tray (GNOME without the AppIndicator extension) the app still opens its windows and
 quits when the last one closes; `--tray` gives up after a minute and says so to the doctor.
@@ -23,42 +20,18 @@ quits when the last one closes; `--tray` gives up after a minute and says so to 
 
 from __future__ import annotations
 
-import json
-import os
 import subprocess
 import sys
 import time
 
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
-from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from common import BIN, CONSOLE_UNIT, NAME, SOCKET, default_profile, write_state
-from gate import EXIT_ERROR, EXIT_LAUNCH_ASIS, UpdateGate, drop_skipped
+from common import BIN, CONSOLE_UNIT, NAME, SOCKET, write_state
 
 TRAY_WAIT_S = 60  # at login the tray host can come up after us
-
-
-def load_state(argv: list[str]) -> dict:
-    """Versions: from the caller via --state (saves a second network round), or checked here."""
-    if "--state" in argv:
-        return json.loads(argv[argv.index("--state") + 1])
-    out = subprocess.run([str(BIN / "claude-update"), "--check", "--json"],
-                         capture_output=True, text=True, timeout=40).stdout
-    return json.loads(out)
-
-
-class CheckWorker(QThread):
-    """The update check takes seconds of network: off the UI thread, or the tray freezes."""
-    done = Signal(dict)
-    failed = Signal(str)
-
-    def run(self) -> None:
-        try:
-            self.done.emit(drop_skipped(load_state([])))
-        except Exception as exc:  # noqa: BLE001 — shown to the user, the app stays up
-            self.failed.emit(str(exc))
 
 
 class Controller(QObject):
@@ -67,19 +40,11 @@ class Controller(QObject):
         self.app = app
         self.tray = None
         self.window = None
-        self.gate: UpdateGate | None = None
-        self.worker: CheckWorker | None = None
         self._profile = None
-        self._closing: list[UpdateGate] = []  # closed gates whose status thread is still running
-        # Qt aborts the process if a QThread is destroyed while it runs, and quitting destroys
-        # everything: the threads still out finish first (a status read takes a few seconds).
-        app.aboutToQuit.connect(self._drain)
 
     # ------------------------------------------------------------------ requests
     def handle(self, cmd: str) -> None:
-        if cmd == "updates":
-            self.show_updates()
-        elif cmd.startswith("show"):
+        if cmd.startswith("show"):
             self.show_console(cmd.partition(":")[2] or None)
         # "tray": already running, nothing to do
 
@@ -108,48 +73,6 @@ class Controller(QObject):
         self.window = None
         QTimer.singleShot(0, self._maybe_quit)
 
-    def show_updates(self) -> None:
-        if self.gate:
-            self.gate.raise_()
-            self.gate.activateWindow()
-            return
-        if self.worker:
-            return  # a check is already running
-        if self.tray:
-            self.tray.icon.showMessage(NAME, "Checking for updates…", QSystemTrayIcon.MessageIcon.NoIcon, 3000)
-        self.worker = CheckWorker(self)
-        self.worker.done.connect(self._open_gate)
-        self.worker.failed.connect(self._check_failed)
-        self.worker.start()
-
-    def _open_gate(self, state: dict) -> None:
-        self.worker = None
-        self.gate = UpdateGate(state, default_profile(), standalone=True, on_console=self.show_console)
-        self.gate.finished.connect(self._gate_closed)
-        self.gate.show()
-        self.gate.raise_()
-        self.gate.activateWindow()
-
-    def _check_failed(self, msg: str) -> None:
-        self.worker = None
-        QMessageBox.warning(None, NAME, f"The update check failed (offline?).\n\n{msg}")
-        self._maybe_quit()
-
-    def _gate_closed(self) -> None:
-        # The gate reads `claude-multi status` in a thread of its own. Closed before that returns,
-        # deleting it would destroy a running QThread, and Qt aborts the whole process for that.
-        gate, self.gate = self.gate, None
-        worker = getattr(gate, "worker", None)
-        if worker is not None and worker.isRunning():
-            gate.hide()
-            self._closing.append(gate)
-            worker.finished.connect(lambda: (self._closing.remove(gate), gate.deleteLater()))
-        else:
-            gate.deleteLater()
-        if self.tray:
-            self.tray.refresh()
-        QTimer.singleShot(0, self._maybe_quit)
-
     def launch(self, profile: str) -> None:
         subprocess.Popen([str(BIN / "claude-launch"), profile], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -162,13 +85,8 @@ class Controller(QObject):
 
     def _maybe_quit(self) -> None:
         """Without a tray nothing keeps the app alive but its windows."""
-        if not self.tray and not self.window and not self.gate and not self.worker:
+        if not self.tray and not self.window:
             self.app.quit()
-
-    def _drain(self) -> None:
-        for t in (self.worker, getattr(self.gate, "worker", None), *(g.worker for g in self._closing)):
-            if t is not None and t.isRunning():
-                t.wait(60000)
 
     def quit(self) -> None:
         self.app.quit()
@@ -207,45 +125,8 @@ def listen(ctl: Controller) -> QLocalServer:
 
 
 # ---------------------------------------------------------------------- entry points
-def run_gate(argv: list[str]) -> int:
-    """The gate before Claude Desktop opens: a process of its own, its exit code is the answer."""
-    demo = "--demo" in argv
-    profile = argv[argv.index("--profile") + 1] if "--profile" in argv else default_profile()
-    app = QApplication(sys.argv)
-    app.setApplicationName(NAME)
-    app.setDesktopFileName(NAME)
-    if demo:
-        outdated = "--demo-uptodate" not in argv
-        state = {
-            "cli": {"current": "2.1.220", "latest": "2.1.221", "outdated": outdated},
-            "desktop": {"current": "1.24012.9", "latest": "1.24013.0", "outdated": outdated},
-        }
-    else:
-        try:
-            state = drop_skipped(load_state(argv))
-        except Exception as exc:  # noqa: BLE001 — any error here means "open Claude anyway"
-            print(f"{NAME}-app: update check failed ({exc})", file=sys.stderr)
-            return EXIT_ERROR
-        if not (state.get("desktop", {}).get("outdated") or state.get("cli", {}).get("outdated")):
-            return EXIT_LAUNCH_ASIS
-    gate = UpdateGate(state, profile, demo=demo, standalone="--standalone" in argv)
-    gate.show()
-    gate.raise_()
-    gate.activateWindow()
-    app.exec()
-    # The answer is known and claude-launch is waiting for it. Closed quickly, the gate may still
-    # be reading `claude-multi status` in a thread, and tearing down a running QThread aborts the
-    # process (a core dump, and exit 134 instead of the answer): leave without the teardown.
-    sys.stdout.flush()
-    sys.stderr.flush()
-    os._exit(gate.result_code)
-
-
 def main() -> int:
-    argv = sys.argv[1:]
-    if "--gate" in argv:
-        return run_gate(argv)
-    cmd = "updates" if "--updates" in argv else "tray" if "--tray" in argv else "show"
+    cmd = "tray" if "--tray" in sys.argv[1:] else "show"
 
     app = QApplication(sys.argv)
     app.setApplicationName(NAME)
@@ -275,8 +156,6 @@ def main() -> int:
     attach_tray()
     if cmd == "show":
         ctl.show_console()
-    elif cmd == "updates":
-        ctl.show_updates()
     return app.exec()
 
 

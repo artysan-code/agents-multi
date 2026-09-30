@@ -9,8 +9,7 @@
 //   mcp     check|sync|health [--force]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop)
 //   update  [...]           passthrough to bin/claude-update (CLI + Desktop, --rollback)
 //   usage   [...]           tokens and list-price estimate per profile/model/project/agent/skill/command (SQLite)
-//   budget  [--notify]      consumption thresholds; alerts on billed extra usage only
-//   serve   [--no-open]     local console on http://127.0.0.1:7331 (state, usage, sessions, health, actions)
+//   serve   [--no-open]     local console on http://127.0.0.1:7331 (today, connections, profiles, plugins, updates, health)
 //
 // Principle: the repository is the source of truth, ~/.claude-multi is runtime materialised by
 // `install`. Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
@@ -25,7 +24,6 @@ import { syncAllSettings } from "./settings.ts";
 import { printStatus, status } from "./status.ts";
 import { apply, blockers, describe, health, plan } from "./mcp.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
-import { collect, notifyBudget, printBudget } from "./budget.ts";
 import { PORT, serve } from "./serve.ts";
 
 const [cmd = "help", ...rest] = Deno.args;
@@ -99,12 +97,6 @@ switch (cmd) {
     if (flag("--json")) console.log(JSON.stringify(rep, null, 2)); else printReport(rep);
     break;
   }
-  case "budget": {
-    const r = await collect({ ingest: !flag("--no-ingest") });
-    if (flag("--notify")) { const sent = await notifyBudget(r, { dryRun: flag("--dry-run") }); console.log(sent ? "notification sent" : "nothing worth reporting"); break; }
-    if (flag("--json")) console.log(JSON.stringify(r, null, 2)); else printBudget(r);
-    break;
-  }
   case "serve": await serve({ open: !flag("--no-open") }); break;
   // deno-lint-ignore no-fallthrough
   case "help": case "--help": case "-h":
@@ -116,12 +108,10 @@ switch (cmd) {
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
   mcp     check|sync|health [--probe]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop); --force ignores running instances; --probe really starts each server and waits for initialize
-  update  [--cli|--desktop|--check [--json]|--rollback]   update Claude Code / Claude Desktop
+  update  [--cli|--desktop|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code / Claude Desktop (--auto: what the timer runs)
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  budget  [--notify [--dry-run]] [--json]   consumption thresholds from shared/budget.json. Only billed
-          extra usage raises an alert: plan windows and list-price estimates are shown, never notified
-  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (state, usage, sessions, health, actions)
+  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
 
   The console runs as a systemd user unit after install, so it is always there:
   systemctl --user status claude-multi-console.service`);

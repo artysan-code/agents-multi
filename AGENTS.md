@@ -3,7 +3,7 @@
 ## Repo profile
 - visibility: agents           # me-only | agents | co-author | client | public
 - stable branch: release
-- language: English            # code, commits, docs, UI
+- language: English            # code, commits, docs; the console UI is English + Italian (cli/dashboard/i18n.js)
 - MCP layer: code
 
 ## What this is
@@ -29,13 +29,15 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   reading one — `install` links one launcher per manifest and builds the `~/.zshrc` block from
   them; there is a single launcher script (`bin/claude`) that identifies its profile from the name
   it was invoked as.
-- **The cost in `usage` is a list-price equivalent, not a charge.** Consumption sits on three planes
-  (`cli/budget.ts`): `billed` (extra credits, real money, the only one that notifies), `plan`
-  (subscription windows), `estimate` (list price). The plane belongs to the **metric**, not to the
-  profile — do not reintroduce a per-profile billing class, and do not let anything but `billed`
-  raise a notification.
+- **The cost in `usage` is a list-price equivalent, not a charge**, and nothing in this repository
+  monitors billing: the budget module was removed on purpose (2026-09-30). Do not bring back
+  thresholds or notifications on spending.
 - **The console serves itself** (`claude-multi-console.service`). UI updates arrive over SSE on
   `/api/events`: a new panel hangs off `refresh()` by topic, never off a new polling loop.
+  Every string on the page is a key in both dictionaries of `cli/dashboard/i18n.js` (`t()`,
+  `data-i18n*`): a string added in one language only falls back to English, visibly.
+- **Notifications go through `desktopNotify()`** (`cli/notify.ts`): normal urgency, eight seconds,
+  once per event. Never `-u critical` — on KDE it ignores the expiry and stays on screen.
 - **The desktop app is a view** (`lib/claude-multi-app/`, PySide6): what it shows comes from the
   console's API, what it does is a CLI command. A colour or a rule the tray applies is TypeScript
   (`summarize()` in `cli/status.ts`, with its test), not Python. Its name and identifiers derive

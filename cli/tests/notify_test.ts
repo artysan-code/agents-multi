@@ -19,7 +19,6 @@ Deno.test("notifyText: only new failures or recovery; warnings never notify", ()
   assertEquals(notifyText(diffDoctor([], [c("w", "warn")])), null);
   assertEquals(notifyText(diffDoctor(["a"], [c("a", "fail")])), null); // already-known failure: silence
   const t = notifyText(diffDoctor([], [c("x", "fail", "do this")]))!;
-  assertEquals(t.urgency, "critical");
   assertEquals(t.title.includes("1 new problem"), true);
   assertEquals(t.body.includes("→ do this"), true);
   const r = notifyText(diffDoctor(["x"], [c("o", "ok")]))!;

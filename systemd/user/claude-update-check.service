@@ -1,19 +1,23 @@
 [Unit]
-Description=Check for Claude updates (Desktop + Code), setup health (doctor) and spend thresholds (budget)
-Documentation=file://%h/.local/bin/claude-update-notify
-# Needs the graphical session: the notification goes to the desktop and its action opens a window.
+Description=Update Claude (Code + Desktop) in the background, and check the setup's health (doctor)
+Documentation=file://%h/.local/bin/claude-update
+# Needs the graphical session: the only notifications (a failed verification, a new doctor failure)
+# go to the desktop.
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
-# deno is needed by the second ExecStart (claude-multi); the systemd --user session reads no login shell
+# deno is needed by claude-multi, asar (pnpm) by the Desktop variant rebuild; the systemd --user
+# session reads no login shell
 Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
-ExecStart=%h/.local/bin/claude-update-notify
+# Code is installed as soon as it is out; Desktop is staged and switches once no instance runs.
+# Every result goes to ~/.local/state/claude-multi/updates.jsonl (the console's System › Updates).
+ExecStart=-%h/.local/bin/claude-update --auto
 # Doctor as a watchdog: notifies only when a NEW failure appears (state in ~/.local/state/claude-multi)
 ExecStart=-%h/.local/bin/claude-multi doctor --notify
-# Budget: samples the credits reading and notifies ONLY billed extra usage, never the subscription
-ExecStart=-%h/.local/bin/claude-multi budget --notify
-# notify-send --wait hangs until an action is chosen: after half an hour it gives up
-# (the notification still stays in the desktop's history).
-TimeoutStartSec=1900
+# a Desktop download is a few hundred MB: room for a slow line, but never an hour
+TimeoutStartSec=1200
+# in the background, and it should feel like it
+Nice=10
+IOSchedulingClass=idle

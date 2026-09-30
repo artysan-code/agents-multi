@@ -7,7 +7,6 @@ opens — never on a timer. With the console down the icon turns grey and the st
 a bounded backoff.
 
   no dot   all good (warnings are listed in the menu, they do not colour the icon)
-  blue     an update is waiting
   red      a doctor check fails
   grey     the console is not answering
 """
@@ -23,8 +22,8 @@ from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from common import CONSOLE_URL, NAME, manifests
 
-DOTS = {"fail": "#d64545", "update": "#3b82f6", "down": "#8a8f98"}
-HEADLINES = {"ok": "All good", "update": "Update available", "fail": "Something needs attention", "down": "Console not running"}
+DOTS = {"fail": "#d64545", "down": "#8a8f98"}
+HEADLINES = {"ok": "All good", "fail": "Something needs attention", "down": "Console not running"}
 
 
 def icon_for(level: str) -> QIcon:
@@ -141,9 +140,8 @@ class Tray(QObject):
         lines: list[str] = []
         if s:
             lines += [f"✗ {m}" for m in s["fails"]]
-            ups = [f"{name} {v}" for name, v in (("Claude Code", s["updates"]["cli"]), ("Claude Desktop", s["updates"]["desktop"])) if v]
-            if ups:
-                lines.append("⬆ " + " · ".join(ups))
+            if s["staged"]:
+                lines.append(f"Claude Desktop {s['staged']} is ready: it switches at the next launch")
             if s["warns"]:
                 lines.append(f"{len(s['warns'])} warning{'s' if len(s['warns']) != 1 else ''}")
             run = s["running"]
@@ -161,9 +159,8 @@ class Tray(QObject):
         launch = m.addMenu("Open Claude Desktop")
         for p in manifests():
             launch.addAction(p, lambda p=p: self.ctl.launch(p))
-        ups = s and (s["updates"]["cli"] or s["updates"]["desktop"])
-        m.addAction("Install updates…" if ups else "Updates…", self.ctl.show_updates)
-        m.addAction("Health", lambda: self.ctl.show_console("health"))
+        m.addAction("Updates", lambda: self.ctl.show_console("system/updates"))
+        m.addAction("Health", lambda: self.ctl.show_console("system/health"))
         if not s:
             m.addAction("Start the console", self.ctl.start_console)
         m.addSeparator()

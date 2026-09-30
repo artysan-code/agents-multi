@@ -8,14 +8,14 @@ const proc = (embedded: boolean): CliProc => ({ pid: 1, profile: "p", cwd: null,
 const base = {
   generatedAt: "2026-09-24T00:00:00.000Z",
   doctor: [] as Check[],
-  update: null as Parameters<typeof summarize>[0]["update"],
+  machine: { desktopStaged: null as string | null },
   running: { cli: [] as CliProc[], desktop: [] as { pid: number; variant: string }[] },
 };
 
-Deno.test("summarize: nothing wrong and nothing pending is ok", () => {
+Deno.test("summarize: nothing wrong is ok", () => {
   const s = summarize({ ...base, doctor: [check("a", "ok")] });
   assertEquals(s.level, "ok");
-  assertEquals(s.updates, { cli: null, desktop: null });
+  assertEquals(s.staged, null);
 });
 
 Deno.test("summarize: a warn is listed but does not colour the icon", () => {
@@ -24,23 +24,15 @@ Deno.test("summarize: a warn is listed but does not colour the icon", () => {
   assertEquals(s.warns, ["msg w"]);
 });
 
-Deno.test("summarize: a pending update, unless that version was skipped", () => {
-  const update = { cli: { current: "1.0.0", latest: "1.0.1", outdated: true }, desktop: { current: "2.0", latest: "2.0", outdated: false } };
-  assertEquals(summarize({ ...base, update }).level, "update");
-  assertEquals(summarize({ ...base, update }).updates, { cli: "1.0.1", desktop: null });
-  const skipped = summarize({ ...base, update }, ["cli 1.0.1", ""]);
-  assertEquals(skipped.level, "ok");
-  assertEquals(skipped.updates.cli, null);
-  // skipping another version does not hide this one
-  assertEquals(summarize({ ...base, update }, ["cli 1.0.0", "desktop 1.0.1"]).updates.cli, "1.0.1");
+Deno.test("summarize: a staged Desktop is information, not a state to act on", () => {
+  const s = summarize({ ...base, machine: { desktopStaged: "2.1.0" } });
+  assertEquals([s.level, s.staged], ["ok", "2.1.0"]);
 });
 
-Deno.test("summarize: a failure outranks a pending update", () => {
-  const update = { desktop: { current: "2.0", latest: "2.1", outdated: true } };
-  const s = summarize({ ...base, update, doctor: [check("f", "fail"), check("w", "warn")] });
+Deno.test("summarize: a failure turns it red", () => {
+  const s = summarize({ ...base, doctor: [check("f", "fail"), check("w", "warn")] });
   assertEquals(s.level, "fail");
   assertEquals(s.fails, ["msg f"]);
-  assertEquals(s.updates.desktop, "2.1");
 });
 
 Deno.test("summarize: sessions embedded in Desktop count as Desktop, not as CLI", () => {

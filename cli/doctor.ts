@@ -1,10 +1,9 @@
 // doctor.ts — every invariant of the setup as a check with a verdict and a fix.
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
-import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog } from "./lib.ts";
 import { settingsState } from "./settings.ts";
 import { health, legacyStatePresent, plan } from "./mcp.ts";
-import { collect, doctorChecks } from "./budget.ts";
 import { PORT } from "./serve.ts";
 
 export async function doctor(): Promise<Check[]> {
@@ -123,10 +122,13 @@ export async function doctor(): Promise<Check[]> {
   else {
     add("bin.claude-bin", m.cliVersions.length > 2 ? "warn" : "ok", `Claude Code ${m.cliVersion}${m.cliVersions.length > 1 ? ` (+${m.cliVersions.length - 1} cached, rollback available)` : ""}`, m.cliVersions.length > 2 ? "claude-multi update --cli (prunes past N-1)" : undefined);
   }
-  const lock = await stat(`${HOME}/.cache/claude-update/update.lock`);
-  if (lock) {
+  // The lock file outlives every run (flock, not presence, is the lock): it only means something
+  // when a process still holds it, and holds it for longer than any update takes.
+  const lockPath = `${HOME}/.cache/claude-update/update.lock`;
+  const lock = await stat(lockPath);
+  if (lock && (await run("flock", ["-n", lockPath, "true"])).code !== 0) {
     const age = (Date.now() - (lock.mtime?.getTime() ?? 0)) / 60000;
-    if (age > 30) add("update.lock", "warn", `claude-update lock is ${Math.round(age)} min old`, "rm ~/.cache/claude-update/update.lock if no update is running");
+    if (age > 30) add("update.lock", "warn", `an update has held its lock for ${Math.round(age)} min`, "pgrep -af claude-update — kill it if it hangs");
   }
   const stub = await lstat(`${HOME}/.claude`);
   if (!stub) add("stub", "warn", "~/.claude is missing (the safety stub)", "claude-multi install");
@@ -174,18 +176,29 @@ export async function doctor(): Promise<Check[]> {
   for (const h of await health()) c.push(h);
   if (await legacyStatePresent()) add("mcp.legacy", "warn", "shared/mcp/.sync-state.json is a leftover of the old sync script", `rm ${REPO}/shared/mcp/.sync-state.json`);
 
-  // --- updates
-  const upd = await readJson<{ cli: { outdated: boolean; latest: string }; desktop: { outdated: boolean; latest: string } }>(`${HOME}/.cache/claude-update/check.json`);
-  // the cache can be stale right after an update: it only counts when the remote version differs
-  if (upd?.cli?.outdated && upd.cli.latest !== m.cliVersion) add("update.cli", "warn", `Claude Code ${upd.cli.latest} available`, "claude-multi update --cli");
-  if (upd?.desktop?.outdated && upd.desktop.latest !== m.desktopVersion) add("update.desktop", "warn", `Claude Desktop ${upd.desktop.latest} available`, "claude-multi update --desktop");
+  // --- updates: they install themselves (claude-update --auto, from the timer), so a newer version
+  // is not news. What is: the last attempt for a component failed, or verification refused one.
+  const upd = await readJson<unknown>(`${HOME}/.cache/claude-update/check.json`);
+  const log = await updateLog(50);
+  for (const comp of ["cli", "desktop"]) {
+    const last = log.find((e) => e.component === comp && e.event !== "waiting");
+    const name = comp === "cli" ? "Claude Code" : "Claude Desktop";
+    if (last?.event === "verify-failed") add(`update.${comp}`, "fail", `${name}: the last update failed verification (${last.detail}) — nothing was installed`, "claude-multi update --auto");
+    else if (last?.event === "failed") add(`update.${comp}`, "warn", `${name}: the last update failed (${last.detail || "see the journal"})`, "claude-multi update --auto");
+  }
   if (!upd) add("update.check", "warn", "no update check cached", "claude-multi update --check");
   else {
     const ageH = (Date.now() - ((await stat(`${HOME}/.cache/claude-update/check.json`))?.mtime?.getTime() ?? 0)) / 36e5;
     if (ageH > 24) add("update.check", "warn", `update check is ${Math.round(ageH)} h old (timer stopped?)`, "claude-multi update --check");
   }
 
-  // --- Claude Desktop
+  // --- Claude Desktop: in user space since 2026-09-30 (bin/claude-desktop-update)
+  if (m.desktopSystem) {
+    add("desktop.userspace", "warn", `Claude Desktop ${m.desktopSystem} is still the system package: it cannot update itself`, "claude-desktop-migrate (in a terminal, with every Claude Desktop closed)");
+  } else if (m.desktopVersion) {
+    const shims = await run("pacman", ["-Q", "claude-desktop-shims"]);
+    if (shims.code !== 0) add("desktop.shims", "warn", "claude-desktop-shims is not installed: the VM mode misses virtiofsd/OVMF and the runtime libraries are untracked", "claude-desktop-migrate");
+  }
   if (m.desktopVersion) {
     // Desktop variants are built per profile; only profiles whose manifest names a dedicated
     // directory get one, so a machine with a single profile is not told anything is missing.
@@ -195,9 +208,10 @@ export async function doctor(): Promise<Check[]> {
       const variant = `claude-desktop-${p}`;
       const bin = await lstat(`${LIB}/${variant}/${variant}`);
       const asar = await lstat(`${LIB}/${variant}/resources/app.asar`);
-      const sysAsar = await lstat("/usr/lib/claude-desktop/resources/app.asar");
+      // the variant is built from the version in use; a switch rebuilds it, so older means a failed rebuild
+      const srcAsar = await stat(m.desktopSystem ? "/usr/lib/claude-desktop/resources/app.asar" : `${LIB}/claude-desktop/current/resources/app.asar`);
       if (!bin || !asar) add(`desktop.${p}`, "fail", `Claude Desktop variant for ${p} is missing`, `claude-desktop-rebuild ${p}`);
-      else if (sysAsar?.mtime && asar.mtime && sysAsar.mtime > asar.mtime) add(`desktop.${p}`, "fail", `the ${p} variant is older than the system app`, `claude-desktop-rebuild ${p}`);
+      else if (srcAsar?.mtime && asar.mtime && srcAsar.mtime > asar.mtime) add(`desktop.${p}`, "fail", `the ${p} variant is older than the Claude Desktop in use`, `claude-desktop-rebuild ${p}`);
       else add(`desktop.${p}`, "ok", `Claude Desktop ${m.desktopVersion} + ${p} variant in step`);
     }
     for (const d of await listDir(`${REPO}/desktop`)) {
@@ -211,11 +225,11 @@ export async function doctor(): Promise<Check[]> {
         add(`desktop.entry.${d}`, "fail", `${d} does not go through claude-launch`, "claude-multi install");
       }
     }
-    // The desktop app (tray, console window, update gate). WebEngine is only an optional
+    // The desktop app (tray and console window). WebEngine is only an optional
     // dependency of pyside6 on Arch: present here by accident of KDE, missing on a bare install.
     const qt = await run("pacman", ["-Q", "pyside6", "qt6-webengine"]);
     const missing = ["pyside6", "qt6-webengine"].filter((p) => !qt.out.split("\n").some((l) => l.startsWith(`${p} `)));
-    if (missing.length) add("app.deps", "fail", `the desktop app and the update gate need ${missing.join(" and ")}`, `sudo pacman -S --needed ${missing.join(" ")}`);
+    if (missing.length) add("app.deps", "fail", `the desktop app needs ${missing.join(" and ")}`, `sudo pacman -S --needed ${missing.join(" ")}`);
     if (m.systemd && m.graphical) {
       const u = await run("systemctl", ["--user", "is-enabled", "claude-multi-app.service"]);
       if (u.out !== "enabled") add("app.unit", "warn", `claude-multi-app.service: ${u.out || "not installed"} — no tray icon at login`, "claude-multi install");
@@ -229,7 +243,7 @@ export async function doctor(): Promise<Check[]> {
     }
     if (!(await lstat(`${REPO}/pkg/claude-desktop/anthropic-apt.asc`))) add("desktop.apt-key", "warn", "the Anthropic apt key is not in the repository: the InRelease signature cannot be verified", "fetch the key into pkg/claude-desktop/anthropic-apt.asc");
     else if (!(await has("gpgv"))) add("desktop.apt-key", "warn", "gpgv is missing: the apt repository signature is not verified", "install gnupg");
-    else add("desktop.apt-key", "ok", "Anthropic apt repository: key pinned, InRelease verified on every update");
+    else add("desktop.apt-key", "ok", "Anthropic apt repository: key pinned, every update verified (InRelease → Packages → .deb)");
     const handler = await readText(`${HOME}/.local/share/applications/claude-code-url-handler.desktop`);
     if (handler && !handler.includes("claude-bin")) add("desktop.urlhandler", "fail", "the claude-cli:// url handler does not point at claude-bin", "claude-multi install");
   }
@@ -245,11 +259,5 @@ export async function doctor(): Promise<Check[]> {
     if (!(await readlink(`${HOME}/.config/systemd/user/llama-embed-shim.service`))?.startsWith(REPO)) add("llama.units", "warn", "llama-*.service units are not linked from the repository", "claude-multi install");
   }
   if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills is missing: external skills are unavailable on this machine", "create it, or sync it from your other machine");
-
-  // --- budget: what is actually billed, and whether the reading is fresh enough for alerts to work
-  try {
-    const b = await collect({ ingest: false });
-    for (const x of doctorChecks(b.profiles.map((p) => p.snap), b.cfg, b.alerts)) c.push(x);
-  } catch (e) { add("budget", "warn", `budget could not be evaluated: ${(e as Error).message}`, "claude-multi budget"); }
   return c;
 }

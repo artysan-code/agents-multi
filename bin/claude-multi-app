@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claude-multi-app: the desktop app (tray, console window, update gate) — lib/claude-multi-app/.
+# claude-multi-app: the desktop app (tray and console window) — lib/claude-multi-app/.
 # /usr/bin/python3 and not `python3`: PySide6 is a system package, and a pyenv, conda or venv
 # python first in PATH would not have it.
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"

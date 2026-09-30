@@ -1,7 +1,7 @@
 // status.ts — the whole state as one JSON document: the contract for the statusline, the GUI, the
 // notifier and the console. Everything that reads state reads this shape.
 
-import { ANSI, CACHE, HOME, machine, profileInfo, profileNames, readJson, repoState, running, sharedInventory } from "./lib.ts";
+import { ANSI, CACHE, HOME, machine, profileInfo, profileNames, readJson, repoState, running, sharedInventory, uiLanguage, updateLog } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { loadRegistry } from "./mcp.ts";
 
@@ -10,14 +10,16 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
   const profiles: Record<string, Awaited<ReturnType<typeof profileInfo>>> = {};
   for (const p of await profileNames()) profiles[p] = await profileInfo(p);
   const sync = await readJson(`${CACHE}/sync.json`);
-  const update = await readJson<{ cli?: { current?: string; latest?: string; outdated?: boolean; changelog_file?: string }; desktop?: { current?: string; latest?: string; outdated?: boolean } }>(`${HOME}/.cache/claude-update/check.json`);
+  const update = await readJson<{ cli?: { current?: string; latest?: string; outdated?: boolean }; desktop?: { current?: string; latest?: string; outdated?: boolean }; checked_at?: number }>(`${HOME}/.cache/claude-update/check.json`);
   let registry: Record<string, { profiles: string[]; surfaces: string[] }> = {};
   try {
     const reg = await loadRegistry();
     registry = Object.fromEntries(Object.entries(reg.servers).map(([n, c]) => [n, { profiles: c._profiles ?? reg.profiles, surfaces: c._surfaces ?? ["cli"] }]));
   } catch { /* no registry */ }
   return {
-    generatedAt: new Date().toISOString(), machine: m, repo, sync, update,
+    generatedAt: new Date().toISOString(), machine: m, repo, sync, update, updateLog: await updateLog(),
+    // what the console shows when the viewer has not picked a language: the machine's, not the browser's
+    language: uiLanguage(Deno.env.toObject()),
     shared: { ...inv, mcpRegistry: registry },
     profiles, running: inst,
     doctor: opts.withDoctor ? await doctor() : [],
@@ -27,31 +29,25 @@ export type StatusReport = Awaited<ReturnType<typeof status>>;
 
 /** What the tray icon says: one level, and the lines behind it. */
 export interface Summary {
-  level: "ok" | "update" | "fail";
+  level: "ok" | "fail";
   fails: string[];
   warns: string[];
-  updates: { cli: string | null; desktop: string | null };
+  /** a Claude Desktop version waiting for every instance to close */
+  staged: string | null;
   running: { cli: number; desktop: number };
   generatedAt: string;
 }
 
-/** Pure: the report to the tray's summary. `skipped` holds the "<component> <version>" lines the
- *  update gate set aside (~/.config/claude-update/skipped): those are not pending any more.
- *  A warn does not colour the icon. Some warns are standing conditions of a machine (no semantic
- *  search on a laptop without llama.cpp), and an icon that is always yellow says nothing; they are
- *  listed instead. */
-export function summarize(s: Pick<StatusReport, "doctor" | "update" | "running" | "generatedAt">, skipped: string[] = []): Summary {
-  const skip = new Set(skipped.map((l) => l.trim()).filter(Boolean));
-  const pending = (k: "cli" | "desktop") => {
-    const u = s.update?.[k];
-    return u?.outdated && u.latest && !skip.has(`${k} ${u.latest}`) ? u.latest : null;
-  };
-  const updates = { cli: pending("cli"), desktop: pending("desktop") };
+/** Pure: the report to the tray's summary. Updates install themselves, so a newer version is not
+ *  something to act on and does not colour the icon; only a failure does. A warn is listed, not
+ *  coloured either: some warns are standing conditions of a machine (no semantic search on a
+ *  laptop without llama.cpp), and an icon that is always yellow says nothing. */
+export function summarize(s: Pick<StatusReport, "doctor" | "running" | "generatedAt"> & { machine: { desktopStaged: string | null } }): Summary {
   const fails = s.doctor.filter((c) => c.status === "fail").map((c) => c.msg);
   const warns = s.doctor.filter((c) => c.status === "warn").map((c) => c.msg);
   return {
-    level: fails.length ? "fail" : updates.cli || updates.desktop ? "update" : "ok",
-    fails, warns, updates,
+    level: fails.length ? "fail" : "ok",
+    fails, warns, staged: s.machine.desktopStaged,
     running: { cli: s.running.cli.filter((c) => !c.embedded).length, desktop: s.running.desktop.length },
     generatedAt: s.generatedAt,
   };

@@ -14,8 +14,7 @@ shared/plugins/
 # Artefatti estratti dall'asar (claude-desktop-work-rebuild)
 index.pre.js
 # Build locali
-pkg/claude-desktop/*.deb
-pkg/claude-desktop/*.pkg.tar.*
-pkg/claude-desktop/pkg/
-pkg/claude-desktop/src/
+pkg/*/*.pkg.tar.*
+pkg/*/pkg/
+pkg/*/src/
 shared/mcp/.sync-state.json

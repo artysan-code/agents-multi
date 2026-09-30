@@ -175,14 +175,71 @@ export async function repoState() {
 }
 
 // ---------------------------------------------------------------- machine
+/** The console's languages. The page carries one dictionary per entry (cli/dashboard/i18n.js). */
+export const UI_LANGUAGES = ["en", "it"] as const;
+export type UiLanguage = typeof UI_LANGUAGES[number];
+
+/**
+ * Pure: the interface language a machine asks for, from its locale variables. The regional format
+ * (LC_TIME) outranks LANG on purpose: a common setup is English messages with the country's
+ * formats (LANG=en_US, LC_TIME=it_IT), and there the format says where the person is. An explicit
+ * LC_ALL or LC_MESSAGES still wins. Unsupported or C/POSIX locales fall through to the next one.
+ */
+export function uiLanguage(env: Record<string, string | undefined>): UiLanguage {
+  for (const k of ["LC_ALL", "LC_MESSAGES", "LC_TIME", "LANG"]) {
+    const code = env[k]?.match(/^([a-z]{2})(?:[_.@-]|$)/i)?.[1].toLowerCase();
+    if (code && (UI_LANGUAGES as readonly string[]).includes(code)) return code as UiLanguage;
+  }
+  return "en";
+}
+
+/** Numeric comparison of dotted versions ("2.10.0" > "2.9.9"). */
+export function cmpVersion(a: string, b: string): number {
+  const x = a.split(".").map(Number), y = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/**
+ * Pure: Claude Desktop in user space, from the version directories present and the one `current`
+ * points at. `staged` is a newer version extracted and waiting for every instance to close;
+ * `previous` is the newest one below the current, the rollback target.
+ */
+export function desktopVersions(dirs: string[], current: string | null) {
+  const vs = dirs.filter((d) => /^\d+(\.\d+)+$/.test(d)).sort(cmpVersion).reverse();
+  const cur = current && vs.includes(current) ? current : null;
+  return {
+    current: cur,
+    staged: vs.find((v) => !cur || cmpVersion(v, cur) > 0) ?? null,
+    previous: cur ? vs.find((v) => cmpVersion(v, cur) < 0) ?? null : null,
+  };
+}
+
+/** The last update results (bin/lib/updates.sh writes them), newest first. */
+export async function updateLog(limit = 20): Promise<{ at: string; component: string; event: string; from: string; to: string; detail: string }[]> {
+  const text = await readText(`${STATE}/updates.jsonl`) ?? "";
+  return text.split("\n").filter(Boolean).slice(-limit).reverse().flatMap((l) => {
+    try { return [JSON.parse(l)]; } catch { return []; }
+  });
+}
+
 export async function machine() {
   // Over ssh the session variables are absent: without this check install would think it is on a
   // headless box and silently skip systemd units and menu entries.
   const rt = Deno.env.get("XDG_RUNTIME_DIR");
   const graphical = !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY") || Deno.env.get("XDG_CURRENT_DESKTOP")) ||
     !!(rt && await lstat(`${rt}/wayland-0`)) || !!(await lstat("/tmp/.X11-unix/X0"));
+  // Claude Desktop lives in user space (bin/claude-desktop-update); the system package is what a
+  // machine had before the migration, and what the doctor asks to remove.
+  const droot = `${LIB}/claude-desktop`;
+  const cur = await run("readlink", ["-f", `${droot}/current`]);
+  const desktop = desktopVersions(await listDir(`${droot}/versions`), cur.code === 0 ? cur.out.split("/").pop() ?? null : null);
   const desktopPkg = await run("pacman", ["-Q", "claude-desktop"]);
-  const desktopVersion = desktopPkg.code === 0 ? desktopPkg.out.split(/\s+/)[1]?.split("-")[0] ?? null : null;
+  const desktopSystem = desktopPkg.code === 0 ? desktopPkg.out.split(/\s+/)[1]?.split("-")[0] ?? null : null;
+  const desktopVersion = desktop.current ?? desktopSystem;
   const systemd = await has("systemctl");
   const kde = (Deno.env.get("XDG_CURRENT_DESKTOP") ?? "").toUpperCase().includes("KDE") || await has("kbuildsycoca6");
   const cliBin = await run("readlink", ["-f", `${BIN}/claude-bin`]);
@@ -193,7 +250,11 @@ export async function machine() {
     const v = (await listDir(`${await desktopDir(p)}/claude-code`)).filter((x) => /^\d+\.\d+\.\d+$/.test(x));
     if (v.length) embedded[p] = v;
   }
-  return { hostname: Deno.hostname(), graphical, kde, systemd, desktopVersion, embeddedCode: embedded, cliVersion, cliVersions, deno: Deno.version.deno };
+  return {
+    hostname: Deno.hostname(), graphical, kde, systemd, desktopVersion,
+    desktopStaged: desktop.staged, desktopPrevious: desktop.previous, desktopSystem,
+    embeddedCode: embedded, cliVersion, cliVersions, deno: Deno.version.deno,
+  };
 }
 
 // ---------------------------------------------------------------- running instances

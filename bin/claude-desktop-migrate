@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# claude-desktop-migrate — once per machine: Claude Desktop moves from the system package to user
+# space (~/.local/lib/claude-desktop), where it updates itself without root. Run it in a terminal,
+# with every Claude Desktop closed.
+#
+#   1. the current version is downloaded, verified and put in use in user space (variants rebuilt)
+#   2. pkg/claude-desktop-shims is built and installed with sudo: it keeps the runtime dependencies
+#      and the virtiofsd/OVMF links, and removes the old `claude-desktop` package it conflicts with
+#
+# Safe to run again: each step does nothing when it is already done.
+set -euo pipefail
+
+HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+REPO_DIR="$(cd "$HERE/.." && pwd)"
+source "$HERE/lib/updates.sh"
+
+if cm_desktop_running; then
+  echo "Close every Claude Desktop first (this terminal must not be inside one)." >&2
+  exit 1
+fi
+
+echo "==> 1/2 Claude Desktop in user space"
+"$HERE/claude-desktop-update"
+echo "    in use: $("$HERE/claude-desktop-update" --current)"
+
+echo "==> 2/2 system shims (replaces the claude-desktop package)"
+if pacman -Q claude-desktop-shims >/dev/null 2>&1 && ! pacman -Q claude-desktop >/dev/null 2>&1; then
+  echo "    already installed"
+else
+  cd "$REPO_DIR/pkg/claude-desktop-shims"
+  makepkg -f >/dev/null
+  # pacman asks to remove claude-desktop (the conflict): answer yes
+  sudo pacman -U claude-desktop-shims-*.pkg.tar.zst
+fi
+
+echo "==> done: Claude Desktop now updates itself (claude-multi doctor to check)"

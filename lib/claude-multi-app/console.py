@@ -104,7 +104,7 @@ class ConsoleWindow(QMainWindow):
         self.stack.setCurrentIndex(0 if ok else 1)
 
     def open(self, view: str | None = None) -> None:
-        """Show the console, on one of its views (#health, #usage…) when asked."""
+        """Show the console, on one of its views (#today, #system/health…) when asked."""
         current = self.view.url()
         if _is_console(current) and self.stack.currentIndex() == 0:
             # already showing it: no reload, and a view is a hashchange the page follows

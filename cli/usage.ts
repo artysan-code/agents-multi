@@ -10,8 +10,7 @@
 // Incremental ingest: a file is re-read only when its size or mtime changes.
 //
 // Costs here are the LIST-PRICE EQUIVALENT (a Max subscription is not billed per token): useful to
-// compare profiles, models and days, not for accounting. What is actually billed, and when a
-// threshold is worth raising, is budget.ts's job — see the three planes documented there.
+// compare profiles, models and days, never for accounting — and nothing here raises an alert.
 //
 // Attributing to skills and commands: a skill consumes no tokens by itself, it makes the turn that
 // uses it consume them. The turn is the well-defined unit available (from one human prompt to the
@@ -93,13 +92,9 @@ export function openDb(path: string = DB_PATH) {
     );
     CREATE INDEX IF NOT EXISTS turn_tools_kind ON turn_tools(kind, name);
     CREATE INDEX IF NOT EXISTS turn_tools_file ON turn_tools(file);
-    CREATE TABLE IF NOT EXISTS credit_samples (
-      profile TEXT NOT NULL, fetched_at TEXT NOT NULL, seen_at TEXT NOT NULL, day TEXT NOT NULL,
-      enabled INTEGER, used_credits REAL, monthly_limit REAL, currency TEXT, decimals INTEGER,
-      utilization REAL, plan_json TEXT,
-      PRIMARY KEY (profile, fetched_at)
-    );
   `);
+  // the billing monitor is gone, and its samples with it
+  db.exec("DROP TABLE IF EXISTS credit_samples");
   // migration: databases created before per-turn attribution lack the column
   const cols = (db.prepare("PRAGMA table_info(messages)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("turn_id")) db.exec("ALTER TABLE messages ADD COLUMN turn_id TEXT");
@@ -341,60 +336,6 @@ export function sessions(db: DatabaseSync, opts: { since?: string; profile?: str
     ...r, project: projectLabel(null, r.cwd), models: r.models.split(","), agents: r.agents.split(","),
     minutes: Math.max(0, Math.round((new Date(r.ended).getTime() - new Date(r.started).getTime()) / 60000)),
   }));
-}
-
-// ---------------------------------------------------------------- transcript
-export interface Turn {
-  role: "user" | "assistant"; ts: string; text: string;
-  tools: string[]; model: string | null; cost: number | null;
-}
-
-/** Read back one session as turns, for the console's transcript view. The transcript file is
- *  located through the messages table rather than guessed from the session id, so a session that
- *  moved directories still resolves. Text blocks only: tool payloads stay out, both because they
- *  are long and because they are the part most likely to carry secrets. */
-export async function transcript(db: DatabaseSync, sessionId: string, limit = 200): Promise<{ file: string | null; turns: Turn[]; total: number }> {
-  const row = db.prepare("SELECT file FROM messages WHERE session_id = ? AND sidechain = 0 ORDER BY ts DESC LIMIT 1").get(sessionId) as { file: string } | undefined;
-  if (!row?.file) return { file: null, turns: [], total: 0 };
-  let text: string;
-  try { text = await Deno.readTextFile(row.file); } catch { return { file: row.file, turns: [], total: 0 }; }
-  const all: Turn[] = [];
-  for (const line of text.split("\n")) {
-    if (!line) continue;
-    let d: Record<string, unknown>;
-    try { d = JSON.parse(line); } catch { continue; }
-    if (d.isSidechain) continue;
-    const ts = String(d.timestamp ?? "");
-    if (d.type === "user") {
-      const c = (d.message as { content?: unknown } | undefined)?.content;
-      if (Array.isArray(c) && c.some((b) => (b as { type?: string }).type === "tool_result")) continue;
-      const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b as { text?: string }).text ?? "").join("\n") : "";
-      if (t.trim()) all.push({ role: "user", ts, text: t, tools: [], model: null, cost: null });
-      continue;
-    }
-    if (d.type !== "assistant") continue;
-    const m = d.message as { model?: string; content?: unknown[]; usage?: Record<string, unknown> } | undefined;
-    if (!m) continue;
-    const parts: string[] = [], tools: string[] = [];
-    for (const b of m.content ?? []) {
-      const blk = b as { type?: string; text?: string; name?: string };
-      if (blk.type === "text" && blk.text) parts.push(blk.text);
-      else if (blk.type === "tool_use" && blk.name) tools.push(blk.name);
-    }
-    if (!parts.length && !tools.length) continue;
-    const u = m.usage;
-    const cost = u
-      ? costUsd(m.model ?? "", {
-        input: Number(u.input_tokens ?? 0), output: Number(u.output_tokens ?? 0), cacheRead: Number(u.cache_read_input_tokens ?? 0),
-        cache5m: Number(u.cache_creation_input_tokens ?? 0), cache1h: 0,
-      })
-      : null;
-    const prev = all[all.length - 1];
-    // consecutive assistant chunks are one visible turn
-    if (prev?.role === "assistant" && !parts.length) { prev.tools.push(...tools); prev.cost = (prev.cost ?? 0) + (cost ?? 0); continue; }
-    all.push({ role: "assistant", ts, text: parts.join("\n"), tools, model: m.model ?? null, cost });
-  }
-  return { file: row.file, turns: all.slice(-limit), total: all.length };
 }
 
 const fmt = (n: number | null | undefined) => n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n);
