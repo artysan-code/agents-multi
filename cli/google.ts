@@ -31,7 +31,8 @@ export async function startConnect(account: string, onDone: (r: { ok: boolean; m
   const state = crypto.randomUUID();
   const ac = new AbortController();
   let port = 0;
-  const finish = (r: { ok: boolean; message: string }) => { onDone(r); setTimeout(() => ac.abort(), 500); };
+  // onDone once the listener has closed: the page is out to the browser by then, and the CLI may exit
+  const finish = (r: { ok: boolean; message: string }) => { setTimeout(() => ac.abort(), 500); void srv.finished.then(() => onDone(r), () => onDone(r)); };
   const timer = setTimeout(() => finish({ ok: false, message: "no answer from the browser within 5 minutes" }), 300000);
   const srv = Deno.serve({ hostname: "127.0.0.1", port: 0, signal: ac.signal, onListen: (addr) => { port = addr.port; } }, async (req) => {
     const u = new URL(req.url);

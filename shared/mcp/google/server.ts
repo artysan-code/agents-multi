@@ -10,7 +10,7 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
 import { z } from "npm:zod@^3.23";
-import { accessToken, loadClient, rawMessage, readPayload } from "../lib/google.ts";
+import { accessToken, htmlToText, loadClient, rawMessage, readPayload } from "../lib/google.ts";
 import { service, text } from "../lib/service.ts";
 
 const google = service("google");
@@ -49,7 +49,7 @@ server.registerTool("gmail_search", {
   ));
   return text(msgs.map((m) => ({
     id: m.id, threadId: m.threadId, from: header(m, "From"), to: header(m, "To"), subject: header(m, "Subject"), date: header(m, "Date"),
-    unread: (m.labelIds ?? []).includes("UNREAD"), snippet: m.snippet,
+    unread: (m.labelIds ?? []).includes("UNREAD"), snippet: htmlToText(m.snippet ?? ""),  // Gmail escapes snippets as HTML
   })));
 });
 
@@ -97,7 +97,7 @@ server.registerTool("gmail_drafts", {
 }, async ({ account }: { account?: string }) => {
   const list = await api(account, `${GMAIL}/drafts?maxResults=20`);
   const ds = await Promise.all((list.drafts ?? []).map((d: Doc) => api(account, `${GMAIL}/drafts/${d.id}?format=metadata`)));
-  return text(ds.map((d) => ({ draftId: d.id, to: header(d.message, "To"), subject: header(d.message, "Subject"), snippet: d.message.snippet })));
+  return text(ds.map((d) => ({ draftId: d.id, to: header(d.message, "To"), subject: header(d.message, "Subject"), snippet: htmlToText(d.message.snippet ?? "") })));
 });
 
 server.registerTool("gmail_send", {
