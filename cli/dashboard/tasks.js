@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
 /* claude-multi console — the Tasks tab: a board (columns by status), a list, a calendar with the
    Google events, a board per project folder, and each task's own page (steps, description,
    attachments). Loaded after app.js, whose helpers it uses ($, esc, api, post, toast, t, lang,
@@ -389,7 +390,7 @@ function wireSheet(host) {
     if (f.type === "file") return uploadFiles([...f.files]);
     const name = f.name;
     if (!["title", "status", "due", "time", "priority", "owner", "project", "repeat", "remind"].includes(name)) return;
-    let v = f.value.trim();
+    const v = f.value.trim();
     if (name === "title" && !v) return renderSheet(sheet.data);
     const input = { [name]: v === "" ? null : name === "priority" || name === "remind" ? Number(v) : v };
     // a time needs a day: the page's own date field decides it, today when empty
@@ -489,7 +490,7 @@ async function openAttachment(a) {
   if (!r.ok) toast(r.message, true);
 }
 
-async function newTask(extra = {}) {
+function newTask(extra = {}) {
   const host = drawer(t("ts.newTitle"), `<form class="tsheet ts-new">
     <input class="ts-title" name="title" placeholder="${esc(t("ts.titlePh"))}" required autocomplete="off">
     <div class="ts-props">

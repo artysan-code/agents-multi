@@ -24,7 +24,7 @@ async function run(root: string, args: string[], running = false) {
   return { code: out.code, out: new TextDecoder().decode(out.stdout).trim() };
 }
 const current = async (root: string) => (await Deno.realPath(`${root}/current`)).split("/").pop();
-const versions = async (root: string) => [...Deno.readDirSync(`${root}/versions`)].map((e) => e.name).sort();
+const versions = (root: string) => [...Deno.readDirSync(`${root}/versions`)].map((e) => e.name).sort();
 const log = async (root: string) => (await Deno.readTextFile(`${root}/log.jsonl`)).trim().split("\n").map((l) => JSON.parse(l));
 
 Deno.test("claude-desktop-update: a staged version waits while Desktop runs, then switches", async () => {
@@ -43,7 +43,7 @@ Deno.test("claude-desktop-update: a staged version waits while Desktop runs, the
 Deno.test("claude-desktop-update: the switch keeps the previous version and prunes the rest", async () => {
   const root = await setup(["0.9.0", "1.0.0", "1.1.0"], "1.0.0");
   assertEquals((await run(root, ["--apply"])).code, 0);
-  assertEquals(await versions(root), ["1.0.0", "1.1.0"]);
+  assertEquals(versions(root), ["1.0.0", "1.1.0"]);
   await Deno.remove(root, { recursive: true });
 });
 
@@ -61,7 +61,7 @@ Deno.test("claude-desktop-update: rollback goes back one version, and refuses wi
   assertEquals((await run(root, ["--rollback"])).code, 0);
   assertEquals(await current(root), "1.0.0");
   // the version rolled back from stays: it is newer, and a later --apply would bring it back
-  assertEquals(await versions(root), ["1.0.0", "1.1.0"]);
+  assertEquals(versions(root), ["1.0.0", "1.1.0"]);
   assertEquals((await log(root)).at(-1).event, "rollback");
   const lone = await setup(["1.0.0"], "1.0.0");
   const r = await run(lone, ["--rollback"]);

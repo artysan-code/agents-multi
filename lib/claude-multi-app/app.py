@@ -30,7 +30,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from common import BIN, CONSOLE_UNIT, CONSOLE_URL, NAME, SOCKET, write_state
+from common import BIN, CONSOLE_UNIT, NAME, SOCKET, write_state
 
 TRAY_WAIT_S = 60  # at login the tray host can come up after us
 
@@ -82,7 +82,7 @@ class Controller(QObject):
         except ValueError:
             text = ""
         if self.hey is None:
-            self.hey = HeyPanel(recent_folders(), text)
+            self.hey = HeyPanel(text)
             self.hey.closed.connect(self._hey_closed)
         elif text:
             self.hey.set_text(text)
@@ -117,22 +117,6 @@ class Controller(QObject):
 
     def quit(self) -> None:
         self.app.quit()
-
-
-def recent_folders() -> list[str]:
-    """The folders of the last sessions, for the panel's folder list (the console knows them)."""
-    import json
-    import urllib.request
-    try:
-        with urllib.request.urlopen(f"{CONSOLE_URL}/api/sessions?since=14d&limit=60", timeout=2) as r:
-            rows = json.loads(r.read())
-    except (OSError, ValueError):
-        return []
-    seen: list[str] = []
-    for row in rows:
-        if row.get("cwd") and row["cwd"] not in seen:
-            seen.append(row["cwd"])
-    return seen[:12]
 
 
 # ---------------------------------------------------------------------- single instance

@@ -105,7 +105,7 @@ export function openDb(path: string = DB_PATH) {
 interface Acc { input: number; output: number; cacheRead: number; cache5m: number; cache1h: number; model: string; ts: string; sidechain: boolean; agentId: string | null; agent: string; cwd: string | null; entrypoint: string | null; version: string | null; sessionId: string | null; turnId: string | null }
 
 async function* walk(dir: string): AsyncGenerator<string> {
-  let entries: Deno.DirEntry[] = [];
+  const entries: Deno.DirEntry[] = [];
   try { for await (const e of Deno.readDir(dir)) entries.push(e); } catch { return; }
   for (const e of entries) {
     const p = `${dir}/${e.name}`;

@@ -133,7 +133,7 @@ def terminal_argv(workdir: str, argv: list[str]) -> list[str] | None:
 class HeyPanel(QWidget):
     closed = Signal()
 
-    def __init__(self, folders: list[str] | None = None, text: str = "") -> None:
+    def __init__(self, text: str = "") -> None:
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowTitle(f"Hey Claude — {NAME}")

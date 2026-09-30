@@ -282,10 +282,8 @@ export async function install(dry: boolean) {
       if (await has("gtk-update-icon-cache")) await run("gtk-update-icon-cache", ["-q", `${HOME}/.local/share/icons/hicolor`]);
       if (await has("kbuildsycoca6")) await run("kbuildsycoca6", ["--noincremental"]);
     }
-    const pkgdir = Deno.env.get("CLAUDE_DESKTOP_PKGDIR") ?? `${HOME}/build/claude-desktop`;
-    if (!(await lstat(`${pkgdir}/PKGBUILD`))) for (const f of ["PKGBUILD", "claude-desktop.install"]) await ensureCopy(`${REPO}/pkg/claude-desktop/${f}`, `${pkgdir}/${f}`);
   } else {
-    console.log(`  ${ANSI.d}Claude Desktop is not installed: skipping desktop entries, icons, GUI and package files${ANSI.x}`);
+    console.log(`  ${ANSI.d}Claude Desktop is not installed: skipping desktop entries and icons${ANSI.x}`);
   }
 
   if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} everything already materialised, nothing to do`);

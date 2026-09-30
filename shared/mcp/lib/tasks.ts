@@ -277,7 +277,7 @@ export function setStep(notes: string, index: number, done?: boolean): string {
 function appendTo(notes: string, head: RegExp, title: string, line: string): string {
   const lines = notes.replace(/\s+$/, "").split("\n");
   if (lines.length === 1 && lines[0] === "") lines.length = 0;
-  let at = lines.findIndex((l) => head.test(l));
+  const at = lines.findIndex((l) => head.test(l));
   if (at < 0) {
     // a new steps section goes before the attachments, when they are there
     const att = head === STEPS_HEAD ? lines.findIndex((l) => ATT_HEAD.test(l)) : -1;

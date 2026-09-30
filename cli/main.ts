@@ -36,7 +36,7 @@ const flag = (f: string) => rest.includes(f);
 const opt = (name: string, def?: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : def; };
 
 switch (cmd) {
-  case "install": Deno.exit(await install(flag("--dry-run")));
+  case "install": Deno.exit(await install(flag("--dry-run"))); break;
   case "settings": {
     const dry = flag("--dry-run");
     for (const r of await syncAllSettings({ dry })) {
@@ -89,6 +89,7 @@ switch (cmd) {
   case "update": {
     const p = new Deno.Command(`${REPO}/bin/claude-update`, { args: rest, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     Deno.exit((await p.output()).code);
+    break;
   }
   case "usage": {
     const db = openDb();
@@ -103,10 +104,9 @@ switch (cmd) {
     break;
   }
   case "serve": await serve({ open: !flag("--no-open") }); break;
-  case "vault": Deno.exit(await vaultCommand(rest));
-  case "tasks": Deno.exit(await tasksCommand(rest));
-  case "google": Deno.exit(await googleCommand(rest));
-  // deno-lint-ignore no-fallthrough
+  case "vault": Deno.exit(await vaultCommand(rest)); break;
+  case "tasks": Deno.exit(await tasksCommand(rest)); break;
+  case "google": Deno.exit(await googleCommand(rest)); break;
   case "help": case "--help": case "-h":
   default:
     console.log(`claude-multi — manage a multi-profile Claude setup (repository ${REPO})

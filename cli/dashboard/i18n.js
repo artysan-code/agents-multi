@@ -136,7 +136,6 @@ const I18N = {
     "lang.auto": "auto",
 
     "state.ok": "All good",
-    "state.update": "Update available",
     "state.fail": "Something needs you",
     "state.down": "Console unreachable",
     "live.live": "live",
@@ -170,7 +169,6 @@ const I18N = {
     "tasks.add.ph": "something to do…",
     "tasks.due": "day",
     "tasks.time": "time",
-    "tasks.project": "project",
     "today.resume": "Pick up again",
     "today.resume.sub": "last 7 days",
     "today.nothing": "nothing running",
@@ -527,7 +525,6 @@ const I18N = {
     "lang.auto": "auto",
 
     "state.ok": "Tutto in ordine",
-    "state.update": "Aggiornamento disponibile",
     "state.fail": "C'è qualcosa da sistemare",
     "state.down": "Console non raggiungibile",
     "live.live": "in diretta",
@@ -561,7 +558,6 @@ const I18N = {
     "tasks.add.ph": "qualcosa da fare…",
     "tasks.due": "giorno",
     "tasks.time": "ora",
-    "tasks.project": "progetto",
     "today.resume": "Riprendi",
     "today.resume.sub": "ultimi 7 giorni",
     "today.nothing": "niente in esecuzione",

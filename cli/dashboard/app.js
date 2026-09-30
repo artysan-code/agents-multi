@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
 /* claude-multi console — vanilla JS, no dependencies.
    Data from /api/*, live updates over /api/events (SSE), actions through /api/action.
    Text comes from i18n.js (`t`), loaded before this file. */

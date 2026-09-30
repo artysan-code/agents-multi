@@ -1,19 +1,18 @@
 // serve.ts — the local console: `claude-multi serve` listens on http://127.0.0.1:7331.
 //
 // Page in cli/dashboard/ (HTML/CSS/JS, no dependencies, no build step: works offline). Data comes
-// from status() and usage.ts.
+// from status(), the tasks (taskboard.ts), the wiki (brain.ts), the vault and accounts, and the
+// session index of usage.ts (Today's "pick up again").
 //
 // Live updates are pushed, not polled. The browser holds one EventSource on /api/events; the
-// server watches the transcript tree and the runtime config and emits an event when something
-// actually changed, so the panel you are looking at redraws itself. The old page polled /api/status
-// every 30s and redrew four panels that were rarely the one on screen — which is why it looked
-// frozen on Usage, Sessions and Budget.
+// server watches the transcript tree, the runtime config, the wiki and the tasks, and emits an
+// event when something actually changed, so the panel you are looking at redraws itself.
 //
 // Actions (POST /api/action): an allowlist of CLI subcommands, localhost only, behind the
 // `x-claude-multi` anti-CSRF header. Updating needs no privilege any more (Claude Desktop lives in
 // user space), so it is an action like the others.
 
-import { ANSI, CACHE, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
+import { ANSI, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
 import { ACCOUNTS, loadRegistry, type RawRegistry, selectServers } from "./mcp.ts";
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
@@ -57,6 +56,7 @@ async function runAction(name: string, opts: string[]) {
   const timer = setTimeout(() => { try { child.kill("SIGTERM"); } catch { /* already gone */ } }, a.timeoutMs ?? 60000);
   const r = await child.output(); clearTimeout(timer);
   const dec = new TextDecoder();
+  // deno-lint-ignore no-control-regex
   const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
   let output = strip(dec.decode(r.stdout)); const err = strip(dec.decode(r.stderr)).trim();
   if (err) output += (output ? "\n" : "") + err;
@@ -402,7 +402,6 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
           return json({ ok: false, message: (e as Error).message });
         }
       }
-      if (u.pathname === "/api/sync") return new Response(await readText(`${CACHE}/sync.json`) ?? "null", { headers: { "content-type": "application/json" } });
       if (u.pathname === "/api/profile") {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);

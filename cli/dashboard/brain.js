@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
 /* claude-multi console — the Brain: the wiki (~/brains/claude) the way Obsidian shows it. Pages as a
    tree of folders, a reader with what links in and out, the page's neighbourhood as a small live
    graph, and the whole graph on its own screen. A view: pages are written by Claude through
@@ -9,7 +10,8 @@ const groupOf = (g) => GROUPS.includes(g) ? g : "other";
 /** Pages that link to everything (the index, the log): in a graph they are a star that hides the
     structure, so the graph leaves them out unless asked. They stay in the tree and the reader. */
 const HUBS = new Set(["index", "log", "CONVENTIONS", "README", "hot"]);
-let BRAIN = null, bSel = null, bMode = "read", bShowHubs = false, bDepth2 = false, bOff = new Set(), bOpen = new Set(["projects"]);
+let BRAIN = null, bSel = null, bMode = "read", bShowHubs = false, bDepth2 = false, bOpen = new Set(["projects"]);
+const bOff = new Set();
 let bPage = null; // the page on screen: { path, body, data }
 try {
   bMode = localStorage.getItem("cm-bmode") === "graph" ? "graph" : "read";
@@ -173,7 +175,8 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
   const ctx = canvas.getContext("2d");
   let nodes = [], links = [], byId = new Map(), adj = new Map(), top = new Set();
   let tf = { k: 1, x: 0, y: 0 }, alpha = 0, raf = 0, W = 0, H = 0, dpr = 1, moved = false, fitted = false;
-  let hover = null, drag = null, pan = null, selected = null, match = null, colors = {}, colorsAt = 0;
+  let hover = null, drag = null, pan = null, selected = null, match = null, colorsAt = 0;
+  const colors = {};
 
   const readColors = () => {
     const cs = getComputedStyle(document.documentElement);

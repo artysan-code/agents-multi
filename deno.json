@@ -10,7 +10,8 @@
   "lint": {
     "rules": {
       "exclude": [
-        "no-explicit-any"
+        "no-explicit-any",
+        "no-import-prefix"
       ]
     }
   }
