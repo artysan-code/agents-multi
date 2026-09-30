@@ -43,26 +43,25 @@
         <!-- ============ TODAY ============ -->
         <section class="view" id="v-today" hidden>
           <form class="hey-bar" id="hey-bar">
-            <svg viewBox="0 0 24 24" class="ico"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            <span class="hey-mark" aria-hidden="true">✳</span>
             <input name="text" data-i18n-ph="hey.ph" autocomplete="off">
             <kbd>Ctrl Space</kbd>
           </form>
-          <div class="status-card" id="status" style="margin-top:16px"></div>
-          <section class="panel" style="margin-top:16px">
-            <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span><a class="btn sm" href="#tasks" data-i18n="tasks.all"></a></div>
-            <div id="tk-list"></div>
-            <form class="tk-add" id="tk-add">
-              <input name="title" class="search" data-i18n-ph="tasks.add.ph" required autocomplete="off">
-              <input name="due" type="date" class="search" data-i18n-title="tasks.due">
-              <input name="time" type="time" class="search" data-i18n-title="tasks.time">
-              <input name="project" class="search" data-i18n-ph="tasks.project" autocomplete="off" style="max-width:130px">
-              <button class="btn primary" type="submit" data-i18n="mk.add"></button>
-            </form>
+          <div class="status-card" id="status" hidden></div>
+          <section class="panel today-run">
+            <div class="panel-h"><h3 data-i18n="today.running"></h3><span class="r" id="run-n"></span></div>
+            <div class="panel-b" id="running"></div>
           </section>
-          <div class="row c2">
-            <section class="panel">
-              <div class="panel-h"><h3 data-i18n="today.running"></h3><span class="r" id="run-n"></span></div>
-              <div class="panel-b" id="running"></div>
+          <div class="today-grid">
+            <section class="panel today-tasks">
+              <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span><a class="btn sm" href="#tasks" data-i18n="tasks.all"></a></div>
+              <div id="tk-list"></div>
+              <form class="tk-add" id="tk-add">
+                <input name="title" class="search" data-i18n-ph="tasks.add.ph" required autocomplete="off">
+                <input name="due" type="date" class="search" data-i18n-title="tasks.due">
+                <input name="time" type="time" class="search" data-i18n-title="tasks.time">
+                <button class="btn primary" type="submit" data-i18n="mk.add"></button>
+              </form>
             </section>
             <section class="panel">
               <div class="panel-h"><h3 data-i18n="today.resume"></h3><span class="r" data-i18n="today.resume.sub"></span></div>
@@ -70,7 +69,6 @@
             </section>
           </div>
         </section>
-
         <!-- ============ TASKS ============ -->
         <section class="view wide" id="v-tasks" hidden>
           <div class="tb-bar">

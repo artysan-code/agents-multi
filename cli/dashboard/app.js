@@ -186,6 +186,8 @@ function renderToday() {
   const level = SUM?.level ?? "ok";
   const box = $("#status");
   box.className = "status-card " + level;
+  // all good needs no card: the rail says it; the card is for something to act on
+  box.hidden = level === "ok" && !SUM?.staged;
   const extra = [
     SUM?.staged ? t("status.staged", { v: SUM.staged }) : null,
     SUM?.warns.length ? t("status.warns", { n: SUM.warns.length }) : null,
@@ -253,7 +255,7 @@ $("#tk-list").addEventListener("change", async (e) => {
 $("#tk-add").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target;
-  const body = { op: "add", title: f.elements.title.value.trim(), due: f.elements.due.value || undefined, time: f.elements.time.value || undefined, project: f.elements.project.value.trim() || undefined };
+  const body = { op: "add", title: f.elements.title.value.trim(), due: f.elements.due.value || undefined, time: f.elements.time.value || undefined };
   if (body.time && !body.due) body.due = TK?.day; // the server's local day, not the UTC one
   const r = await post("/api/tasks", body).catch((err) => ({ ok: false, message: err.message }));
   if (!r.ok) return toast(r.message, true);
@@ -1231,6 +1233,8 @@ function applyLang() {
   setLive(liveState);
   if (CAT) renderCatalogSelect();
   if (SUM) renderState();
+  // the rail can shrink to icons: each keeps its name as a tooltip
+  $$("#nav a").forEach((a) => a.title = t(`nav.${a.dataset.v}`));
   renderTitle();
   renderView();
   if (PL) renderPlugins();
