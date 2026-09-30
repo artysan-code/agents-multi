@@ -727,6 +727,14 @@ kbd {
   accent-color: var(--accent);
   flex: none;
 }
+.tk.ev .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--info);
+}
+.tk.ev .tt {
+  color: var(--fg-dim);
+}
 .tk .tm {
   font: 500 12.5px var(--mono);
   color: var(--accent);

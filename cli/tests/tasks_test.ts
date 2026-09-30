@@ -93,3 +93,16 @@ Deno.test("briefText: evening looks at tomorrow; nothing to say is marked empty"
   assertEquals(t.body, "domani: 09:00 Dentista");
   assertEquals(briefText(T.brief([], at("2026-09-30T08:30:00")), "it").empty, true);
 });
+
+Deno.test("eventAsTask: timed and all-day events; cancelled and declined ones are not on the agenda", async () => {
+  const { eventAsTask } = await import("../agenda.ts");
+  const timed = eventAsTask({ id: "e1", summary: "Call", start: { dateTime: "2026-09-30T17:30:00+02:00" } }, "acme")!;
+  assertEquals([timed.title, timed.source, timed.project, timed.due], ["Call", "calendar", "acme", "2026-09-30"]);
+  assert(/^\d\d:\d\d$/.test(timed.time!));
+  assertEquals(eventAsTask({ id: "e2", summary: "Ferie", start: { date: "2026-10-02" } }, "personal")!.time, undefined);
+  assertEquals(eventAsTask({ id: "e3", status: "cancelled", start: { date: "2026-10-02" } }, "p"), null);
+  assertEquals(eventAsTask({ id: "e4", start: { date: "2026-10-02" }, attendees: [{ self: true, responseStatus: "declined" }] }, "p"), null);
+  // a past appointment is not "missed": it is just past
+  const past = { ...timed, due: "2026-09-30", time: "09:00" };
+  assertEquals(T.brief([past], at("2026-09-30T11:00:00")).missed.length, 0);
+});

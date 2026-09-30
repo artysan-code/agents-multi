@@ -205,13 +205,13 @@ async function loadTasks() {
 
 function renderTasks() {
   if (!TK) return;
-  const item = (t, withDay = false) =>
-    `<label class="tk${t.priority === 1 ? " hi" : ""}">
-      <input type="checkbox" data-tk-done="${esc(t.id)}">
-      <span class="tm">${esc(t.time ?? "")}</span>
-      <span class="tt">${esc(t.title)}${t.project ? `<small>${esc(t.project)}</small>` : ""}${
-      t.owner && t.owner !== "samuel" ? `<small>${esc(t.owner)}</small>` : ""
-    }${withDay && t.due ? `<small>${esc(new Date(t.due + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric", month: "short" }))}</small>` : ""}</span>
+  const item = (x, withDay = false) =>
+    `<label class="tk${x.priority === 1 ? " hi" : ""}${x.source ? " ev" : ""}">
+      ${x.source ? `<svg viewBox="0 0 24 24" class="ico" aria-label="${esc(t("tasks.event"))}"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>` : `<input type="checkbox" data-tk-done="${esc(x.id)}">`}
+      <span class="tm">${esc(x.time ?? "")}</span>
+      <span class="tt">${esc(x.title)}${x.project ? `<small>${esc(x.project)}</small>` : ""}${
+      x.owner && x.owner !== "samuel" ? `<small>${esc(x.owner)}</small>` : ""
+    }${withDay && x.due ? `<small>${esc(new Date(x.due + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric", month: "short" }))}</small>` : ""}</span>
     </label>`;
   const group = (key, xs, cls = "", withDay = false) =>
     xs.length ? `<div class="tk-group ${cls}"><h4>${esc(t(`tasks.${key}`))}</h4>${xs.map((x) => item(x, withDay)).join("")}</div>` : "";

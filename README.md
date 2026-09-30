@@ -312,6 +312,10 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   briefs at the times in `~/brains/tasks/settings.json` (default 08:30, 13:30, 19:00; an empty brief
   is not sent) and a warning before each timed task. Never more than an hour late, never twice.
 - **Today** in the console shows the list, with a checkbox to complete and a quick add.
+- **Appointments count too**: today's and tomorrow's events of every connected Google account join
+  the briefs, the warnings and Today (marked as events, not completable; declined and cancelled
+  ones left out). The `tasks` server itself stays local: in a chat, the debrief combines
+  `tasks_brief` with the google server's `calendar_events`.
 
 ### Accounts and the secret vault
 

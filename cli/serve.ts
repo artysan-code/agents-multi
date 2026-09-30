@@ -18,6 +18,7 @@ import { ACCOUNTS, loadRegistry, type RawRegistry, selectServers } from "./mcp.t
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
+import { calendarAsTasks } from "./agenda.ts";
 import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
@@ -357,7 +358,8 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
             return json({ ok: false, message: (e as Error).message });
           }
         }
-        return json(brief(await listTasks(), new Date()));
+        const cal = await calendarAsTasks();
+        return json({ ...brief([...await listTasks(), ...cal.tasks], new Date()), calendarErrors: cal.errors });
       }
       if (u.pathname === "/api/brain") return json(await brainGraph());
       if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));

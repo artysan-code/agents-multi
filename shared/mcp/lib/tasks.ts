@@ -33,6 +33,8 @@ export interface Task {
   updated: string;
   done?: string;
   notes?: string;
+  /** where an agenda entry comes from when it is not a task ("calendar"): never written to a file */
+  source?: string;
 }
 
 export interface TaskSettings {
@@ -233,8 +235,8 @@ export function brief(tasks: Task[], now: Date, horizon = 3) {
     day: today,
     moment: momentOf(now),
     overdue: mine.filter((t) => t.due && t.due < today).sort((a, b) => a.due!.localeCompare(b.due!) || byTimeThenPriority(a, b)),
-    // timed tasks already past this hour, still open: missed today
-    missed: todayAll.filter((t) => t.time && t.time < clock),
+    // timed tasks already past this hour, still open: missed today (a past appointment is just past)
+    missed: todayAll.filter((t) => t.time && t.time < clock && !t.source),
     today: todayAll.filter((t) => !t.time || t.time >= clock),
     tomorrow: mine.filter((t) => t.due === addDays(today, 1)).sort(byTimeThenPriority),
     upcoming: mine.filter((t) => t.due && t.due > addDays(today, 1) && t.due <= addDays(today, horizon)).sort((a, b) => a.due!.localeCompare(b.due!) || byTimeThenPriority(a, b)),

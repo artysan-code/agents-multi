@@ -65,6 +65,7 @@ const I18N = {
 
     "today.running": "Running now",
     "tasks.title": "To do",
+    "tasks.event": "calendar event",
     "tasks.overdue": "Overdue",
     "tasks.missed": "Missed earlier today",
     "tasks.today": "Today",
@@ -362,6 +363,7 @@ const I18N = {
 
     "today.running": "In esecuzione",
     "tasks.title": "Da fare",
+    "tasks.event": "evento del calendario",
     "tasks.overdue": "In ritardo",
     "tasks.missed": "Saltate oggi",
     "tasks.today": "Oggi",

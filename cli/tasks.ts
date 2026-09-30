@@ -8,6 +8,7 @@
 
 import { ANSI, readJson, STATE, uiLanguage } from "./lib.ts";
 import { desktopNotify } from "./notify.ts";
+import { calendarAsTasks } from "./agenda.ts";
 import {
   addTask, brief, dayOf, dueBriefs, dueReminders, listTasks, loadSettings, type Task, updateTask,
 } from "../shared/mcp/lib/tasks.ts";
@@ -34,7 +35,9 @@ export function briefText(b: ReturnType<typeof brief>, lang: "it" | "en"): { tit
 
 async function remind(dry: boolean): Promise<number> {
   const now = new Date();
-  const [tasks, settings] = await Promise.all([listTasks(), loadSettings()]);
+  const [own, settings, cal] = await Promise.all([listTasks(), loadSettings(), calendarAsTasks()]);
+  // the day is tasks and appointments: calendar events brief and remind like timed tasks
+  const tasks = [...own, ...cal.tasks];
   const state = await readJson<{ sent: string[] }>(SENT) ?? { sent: [] };
   const sent = new Set(state.sent);
   let n = 0;
@@ -46,7 +49,7 @@ async function remind(dry: boolean): Promise<number> {
     n++;
   }
   for (const r of dueReminders(tasks, now, sent, settings.remind)) {
-    await desktopNotify(`${r.task.time} · ${r.task.title}`, [r.task.project, it ? "tra poco" : "coming up"].filter(Boolean).join(" · "), { dryRun: dry });
+    await desktopNotify(`${r.task.time} · ${r.task.title}`, [r.task.source === "calendar" ? (it ? "calendario" : "calendar") : null, r.task.project, it ? "tra poco" : "coming up"].filter(Boolean).join(" · "), { dryRun: dry });
     sent.add(r.key);
     n++;
   }
@@ -71,7 +74,7 @@ export async function tasksCommand(args: string[]): Promise<number> {
   const opt = (name: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : undefined; };
   switch (sub) {
     case "brief": {
-      const b = brief(await listTasks(), new Date());
+      const b = brief([...await listTasks(), ...(await calendarAsTasks()).tasks], new Date());
       console.log(`${ANSI.b}claude-multi tasks${ANSI.x} — ${b.day}`);
       print(it ? "In ritardo" : "Overdue", b.overdue);
       print(it ? "Saltate oggi" : "Missed today", b.missed);
