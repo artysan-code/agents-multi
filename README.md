@@ -155,7 +155,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | Command | What it does |
 |---|---|
 | `claude` | Claude Code on the default profile |
-| `claude-work` | Claude Code on the `work` profile (each profile can declare its own `command`) |
+| `claude-agency`, `claude-acme` | Claude Code on that profile (each profile declares its own `command`) |
 | `claude-multi install [--dry-run]` | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent |
 | `claude-multi settings [--dry-run]` | regenerate each profile's `settings.json`, adopting into `profiles/<p>/settings.json` what Claude wrote into it |
 | `claude-multi doctor [--json\|--notify]` | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a *new* failure appears, or when everything clears |
@@ -165,8 +165,11 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | update Claude Code and/or Claude Desktop |
 | `claude-multi usage [--by …] [--since …]` | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite) |
 | `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
+| `claude-multi vault status\|init\|pair\|set\|delete\|import-legacy` | the secret vault the MCP servers read their credentials from (below) |
+| `claude-multi tasks brief\|add\|done\|remind` | the task list from the terminal; `remind` is what the timer runs |
+| `claude-multi google client <file.json>\|connect <account>` | the Google OAuth client, and connecting an account |
 | `claude-launch <profile>` | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app |
-| `claude-multi-app [--tray]` | the desktop app: console window and tray icon (below) |
+| `claude-multi-app [--tray\|--hey]` | the desktop app: console window, tray icon, Hey Claude (below) |
 
 `claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -179,21 +182,28 @@ would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 <http://127.0.0.1:7331>. It is not tied to a graphical session — over an ssh tunnel it works
 exactly the same, which is the point on a headless box.
 
-Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
-and the page redraws the view you are actually looking at. The page itself is HTML, CSS and
+Updates are **pushed, not polled**: the server watches the transcript tree, the shared config, the
+wiki and the tasks, and the page redraws the view you are actually looking at. The page itself is HTML, CSS and
 vanilla JS with no dependencies and no external assets, so it renders on a machine that has never
 been online.
 
-Four sections, in English or Italian. The language follows the machine's locale — the regional
+Five sections, in English or Italian. The language follows the machine's locale — the regional
 format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
 the globe button in the rail overrides it per browser.
 
-- **Today** (`#today`) — the tray's verdict in words (what needs you, if anything), the sessions
-  running now, and the last sessions per directory with the command that reopens each one.
-- **Brain** (`#brain`) — the wiki (`~/brains/claude`, `CLAUDE_MULTI_BRAIN`) as a graph of its pages
-  and their links, searchable, each page readable in place or opened in Obsidian. A view, not an
-  editor: what you add (a document, a link, a note) waits in `_raw/`, and Claude distils it with
-  `/wiki-ingest` when asked, confirming before it writes.
+- **Today** (`#today`) — the sessions running now first, then the day's tasks and appointments and
+  the last sessions per directory with the command that reopens each one. A status card appears
+  only when something needs you; the rail's dot says the rest.
+- **Tasks** (`#tasks`) — the board (columns by status, drag a card to move it), a sortable list, a
+  month calendar with the Google events, and one small board per project folder. The folder tree
+  on the left filters every view. A task opens as a page: its fields, its steps and their
+  progress, a Markdown description that saves as you type, and its attachments. See [Tasks](#tasks).
+- **Brain** (`#brain`) — the wiki (`~/brains/claude`, `CLAUDE_MULTI_BRAIN`): the pages as a tree of
+  folders, a reader with what links in and out and the page's neighbourhood as a live graph, and
+  the whole wiki as a full-screen graph (drag, pan, zoom, filter by folder; the index and log are
+  hidden by default, they link to everything). A view, not an editor: what you add (a document, a
+  link, a note) waits in `_raw/`, and Claude distils it with `/wiki-ingest` when asked, confirming
+  before it writes.
 - **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
   where, and whether each profile actually mounted it at its last sync.
 - **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or
@@ -226,18 +236,21 @@ tunnel still reaches it.
   **grey** when the console does not answer. Warnings are listed, not coloured: some are standing
   conditions of a machine, and an icon that is always yellow says nothing. It refreshes on the
   console's `state` events and when the menu opens, never on a timer. The menu opens the console,
-  a profile's Claude Desktop, the Updates tab and the Health view. A Claude Desktop version waiting
+  Hey Claude, a profile's Claude Desktop, the Updates tab and the Health view. A Claude Desktop version waiting
   to switch is listed there, not coloured: it needs nothing from you.
 - **At login** — `claude-multi-app.service` (graphical session only, enabled by `install`) runs
   `--tray`. One instance per session: a second start hands its request to the first over
   `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
 
-- **Hey Claude** — `claude-multi-app --hey` (also in the tray menu, and the bar on Today) opens a
-  quick entry: what you write goes to Claude Code in a terminal in the chosen folder (Enter), to a
-  new Claude Desktop chat (Ctrl+Enter; the text is on the clipboard too), or is answered in the
-  panel by `claude -p` (Alt+Enter), under the chosen profile. Bind it to a global shortcut in KDE:
-  System Settings › Keyboard › Shortcuts › Add New › Command, `claude-multi-app --hey`. The voice
-  (a local wake word and whisper.cpp) will fill the same field.
+- **Hey Claude** — `claude-multi-app --hey` (also in the tray menu, and the bar on Today) opens one
+  floating field. What you write goes to `claude -p` in the default profile and the answer streams
+  under it: the tasks can be changed from there, calendar, mail, Drive and the wiki only read
+  (sending mail or inviting stays a conversation's job). A follow-up continues the same
+  conversation, which can move to a terminal; a request that needs work inside a project's files
+  becomes one button that opens Claude Code in that folder with the request. Bind it to a global
+  shortcut in KDE: System Settings › Keyboard › Shortcuts › Add New › Command, with the **absolute**
+  path (`~/.local/bin/claude-multi-app --hey`): the Plasma session's `PATH` does not include
+  `~/.local/bin`.
 
 Without a system tray (GNOME needs the AppIndicator extension) the windows still work and the app
 quits with the last one; `--tray` waits a minute for a tray to appear, then exits cleanly and the
@@ -312,13 +325,23 @@ a warning in minutes before it, a project, a priority, a repeat (daily, weekdays
 completing one creates the next) and an owner — who has to move: `samuel`, `claude`, or someone else,
 and then it is waiting on them. Nothing is deleted: a task that no longer matters is `dropped`.
 
+- **The body is plain Markdown**: a description, a checklist of steps (`- [ ]` / `- [x]`, whose
+  ticks give the progress on the board) and an `## Attachments` section — links, paths on this
+  computer (opened with the desktop's default program), files dropped on the task in the console
+  (copied to `files/<id>/`, so they sync too) and wiki pages (`[[…]]`).
+- **Projects are folders**: a task's project is its folder under `~` (`work/acme/site`), or a bare
+  name that resolves to the shallowest folder with that name (`cli/projects.ts`; the roots are
+  `projectRoots` in the settings, by default `personal`, `work`, `university`).
 - The **`tasks` MCP server** is in every profile, on the CLI and in Desktop: `tasks_brief` (the
-  debrief), `tasks_list`, `tasks_add`, `tasks_update`, `tasks_done`. `shared/rules/tasks.md` tells
-  every session to keep the list current from the conversation.
+  debrief), `tasks_list`, `tasks_get`, `tasks_add`, `tasks_update`, `tasks_done`, `tasks_steps`,
+  `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
+  task that changed since it was opened. `shared/rules/tasks.md` tells every session to keep the
+  list current from the conversation.
 - **Reminders**: `claude-tasks.timer` runs `claude-multi tasks remind` every five minutes: the
   briefs at the times in `~/brains/tasks/settings.json` (default 08:30, 13:30, 19:00; an empty brief
   is not sent) and a warning before each timed task. Never more than an hour late, never twice.
-- **Today** in the console shows the list, with a checkbox to complete and a quick add.
+- **In the console**: the Tasks tab, and on Today the day's list with a checkbox to complete and a
+  quick add.
 - **Appointments count too**: today's and tomorrow's events of every connected Google account join
   the briefs, the warnings and Today (marked as events, not completable; declined and cancelled
   ones left out). The `tasks` server itself stays local: in a chat, the debrief combines
@@ -375,14 +398,14 @@ With `GEN_UNIT` empty the shim answers 503 to `/api/generate` instead of startin
 ## Repository layout
 
 ```
-bin/            wrappers and scripts: claude, claude-work, claude-multi, claude-launch, claude-update, …
+bin/            wrappers and scripts: claude, claude-multi, claude-multi-app, claude-launch, claude-update, …
 bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
 cli/            the claude-multi CLI (Deno, zero dependencies)
 cli/dashboard/  the console page (HTML/CSS/JS, no build step)
 shared/         config shared across profiles: agents, commands, hooks, skills, rules, mcp, settings.json
 profiles/       one directory per profile: manifest, CLAUDE.md, owned entries
 lib/            the desktop app: tray and console window (PySide6)
-systemd/user/   console unit, update-check timer, optional local inference units
+systemd/user/   console and app units, update-check and tasks timers, optional local inference units
 desktop/        .desktop entries and icons
 pkg/            the pinned Anthropic apt key, and claude-desktop-shims (the system half of Claude Desktop)
 ```
