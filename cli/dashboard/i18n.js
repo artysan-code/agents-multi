@@ -90,9 +90,9 @@ const I18N = {
     "run.working": "working",
     "run.idle": "idle {d}",
     "run.terminal": "terminal",
-    "run.desktop": "desktop",
+    "run.desktop": "Code tab in Desktop",
     "run.desktopApp": "Desktop app",
-    "run.window": "window",
+    "run.window": "the app window · {n} Code sessions inside, listed above",
     "run.count": "{c} sessions · {d} desktop",
     "run.countBusy": "{w} working · {c} sessions · {d} desktop",
 
@@ -389,9 +389,9 @@ const I18N = {
     "run.working": "al lavoro",
     "run.idle": "ferma da {d}",
     "run.terminal": "terminale",
-    "run.desktop": "desktop",
+    "run.desktop": "tab Code di Desktop",
     "run.desktopApp": "App Desktop",
-    "run.window": "finestra",
+    "run.window": "la finestra dell'app · {n} sessioni Code dentro, elencate sopra",
     "run.count": "{c} sessioni · {d} desktop",
     "run.countBusy": "{w} al lavoro · {c} sessioni · {d} desktop",
 

@@ -284,14 +284,23 @@ export function transcriptPath(profile: string, cwd: string | null, session: str
   if (!cwd || !session) return null;
   return `${RUNTIME}/${profile}/projects/${cwd.replace(/\//g, "-")}/${session}.jsonl`;
 }
+/** Pure: the Desktop variant an executable serves — the default build in user space
+ *  (~/.local/lib/claude-desktop/versions/<v>/claude-desktop) is the default profile, a rebuilt one
+ *  (~/.local/lib/claude-desktop-<p>/claude-desktop-<p>) names its profile; null for anything else. */
+export function desktopVariantOf(exe: string, defaultProfile: string): string | null {
+  const m = exe.match(/\/claude-desktop(?:-([a-z0-9-]+))?\/(?:versions\/[0-9.]+\/)?claude-desktop(?:-[a-z0-9-]+)?$/);
+  return m ? m[1] ?? defaultProfile : null;
+}
 export async function running() {
   const cli: CliProc[] = [];
+  const ls = await launchers();
+  const def = (ls.find((l) => l.command === "claude") ?? ls[0])?.profile ?? "default";
   const desktop: { pid: number; variant: Profile }[] = [];
   // Desktop binaries are named after the profile they serve (claude-desktop, claude-desktop-work…),
   // so the profile is read back off the executable path rather than a fixed table.
   // the launcher runs the native build through ~/.local/bin/claude-bin, a symlink: its command line
   // names the link, not claude/versions/ (the exe check below is what decides)
-  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-bin( |$)|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/claude-desktop"]);
+  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-bin( |$)|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/(versions/[0-9.]+/)?claude-desktop"]);
   for (const line of pg.out.split("\n").filter(Boolean)) {
     const [pidS, ...rest] = line.split(" "); const pid = Number(pidS); const cmd = rest.join(" ");
     if (cmd.includes("--type=")) continue; // Electron child processes
@@ -312,8 +321,8 @@ export async function running() {
       });
       continue;
     }
-    const desk = exe.match(/\/claude-desktop(?:-([a-z0-9-]+))?\/claude-desktop/);
-    if (desk) desktop.push({ pid, variant: desk[1] ?? "personal" });
+    const variant = desktopVariantOf(exe, def);
+    if (variant) desktop.push({ pid, variant });
   }
   return { cli, desktop };
 }

@@ -317,7 +317,7 @@ function renderRunning() {
     desk.map((d) =>
       `<div class="run static" title="pid ${d.pid}">
       <div class="run-top"><span class="chip">${esc(d.variant)}</span><b>${esc(t("run.desktopApp"))}</b></div>
-      <div class="run-bot"><span class="run-meta">${esc(t("run.window"))}</span></div>
+      <div class="run-bot"><span class="run-meta">${esc(t("run.window", { n: cli.filter((c) => c.embedded && c.profile === d.variant).length }))}</span></div>
     </div>`
     ).join("") +
     `</div>`;
