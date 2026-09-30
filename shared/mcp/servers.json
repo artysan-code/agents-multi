@@ -63,6 +63,23 @@
         "--lock=~/.claude-multi/shared/mcp/coolify/deno.lock",
         "~/.claude-multi/shared/mcp/coolify/server.ts"
       ]
+    },
+    "tasks": {
+      "type": "stdio",
+      "command": "deno",
+      "args": [
+        "run",
+        "--quiet",
+        "--allow-read=~/brains/tasks,~/.cache/deno",
+        "--allow-write=~/brains/tasks",
+        "--allow-env=HOME,CLAUDE_MULTI_TASKS",
+        "--lock=~/.claude-multi/shared/mcp/tasks/deno.lock",
+        "~/.claude-multi/shared/mcp/tasks/server.ts"
+      ],
+      "_surfaces": [
+        "cli",
+        "desktop"
+      ]
     }
   }
 }

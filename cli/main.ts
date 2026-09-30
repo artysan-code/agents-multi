@@ -10,6 +10,7 @@
 //   update  [...]           passthrough to bin/claude-update (CLI + Desktop, --rollback)
 //   usage   [...]           tokens and list-price estimate per profile/model/project/agent/skill/command (SQLite)
 //   serve   [--no-open]     local console on http://127.0.0.1:7331 (today, connections, profiles, plugins, updates, health)
+//   tasks   [...]           the task list, its brief and the desktop reminders
 //   vault   [...]           the MCP servers' secrets: encrypted in ~/vault/claude-multi, key in the keyring
 //
 // Principle: the repository is the source of truth, ~/.claude-multi is runtime materialised by
@@ -18,6 +19,7 @@
 // it runs on a fresh machine with no cache to warm.
 
 import { vaultCommand } from "./vault.ts";
+import { tasksCommand } from "./tasks.ts";
 import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
@@ -101,6 +103,7 @@ switch (cmd) {
   }
   case "serve": await serve({ open: !flag("--no-open") }); break;
   case "vault": Deno.exit(await vaultCommand(rest));
+  case "tasks": Deno.exit(await tasksCommand(rest));
   // deno-lint-ignore no-fallthrough
   case "help": case "--help": case "-h":
   default:
@@ -116,6 +119,7 @@ switch (cmd) {
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
   vault   [status|init|pair|recovery-code|set|delete|import-legacy]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
+  tasks   [brief|add|done|remind]   the task list (~/brains/tasks); remind is what claude-tasks.timer runs
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
 
   The console runs as a systemd user unit after install, so it is always there:

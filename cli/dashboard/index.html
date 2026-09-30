@@ -42,6 +42,17 @@
         <!-- ============ TODAY ============ -->
         <section class="view" id="v-today" hidden>
           <div class="status-card" id="status"></div>
+          <section class="panel" style="margin-top:16px">
+            <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span></div>
+            <div id="tk-list"></div>
+            <form class="tk-add" id="tk-add">
+              <input name="title" class="search" data-i18n-ph="tasks.add.ph" required autocomplete="off">
+              <input name="due" type="date" class="search" data-i18n-title="tasks.due">
+              <input name="time" type="time" class="search" data-i18n-title="tasks.time">
+              <input name="project" class="search" data-i18n-ph="tasks.project" autocomplete="off" style="max-width:130px">
+              <button class="btn primary" type="submit" data-i18n="mk.add"></button>
+            </form>
+          </section>
           <div class="row c2">
             <section class="panel">
               <div class="panel-h"><h3 data-i18n="today.running"></h3><span class="r" id="run-n"></span></div>

@@ -1,0 +1,13 @@
+[Unit]
+Description=Task reminders: the day's briefs and a warning before each timed task (every 5 min)
+
+[Timer]
+# On the clock, not relative to the last run: a warning set for 14:45 goes out between 14:45 and
+# 14:50 whatever the machine did before. Persistent: a machine that was asleep catches up once,
+# and the reminder logic drops anything more than an hour late.
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

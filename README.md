@@ -280,6 +280,22 @@ native modules built for the wrong Node ABI, missing environment, cold-start cra
 Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege). The ones that work on
 an external service share `shared/mcp/lib/`: `coolify` and `n8n` today.
 
+### Tasks
+
+Samuel's tasks live in `~/brains/tasks` (`CLAUDE_MULTI_TASKS`): one Markdown file per task in
+`items/`, synced by Syncthing and readable in Obsidian. A task has a day and optionally a time,
+a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
+completing one creates the next) and an owner — who has to move: `samuel`, `claude`, or someone else,
+and then it is waiting on them. Nothing is deleted: a task that no longer matters is `dropped`.
+
+- The **`tasks` MCP server** is in every profile, on the CLI and in Desktop: `tasks_brief` (the
+  debrief), `tasks_list`, `tasks_add`, `tasks_update`, `tasks_done`. `shared/rules/tasks.md` tells
+  every session to keep the list current from the conversation.
+- **Reminders**: `claude-tasks.timer` runs `claude-multi tasks remind` every five minutes: the
+  briefs at the times in `~/brains/tasks/settings.json` (default 08:30, 13:30, 19:00; an empty brief
+  is not sent) and a warning before each timed task. Never more than an hour late, never twice.
+- **Today** in the console shows the list, with a checkbox to complete and a quick add.
+
 ### Accounts and the secret vault
 
 - **Accounts** are listed in `shared/mcp/accounts.json`, with no secret in it: service, a short

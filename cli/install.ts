@@ -239,6 +239,8 @@ export async function install(dry: boolean) {
       const wantEnabled = ["claude-multi-console.service"];
       // The update check raises desktop notifications, so it only makes sense with a session.
       if (m.graphical) wantEnabled.push("claude-update-check.timer");
+      // task briefs and reminders are desktop notifications: only where there is a desktop
+      if (m.graphical) wantEnabled.push("claude-tasks.timer");
       // The desktop app sits in the tray from login (it exits by itself where there is no tray).
       if (m.graphical) wantEnabled.push("claude-multi-app.service");
       // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.

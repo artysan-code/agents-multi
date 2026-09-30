@@ -97,6 +97,10 @@ function connect() {
     } catch { /* an event without a body is still a change */ }
     onChange("usage");
   });
+  es.addEventListener("tasks", () => {
+    lastEvent = Date.now();
+    if (view === "today") loadTasks().catch(() => {});
+  });
   es.addEventListener("brain", () => {
     lastEvent = Date.now();
     if (view === "brain") loadBrain().catch(() => {});
@@ -189,7 +193,53 @@ function renderToday() {
   }
   renderRunning();
   loadResume();
+  loadTasks().catch(() => {});
 }
+
+/* ---------------- tasks ---------------- */
+let TK = null;
+async function loadTasks() {
+  TK = await api("/api/tasks");
+  renderTasks();
+}
+
+function renderTasks() {
+  if (!TK) return;
+  const item = (t, withDay = false) =>
+    `<label class="tk${t.priority === 1 ? " hi" : ""}">
+      <input type="checkbox" data-tk-done="${esc(t.id)}">
+      <span class="tm">${esc(t.time ?? "")}</span>
+      <span class="tt">${esc(t.title)}${t.project ? `<small>${esc(t.project)}</small>` : ""}${
+      t.owner && t.owner !== "samuel" ? `<small>${esc(t.owner)}</small>` : ""
+    }${withDay && t.due ? `<small>${esc(new Date(t.due + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric", month: "short" }))}</small>` : ""}</span>
+    </label>`;
+  const group = (key, xs, cls = "", withDay = false) =>
+    xs.length ? `<div class="tk-group ${cls}"><h4>${esc(t(`tasks.${key}`))}</h4>${xs.map((x) => item(x, withDay)).join("")}</div>` : "";
+  const evening = TK.moment === "evening";
+  const html = group("overdue", TK.overdue, "late", true) + group("missed", TK.missed, "late") + group("today", TK.today) +
+    group("tomorrow", TK.tomorrow) + (evening ? "" : group("upcoming", TK.upcoming, "", true)) + group("waiting", TK.waiting, "", true);
+  $("#tk-list").innerHTML = html || `<div class="tk-empty">${esc(t("tasks.none"))}</div>`;
+  $("#tk-sum").textContent = TK.doneToday ? t("tasks.doneToday", { n: TK.doneToday }) : "";
+}
+
+$("#tk-list").addEventListener("change", async (e) => {
+  const cb = e.target.closest("[data-tk-done]");
+  if (!cb) return;
+  const r = await post("/api/tasks", { op: "update", id: cb.dataset.tkDone, status: "done" }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) { cb.checked = false; return toast(r.message, true); }
+  toast(t("tasks.done", { t: r.task.title }));
+  await loadTasks();
+});
+$("#tk-add").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = { op: "add", title: f.elements.title.value.trim(), due: f.elements.due.value || undefined, time: f.elements.time.value || undefined, project: f.elements.project.value.trim() || undefined };
+  if (body.time && !body.due) body.due = TK?.day; // the server's local day, not the UTC one
+  const r = await post("/api/tasks", body).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) return toast(r.message, true);
+  f.reset();
+  await loadTasks();
+});
 
 /** Sessions seen writing recently. A row stays "working" for a few seconds after its last write,
  *  because a session pauses between turns and flickering would be worse than a short lag. */
@@ -1326,6 +1376,7 @@ function applyLang() {
   renderView();
   if (PL) renderPlugins();
   if (BRAIN) renderBrain();
+  if (TK) renderTasks();
 }
 $("#lang-btn").addEventListener("click", () => {
   const order = ["auto", ...Object.keys(I18N)];

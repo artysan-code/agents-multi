@@ -20,6 +20,7 @@ import { deleteSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } f
 import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
+import { addTask, brief, listTasks, tasksRoot, type TaskInput, updateTask } from "../shared/mcp/lib/tasks.ts";
 import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
@@ -180,7 +181,7 @@ async function accountOp(b: { op?: string; service?: string; name?: string; url?
 }
 
 // ---------------------------------------------------------------- live updates
-type Topic = "usage" | "state" | "brain";
+type Topic = "usage" | "state" | "brain" | "tasks";
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
  *  rather than repainting every row as busy. */
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
@@ -194,6 +195,7 @@ function broadcast(topic: Topic, sessions: string[] = []) {
  * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
  * `brain`  a page or the inbox of the wiki changed (Syncthing, Claude writing, a drop)
+ * `tasks`  a task changed: a chat, another machine, the console
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
  * second is plenty for a dashboard.
@@ -204,7 +206,7 @@ async function watchTree(signal: AbortSignal) {
   // those two are watched only where they are.
   const paths = [RUNTIME, `${REPO}/shared`];
   // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
-  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), BRAIN]) if (await lstat(d)) paths.push(d);
+  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), BRAIN, tasksRoot()]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
   try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
@@ -224,6 +226,7 @@ async function watchTree(signal: AbortSignal) {
         if (p.endsWith(".tmp") || p.includes("/.git/") || p.includes("/.obsidian/")) continue;
         // the wiki is its own topic: an Obsidian save should not reload the doctor
         if (p.startsWith(`${BRAIN}/`)) { if (p.endsWith(".md") || p.includes("/_raw/")) pending.add("brain"); continue; }
+        if (p.startsWith(`${tasksRoot()}/`)) { pending.add("tasks"); continue; }
         const transcript = p.includes("/projects/") && p.endsWith(".jsonl");
         pending.add(transcript ? "usage" : "state");
         // the file is named after the session, which is what the page needs to mark it as working
@@ -316,6 +319,21 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
           return json(r);
         }
         return json(await permissionsView());
+      }
+      if (u.pathname === "/api/tasks") {
+        if (req.method === "POST") {
+          if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+          const b = await req.json().catch(() => ({})) as TaskInput & { op?: string; id?: string };
+          try {
+            const { op, id, ...input } = b;
+            const r = op === "add" ? { task: await addTask(input) } : await updateTask(String(id ?? ""), input);
+            broadcast("tasks");
+            return json({ ok: true, task: r.task });
+          } catch (e) {
+            return json({ ok: false, message: (e as Error).message });
+          }
+        }
+        return json(brief(await listTasks(), new Date()));
       }
       if (u.pathname === "/api/brain") return json(await brainGraph());
       if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));

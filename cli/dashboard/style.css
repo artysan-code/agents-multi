@@ -699,6 +699,73 @@ kbd {
   padding: 4px 8px;
 }
 
+/* ---------------- tasks (Today) ---------------- */
+.tk-group {
+  padding: 6px 20px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tk-group h4 {
+  margin: 8px 0 4px;
+  font: 600 11px var(--sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.tk-group.late h4 {
+  color: var(--crit);
+}
+.tk {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.tk input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.tk .tm {
+  font: 500 12.5px var(--mono);
+  color: var(--accent);
+  width: 44px;
+  flex: none;
+}
+.tk .tt {
+  flex: 1;
+  min-width: 0;
+}
+.tk .tt small {
+  color: var(--fg-dim);
+  font-size: 12px;
+  margin-left: 6px;
+}
+.tk.hi .tt {
+  font-weight: 600;
+}
+.tk-add {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  flex-wrap: wrap;
+}
+.tk-add .search {
+  font: inherit;
+  font-size: 13px;
+}
+.tk-add input[name="title"] {
+  flex: 1;
+  min-width: 220px;
+}
+.tk-empty {
+  padding: 14px 20px;
+  color: var(--fg-dim);
+  font-size: 13px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
 /* ---------------- connections ---------------- */
 .conn td:first-child b {
   display: block;

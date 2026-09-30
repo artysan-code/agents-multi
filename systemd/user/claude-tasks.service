@@ -1,0 +1,13 @@
+[Unit]
+Description=Send the task briefs and reminders that are due (claude-multi tasks remind)
+Documentation=file://%h/.local/bin/claude-multi
+# the notifications go to the desktop
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+# the systemd --user session reads no login shell: deno is not on the default PATH
+Environment=PATH=%h/.deno/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/claude-multi tasks remind
+Nice=10

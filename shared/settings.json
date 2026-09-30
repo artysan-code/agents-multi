@@ -57,7 +57,8 @@
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:bundlephobia.com)",
       "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:orm.drizzle.team)"
+      "WebFetch(domain:orm.drizzle.team)",
+      "mcp__tasks"
     ],
     "deny": [
       "Read(~/.aws/**)",

@@ -270,6 +270,8 @@ export async function doctor(): Promise<Check[]> {
     if (m.systemd && m.graphical) {
       const t = await run("systemctl", ["--user", "is-enabled", "claude-update-check.timer"]);
       if (t.out !== "enabled") add("desktop.timer", "warn", `claude-update-check.timer: ${t.out || "not installed"}`, "claude-multi install");
+      const tt = await run("systemctl", ["--user", "is-enabled", "claude-tasks.timer"]);
+      if (tt.out !== "enabled") add("tasks.timer", "warn", `claude-tasks.timer: ${tt.out || "not installed"} — no task reminders on this machine`, "claude-multi install");
     }
     if (!(await lstat(`${REPO}/pkg/claude-desktop/anthropic-apt.asc`))) add("desktop.apt-key", "warn", "the Anthropic apt key is not in the repository: the InRelease signature cannot be verified", "fetch the key into pkg/claude-desktop/anthropic-apt.asc");
     else if (!(await has("gpgv"))) add("desktop.apt-key", "warn", "gpgv is missing: the apt repository signature is not verified", "install gnupg");
