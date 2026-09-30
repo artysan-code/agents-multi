@@ -289,7 +289,9 @@ export async function running() {
   const desktop: { pid: number; variant: Profile }[] = [];
   // Desktop binaries are named after the profile they serve (claude-desktop, claude-desktop-work…),
   // so the profile is read back off the executable path rather than a fixed table.
-  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/claude-desktop"]);
+  // the launcher runs the native build through ~/.local/bin/claude-bin, a symlink: its command line
+  // names the link, not claude/versions/ (the exe check below is what decides)
+  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-bin( |$)|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/claude-desktop"]);
   for (const line of pg.out.split("\n").filter(Boolean)) {
     const [pidS, ...rest] = line.split(" "); const pid = Number(pidS); const cmd = rest.join(" ");
     if (cmd.includes("--type=")) continue; // Electron child processes
@@ -298,7 +300,9 @@ export async function running() {
     const embedded = exe.match(/\/claude-code\/([0-9.]+)\/claude$/);
     const native = exe.match(/claude\/versions\/([0-9.]+)$/);
     if (embedded || native) {
-      const session = cmd.match(/--resume[= ]([0-9a-f-]{36})/)?.[1] ?? null;
+      // a new session has no --resume: Claude Code records it in <config>/sessions/<pid>.json
+      const session = cmd.match(/--resume[= ]([0-9a-f-]{36})/)?.[1] ??
+        (profile ? (await readJson<{ sessionId?: string }>(`${RUNTIME}/${profile}/sessions/${pid}.json`))?.sessionId ?? null : null);
       const tp = profile ? transcriptPath(profile, cwd, session) : null;
       const st = tp ? await stat(tp) : null;
       cli.push({
