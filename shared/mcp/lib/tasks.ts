@@ -194,7 +194,19 @@ export function applyInput(base: Task, input: TaskInput, now: Date): Task {
   return t;
 }
 
-export async function addTask(input: TaskInput, now = new Date()): Promise<Task> {
+/** Changes run one at a time in a process: a server answers several tool calls at once, and two
+ *  read-modify-writes of the same task would otherwise lose one of them. */
+let chain: Promise<unknown> = Promise.resolve();
+function serial<T>(job: () => Promise<T>): Promise<T> {
+  const run = chain.then(job, job);
+  chain = run.catch(() => {});
+  return run;
+}
+
+export function addTask(input: TaskInput, now = new Date()): Promise<Task> {
+  return serial(() => addTaskNow(input, now));
+}
+async function addTaskNow(input: TaskInput, now: Date): Promise<Task> {
   const base: Task = { id: newId(now), title: "", status: "todo", created: now.toISOString(), updated: now.toISOString() };
   const t = applyInput(base, { owner: "samuel", ...input }, now);
   if (!t.title) throw new Error("a task needs a title");
@@ -203,9 +215,16 @@ export async function addTask(input: TaskInput, now = new Date()): Promise<Task>
 }
 
 /** Changes a task. Completing a repeating one also creates its next occurrence, returned as `next`. */
-export async function updateTask(id: string, input: TaskInput, now = new Date()): Promise<{ task: Task; next?: Task }> {
+export function updateTask(id: string, input: TaskInput | ((cur: Task) => TaskInput), now = new Date(), base?: string): Promise<{ task: Task; next?: Task }> {
+  return serial(() => updateTaskNow(id, input, now, base));
+}
+/** `input` may be a function of the task as it is now: the way to edit its notes without racing. */
+async function updateTaskNow(id: string, change: TaskInput | ((cur: Task) => TaskInput), now: Date, base?: string): Promise<{ task: Task; next?: Task }> {
   const cur = await getTask(id);
   if (!cur) throw new Error(`no task ${id}`);
+  // an editor that read the task at `base` does not overwrite a change made since (a chat, another machine)
+  if (base && cur.updated !== base) throw new StaleError(cur);
+  const input = typeof change === "function" ? change(cur) : change;
   const t = applyInput(cur, input, now);
   await write(t);
   let next: Task | undefined;
@@ -215,6 +234,127 @@ export async function updateTask(id: string, input: TaskInput, now = new Date())
     await write(next);
   }
   return { task: t, next };
+}
+
+export class StaleError extends Error {
+  constructor(public current: Task) { super("the task changed meanwhile: reload it"); }
+}
+
+// ---------------------------------------------------------------- the body: steps and attachments
+// A task's notes are plain Markdown, the way Obsidian writes them: a description, then optionally
+// a checklist (`- [ ]` / `- [x]` lines, anywhere) whose ticks give the progress, and a section of
+// attachments (`## Attachments`, or `## Allegati`): one link per line — a URL, a local path, a file
+// stored with the task (`files/<id>/…`, under the tasks root), or a wiki page (`[[page]]`).
+
+const STEP = /^(\s*)[-*] \[([ xX])\] (.*)$/;
+const ATT_HEAD = /^##\s+(attachments|allegati)\s*$/i;
+const STEPS_HEAD = /^##\s+(steps|passi)\s*$/i;
+
+export interface Step { text: string; done: boolean }
+/** Pure: the checklist of a task's notes, in order. */
+export function steps(notes = ""): Step[] {
+  return notes.split("\n").map((l) => l.match(STEP)).filter((m): m is RegExpMatchArray => !!m).map((m) => ({ text: m[3].trim(), done: m[2] !== " " }));
+}
+/** Pure: how much of the checklist is ticked; null when there is none. */
+export function progress(notes = ""): { done: number; total: number; pct: number } | null {
+  const s = steps(notes);
+  if (!s.length) return null;
+  const done = s.filter((x) => x.done).length;
+  return { done, total: s.length, pct: Math.round(done / s.length * 100) };
+}
+/** Pure: the notes with step `index` ticked or unticked (toggled when `done` is not given). */
+export function setStep(notes: string, index: number, done?: boolean): string {
+  let i = -1;
+  return notes.split("\n").map((l) => {
+    const m = l.match(STEP);
+    if (!m || ++i !== index) return l;
+    return `${m[1]}- [${(done ?? m[2] === " ") ? "x" : " "}] ${m[3]}`;
+  }).join("\n");
+}
+
+/** Pure: `line` appended at the end of the section whose heading matches, the section created
+ *  (as `## <title>`) where it belongs: steps before the attachments, attachments last. */
+function appendTo(notes: string, head: RegExp, title: string, line: string): string {
+  const lines = notes.replace(/\s+$/, "").split("\n");
+  if (lines.length === 1 && lines[0] === "") lines.length = 0;
+  let at = lines.findIndex((l) => head.test(l));
+  if (at < 0) {
+    // a new steps section goes before the attachments, when they are there
+    const att = head === STEPS_HEAD ? lines.findIndex((l) => ATT_HEAD.test(l)) : -1;
+    const block = [`## ${title}`, "", line];
+    if (att >= 0) { lines.splice(att, 0, ...block, ""); return lines.join("\n") + "\n"; }
+    return [...lines, ...(lines.length ? [""] : []), ...block].join("\n") + "\n";
+  }
+  let end = at + 1;
+  while (end < lines.length && !/^#{1,2}\s/.test(lines[end])) end++;
+  let last = end - 1;
+  while (last > at && !lines[last].trim()) last--;
+  lines.splice(last + 1, 0, line);
+  return lines.join("\n") + "\n";
+}
+export function addStep(notes: string, text: string): string {
+  const t = text.trim().replace(/\s+/g, " ");
+  if (!t) throw new Error("a step needs some text");
+  return appendTo(notes, STEPS_HEAD, "Steps", `- [ ] ${t}`);
+}
+
+export type AttachmentKind = "url" | "file" | "path" | "page";
+export interface Attachment { label: string; target: string; kind: AttachmentKind }
+const kindOf = (target: string): AttachmentKind =>
+  /^https?:\/\//.test(target) ? "url" : target.startsWith("files/") ? "file" : "path";
+
+/** Pure: the attachments section, one entry per list line. */
+export function attachments(notes = ""): Attachment[] {
+  const lines = notes.split("\n");
+  const at = lines.findIndex((l) => ATT_HEAD.test(l));
+  if (at < 0) return [];
+  const out: Attachment[] = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^#{1,2}\s/.test(l)) break;
+    const item = l.match(/^\s*[-*]\s+(.*)$/)?.[1]?.trim();
+    if (!item) continue;
+    const page = item.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+    if (page) { out.push({ label: page[2] ?? page[1].split("/").pop()!, target: page[1], kind: "page" }); continue; }
+    const md = item.match(/^\[([^\]]*)\]\(<?([^>)]+)>?\)$/);
+    const target = (md ? md[2] : item.replace(/^`|`$/g, "")).trim();
+    out.push({ label: md?.[1] || target.split("/").filter(Boolean).pop() || target, target, kind: kindOf(target) });
+  }
+  return out;
+}
+/** Pure: an attachment line added. Paths with spaces go in angle brackets, as CommonMark wants. */
+export function addAttachment(notes: string, target: string, label?: string): string {
+  const t = target.trim();
+  if (!t) throw new Error("an attachment needs a link or a path");
+  const page = t.match(/^\[\[.+\]\]$/);
+  const name = (label ?? "").trim() || t.split("/").filter(Boolean).pop() || t;
+  const line = page ? `- ${t}` : `- [${name.replace(/[[\]]/g, "")}](${/\s/.test(t) ? `<${t}>` : t})`;
+  return appendTo(notes, ATT_HEAD, "Attachments", line);
+}
+/** Pure: attachment `index` removed. */
+export function removeAttachment(notes: string, index: number): string {
+  const lines = notes.split("\n");
+  const at = lines.findIndex((l) => ATT_HEAD.test(l));
+  if (at < 0) return notes;
+  let i = -1;
+  for (let k = at + 1; k < lines.length; k++) {
+    if (/^#{1,2}\s/.test(lines[k])) break;
+    if (/^\s*[-*]\s+\S/.test(lines[k]) && ++i === index) { lines.splice(k, 1); break; }
+  }
+  return lines.join("\n");
+}
+
+/** A file stored with a task: under files/<id>/, the name kept readable and made safe. */
+export async function storeFile(id: string, name: string, bytes: Uint8Array): Promise<string> {
+  if (!/^t-[\w-]+$/.test(id)) throw new Error("bad task id");
+  const safe = name.replace(/[/\\\0]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
+  const dir = `${tasksRoot()}/files/${id}`;
+  await Deno.mkdir(dir, { recursive: true });
+  let rel = `files/${id}/${safe}`;
+  for (let n = 2; await Deno.stat(`${tasksRoot()}/${rel}`).then(() => true, () => false); n++) {
+    rel = `files/${id}/${safe.replace(/(\.[^.]*)?$/, `-${n}$1`)}`;
+  }
+  await Deno.writeFile(`${tasksRoot()}/${rel}`, bytes);
+  return rel;
 }
 
 // ---------------------------------------------------------------- the brief
