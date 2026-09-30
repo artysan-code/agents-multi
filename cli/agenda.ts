@@ -26,13 +26,14 @@ export function eventAsTask(e: Doc, account: string): Task | null {
   };
 }
 
-export async function calendarAsTasks(days = 2): Promise<{ tasks: Task[]; errors: string[] }> {
+/** Events from `fromDay` (today by default) for `days` days. */
+export async function calendarAsTasks(days = 2, fromDay?: string): Promise<{ tasks: Task[]; errors: string[] }> {
   const google = loadAccounts(ACCOUNTS).filter((a) => a.service === "google");
   if (!google.length) return { tasks: [], errors: [] };
   const tasks: Task[] = [], errors: string[] = [];
   let client;
   try { client = await loadClient(); } catch { return { tasks, errors }; } // not set up yet: nothing to say
-  const today = dayOf(new Date());
+  const today = fromDay ?? dayOf(new Date());
   const [y, m, d] = today.split("-").map(Number);
   const from = new Date(y, m - 1, d).toISOString();
   const [y2, m2, d2] = addDays(today, days).split("-").map(Number);
@@ -42,7 +43,7 @@ export async function calendarAsTasks(days = 2): Promise<{ tasks: Task[]; errors
       const refresh = await getSecret("google", a.name);
       if (!refresh) continue; // not connected on this machine yet
       const token = await accessToken(client, refresh);
-      const q = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "100" });
+      const q = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
       const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) { errors.push(`${a.name}: HTTP ${r.status}`); continue; }
       for (const e of (await r.json()).items ?? []) {

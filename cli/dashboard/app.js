@@ -100,6 +100,11 @@ function connect() {
   es.addEventListener("tasks", () => {
     lastEvent = Date.now();
     if (view === "today") loadTasks().catch(() => {});
+    if (view === "tasks") loadBoard().catch(() => {});
+    // the open task follows a chat's changes, unless its description is being written
+    if (sheet && !sheet.host.contains(document.activeElement)) {
+      api(`/api/tasks/item?id=${encodeURIComponent(sheet.id)}`).then((d) => sheet && d.task.updated !== sheet.data.task.updated && renderSheet(d), () => {});
+    }
   });
   es.addEventListener("brain", () => {
     lastEvent = Date.now();
@@ -164,6 +169,7 @@ function renderState() {
 function renderView() {
   if (!S) return;
   if (view === "today") renderToday();
+  if (view === "tasks") loadBoard().catch((e) => toast(e.message, true));
   if (view === "connections") renderConnections();
   if (view === "brain" && !BRAIN) loadBrain().catch((e) => toast(e.message, true));
   if (view === "system") {
@@ -215,13 +221,14 @@ async function loadTasks() {
 function renderTasks() {
   if (!TK) return;
   const item = (x, withDay = false) =>
-    `<label class="tk${x.priority === 1 ? " hi" : ""}${x.source ? " ev" : ""}">
-      ${x.source ? `<svg viewBox="0 0 24 24" class="ico" aria-label="${esc(t("tasks.event"))}"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>` : `<input type="checkbox" data-tk-done="${esc(x.id)}">`}
+    `<div class="tk${x.priority === 1 ? " hi" : ""}${x.source ? " ev" : ""}">
+      ${x.source ? `<svg viewBox="0 0 24 24" class="ico" aria-label="${esc(t("tasks.event"))}"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>` : `<input type="checkbox" data-tk-done="${esc(x.id)}" aria-label="${esc(t("ts.done"))}">`}
       <span class="tm">${esc(x.time ?? "")}</span>
-      <span class="tt">${esc(x.title)}${x.project ? `<small>${esc(x.project)}</small>` : ""}${
+      <span class="tt"${x.source ? "" : ` data-tk-open="${esc(x.id)}" role="button" tabindex="0"`}>${esc(x.title)}${x.project ? `<small>${esc(x.project)}</small>` : ""}${
       x.owner && x.owner !== "samuel" ? `<small>${esc(x.owner)}</small>` : ""
     }${withDay && x.due ? `<small>${esc(new Date(x.due + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric", month: "short" }))}</small>` : ""}</span>
-    </label>`;
+      ${x.source ? "" : bar(notesProgress(x.notes))}
+    </div>`;
   const group = (key, xs, cls = "", withDay = false) =>
     xs.length ? `<div class="tk-group ${cls}"><h4>${esc(t(`tasks.${key}`))}</h4>${xs.map((x) => item(x, withDay)).join("")}</div>` : "";
   const evening = TK.moment === "evening";
@@ -231,6 +238,10 @@ function renderTasks() {
   $("#tk-sum").textContent = TK.doneToday ? t("tasks.doneToday", { n: TK.doneToday }) : "";
 }
 
+$("#tk-list").addEventListener("click", (e) => {
+  const o = e.target.closest("[data-tk-open]");
+  if (o) openTask(o.dataset.tkOpen);
+});
 $("#tk-list").addEventListener("change", async (e) => {
   const cb = e.target.closest("[data-tk-done]");
   if (!cb) return;
@@ -1370,7 +1381,7 @@ $("#cat-mk").addEventListener("change", renderCatalog);
 
 /* ---------------- navigation ---------------- */
 // #today · #connections · #system/<tab>. The tray opens a view by setting the hash.
-const VIEWS = ["today", "brain", "connections", "system"];
+const VIEWS = ["today", "tasks", "brain", "connections", "system"];
 const TABS = ["profiles", "permissions", "plugins", "updates", "health"];
 
 function go(hash) {
@@ -1446,6 +1457,8 @@ $("#lang-btn").addEventListener("click", () => {
 /* ---------------- command palette ---------------- */
 const CMDS = () => [
   { s: "pal.goto", n: t("nav.today"), d: "today", f: () => go("today") },
+  { s: "pal.goto", n: t("nav.tasks"), d: "tasks", f: () => go("tasks") },
+  { s: "pal.do", n: t("tb.new"), d: "task", f: () => { go("tasks"); newTask(); } },
   { s: "pal.goto", n: t("nav.brain"), d: "brain", f: () => go("brain") },
   { s: "pal.goto", n: t("nav.connections"), d: "connections", f: () => go("connections") },
   ...TABS.map((x) => ({ s: "pal.goto", n: `${t("nav.system")} · ${t(`sys.${x}`)}`, d: `system/${x}`, f: () => go(`system/${x}`) })),

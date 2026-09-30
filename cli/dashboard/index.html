@@ -15,6 +15,7 @@
 
         <nav id="nav" aria-label="Sections">
           <a href="#today" data-v="today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span data-i18n="nav.today"></span></a>
+          <a href="#tasks" data-v="tasks"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg><span data-i18n="nav.tasks"></span></a>
           <a href="#brain" data-v="brain"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M8.3 7l7.4.7M7 8.3l2.2 7.4M16.6 10l-4.9 6"/></svg><span data-i18n="nav.brain"></span></a>
           <a href="#connections" data-v="connections"><svg viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg><span data-i18n="nav.connections"></span></a>
           <a href="#system" data-v="system"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span data-i18n="nav.system"></span><span class="n" id="n-health"></span></a>
@@ -48,7 +49,7 @@
           </form>
           <div class="status-card" id="status" style="margin-top:16px"></div>
           <section class="panel" style="margin-top:16px">
-            <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span></div>
+            <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span><a class="btn sm" href="#tasks" data-i18n="tasks.all"></a></div>
             <div id="tk-list"></div>
             <form class="tk-add" id="tk-add">
               <input name="title" class="search" data-i18n-ph="tasks.add.ph" required autocomplete="off">
@@ -70,6 +71,30 @@
           </div>
         </section>
 
+        <!-- ============ TASKS ============ -->
+        <section class="view wide" id="v-tasks" hidden>
+          <div class="tb-bar">
+            <div class="seg" id="tb-modes" role="group">
+              <button data-mode="board" data-i18n="tb.board"></button>
+              <button data-mode="list" data-i18n="tb.list"></button>
+              <button data-mode="calendar" data-i18n="tb.calendar"></button>
+              <button data-mode="projects" data-i18n="tb.projects"></button>
+            </div>
+            <input id="tb-q" class="search" type="search" data-i18n-ph="tb.search" autocomplete="off">
+            <div class="seg" id="tb-owner" role="group">
+              <button data-owner="all" data-i18n="tb.owner.all"></button>
+              <button data-owner="me" data-i18n="tb.owner.me"></button>
+              <button data-owner="claude" data-i18n="tb.owner.claude"></button>
+              <button data-owner="others" data-i18n="tb.owner.others"></button>
+            </div>
+            <span class="r sub" id="tb-sum"></span>
+            <button class="btn primary" id="tb-new" data-i18n="tb.new"></button>
+          </div>
+          <div class="tb-frame">
+            <nav class="tb-folders" id="tb-folders" aria-label="Folders"></nav>
+            <div class="tb-body" id="tb-body"></div>
+          </div>
+        </section>
         <!-- ============ BRAIN ============ -->
         <section class="view" id="v-brain" hidden>
           <div class="brain">
@@ -266,5 +291,6 @@
     </div>
     <script src="/i18n.js"></script>
     <script src="/app.js"></script>
+    <script src="/tasks.js"></script>
   </body>
 </html>

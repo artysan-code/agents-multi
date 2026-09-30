@@ -8,7 +8,8 @@
 - **Qualcosa da fare detto di passaggio** («devo…», «ricordami…», «entro venerdì…», «domani alle 10 chiamo…») → `tasks_add`, e una riga per dire cosa hai aggiunto (giorno e ora risolti: «domani» diventa la data vera, dal campo `today` delle risposte). Metti un'ora solo se l'ha data lui.
 - **Fatto** («fatto», «l'ho mandata», o un lavoro che hai finito tu per una task) → `tasks_done`. Una task ricorrente crea da sola la prossima.
 - **Rimandato o delegato** → `tasks_update` (nuovo giorno; `owner` a chi deve muoversi, `status: waiting` se si aspetta qualcun altro). Mai cancellare: una task che non serve più è `dropped`.
-- **Task di progetto**: al posto di un `TASKS.md` nuovo, usa `tasks` con `project`. I `TASKS.md` esistenti restano finché Samuel non chiede di migrarli.
+- **Task di progetto**: al posto di un `TASKS.md` nuovo, usa `tasks` con `project`. Il progetto è la cartella sotto `~` quando c'è (`work/acme/site`, `personal/dnd/dragons-lair`): la bacheca raggruppa per cartelle. I `TASKS.md` esistenti restano finché Samuel non chiede di migrarli.
+- **Lavoro su una task** (Samuel la vede su una bacheca Kanban): quando si comincia → `status: doing`; se ha più passi → `tasks_steps` per scriverli e spuntarli man mano (danno la percentuale); link, file e cartelle utili → `tasks_attach`. Le note sono Markdown: leggile con `tasks_get` prima di riscriverle.
 
 ## Cosa non fare
 

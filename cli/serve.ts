@@ -19,6 +19,7 @@ import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
 import { calendarAsTasks } from "./agenda.ts";
+import { taskApi } from "./taskboard.ts";
 import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
@@ -361,6 +362,8 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
           return json({ ok: false, message: gone ? "the desktop app is not running (claude-multi-app --tray)" : (e as Error).message });
         }
       }
+      const tr = await taskApi(req, u, json, () => broadcast("tasks"));
+      if (tr) return tr;
       if (u.pathname === "/api/tasks") {
         if (req.method === "POST") {
           if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
