@@ -184,12 +184,16 @@ and the page redraws the view you are actually looking at. The page itself is HT
 vanilla JS with no dependencies and no external assets, so it renders on a machine that has never
 been online.
 
-Three sections, in English or Italian. The language follows the machine's locale — the regional
+Four sections, in English or Italian. The language follows the machine's locale — the regional
 format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
 the globe button in the rail overrides it per browser.
 
 - **Today** (`#today`) — the tray's verdict in words (what needs you, if anything), the sessions
   running now, and the last sessions per directory with the command that reopens each one.
+- **Brain** (`#brain`) — the wiki (`~/brains/claude`, `CLAUDE_MULTI_BRAIN`) as a graph of its pages
+  and their links, searchable, each page readable in place or opened in Obsidian. A view, not an
+  editor: what you add (a document, a link, a note) waits in `_raw/`, and Claude distils it with
+  `/wiki-ingest` when asked, confirming before it writes.
 - **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
   where, and whether each profile actually mounted it at its last sync.
 - **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or

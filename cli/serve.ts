@@ -18,6 +18,7 @@ import { ACCOUNTS, loadRegistry, type RawRegistry, selectServers } from "./mcp.t
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { probeAccount } from "./vault.ts";
+import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
@@ -178,7 +179,7 @@ async function accountOp(b: { op?: string; service?: string; name?: string; url?
 }
 
 // ---------------------------------------------------------------- live updates
-type Topic = "usage" | "state";
+type Topic = "usage" | "state" | "brain";
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
  *  rather than repainting every row as busy. */
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
@@ -191,6 +192,7 @@ function broadcast(topic: Topic, sessions: string[] = []) {
  * Watch what the console displays and say which half moved.
  * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
+ * `brain`  a page or the inbox of the wiki changed (Syncthing, Claude writing, a drop)
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
  * second is plenty for a dashboard.
@@ -201,7 +203,7 @@ async function watchTree(signal: AbortSignal) {
   // those two are watched only where they are.
   const paths = [RUNTIME, `${REPO}/shared`];
   // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
-  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir()]) if (await lstat(d)) paths.push(d);
+  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), BRAIN]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
   try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
@@ -218,7 +220,9 @@ async function watchTree(signal: AbortSignal) {
     for await (const e of watcher) {
       if (e.kind === "access") continue;
       for (const p of e.paths) {
-        if (p.endsWith(".tmp") || p.includes("/.git/")) continue;
+        if (p.endsWith(".tmp") || p.includes("/.git/") || p.includes("/.obsidian/")) continue;
+        // the wiki is its own topic: an Obsidian save should not reload the doctor
+        if (p.startsWith(`${BRAIN}/`)) { if (p.endsWith(".md") || p.includes("/_raw/")) pending.add("brain"); continue; }
         const transcript = p.includes("/projects/") && p.endsWith(".jsonl");
         pending.add(transcript ? "usage" : "state");
         // the file is named after the session, which is what the page needs to mark it as working
@@ -302,6 +306,28 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
           return json(r);
         }
         return json(await accountsView());
+      }
+      if (u.pathname === "/api/brain") return json(await brainGraph());
+      if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));
+      if (u.pathname === "/api/brain/inbox") {
+        if (req.method !== "POST") return json({ error: "POST required" }, 405);
+        if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+        try {
+          const name = req.headers.get("x-filename");
+          let saved: string;
+          if (name) {
+            // a file comes as the request body; the size is checked before it is read whole
+            if (Number(req.headers.get("content-length") ?? 0) > INBOX_MAX) return json({ ok: false, message: "over 50 MB" });
+            saved = await addToInbox("file", { name: decodeURIComponent(name), bytes: new Uint8Array(await req.arrayBuffer()) });
+          } else {
+            const b = await req.json().catch(() => ({})) as { kind?: string; url?: string; text?: string };
+            saved = await addToInbox(b.kind === "link" ? "link" : "note", b);
+          }
+          broadcast("brain");
+          return json({ ok: true, message: saved });
+        } catch (e) {
+          return json({ ok: false, message: (e as Error).message });
+        }
       }
       if (u.pathname === "/api/sync") return new Response(await readText(`${CACHE}/sync.json`) ?? "null", { headers: { "content-type": "application/json" } });
       if (u.pathname === "/api/profile") {
