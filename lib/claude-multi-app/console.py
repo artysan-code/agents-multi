@@ -18,6 +18,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QPushButton, QSt
 
 from common import CONSOLE_UNIT, CONSOLE_URL, DATA_DIR, NAME, PORT
 
+KEEP_MS = 20 * 60 * 1000
+
 
 def _is_console(url: QUrl) -> bool:
     return url.scheme() == "http" and url.host() == "127.0.0.1" and url.port() == PORT
@@ -59,8 +61,13 @@ class ConsoleWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(NAME)
         self.setWindowIcon(QIcon.fromTheme("claude-desktop"))
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.resize(1280, 860)
+        # Closed, the window is hidden and kept a while: reopening is instant, where building the
+        # web engine again takes seconds on a slower machine. After KEEP_MS unused it is destroyed,
+        # so the tray alone stays light. `keep` is off without a tray: then closing means leaving.
+        self.keep = True
+        self._reap = QTimer(self, singleShot=True, interval=KEEP_MS)
+        self._reap.timeout.connect(self._destroy)
 
         self.view = QWebEngineView(self)
         self.view.setPage(ConsolePage(profile, self.view))
@@ -104,7 +111,10 @@ class ConsoleWindow(QMainWindow):
         self.stack.setCurrentIndex(0 if ok else 1)
 
     def open(self, view: str | None = None) -> None:
-        """Show the console, on one of its views (#today, #system/health…) when asked."""
+        """Show the console on a view (#today, #system/health…): Today unless another is asked for,
+        as an application opens on its start page."""
+        self._reap.stop()
+        view = view or "today"
         current = self.view.url()
         if _is_console(current) and self.stack.currentIndex() == 0:
             # already showing it: no reload, and a view is a hashchange the page follows
@@ -117,7 +127,14 @@ class ConsoleWindow(QMainWindow):
         self.activateWindow()
 
     def closeEvent(self, event) -> None:
-        # The window is destroyed, not hidden: the web engine's renderer is the heavy part of the
-        # app, and the tray alone should stay light. Reopening reloads the page.
-        self.closed.emit()
+        if self.keep:
+            event.ignore()
+            self.hide()
+            self._reap.start()
+            return
+        self._destroy()
         super().closeEvent(event)
+
+    def _destroy(self) -> None:
+        self.closed.emit()
+        self.deleteLater()

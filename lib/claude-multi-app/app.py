@@ -70,6 +70,7 @@ class Controller(QObject):
             if self._profile is None:
                 self._profile = web_profile(self.app)
             self.window = ConsoleWindow(self._profile)
+            self.window.keep = bool(self.tray)
             self.window.closed.connect(self._window_closed)
         self.window.open(view)
 

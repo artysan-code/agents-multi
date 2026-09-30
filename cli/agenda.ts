@@ -26,8 +26,20 @@ export function eventAsTask(e: Doc, account: string): Task | null {
   };
 }
 
-/** Events from `fromDay` (today by default) for `days` days. */
-export async function calendarAsTasks(days = 2, fromDay?: string): Promise<{ tasks: Task[]; errors: string[] }> {
+/** Events from `fromDay` (today by default) for `days` days. Kept two minutes: Today and the
+ *  calendar ask on every redraw, and Google answers in about a second. */
+const memo = new Map<string, { at: number; value: Promise<{ tasks: Task[]; errors: string[] }> }>();
+export function calendarAsTasks(days = 2, fromDay?: string): Promise<{ tasks: Task[]; errors: string[] }> {
+  const key = `${fromDay ?? dayOf(new Date())}+${days}`;
+  const hit = memo.get(key);
+  if (hit && Date.now() - hit.at < 120000) return hit.value;
+  const value = fetchCalendar(days, fromDay);
+  memo.set(key, { at: Date.now(), value });
+  value.then((r) => { if (r.errors.length) memo.delete(key); }, () => memo.delete(key)); // failures are not kept
+  return value;
+}
+
+async function fetchCalendar(days: number, fromDay?: string): Promise<{ tasks: Task[]; errors: string[] }> {
   const google = loadAccounts(ACCOUNTS).filter((a) => a.service === "google");
   if (!google.length) return { tasks: [], errors: [] };
   const tasks: Task[] = [], errors: string[] = [];
