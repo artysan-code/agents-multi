@@ -36,6 +36,11 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   `/api/events`: a new panel hangs off `refresh()` by topic, never off a new polling loop.
   Every string on the page is a key in both dictionaries of `cli/dashboard/i18n.js` (`t()`,
   `data-i18n*`): a string added in one language only falls back to English, visibly.
+- **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `claude-multi vault`):
+  never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
+  A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A
+  server that returns data masks it (`lib/mask.ts`), and one that writes whole objects back refuses
+  payloads carrying the mask marker. No deletion tools on external services.
 - **Notifications go through `desktopNotify()`** (`cli/notify.ts`): normal urgency, eight seconds,
   once per event. Never `-u critical` — on KDE it ignores the expiry and stays on screen.
 - **The desktop app is a view** (`lib/claude-multi-app/`, PySide6): what it shows comes from the

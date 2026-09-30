@@ -4,22 +4,27 @@
 //
 // Registry: { "profiles": [...], "servers": { name: { ...config, "_profiles": [...], "_surfaces": ["cli","desktop"] } } }
 //   _profiles  defaults to every profile · _surfaces defaults to ["cli"]
+//   _service   the server works on the accounts of that service (shared/mcp/accounts.json): only the
+//              profiles that see one of them get it, with CLAUDE_MULTI_PROFILE in its env and
+//              {hosts} in its args replaced by those accounts' hosts (its --allow-net)
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
 // State (which servers were managed per target) lives in XDG state: it is per-machine, not in the repo.
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
+import { type Account, accountHosts, loadAccounts, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
 import { type Check, desktopDir, has, HOME, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
 
-type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[] };
+type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[]; _service?: string };
 type Surface = "cli" | "desktop";
-export interface Registry { profiles: string[]; servers: Record<string, ServerCfg> }
+export interface Registry { profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[] }
 /** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
 export interface RawRegistry { profiles?: string[]; servers: Record<string, ServerCfg> }
 export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
 export interface Change { target: Target; name: string; kind: "add" | "update" | "remove" }
 
 const REGISTRY = `${REPO}/shared/mcp/servers.json`;
+export const ACCOUNTS = `${REPO}/shared/mcp/accounts.json`;
 const STATE_FILE = `${STATE}/mcp-state.json`;
 const LEGACY_STATE = `${REPO}/shared/mcp/.sync-state.json`;
 const BACKUPS = `${STATE}/mcp-sync-backups`;
@@ -28,7 +33,7 @@ const KEEP = 5;
 export async function loadRegistry(): Promise<Registry> {
   const r = await readJson<Registry>(REGISTRY);
   if (!r?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
-  return { profiles: r.profiles ?? await profileNames(), servers: r.servers };
+  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS) };
 }
 /**
  * A profile's server selection applied to the raw registry file. `everyone` is what an absent
@@ -50,6 +55,12 @@ export function selectServers(reg: RawRegistry, everyone: string[], name: string
   return out;
 }
 
+/** The profiles a server reaches: its _profiles, and for an account-backed one only those that see
+ *  one of its accounts (what wanted() applies, and what status and health report). */
+export function reachOf(reg: Registry, cfg: ServerCfg): string[] {
+  return (cfg._profiles ?? reg.profiles).filter((p) => !cfg._service || visibleAccounts(reg.accounts ?? [], cfg._service, p).length);
+}
+
 export function wanted(reg: Registry, t: Target): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
   for (const [name, cfg] of Object.entries(reg.servers)) {
@@ -58,6 +69,14 @@ export function wanted(reg: Registry, t: Target): Record<string, Record<string, 
     if (!profiles.includes(t.profile) || !surfaces.includes(t.surface)) continue;
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(cfg)) if (!k.startsWith("_")) clean[k] = v;
+    if (cfg._service) {
+      const visible = visibleAccounts(reg.accounts ?? [], cfg._service, t.profile);
+      if (!visible.length) continue; // nothing this profile could use it for
+      // with no address at all, reach nothing rather than everything
+      const hosts = accountHosts(visible).join(",") || "127.0.0.1:9";
+      if (Array.isArray(clean.args)) clean.args = clean.args.map((a) => typeof a === "string" ? a.replaceAll("{hosts}", hosts) : a);
+      clean.env = { ...(clean.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
+    }
     if (t.surface === "desktop") delete clean.type; // Desktop takes command/args/env; "type" is CLI vocabulary
     out[name] = clean;
   }
@@ -233,7 +252,7 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
     if (embedding.length && llamaInstalled) problems.push(...embedding);
     const envFile = args.join(" ").match(/\. "?\$HOME\/([^"\s;]+)/); // the `. "$HOME/.config/x/.env"` pattern
     if (envFile && !(await stat(`${Deno.env.get("HOME")}/${envFile[1]}`))) problems.push(`missing env file: ~/${envFile[1]}`);
-    const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = (cfg._profiles ?? reg.profiles).join("+");
+    const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = reachOf(reg, cfg).join("+");
     let live = "";
     if (opts.live && !problems.length && cmd) {
       const r = await probe(cmd, args, env);

@@ -49,6 +49,22 @@ Deno.test("wanted: _private keys are stripped, and `type` is dropped on the desk
   assertEquals(desk, { command: "z" });
 });
 
+Deno.test("wanted: an account-backed server goes only where an account is visible, with its hosts and profile", () => {
+  const withAccounts: Registry = {
+    profiles: PROFILES,
+    servers: { svc: { command: "deno", args: ["--allow-net={hosts}", "s.ts"], _service: "svc" } },
+    accounts: [
+      { service: "svc", name: "one", url: "https://one.example:8443/api", profiles: [A] },
+      { service: "svc", name: "two", url: "https://two.example" , profiles: [A] },
+      { service: "other", name: "x", url: "https://x.example" },
+    ],
+  };
+  const got = wanted(withAccounts, t(A, "cli")).svc;
+  assertEquals(got, { command: "deno", args: ["--allow-net=one.example:8443,two.example", "s.ts"], env: { CLAUDE_MULTI_PROFILE: A } });
+  // B sees no svc account: no server at all, rather than one that can only fail
+  assertEquals(wanted(withAccounts, t(B, "cli")).svc, undefined);
+});
+
 Deno.test("selectServers: an implicit profile list stays implicit and still means everyone", () => {
   const raw: RawRegistry = { servers: { a: { command: "a" }, b: { command: "b" }, c: { command: "c", _profiles: [B] } } };
   // A drops b and picks c: b gains an explicit list without A, c gains A, the top level stays absent

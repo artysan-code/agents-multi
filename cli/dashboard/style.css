@@ -962,14 +962,18 @@ tbody tr[aria-selected="true"] {
   font-weight: 400;
   color: var(--fg-dim);
 }
-.fld input[type="text"],
-.fld input:not([type]) {
+.fld input:not([type="checkbox"]),
+.fld select {
   font: 400 14px var(--sans);
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--fg);
+}
+.fld input[readonly] {
+  color: var(--fg-dim);
+  background: var(--raised);
 }
 .fld input:focus {
   border-color: var(--accent);

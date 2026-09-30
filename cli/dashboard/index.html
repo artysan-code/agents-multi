@@ -56,6 +56,20 @@
         <!-- ============ CONNECTIONS ============ -->
         <section class="view" id="v-connections" hidden>
           <p class="lede" data-i18n="conn.lede"></p>
+          <div class="status-card" id="vault" style="margin-top:20px" hidden></div>
+          <div class="panel" style="margin-top:20px">
+            <div class="panel-h">
+              <h3 data-i18n="acc.title"></h3>
+              <span class="r" id="acc-sum"></span>
+              <button class="btn primary" id="acc-add" data-i18n="acc.add"></button>
+            </div>
+            <div class="scroll">
+              <table class="conn">
+                <thead><tr><th data-i18n="acc.service"></th><th data-i18n="acc.name"></th><th data-i18n="acc.url"></th><th data-i18n="conn.profiles"></th><th data-i18n="acc.secret"></th><th></th></tr></thead>
+                <tbody id="acc-rows"></tbody>
+              </table>
+            </div>
+          </div>
           <div class="panel" style="margin-top:20px">
             <div class="panel-h">
               <h3 data-i18n="conn.servers"></h3>

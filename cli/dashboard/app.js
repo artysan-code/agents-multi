@@ -307,7 +307,103 @@ $("#resume").addEventListener("click", async (e) => {
 });
 
 /* ---------------- connections ---------------- */
+let ACC = null;
+async function loadAccounts() {
+  ACC = await api("/api/accounts");
+  renderAccounts();
+}
+
+function renderAccounts() {
+  if (!ACC) return;
+  const v = ACC.vault, box = $("#vault");
+  // the vault only speaks up when something is to be done on this machine
+  const msg = v.state === "wrong-key" ? ["fail", t("vault.wrongKey")]
+    : v.state === "no-key" ? ["update", t(v.initialised ? "vault.pair" : "vault.init")]
+    : v.conflicts ? ["update", t("vault.conflicts", { n: v.conflicts })]
+    : null;
+  box.hidden = !msg;
+  if (msg) {
+    box.className = "status-card " + msg[0];
+    box.innerHTML = `<i></i><div><b>${esc(t("vault.title"))}</b><div class="sub">${esc(msg[1])}</div><div class="sub"><code>${
+      esc(v.dir)
+    }</code></div></div>`;
+  }
+  $("#acc-sum").textContent = t("acc.sum", { n: ACC.accounts.length });
+  $("#acc-rows").innerHTML = ACC.accounts.map((a, i) =>
+    `<tr>
+      <td><b>${esc(a.service)}</b></td>
+      <td><code>${esc(a.name)}</code></td>
+      <td>${esc(a.url ?? "—")}</td>
+      <td>${a.profiles ? a.profiles.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ") : `<span class="sub">${esc(t("acc.allProfiles"))}</span>`}</td>
+      <td>${a.hasSecret ? `<span class="ok-t">${esc(t("acc.hasSecret"))}</span>` : `<span class="warn-t">${esc(t("acc.noSecret"))}</span>`}</td>
+      <td class="acts"><button class="btn sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></td>
+    </tr>`
+  ).join("") || `<tr><td class="empty" colspan="6">${esc(t("acc.none"))}</td></tr>`;
+}
+
+/** The account form, in the drawer: `i` null for a new one. The secret field is never filled in:
+    the page never receives a secret, it only sends one. */
+function openAccountForm(i) {
+  const a = i == null ? null : ACC.accounts[i];
+  const field = (label, input, hint = "") => `<label class="fld">${esc(label)}${hint ? ` <small>${esc(hint)}</small>` : ""}${input}</label>`;
+  const host = drawer(
+    a ? `${a.service}/${a.name}` : t("acc.new"),
+    `<form class="pform" id="aform">
+      ${
+      field(t("acc.service"), a
+        ? `<input name="service" value="${esc(a.service)}" readonly>`
+        : `<select name="service" class="sel" style="font-size:14px;padding:8px">${ACC.services.map((sv) => `<option>${esc(sv)}</option>`).join("")}</select>`)
+    }
+      ${field(t("acc.name"), `<input name="name" required pattern="[a-z][a-z0-9_-]{0,30}" value="${esc(a?.name ?? "")}" ${a ? "readonly" : ""} placeholder="ark">`, t("acc.name.hint"))}
+      ${field(t("acc.url"), `<input name="url" value="${esc(a?.url ?? "")}" placeholder="https://…">`)}
+      <div class="fld">${esc(t("conn.profiles"))} <small>${esc(t("acc.profiles.hint"))}</small><div class="chips">${
+      ACC.profiles.map((p) =>
+        `<button type="button" class="chip pick${a?.profiles?.includes(p) ? " on" : ""}" data-pick="${esc(p)}" aria-pressed="${!!a?.profiles?.includes(p)}">${esc(p)}</button>`
+      ).join("")
+    }</div></div>
+      ${field(t("acc.secret"), `<input name="secret" type="password" autocomplete="off" ${a ? "" : "required"} placeholder="${esc(t(a ? "acc.secret.keep" : "acc.secret.ph"))}">`, t("acc.secret.hint"))}
+      <div class="pform-foot">
+        <button class="btn primary" type="submit">${esc(t("profile.save"))}</button>
+        ${a ? `<button class="btn ghost danger" type="button" data-acc-del>${esc(t("pl.remove"))}</button>` : ""}
+        <button class="btn ghost" type="button" data-close>${esc(t("profile.cancel"))}</button>
+      </div>
+    </form>`,
+  );
+  const f = $("#aform", host);
+  const send = async (op) => {
+    const body = {
+      op,
+      service: f.elements.service.value,
+      name: f.elements.name.value.trim(),
+      url: f.elements.url.value.trim(),
+      profiles: $$("[data-pick].on", f).map((c) => c.dataset.pick),
+      secret: f.elements.secret.value,
+    };
+    f.elements.secret.value = "";
+    const r = await post("/api/accounts", body).catch((e) => ({ ok: false, message: e.message }));
+    toast(r.message, !r.ok);
+    if (r.ok) {
+      host.remove();
+      await loadAccounts();
+    }
+  };
+  f.addEventListener("submit", (e) => {
+    e.preventDefault();
+    send("save");
+  });
+  $("[data-acc-del]", host)?.addEventListener("click", () => {
+    if (confirm(t("acc.confirmDelete", { a: `${a.service}/${a.name}` }))) send("delete");
+  });
+}
+
+$("#acc-add").addEventListener("click", () => ACC && openAccountForm(null));
+document.addEventListener("click", (e) => {
+  const ed = e.target.closest("[data-acc-edit]");
+  if (ed) openAccountForm(+ed.dataset.accEdit);
+});
+
 function renderConnections() {
+  loadAccounts().catch((e) => toast(e.message, true));
   const reg = S.shared.mcpRegistry ?? {};
   const names = Object.keys(reg);
   $("#conn-rows").innerHTML = names.map((n) => {

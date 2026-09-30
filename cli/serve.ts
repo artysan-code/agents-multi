@@ -14,7 +14,10 @@
 // user space), so it is an action like the others.
 
 import { ANSI, CACHE, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
-import { type RawRegistry, selectServers } from "./mcp.ts";
+import { ACCOUNTS, loadRegistry, type RawRegistry, selectServers } from "./mcp.ts";
+import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
+import { deleteSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
+import { probeAccount } from "./vault.ts";
 import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
@@ -115,6 +118,65 @@ async function applyRegistrySelection(name: string, picked: string[]) {
   if (JSON.stringify(next) !== JSON.stringify(reg)) await Deno.writeTextFile(path, JSON.stringify(next, null, 2) + "\n");
 }
 
+// ---------------------------------------------------------------- accounts
+/** What Connections shows: the accounts, whether this machine has each one's secret, and the vault's
+ *  state. Never a secret value. */
+async function accountsView() {
+  const reg = await loadRegistry();
+  const services = [...new Set(Object.values(reg.servers).map((c) => c._service).filter((x): x is string => !!x))].sort();
+  const accounts = loadAccounts(ACCOUNTS);
+  let state = "ok", detail = "", conflicts = 0, unreadable = 0;
+  let have = new Set<string>();
+  try {
+    const key = await loadKey();
+    if (!(await keyMatches(key))) { state = "wrong-key"; }
+    else {
+      const l = await listSecrets(key);
+      have = new Set(l.entries.map((e) => `${e.service}/${e.account}`));
+      conflicts = l.conflicts; unreadable = l.unreadable;
+    }
+  } catch (e) { state = "no-key"; detail = (e as Error).message; }
+  const initialised = !!(await readText(`${vaultDir()}/key-check.json`));
+  return {
+    vault: { dir: vaultDir(), state, detail, initialised, conflicts, unreadable },
+    services,
+    profiles: await profileNames(),
+    accounts: accounts.map((a) => ({ ...a, hasSecret: have.has(`${a.service}/${a.name}`) })),
+  };
+}
+
+const ACCOUNT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
+
+/** Add or change an account (and its secret), or remove one. The secret, when given, is checked
+ *  against the service first: a wrong one is refused rather than stored. */
+async function accountOp(b: { op?: string; service?: string; name?: string; url?: string; profiles?: string[] | null; secret?: string }) {
+  const service = String(b.service ?? ""), name = String(b.name ?? "").trim();
+  if (!service || !ACCOUNT_NAME.test(name)) return { ok: false, message: "the name is lowercase letters, digits, - or _, starting with a letter" };
+  const raw = await readJson<{ accounts: Account[] } & Record<string, unknown>>(ACCOUNTS) ?? { accounts: [] };
+  const i = raw.accounts.findIndex((a) => a.service === service && a.name === name);
+  if (b.op === "delete") {
+    if (i >= 0) raw.accounts.splice(i, 1);
+    await Deno.writeTextFile(ACCOUNTS, JSON.stringify(raw, null, 2) + "\n");
+    const gone = await deleteSecret(service, name).catch(() => false);
+    return { ok: true, message: `${service}/${name} removed${gone ? " with its secret" : ""}` };
+  }
+  let url: string | undefined;
+  if (b.url?.trim()) {
+    try { url = new URL(b.url.trim()).origin; } catch { return { ok: false, message: "the address is not a valid URL" }; }
+  }
+  const account: Account = { service, name, ...(url ? { url } : {}), ...(b.profiles?.length ? { profiles: [...b.profiles].sort() } : {}) };
+  if (b.secret) {
+    const probe = await probeAccount(account, b.secret);
+    if (!probe.ok) return { ok: false, message: `the secret does not open ${service}/${name} (${probe.detail}): not stored` };
+    await setSecret(service, name, b.secret);
+  }
+  if (i >= 0) raw.accounts[i] = { ...raw.accounts[i], ...account, ...(b.profiles?.length ? {} : { profiles: undefined }) };
+  else raw.accounts.push(account);
+  raw.accounts = raw.accounts.map((a) => JSON.parse(JSON.stringify(a))); // drop undefined keys
+  await Deno.writeTextFile(ACCOUNTS, JSON.stringify(raw, null, 2) + "\n");
+  return { ok: true, message: `${service}/${name} saved${b.secret ? ", secret checked and stored" : ""}` };
+}
+
 // ---------------------------------------------------------------- live updates
 type Topic = "usage" | "state";
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
@@ -138,7 +200,8 @@ async function watchTree(signal: AbortSignal) {
   // (updates.jsonl): the Updates tab follows both. watchFs refuses a path that does not exist, so
   // those two are watched only where they are.
   const paths = [RUNTIME, `${REPO}/shared`];
-  for (const d of [`${HOME}/.cache/claude-update`, STATE]) if (await lstat(d)) paths.push(d);
+  // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
+  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir()]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
   try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
@@ -229,6 +292,16 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         const r = sessions(db, { since: u.searchParams.get("since") ?? "7d", profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60) });
         db.close();
         return json(r);
+      }
+      if (u.pathname === "/api/accounts") {
+        if (req.method === "POST") {
+          if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+          const r = await accountOp(await req.json().catch(() => ({})));
+          cache = null;
+          broadcast("state");
+          return json(r);
+        }
+        return json(await accountsView());
       }
       if (u.pathname === "/api/sync") return new Response(await readText(`${CACHE}/sync.json`) ?? "null", { headers: { "content-type": "application/json" } });
       if (u.pathname === "/api/profile") {

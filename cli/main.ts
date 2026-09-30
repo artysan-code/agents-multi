@@ -10,12 +10,14 @@
 //   update  [...]           passthrough to bin/claude-update (CLI + Desktop, --rollback)
 //   usage   [...]           tokens and list-price estimate per profile/model/project/agent/skill/command (SQLite)
 //   serve   [--no-open]     local console on http://127.0.0.1:7331 (today, connections, profiles, plugins, updates, health)
+//   vault   [...]           the MCP servers' secrets: encrypted in ~/vault/claude-multi, key in the keyring
 //
 // Principle: the repository is the source of truth, ~/.claude-multi is runtime materialised by
 // `install`. Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
 // management lives here. Zero external dependencies — Deno APIs plus the built-in node:sqlite — so
 // it runs on a fresh machine with no cache to warm.
 
+import { vaultCommand } from "./vault.ts";
 import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
@@ -98,6 +100,7 @@ switch (cmd) {
     break;
   }
   case "serve": await serve({ open: !flag("--no-open") }); break;
+  case "vault": Deno.exit(await vaultCommand(rest));
   // deno-lint-ignore no-fallthrough
   case "help": case "--help": case "-h":
   default:
@@ -111,6 +114,8 @@ switch (cmd) {
   update  [--cli|--desktop|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code / Claude Desktop (--auto: what the timer runs)
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
+  vault   [status|init|pair|recovery-code|set|delete|import-legacy]   the MCP servers' secrets: encrypted,
+          in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
 
   The console runs as a systemd user unit after install, so it is always there:

@@ -3,7 +3,10 @@
 
 import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog } from "./lib.ts";
 import { settingsState } from "./settings.ts";
-import { health, legacyStatePresent, plan } from "./mcp.ts";
+import { ACCOUNTS, health, legacyStatePresent, plan } from "./mcp.ts";
+import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
+import { keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
+import { legacyFilesPresent } from "./vault.ts";
 import { PORT } from "./serve.ts";
 
 export async function doctor(): Promise<Check[]> {
@@ -174,6 +177,27 @@ export async function doctor(): Promise<Check[]> {
     else add("mcp.sync", "warn", `MCP registry out of sync: ${changes.length} changes (${[...new Set(changes.map((x) => x.target.managedKey))].join(", ")})`, "claude-multi mcp sync (with Claude closed)");
   } catch (e) { add("mcp.sync", "fail", `MCP registry: ${(e as Error).message}`); }
   for (const h of await health()) c.push(h);
+
+  // --- the secret vault and the accounts that need it
+  const accounts = loadAccounts(ACCOUNTS);
+  if (accounts.length) {
+    const key = await loadKey().catch((e) => e as Error);
+    const initialised = !!(await readText(`${vaultDir()}/key-check.json`));
+    if (key instanceof Error) {
+      add("vault", "fail", initialised ? "this machine is not paired with the secret vault: account-backed MCP servers cannot work" : "no secret vault yet: account-backed MCP servers cannot work", initialised ? "claude-multi vault pair (in a terminal, with the recovery code)" : "claude-multi vault init (in a terminal)");
+    } else if (!(await keyMatches(key))) {
+      add("vault", "fail", "this machine's vault key does not open the vault", "claude-multi vault pair (with the right recovery code)");
+    } else {
+      const l = await listSecrets(key);
+      const missing = accounts.filter((a) => !l.entries.some((e) => e.service === a.service && e.account === a.name));
+      if (missing.length) add("vault.secrets", "warn", `no secret for ${missing.map((a) => `${a.service}/${a.name}`).join(", ")}`, "console › Connections, or claude-multi vault set <service> <account>");
+      if (l.conflicts) add("vault.conflicts", "warn", `${l.conflicts} Syncthing conflict copies in the vault`, `ls ${vaultDir()}/secrets/*sync-conflict*`);
+      if (l.unreadable) add("vault.unreadable", "fail", `${l.unreadable} vault entries this key cannot open`, "claude-multi vault status");
+      if (!missing.length && !l.conflicts && !l.unreadable) add("vault", "ok", `secret vault: ${accounts.length} accounts, every secret here`);
+    }
+    const legacy = await legacyFilesPresent();
+    if (legacy.length) add("vault.legacy", "warn", `secrets still outside the vault: ${legacy.map(shortHome).join(", ")}`, "claude-multi vault import-legacy (imports, checks, then removes them)");
+  }
   if (await legacyStatePresent()) add("mcp.legacy", "warn", "shared/mcp/.sync-state.json is a leftover of the old sync script", `rm ${REPO}/shared/mcp/.sync-state.json`);
 
   // --- updates: they install themselves (claude-update --auto, from the timer), so a newer version

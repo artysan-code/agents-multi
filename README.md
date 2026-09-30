@@ -271,8 +271,29 @@ that would rewrite the file is open (`--force` overrides), backs up into
 starts each server and waits for its `initialize` reply, which catches what static checks cannot —
 native modules built for the wrong Node ABI, missing environment, cold-start crashes.
 
-Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege, secrets read from
-`~/.config/secrets/`).
+Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege). The ones that work on
+an external service share `shared/mcp/lib/`: `coolify` and `n8n` today.
+
+### Accounts and the secret vault
+
+- **Accounts** are listed in `shared/mcp/accounts.json`, with no secret in it: service, a short
+  name, the address, and the profiles that see it (none = every profile). A profile can see several
+  accounts of one service; each tool then takes `account`, required as soon as there is more than
+  one — never a silent default. A registry entry with `_service` goes only to the profiles that see
+  one of that service's accounts, with `CLAUDE_MULTI_PROFILE` in its environment and `{hosts}` in
+  its arguments replaced by those accounts' hosts (its `--allow-net`).
+- **Secrets** are in the vault, `~/vault/claude-multi` (a Syncthing folder: they travel between
+  machines already encrypted, ark relays them without reading them). One file per secret,
+  AES-GCM with a fresh IV per write, named by an HMAC so the names say nothing. The key is in each
+  machine's keyring (Secret Service: KWallet here), so nothing is typed at login.
+- **Deleting** a secret rewrites it as a tombstone instead of removing the file: through an encrypted
+  relay a removal can lose against a concurrent modification and come back, a write cannot.
+- **Machines**: `claude-multi vault init` on the first one prints a recovery code — keep it outside the
+  machine. Every other machine runs `claude-multi vault pair` with it. Never restore the vault
+  directory from a backup onto a reinstalled machine: pair it and let Syncthing bring the entries.
+- **Adding an account**: console › Connections (the secret is checked against the service before it
+  is stored, and never comes back to the page), or `claude-multi vault set <service> <account>`
+  with the secret on stdin. A secret is never a command-line argument and never a tool result.
 
 ### Local inference (the wiki's semantic search)
 

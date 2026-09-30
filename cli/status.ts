@@ -3,7 +3,7 @@
 
 import { ANSI, CACHE, HOME, machine, profileInfo, profileNames, readJson, repoState, running, sharedInventory, uiLanguage, updateLog } from "./lib.ts";
 import { doctor } from "./doctor.ts";
-import { loadRegistry } from "./mcp.ts";
+import { loadRegistry, reachOf } from "./mcp.ts";
 
 export async function status(opts: { withDoctor?: boolean } = { withDoctor: true }) {
   const [m, repo, inst, inv] = await Promise.all([machine(), repoState(), running(), sharedInventory()]);
@@ -14,7 +14,7 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
   let registry: Record<string, { profiles: string[]; surfaces: string[] }> = {};
   try {
     const reg = await loadRegistry();
-    registry = Object.fromEntries(Object.entries(reg.servers).map(([n, c]) => [n, { profiles: c._profiles ?? reg.profiles, surfaces: c._surfaces ?? ["cli"] }]));
+    registry = Object.fromEntries(Object.entries(reg.servers).map(([n, c]) => [n, { profiles: reachOf(reg, c), surfaces: c._surfaces ?? ["cli"] }]));
   } catch { /* no registry */ }
   return {
     generatedAt: new Date().toISOString(), machine: m, repo, sync, update, updateLog: await updateLog(),
