@@ -6,7 +6,9 @@
 //   _profiles  defaults to every profile · _surfaces defaults to ["cli"]
 //   _service   the server works on the accounts of that service (shared/mcp/accounts.json): only the
 //              profiles that see one of them get it, with CLAUDE_MULTI_PROFILE in its env and
-//              {hosts} in its args replaced by those accounts' hosts (its --allow-net)
+//              {hosts} in its args replaced by those accounts' hosts (its --allow-net); on Desktop
+//              also the session bus address, because Desktop starts servers with a bare env (HOME,
+//              PATH, USER…) and the vault key is read from the keyring over D-Bus (secret-tool)
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
 // State (which servers were managed per target) lives in XDG state: it is per-machine, not in the repo.
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
@@ -17,7 +19,7 @@ import { type Check, desktopDir, has, HOME, lstat, type Profile, profileNames, r
 
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[]; _service?: string };
 type Surface = "cli" | "desktop";
-export interface Registry { profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[] }
+export interface Registry { profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[]; bus?: string }
 /** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
 export interface RawRegistry { profiles?: string[]; servers: Record<string, ServerCfg> }
 export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
@@ -33,7 +35,7 @@ const KEEP = 5;
 export async function loadRegistry(): Promise<Registry> {
   const r = await readJson<Registry>(REGISTRY);
   if (!r?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
-  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS) };
+  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS), bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS") };
 }
 /**
  * A profile's server selection applied to the raw registry file. `everyone` is what an absent
@@ -76,6 +78,7 @@ export function wanted(reg: Registry, t: Target): Record<string, Record<string, 
       const hosts = accountHosts(visible).join(",") || "127.0.0.1:9";
       if (Array.isArray(clean.args)) clean.args = clean.args.map((a) => typeof a === "string" ? a.replaceAll("{hosts}", hosts) : a);
       clean.env = { ...(clean.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
+      if (t.surface === "desktop" && reg.bus) (clean.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
     }
     if (t.surface === "desktop") delete clean.type; // Desktop takes command/args/env; "type" is CLI vocabulary
     out[name] = clean;

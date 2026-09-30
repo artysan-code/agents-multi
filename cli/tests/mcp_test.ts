@@ -65,6 +65,19 @@ Deno.test("wanted: an account-backed server goes only where an account is visibl
   assertEquals(wanted(withAccounts, t(B, "cli")).svc, undefined);
 });
 
+Deno.test("wanted: on Desktop an account-backed server gets the session bus, which Desktop's bare env lacks", () => {
+  const reg: Registry = {
+    profiles: PROFILES, bus: "unix:path=/run/user/1000/bus",
+    servers: { svc: { command: "deno", args: ["s.ts"], _service: "svc", _surfaces: ["cli", "desktop"] }, plain: { command: "p", _surfaces: ["desktop"] } },
+    accounts: [{ service: "svc", name: "one", url: "https://one.example", profiles: [A] }],
+  };
+  assertEquals(wanted(reg, t(A, "desktop")).svc.env, { CLAUDE_MULTI_PROFILE: A, DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus" });
+  // the CLI inherits the session's env: nothing pinned there
+  assertEquals(wanted(reg, t(A, "cli")).svc.env, { CLAUDE_MULTI_PROFILE: A });
+  // a server that reads no secret is left as written
+  assertEquals(wanted(reg, t(A, "desktop")).plain, { command: "p" });
+});
+
 Deno.test("selectServers: an implicit profile list stays implicit and still means everyone", () => {
   const raw: RawRegistry = { servers: { a: { command: "a" }, b: { command: "b" }, c: { command: "c", _profiles: [B] } } };
   // A drops b and picks c: b gains an explicit list without A, c gains A, the top level stays absent
