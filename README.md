@@ -229,8 +229,8 @@ tunnel still reaches it.
 
 - **Window** — the console in a window with its own icon and menu entry (`claude-multi`). Links
   that leave it open in the system browser. With the server down it says so and offers to start
-  it. Closing the window destroys it: the web engine is the heavy part, and the tray alone stays
-  light.
+  it. It opens on Today. Closing it hides it for twenty minutes, so reopening is instant; after that
+  it is destroyed, because the web engine is the heavy part and the tray alone should stay light.
 - **Tray** — the state at a glance, from `/api/summary` (a pure function of `status`, tested):
   no dot when all is well, **red** for a failing doctor check,
   **grey** when the console does not answer. Warnings are listed, not coloured: some are standing
