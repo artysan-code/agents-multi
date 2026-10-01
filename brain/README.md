@@ -23,8 +23,8 @@ All of it is one SQLite file in `BRAIN_DATA` (`brain.db`).
 
 ## How it is written
 
-Six areas, named the way Samuel thinks: `io/` (who he is, how he works — its pages, title and
-opening paragraph, go into the instructions every connected Claude receives), `progetti/` (one page
+Six areas, named the way Samuel thinks: `io/` (who he is, how he works — of each page, what stands
+above its first `## ` goes into the instructions every connected Claude receives), `progetti/` (one page
 per project, the same path as his folder: `progetti/work/acme/site.md`), `persone/`, `note/` (how
 things are done), `diario/` (one page a day, only added to) and `inbox/` (said in passing, to sort).
 

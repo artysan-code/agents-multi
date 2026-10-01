@@ -28,11 +28,12 @@ export function instructions(store: Store): string {
     "Italian. Say in one line what you wrote.";
   const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like 'io/%' order by path").all() as { path: string; title: string; body: string }[];
   if (!io.length) return rules;
-  // each io page by its title and opening paragraph: a portrait, the rest is a brain_read away
+  // each io page by its title and what stands above its first "## ": the part meant for every
+  // conversation; the sections below (a contract, details) are a brain_read away
   const portrait = io.map((d) => {
-    const para = d.body.replace(/^---\n[\s\S]*?\n---\n?/, "").replace(/^# .*\n+/, "").split(/\n\n/)[0].replace(/\s+/g, " ").trim();
-    return `${d.title} (${d.path}): ${para}`;
-  }).join("\n").slice(0, 2400);
+    const top = d.body.replace(/^---\n[\s\S]*?\n---\n?/, "").replace(/^# .*\n+/, "").split(/\n## /)[0].replace(/\s+/g, " ").trim();
+    return `${d.title} (${d.path}): ${top.slice(0, 900)}`;
+  }).join("\n").slice(0, 4000);
   return `${rules}\n\nWho Samuel is (from io/, read the pages for more):\n${portrait}`;
 }
 
