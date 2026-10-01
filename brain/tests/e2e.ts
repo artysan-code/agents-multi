@@ -1,0 +1,111 @@
+// End to end against a running brain with an empty database: the OAuth dance Claude does, then
+// the MCP tools. Start one, then run this with the same URL and passphrase:
+//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… BRAIN_DEV=1 BRAIN_DATA=$(mktemp -d) PORT=8787 deno run -A brain/main.ts
+//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e.ts
+const B = Deno.env.get("BRAIN_URL") ?? "http://127.0.0.1:8787";
+const PASS = Deno.env.get("BRAIN_PASSPHRASE") ?? "";
+const ok = (c: boolean, m: string) => { console.log(`${c ? "ok  " : "FAIL"} ${m}`); if (!c) Deno.exitCode = 1; };
+const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+let r = await fetch(`${B}/mcp`, { method: "POST", body: "{}" });
+ok(r.status === 401 && /resource_metadata=/.test(r.headers.get("www-authenticate") ?? ""), "no token: 401 with resource_metadata");
+await r.body?.cancel();
+const prm = await (await fetch(`${B}/.well-known/oauth-protected-resource`)).json();
+const asm = await (await fetch(`${B}/.well-known/oauth-authorization-server`)).json();
+ok(prm.authorization_servers[0] === B && asm.code_challenge_methods_supported[0] === "S256", "discovery");
+
+r = await fetch(`${B}/register`, { method: "POST", body: JSON.stringify({ redirect_uris: ["https://evil.example/cb"], client_name: "x" }) });
+ok(r.status === 400, "register refuses a foreign redirect");
+await r.body?.cancel();
+const reg = await (await fetch(`${B}/register`, { method: "POST", body: JSON.stringify({ redirect_uris: ["http://127.0.0.1/callback"], client_name: "Claude Code" }) })).json();
+ok(!!reg.client_id, "register a loopback client");
+
+const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+const q = new URLSearchParams({ response_type: "code", client_id: reg.client_id, redirect_uri: "http://127.0.0.1:43210/callback", code_challenge: challenge, code_challenge_method: "S256", state: "s1", resource: `${B}/mcp` });
+r = await fetch(`${B}/authorize?${q}`);
+ok(r.status === 200 && (await r.text()).includes("Collega Claude Code"), "authorize page");
+r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), passphrase: "sbagliata-lunga" }), redirect: "manual" });
+ok(r.status === 401, "wrong passphrase refused");
+await r.body?.cancel();
+r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), passphrase: PASS }), redirect: "manual" });
+const loc = new URL(r.headers.get("location") ?? "http://x/");
+ok(r.status === 302 && loc.port === "43210" && loc.searchParams.get("state") === "s1", "signed in: redirected with code and state");
+const code = loc.searchParams.get("code")!;
+const tokenReq = (f: Record<string, string>) => fetch(`${B}/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(f) });
+r = await tokenReq({ grant_type: "authorization_code", code, client_id: reg.client_id, redirect_uri: "http://127.0.0.1:43210/callback", code_verifier: "wrong".padEnd(43, "x") });
+ok(r.status === 400, "bad PKCE verifier refused (and the code is now spent)");
+await r.body?.cancel();
+// a fresh code for the real exchange
+r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), passphrase: PASS }), redirect: "manual" });
+const code2 = new URL(r.headers.get("location")!).searchParams.get("code")!;
+const tok = await (await tokenReq({ grant_type: "authorization_code", code: code2, client_id: reg.client_id, redirect_uri: "http://127.0.0.1:43210/callback", code_verifier: verifier })).json();
+ok(!!tok.access_token && !!tok.refresh_token, "token exchange");
+
+let id = 0;
+const mcp = async (method: string, params: unknown = {}) => {
+  const res = await fetch(`${B}/mcp`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${tok.access_token}`, "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }),
+  });
+  return await res.json();
+};
+const call = async (name: string, args: unknown) => {
+  const j = await mcp("tools/call", { name, arguments: args });
+  if (j.error || j.result?.isError) return { error: j.error?.message ?? j.result.content[0].text };
+  return JSON.parse(j.result.content[0].text);
+};
+const init = await mcp("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "e2e", version: "1" } });
+ok(init.result?.serverInfo?.name === "brain" && /Samuel's brain/.test(init.result?.instructions ?? ""), "initialize with instructions");
+const tools = (await mcp("tools/list")).result.tools.map((t: { name: string }) => t.name);
+ok(["brain_search", "brain_write", "brain_edit", "tasks_add", "tasks_brief"].every((n) => tools.includes(n)), `tools: ${tools.length}`);
+
+let w = await call("brain_write", { path: "progetti/claude-multi", body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria. Vedi [[persone/samuel]].", base_rev: 0 });
+ok(w.rev === 1 && w.written === "progetti/claude-multi.md", "create a document");
+w = await call("brain_write", { path: "persone/samuel.md", body: "---\ntitle: Samuel\n---\nSviluppatore, lavora con Claude ogni giorno. Preferisce l'italiano e risposte compatte." });
+ok(w.title === "Samuel", "title from frontmatter");
+w = await call("brain_write", { path: "progetti/claude-multi.md", body: "x", base_rev: 0 });
+ok(!!w.error && /changed meanwhile/.test(w.error), "base_rev refuses to overwrite");
+const read = await call("brain_read", { path: "persone/samuel" });
+ok(read.links.back[0] === "progetti/claude-multi.md", "backlink resolved by name");
+const e = await call("brain_edit", { path: "persone/samuel.md", find: "risposte compatte", replace: "risposte compatte e concrete" });
+ok(e.rev === 2, "edit a passage");
+await new Promise((res) => setTimeout(res, 2500)); // the indexer embeds in the background
+const s1 = await call("brain_search", { query: "in che idioma devo parlargli" });
+ok(s1.results[0]?.path === "persone/samuel.md" && !s1.note, `search by meaning: ${s1.results.map((x: { path: string }) => x.path).join(", ")}${s1.note ? ` (${s1.note})` : ""}`);
+const h = await call("brain_history", { path: "persone/samuel.md" });
+ok(h.versions.length === 2 && /^claude:Claude Code/.test(h.versions[0].by), `history with author ${h.versions[0].by}`);
+const rs = await call("brain_restore", { path: "persone/samuel.md", rev: 1 });
+ok(rs.rev === 3, "restore an old version on top");
+await call("brain_delete", { path: "progetti/claude-multi.md" });
+ok((await call("brain_list", {})).documents.length === 1, "deleted leaves the list");
+ok((await call("brain_history", { path: "progetti/claude-multi.md" })).versions[0].op === "delete", "deletion is a revision");
+
+const t = await call("tasks_add", { title: "Provare il cervello dal telefono", due: "2026-10-02", project: "claude-multi" });
+ok(/Provare il cervello/.test(t.added), "tasks_add in the brain");
+const st = await call("tasks_steps", { id: t.task.id, add: ["Collegare il connettore", "Provare la voce"] });
+ok(st.steps.length === 2, "task steps");
+ok((await call("tasks_brief", {})).tomorrow.length === 1, "tasks_brief sees it");
+ok((await call("brain_list", {})).documents.every((d: { path: string }) => !d.path.startsWith("tasks/")), "tasks stay out of memory lists");
+
+// refresh rotation, and a reused refresh token revokes the family
+const t2 = await (await tokenReq({ grant_type: "refresh_token", refresh_token: tok.refresh_token, client_id: reg.client_id })).json();
+ok(!!t2.access_token, "refresh");
+r = await tokenReq({ grant_type: "refresh_token", refresh_token: tok.refresh_token, client_id: reg.client_id });
+ok(r.status === 400, "reused refresh token refused");
+await r.body?.cancel();
+r = await fetch(`${B}/mcp`, { method: "POST", headers: { authorization: `Bearer ${t2.access_token}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+ok(r.status === 401, "…and the whole family with it");
+await r.body?.cancel();
+
+// the account page: a personal token, then the backup
+r = await fetch(`${B}/account/login`, { method: "POST", body: new URLSearchParams({ passphrase: PASS }), redirect: "manual" });
+const cookie = (r.headers.get("set-cookie") ?? "").split(";")[0];
+ok(r.status === 303 && cookie.startsWith("brain_session="), "account sign-in");
+const page = await (await fetch(`${B}/account/token`, { method: "POST", headers: { cookie }, body: new URLSearchParams({ name: "fisso" }) })).text();
+const pt = page.match(/brain_[\w-]{20,}/)?.[0];
+ok(!!pt, "personal token shown once");
+r = await fetch(`${B}/backup`, { headers: { authorization: `Bearer ${pt}` } });
+const bytes = new Uint8Array(await r.arrayBuffer());
+ok(r.status === 200 && new TextDecoder().decode(bytes.subarray(0, 4)) === "BRN1" && bytes.length > 1000, `encrypted backup, ${bytes.length} bytes`);

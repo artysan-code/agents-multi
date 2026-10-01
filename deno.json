@@ -1,7 +1,7 @@
 {
   "tasks": {
     "check": "bash scripts/check.sh",
-    "test": "deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:11434,localhost:11434,127.0.0.1:8090,127.0.0.1:7331 cli/tests",
+    "test": "deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:11434,localhost:11434,127.0.0.1:8090,127.0.0.1:7331 cli/tests brain/tests/brain_test.ts",
     "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:11434,localhost:11434,127.0.0.1:8090,127.0.0.1:7331 cli/main.ts doctor"
   },
   "fmt": {

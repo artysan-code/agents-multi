@@ -127,29 +127,49 @@ export function newId(now = new Date()): string {
 }
 
 // ---------------------------------------------------------------- store
-export async function listTasks(): Promise<Task[]> {
-  const out: Task[] = [];
-  try {
-    for await (const e of Deno.readDir(itemsDir())) {
-      if (!e.isFile || !/^t-[\w-]+\.md$/.test(e.name)) continue; // conflict copies are not tasks
-      const t = fromFile(await Deno.readTextFile(`${itemsDir()}/${e.name}`).catch(() => ""));
-      if (t) out.push(t);
-    }
-  } catch { /* no tasks yet */ }
-  return out;
+/** Where tasks are kept: one file each under the tasks root, unless a process says otherwise (the
+ *  brain service keeps them in its own database, with the same rules on top). */
+export interface TaskStore {
+  list(): Promise<Task[]>;
+  get(id: string): Promise<Task | null>;
+  write(t: Task): Promise<void>;
+}
+
+const fileStore: TaskStore = {
+  async list() {
+    const out: Task[] = [];
+    try {
+      for await (const e of Deno.readDir(itemsDir())) {
+        if (!e.isFile || !/^t-[\w-]+\.md$/.test(e.name)) continue; // conflict copies are not tasks
+        const t = fromFile(await Deno.readTextFile(`${itemsDir()}/${e.name}`).catch(() => ""));
+        if (t) out.push(t);
+      }
+    } catch { /* no tasks yet */ }
+    return out;
+  },
+  async get(id) {
+    return fromFile(await Deno.readTextFile(`${itemsDir()}/${id}.md`).catch(() => ""));
+  },
+  async write(t) {
+    await Deno.mkdir(itemsDir(), { recursive: true });
+    const p = `${itemsDir()}/${t.id}.md`, tmp = `${p}.${crypto.randomUUID()}.tmp`;
+    await Deno.writeTextFile(tmp, toFile(t));
+    await Deno.rename(tmp, p);
+  },
+};
+let store: TaskStore = fileStore;
+export function useTaskStore(s: TaskStore) { store = s; }
+
+export function listTasks(): Promise<Task[]> {
+  return store.list();
 }
 
 export async function getTask(id: string): Promise<Task | null> {
   if (!/^t-[\w-]+$/.test(id)) return null;
-  return fromFile(await Deno.readTextFile(`${itemsDir()}/${id}.md`).catch(() => ""));
+  return await store.get(id);
 }
 
-async function write(t: Task) {
-  await Deno.mkdir(itemsDir(), { recursive: true });
-  const p = `${itemsDir()}/${t.id}.md`, tmp = `${p}.${crypto.randomUUID()}.tmp`;
-  await Deno.writeTextFile(tmp, toFile(t));
-  await Deno.rename(tmp, p);
-}
+const write = (t: Task) => store.write(t);
 
 export async function loadSettings(): Promise<TaskSettings> {
   try {

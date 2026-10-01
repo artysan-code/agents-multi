@@ -1,0 +1,74 @@
+# brain
+
+Samuel's brain as a service: his memory and his tasks in one place on his server, reached by
+every Claude he uses — the Claude apps and claude.ai as a custom connector, Claude Code and Claude
+Desktop as a remote MCP server — and by his machines with a personal token. There is no copy on
+the machines: the brain is here.
+
+## What it keeps
+
+- **Documents**: Markdown with a path (`folder/name.md`), linked with `[[target]]` as Obsidian
+  writes them. No structure is imposed; the clients choose the paths.
+- **History**: every write keeps the version it replaces, with who made it (`claude:<client>`,
+  `token:<machine>`) and when. A deletion is a revision too; anything can be read as it was and put
+  back (`brain_history`, `brain_restore`).
+- **Tasks**: one document per task under `tasks/`, with the same rules as the local tasks tools
+  (`shared/mcp/lib/tasks.ts`, `shared/mcp/tasks/tools.ts`, shared code). Memory lists and searches
+  leave them out unless asked.
+- **Search**: full text (SQLite FTS5) and by meaning (chunks embedded by `bge-m3` behind Ollama),
+  fused by reciprocal rank. The embeddings fill in the background after each write; when the model
+  is down, search answers with words alone and says so.
+
+All of it is one SQLite file in `BRAIN_DATA` (`brain.db`).
+
+## Who gets in
+
+- **Claude, through OAuth 2.1**: the MCP endpoint (`/mcp`) answers 401 with a pointer to its
+  metadata; Claude registers itself (only Claude's callback or a loopback address are accepted),
+  sends Samuel to `/authorize`, and gets a code bound to a PKCE S256 challenge. Access tokens last
+  an hour; refresh tokens rotate, and one used twice revokes its whole family.
+- **Signing in** takes the passphrase and the current TOTP code. Five wrong attempts close the door
+  for fifteen minutes.
+- **Machines** use personal tokens, created on `/account` (shown once, to be put in the vault) and
+  revoked there. The same page lists Claude's connections and can cut them all.
+- Tokens are stored as their SHA-256, never as themselves.
+
+## Backups
+
+`GET /backup` with a personal token returns the whole brain as one file: a consistent copy of the
+database (`VACUUM INTO`), sealed with AES-256-GCM under `BRAIN_BACKUP_KEY`. Samuel's machines fetch
+it and keep the last ones; without the key from the vault a copy cannot be read. No third party
+holds the brain.
+
+## Running it
+
+| Variable | |
+|---|---|
+| `BRAIN_URL` | the public address, `https://brain.example.com` (OAuth names it exactly) |
+| `BRAIN_PASSPHRASE` | 12 characters or more |
+| `BRAIN_TOTP_SECRET` | base32; `deno run brain/main.ts totp` makes one and the line for the authenticator app |
+| `BRAIN_BACKUP_KEY` | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`); without it `/backup` is off |
+| `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL` | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`) |
+| `BRAIN_DATA` | where `brain.db` lives (`/data`) |
+| `BRAIN_DEV=1` | local only: signing in without TOTP |
+
+On Coolify: a Docker Compose resource from this repository with `brain/compose.yaml` (the service
+and Ollama, which pulls `bge-m3` into its own volume on first start), the domain on `brain`, port
+8080, the secrets as Coolify variables. The secrets are made and typed in by Samuel, never passed
+through a chat.
+
+Locally, with any Ollama-compatible API:
+
+```sh
+BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… BRAIN_DEV=1 BRAIN_DATA=$(mktemp -d) \
+  BRAIN_EMBED_URL=http://localhost:11434 PORT=8787 HOST=127.0.0.1 deno run -A brain/main.ts
+BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e.ts   # on an empty database
+```
+
+## Connecting
+
+- **Claude apps and claude.ai**: Customize → Connectors → Add custom connector, URL
+  `https://brain.example.com/mcp`; sign in on the page that opens. It is then in the Android app too.
+- **Claude Code**: `claude mcp add --transport http brain https://brain.example.com/mcp`, then `/mcp`
+  to sign in.
+- **Samuel's machines** (the console, backups): a personal token from `/account`, kept in the vault.

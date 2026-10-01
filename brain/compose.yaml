@@ -1,0 +1,36 @@
+# The brain on Coolify: the service, and the embedding model next to it on a private network.
+# Coolify builds this from the repository (base directory /, compose file brain/compose.yaml) and
+# puts the domain in front of `brain`; the secrets are set in Coolify, never here.
+services:
+  brain:
+    build:
+      context: ..
+      dockerfile: brain/Dockerfile
+    environment:
+      - BRAIN_URL=${BRAIN_URL}
+      - BRAIN_PASSPHRASE=${BRAIN_PASSPHRASE}
+      - BRAIN_TOTP_SECRET=${BRAIN_TOTP_SECRET}
+      - BRAIN_BACKUP_KEY=${BRAIN_BACKUP_KEY}
+      - BRAIN_EMBED_URL=http://ollama:11434
+      - BRAIN_EMBED_MODEL=bge-m3
+      - BRAIN_DATA=/data
+      - PORT=8080
+    volumes:
+      - brain-data:/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # bge-m3, pulled once into its volume; about 1.2 GB on disk and 2 GB of memory while it works
+  ollama:
+    image: ollama/ollama:0.35.0
+    entrypoint: ["/bin/sh", "-c", "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull bge-m3; wait"]
+    environment:
+      - OLLAMA_KEEP_ALIVE=10m
+    volumes:
+      - brain-models:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  brain-data:
+  brain-models:
