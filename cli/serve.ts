@@ -456,7 +456,13 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         broadcast("state");
         return json(r);
       }
-      // static
+      // static: the faces are bytes and never change under a name, the rest is text
+      const font = u.pathname.match(/^\/fonts\/([a-z0-9-]+\.woff2)$/);
+      if (font) {
+        const bytes = await Deno.readFile(`${DASH}/fonts/${font[1]}`).catch(() => null);
+        if (!bytes) return new Response("not found", { status: 404 });
+        return new Response(bytes, { headers: { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" } });
+      }
       const path = u.pathname === "/" ? "/index.html" : u.pathname;
       if (!/^\/[a-z0-9_.-]+$/i.test(path)) return new Response("not found", { status: 404 });
       const ext = path.slice(path.lastIndexOf("."));

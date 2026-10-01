@@ -1,82 +1,103 @@
-/* claude-multi console — no framework, no build step, no external assets: the page has to render
-   identically on a machine that has never been online. The faces below are used when installed
-   and fall back to the system's otherwise. */
+/* claude-multi console — no framework, no build step, nothing fetched from the network: the page
+   renders the same on a machine that has never been online. The palette is Claude's (ivory and
+   warm greys, the clay as accent); the two faces ship in fonts/ (SIL OFL), so every machine sees
+   the same page. Serif is the voice — titles, reading, Claude's answers — sans is the
+   interface, mono only for code and paths. */
+
+@font-face { font-family: "Source Serif 4"; src: url(fonts/source-serif-4.woff2) format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Serif 4"; src: url(fonts/source-serif-4-italic.woff2) format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
+@font-face { font-family: "DM Sans"; src: url(fonts/dm-sans.woff2) format("woff2"); font-weight: 100 1000; font-style: normal; font-display: swap; }
 
 :root {
-  --ink: #f3f1ec;
-  --rail: #eae6df;
+  --ink: #faf9f5;
+  --rail: #f3f1ea;
   --surface: #ffffff;
-  --raised: #faf9f6;
-  --line: #ddd8cf;
-  --line-soft: #edeae4;
-  --fg: #1d1c1a;
-  --fg-dim: #5f5b54;
-  --fg-faint: #767067;
-  --accent: #a94a24;
-  --accent-dim: #7e3517;
-  --accent-wash: #f5e4da;
+  --raised: #f5f4ef;
+  --line: #dedbd2;
+  --line-soft: #ebe9e1;
+  --fg: #141413;
+  --fg-dim: #5e5d59;
+  --fg-faint: #73726c;
+  --accent: #b85c38;
+  --accent-dim: #96462a;
+  --accent-wash: #f6e7df;
   --on-accent: #ffffff;
-  --ok: #2e6b41;
-  --ok-wash: #e1eee4;
-  --info: #2f5e8c;
-  --warn: #8a5a00;
-  --warn-wash: #f6ecd7;
-  --crit: #b3261e;
-  --crit-wash: #f7e1df;
-  --shadow: 0 1px 2px rgba(29,28,26,.05),0 12px 30px -18px rgba(29,28,26,.3);
+  --spark: #d97757;
+  --p-1: #788c5d;
+  --p-2: #6a9bcc;
+  --p-3: #c46686;
+  --p-4: #d4a27f;
+  --ok: #4f7a3a;
+  --ok-wash: #e6eedf;
+  --info: #3f6f9f;
+  --warn: #8f6512;
+  --warn-wash: #f5ead3;
+  --crit: #bf4d43;
+  --crit-wash: #f7e2df;
+  --shadow: 0 .25rem 1.25rem rgba(31,30,29,.05),0 0 0 .5px rgba(31,30,29,.14);
   --r: 12px;
-  --sans: "IBM Plex Sans","Fira Sans",ui-sans-serif,system-ui,sans-serif;
-  --serif: "Newsreader","Source Serif 4","Liberation Serif",Georgia,serif;
-  --mono: "IBM Plex Mono","JetBrains Mono","Hack","DejaVu Sans Mono",ui-monospace,monospace;
+  --sans: "DM Sans","Fira Sans",ui-sans-serif,system-ui,sans-serif;
+  --serif: "Source Serif 4","Noto Serif",Georgia,serif;
+  --mono: "JetBrains Mono","DejaVu Sans Mono",ui-monospace,monospace;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --ink: #1a1917;
-  --rail: #1f1e1b;
-  --surface: #242320;
-  --raised: #2b2a26;
-  --line: #3a3833;
-  --line-soft: #302f2b;
-  --fg: #edeae4;
-  --fg-dim: #b3ada3;
-  --fg-faint: #948e84;
-  --accent: #e3845b;
-  --accent-dim: #f0a07c;
-  --accent-wash: rgba(227,132,91,.14);
-  --on-accent: #1a1917;
-  --ok: #7cc091;
-  --ok-wash: rgba(124,192,145,.14);
-  --info: #86aedb;
-  --warn: #e2b458;
-  --warn-wash: rgba(226,180,88,.14);
-  --crit: #f08077;
-  --crit-wash: rgba(240,128,119,.14);
-  --shadow: 0 1px 2px rgba(0,0,0,.4),0 12px 30px -16px rgba(0,0,0,.7);
+  --ink: #262624;
+  --rail: #1f1e1d;
+  --surface: #30302e;
+  --raised: #2b2b29;
+  --line: #43423e;
+  --line-soft: #363532;
+  --fg: #faf9f5;
+  --fg-dim: #c2c0b6;
+  --fg-faint: #9c9a92;
+  --accent: #d97757;
+  --accent-dim: #e8a083;
+  --accent-wash: rgba(217,119,87,.15);
+  --on-accent: #1f1e1d;
+  --spark: #d97757;
+  --p-1: #9cb07e;
+  --p-2: #8db5de;
+  --p-3: #d88ca6;
+  --p-4: #dcb391;
+  --ok: #94bd7f;
+  --ok-wash: rgba(148,189,127,.14);
+  --info: #8db5de;
+  --warn: #d9a54a;
+  --warn-wash: rgba(217,165,74,.14);
+  --crit: #e57a6f;
+  --crit-wash: rgba(229,122,111,.15);
+  --shadow: 0 .25rem 1.25rem rgba(0,0,0,.28),0 0 0 .5px rgba(222,220,209,.16);
   color-scheme: dark;
 }
 @media (prefers-color-scheme:dark) {
   :root:not([data-theme="light"]) {
-    --ink: #1a1917;
-    --rail: #1f1e1b;
-    --surface: #242320;
-    --raised: #2b2a26;
-    --line: #3a3833;
-    --line-soft: #302f2b;
-    --fg: #edeae4;
-    --fg-dim: #b3ada3;
-    --fg-faint: #948e84;
-    --accent: #e3845b;
-    --accent-dim: #f0a07c;
-    --accent-wash: rgba(227,132,91,.14);
-    --on-accent: #1a1917;
-    --ok: #7cc091;
-    --ok-wash: rgba(124,192,145,.14);
-    --info: #86aedb;
-    --warn: #e2b458;
-    --warn-wash: rgba(226,180,88,.14);
-    --crit: #f08077;
-    --crit-wash: rgba(240,128,119,.14);
-    --shadow: 0 1px 2px rgba(0,0,0,.4),0 12px 30px -16px rgba(0,0,0,.7);
+    --ink: #262624;
+    --rail: #1f1e1d;
+    --surface: #30302e;
+    --raised: #2b2b29;
+    --line: #43423e;
+    --line-soft: #363532;
+    --fg: #faf9f5;
+    --fg-dim: #c2c0b6;
+    --fg-faint: #9c9a92;
+    --accent: #d97757;
+    --accent-dim: #e8a083;
+    --accent-wash: rgba(217,119,87,.15);
+    --on-accent: #1f1e1d;
+    --spark: #d97757;
+    --p-1: #9cb07e;
+    --p-2: #8db5de;
+    --p-3: #d88ca6;
+    --p-4: #dcb391;
+    --ok: #94bd7f;
+    --ok-wash: rgba(148,189,127,.14);
+    --info: #8db5de;
+    --warn: #d9a54a;
+    --warn-wash: rgba(217,165,74,.14);
+    --crit: #e57a6f;
+    --crit-wash: rgba(229,122,111,.15);
+    --shadow: 0 .25rem 1.25rem rgba(0,0,0,.28),0 0 0 .5px rgba(222,220,209,.16);
     color-scheme: dark;
   }
 }
@@ -444,7 +465,7 @@ kbd {
 
 /* ---------------- brain ---------------- */
 :root {
-  --g-projects: #a94a24;
+  --g-projects: #d97757;
   --g-references: #2f5e8c;
   --g-concepts: #2e6b41;
   --g-skills: #7a4ca0;
