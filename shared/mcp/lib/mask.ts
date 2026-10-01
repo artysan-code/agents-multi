@@ -31,3 +31,12 @@ export function maskDeep(v: unknown, name = ""): unknown {
   }
   return mask(name, v);
 }
+
+/** Free text (logs, a compose file): `KEY=value` and `key: value` pairs whose name looks secret
+ *  lose their value, and addresses lose their credentials. Line by line, the rest untouched. */
+export function maskText(s: string): string {
+  return s
+    .replace(/(\b[\w.-]*(?:password|passwd|secret|token|apikey|api_key|private_key|credential)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi, (_, k: string, v: string) =>
+      /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`) // a ${VARIABLE} reference is not the secret
+    .replace(new RegExp(CREDENTIALS_IN_URL.source, "g"), "://‹user›:‹password›@");
+}
