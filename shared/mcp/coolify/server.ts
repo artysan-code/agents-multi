@@ -208,11 +208,19 @@ server.registerTool("coolify_log", {
   annotations: LEGGE,
 }, async ({ account, tipo, rif, righe, container }: { account?: string; tipo: Tipo; rif: string; righe?: number; container?: string }) => {
   const r = await trovaDi(account, tipo, rif);
-  const q = new URLSearchParams({ lines: String(righe ?? 100) });
-  if (tipo === "service" && container) q.set("sub_service_name", container);
-  const l = await api(account, `${PERCORSO[tipo]}/${r.uuid}/logs?${q}`) as Qualunque;
-  const testo = typeof l === "string" ? l : l?.logs ?? JSON.stringify(l);
-  return txt({ risorsa: r.name, log: maskText(String(testo)).split("\n").slice(-(righe ?? 100)) });
+  const n = righe ?? 100;
+  const leggi = async (sotto?: string) => {
+    const q = new URLSearchParams({ lines: String(n) });
+    if (sotto) q.set("sub_service_name", sotto);
+    const l = await api(account, `${PERCORSO[tipo]}/${r.uuid}/logs?${q}`) as Qualunque;
+    return maskText(String(typeof l === "string" ? l : l?.logs ?? JSON.stringify(l))).split("\n").slice(-n);
+  };
+  if (tipo !== "service" || container) return txt({ risorsa: r.name, ...(container ? { container } : {}), log: await leggi(container) });
+  // Coolify vuole il container: senza, si leggono tutti quelli del service, ognuno col suo nome
+  const s = await api(account, `/services/${r.uuid}`) as Qualunque;
+  const nomi = [...(s.applications ?? []), ...(s.databases ?? [])].map((c: Qualunque) => c.name as string);
+  const log = Object.fromEntries(await Promise.all(nomi.map(async (c) => [c, await leggi(c).catch((e) => [(e as Error).message])])));
+  return txt({ risorsa: r.name, log });
 });
 
 server.registerTool("coolify_variabili", {
