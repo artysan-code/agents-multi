@@ -6,7 +6,8 @@
 export const HIDDEN = "‹hidden — look it up in the service's own panel›";
 
 /** Names that almost certainly hold a secret. */
-export const SECRET_NAME = /password|secret|token|apikey|api_key|_key$|^key$|private|credential|authorization|cookie/i;
+export const SECRET_NAME =
+  /(^|[_-])(pass|passwd|pwd|pin|otp|totp|seed|salt)($|[_-])|password|passphrase|secret|token|apikey|api_key|_key$|^key$|private|credential|authorization|cookie|signing/i;
 /** An address carrying credentials: `postgres://user:password@host/db`. */
 export const CREDENTIALS_IN_URL = /:\/\/[^/@\s]+:[^/@\s]+@/;
 
@@ -36,7 +37,7 @@ export function maskDeep(v: unknown, name = ""): unknown {
  *  lose their value, and addresses lose their credentials. Line by line, the rest untouched. */
 export function maskText(s: string): string {
   return s
-    .replace(/(\b[\w.-]*(?:password|passwd|secret|token|apikey|api_key|private_key|credential)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi, (_, k: string, v: string) =>
+    .replace(/(\b[\w.-]*(?:password|passwd|passphrase|secret|token|apikey|api_key|private_key|credential|totp|_pin)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi, (_, k: string, v: string) =>
       /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`) // a ${VARIABLE} reference is not the secret
     .replace(new RegExp(CREDENTIALS_IN_URL.source, "g"), "://‹user›:‹password›@");
 }
