@@ -61,25 +61,37 @@ ok(init.result?.serverInfo?.name === "brain" && /Samuel's brain/.test(init.resul
 const tools = (await mcp("tools/list")).result.tools.map((t: { name: string }) => t.name);
 ok(["brain_search", "brain_write", "brain_edit", "tasks_add", "tasks_brief"].every((n) => tools.includes(n)), `tools: ${tools.length}`);
 
-let w = await call("brain_write", { path: "progetti/claude-multi", body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria. Vedi [[persone/samuel]].", base_rev: 0 });
-ok(w.rev === 1 && w.written === "progetti/claude-multi.md", "create a document");
-w = await call("brain_write", { path: "persone/samuel.md", body: "---\ntitle: Samuel\n---\nSviluppatore, lavora con Claude ogni giorno. Preferisce l'italiano e risposte compatte." });
-ok(w.title === "Samuel", "title from frontmatter");
-w = await call("brain_write", { path: "progetti/claude-multi.md", body: "x", base_rev: 0 });
+let w = await call("brain_write", { path: "persone/Samuel", body: "# Samuel\n\nSviluppatore, lavora con Claude ogni giorno. Preferisce l'italiano e risposte compatte." });
+ok(w.title === "Samuel" && w.written === "persone/samuel.md", "create the first page (nothing yet to link)");
+w = await call("brain_write", { path: "concepts/x", body: "# X\n\nFrase." });
+ok(w.refused && /one of/.test(w.errors[0]), "a page outside the six areas is refused");
+w = await call("brain_write", { path: "progetti/claude-multi", body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria." });
+ok(w.refused && /link at least one/.test(w.errors.join()), "a page without links is refused");
+w = await call("brain_write", { path: "progetti/claude-multi", body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria. Vedi [[persone/samuel]].", base_rev: 0 });
+ok(w.rev === 1 && w.written === "progetti/claude-multi.md", "create a linked page");
+w = await call("brain_write", { path: "progetti/claude-multi-console", body: "# Claude multi\n\nAltro. Vedi [[persone/samuel]]." });
+ok(w.refused && w.similar?.[0]?.path === "progetti/claude-multi.md", "a near copy is refused with the candidate");
+const ap = await call("brain_append", { text: "Provato il cervello, vedi [[progetti/claude-multi]]" });
+ok(/^diario\//.test(ap.added), "append to today's diary");
+w = await call("brain_write", { path: "progetti/claude-multi.md", body: "# claude-multi\n\nAltro testo. Vedi [[persone/samuel]].", base_rev: 0 });
 ok(!!w.error && /changed meanwhile/.test(w.error), "base_rev refuses to overwrite");
 const read = await call("brain_read", { path: "persone/samuel" });
 ok(read.links.back[0] === "progetti/claude-multi.md", "backlink resolved by name");
-const e = await call("brain_edit", { path: "persone/samuel.md", find: "risposte compatte", replace: "risposte compatte e concrete" });
+const e0 = await call("brain_edit", { path: "persone/samuel.md", find: "risposte compatte", replace: "risposte compatte e concrete" });
+ok(e0.refused && /link at least one/.test(e0.errors.join()), "an edit that leaves a page without links is refused");
+const e = await call("brain_edit", { path: "persone/samuel.md", find: "risposte compatte.", replace: "risposte compatte, vedi [[progetti/claude-multi]]." });
 ok(e.rev === 2, "edit a passage");
 await new Promise((res) => setTimeout(res, 2500)); // the indexer embeds in the background
 const s1 = await call("brain_search", { query: "in che idioma devo parlargli" });
-ok(s1.results[0]?.path === "persone/samuel.md" && !s1.note, `search by meaning: ${s1.results.map((x: { path: string }) => x.path).join(", ")}${s1.note ? ` (${s1.note})` : ""}`);
+ok(s1.results.slice(0, 2).some((x: { path: string }) => x.path === "persone/samuel.md") && !s1.note, `search by meaning: ${s1.results.map((x: { path: string }) => x.path).join(", ")}${s1.note ? ` (${s1.note})` : ""}`);
 const h = await call("brain_history", { path: "persone/samuel.md" });
 ok(h.versions.length === 2 && /^claude:Claude Code/.test(h.versions[0].by), `history with author ${h.versions[0].by}`);
 const rs = await call("brain_restore", { path: "persone/samuel.md", rev: 1 });
 ok(rs.rev === 3, "restore an old version on top");
 await call("brain_delete", { path: "progetti/claude-multi.md" });
-ok((await call("brain_list", {})).documents.length === 1, "deleted leaves the list");
+ok((await call("brain_list", {})).documents.every((d: { path: string }) => d.path !== "progetti/claude-multi.md"), "deleted leaves the list");
+const chk = await call("brain_check", {});
+ok(Array.isArray(chk.orphans) && chk.broken_links.some((b: { link: string }) => b.link === "progetti/claude-multi"), "check finds the link the deletion broke");
 ok((await call("brain_history", { path: "progetti/claude-multi.md" })).versions[0].op === "delete", "deletion is a revision");
 
 const t = await call("tasks_add", { title: "Provare il cervello dal telefono", due: "2026-10-02", project: "claude-multi" });

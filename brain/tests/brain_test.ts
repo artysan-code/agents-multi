@@ -6,6 +6,7 @@ import { cleanPath, linksIn, Store, titleOf } from "../store.ts";
 import { chunk, fuse } from "../embed.ts";
 import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, totp, totpOk } from "../auth.ts";
 import { open, seal } from "../backup.ts";
+import { check, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
 
 Deno.test("cleanPath: a folder/name.md inside the tree, nothing else", () => {
   assertEquals(cleanPath("progetti/claude-multi"), "progetti/claude-multi.md");
@@ -93,4 +94,52 @@ Deno.test("backup: sealed and opened with the key, refused with another", async 
   const s = await seal(plain, key);
   assertEquals(new TextDecoder().decode(await open(s, key)), "il cervello");
   await assertRejects(() => open(s, other));
+});
+
+// ---------------------------------------------------------------- the writing rules (brain/rules.ts)
+
+const page = (title: string, rest = "Una frase che dice cos'è.\n\nContenuto.") => `# ${title}\n\n${rest}`;
+
+Deno.test("slugPath: lower case, no accents, dashes", () => {
+  assertEquals(slugPath("Note/Città Già Fatte"), "note/citta-gia-fatte.md");
+  assertEquals(slugPath("/progetti/work/acme/Site.md"), "progetti/work/acme/site.md");
+});
+
+Deno.test("shapeErrors: areas, flat folders, diary days, title and sentence, length, code, secrets", () => {
+  assertEquals(shapeErrors("note/arctis.md", page("Arctis")), []);
+  assertEquals(shapeErrors("progetti/work/acme/site.md", page("Site")), []);
+  assert(shapeErrors("concepts/x.md", page("X"))[0].includes("one of"));
+  assert(shapeErrors("note/audio/arctis.md", page("A")).some((e) => e.includes("flat")));
+  assert(shapeErrors("diario/oggi.md", page("Oggi")).some((e) => e.includes("YYYY-MM-DD")));
+  assert(shapeErrors("note/x.md", "Senza titolo").some((e) => e.includes("title")));
+  assert(shapeErrors("note/x.md", "# X\n\n- solo elenco").some((e) => e.includes("sentence")));
+  assert(shapeErrors("note/x.md", page("X", "Frase.\n\n" + "parola ".repeat(450))).some((e) => e.includes("at most 400")));
+  assertEquals(shapeErrors("diario/2026-10-01.md", page("2026-10-01", "Frase.\n\n" + "parola ".repeat(450))), []);
+  assert(shapeErrors("note/x.md", page("X", "Frase.\n\n```\n" + "riga\n".repeat(20) + "```")).some((e) => e.includes("code")));
+  assert(shapeErrors("note/x.md", page("X", "Frase.\n\nDB_PASSWORD=hunter2")).some((e) => e.includes("secret")));
+});
+
+Deno.test("similarity: words in common, containment counts as the same", () => {
+  assertEquals(similarity("Audio Arctis su Linux", "Arctis audio"), 1);
+  assert(similarity("Migrazione server OVH", "Ricetta della pizza") === 0);
+});
+
+Deno.test("check: a link to an existing page, near copies refused unless distinct", () => {
+  const s = new Store(":memory:");
+  assert(check(s, "io/lavoro.md", page("Lavoro"), { creating: true }).ok); // the first page has nothing to link to
+  s.write("io/lavoro.md", page("Lavoro"), "t");
+  const noLink = check(s, "note/arctis-audio.md", page("Audio Arctis"), { creating: true });
+  assert(!noLink.ok && noLink.errors.some((e) => e.includes("link at least one")));
+  assert(check(s, "note/arctis-audio.md", page("Audio Arctis", "Frase, vedi [[io/lavoro]]."), { creating: true }).ok);
+  s.write("note/arctis-audio.md", page("Audio Arctis", "Frase, vedi [[io/lavoro]]."), "t");
+  const dup = check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true });
+  assert(!dup.ok && dup.similar?.[0].path === "note/arctis-audio.md");
+  assert(check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true, distinct: true }).ok);
+  assert(check(s, "diario/2026-10-01.md", page("2026-10-01"), { creating: true }).ok); // the diary needs no link
+  s.close();
+});
+
+Deno.test("relink: links that meant the old page point at the new one, label and heading kept", () => {
+  const resolve = (t: string) => ["note/a", "a"].includes(t) ? "note/a.md" : null;
+  assertEquals(relink("vedi [[a]] e [[note/a#sez|qui]] e [[b]]", "note/a.md", "note/nuova.md", resolve), "vedi [[note/nuova]] e [[note/nuova#sez|qui]] e [[b]]");
 });
