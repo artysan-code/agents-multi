@@ -26,26 +26,26 @@ export function eventAsTask(e: Doc, account: string): Task | null {
   };
 }
 
-/** Events from `fromDay` (today by default) for `days` days. Kept two minutes: Today and the
- *  calendar ask on every redraw, and Google answers in about a second. */
+/** Today's and tomorrow's events. Kept two minutes: Today asks on every redraw, and Google
+ *  answers in about a second. */
 const memo = new Map<string, { at: number; value: Promise<{ tasks: Task[]; errors: string[] }> }>();
-export function calendarAsTasks(days = 2, fromDay?: string): Promise<{ tasks: Task[]; errors: string[] }> {
-  const key = `${fromDay ?? dayOf(new Date())}+${days}`;
+export function calendarAsTasks(): Promise<{ tasks: Task[]; errors: string[] }> {
+  const key = dayOf(new Date()), days = 2;
   const hit = memo.get(key);
   if (hit && Date.now() - hit.at < 120000) return hit.value;
-  const value = fetchCalendar(days, fromDay);
+  const value = fetchCalendar(days);
   memo.set(key, { at: Date.now(), value });
   value.then((r) => { if (r.errors.length) memo.delete(key); }, () => memo.delete(key)); // failures are not kept
   return value;
 }
 
-async function fetchCalendar(days: number, fromDay?: string): Promise<{ tasks: Task[]; errors: string[] }> {
+async function fetchCalendar(days: number): Promise<{ tasks: Task[]; errors: string[] }> {
   const google = loadAccounts(ACCOUNTS).filter((a) => a.service === "google");
   if (!google.length) return { tasks: [], errors: [] };
   const tasks: Task[] = [], errors: string[] = [];
   let client;
   try { client = await loadClient(); } catch { return { tasks, errors }; } // not set up yet: nothing to say
-  const today = fromDay ?? dayOf(new Date());
+  const today = dayOf(new Date());
   const [y, m, d] = today.split("-").map(Number);
   const from = new Date(y, m - 1, d).toISOString();
   const [y2, m2, d2] = addDays(today, days).split("-").map(Number);

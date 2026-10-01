@@ -31,11 +31,13 @@ const BASE = (now: string) =>
   `unless he writes in another language. No preamble, no closing question. Now: ${now}.`;
 
 /** Pure: the instructions for a kind of request. */
-export function promptFor(kind: AskKind, now: string, project?: string | null): string {
+export function promptFor(kind: AskKind, now: string, project?: string | null, noProject = false): string {
   if (kind === "newtask") {
-    const where = project ? `the project "${project}" (its folder is ~/${project})` : `no project (a simple thing to do)`;
+    const where = project ? `the project "${project}"` : noProject ? `no project (a simple thing to do)` : `a project you work out from what he says`;
+    const set = project ? `project "${project}"` : noProject ? "no project" : `project: the folder under ~ it belongs to (work/acme/site, ` +
+      `personal/dnd/dragons-lair: look at the existing tasks' projects with tasks_list, or the wiki), or none for a simple thing`;
     return `${BASE(now)}\nSamuel is describing a new task for ${where}. Create it with tasks_add: a short, clear title in his ` +
-      `words, project ${project ? `"${project}"` : "unset"}, a day and time only if he gave them (resolve "domani", "venerdì" ` +
+      `words, ${set}, a day and time only if he gave them (resolve "domani", "venerdì" ` +
       `from today), and in notes what he explained, as a short description. If it takes more than one action, add the steps ` +
       `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what he wrote is too ` +
       `vague to be a task, ask him one short question instead of creating it.`;
@@ -57,11 +59,11 @@ export function promptFor(kind: AskKind, now: string, project?: string | null): 
 export const asArg = (s: string) => s.startsWith("-") ? ` ${s}` : s;
 
 /** Pure: the arguments of `claude -p` for one request. */
-export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null } = {}) {
+export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null; noProject?: boolean } = {}) {
   const args = [
     "-p", asArg(text), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     "--tools", "", "--permission-mode", "dontAsk", "--allowedTools", ...TOOLS[kind],
-    "--append-system-prompt", promptFor(kind, now, opts.project),
+    "--append-system-prompt", promptFor(kind, now, opts.project, opts.noProject),
   ];
   if (opts.session) args.push("--resume", opts.session);
   return args;
@@ -135,7 +137,7 @@ export async function cachedDebrief(): Promise<{ day: string; text: string } | n
   return d && d.day === dayOf(new Date()) ? d : null;
 }
 
-function ask(kind: AskKind, text: string, opts: { session?: string | null; project?: string | null }, signal: AbortSignal) {
+function ask(kind: AskKind, text: string, opts: { session?: string | null; project?: string | null; noProject?: boolean }, signal: AbortSignal) {
   const enc = new TextEncoder();
   const now = new Date().toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   return new ReadableStream<Uint8Array>({
@@ -237,7 +239,7 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
     if (!text) return json({ error: "empty" }, 400);
     const session = typeof b.session === "string" && SESSION_ID.test(b.session) ? b.session : null;
     const project = typeof b.project === "string" && /^[\w./ -]{1,200}$/.test(b.project) && !b.project.includes("..") ? b.project : null;
-    return new Response(ask(kind, text, { session, project }, req.signal), {
+    return new Response(ask(kind, text, { session, project, noProject: b.noProject === true }, req.signal), {
       headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
     });
   }

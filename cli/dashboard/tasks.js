@@ -1,24 +1,24 @@
 // deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — the Tasks tab: a board (columns by status), a list, a calendar with the
-   Google events, a board per project folder, and each task's own page (steps, description,
-   attachments). Loaded after app.js, whose helpers it uses ($, esc, api, post, toast, t, lang,
-   drawer, mdToHtml). The data is shared/mcp/lib/tasks.ts through /api/tasks/*: the same files a
-   chat changes through the tasks MCP server, so a "tasks" event redraws what is open. */
+/* claude-multi console — the Tasks tab. A task lives in a project: the projects are Samuel's
+   folders (personal/…, work/…), plus the short names a chat used, plus "no project" for simple
+   things. On the left the projects that have something open; on the right either all of them at a
+   glance or one project's board, and each task's own page (steps, description, attachments).
+   A new task is explained to Claude in the field at the bottom, which writes it down.
+   Loaded after app.js, whose helpers it uses ($, esc, api, post, toast, t, lang, drawer, mdToHtml,
+   askContext). The data is shared/mcp/lib/tasks.ts through /api/tasks/*: the same files a chat
+   changes through the tasks MCP server, so a "tasks" event redraws what is open. */
 
 const COLS = ["todo", "doing", "waiting", "done"];
-const MODES = ["board", "list", "calendar", "projects"];
+const NONE = "~none";
 let TB = null; // /api/tasks/board
-let tMode = "board", tFolder = null, tQuery = "", tOwner = "all", tAllFolders = false;
-let tSort = { k: "due", d: 1 }, tMonth = null, AG = null;
+let tProject = null, tQuery = "", tOwner = "all", tAllFolders = false; // tProject: null = all projects
 try {
-  const m = localStorage.getItem("cm-tmode");
-  if (MODES.includes(m)) tMode = m;
-} catch { /* storage blocked: the board */ }
+  tProject = localStorage.getItem("cm-tproject") || null;
+} catch { /* storage blocked: all projects */ }
 
 async function loadBoard() {
   TB = await api("/api/tasks/board");
   renderBoard();
-  if (tMode === "calendar") loadAgenda().catch((e) => toast(e.message, true));
 }
 
 /* ---------------- helpers ---------------- */
@@ -30,12 +30,7 @@ const dayLabel = (day, time) => {
   const d = new Date(day + "T12:00");
   const tomorrow = new Date(new Date(today + "T12:00").getTime() + 86400000).toISOString().slice(0, 10);
   const label = day === today ? t("tb.today") : day === tomorrow ? t("tb.tomorrow") : d.toLocaleDateString(lang(), { weekday: "short", day: "numeric", month: "short" });
-  return time ? `${label} · ${time}` : label;
-};
-/** The last two folders of a path, the way a card has room for: "acme › site". */
-const crumb = (x) => {
-  if (x.folder) return x.folder.split("/").slice(-2).join(" › ");
-  return x.project ?? "";
+  return time ? `${label}, ${time}` : label;
 };
 /** Progress from notes, for entries that come with their notes (Today's brief). */
 const notesProgress = (notes) => {
@@ -48,29 +43,36 @@ const bar = (p) => p ? `<span class="tbar" title="${p.done}/${p.total}"><i style
 const byDue = (a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || (a.time ?? "99").localeCompare(b.time ?? "99") || (a.priority ?? 2) - (b.priority ?? 2);
 const byWeight = (a, b) => (a.priority ?? 2) - (b.priority ?? 2) || byDue(a, b) || a.title.localeCompare(b.title);
 
+/** The project a task belongs to, as the left column keys it: its folder, the name a chat gave it
+ *  when that is no folder, or none. */
+const projectOf = (x) => x.folder ?? (x.project ? `~other:${x.project}` : NONE);
+const projectLabel = (k) => k === NONE ? t("tb.noProject") : (k.startsWith("~other:") ? k.slice(7) : k).split("/").pop();
+const openCount = (n) => t(n === 1 ? "tb.sum1" : "tb.sum", { n });
+/** What a new task in that project is told about where it belongs. */
+const projectValue = (k) => k === NONE || !k ? null : k.startsWith("~other:") ? k.slice(7) : k;
+const inProject = (x, k) => k === NONE || k.startsWith("~other:") ? projectOf(x) === k : !!x.folder && (x.folder === k || x.folder.startsWith(k + "/"));
+
 function visible() {
   const q = tQuery.toLowerCase();
   return TB.tasks.filter((x) =>
-    (!tFolder || (tFolder === "~none" ? !x.project : tFolder.startsWith("~other:") ? !x.folder && x.project === tFolder.slice(7) : x.folder === tFolder || x.folder?.startsWith(tFolder + "/"))) &&
+    (!tProject || inProject(x, tProject)) &&
     (tOwner === "all" || (tOwner === "me" ? isMine(x) : tOwner === "claude" ? x.owner === "claude" : !isMine(x) && x.owner !== "claude")) &&
     (!q || `${x.title} ${x.project ?? ""} ${x.folder ?? ""}`.toLowerCase().includes(q))
   );
 }
 
-/* ---------------- the frame: folders on the left, a view on the right ---------------- */
+/* ---------------- the frame ---------------- */
 function renderBoard() {
   if (!TB) return;
-  $$("#tb-modes [data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === tMode)));
+  // a project that has gone (its last task moved) falls back to the overview
+  if (tProject && !TB.tasks.some((x) => inProject(x, tProject)) && !TB.projects.some((n) => n.path === tProject)) tProject = null;
   $$("#tb-owner [data-owner]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.owner === tOwner)));
   renderFolders();
+  renderHead();
   const xs = visible();
-  const el = $("#tb-body");
-  el.className = `tb-body m-${tMode}`;
-  if (tMode === "board") el.innerHTML = boardHtml(xs);
-  if (tMode === "list") el.innerHTML = listHtml(xs);
-  if (tMode === "projects") el.innerHTML = projectsHtml(xs);
-  if (tMode === "calendar") el.innerHTML = calendarHtml();
-  $("#tb-sum").textContent = t("tb.sum", { n: xs.filter(open).length });
+  $("#tb-body").innerHTML = tProject ? boardHtml(xs) : overviewHtml(xs);
+  // on this page the field writes new tasks, in the project on screen
+  if (view === "tasks") askContext("newtask", tProject === NONE ? NONE : projectValue(tProject));
 }
 
 function renderFolders() {
@@ -86,150 +88,81 @@ function renderFolders() {
     } else if (x.project) other.set(x.project, (other.get(x.project) ?? 0) + 1);
     else none++;
   }
-  const nodes = TB.projects.filter((n) => n.depth === 0 || counts.has(n.path) || (tAllFolders && n.depth <= 2) || n.path === tFolder);
-  const row = (key, label, n, depth = 0, cls = "") =>
-    `<button class="tf${tFolder === key ? " on" : ""} ${cls}" data-folder="${esc(key ?? "")}" style="--d:${depth}" title="${esc(key ?? "")}">
-      <svg viewBox="0 0 24 24" class="ico"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      <span>${esc(label)}</span>${n ? `<i>${n}</i>` : ""}</button>`;
+  const nodes = TB.projects.filter((n) => n.depth > 0 && (counts.has(n.path) || (tAllFolders && n.depth <= 2) || n.path === tProject));
+  const roots = TB.projects.filter((n) => n.depth === 0 && (counts.has(n.path) || tAllFolders));
+  const row = (key, label, n, depth = 0) =>
+    `<button class="tf${tProject === key ? " on" : ""}" data-project="${esc(key)}" style="--d:${depth}" title="${esc(key)}"><span>${esc(label)}</span>${n ? `<i>${n}</i>` : ""}</button>`;
   $("#tb-folders").innerHTML =
-    `<button class="tf${tFolder === null ? " on" : ""}" data-folder=""><span>${esc(t("tb.all"))}</span><i>${TB.tasks.filter(open).length}</i></button>` +
-    `<div class="tf-h">${esc(t("tb.folders"))}</div>` +
-    nodes.map((n) => row(n.path, n.name, counts.get(n.path) ?? 0, n.depth, n.depth === 0 ? "area" : "")).join("") +
-    (other.size ? `<div class="tf-h">${esc(t("tb.other"))}</div>` + [...other].sort().map(([p, n]) => row(`~other:${p}`, p, n)).join("") : "") +
-    (none ? row("~none", t("tb.noProject"), none) : "") +
+    `<button class="tf${tProject === null ? " on" : ""}" data-project=""><span>${esc(t("tb.allProjects"))}</span><i>${TB.tasks.filter(open).length}</i></button>` +
+    row(NONE, t("tb.noProject"), none) +
+    roots.map((r) => `<div class="tf root" style="--d:0"><span>${esc(r.name)}</span></div>` +
+      nodes.filter((n) => n.path.startsWith(r.path + "/")).map((n) => row(n.path, n.name, counts.get(n.path) ?? 0, n.depth - 1)).join("")).join("") +
+    (other.size ? `<div class="tf root"><span>${esc(t("tb.other"))}</span></div>` + [...other].sort().map(([p, n]) => row(`~other:${p}`, p, n)).join("") : "") +
     `<button class="tf-more" id="tb-allf">${esc(t(tAllFolders ? "tb.fewFolders" : "tb.allFolders"))}</button>`;
 }
 
-/* ---------------- cards ---------------- */
-function cardHtml(x, compact = false) {
+function renderHead() {
+  const xs = TB.tasks.filter((x) => !tProject || inProject(x, tProject));
+  const openN = xs.filter(open).length;
+  const steps = xs.filter(open).reduce((a, x) => x.progress ? { d: a.d + x.progress.done, n: a.n + x.progress.total } : a, { d: 0, n: 0 });
+  const isFolder = tProject && !tProject.startsWith("~");
+  $("#tb-title").innerHTML = `<h2>${esc(tProject ? projectLabel(tProject) : t("tb.allProjects"))}</h2>
+    <div class="crumb">
+      ${isFolder ? `<span>~/${esc(tProject)}</span><button data-open-folder="${esc(tProject)}">${esc(t("ts.openFolder"))}</button>` : ""}
+      <span>${esc(openCount(openN))}${steps.n ? `, ${esc(t("tb.steps", { d: steps.d, n: steps.n }))}` : ""}</span>
+    </div>`;
+}
+
+/* ---------------- cards and boards ---------------- */
+function cardHtml(x) {
   const today = TB.today;
   const late = x.due && x.due < today && open(x);
-  return `<article class="tcard${x.priority === 1 ? " hi" : ""}${x.status === "done" ? " done" : ""}" draggable="true" data-task="${esc(x.id)}">
+  const where = tProject ? "" : projectLabel(projectOf(x));
+  return `<article class="tcard${x.priority === 1 ? " hi" : ""}${x.status === "doing" ? " doing" : ""}" draggable="true" data-task="${esc(x.id)}">
     <div class="tc-t">${esc(x.title)}</div>
-    <div class="tc-m">
-      ${x.due ? `<span class="tc-due${late ? " late" : x.due === today ? " now" : ""}">${esc(dayLabel(x.due, x.time))}</span>` : ""}
-      ${!compact && crumb(x) ? `<span class="tc-p">${esc(crumb(x))}</span>` : ""}
-      ${x.owner && x.owner !== "samuel" ? `<span class="tc-o">${esc(x.owner)}</span>` : ""}
-      ${x.repeat ? `<span class="tc-i" title="${esc(t(`ts.r.${x.repeat}`))}">↻</span>` : ""}
-      ${x.attachments ? `<span class="tc-i" title="${esc(t("ts.att"))}">⧉ ${x.attachments}</span>` : ""}
-    </div>
-    ${x.progress ? `<div class="tc-pr">${bar(x.progress)}</div>` : ""}
+    <div class="tc-m">${[
+      x.due ? `<span class="tc-due${late ? " late" : x.due === today ? " now" : ""}">${esc(dayLabel(x.due, x.time))}</span>` : "",
+      where ? `<span>${esc(where)}</span>` : "",
+      x.owner && x.owner !== "samuel" ? `<span>${esc(x.owner)}</span>` : "",
+      x.repeat ? `<span title="${esc(t(`ts.r.${x.repeat}`))}">${esc(t(`ts.r.${x.repeat}`))}</span>` : "",
+      x.attachments ? `<span>${esc(t("tb.attN", { n: x.attachments }))}</span>` : "",
+    ].join("")}</div>
+    ${x.progress && x.status !== "done" ? `<div class="tc-pr">${bar(x.progress)}</div>` : ""}
   </article>`;
 }
 
-function boardHtml(xs, compact = false, key = "") {
-  return `<div class="kanban${compact ? " compact" : ""}">` + COLS.map((c) => {
+function boardHtml(xs) {
+  return `<div class="kanban">` + COLS.map((c) => {
     const cs = xs.filter((x) => x.status === c).sort(c === "done" ? (a, b) => (b.done ?? "").localeCompare(a.done ?? "") : byWeight);
     return `<section class="kcol" data-col="${c}">
       <header><b>${esc(t(`tb.col.${c}`))}</b><i>${cs.length}</i></header>
-      <div class="kcards">${cs.map((x) => cardHtml(x, compact)).join("") || `<div class="kempty">${esc(t("tb.dropHere"))}</div>`}</div>
-      ${c === "todo" ? `<form class="kadd" data-folder="${esc(key)}"><input class="search" name="title" placeholder="${esc(t("tb.quick"))}" autocomplete="off"></form>` : ""}
+      <div class="kcards">${cs.map(cardHtml).join("") || (c === "done" ? "" : `<div class="kempty">${esc(t(c === "todo" ? "tb.emptyTodo" : "tb.dropHere"))}</div>`)}</div>
     </section>`;
   }).join("") + `</div>`;
 }
 
-function projectsHtml(xs) {
+/** All projects at a glance: what is open in each, how far along, and what comes next. */
+function overviewHtml(xs) {
   const groups = new Map();
-  for (const x of xs) {
-    const k = x.folder ?? (x.project ? `~other:${x.project}` : "~none");
+  for (const x of xs.filter(open)) {
+    const k = projectOf(x);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(x);
   }
-  const keys = [...groups.keys()].sort((a, b) => (a.startsWith("~") ? 1 : 0) - (b.startsWith("~") ? 1 : 0) || a.localeCompare(b));
-  if (!keys.length) return `<div class="kempty big">${esc(t("tb.empty"))}</div>`;
-  return keys.map((k) => {
-    const g = groups.get(k);
-    const label = k === "~none" ? t("tb.noProject") : k.startsWith("~other:") ? k.slice(7) : k.split("/").join(" › ");
-    const openN = g.filter(open).length;
-    return `<section class="pgroup">
-      <header>
-        <svg viewBox="0 0 24 24" class="ico"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <b>${esc(label)}</b><i>${openN}</i>
-        ${k.startsWith("~") ? "" : `<button class="btn sm" data-open-folder="${esc(k)}">${esc(t("ts.openFolder"))}</button>`}
-      </header>
-      ${boardHtml(g, true, k.startsWith("~other:") ? k.slice(7) : k.startsWith("~") ? "" : k)}
-    </section>`;
-  }).join("");
-}
-
-function listHtml(xs) {
-  const cols = [["title", "tb.h.title"], ["project", "tb.h.project"], ["due", "tb.h.due"], ["status", "tb.h.status"], ["progress", "tb.h.progress"], ["owner", "tb.h.owner"], ["priority", "tb.h.priority"]];
-  const val = (x, k) => k === "project" ? (x.folder ?? x.project ?? "") : k === "due" ? `${x.due ?? "9999"}${x.time ?? ""}` : k === "status" ? COLS.indexOf(x.status) : k === "progress" ? (x.progress?.pct ?? -1) : k === "priority" ? (x.priority ?? 2) : (x[k] ?? "");
-  const rows = [...xs].sort((a, b) => {
-    const A = val(a, tSort.k), B = val(b, tSort.k);
-    return (typeof A === "number" ? A - B : String(A).localeCompare(String(B))) * tSort.d || byDue(a, b);
-  });
-  if (!rows.length) return `<div class="kempty big">${esc(t("tb.empty"))}</div>`;
-  return `<div class="panel"><div class="scroll"><table class="tlist">
-    <thead><tr><th></th>${cols.map(([k, l]) => `<th><button data-sort="${k}"${tSort.k === k ? ` class="on"` : ""}>${esc(t(l))}${tSort.k === k ? (tSort.d > 0 ? " ↑" : " ↓") : ""}</button></th>`).join("")}</tr></thead>
-    <tbody>${rows.map((x) => `<tr data-task="${esc(x.id)}" class="${x.status === "done" ? "done" : ""}${x.due && x.due < TB.today && open(x) ? " late" : ""}">
-      <td><input type="checkbox" data-done="${esc(x.id)}" ${x.status === "done" ? "checked" : ""} aria-label="${esc(t("ts.done"))}"></td>
-      <td class="tl-t">${x.priority === 1 ? `<span class="hi-dot"></span>` : ""}${esc(x.title)}</td>
-      <td class="tl-p">${esc(crumb(x))}</td>
-      <td class="tl-d">${esc(dayLabel(x.due, x.time))}</td>
-      <td><span class="st st-${x.status}">${esc(t(`tb.col.${x.status}`))}</span></td>
-      <td>${bar(x.progress)}</td>
-      <td>${esc(x.owner && x.owner !== "samuel" ? x.owner : "")}</td>
-      <td>${esc(t(`ts.p${x.priority ?? 2}`))}</td>
-    </tr>`).join("")}</tbody></table></div></div>`;
-}
-
-/* ---------------- calendar ---------------- */
-const monthOf = (day) => day.slice(0, 7);
-function monthGrid(month) {
-  const [y, m] = month.split("-").map(Number);
-  const first = new Date(y, m - 1, 1, 12);
-  const start = new Date(first.getTime() - ((first.getDay() + 6) % 7) * 86400000); // back to Monday
-  const days = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(start.getTime() + i * 86400000);
-    days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-  }
-  // six weeks only when the month needs them
-  return days[35].slice(0, 7) === month ? days : days.slice(0, 35);
-}
-async function loadAgenda() {
-  tMonth ??= monthOf(TB?.today ?? new Date().toISOString());
-  const g = monthGrid(tMonth);
-  AG = { month: tMonth, ...(await api(`/api/tasks/agenda?from=${g[0]}&to=${g[g.length - 1]}`)) };
-  if (tMode === "calendar") $("#tb-body").innerHTML = calendarHtml();
-}
-function calendarHtml() {
-  tMonth ??= monthOf(TB.today);
-  const g = monthGrid(tMonth);
-  const [y, m] = tMonth.split("-").map(Number);
-  const title = new Date(y, m - 1, 1).toLocaleDateString(lang(), { month: "long", year: "numeric" });
-  const ids = new Set(visible().map((x) => x.id));
-  const byDay = new Map();
-  // tasks from the agenda answer when it is this month's (it carries the events), filtered like the rest
-  const entries = AG?.month === tMonth ? AG.tasks.filter((x) => x.source || ids.has(x.id) || !TB.tasks.some((b) => b.id === x.id)) : [];
-  for (const x of entries) {
-    if (!byDay.has(x.due)) byDay.set(x.due, []);
-    byDay.get(x.due).push(x);
-  }
-  const wd = [...Array(7)].map((_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(lang(), { weekday: "short" }));
-  return `<div class="cal">
-    <header class="cal-h">
-      <button class="btn sm" data-month="-1" aria-label="${esc(t("tb.prev"))}">‹</button>
-      <b>${esc(title)}</b>
-      <button class="btn sm" data-month="1" aria-label="${esc(t("tb.next"))}">›</button>
-      <button class="btn sm" data-month="0">${esc(t("tb.thisMonth"))}</button>
-      ${AG?.errors?.length ? `<span class="sub warn-t">${esc(t("tb.calErr", { e: AG.errors.join("; ") }))}</span>` : ""}
-      ${AG?.month !== tMonth ? `<span class="sub">${esc(t("pl.loading"))}</span>` : ""}
-    </header>
-    <div class="cal-g">
-      ${wd.map((d) => `<div class="cal-wd">${esc(d)}</div>`).join("")}
-      ${g.map((d) => {
-        const xs = (byDay.get(d) ?? []).sort((a, b) => (a.time ?? "00:00").localeCompare(b.time ?? "00:00"));
-        const show = xs.slice(0, 4);
-        return `<div class="cal-d${d.slice(0, 7) !== tMonth ? " other" : ""}${d === TB.today ? " today" : ""}" data-day="${d}">
-          <span class="cal-n">${Number(d.slice(8))}</span>
-          ${show.map((x) => `<button class="cal-e${x.source ? " ev" : ""}${x.status === "done" ? " done" : ""}" ${x.source ? "" : `data-task="${esc(x.id)}"`} title="${esc(`${x.time ?? ""} ${x.title}${x.project ? ` · ${x.project}` : ""}`)}">${x.time ? `<i>${esc(x.time)}</i>` : ""}${esc(x.title)}</button>`).join("")}
-          ${xs.length > show.length ? `<span class="cal-more">${esc(t("tb.more", { n: xs.length - show.length }))}</span>` : ""}
-        </div>`;
-      }).join("")}
-    </div>
-  </div>`;
+  const keys = [...groups.keys()].sort((a, b) => (a === NONE ? 1 : 0) - (b === NONE ? 1 : 0) || projectLabel(a).localeCompare(projectLabel(b)));
+  if (!keys.length) return `<div class="kempty">${esc(t("tb.empty"))}</div>`;
+  return `<div class="plist">` + keys.map((k) => {
+    const g = groups.get(k).sort(byDue);
+    const next = g.find((x) => x.status !== "waiting") ?? g[0];
+    const steps = g.reduce((a, x) => x.progress ? { d: a.d + x.progress.done, n: a.n + x.progress.total } : a, { d: 0, n: 0 });
+    const doing = g.some((x) => x.status === "doing");
+    return `<button class="pcard${doing ? " doing" : ""}" data-project="${esc(k)}">
+      <span class="pc-h"><b>${esc(projectLabel(k))}</b><span class="pc-n">${esc(openCount(g.length))}</span></span>
+      ${k === NONE ? "" : `<small>${esc(k.startsWith("~other:") ? k.slice(7) : `~/${k}`)}</small>`}
+      ${steps.n ? `<span class="tc-pr">${bar({ done: steps.d, total: steps.n, pct: Math.round(steps.d / steps.n * 100) })}</span>` : ""}
+      <span class="pc-next">${next.due ? `<span>${esc(dayLabel(next.due, next.time))}</span>  ` : ""}${esc(next.title)}</span>
+    </button>`;
+  }).join("") + `</div>`;
 }
 
 /* ---------------- changes ---------------- */
@@ -252,12 +185,6 @@ async function moveTask(id, status) {
   if (!r) { x.status = was; renderBoard(); return; }
   toast(t("tb.moved", { t: r.task.title, s: t(`tb.col.${status}`) }));
   await loadBoard();
-}
-async function quickAdd(title, folder, extra = {}) {
-  if (!title.trim()) return;
-  const r = await taskOp({ op: "add", title, ...(folder ? { project: folder } : {}), ...extra });
-  if (r) await loadBoard();
-  return r;
 }
 
 /* ---------------- one task's page ---------------- */
@@ -508,92 +435,36 @@ async function openAttachment(a) {
   if (!r.ok) toast(r.message, true);
 }
 
-function newTask(extra = {}) {
-  const host = drawer(t("ts.newTitle"), `<form class="tsheet ts-new">
-    <input class="ts-title" name="title" placeholder="${esc(t("ts.titlePh"))}" required autocomplete="off">
-    <div class="ts-props">
-      <label><span>${esc(t("ts.due"))}</span><input type="date" name="due" class="search" value="${esc(extra.due ?? "")}"></label>
-      <label><span>${esc(t("ts.time"))}</span><input type="time" name="time" class="search"></label>
-      <label class="wide"><span>${esc(t("ts.project"))}</span><input name="project" class="search" list="ts-projects2" value="${esc(extra.project ?? "")}" autocomplete="off"></label>
-      <datalist id="ts-projects2">${(TB?.projects ?? []).map((n) => `<option value="${esc(n.path)}">`).join("")}</datalist>
-    </div>
-    <footer class="ts-foot"><span class="r"></span><button class="btn primary" type="submit">${esc(t("ts.create"))}</button></footer>
-  </form>`);
-  const f = $("form", host);
-  $("input[name=title]", f).focus();
-  f.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const v = (n) => f.elements[n].value.trim() || undefined;
-    const body = { op: "add", title: v("title"), due: v("due"), time: v("time"), project: v("project") };
-    if (body.time && !body.due) body.due = TB?.today;
-    const r = await taskOp(body);
-    if (!r) return;
-    host.remove();
-    await loadBoard();
-    openTask(r.task.id);
-  });
-}
-
 /* ---------------- events ---------------- */
 {
   const root = $("#v-tasks");
-  $("#tb-modes").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-mode]");
-    if (!b) return;
-    tMode = b.dataset.mode;
-    try { localStorage.setItem("cm-tmode", tMode); } catch { /* not remembered */ }
+  const pick = (k) => {
+    tProject = k || null;
+    try { localStorage.setItem("cm-tproject", tProject ?? ""); } catch { /* not remembered */ }
     renderBoard();
-    if (tMode === "calendar" && AG?.month !== tMonth) loadAgenda().catch((err) => toast(err.message, true));
-  });
+  };
   $("#tb-owner").addEventListener("click", (e) => {
     const b = e.target.closest("[data-owner]");
     if (b) { tOwner = b.dataset.owner; renderBoard(); }
   });
   let qTimer = null;
   $("#tb-q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { tQuery = e.target.value.trim(); renderBoard(); }, 120); });
-  $("#tb-new").addEventListener("click", () => newTask(tFolder && !tFolder.startsWith("~") ? { project: tFolder } : {}));
+  // a new task is explained to Claude, in the project on screen
+  $("#tb-new").addEventListener("click", () => {
+    askContext("newtask", tProject === NONE ? NONE : projectValue(tProject));
+    $("#ask-text").focus();
+  });
   root.addEventListener("click", async (e) => {
-    const f = e.target.closest("[data-folder]");
-    if (f && f.classList.contains("tf")) { tFolder = f.dataset.folder || null; return renderBoard(); }
+    const p = e.target.closest("[data-project]");
+    if (p) return pick(p.dataset.project);
     if (e.target.closest("#tb-allf")) { tAllFolders = !tAllFolders; return renderFolders(); }
     const of = e.target.closest("[data-open-folder]");
     if (of) {
       const r = await post("/api/open", { target: `~/${of.dataset.openFolder}` }).catch((err) => ({ ok: false, message: err.message }));
       return r.ok || toast(r.message, true);
     }
-    const so = e.target.closest("[data-sort]");
-    if (so) { tSort = { k: so.dataset.sort, d: tSort.k === so.dataset.sort ? -tSort.d : 1 }; return renderBoard(); }
-    const mo = e.target.closest("[data-month]");
-    if (mo) {
-      const n = Number(mo.dataset.month);
-      if (n === 0) tMonth = monthOf(TB.today);
-      else {
-        const [y, m] = tMonth.split("-").map(Number);
-        const d = new Date(y, m - 1 + n, 1);
-        tMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      }
-      renderBoard();
-      return loadAgenda().catch((err) => toast(err.message, true));
-    }
-    if (e.target.closest("[data-done]")) return; // the checkbox, handled on change
     const card = e.target.closest("[data-task]");
     if (card) return openTask(card.dataset.task);
-    const day = e.target.closest(".cal-d");
-    if (day && e.target.closest(".cal-n")) return newTask({ due: day.dataset.day, ...(tFolder && !tFolder.startsWith("~") ? { project: tFolder } : {}) });
-  });
-  root.addEventListener("change", async (e) => {
-    const cb = e.target.closest("[data-done]");
-    if (!cb) return;
-    const r = await taskOp({ op: "update", id: cb.dataset.done, status: cb.checked ? "done" : "todo" });
-    if (r) { toast(t("tasks.done", { t: r.task.title })); loadBoard(); } else cb.checked = !cb.checked;
-  });
-  root.addEventListener("submit", async (e) => {
-    const f = e.target.closest(".kadd");
-    if (!f) return;
-    e.preventDefault();
-    const input = f.elements.title;
-    const r = await quickAdd(input.value, f.dataset.folder || (tFolder && !tFolder.startsWith("~") ? tFolder : tFolder?.startsWith("~other:") ? tFolder.slice(7) : ""));
-    if (r) $(`.kadd[data-folder="${CSS.escape(f.dataset.folder)}"] input`)?.focus();
   });
   // dragging a card between columns sets its status
   let dragId = null;

@@ -489,7 +489,8 @@ function askContext(kind, project = null) {
   ASK.project = project;
   const ctx = $("#ask-ctx");
   ctx.hidden = kind === "ask";
-  $("span", ctx).textContent = kind === "newtask" ? t("ask.ctx.newtask", { p: project ?? t("tb.noProject") }) : "";
+  // a new task: in the project on screen, in none, or (null) wherever Claude finds it belongs
+  $("span", ctx).textContent = kind !== "newtask" ? "" : project === null ? t("tb.new") : t("ask.ctx.newtask", { p: project === "~none" ? t("tb.noProject") : project.split("/").pop() });
   $("#ask-text").placeholder = t(kind === "newtask" ? "ask.ph.newtask" : "ask.ph");
 }
 $("#ask-ctx button").addEventListener("click", () => { askContext("ask"); $("#ask-text").focus(); });
@@ -527,7 +528,8 @@ $("#composer").addEventListener("submit", async (e) => {
   ASK.busy = new AbortController();
   const kind = ASK.kind;
   try {
-    await askStream("/api/ask", { text, kind, project: ASK.project, session: ASK.session }, {
+    const where = ASK.project === "~none" ? { noProject: true } : { project: ASK.project };
+    await askStream("/api/ask", { text, kind, ...where, session: ASK.session }, {
       session: (o) => { ASK.session = o.id; },
       text: (d) => {
         acc += d;
@@ -1406,6 +1408,7 @@ function go(hash) {
   $$(".view").forEach((el) => el.hidden = el.id !== `v-${view}`);
   // the field to ask Claude lives where there is something to ask about
   $("#ask-dock").hidden = !["today", "tasks", "brain"].includes(view);
+  if (view !== "tasks" && ASK.kind === "newtask") askContext("ask");
   $$("#tabs a").forEach((a) => a.setAttribute("aria-selected", String(a.dataset.t === sub)));
   $$(".sub-view").forEach((el) => el.hidden = el.id !== `s-${sub}`);
   renderTitle();
@@ -1474,7 +1477,7 @@ $("#lang-btn").addEventListener("click", () => {
 const CMDS = () => [
   { s: "pal.goto", n: t("nav.today"), d: "today", f: () => go("today") },
   { s: "pal.goto", n: t("nav.tasks"), d: "tasks", f: () => go("tasks") },
-  { s: "pal.do", n: t("tb.new"), d: "task", f: () => { go("tasks"); newTask(); } },
+  { s: "pal.do", n: t("tb.new"), d: "task", f: () => { go("tasks"); $("#tb-new").click(); } },
   { s: "pal.goto", n: t("nav.brain"), d: "brain", f: () => go("brain") },
   { s: "pal.goto", n: t("nav.connections"), d: "connections", f: () => go("connections") },
   ...TABS.map((x) => ({ s: "pal.goto", n: `${t("nav.system")} · ${t(`sys.${x}`)}`, d: `system/${x}`, f: () => go(`system/${x}`) })),

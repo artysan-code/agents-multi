@@ -1,15 +1,14 @@
 // taskboard.ts — the console's Tasks tab: the board, one task's page, its steps and attachments,
-// files dropped on it, local files opened with the desktop's default program, and the calendar.
+// files dropped on it, and local files opened with the desktop's default program.
 // Every write goes through shared/mcp/lib/tasks.ts, the same code the MCP server uses, so a chat
 // and the console change a task the same way; `base` (the version the page holds) keeps the page
 // from overwriting a change a chat made meanwhile.
 
-import { calendarAsTasks } from "./agenda.ts";
 import { HOME } from "./lib.ts";
 import { projectTree, resolveProject } from "./projects.ts";
 import {
   addAttachment, addDays, addStep, addTask, attachments, dayOf, getTask, listTasks, progress, removeAttachment, setStep, StaleError, steps,
-  storeFile, type Task, type TaskInput, tasksRoot, updateTask, validDay,
+  storeFile, type Task, type TaskInput, tasksRoot, updateTask,
 } from "../shared/mcp/lib/tasks.ts";
 
 export const TASK_FILE_MAX = 50 * 1024 * 1024;
@@ -76,16 +75,6 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
   if (p === "/api/tasks/item") {
     const t = await getTask(u.searchParams.get("id") ?? "");
     return t ? json(full(t)) : json({ error: "no such task" }, 404);
-  }
-
-  if (p === "/api/tasks/agenda") {
-    const from = u.searchParams.get("from") ?? "", to = u.searchParams.get("to") ?? "";
-    if (!validDay(from) || !validDay(to) || to < from) return json({ error: "from and to are days, YYYY-MM-DD" }, 400);
-    const days = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
-    if (days > 62) return json({ error: "at most two months at a time" }, 400);
-    const [tasks, cal] = await Promise.all([listTasks(), calendarAsTasks(days, from)]);
-    const inRange = (t: Task) => !!t.due && t.due >= from && t.due <= to && t.status !== "dropped";
-    return json({ tasks: [...tasks.filter(inRange), ...cal.tasks.filter(inRange)], errors: cal.errors });
   }
 
   if (p === "/api/tasks/op" && write) {

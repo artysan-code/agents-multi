@@ -63,27 +63,28 @@
           </div>
         </section>
         <!-- ============ TASKS ============ -->
-        <section class="view wide" id="v-tasks" hidden>
-          <div class="tb-bar">
-            <div class="seg" id="tb-modes" role="group">
-              <button data-mode="board" data-i18n="tb.board"></button>
-              <button data-mode="list" data-i18n="tb.list"></button>
-              <button data-mode="calendar" data-i18n="tb.calendar"></button>
-              <button data-mode="projects" data-i18n="tb.projects"></button>
-            </div>
-            <input id="tb-q" class="search" type="search" data-i18n-ph="tb.search" autocomplete="off">
-            <div class="seg" id="tb-owner" role="group">
-              <button data-owner="all" data-i18n="tb.owner.all"></button>
-              <button data-owner="me" data-i18n="tb.owner.me"></button>
-              <button data-owner="claude" data-i18n="tb.owner.claude"></button>
-              <button data-owner="others" data-i18n="tb.owner.others"></button>
-            </div>
-            <span class="r sub" id="tb-sum"></span>
-            <button class="btn primary" id="tb-new" data-i18n="tb.new"></button>
-          </div>
-          <div class="tb-frame">
-            <nav class="tb-folders" id="tb-folders" aria-label="Folders"></nav>
-            <div class="tb-body" id="tb-body"></div>
+        <section class="view" id="v-tasks" hidden>
+          <div class="tk-frame">
+            <section class="pane tk-projects">
+              <div class="pane-h"><h3 data-i18n="tb.projects"></h3></div>
+              <nav class="pane-b" id="tb-folders" aria-label="Projects"></nav>
+            </section>
+            <section class="pane tk-main">
+              <header class="tk-head">
+                <div class="tk-title" id="tb-title"></div>
+                <div class="tk-tools">
+                  <input id="tb-q" class="search" type="search" data-i18n-ph="tb.search" autocomplete="off">
+                  <div class="seg" id="tb-owner" role="group">
+                    <button data-owner="all" data-i18n="tb.owner.all"></button>
+                    <button data-owner="me" data-i18n="tb.owner.me"></button>
+                    <button data-owner="claude" data-i18n="tb.owner.claude"></button>
+                    <button data-owner="others" data-i18n="tb.owner.others"></button>
+                  </div>
+                  <button class="btn primary" id="tb-new" data-i18n="tb.new"></button>
+                </div>
+              </header>
+              <div class="tk-body" id="tb-body"></div>
+            </section>
           </div>
         </section>
         <!-- ============ BRAIN ============ -->
