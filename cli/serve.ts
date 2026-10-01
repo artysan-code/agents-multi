@@ -19,6 +19,8 @@ import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, v
 import { startConnect, storeClient } from "./google.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import { taskApi } from "./taskboard.ts";
+import { askApi } from "./ask.ts";
+import { assetsApi, claudeAssets } from "./claude-assets.ts";
 import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
@@ -305,6 +307,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   // lazily: state events can be frequent while sessions run, and only a page asking needs the report
   clients.add((topic) => { if (topic === "state") invalidate(); });
   void refreshStatus().catch(() => {}); // warm: the first page after a start is not the one to wait
+  void claudeAssets(); // the scan of Desktop's bundle, done before the first page asks for it
 
   const handler = async (req: Request): Promise<Response> => {
     const u = new URL(req.url);
@@ -369,22 +372,10 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         }
         return json(await permissionsView());
       }
-      if (u.pathname === "/api/hey") {
-        // the desktop app owns the panel: the request goes over its socket, as a second start would
-        if (req.method !== "POST") return json({ error: "POST required" }, 405);
-        if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
-        const { text = "" } = await req.json().catch(() => ({})) as { text?: string };
-        const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(String(text).slice(0, 4000))));
-        try {
-          const sock = await Deno.connect({ transport: "unix", path: `${Deno.env.get("XDG_RUNTIME_DIR") ?? "/tmp"}/claude-multi-app.sock` });
-          await sock.write(new TextEncoder().encode(`hey:${b64}\n`));
-          sock.close();
-          return json({ ok: true });
-        } catch (e) {
-          const gone = e instanceof Deno.errors.NotFound || e instanceof Deno.errors.ConnectionRefused;
-          return json({ ok: false, message: gone ? "the desktop app is not running (claude-multi-app --tray)" : (e as Error).message });
-        }
-      }
+      const ca = await assetsApi(u);
+      if (ca) return ca;
+      const ar = await askApi(req, u, json);
+      if (ar) return ar;
       const tr = await taskApi(req, u, json, () => broadcast("tasks"));
       if (tr) return tr;
       if (u.pathname === "/api/tasks") {
@@ -400,8 +391,12 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
             return json({ ok: false, message: (e as Error).message });
           }
         }
-        const cal = await calendarAsTasks();
-        return json({ ...brief([...await listTasks(), ...cal.tasks], new Date()), calendarErrors: cal.errors });
+        const cal = await calendarAsTasks(), now = new Date();
+        const b = brief([...await listTasks(), ...cal.tasks], now);
+        // today's appointments already past: the day on the page keeps them above the line for now
+        const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        const earlier = cal.tasks.filter((t) => t.due === b.day && t.time && t.time < clock);
+        return json({ ...b, earlier, calendarErrors: cal.errors });
       }
       if (u.pathname === "/api/brain") return json(await brainGraph());
       if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));

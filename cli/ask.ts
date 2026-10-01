@@ -1,0 +1,272 @@
+// ask.ts — the console talks to Claude: the one field at the bottom of the page, the morning debrief,
+// and the hand-over to a terminal (resume a session, continue a conversation, open Claude Code in a
+// project) and to a session's own window.
+//
+// The answer comes from `claude -p` in the machine's default profile, as Hey's does, and streams
+// back to the page as NDJSON on the response of the POST that asked: one request, one answer, no
+// polling. The tools are a fixed list per kind of request and `--permission-mode dontAsk` refuses
+// everything else, whatever the profile's own mode: from here Claude reads and keeps the tasks; it
+// never sends mail or creates events.
+
+import { BIN, expandHome, HOME, launchers, readJson, running, STATE } from "./lib.ts";
+import { dayOf } from "../shared/mcp/lib/tasks.ts";
+
+type Json = (v: unknown, code?: number) => Response;
+export type AskKind = "ask" | "newtask" | "debrief";
+
+const READ = [
+  "mcp__google__calendar_list", "mcp__google__calendar_events",
+  "mcp__google__gmail_search", "mcp__google__gmail_thread",
+  "mcp__google__drive_search", "mcp__google__drive_read",
+  "mcp__wiki-claude__search", "mcp__wiki-claude__read_note",
+];
+export const TOOLS: Record<AskKind, string[]> = {
+  ask: ["mcp__tasks", ...READ],
+  newtask: ["mcp__tasks", "mcp__wiki-claude__search", "mcp__wiki-claude__read_note"],
+  debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
+};
+
+const BASE = (now: string) =>
+  `You answer inside Samuel's console (claude-multi), in a panel above the field he typed in. Answer in Italian ` +
+  `unless he writes in another language. No preamble, no closing question. Now: ${now}.`;
+
+/** Pure: the instructions for a kind of request. */
+export function promptFor(kind: AskKind, now: string, project?: string | null): string {
+  if (kind === "newtask") {
+    const where = project ? `the project "${project}" (its folder is ~/${project})` : `no project (a simple thing to do)`;
+    return `${BASE(now)}\nSamuel is describing a new task for ${where}. Create it with tasks_add: a short, clear title in his ` +
+      `words, project ${project ? `"${project}"` : "unset"}, a day and time only if he gave them (resolve "domani", "venerdì" ` +
+      `from today), and in notes what he explained, as a short description. If it takes more than one action, add the steps ` +
+      `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what he wrote is too ` +
+      `vague to be a task, ask him one short question instead of creating it.`;
+  }
+  if (kind === "debrief") {
+    return `${BASE(now)}\nWrite Samuel's debrief for today from tasks_brief and today's calendar events: at most three short ` +
+      `lines, plain sentences, no headings, no bullets. First what matters today, with times; then anything late; then ` +
+      `what he is waiting for from others, if anything. If the day is empty say so in one line.`;
+  }
+  return `${BASE(now)}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when he says ` +
+    `something to do, add it), his calendar, mail and Drive read only, the wiki. Never send mail or create events from ` +
+    `here: say it is for a conversation. When the request needs work inside a project's files (code, changes, looking ` +
+    `through a repository), do not start it here: say in one line what you would do, then end with a line of its own ` +
+    `[[code:PATH]] where PATH is the project's folder under ~ (for example ~/work/acme/site) if you know it or can find ` +
+    `it in the wiki, otherwise [[code:~]].`;
+}
+
+/** The user's text as a positional argument: a leading "-" would read as an option. */
+export const asArg = (s: string) => s.startsWith("-") ? ` ${s}` : s;
+
+/** Pure: the arguments of `claude -p` for one request. */
+export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null } = {}) {
+  const args = [
+    "-p", asArg(text), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+    "--tools", "", "--permission-mode", "dontAsk", "--allowedTools", ...TOOLS[kind],
+    "--append-system-prompt", promptFor(kind, now, opts.project),
+  ];
+  if (opts.session) args.push("--resume", opts.session);
+  return args;
+}
+
+/** What the page receives, one JSON object per line. */
+export type Out =
+  | { t: "session"; id: string }
+  | { t: "text"; d: string }
+  | { t: "tool"; k: "tasks" | "calendar" | "mail" | "drive" | "wiki" | "work" }
+  | { t: "done"; text: string; code: string | null; error?: string };
+
+export const toolKind = (name: string): Extract<Out, { t: "tool" }>["k"] =>
+  /tasks/.test(name) ? "tasks" : /calendar/.test(name) ? "calendar" : /gmail/.test(name) ? "mail"
+  : /drive/.test(name) ? "drive" : /wiki/.test(name) ? "wiki" : "work";
+
+const CODE = /\[\[code:([^\]]+)\]\]/;
+
+/** Pure: the stream-json of `claude -p` turned into what the page needs. Text arrives as deltas
+ *  when the CLI streams them, else whole in the assistant message, else only in the result. */
+export class AskStream {
+  text = "";
+  session: string | null = null;
+  private streamed = false;
+
+  line(raw: string): Out[] {
+    let ev: Record<string, unknown>;
+    try { ev = JSON.parse(raw); } catch { return []; }
+    const out: Out[] = [];
+    if (typeof ev.session_id === "string" && ev.session_id !== this.session) {
+      this.session = ev.session_id;
+      out.push({ t: "session", id: this.session });
+    }
+    const add = (d: string) => { if (d) { this.text += d; out.push({ t: "text", d }); } };
+    if (ev.type === "stream_event") {
+      const d = (ev.event as { delta?: { type?: string; text?: string } } | undefined)?.delta;
+      if (d?.type === "text_delta") { this.streamed = true; add(d.text ?? ""); }
+    } else if (ev.type === "assistant") {
+      const blocks = ((ev.message as { content?: { type: string; name?: string; text?: string }[] })?.content) ?? [];
+      for (const b of blocks) {
+        if (b.type === "tool_use") {
+          out.push({ t: "tool", k: toolKind(b.name ?? "") });
+          // text before a tool call and text after it are separate paragraphs
+          if (this.text && !this.text.endsWith("\n\n")) add("\n\n");
+        } else if (b.type === "text" && !this.streamed) add(b.text ?? "");
+      }
+    } else if (ev.type === "result" && !this.text.trim() && typeof ev.result === "string") add(ev.result);
+    return out;
+  }
+
+  end(code: number, stderr: string): Extract<Out, { t: "done" }> {
+    const m = this.text.match(CODE);
+    const text = this.text.replace(CODE, "").trim();
+    if (code !== 0 && !text) {
+      const last = stderr.trim().split("\n").pop();
+      return { t: "done", text: "", code: null, error: last || `exit ${code}` };
+    }
+    return { t: "done", text, code: m ? m[1].trim() : null };
+  }
+}
+
+/** The machine's default profile: the one whose launcher is plain `claude`, else the first. */
+export async function defaultLauncher() {
+  const ls = await launchers();
+  return ls.find((l) => l.command === "claude") ?? ls[0];
+}
+
+const DEBRIEF = `${STATE}/debrief.json`;
+export async function cachedDebrief(): Promise<{ day: string; text: string } | null> {
+  const d = await readJson<{ day: string; text: string }>(DEBRIEF);
+  return d && d.day === dayOf(new Date()) ? d : null;
+}
+
+function ask(kind: AskKind, text: string, opts: { session?: string | null; project?: string | null }, signal: AbortSignal) {
+  const enc = new TextEncoder();
+  const now = new Date().toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new ReadableStream<Uint8Array>({
+    async start(ctl) {
+      const send = (o: Out) => { try { ctl.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { /* the page went away */ } };
+      const launcher = await defaultLauncher();
+      if (!launcher) { send({ t: "done", text: "", code: null, error: "no profile" }); return ctl.close(); }
+      let child: Deno.ChildProcess;
+      try {
+        child = new Deno.Command(`${BIN}/${launcher.command}`, {
+          args: askArgs(kind, text, now, opts), cwd: HOME, stdin: "null", stdout: "piped", stderr: "piped", signal,
+        }).spawn();
+      } catch (e) {
+        send({ t: "done", text: "", code: null, error: (e as Error).message });
+        return ctl.close();
+      }
+      const stream = new AskStream();
+      const errText = new Response(child.stderr).text();
+      let rest = "";
+      for await (const chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
+        rest += chunk;
+        const lines = rest.split("\n");
+        rest = lines.pop() ?? "";
+        for (const l of lines) stream.line(l).forEach(send);
+      }
+      if (rest) stream.line(rest).forEach(send);
+      const { code } = await child.status;
+      const done = stream.end(code, await errText);
+      if (kind === "debrief" && done.text && !done.error) {
+        await Deno.mkdir(STATE, { recursive: true }).catch(() => {});
+        await Deno.writeTextFile(DEBRIEF, JSON.stringify({ day: dayOf(new Date()), text: done.text })).catch(() => {});
+      }
+      send(done);
+      ctl.close();
+    },
+  });
+}
+
+/** A terminal running argv in workdir: Konsole on this setup, the usual others as fallbacks. */
+async function terminalArgv(workdir: string, argv: string[]): Promise<string[] | null> {
+  const which = async (c: string) => (await new Deno.Command("sh", { args: ["-c", `command -v ${c}`], stdout: "null", stderr: "null" }).output()).success;
+  if (await which("konsole")) return ["konsole", "--workdir", workdir, "-e", ...argv];
+  for (const [t, flag] of [["kitty", "--directory"], ["alacritty", "--working-directory"]]) {
+    if (await which(t)) return [t, flag, workdir, "-e", ...argv];
+  }
+  if (await which("wezterm")) return ["wezterm", "start", "--cwd", workdir, "--", ...argv];
+  return null;
+}
+
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Pure: the process ids from pid up to init, read from /proc stat lines. */
+export function ancestry(pid: number, parentOf: (pid: number) => number | null): number[] {
+  const out: number[] = [];
+  for (let p: number | null = pid; p && p > 1 && out.length < 64; p = parentOf(p)) out.push(p);
+  return out;
+}
+
+const parentOf = (pid: number): number | null => {
+  try {
+    const stat = Deno.readTextFileSync(`/proc/${pid}/stat`);
+    // the command name is in parentheses and may contain spaces: the fields start after the last ")"
+    const ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
+    return Number.isFinite(ppid) ? ppid : null;
+  } catch { return null; }
+};
+
+/** Bring forward the window that holds a process: on KWin, a one-shot script that activates the
+ *  first window whose pid is the process or one of its ancestors (the terminal, Claude Desktop). */
+async function focusWindow(pid: number): Promise<boolean> {
+  const pids = ancestry(pid, parentOf);
+  const file = await Deno.makeTempFile({ prefix: "claude-multi-focus-", suffix: ".js" });
+  const name = `claude-multi-focus-${pid}`;
+  await Deno.writeTextFile(file, `const pids = ${JSON.stringify(pids)};
+const ws = workspace.windowList();
+for (const p of pids) { const w = ws.find((x) => x.pid === p && x.normalWindow); if (w) { if (w.minimized) w.minimized = false; workspace.activeWindow = w; break; } }`);
+  const q = (...a: string[]) => new Deno.Command("qdbus6", { args: ["org.kde.KWin", ...a], stdout: "piped", stderr: "null" }).output();
+  try {
+    await q("/Scripting", "org.kde.kwin.Scripting.unloadScript", name);
+    const id = new TextDecoder().decode((await q("/Scripting", "org.kde.kwin.Scripting.loadScript", file, name)).stdout).trim();
+    if (!/^\d+$/.test(id) || id === "-1") return false;
+    await q(`/Scripting/Script${id}`, "org.kde.kwin.Script.run");
+    await q("/Scripting", "org.kde.kwin.Scripting.unloadScript", name);
+    return true;
+  } catch { return false; } finally { await Deno.remove(file).catch(() => {}); }
+}
+
+export async function askApi(req: Request, u: URL, json: Json): Promise<Response | null> {
+  const p = u.pathname;
+  if (!["/api/ask", "/api/debrief", "/api/terminal", "/api/focus"].includes(p)) return null;
+  if (p === "/api/debrief" && req.method === "GET") return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
+  if (req.method !== "POST") return json({ error: "POST required" }, 405);
+  if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+  const b = await req.json().catch(() => ({})) as Record<string, unknown>;
+
+  if (p === "/api/ask" || p === "/api/debrief") {
+    const kind: AskKind = p === "/api/debrief" ? "debrief" : b.kind === "newtask" ? "newtask" : "ask";
+    const text = kind === "debrief" ? "debrief" : String(b.text ?? "").trim().slice(0, 4000);
+    if (!text) return json({ error: "empty" }, 400);
+    const session = typeof b.session === "string" && SESSION_ID.test(b.session) ? b.session : null;
+    const project = typeof b.project === "string" && /^[\w./ -]{1,200}$/.test(b.project) && !b.project.includes("..") ? b.project : null;
+    return new Response(ask(kind, text, { session, project }, req.signal), {
+      headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
+    });
+  }
+
+  if (p === "/api/terminal") {
+    // resume a session, continue the console's conversation, or open Claude Code on a request
+    const ls = await launchers();
+    const launcher = ls.find((l) => l.profile === b.profile) ?? await defaultLauncher();
+    if (!launcher) return json({ ok: false, message: "no profile" });
+    const cwd = expandHome(String(b.cwd ?? "~").replace(/^~$/, "~/"));
+    let real: string;
+    try { real = await Deno.realPath(cwd); } catch { return json({ ok: false, message: `no such folder: ${cwd}` }); }
+    if (real !== HOME && !real.startsWith(`${HOME}/`)) return json({ ok: false, message: "outside home" }, 403);
+    if (!(await Deno.stat(real)).isDirectory) return json({ ok: false, message: "not a folder" });
+    const argv = [`${BIN}/${launcher.command}`];
+    if (typeof b.resume === "string") {
+      if (!SESSION_ID.test(b.resume)) return json({ ok: false, message: "bad session" }, 400);
+      argv.push("--resume", b.resume);
+    } else if (typeof b.ask === "string" && b.ask.trim()) argv.push(asArg(b.ask.trim().slice(0, 4000)));
+    const cmd = await terminalArgv(real, argv);
+    if (!cmd) return json({ ok: false, message: "no terminal found (konsole, kitty, alacritty, wezterm)" });
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: real, stdin: "null", stdout: "null", stderr: "null" }).spawn().unref();
+    return json({ ok: true });
+  }
+
+  // /api/focus: only a process the console itself lists as a running session
+  const pid = Number(b.pid);
+  const r = await running();
+  const known = [...r.cli.map((c) => c.pid), ...r.desktop.map((d) => d.pid)];
+  if (!Number.isInteger(pid) || !known.includes(pid)) return json({ ok: false, message: "not a running session" }, 400);
+  return json({ ok: await focusWindow(pid) });
+}

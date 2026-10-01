@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-window no-unused-vars no-control-regex -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
+// deno-lint-ignore-file no-window no-control-regex -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
 /* claude-multi console — vanilla JS, no dependencies.
    Data from /api/*, live updates over /api/events (SSE), actions through /api/action.
    Text comes from i18n.js (`t`), loaded before this file. */
@@ -201,21 +201,26 @@ function renderToday() {
   } else {
     box.innerHTML = `<i></i><div><b>${esc(t("status.ok"))}</b><div class="sub">${esc(t("status.ok.sub"))}</div>${extra}</div>`;
   }
+  $("#day-h").textContent = cap(new Date().toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long" }));
   if (S) renderRunning();
   loadResume();
   loadTasks().catch(() => {});
+  loadDebrief();
 }
 
-/* ---------------- Hey Claude ---------------- */
-// the bar hands the text to the desktop app's panel, where the three ways out are
-$("#hey-bar").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const r = await post("/api/hey", { text: e.target.elements.text.value }).catch((err) => ({ ok: false, message: err.message }));
-  if (!r.ok) return toast(r.message, true);
-  e.target.reset();
-});
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const hhmm = (d = new Date()) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-/* ---------------- tasks ---------------- */
+/** A profile's colour: its place among the profiles, so no name is ever spelled out here. */
+function pcolor(name) {
+  const names = Object.keys(S?.profiles ?? {}).sort();
+  let i = names.indexOf(name);
+  if (i < 0) i = [...String(name)].reduce((a, c) => a + c.charCodeAt(0), 0);
+  return `var(--p-${(i % 4) + 1})`;
+}
+const pf = (name, label = name) => `<span class="pf" style="--c:${pcolor(name)}">${esc(label)}</span>`;
+
+/* ---------------- the day ---------------- */
 let TK = null;
 async function loadTasks() {
   TK = await api("/api/tasks");
@@ -224,71 +229,104 @@ async function loadTasks() {
 
 function renderTasks() {
   if (!TK) return;
-  const item = (x, withDay = false) =>
-    `<div class="tk${x.priority === 1 ? " hi" : ""}${x.source ? " ev" : ""}">
-      ${x.source ? `<svg viewBox="0 0 24 24" class="ico" aria-label="${esc(t("tasks.event"))}"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>` : `<input type="checkbox" data-tk-done="${esc(x.id)}" aria-label="${esc(t("ts.done"))}">`}
-      <span class="tm">${esc(x.time ?? "")}</span>
-      <span class="tt"${x.source ? "" : ` data-tk-open="${esc(x.id)}" role="button" tabindex="0"`}>${esc(x.title)}${x.project ? `<small>${esc(x.project)}</small>` : ""}${
-      x.owner && x.owner !== "samuel" ? `<small>${esc(x.owner)}</small>` : ""
-    }${withDay && x.due ? `<small>${esc(new Date(x.due + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric", month: "short" }))}</small>` : ""}</span>
-      ${x.source ? "" : bar(notesProgress(x.notes))}
+  const now = hhmm();
+  const shortDay = (d) => new Date(d + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric" });
+  const row = (x, when = x.time ?? "", cls = "") => {
+    const ev = x.source === "calendar";
+    const p = ev ? null : notesProgress(x.notes);
+    const sub = ev ? t("day.calendar", { a: x.project ?? "" }) : [x.project, x.owner && x.owner !== "samuel" ? x.owner : null].filter(Boolean).join("  ");
+    return `<div class="it${ev ? " event" : ""}${x.priority === 1 ? " hi" : ""}${cls ? ` ${cls}` : ""}"${ev ? "" : ` data-tk-open="${esc(x.id)}"`}>
+      <span class="tm">${esc(when)}</span>
+      ${ev ? `<span class="ev"><i></i></span>` : `<button class="ck" data-tk-done="${esc(x.id)}" title="${esc(t("ts.done"))}" aria-label="${esc(t("ts.done"))}"></button>`}
+      <span class="tt"><span>${esc(x.title)}</span>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
+      <span class="rt">${p ? `${bar(p)}` : cls === "late" ? esc(t("day.late")) : ""}</span>
     </div>`;
-  const group = (key, xs, cls = "", withDay = false) =>
-    xs.length ? `<div class="tk-group ${cls}"><h4>${esc(t(`tasks.${key}`))}</h4>${xs.map((x) => item(x, withDay)).join("")}</div>` : "";
-  const evening = TK.moment === "evening";
-  const html = group("overdue", TK.overdue, "late", true) + group("missed", TK.missed, "late") + group("today", TK.today) +
-    group("tomorrow", TK.tomorrow) + (evening ? "" : group("upcoming", TK.upcoming, "", true)) + group("waiting", TK.waiting, "", true);
-  $("#tk-list").innerHTML = html || `<div class="tk-empty">${esc(t("tasks.none"))}</div>`;
-  $("#tk-sum").textContent = TK.doneToday ? t("tasks.doneToday", { n: TK.doneToday }) : "";
+  };
+  const allday = (xs) => xs.length ? `<div class="allday">${xs.map((x) => `<span><i></i>${esc(x.title)}</span>`).join("")}</div>` : "";
+
+  // today: what is late first, then one line of time with a mark for now
+  const todayAll = [...(TK.earlier ?? []), ...TK.today];
+  const untimedEv = todayAll.filter((x) => x.source === "calendar" && !x.time);
+  const timed = todayAll.filter((x) => x.time).sort((a, b) => a.time.localeCompare(b.time));
+  const loose = todayAll.filter((x) => x.source !== "calendar" && !x.time);
+  let html = allday(untimedEv);
+  html += TK.overdue.map((x) => row(x, shortDay(x.due), "late")).join("") + TK.missed.map((x) => row(x, x.time, "late")).join("");
+  let marked = false;
+  for (const x of timed) {
+    if (!marked && x.time > now) { html += `<div class="now"><span>${now}</span></div>`; marked = true; }
+    html += row(x, x.time, x.time < now ? "past" : "");
+  }
+  if (!marked) html += `<div class="now"><span>${now}</span></div>`;
+  html += loose.map((x) => row(x, "")).join("");
+  if (!timed.length && !loose.length && !TK.overdue.length && !TK.missed.length && !untimedEv.length) {
+    html += `<div class="pane-empty">${esc(t("day.free"))}</div>`;
+  }
+
+  const later = (key, xs, when) => xs.length ? `<div class="dhead">${esc(t(key))}</div>` + allday(xs.filter((x) => x.source === "calendar" && !x.time)) +
+    xs.filter((x) => x.source !== "calendar" || x.time).map((x) => row(x, when(x))).join("") : "";
+  html += later("day.tomorrow", TK.tomorrow, (x) => x.time ?? "");
+  if (TK.moment !== "evening") html += later("day.next", TK.upcoming, (x) => shortDay(x.due));
+  html += later("day.waiting", TK.waiting, (x) => x.due ? shortDay(x.due) : "");
+  $("#day").innerHTML = html;
 }
 
-$("#tk-list").addEventListener("click", (e) => {
+$("#day").addEventListener("click", async (e) => {
+  const done = e.target.closest("[data-tk-done]");
+  if (done) {
+    e.stopPropagation();
+    done.disabled = true;
+    const r = await post("/api/tasks", { op: "update", id: done.dataset.tkDone, status: "done" }).catch((err) => ({ ok: false, message: err.message }));
+    if (!r.ok) { done.disabled = false; return toast(r.message, true); }
+    toast(t("tasks.done", { t: r.task.title }));
+    return loadTasks();
+  }
   const o = e.target.closest("[data-tk-open]");
   if (o) openTask(o.dataset.tkOpen);
 });
-$("#tk-list").addEventListener("change", async (e) => {
-  const cb = e.target.closest("[data-tk-done]");
-  if (!cb) return;
-  const r = await post("/api/tasks", { op: "update", id: cb.dataset.tkDone, status: "done" }).catch((err) => ({ ok: false, message: err.message }));
-  if (!r.ok) { cb.checked = false; return toast(r.message, true); }
-  toast(t("tasks.done", { t: r.task.title }));
-  await loadTasks();
-});
-$("#tk-add").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = e.target;
-  const body = { op: "add", title: f.elements.title.value.trim(), due: f.elements.due.value || undefined, time: f.elements.time.value || undefined };
-  if (body.time && !body.due) body.due = TK?.day; // the server's local day, not the UTC one
-  const r = await post("/api/tasks", body).catch((err) => ({ ok: false, message: err.message }));
-  if (!r.ok) return toast(r.message, true);
-  f.reset();
-  await loadTasks();
-});
+// the line for now moves with the clock
+setInterval(() => { if (view === "today" && TK) renderTasks(); }, 60000);
 
+/* ---------------- the morning debrief ---------------- */
+// Written by Claude once a day, at the first look at Today after five in the morning; kept by the server.
+let debriefAsked = false;
+async function loadDebrief(again = false) {
+  const el = $("#debrief");
+  if (!again) {
+    const r = await api("/api/debrief").catch(() => null);
+    if (r?.debrief) return showDebrief(r.debrief.text);
+    if (debriefAsked || new Date().getHours() < 5) return;
+  }
+  debriefAsked = true;
+  el.hidden = false;
+  el.innerHTML = `<div class="debrief-f">${sparkHtml(true)}<span>${esc(t("debrief.writing"))}</span></div>`;
+  let text = "";
+  await askStream("/api/debrief", {}, {
+    text: (d) => { text += d; showDebrief(text, true); },
+    done: (o) => o.error ? (el.hidden = true) : showDebrief(o.text),
+  }).catch(() => { el.hidden = true; });
+}
+function showDebrief(text, writing = false) {
+  const el = $("#debrief");
+  el.hidden = !text.trim();
+  el.innerHTML = text.trim().split(/\n+/).map((l) => `<p>${esc(l)}</p>`).join("") +
+    (writing ? "" : `<div class="debrief-f"><span>${esc(t("debrief.by"))}</span><button data-debrief-again>${esc(t("debrief.again"))}</button></div>`);
+}
+$("#debrief").addEventListener("click", (e) => { if (e.target.closest("[data-debrief-again]")) loadDebrief(true); });
+
+/* ---------------- sessions ---------------- */
 /** Sessions seen writing recently. A row stays "working" for a few seconds after its last write,
  *  because a session pauses between turns and flickering would be worse than a short lag. */
 const working = new Map();
 const WORKING_MS = 12000;
-const workingLabel = () => `<span class="dots"><i></i><i></i><i></i></span>${esc(t("run.working"))}`;
 
 function markWorking(id) {
+  const was = working.has(id);
   working.set(id, Date.now());
-  const row = document.querySelector(`#running [data-session="${CSS.escape(id)}"]`);
-  if (row && !row.classList.contains("busy")) {
-    // Light it up now rather than waiting for the debounced redraw: the event arrived because that
-    // session just wrote, and a lit border next to the word "idle" reads as a bug.
-    row.classList.add("busy");
-    const state = row.querySelector(".state");
-    if (state) state.innerHTML = workingLabel();
-  }
+  if (!was && S && view === "today") renderRunning();
   clearTimeout(markWorking[id]);
   markWorking[id] = setTimeout(() => {
     working.delete(id);
-    const row = document.querySelector(`#running [data-session="${CSS.escape(id)}"]`);
-    if (!row) return;
-    row.classList.remove("busy");
-    const state = row.querySelector(".state");
-    if (state) state.textContent = t("run.idle", { d: dur(new Date(Date.now() - WORKING_MS).toISOString()) });
+    if (S && view === "today") renderRunning();
   }, WORKING_MS);
 }
 
@@ -301,89 +339,257 @@ const isWorking = (id, lastActivity) => {
 function renderRunning() {
   const cli = S.running.cli, desk = S.running.desktop;
   const active = cli.filter((c) => isWorking(c.session, c.lastActivity)).length;
-  $("#run-n").textContent = active
-    ? t("run.countBusy", { w: active, c: cli.length, d: desk.length })
-    : t("run.count", { c: cli.length, d: desk.length });
+  $("#run-n").textContent = active ? t("run.busyN", { n: active }) : "";
   const el = $("#running");
   if (!cli.length && !desk.length) {
-    el.innerHTML = `<div class="sub">${esc(t("today.nothing"))}</div>`;
+    el.innerHTML = `<div class="pane-empty">${esc(t("today.nothing"))}</div>`;
     return;
   }
-  // Several sessions of one profile are the normal case with Desktop tabs, and profile plus
-  // directory is not enough to tell them apart: model and session id are.
-  el.innerHTML = `<div class="runlist">` +
-    cli.map((c) => {
-      const busy = isWorking(c.session, c.lastActivity);
-      return `<div class="run${busy ? " busy" : ""}" ${c.session ? `data-session="${esc(c.session)}"` : ""} title="pid ${c.pid}${
-        c.cwd ? ` · ${esc(c.cwd)}` : ""
-      }">
-        <div class="run-top">
-          <span class="chip on">${esc(c.profile ?? "?")}</span>
-          <b>${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</b>
-          <span class="state">${busy ? workingLabel() : c.lastActivity ? esc(t("run.idle", { d: dur(c.lastActivity) })) : ""}</span>
-        </div>
-        <div class="run-bot">
-          <span class="run-model">${esc(c.model ? modelShort(c.model) : "")}</span>
-          <span class="run-meta">${esc(t(c.embedded ? "run.desktop" : "run.terminal"))}${c.session ? ` · ${esc(c.session.slice(0, 8))}` : ""}</span>
-        </div>
-        <span class="run-scan"></span>
-      </div>`;
-    }).join("") +
-    desk.map((d) =>
-      `<div class="run static" title="pid ${d.pid}">
-      <div class="run-top"><span class="chip">${esc(d.variant)}</span><b>${esc(t("run.desktopApp"))}</b></div>
-      <div class="run-bot"><span class="run-meta">${esc(t("run.window", { n: cli.filter((c) => c.embedded && c.profile === d.variant).length }))}</span></div>
-    </div>`
-    ).join("") +
-    `</div>`;
+  // busy first, then the most recent
+  const rows = cli.map((c) => ({ c, busy: isWorking(c.session, c.lastActivity) }))
+    .sort((a, b) => Number(b.busy) - Number(a.busy) || String(b.c.lastActivity ?? "").localeCompare(String(a.c.lastActivity ?? "")));
+  el.innerHTML = rows.map(({ c, busy }) =>
+    `<button class="ses" data-focus="${c.pid}" title="${esc(c.cwd ?? "")}">
+      <span class="mark">${busy ? sparkHtml(true) : `<i class="idle"></i>`}</span>
+      <span class="nm">${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</span>
+      <span class="when${busy ? " on" : ""}">${esc(busy ? t("run.working") : c.lastActivity ? t("run.idle", { d: dur(c.lastActivity) }) : "")}</span>
+      <span class="sub">${pf(c.profile ?? "?")}<span>${esc(t(c.embedded ? "run.desktop" : "run.terminal"))}</span>${c.model ? `<span>${esc(modelShort(c.model))}</span>` : ""}</span>
+    </button>`
+  ).join("") + desk.map((d) =>
+    `<button class="ses" data-focus="${d.pid}">
+      <span class="mark"><i class="idle"></i></span>
+      <span class="nm">${esc(t("run.desktopApp"))}</span>
+      <span class="when"></span>
+      <span class="sub">${pf(d.variant)}<span>${esc(t("run.window", { n: cli.filter((c) => c.embedded && c.profile === d.variant).length }))}</span></span>
+    </button>`
+  ).join("");
 }
 
-/** The last sessions, one per directory, each with the command that reopens it. A busy session
+$("#running").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-focus]");
+  if (!b) return;
+  const r = await post("/api/focus", { pid: Number(b.dataset.focus) }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) toast(r.message ?? t("run.noFocus"), true);
+});
+
+/** The last sessions, one per directory; a click reopens one in a terminal. A busy session
     writes every second: the list is re-read at most every 15 s. */
 let RESUME = [], resumeAt = 0;
 async function loadResume(force = false) {
   if (!force && Date.now() - resumeAt < 15000) return renderResume();
   resumeAt = Date.now();
   try {
-    const rows = await api("/api/sessions?" + new URLSearchParams({ since: "7d", limit: "40" }));
+    const rows = await api("/api/sessions?" + new URLSearchParams({ since: "7d", limit: "60" }));
     const seen = new Set();
-    RESUME = rows.filter((r) => r.cwd && !seen.has(r.cwd) && seen.add(r.cwd)).slice(0, 6);
+    RESUME = rows.filter((r) => r.cwd && !seen.has(r.cwd) && seen.add(r.cwd)).slice(0, 12);
   } catch { /* the panel stays as it was */ }
   renderResume();
-}
-
-function resumeCommand(r) {
-  const cmd = S?.profiles[r.profile]?.manifest.command ?? `claude-${r.profile}`;
-  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
-  return `cd ${q(r.cwd)} && ${cmd} --resume ${r.session_id}`;
 }
 
 function renderResume() {
   const el = $("#resume");
   if (!RESUME.length) {
-    el.innerHTML = `<div class="panel-b sub">${esc(t("today.noResume"))}</div>`;
+    el.innerHTML = `<div class="pane-empty">${esc(t("today.noResume"))}</div>`;
     return;
   }
   el.innerHTML = RESUME.map((r, i) =>
-    `<div class="resume-row">
-      <span class="chip">${esc(r.profile)}</span>
-      <b title="${esc(r.cwd)}">${esc(r.project)}</b>
+    `<button class="ses" data-resume="${i}" title="${esc(r.cwd)}">
+      <span class="mark"></span>
+      <span class="nm">${esc(r.project)}</span>
       <span class="when">${esc(ago(r.ended))}</span>
-      <button class="btn sm" data-resume="${i}">${esc(t("today.copy"))}</button>
-    </div>`
+      <span class="sub">${pf(r.profile)}</span>
+    </button>`
   ).join("");
 }
 
 $("#resume").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-resume]");
   if (!b) return;
-  const cmd = resumeCommand(RESUME[+b.dataset.resume]);
-  try {
-    await navigator.clipboard.writeText(cmd);
-    toast(t("today.copied"));
-  } catch {
-    toast(t("today.copyFailed", { cmd }), true);
+  const r = RESUME[+b.dataset.resume];
+  const res = await post("/api/terminal", { cwd: r.cwd, profile: r.profile, resume: r.session_id }).catch((err) => ({ ok: false, message: err.message }));
+  if (!res.ok) toast(res.message, true);
+});
+
+/* ---------------- asking Claude ---------------- */
+// One field at the bottom of Today, Tasks and the Brain. The answer streams in above it; a
+// follow-up continues the same conversation until the answer is closed.
+/* ---------------- Claude's spark and icons ---------------- */
+// Claude Desktop's own, when it is installed (cli/claude-assets.ts): the spark, the frames it
+// moves through while Claude works, and the icon font. Without it a plain star stands still.
+let CLAUDE = { spark: null, strips: {}, icons: {}, iconFont: false };
+const SPARK_STILL = `<svg viewBox="0 0 24 24"><path d="M12 2.5l1.6 6.2 5.6-3.2-3.2 5.6 6.2 1.6-6.2 1.6 3.2 5.6-5.6-3.2L12 22.9l-1.6-6.2-5.6 3.2 3.2-5.6L1.8 12.7 8 11.1 4.8 5.5l5.6 3.2z"/></svg>`;
+const sparkStill = () => CLAUDE.spark ?? SPARK_STILL;
+
+/** A spark: still, or moving through one of Claude's animations ("thinking", "writing"…). */
+const sparkHtml = (busy = false) => `<span class="spark" data-spark="${busy ? "thinking" : ""}"></span>`;
+function setSpark(el, mode) {
+  el.getAnimations?.().forEach((a) => a.cancel());
+  const strip = mode && CLAUDE.strips[mode];
+  el.dataset.spark = mode || "";
+  el.dataset.drawn = mode || "still";
+  if (!strip || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    el.innerHTML = sparkStill();
+    return;
   }
+  // as Desktop does it: a strip of frames stacked top to bottom, stepped through by a transform
+  const n = strip.frameCount;
+  el.innerHTML = `<span class="strip" style="height:${n * 100}%">${strip.svg}</span>`;
+  el.firstElementChild.animate(Array.from({ length: n }, (_, i) => ({ transform: `translateY(-${(100 / n) * i}%)` })), {
+    duration: strip.speed * n, iterations: Infinity, easing: `steps(${n}, jump-none)`,
+  });
+}
+// every spark drawn anywhere on the page gets its content, without each renderer having to ask
+new MutationObserver(() => {
+  for (const el of document.querySelectorAll(".spark")) {
+    if (el.dataset.drawn !== (el.dataset.spark || "still")) setSpark(el, el.dataset.spark);
+  }
+}).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-spark"] });
+
+/** An Anthropicons glyph by name, or "" when the font is not here (the caller keeps its own). */
+const aicon = (name) => CLAUDE.iconFont && CLAUDE.icons[name] ? `<i class="ai" aria-hidden="true">&#${CLAUDE.icons[name]};</i>` : "";
+const NAV_ICONS = { today: "Sun", tasks: "Tasks", brain: "Memory", connections: "Connectors", system: "Settings" };
+
+async function loadClaude() {
+  try {
+    const a = await api("/claude/assets.json");
+    if (!a.found) return;
+    CLAUDE = { spark: a.spark?.replace(/fill="#[0-9a-fA-F]{3,8}"/g, 'fill="currentColor"') ?? null, strips: a.strips, icons: a.icons, iconFont: a.iconFont };
+  } catch { return; }
+  for (const el of document.querySelectorAll(".spark")) setSpark(el, el.dataset.spark);
+  for (const a of $$("#nav a")) {
+    const g = aicon(NAV_ICONS[a.dataset.v]);
+    if (g) a.querySelector("svg")?.replaceWith(document.createRange().createContextualFragment(g));
+  }
+}
+
+/** POST and read the NDJSON answer line by line. */
+async function askStream(path, body, on, signal) {
+  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-claude-multi": "1" }, body: JSON.stringify(body), signal });
+  if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let rest = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    rest += value;
+    const lines = rest.split("\n");
+    rest = lines.pop();
+    for (const l of lines) {
+      if (!l.trim()) continue;
+      const o = JSON.parse(l);
+      on[o.t]?.(o.t === "text" ? o.d : o);
+    }
+  }
+}
+
+const ASK = { kind: "ask", project: null, session: null, busy: null, last: "", code: null, tools: false };
+
+function askContext(kind, project = null) {
+  ASK.kind = kind;
+  ASK.project = project;
+  const ctx = $("#ask-ctx");
+  ctx.hidden = kind === "ask";
+  $("span", ctx).textContent = kind === "newtask" ? t("ask.ctx.newtask", { p: project ?? t("tb.noProject") }) : "";
+  $("#ask-text").placeholder = t(kind === "newtask" ? "ask.ph.newtask" : "ask.ph");
+}
+$("#ask-ctx button").addEventListener("click", () => { askContext("ask"); $("#ask-text").focus(); });
+
+function closeAnswer() {
+  ASK.busy?.abort();
+  ASK.busy = null;
+  ASK.session = null;
+  $("#answer").hidden = true;
+  $("#ask-spark").dataset.spark = "";
+}
+$("#answer-x").addEventListener("click", closeAnswer);
+
+const toolLabel = (k) => t(`ask.tool.${k}`);
+
+$("#composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ta = $("#ask-text");
+  const text = ta.value.trim();
+  if (!text || ASK.busy) return;
+  ta.value = "";
+  autosize();
+  ASK.last = text;
+  ASK.code = null;
+  ASK.tools = false;
+  const ans = $("#answer"), body = $("#answer-b"), status = $("#answer-s");
+  ans.hidden = false;
+  $("#answer-q").textContent = text;
+  body.innerHTML = "";
+  $("#answer-term").hidden = $("#answer-code").hidden = true;
+  status.innerHTML = `${sparkHtml(true)}<span>${esc(t("ask.thinking"))}</span>`;
+  $("#ask-spark").dataset.spark = "thinking";
+  let acc = "", frame = 0;
+  const paint = () => { frame = 0; body.innerHTML = mdToHtml(acc.replace(/\[\[code:[^\]]*\]\]/g, "")); body.scrollTop = body.scrollHeight; };
+  ASK.busy = new AbortController();
+  const kind = ASK.kind;
+  try {
+    await askStream("/api/ask", { text, kind, project: ASK.project, session: ASK.session }, {
+      session: (o) => { ASK.session = o.id; },
+      text: (d) => {
+        acc += d;
+        if (!frame) frame = requestAnimationFrame(paint);
+        const sp = $(".spark", status);
+        if (sp && sp.dataset.spark !== "writing") sp.dataset.spark = "writing";
+      },
+      tool: (o) => {
+        ASK.tools = true;
+        $("span:last-child", status).textContent = toolLabel(o.k);
+        const sp = $(".spark", status);
+        if (sp) sp.dataset.spark = "thinking";
+      },
+      done: (o) => {
+        if (o.error) { body.innerHTML = `<p class="err">${esc(t("ask.failed", { e: o.error }))}</p>`; }
+        else { acc = o.text; paint(); }
+        ASK.code = o.code;
+      },
+    }, ASK.busy.signal);
+  } catch (err) {
+    if (err.name !== "AbortError") body.innerHTML = `<p class="err">${esc(t("ask.failed", { e: err.message }))}</p>`;
+  }
+  ASK.busy = null;
+  $("#ask-spark").dataset.spark = "";
+  status.innerHTML = `<span>${esc(t("ask.followup"))}</span>`;
+  $("#answer-term").hidden = !ASK.session;
+  if (ASK.code) {
+    const name = ASK.code.replace(/\/+$/, "").split("/").pop() || "~";
+    $("#answer-code").textContent = t("ask.code", { p: name });
+    $("#answer-code").hidden = false;
+  }
+  // a new task is one thing: the next request is a plain one again
+  if (kind === "newtask") askContext("ask");
+  if (ASK.tools) { loadTasks().catch(() => {}); if (view === "tasks") loadBoard().catch(() => {}); }
+  ta.focus();
+});
+
+$("#answer-term").addEventListener("click", async () => {
+  const r = await post("/api/terminal", { resume: ASK.session }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) toast(r.message, true);
+});
+$("#answer-code").addEventListener("click", async () => {
+  const r = await post("/api/terminal", { cwd: ASK.code, ask: ASK.last }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) toast(r.message, true);
+});
+
+function autosize() {
+  const ta = $("#ask-text");
+  ta.style.height = "auto";
+  ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+}
+$("#ask-text").addEventListener("input", autosize);
+$("#ask-text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#composer").requestSubmit(); }
+  if (e.key === "Escape") { if (!$("#answer").hidden) closeAnswer(); else e.target.blur(); }
+});
+// "/" anywhere outside a field puts the cursor in the field, as in most chat apps
+addEventListener("keydown", (e) => {
+  if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]") || $("#ask-dock").hidden) return;
+  e.preventDefault();
+  $("#ask-text").focus();
 });
 
 /* ---------------- markdown ---------------- */
@@ -1198,6 +1404,8 @@ function go(hash) {
   $$("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.v === view));
   $$("#nav a[aria-current]").forEach((a) => a.setAttribute("aria-current", "page"));
   $$(".view").forEach((el) => el.hidden = el.id !== `v-${view}`);
+  // the field to ask Claude lives where there is something to ask about
+  $("#ask-dock").hidden = !["today", "tasks", "brain"].includes(view);
   $$("#tabs a").forEach((a) => a.setAttribute("aria-selected", String(a.dataset.t === sub)));
   $$(".sub-view").forEach((el) => el.hidden = el.id !== `s-${sub}`);
   renderTitle();
@@ -1209,10 +1417,11 @@ function go(hash) {
 }
 
 function renderTitle() {
-  $("#title").textContent = t(`title.${view}`);
-  $("#eyebrow").textContent = view === "today"
-    ? new Date().toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long" })
-    : S?.machine.hostname ?? "";
+  // Today greets, as Claude does; the date heads the day below
+  const h = new Date().getHours();
+  $("#title").textContent = view === "today" ? t(`greet.${h < 5 ? "night" : h < 13 ? "morning" : h < 18 ? "afternoon" : "evening"}`) : t(`title.${view}`);
+  $("#eyebrow").textContent = view === "today" ? "" : S?.machine.hostname ?? "";
+  $("#eyebrow").hidden = view === "today";
 }
 
 addEventListener("hashchange", () => go(location.hash.slice(1)));
@@ -1245,6 +1454,7 @@ function applyLang() {
   if (SUM) renderState();
   // the rail can shrink to icons: each keeps its name as a tooltip
   $$("#nav a").forEach((a) => a.title = t(`nav.${a.dataset.v}`));
+  askContext(ASK.kind, ASK.project);
   renderTitle();
   renderView();
   if (PL) renderPlugins();
@@ -1360,6 +1570,8 @@ addEventListener("keydown", (e) => {
 addEventListener("DOMContentLoaded", async () => {
   applyTheme();
   applyLang();
+  askContext("ask");
+  void loadClaude();
   go(location.hash.slice(1)); // what needs no status report draws now
   try {
     await loadStatus();

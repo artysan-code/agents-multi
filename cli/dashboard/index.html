@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>claude-multi</title>
+    <link rel="stylesheet" href="/claude/faces.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23a94a24'/><text x='16' y='22' font-size='16' font-family='monospace' font-weight='700' text-anchor='middle' fill='%23ffffff'>cm</text></svg>">
@@ -42,31 +43,23 @@
 
         <!-- ============ TODAY ============ -->
         <section class="view" id="v-today" hidden>
-          <form class="hey-bar" id="hey-bar">
-            <span class="hey-mark" aria-hidden="true">✳</span>
-            <input name="text" data-i18n-ph="hey.ph" autocomplete="off">
-            <kbd>Ctrl Space</kbd>
-          </form>
-          <div class="status-card" id="status" hidden></div>
-          <section class="panel today-run">
-            <div class="panel-h"><h3 data-i18n="today.running"></h3><span class="r" id="run-n"></span></div>
-            <div class="panel-b" id="running"></div>
-          </section>
-          <div class="today-grid">
-            <section class="panel today-tasks">
-              <div class="panel-h"><h3 data-i18n="tasks.title"></h3><span class="r" id="tk-sum"></span><a class="btn sm" href="#tasks" data-i18n="tasks.all"></a></div>
-              <div id="tk-list"></div>
-              <form class="tk-add" id="tk-add">
-                <input name="title" class="search" data-i18n-ph="tasks.add.ph" required autocomplete="off">
-                <input name="due" type="date" class="search" data-i18n-title="tasks.due">
-                <input name="time" type="time" class="search" data-i18n-title="tasks.time">
-                <button class="btn primary" type="submit" data-i18n="mk.add"></button>
-              </form>
+          <div class="today">
+            <section class="pane day-pane">
+              <div class="pane-h"><h3 id="day-h"></h3><a class="pane-link" href="#tasks" data-i18n="tasks.all"></a></div>
+              <div class="status-card" id="status" hidden></div>
+              <div class="debrief" id="debrief" hidden></div>
+              <div class="pane-b" id="day"></div>
             </section>
-            <section class="panel">
-              <div class="panel-h"><h3 data-i18n="today.resume"></h3><span class="r" data-i18n="today.resume.sub"></span></div>
-              <div class="resume" id="resume"></div>
-            </section>
+            <div class="today-side">
+              <section class="pane run-pane">
+                <div class="pane-h"><h3 data-i18n="today.running"></h3><span class="pane-r" id="run-n"></span></div>
+                <div class="pane-b" id="running"></div>
+              </section>
+              <section class="pane">
+                <div class="pane-h"><h3 data-i18n="today.resume"></h3><span class="pane-r" data-i18n="today.resume.sub"></span></div>
+                <div class="pane-b" id="resume"></div>
+              </section>
+            </div>
           </div>
         </section>
         <!-- ============ TASKS ============ -->
@@ -280,6 +273,24 @@
             </div>
           </div>
         </section>
+        <div class="ask-dock" id="ask-dock" hidden>
+          <section class="answer" id="answer" hidden aria-live="polite">
+            <div class="answer-q" id="answer-q"></div>
+            <div class="answer-b md" id="answer-b"></div>
+            <div class="answer-f">
+              <span class="answer-s" id="answer-s"></span>
+              <button class="btn sm" id="answer-term" hidden data-i18n="ask.terminal"></button>
+              <button class="btn sm primary" id="answer-code" hidden></button>
+              <button class="icon-btn" id="answer-x" data-i18n-title="ask.close"><svg viewBox="0 0 24 24" class="ico"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+          </section>
+          <form class="composer" id="composer">
+            <span class="spark" id="ask-spark" aria-hidden="true"></span>
+            <span class="ask-ctx" id="ask-ctx" hidden><span></span><button type="button" data-i18n-title="ask.ctx.clear">×</button></span>
+            <textarea name="text" id="ask-text" rows="1" autocomplete="off"></textarea>
+            <button class="send" type="submit" data-i18n-title="ask.send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </form>
+        </div>
       </div>
     </div>
     <script src="/i18n.js"></script>

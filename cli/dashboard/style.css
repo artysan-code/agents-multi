@@ -1,26 +1,27 @@
 /* claude-multi console — no framework, no build step, nothing fetched from the network: the page
-   renders the same on a machine that has never been online. The palette is Claude's (ivory and
-   warm greys, the clay as accent); the two faces ship in fonts/ (SIL OFL), so every machine sees
-   the same page. Serif is the voice — titles, reading, Claude's answers — sans is the
-   interface, mono only for code and paths. */
+   renders the same on a machine that has never been online. The palette is Claude Desktop's own
+   (its surface, text and border values, the clay for the brand and the main action). The faces
+   are Anthropic's, read from the Desktop installed here (/claude/faces.css, cli/claude-assets.ts);
+   where there is none, the two in fonts/ (SIL OFL) stand in. Serif is the voice — titles,
+   reading, Claude's answers — sans is the interface, mono only for code and paths. */
 
 @font-face { font-family: "Source Serif 4"; src: url(fonts/source-serif-4.woff2) format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "Source Serif 4"; src: url(fonts/source-serif-4-italic.woff2) format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
 @font-face { font-family: "DM Sans"; src: url(fonts/dm-sans.woff2) format("woff2"); font-weight: 100 1000; font-style: normal; font-display: swap; }
 
 :root {
-  --ink: #faf9f5;
-  --rail: #f3f1ea;
+  --ink: #fcfcfb;
+  --rail: #f9f9f7;
   --surface: #ffffff;
-  --raised: #f5f4ef;
-  --line: #dedbd2;
-  --line-soft: #ebe9e1;
-  --fg: #141413;
-  --fg-dim: #5e5d59;
-  --fg-faint: #73726c;
-  --accent: #b85c38;
-  --accent-dim: #96462a;
-  --accent-wash: #f6e7df;
+  --raised: #f4f3ef;
+  --line: #e4e3df;
+  --line-soft: #efeeea;
+  --fg: #0b0b0b;
+  --fg-dim: #52514e;
+  --fg-faint: #75736d;
+  --accent: #c6613f;
+  --accent-dim: #a84e2f;
+  --accent-wash: #f8ebe5;
   --on-accent: #ffffff;
   --spark: #d97757;
   --p-1: #788c5d;
@@ -34,27 +35,27 @@
   --warn-wash: #f5ead3;
   --crit: #bf4d43;
   --crit-wash: #f7e2df;
-  --shadow: 0 .25rem 1.25rem rgba(31,30,29,.05),0 0 0 .5px rgba(31,30,29,.14);
+  --shadow: 0 .25rem 1.25rem rgba(0,0,0,.035),0 0 0 1px rgba(11,11,11,.08);
   --r: 12px;
-  --sans: "DM Sans","Fira Sans",ui-sans-serif,system-ui,sans-serif;
-  --serif: "Source Serif 4","Noto Serif",Georgia,serif;
-  --mono: "JetBrains Mono","DejaVu Sans Mono",ui-monospace,monospace;
+  --sans: "anthropic-sans","DM Sans","Fira Sans",ui-sans-serif,system-ui,sans-serif;
+  --serif: "anthropic-serif","Source Serif 4","Noto Serif",Georgia,serif;
+  --mono: "anthropic-mono","JetBrains Mono","DejaVu Sans Mono",ui-monospace,monospace;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --ink: #262624;
-  --rail: #1f1e1d;
-  --surface: #30302e;
-  --raised: #2b2b29;
-  --line: #43423e;
-  --line-soft: #363532;
-  --fg: #faf9f5;
-  --fg-dim: #c2c0b6;
-  --fg-faint: #9c9a92;
+  --ink: #151515;
+  --rail: #0f0f0f;
+  --surface: #1a1a19;
+  --raised: #232322;
+  --line: #2c2c2a;
+  --line-soft: #232322;
+  --fg: #f0efec;
+  --fg-dim: #c3c2b7;
+  --fg-faint: #929089;
   --accent: #d97757;
   --accent-dim: #e8a083;
-  --accent-wash: rgba(217,119,87,.15);
-  --on-accent: #1f1e1d;
+  --accent-wash: rgba(217,119,87,.14);
+  --on-accent: #0b0b0b;
   --spark: #d97757;
   --p-1: #9cb07e;
   --p-2: #8db5de;
@@ -67,24 +68,24 @@
   --warn-wash: rgba(217,165,74,.14);
   --crit: #e57a6f;
   --crit-wash: rgba(229,122,111,.15);
-  --shadow: 0 .25rem 1.25rem rgba(0,0,0,.28),0 0 0 .5px rgba(222,220,209,.16);
+  --shadow: 0 .25rem 1.25rem rgba(0,0,0,.35),0 0 0 1px rgba(240,239,236,.08);
   color-scheme: dark;
 }
 @media (prefers-color-scheme:dark) {
   :root:not([data-theme="light"]) {
-    --ink: #262624;
-    --rail: #1f1e1d;
-    --surface: #30302e;
-    --raised: #2b2b29;
-    --line: #43423e;
-    --line-soft: #363532;
-    --fg: #faf9f5;
-    --fg-dim: #c2c0b6;
-    --fg-faint: #9c9a92;
+    --ink: #151515;
+    --rail: #0f0f0f;
+    --surface: #1a1a19;
+    --raised: #232322;
+    --line: #2c2c2a;
+    --line-soft: #232322;
+    --fg: #f0efec;
+    --fg-dim: #c3c2b7;
+    --fg-faint: #929089;
     --accent: #d97757;
     --accent-dim: #e8a083;
-    --accent-wash: rgba(217,119,87,.15);
-    --on-accent: #1f1e1d;
+    --accent-wash: rgba(217,119,87,.14);
+    --on-accent: #0b0b0b;
     --spark: #d97757;
     --p-1: #9cb07e;
     --p-2: #8db5de;
@@ -97,7 +98,7 @@
     --warn-wash: rgba(217,165,74,.14);
     --crit: #e57a6f;
     --crit-wash: rgba(229,122,111,.15);
-    --shadow: 0 .25rem 1.25rem rgba(0,0,0,.28),0 0 0 .5px rgba(222,220,209,.16);
+    --shadow: 0 .25rem 1.25rem rgba(0,0,0,.35),0 0 0 1px rgba(240,239,236,.08);
     color-scheme: dark;
   }
 }
@@ -113,6 +114,8 @@ body {
   background: var(--ink);
   color: var(--fg);
   font: 400 14px/1.5 var(--sans);
+  font-feature-settings: "dlig" 0;
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
 }
 h1,
@@ -150,10 +153,15 @@ button {
 }
 
 /* ---------------- shell ---------------- */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
 .app {
   display: grid;
   grid-template-columns: 232px 1fr;
-  min-height: 100vh;
+  height: 100vh;
 }
 .rail {
   background: var(--rail);
@@ -290,14 +298,17 @@ kbd {
 /* ---------------- page ---------------- */
 .main {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 .top {
   display: flex;
   align-items: flex-end;
   gap: 14px;
-  padding: 32px 44px 0;
+  padding: 24px 32px 0;
+  flex: none;
 }
 .top-t {
   display: flex;
@@ -310,8 +321,11 @@ kbd {
   color: var(--fg-dim);
 }
 .top h1 {
-  font: 500 38px/1.15 var(--serif);
-  letter-spacing: -.01em;
+  font: 360 32px/1.15 var(--serif);
+  letter-spacing: -.018em;
+}
+.live:not(.down) {
+  display: none;
 }
 .live {
   display: flex;
@@ -348,10 +362,17 @@ kbd {
   }
 }
 
+/* A view fills what is left of the window. Views not yet laid out as panes scroll inside
+   themselves, under a header that stays. */
 .view {
-  padding: 24px 44px 56px;
-  max-width: 1480px;
+  flex: 1;
+  min-height: 0;
+  padding: 20px 32px 24px;
   width: 100%;
+  overflow: auto;
+}
+.view[hidden] {
+  display: none;
 }
 .lede {
   margin: 0;
@@ -433,34 +454,6 @@ kbd {
 .status-card .btn {
   margin-left: auto;
   flex: none;
-}
-.resume {
-  display: flex;
-  flex-direction: column;
-}
-.resume-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 20px;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 14px;
-}
-.resume-row:last-child {
-  border-bottom: none;
-}
-.resume-row b {
-  font-weight: 500;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.resume-row .when {
-  margin-left: auto;
-  font: 400 12px var(--mono);
-  color: var(--fg-faint);
-  white-space: nowrap;
 }
 
 /* ---------------- brain ---------------- */
@@ -614,103 +607,6 @@ kbd {
   padding: 4px 8px;
 }
 
-/* ---------------- Hey Claude bar (Today) ---------------- */
-.hey-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-.hey-bar .ico {
-  color: var(--accent);
-}
-.hey-bar input {
-  flex: 1;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--fg);
-  font: 400 15px var(--sans);
-}
-
-/* ---------------- tasks (Today) ---------------- */
-.tk-group {
-  padding: 6px 20px 10px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.tk-group h4 {
-  margin: 8px 0 4px;
-  font: 600 11px var(--sans);
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-}
-.tk-group.late h4 {
-  color: var(--crit);
-}
-.tk {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 0;
-  font-size: 14px;
-}
-.tk input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  flex: none;
-}
-.tk.ev .ico {
-  width: 16px;
-  height: 16px;
-  color: var(--info);
-}
-.tk.ev .tt {
-  color: var(--fg-dim);
-}
-.tk .tm {
-  font: 500 12.5px var(--mono);
-  color: var(--accent);
-  width: 44px;
-  flex: none;
-}
-.tk .tt {
-  flex: 1;
-  min-width: 0;
-}
-.tk .tt small {
-  color: var(--fg-dim);
-  font-size: 12px;
-  margin-left: 6px;
-}
-.tk.hi .tt {
-  font-weight: 600;
-}
-.tk-add {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px 16px;
-  flex-wrap: wrap;
-}
-.tk-add .search {
-  font: inherit;
-  font-size: 13px;
-}
-.tk-add input[name="title"] {
-  flex: 1;
-  min-width: 220px;
-}
-.tk-empty {
-  padding: 14px 20px;
-  color: var(--fg-dim);
-  font-size: 13px;
-  border-bottom: 1px solid var(--line-soft);
-}
-
 /* ---------------- connections ---------------- */
 .conn td:first-child b {
   display: block;
@@ -843,163 +739,6 @@ kbd {
 .vcard code {
   margin-left: 6px;
   color: var(--fg-dim);
-}
-
-/* running sessions — the animation is driven by real transcript writes, never by a timer */
-.runlist {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 9px;
-}
-
-.run {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  min-width: 0;
-  overflow: hidden;
-  transition: border-color .2s, background .2s;
-}
-
-.run.open {
-  cursor: pointer;
-}
-
-.run.open:hover {
-  border-color: var(--accent-dim);
-  background: var(--raised);
-}
-
-.run-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.run-top b {
-  font-size: 12.5px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.run-bot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.run .state {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font: 400 10.5px var(--mono);
-  color: var(--fg-faint);
-  white-space: nowrap;
-}
-
-.run.busy {
-  border-color: var(--accent-dim);
-}
-
-.run.busy .state {
-  color: var(--accent);
-}
-
-.run-model {
-  font: 400 10.5px var(--mono);
-  color: var(--fg-faint);
-  white-space: nowrap;
-}
-
-.run-meta {
-  margin-left: auto;
-  font: 400 10.5px var(--mono);
-  color: var(--fg-faint);
-  white-space: nowrap;
-}
-
-/* three dots, the way a session actually feels: a pause, then a burst */
-.dots {
-  display: inline-flex;
-  gap: 2px;
-}
-
-.dots i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: dot 1.4s ease-in-out infinite;
-}
-
-.dots i:nth-child(2) {
-  animation-delay: .18s;
-}
-
-.dots i:nth-child(3) {
-  animation-delay: .36s;
-}
-
-@keyframes dot {
-  0%,
-  60%,
-  100% {
-    opacity: .25;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-2px);
-  }
-}
-
-/* a sweep along the bottom edge while the session is writing */
-.run-scan {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1.5px;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity .25s;
-}
-
-.run.busy .run-scan {
-  opacity: 1;
-}
-
-.run-scan::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  transform: translateX(-100%);
-  animation: sweep 1.9s linear infinite;
-}
-
-@keyframes sweep {
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .run-scan {
-    display: none;
-  }
-  .dots i {
-    opacity: 1;
-  }
 }
 
 /* ---------------- panels ---------------- */
@@ -2019,15 +1758,6 @@ body.plbusy #mk-add button {
   font: 500 10.5px var(--mono);
   color: var(--fg-faint);
 }
-.tk .tbar {
-  flex: 0 0 60px;
-}
-.tk .tt[role="button"] {
-  cursor: pointer;
-}
-.tk .tt[role="button"]:hover {
-  color: var(--accent);
-}
 
 /* by project: one small board per folder */
 .pgroup {
@@ -2473,13 +2203,6 @@ table.tlist th:first-child {
   width: 32px;
   padding-right: 0;
 }
-.tk > input[type="checkbox"],
-.tk > .ico {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  margin: 0;
-}
 
 /* ---------------- brain: tree, reader, graphs ---------------- */
 .bn-read {
@@ -2818,79 +2541,533 @@ table.tlist th:first-child {
   }
 }
 
-/* ---------------- Today, laid out for a window that is not full screen ---------------- */
-.today-run {
-  margin-top: 16px;
+/* ---------------- panes: what scrolls is inside them, never the page ---------------- */
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 0 0 .5px var(--line), 0 1px 2px rgba(31,30,29,.03);
+  overflow: hidden;
 }
-.today-run .panel-b {
-  padding: 12px 16px 14px;
-}
-.today-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 16px;
-  margin-top: 16px;
-  align-items: start;
-}
-.today-tasks .tk-group {
-  padding: 4px 18px 8px;
-}
-.today-tasks .tk-group h4 {
-  margin: 8px 0 2px;
-}
-.today-tasks .tk {
-  padding: 4px 0;
-  font-size: 13.5px;
+.pane-h {
+  display: flex;
+  align-items: baseline;
   gap: 10px;
-}
-.today-tasks .tk .tm {
-  min-width: 42px;
-}
-.tk-add {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px 104px auto;
-  gap: 8px;
-  padding: 12px 18px 14px;
-  border-top: 1px solid var(--line-soft);
-}
-.tk-add .search {
-  padding: 6px 9px;
-  font-size: 13px;
-}
-.hey-bar {
-  padding: 10px 16px;
-  gap: 12px;
-}
-.hey-mark {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 13px;
-  font-weight: 700;
+  padding: 14px 18px 10px;
   flex: none;
 }
-.hey-bar input {
-  font-size: 15px;
+.pane-h h3 {
+  font: 500 13.5px/1.2 var(--sans);
+  color: var(--fg);
 }
-.resume-row {
-  padding: 9px 18px;
+.pane-r {
+  font-size: 12.5px;
+  color: var(--fg-faint);
+}
+.pane-link {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.pane-link:hover {
+  text-decoration: underline;
+}
+.pane-b {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 10px 12px;
+  scrollbar-width: thin;
+}
+.pane-empty {
+  padding: 8px 8px 12px;
   font-size: 13.5px;
+  color: var(--fg-faint);
 }
-.top {
-  padding-top: 26px;
+
+/* ---------------- Today ---------------- */
+#v-today {
+  overflow: hidden;
+  padding-bottom: 0;
 }
-.top h1 {
-  font-size: 34px;
+.today {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+  gap: 16px;
 }
-@media (max-width:1200px) {
-  .today-grid {
-    grid-template-columns: 1fr;
+.today-side {
+  display: grid;
+  grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+.run-pane {
+  max-height: 58vh;
+}
+.day-pane .status-card {
+  margin: 0 18px 10px;
+  padding: 12px 14px;
+  box-shadow: none;
+}
+
+/* the morning debrief: Claude's voice, so the serif */
+.debrief {
+  margin: 0 18px 8px;
+  padding: 2px 0 12px 14px;
+  border-left: 2px solid var(--spark);
+  font: 400 15.5px/1.55 var(--serif);
+  color: var(--fg-dim);
+  flex: none;
+}
+.debrief p {
+  margin: 0;
+}
+.debrief p + p {
+  margin-top: 4px;
+}
+.debrief .debrief-f {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font: 400 12px var(--sans);
+  color: var(--fg-faint);
+}
+.debrief .debrief-f button {
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+.debrief .debrief-f button:hover {
+  color: var(--accent);
+}
+
+/* the day: tasks and events in one line of time, with a mark for now */
+.dhead {
+  font: 400 16px/1.2 var(--serif);
+  color: var(--fg-dim);
+  padding: 18px 8px 8px;
+}
+.dhead:first-child {
+  padding-top: 4px;
+}
+.allday {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+.allday span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 7px;
+  background: var(--raised);
+  font-size: 12.5px;
+  color: var(--fg-dim);
+}
+.allday i,
+.it .ev i {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--info);
+}
+.allday i {
+  height: 12px;
+}
+.it {
+  display: grid;
+  grid-template-columns: 50px 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 10px;
+  padding: 8px;
+  border-radius: 9px;
+}
+.it:hover {
+  background: var(--raised);
+}
+.it .tm {
+  font-size: 13.5px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.it .tt {
+  min-width: 0;
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+.it .tt > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.it .tt small {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.it[data-tk-open] {
+  cursor: pointer;
+}
+.it .rt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--fg-faint);
+}
+.it .ev {
+  display: grid;
+  place-items: center;
+}
+.it .ev i {
+  height: 16px;
+}
+.it.event .tt > span {
+  color: var(--fg-dim);
+}
+.it.late .tm,
+.it.late .rt {
+  color: var(--crit);
+}
+.it.hi .tt > span {
+  font-weight: 600;
+}
+.ck {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.3px solid var(--fg-faint);
+  opacity: .7;
+  display: block;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.ck:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.now {
+  position: relative;
+  height: 0;
+  margin: 2px 8px;
+  border-top: 1px solid var(--spark);
+}
+.now span {
+  position: absolute;
+  left: 0;
+  top: -9px;
+  padding-right: 8px;
+  background: var(--surface);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--spark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* sessions: a row per session; clicking brings its window forward */
+.ses {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 1px 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px;
+  border-radius: 9px;
+  text-align: left;
+}
+.ses:hover {
+  background: var(--raised);
+}
+.ses .nm {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ses .when {
+  font-size: 12.5px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+.ses .when.on {
+  color: var(--spark);
+  font-weight: 500;
+}
+.ses .sub {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ses .mark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+.idle {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.2px var(--fg-faint);
+  opacity: .7;
+}
+.pf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-dim);
+}
+.pf::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c, var(--fg-faint));
+  flex: none;
+}
+
+/* ---------------- the field: one place to ask Claude, docked at the bottom ---------------- */
+.ask-dock {
+  flex: none;
+  position: relative;
+  padding: 12px 32px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ask-dock[hidden] {
+  display: none;
+}
+.composer {
+  width: min(760px, 100%);
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+.composer:focus-within {
+  box-shadow: 0 .25rem 1.25rem rgba(31,30,29,.07), 0 0 0 1px var(--line);
+}
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font: 400 15.5px/1.5 var(--sans);
+  padding: 4px 0;
+  max-height: 160px;
+}
+.composer textarea::placeholder {
+  color: var(--fg-faint);
+}
+.composer > .spark {
+  width: 22px;
+  height: 22px;
+  margin-bottom: 5px;
+  flex: none;
+}
+.send {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.send svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.send:disabled {
+  opacity: .4;
+}
+.ask-ctx {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  max-width: 40%;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent-dim);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ask-ctx span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ask-ctx button {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: inherit;
+  line-height: 1;
+}
+.ask-ctx button:hover {
+  background: rgba(0,0,0,.06);
+}
+
+/* the answer rises above the field, over the panes */
+.answer {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  width: min(760px, calc(100% - 64px));
+  max-height: min(56vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: 0 .5rem 2.5rem rgba(31,30,29,.14), 0 0 0 .5px var(--line);
+  overflow: hidden;
+  animation: rise .22s cubic-bezier(.23,1,.32,1);
+}
+.answer[hidden] {
+  display: none;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
+.answer-q {
+  padding: 16px 22px 0;
+  font-size: 13px;
+  color: var(--fg-faint);
+  white-space: pre-wrap;
+  max-height: 4.5em;
+  overflow: hidden;
+}
+.answer-b {
+  padding: 8px 22px 6px;
+  overflow: auto;
+  font: 400 16px/1.6 var(--serif);
+  color: var(--fg);
+}
+.answer-b:empty {
+  display: none;
+}
+.answer-f {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 12px 22px;
+}
+.answer-s {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--fg-faint);
+}
+.answer-s .spark {
+  width: 18px;
+  height: 18px;
+}
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--fg-faint);
+}
+.icon-btn:hover {
+  background: var(--raised);
+  color: var(--fg);
+}
+
+/* the spark: Claude's mark, and what moves while Claude works */
+.spark {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  width: 1em;
+  height: 1em;
+  flex: none;
+  color: var(--spark);
+  vertical-align: -.15em;
+}
+.spark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+}
+/* an animation: the frames stacked in one tall strip, moved up one frame at a time */
+.spark .strip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: block;
+}
+.ses .mark .spark,
+.debrief-f .spark {
+  width: 16px;
+  height: 16px;
+}
+
+/* Anthropicons, when Claude Desktop is here: a glyph per code point, weight from its size */
+.ai {
+  font-family: "Anthropicons-Variable";
+  font-style: normal;
+  font-weight: 450;
+  font-feature-settings: "liga" 0;
+  font-optical-sizing: auto;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  font-size: 19px;
+  text-align: center;
+  flex: none;
+}
+
+@media (max-width: 1100px) {
+  .today {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+  .today-side {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .run-pane {
+    max-height: none;
+  }
+}
+
 /* below 1360px the rail keeps its icons only: the page gets the room */
 @media (min-width:981px) and (max-width:1360px) {
   .app {
