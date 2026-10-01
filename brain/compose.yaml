@@ -1,13 +1,16 @@
 # The brain on Coolify: the service, and the embedding model next to it on a private network.
-# Coolify builds this from the repository (base directory /, compose file brain/compose.yaml) and
-# puts the domain in front of `brain`; the secrets are set in Coolify, never here.
+# Coolify builds this from the repository (base directory /brain, compose file /compose.yaml: the
+# build context is the repository root) and puts the domain in front of `brain`: SERVICE_URL_BRAIN_8080
+# tells its proxy the port, and SERVICE_URL_BRAIN is that domain. The secrets are set in Coolify,
+# never here.
 services:
   brain:
     build:
       context: ..
       dockerfile: brain/Dockerfile
     environment:
-      - BRAIN_URL=${BRAIN_URL}
+      - SERVICE_URL_BRAIN_8080
+      - BRAIN_URL=${SERVICE_URL_BRAIN}
       - BRAIN_PASSPHRASE=${BRAIN_PASSPHRASE}
       - BRAIN_TOTP_SECRET=${BRAIN_TOTP_SECRET}
       - BRAIN_BACKUP_KEY=${BRAIN_BACKUP_KEY}

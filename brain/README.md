@@ -44,7 +44,7 @@ holds the brain.
 
 | Variable | |
 |---|---|
-| `BRAIN_URL` | the public address, `https://brain.example.com` (OAuth names it exactly) |
+| `BRAIN_URL` | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain |
 | `BRAIN_PASSPHRASE` | 12 characters or more |
 | `BRAIN_TOTP_SECRET` | base32; `deno run brain/main.ts totp` makes one and the line for the authenticator app |
 | `BRAIN_BACKUP_KEY` | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`); without it `/backup` is off |
@@ -52,9 +52,11 @@ holds the brain.
 | `BRAIN_DATA` | where `brain.db` lives (`/data`) |
 | `BRAIN_DEV=1` | local only: signing in without TOTP |
 
-On Coolify: a Docker Compose resource from this repository with `brain/compose.yaml` (the service
-and Ollama, which pulls `bge-m3` into its own volume on first start), the domain on `brain`, port
-8080, the secrets as Coolify variables. The secrets are made and typed in by Samuel, never passed
+On Coolify: a Docker Compose application from this repository, base directory `/brain`, compose file
+`/compose.yaml` (the service and Ollama, which pulls `bge-m3` into its own volume on first start),
+the domain on `brain`, the three secrets as Coolify variables. The repository is cloned over SSH
+straight from the server's address (`git@<ip>:2222/…`): `git.example.com` is behind Cloudflare,
+which does not carry SSH. The secrets are made and typed in by Samuel, never passed
 through a chat.
 
 Locally, with any Ollama-compatible API:
