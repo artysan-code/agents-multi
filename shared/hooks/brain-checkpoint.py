@@ -9,9 +9,11 @@
 #
 # Lo stato (fin dove ha già guardato, per sessione) è in ~/.local/state/claude-multi/brain-checkpoint/.
 # Robustezza: exit 0 SEMPRE; su qualunque errore non decide niente.
-import json, os, re, sys
+import json, os, re, sys, time
 
-EDITS = 5
+EDITS = 8
+SHIPS = 3
+GAP = 60  # minutes between two reminders in one session
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # a write in the brain: memory or tasks, from the connector (claude_ai_Brain), the brain server or the local tasks server
 BRAIN_WRITE = re.compile(r"(brain_(append|edit|write|move|restore|inbox_clear)|tasks_(add|update|done|steps|attach))$")
@@ -69,9 +71,12 @@ def main():
     state_file = os.path.join(state_dir, f"{session}.json")
     try:
         with open(state_file) as f:
-            since = int(json.load(f).get("line", -1))
+            prev = json.load(f)
+        since, asked = int(prev.get("line", -1)), float(prev.get("at", 0))
     except (OSError, ValueError):
-        since = -1
+        since, asked = -1, 0.0
+    if time.time() - asked < GAP * 60:
+        return
 
     edited, shipped, last = set(), 0, since
     for n, name, inp in tool_uses(transcript):
@@ -85,17 +90,17 @@ def main():
         elif name == "Bash" and SHIPPED.search(str(inp.get("command", ""))):
             shipped += 1
         elif name.endswith("coolify_deploy"):
-            shipped += 1
+            shipped += SHIPS  # a deploy is a change of state on its own
 
-    if len(edited) < EDITS and not shipped:
+    if len(edited) < EDITS and shipped < SHIPS:
         return
     what = " e ".join(filter(None, [
-        f"hai modificato {len(edited)} file" if edited else "",
-        "hai fatto un commit, un push o un deploy" if shipped else "",
+        f"hai modificato {len(edited)} file" if len(edited) >= EDITS else "",
+        "hai fatto commit, push o deploy" if shipped >= SHIPS else "",
     ]))
     os.makedirs(state_dir, exist_ok=True)
     with open(state_file, "w") as f:
-        json.dump({"line": last}, f)
+        json.dump({"line": last, "at": time.time()}, f)
     print(json.dumps({"decision": "block", "reason": REASON.format(what=what)}))
 
 
