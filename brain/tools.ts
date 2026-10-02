@@ -16,8 +16,10 @@ import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
  *  io/, so each conversation starts knowing him. */
 export function instructions(store: Store): string {
   const rules =
-    "Samuel's brain: his memory and his tasks, the same from every Claude he uses. Six areas: io/ (who he is, how he works), " +
-    "progetti/ (one page per project, the same path as his folder: progetti/work/acme/site.md), persone/ (people and companies), " +
+    "Samuel's brain: his memory and his tasks, the same from every Claude he uses. Seven areas: io/ (who he is, how he works), " +
+    "progetti/ (one page per project, the same path as his folder: progetti/work/acme/site.md), " +
+    "clienti/ (who Samuel works for, directly or through another client: the relationship, the people, links to the projects; a client " +
+    "that is only one project stays on the project page), persone/ (people only), " +
     "note/ (how things are done: setups, fixes, procedures), diario/ (what happened, one page a day, only added to), inbox/ (said in passing, to sort). " +
     "Before assuming anything about Samuel, his projects or tools, search here (brain_search) and read what you find. " +
     `Write without asking, by these rules (the brain refuses what breaks them, with the reason): one subject per page, at most ${MAX_WORDS} words; ` +
@@ -113,7 +115,7 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_write", {
-    description: "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the six areas. " +
+    description: "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the seven areas. " +
       "To replace, read it first and pass its rev as base_rev. The rules are checked: a refusal lists what to fix. The previous version is kept (brain_history). " +
       "Diary and inbox are added to with brain_append, not rewritten.",
     inputSchema: {

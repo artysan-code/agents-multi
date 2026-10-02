@@ -64,7 +64,7 @@ ok(["brain_search", "brain_write", "brain_edit", "tasks_add", "tasks_brief"].eve
 let w = await call("brain_write", { path: "persone/Samuel", body: "# Samuel\n\nSviluppatore, lavora con Claude ogni giorno. Preferisce l'italiano e risposte compatte." });
 ok(w.title === "Samuel" && w.written === "persone/samuel.md", "create the first page (nothing yet to link)");
 w = await call("brain_write", { path: "concepts/x", body: "# X\n\nFrase." });
-ok(w.refused && /one of/.test(w.errors[0]), "a page outside the six areas is refused");
+ok(w.refused && /one of/.test(w.errors[0]), "a page outside the seven areas is refused");
 w = await call("brain_write", { path: "progetti/claude-multi", body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria." });
 ok(w.refused && /link at least one/.test(w.errors.join()), "a page without links is refused");
 w = await call("brain_write", { path: "progetti/claude-multi", body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria. Vedi [[persone/samuel]].", base_rev: 0 });

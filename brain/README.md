@@ -8,7 +8,7 @@ the machines: the brain is here.
 ## What it keeps
 
 - **Documents**: Markdown with a path (`area/name.md`), linked with `[[target]]` as Obsidian
-  writes them, in six areas and by the rules below.
+  writes them, in seven areas and by the rules below.
 - **History**: every write keeps the version it replaces, with who made it (`claude:<client>`,
   `token:<machine>`) and when. A deletion is a revision too; anything can be read as it was and put
   back (`brain_history`, `brain_restore`).
@@ -23,13 +23,14 @@ All of it is one SQLite file in `BRAIN_DATA` (`brain.db`).
 
 ## How it is written
 
-Six areas, named the way Samuel thinks: `io/` (who he is, how he works — of each page, what stands
+Seven areas, named the way Samuel thinks: `io/` (who he is, how he works — of each page, what stands
 above its first `## ` goes into the instructions every connected Claude receives), `progetti/` (one page
-per project, the same path as his folder: `progetti/work/acme/site.md`), `persone/`, `note/` (how
+per project, the same path as his folder: `progetti/work/acme/site.md`), `clienti/` (who he works for, directly or through another
+client: the relationship and the people, linking the projects), `persone/` (people only), `note/` (how
 things are done), `diario/` (one page a day, only added to) and `inbox/` (said in passing, to sort).
 
 Claude writes without asking, so the rules are enforced by the service (`rules.ts`, tested) and a
-write that breaks one is refused with the reasons: pages in the six areas, `io`/`persone`/`note`
+write that breaks one is refused with the reasons: pages in the seven areas, `io`/`clienti`/`persone`/`note`
 flat; one subject per page, at most 400 words (1000 for the diary and the inbox); `# Title` and one
 sentence saying what the page is; at least one link to an existing page; no near copy of an
 existing title (unless `distinct`); no secrets; at most 15 lines of code. Paths are normalised

@@ -109,6 +109,8 @@ Deno.test("slugPath: lower case, no accents, dashes", () => {
 Deno.test("shapeErrors: areas, flat folders, diary days, title and sentence, length, code, secrets", () => {
   assertEquals(shapeErrors("note/arctis.md", page("Arctis")), []);
   assertEquals(shapeErrors("progetti/work/acme/site.md", page("Site")), []);
+  assertEquals(shapeErrors("clienti/acme.md", page("Acme")), []);
+  assert(shapeErrors("clienti/acme/site.md", page("Site")).some((e) => e.includes("flat")));
   assert(shapeErrors("concepts/x.md", page("X"))[0].includes("one of"));
   assert(shapeErrors("note/audio/arctis.md", page("A")).some((e) => e.includes("flat")));
   assert(shapeErrors("diario/oggi.md", page("Oggi")).some((e) => e.includes("YYYY-MM-DD")));

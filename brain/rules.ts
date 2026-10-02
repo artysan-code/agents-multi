@@ -3,7 +3,8 @@
 // fixes it. Agreed with Samuel on 2026-10-01 and meant to be tuned while using it: the numbers are
 // the constants below.
 //
-// Six areas, named the way Samuel thinks: io (who he is), progetti (his folders), persone, note
+// Seven areas, named the way Samuel thinks: io (who he is), progetti (his folders), clienti (who
+// he works for, directly or through someone: the relationship, not the work), persone, note
 // (what he knows how to do), diario (what happened, one page a day, only added to), inbox (said in
 // passing, to sort later). Pages are small and linked: one subject each, a title and a sentence
 // saying what it is, at least one link to an existing page.
@@ -11,7 +12,7 @@
 import { maskText } from "../shared/mcp/lib/mask.ts";
 import { linksIn, type Store } from "./store.ts";
 
-export const AREAS = ["io", "progetti", "persone", "note", "diario", "inbox"] as const;
+export const AREAS = ["io", "progetti", "clienti", "persone", "note", "diario", "inbox"] as const;
 export type Area = typeof AREAS[number];
 /** Areas written by adding lines, not by rewriting. */
 export const LOGS: Area[] = ["diario", "inbox"];
@@ -50,7 +51,7 @@ export function shapeErrors(path: string, body: string): string[] {
   const area = parts[0] as Area;
   if (!AREAS.includes(area)) return [`a page lives in one of: ${AREAS.join(", ")} (not "${parts[0]}")`];
   if (parts.length < 2) err.push(`${area}/ needs a name: ${area}/<name>.md`);
-  if (["io", "persone", "note", "inbox"].includes(area) && parts.length > 2) err.push(`${area}/ is flat: ${area}/<name>.md, no subfolders`);
+  if (["io", "clienti", "persone", "note", "inbox"].includes(area) && parts.length > 2) err.push(`${area}/ is flat: ${area}/<name>.md, no subfolders`);
   if (area === "diario" && !/^diario\/\d{4}-\d{2}-\d{2}$/.test(parts.join("/"))) err.push("a diary page is diario/YYYY-MM-DD.md, one a day");
 
   const text = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
