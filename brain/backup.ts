@@ -1,6 +1,6 @@
 // backup.ts — the brain as one encrypted file, for Samuel's machines to fetch and keep.
 //
-// A consistent copy of the database (VACUUM INTO, safe while the service writes), sealed with
+// A consistent copy of the database (see snapshot), sealed with
 // AES-256-GCM under BRAIN_BACKUP_KEY (32 bytes, base64): the server never hands out the brain in
 // clear, and the machines keeping copies cannot read them without the key from the vault.
 // Format: "BRN1", a 12-byte IV, the ciphertext.
@@ -30,12 +30,12 @@ export async function open(sealed: Uint8Array<ArrayBuffer>, b64key: string): Pro
   return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: sealed.slice(4, 16) }, await keyOf(b64key, "decrypt"), sealed.slice(16)));
 }
 
-export async function snapshot(store: Store, dir: string, b64key: string): Promise<Uint8Array<ArrayBuffer>> {
-  const tmp = `${dir}/.snapshot-${crypto.randomUUID()}.db`;
-  try {
-    store.db.prepare("vacuum into ?").run(tmp);
-    return await seal(await Deno.readFile(tmp), b64key);
-  } finally {
-    await Deno.remove(tmp).catch(() => {});
-  }
+/** The database as one sealed file. VACUUM INTO would be the obvious copy, but it needs ATTACH,
+ *  which Deno refuses to a process without unrestricted file access (the service only writes
+ *  /data). One process and synchronous statements make this consistent instead: the WAL is folded
+ *  into the file and the file is read in the same tick, with no write able to run in between. */
+export async function snapshot(store: Store, dbFile: string, b64key: string): Promise<Uint8Array<ArrayBuffer>> {
+  const c = store.db.prepare("pragma wal_checkpoint(truncate)").get() as { busy: number };
+  if (c.busy) throw new Error("the database is busy: try again");
+  return await seal(Deno.readFileSync(dbFile) as Uint8Array<ArrayBuffer>, b64key);
 }

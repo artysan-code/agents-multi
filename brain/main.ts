@@ -148,7 +148,7 @@ async function handle(req: Request): Promise<Response> {
   if (p === "/backup" && who.startsWith("token:")) {
     const key = env("BRAIN_BACKUP_KEY");
     if (!key) return json({ error: "no BRAIN_BACKUP_KEY on the server" }, 503);
-    return new Response(await snapshot(store, DATA, key), {
+    return new Response(await snapshot(store, `${DATA}/brain.db`, key), {
       headers: { "content-type": "application/octet-stream", "content-disposition": `attachment; filename="brain-${new Date().toISOString().slice(0, 10)}.brn"`, "cache-control": "no-store" },
     });
   }
