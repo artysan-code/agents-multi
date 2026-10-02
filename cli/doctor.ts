@@ -6,7 +6,7 @@ import { settingsState } from "./settings.ts";
 import { ACCOUNTS, health, legacyStatePresent, plan } from "./mcp.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
-import { tasksRoot } from "../shared/mcp/lib/tasks.ts";
+import { dayOf, hhmm, tasksRoot } from "../shared/mcp/lib/tasks.ts";
 import { lastBackup } from "./brain-backup.ts";
 import { keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { legacyFilesPresent } from "./vault.ts";
@@ -287,7 +287,7 @@ export async function doctor(): Promise<Check[]> {
       const b = await lastBackup();
       if (!b) add("brain.backup", "warn", "no copy of the brain on this machine yet", "claude-multi brain-backup");
       else if (!b.verified) add("brain.backup", "warn", `brain copies are kept (${b.file}) but not checked: the backup key is not in this vault`, "claude-multi vault set brain brain backup-key   (the BRAIN_BACKUP_KEY from Coolify, on stdin)");
-      else add("brain.backup", "ok", `brain: last copy ${b.file}, checked ${b.checked.slice(0, 16).replace("T", " ")}`);
+      else add("brain.backup", "ok", `brain: last copy ${b.file}, checked ${dayOf(new Date(b.checked))} ${hhmm(new Date(b.checked))}`);
       if (m.systemd && (await run("systemctl", ["--user", "is-enabled", "claude-brain-backup.timer"])).out !== "enabled") add("brain.timer", "warn", "claude-brain-backup.timer is not enabled: no copies of the brain here", "claude-multi install");
     }
     if (!(await lstat(`${REPO}/pkg/claude-desktop/anthropic-apt.asc`))) add("desktop.apt-key", "warn", "the Anthropic apt key is not in the repository: the InRelease signature cannot be verified", "fetch the key into pkg/claude-desktop/anthropic-apt.asc");
