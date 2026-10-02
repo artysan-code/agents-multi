@@ -89,7 +89,8 @@ export function check(store: Store, path: string, body: string, opts: { creating
   if (opts.creating && !opts.distinct && !LOGS.includes(area)) {
     const title = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trim().match(/^# (.+)$/m)?.[1] ?? path;
     const name = path.split("/").pop()!.replace(/\.md$/, "").replace(/-/g, " ");
-    const rows = store.db.prepare("select path, title from docs where deleted = 0 and path not like 'tasks/%' and path not like 'diario/%'").all() as { path: string; title: string }[];
+    // only within the area: a client and its project, or a person and the client they work for, share a name by nature
+    const rows = store.db.prepare("select path, title from docs where deleted = 0 and path like ?").all(`${area}/%`) as { path: string; title: string }[];
     similar = rows.filter((r) => Math.max(similarity(title, r.title), similarity(name, r.path.split("/").pop()!.replace(/\.md$/, "").replace(/-/g, " "))) >= DUPLICATE).slice(0, 5);
     if (similar.length) errors.push("pages with a very similar title exist: update one of them, or pass distinct: true if this really is another subject");
   }

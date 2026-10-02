@@ -32,8 +32,8 @@ things are done), `diario/` (one page a day, only added to) and `inbox/` (said i
 Claude writes without asking, so the rules are enforced by the service (`rules.ts`, tested) and a
 write that breaks one is refused with the reasons: pages in the seven areas, `io`/`clienti`/`persone`/`note`
 flat; one subject per page, at most 400 words (1000 for the diary and the inbox); `# Title` and one
-sentence saying what the page is; at least one link to an existing page; no near copy of an
-existing title (unless `distinct`); no secrets; at most 15 lines of code. Paths are normalised
+sentence saying what the page is; at least one link to an existing page; no near copy of a title
+in the same area (unless `distinct`); no secrets; at most 15 lines of code. Paths are normalised
 (lower case, no accents). The diary and the inbox are added to (`brain_append`), never rewritten;
 moving a page (`brain_move`) updates the links to it; `brain_check` lists orphans, broken links,
 pages too long and an inbox left alone for a week. The numbers are meant to be tuned in use.

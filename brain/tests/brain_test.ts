@@ -138,6 +138,8 @@ Deno.test("check: a link to an existing page, near copies refused unless distinc
   const dup = check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true });
   assert(!dup.ok && dup.similar?.[0].path === "note/arctis-audio.md");
   assert(check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true, distinct: true }).ok);
+  // another area may share the name: a client and the project for it
+  assert(check(s, "progetti/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true }).ok);
   assert(check(s, "diario/2026-10-01.md", page("2026-10-01"), { creating: true }).ok); // the diary needs no link
   s.close();
 });
