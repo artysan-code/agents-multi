@@ -1,9 +1,6 @@
-// brain.ts — the wiki (~/brains/claude) as the console shows it: pages with their frontmatter, the
-// links between them, and the inbox of material waiting to be distilled.
-//
-// A view, not an editor: pages are written by Claude through /wiki-ingest (with its confirmation
-// guard), never from here. What the console can do is put material in `_raw/`, the staging
-// directory /wiki-ingest's raw mode reads and empties.
+// brain.ts — the old wiki (~/brains/claude) as the console shows it: pages with their frontmatter
+// and the links between them. A read-only archive since 2026-10-02 (the memory is the brain
+// service now); this page is to be rebuilt on it.
 
 import { HOME } from "./lib.ts";
 
@@ -104,7 +101,7 @@ export async function brainGraph() {
       links.push([p, to]);
     }
   }
-  return { root: BRAIN, pages, links, inbox: await inbox() };
+  return { root: BRAIN, pages, links };
 }
 
 /** One page for the reader: its frontmatter and its body as written. */
@@ -112,61 +109,4 @@ export async function brainPage(path: string) {
   if (!/^[\w./-]+$/.test(path) || path.includes("..")) throw new Error("bad page path");
   const text = await Deno.readTextFile(`${BRAIN}/${path}.md`);
   return { path, ...frontmatter(text) };
-}
-
-// ---------------------------------------------------------------- the inbox (_raw/)
-const INBOX = () => `${BRAIN}/_raw`;
-/** What can be dropped: documents /wiki-ingest reads. */
-export const INBOX_TYPES = /\.(pdf|md|txt|html?|docx|csv|json)$/i;
-export const INBOX_MAX = 50 * 1024 * 1024;
-
-export async function inbox(): Promise<{ name: string; size: number; at: string | null }[]> {
-  const out = [];
-  try {
-    for await (const e of Deno.readDir(INBOX())) {
-      if (!e.isFile || e.name.startsWith(".")) continue; // sessions/ is the history importer's
-      const st = await Deno.stat(`${INBOX()}/${e.name}`);
-      out.push({ name: e.name, size: st.size, at: st.mtime?.toISOString() ?? null });
-    }
-  } catch { /* no _raw yet */ }
-  return out.sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
-}
-
-/** Pure: a name safe to write under _raw/: basename only, tame characters, date in front. */
-export function inboxName(original: string, now = new Date()): string {
-  const base = original.split(/[\\/]/).pop()!.normalize("NFKD").replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^[-.]+/, "");
-  return `${now.toISOString().slice(0, 10)}-${base || "file"}`;
-}
-
-async function freeName(name: string): Promise<string> {
-  const dot = name.lastIndexOf(".");
-  for (let i = 0; ; i++) {
-    const n = i ? `${name.slice(0, dot)}-${i}${name.slice(dot)}` : name;
-    try { await Deno.lstat(`${INBOX()}/${n}`); } catch { return n; }
-  }
-}
-
-export async function addToInbox(kind: "file" | "link" | "note", input: { name?: string; bytes?: Uint8Array; url?: string; text?: string }): Promise<string> {
-  await Deno.mkdir(INBOX(), { recursive: true });
-  const today = new Date().toISOString().slice(0, 10);
-  if (kind === "file") {
-    if (!input.name || !INBOX_TYPES.test(input.name)) throw new Error("only documents: pdf, md, txt, html, docx, csv, json");
-    if (!input.bytes?.length || input.bytes.length > INBOX_MAX) throw new Error("empty, or over 50 MB");
-    const n = await freeName(inboxName(input.name));
-    await Deno.writeFile(`${INBOX()}/${n}`, input.bytes);
-    return n;
-  }
-  if (kind === "link") {
-    let u: URL;
-    try { u = new URL(String(input.url)); } catch { throw new Error("not a valid address"); }
-    if (!/^https?:$/.test(u.protocol)) throw new Error("only http(s) addresses");
-    const n = await freeName(inboxName(`link-${u.hostname}${u.pathname}`.slice(0, 80) + ".md"));
-    await Deno.writeTextFile(`${INBOX()}/${n}`, `---\nsource: ${u.href}\nadded: ${today}\nkind: link\n---\n\n${u.href}\n${input.text?.trim() ? `\n${input.text.trim()}\n` : ""}`);
-    return n;
-  }
-  const text = String(input.text ?? "").trim();
-  if (!text) throw new Error("an empty note");
-  const n = await freeName(inboxName(`note-${text.split("\n")[0].slice(0, 40)}.md`));
-  await Deno.writeTextFile(`${INBOX()}/${n}`, `---\nadded: ${today}\nkind: note\n---\n\n${text}\n`);
-  return n;
 }

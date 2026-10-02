@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — the Brain: the wiki (~/brains/claude) the way Obsidian shows it. Pages as a
-   tree of folders, a reader with what links in and out, the page's neighbourhood as a small live
-   graph, and the whole graph on its own screen. A view: pages are written by Claude through
-   /wiki-ingest, never from here; what the console adds goes to _raw/, the inbox.
+/* claude-multi console — the Brain: the old wiki (~/brains/claude), a read-only archive since
+   2026-10-02, the way Obsidian shows it, until this page is rebuilt on the brain service. Pages as
+   a tree of folders, a reader with what links in and out, the page's neighbourhood as a small live
+   graph, and the whole graph on its own screen. Only a view.
    Loaded after app.js (helpers: $, esc, api, t, toast, drawer, mdToHtml, ago). */
 
 const GROUPS = ["projects", "references", "concepts", "skills", "entities", "synthesis", "journal"];
@@ -43,7 +43,6 @@ function renderBrainAll() {
   $("#b-sum").textContent = t("brain.sum", { p: BRAIN.pages.length, l: BRAIN.links.length });
   renderTree();
   renderSide();
-  renderInboxBadge();
   if (bMode === "graph") showGlobalGraph();
   else showLocalGraph();
 }
@@ -459,54 +458,6 @@ function renderCard(id) {
     <button class="btn primary sm" data-read="${esc(p.path)}">${esc(t("brain.read"))}</button>`;
 }
 
-/* ---------------- adding to the brain ---------------- */
-function renderInboxBadge() {
-  const n = BRAIN.inbox.length;
-  $("#b-add").innerHTML = `${esc(t("brain.add"))}${n ? ` <i class="n">${n}</i>` : ""}`;
-}
-
-function openAddDrawer() {
-  const cmd = "/wiki-ingest process my drafts";
-  const items = BRAIN.inbox;
-  const host = drawer(t("brain.add"), `<div class="panel-b bn-add">
-    <p class="sub">${esc(t("brain.add.lede"))}</p>
-    <label class="b-zone" id="b-zone">
-      <input type="file" id="b-file" multiple accept=".pdf,.md,.txt,.html,.htm,.docx,.csv,.json" hidden>
-      <svg viewBox="0 0 24 24" class="ico"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-      <span>${esc(t("brain.drop"))}</span>
-    </label>
-    <form class="b-row" id="b-link"><input name="url" class="search" type="url" placeholder="${esc(t("brain.link.ph"))}" required><button class="btn" type="submit">${esc(t("mk.add"))}</button></form>
-    <form class="b-row" id="b-note"><textarea name="text" class="search" rows="3" placeholder="${esc(t("brain.note.ph"))}" required></textarea><button class="btn" type="submit">${esc(t("mk.add"))}</button></form>
-    ${items.length ? `<div class="b-inbox"><b>${esc(t("brain.inbox", { n: items.length }))}</b>
-      ${items.slice(0, 12).map((f) => `<code title="${esc(f.name)}">${esc(f.name)}</code>`).join("")}
-      <span class="sub">${esc(t("brain.inbox.how"))}</span>
-      <div class="b-cmd"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">${esc(t("today.copy"))}</button></div></div>` : ""}
-  </div>`);
-  const send = async (body, headers = {}) => {
-    const r = await api("/api/brain/inbox", { method: "POST", headers: { "x-claude-multi": "1", ...headers }, body }).catch((e) => ({ ok: false, message: e.message }));
-    toast(r.ok ? t("brain.added", { n: r.message }) : r.message, !r.ok);
-    return r.ok;
-  };
-  const files = async (fs) => { for (const f of fs) await send(f, { "x-filename": encodeURIComponent(f.name) }); host.remove(); await loadBrain(); openAddDrawer(); };
-  const zone = $("#b-zone", host);
-  $("#b-file", host).addEventListener("change", (e) => files([...e.target.files]));
-  zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("over"); });
-  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
-  zone.addEventListener("drop", (e) => { e.preventDefault(); zone.classList.remove("over"); files([...e.dataTransfer.files]); });
-  $("#b-link", host).addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (await send(JSON.stringify({ kind: "link", url: e.target.elements.url.value.trim() }), { "content-type": "application/json" })) { e.target.reset(); loadBrain(); }
-  });
-  $("#b-note", host).addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (await send(JSON.stringify({ kind: "note", text: e.target.elements.text.value }), { "content-type": "application/json" })) { e.target.reset(); loadBrain(); }
-  });
-  host.addEventListener("click", (e) => {
-    const cp = e.target.closest("[data-copy]");
-    if (cp) navigator.clipboard.writeText(cp.dataset.copy).then(() => toast(t("today.copied")), () => toast(cp.dataset.copy, true));
-  });
-}
-
 /* ---------------- events ---------------- */
 {
   const root = $("#v-brain");
@@ -529,7 +480,6 @@ function openAddDrawer() {
     const first = $("#bn-tree .bt-p");
     if (first) selectPage(first.dataset.page);
   });
-  $("#b-add").addEventListener("click", openAddDrawer);
   $("#bn-d2").addEventListener("change", (e) => { bDepth2 = e.target.checked; showLocalGraph(); });
   $("#bn-hubs").addEventListener("change", (e) => { bShowHubs = e.target.checked; showGlobalGraph(); });
   $("#bn-fit").addEventListener("click", () => gGlobal?.refit());

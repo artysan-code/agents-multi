@@ -1,6 +1,6 @@
 // Tests for brain.ts: reading the wiki's frontmatter and links, and naming what lands in _raw/.
 import { assertEquals } from "jsr:@std/assert@1";
-import { frontmatter, inboxName, resolveLink, wikilinks } from "../brain.ts";
+import { frontmatter, resolveLink, wikilinks } from "../brain.ts";
 
 Deno.test("frontmatter: scalars, quoted values and inline lists; the body after it", () => {
   const { data, body } = frontmatter(`---\ntitle: "claude-multi — visione"\ncategory: projects\ntags: [setup, meta, 'claude']\nsummary: una riga\n---\n\n# Titolo\n`);
@@ -24,10 +24,4 @@ Deno.test("resolveLink: full path, unique bare name, ambiguous or unknown → no
   assertEquals(resolveLink("claude-multi", paths, byName), "projects/claude-multi/claude-multi");
   assertEquals(resolveLink("readme", paths, byName), null);
   assertEquals(resolveLink("nowhere", paths, byName), null);
-});
-
-Deno.test("inboxName: basename only, tame characters, dated", () => {
-  const d = new Date("2026-09-30T10:00:00Z");
-  assertEquals(inboxName("../../etc/Contratto Fornitura (v2).pdf", d), "2026-09-30-Contratto-Fornitura-v2-.pdf");
-  assertEquals(inboxName("..", d), "2026-09-30-file");
 });

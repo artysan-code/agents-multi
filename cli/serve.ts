@@ -22,7 +22,7 @@ import { taskApi } from "./taskboard.ts";
 import { askApi } from "./ask.ts";
 import { assetsApi, claudeAssets } from "./claude-assets.ts";
 import { probeAccount } from "./vault.ts";
-import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
+import { BRAIN, brainGraph, brainPage } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
 import { addTask, brief, listTasks, tasksRoot, type TaskInput, updateTask } from "../shared/mcp/lib/tasks.ts";
 import { connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
@@ -204,7 +204,7 @@ function broadcast(topic: Topic, sessions: string[] = []) {
  * Watch what the console displays and say which half moved.
  * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
- * `brain`  a page or the inbox of the wiki changed (Syncthing, Claude writing, a drop)
+ * `brain`  a page of the old wiki changed (Syncthing)
  * `tasks`  a task changed: a chat, another machine, the console
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
@@ -235,7 +235,7 @@ async function watchTree(signal: AbortSignal) {
       for (const p of e.paths) {
         if (p.endsWith(".tmp") || p.includes("/.git/") || p.includes("/.obsidian/")) continue;
         // the wiki is its own topic: an Obsidian save should not reload the doctor
-        if (p.startsWith(`${BRAIN}/`)) { if (p.endsWith(".md") || p.includes("/_raw/")) pending.add("brain"); continue; }
+        if (p.startsWith(`${BRAIN}/`)) { if (p.endsWith(".md")) pending.add("brain"); continue; }
         if (p.startsWith(`${tasksRoot()}/`)) { pending.add("tasks"); continue; }
         const transcript = p.includes("/projects/") && p.endsWith(".jsonl");
         pending.add(transcript ? "usage" : "state");
@@ -416,26 +416,6 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
       }
       if (u.pathname === "/api/brain") return json(await brainGraph());
       if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));
-      if (u.pathname === "/api/brain/inbox") {
-        if (req.method !== "POST") return json({ error: "POST required" }, 405);
-        if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
-        try {
-          const name = req.headers.get("x-filename");
-          let saved: string;
-          if (name) {
-            // a file comes as the request body; the size is checked before it is read whole
-            if (Number(req.headers.get("content-length") ?? 0) > INBOX_MAX) return json({ ok: false, message: "over 50 MB" });
-            saved = await addToInbox("file", { name: decodeURIComponent(name), bytes: new Uint8Array(await req.arrayBuffer()) });
-          } else {
-            const b = await req.json().catch(() => ({})) as { kind?: string; url?: string; text?: string };
-            saved = await addToInbox(b.kind === "link" ? "link" : "note", b);
-          }
-          broadcast("brain");
-          return json({ ok: true, message: saved });
-        } catch (e) {
-          return json({ ok: false, message: (e as Error).message });
-        }
-      }
       if (u.pathname === "/api/profile") {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
