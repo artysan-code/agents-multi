@@ -11,6 +11,7 @@ import { DATA, readJson, STATE } from "./lib.ts";
 import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 import { getSecret } from "../shared/mcp/lib/vault.ts";
 import { open } from "../brain/backup.ts";
+import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
 
 export const BACKUPS = `${DATA}/brain-backups`;
 const LAST = `${STATE}/brain-backup.json`;
@@ -64,7 +65,7 @@ export async function brainBackup(force = false): Promise<number> {
   }
 
   await Deno.mkdir(BACKUPS, { recursive: true });
-  const file = `brain-${now.slice(0, 16).replace(":", "-")}.brn`;
+  const d = new Date(now), file = `brain-${dayOf(d)}T${hhmm(d).replace(":", "-")}.brn`; // local time, as Samuel reads it
   const tmp = `${BACKUPS}/.${file}.tmp`;
   await Deno.writeFile(tmp, sealed);
   await Deno.rename(tmp, `${BACKUPS}/${file}`);
