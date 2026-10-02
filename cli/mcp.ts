@@ -15,7 +15,7 @@
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
 import { type Account, accountHosts, loadAccounts, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
-import { type Check, desktopDir, has, HOME, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { type Check, desktopDir, has, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
 
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[]; _service?: string };
 type Surface = "cli" | "desktop";
@@ -182,25 +182,6 @@ export async function apply(opts: { force?: boolean } = {}) {
 }
 
 // ---------------------------------------------------------------- health
-// Note: a server may speak the Ollama protocol without Ollama being installed. Here port 11434 is
-// answered by `llama-embed-shim` (shared/tools, llama-embed-shim.service), which translates to
-// llama.cpp's `llama-server` (llama-embed.service, port 8090). The provider name is a protocol.
-async function getJson(url: string, ms = 1500): Promise<unknown | null> {
-  try {
-    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), ms);
-    // Deno's --allow-net is per literal host, so localhost and 127.0.0.1 are two different hosts
-    const r = await fetch(url.replace("://localhost", "://127.0.0.1"), { signal: ctrl.signal }); clearTimeout(to);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
-}
-async function embeddingModels(base: string): Promise<string[] | null> {
-  const j = await getJson(`${base.replace(/\/$/, "")}/api/tags`) as { models?: { name: string }[] } | null;
-  return j ? (j.models ?? []).map((m) => m.name) : null;
-}
-export const LLAMA_EMBED_URL = "http://127.0.0.1:8090";
-export async function llamaServerOk() { const j = await getJson(`${LLAMA_EMBED_URL}/health`) as { status?: string } | null; return j?.status === "ok"; }
-
 /** Live probe: start the stdio server with its own config, send `initialize`, wait for the reply.
  *  Catches what static checks cannot see (native modules built for the wrong ABI, missing env,
  *  cold-start crashes). It costs a real process spawn. */
@@ -245,19 +226,6 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
       if (a.startsWith("/") && /\.(ts|js|py|lock)$/.test(a) && !(await stat(a))) problems.push(`missing file: ${a}`);
       const lock = a.match(/^--lock=(.+)$/); if (lock && !(await stat(lock[1]))) problems.push(`missing lock file: ${lock[1]}`);
     }
-    if (env.VAULT_PATH && !(await stat(env.VAULT_PATH))) problems.push(`missing vault: ${env.VAULT_PATH}`);
-    // Embedding is kept apart: without it the server still starts and only loses semantic search.
-    // On a machine that has no local inference backend at all that is a choice, not a fault.
-    const embedding: string[] = [];
-    if (env.EMBEDDING_PROVIDER === "ollama") {
-      const base = env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-      const models = await embeddingModels(base);
-      if (!models) embedding.push(`embedding endpoint ${base} is not answering`);
-      else if (env.EMBEDDING_MODEL && !models.some((m) => m.startsWith(env.EMBEDDING_MODEL))) embedding.push(`model ${env.EMBEDDING_MODEL} is not served there`);
-      if (!(await llamaServerOk())) embedding.push(`llama-server ${LLAMA_EMBED_URL} is not answering (llama-embed.service)`);
-    }
-    const llamaInstalled = !!(await stat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`));
-    if (embedding.length && llamaInstalled) problems.push(...embedding);
     const envFile = args.join(" ").match(/\. "?\$HOME\/([^"\s;]+)/); // the `. "$HOME/.config/x/.env"` pattern
     if (envFile && !(await stat(`${Deno.env.get("HOME")}/${envFile[1]}`))) problems.push(`missing env file: ~/${envFile[1]}`);
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = reachOf(reg, cfg).join("+");
@@ -268,19 +236,11 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
       else problems.push(`no answer to initialize: ${r.detail}`);
     }
     if (problems.length) {
-      const fix = problems.some((x) => x.includes("llama-server") || x.includes("embedding")) ? "systemctl --user start llama-embed-shim.service (it pulls in llama-embed.service too)"
-        : problems.some((x) => x.startsWith("model ")) ? "check SHIM_MODEL in systemd/user/llama-embed-shim.service against the model llama-embed.service loads"
-        : problems.some((x) => x.includes("ABI") || x.includes("NODE_MODULE_VERSION")) ? "native module built for a different Node: rebuild it with the Node on the pinned PATH (prebuild-install)"
+      const fix = problems.some((x) => x.includes("ABI") || x.includes("NODE_MODULE_VERSION")) ? "native module built for a different Node: rebuild it with the Node on the pinned PATH (prebuild-install)"
         : "install the dependency, or correct shared/mcp/servers.json";
       out.push({ id: `mcp.${name}`, status: "fail", msg: `MCP ${name}: ${problems.join("; ")}`, fix });
     }
-    else if (embedding.length) {
-      out.push({
-        id: `mcp.${name}`, status: "warn",
-        msg: `MCP ${name} (${profiles} · ${surfaces}) ready, without semantic search${live}`,
-        fix: "no local inference backend here: text and graph search work, semantic does not. Install llama.cpp and enable llama-embed{,-shim}.service to get it",
-      });
-    } else out.push({ id: `mcp.${name}`, status: "ok", msg: `MCP ${name} (${profiles} · ${surfaces}) ready${live}` });
+    else out.push({ id: `mcp.${name}`, status: "ok", msg: `MCP ${name} (${profiles} · ${surfaces}) ready${live}` });
   }
   return out;
 }

@@ -257,8 +257,6 @@ export async function install(dry: boolean) {
       if (m.graphical) wantEnabled.push("claude-multi-app.service");
       // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
       if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
-      if (m.graphical && await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
-      else if (m.graphical) console.log(`  ${ANSI.d}no llama-server (~/.local/opt/llama-vulkan): skipping llama-embed*.service — wiki search will have no semantic mode here${ANSI.x}`);
       for (const u of wantEnabled) {
         const en = await run("systemctl", ["--user", "is-enabled", u]);
         if (en.out !== "enabled") { say(`${ANSI.g}+${ANSI.x} enable --now ${u}`); await run("systemctl", ["--user", "enable", "--now", u]); }

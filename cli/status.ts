@@ -40,8 +40,8 @@ export interface Summary {
 
 /** Pure: the report to the tray's summary. Updates install themselves, so a newer version is not
  *  something to act on and does not colour the icon; only a failure does. A warn is listed, not
- *  coloured either: some warns are standing conditions of a machine (no semantic search on a
- *  laptop without llama.cpp), and an icon that is always yellow says nothing. */
+ *  coloured either: some warns are standing conditions of a machine (a laptop without a desktop
+ *  timer, say), and an icon that is always yellow says nothing. */
 export function summarize(s: Pick<StatusReport, "doctor" | "running" | "generatedAt"> & { machine: { desktopStaged: string | null } }): Summary {
   const fails = s.doctor.filter((c) => c.status === "fail").map((c) => c.msg);
   const warns = s.doctor.filter((c) => c.status === "warn").map((c) => c.msg);

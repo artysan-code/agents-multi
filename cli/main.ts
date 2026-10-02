@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:11434,localhost:11434,127.0.0.1:8090,127.0.0.1:7331
+#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
 // claude-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
 //
 //   install [--dry-run]     materialise ~/.claude-multi, ~/.local/bin, units and .desktop entries (idempotent)

@@ -198,12 +198,11 @@ the globe button in the rail overrides it per browser.
   month calendar with the Google events, and one small board per project folder. The folder tree
   on the left filters every view. A task opens as a page: its fields, its steps and their
   progress, a Markdown description that saves as you type, and its attachments. See [Tasks](#tasks).
-- **Brain** (`#brain`) — the wiki (`~/brains/claude`, `CLAUDE_MULTI_BRAIN`): the pages as a tree of
+- **Brain** (`#brain`) — still the old wiki (`~/brains/claude`, `CLAUDE_MULTI_BRAIN`), a read-only archive since 2026-10-02, until the page is rebuilt on the brain service: the pages as a tree of
   folders, a reader with what links in and out and the page's neighbourhood as a live graph, and
   the whole wiki as a full-screen graph (drag, pan, zoom, filter by folder; the index and log are
   hidden by default, they link to everything). A view, not an editor: what you add (a document, a
-  link, a note) waits in `_raw/`, and Claude distils it with `/wiki-ingest` when asked, confirming
-  before it writes.
+  link, a note) waits in `_raw/`.
 - **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
   where, and whether each profile actually mounted it at its last sync.
 - **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or
@@ -372,27 +371,6 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 - **Adding an account**: console › Connections (the secret is checked against the service before it
   is stored, and never comes back to the page), or `claude-multi vault set <service> <account>`
   with the secret on stdin. A secret is never a command-line argument and never a tool result.
-
-### Local inference (the wiki's semantic search)
-
-`wiki-claude` embeds through `llama-embed-shim` (the Ollama API on `:11434`) in front of
-`llama-server` (`llama-embed.service`, `:8090`), built from source with Vulkan into
-`~/.local/opt/llama-vulkan`; `install` enables both units once that binary exists. The search index
-is per machine (`~/.local/share/obsidian-brain`), so machines may embed with different models — as
-long as the vectors stay 1024-wide, the size `shared/mcp/servers.json` declares.
-
-The unit's defaults are the desktop's (bge-m3 on the discrete GPU). A machine overrides them in
-`~/.config/claude-multi/llama.env`, which stays on that machine:
-
-```
-EMBED_HF=Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0   # model (Hugging Face repo:quant)
-EMBED_POOLING=last                             # what that model expects
-EMBED_CTX=8192
-EMBED_BATCH=8192
-EMBED_UBATCH=1024                               # a causal model can take a chunk in pieces: the compute buffer shrinks
-EMBED_PARALLEL=1
-GGML_VK_VISIBLE_DEVICES=1                       # which Vulkan device (llama-server --list-devices)
-```
 
 ---
 

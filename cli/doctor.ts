@@ -290,14 +290,7 @@ export async function doctor(): Promise<Check[]> {
     if (handler && !handler.includes("claude-bin")) add("desktop.urlhandler", "fail", "the claude-cli:// url handler does not point at claude-bin", "claude-multi install");
   }
 
-  // --- local embedding backend for the wiki MCP server (optional on any given machine)
-  if (await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`) && m.systemd) {
-    for (const u of ["llama-embed.service", "llama-embed-shim.service"]) {
-      const en = (await run("systemctl", ["--user", "is-enabled", u])).out; const act = (await run("systemctl", ["--user", "is-active", u])).out;
-      if (en !== "enabled" || act !== "active") add(`llama.${u}`, "warn", `${u}: ${en}/${act}`, `systemctl --user enable --now ${u}`);
-    }
-    if (!(await readlink(`${HOME}/.config/systemd/user/llama-embed-shim.service`))?.startsWith(REPO)) add("llama.units", "warn", "llama-*.service units are not linked from the repository", "claude-multi install");
-  }
+
   if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills is missing: external skills are unavailable on this machine", "create it, or sync it from your other machine");
   return c;
 }
