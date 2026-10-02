@@ -238,7 +238,10 @@ export async function install(dry: boolean) {
       const target = await readlink(`${ud}/${u}`);
       if (target?.startsWith(`${REPO}/systemd/user/`) && !(await lstat(target))) {
         say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
-        if (!DRY) { await run("systemctl", ["--user", "disable", "--now", u]); await Deno.remove(`${ud}/${u}`); }
+        if (!DRY) {
+          await run("systemctl", ["--user", "disable", "--now", u]); // a linked unit: disable removes the link itself
+          await Deno.remove(`${ud}/${u}`).catch(() => {});
+        }
       }
     }
     if (!DRY) {
