@@ -102,7 +102,10 @@ async function migrate(dry: boolean): Promise<number> {
   }
   console.log(`${todo.length} moved, ${local.length - todo.length} already in the brain`);
   if (dry) return 0;
-  const aside = `${items}-moved-to-brain-${dayOf(new Date())}`;
+  // a folder already set aside (say, synced back from another machine) is never overwritten
+  const base = `${items}-moved-to-brain-${dayOf(new Date())}`;
+  let aside = base;
+  for (let n = 2; await Deno.lstat(aside).then(() => true, () => false); n++) aside = `${base}-${n}`;
   await Deno.rename(items, aside);
   console.log(`the old files are in ${aside}`);
   return 0;
