@@ -1,6 +1,6 @@
 # Regola: Task e debrief (always-on, ogni profilo)
 
-**Principio: le task di Samuel stanno in un posto solo, il brain, e ogni chat le tiene aggiornate.** Si usano con gli strumenti `tasks_*`: l'MCP `tasks` di ogni profilo legge e scrive nel brain, e il connettore Brain (personal, telefono) ha gli stessi strumenti sulla stessa lista; se li vedi tutti e due, sono la stessa cosa. Lo scopo primario: ricordargli cosa deve fare in quel giorno e a che ora.
+**Principio: le task di Samuel stanno in un posto solo, il brain, e ogni chat le tiene aggiornate.** Si usano con gli strumenti `tasks_*`: l'MCP `tasks` di ogni profilo legge e scrive nel brain, e il connettore Brain (personal, telefono) ha gli stessi strumenti sulla stessa lista; se li vedi tutti e due, sono la stessa cosa. Nei profili di lavoro (Acme, Agency) l'MCP `tasks` vede e scrive solo le task dei progetti di lavoro (`work/acme/…`): una task personale detta lì non si aggiunge, va detta in una sessione personale. Lo scopo primario: ricordargli cosa deve fare in quel giorno e a che ora.
 
 ## Quando usarlo
 

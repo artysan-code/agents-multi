@@ -12,6 +12,10 @@ set -uo pipefail
 trap 'exit 0' EXIT
 command -v jq >/dev/null || exit 0
 
+# a work profile (brainScope in its manifest) has no brain memory, on purpose: nothing to point at
+manifest="$HOME/.claude-multi/shared/../profiles/$(basename "${CLAUDE_CONFIG_DIR:-x}")/profile.json"
+[ -f "$manifest" ] && grep -q '"brainScope"' "$manifest" && exit 0
+
 dir="${CLAUDE_PROJECT_DIR:-$PWD}"
 case "$dir" in
   "$HOME"/*) rel="${dir#"$HOME"/}" ;;

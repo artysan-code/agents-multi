@@ -15,11 +15,11 @@
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
 import { type Account, accountHosts, loadAccounts, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
-import { type Check, desktopDir, has, HOME, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { type Check, desktopDir, has, HOME, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
 
 type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[]; _service?: string };
 type Surface = "cli" | "desktop";
-export interface Registry { profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[]; bus?: string }
+export interface Registry { profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[]; bus?: string; brainScopes?: Record<string, string> }
 /** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
 export interface RawRegistry { profiles?: string[]; servers: Record<string, ServerCfg> }
 export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
@@ -35,7 +35,9 @@ const KEEP = 5;
 export async function loadRegistry(): Promise<Registry> {
   const r = await readJson<Registry>(REGISTRY);
   if (!r?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
-  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS), bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS") };
+  const brainScopes: Record<string, string> = {};
+  for (const p of await profileNames()) { const s = (await loadManifest(p)).brainScope; if (s) brainScopes[p] = s; }
+  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS), bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS"), brainScopes };
 }
 /**
  * A profile's server selection applied to the raw registry file. `everyone` is what an absent
@@ -78,6 +80,9 @@ export function wanted(reg: Registry, t: Target): Record<string, Record<string, 
       const hosts = accountHosts(visible).join(",") || "127.0.0.1:9";
       if (Array.isArray(clean.args)) clean.args = clean.args.map((a) => typeof a === "string" ? a.replaceAll("{hosts}", hosts) : a);
       clean.env = { ...(clean.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
+      // a work profile sees only its part of the brain (manifest brainScope)
+      const scope = cfg._service === "brain" ? reg.brainScopes?.[t.profile] : undefined;
+      if (scope) (clean.env as Record<string, string>).CLAUDE_MULTI_BRAIN_SCOPE = scope;
       if (t.surface === "desktop" && reg.bus) (clean.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
     }
     if (t.surface === "desktop") delete clean.type; // Desktop takes command/args/env; "type" is CLI vocabulary

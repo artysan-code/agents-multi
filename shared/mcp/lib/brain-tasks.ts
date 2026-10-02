@@ -42,6 +42,18 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
   };
 }
 
+/** Pure: a store that sees only the tasks of some projects (folder prefixes), for a work profile
+ *  whose conversations belong to someone else's account. A task outside is invisible, and one
+ *  cannot be written outside. */
+export function scoped(store: TaskStore, prefixes: string[]): TaskStore {
+  const inside = (t: Task | null): t is Task => !!t?.project && prefixes.some((p) => t.project === p || t.project!.startsWith(`${p}/`));
+  return {
+    list: async () => (await store.list()).filter(inside),
+    get: async (id) => { const t = await store.get(id); return inside(t) ? t : null; },
+    write: (t) => inside(t) ? store.write(t) : Promise.reject(new Error(`in this profile a task belongs to one of these projects: ${prefixes.join(", ")} — give it one (folder under ~)`)),
+  };
+}
+
 /** A store that only says why there is no list: a brain account without its token on this machine. */
 function missing(why: string): TaskStore {
   const fail = () => Promise.reject(new Error(why));
@@ -58,6 +70,8 @@ export async function connectTasks(): Promise<"brain" | "files"> {
   const account = brainAccount();
   if (!account) return "files";
   const token = await getSecret("brain", account.name).catch(() => null);
-  useTaskStore(token ? brainStore(account.url!, token) : missing(`no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`));
+  const store = token ? brainStore(account.url!, token) : missing(`no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`);
+  const scope = (Deno.env.get("CLAUDE_MULTI_BRAIN_SCOPE") ?? "").split(",").map((s) => s.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean);
+  useTaskStore(scope.length ? scoped(store, scope) : store);
   return "brain";
 }

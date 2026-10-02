@@ -45,7 +45,20 @@ def tool_uses(path):
                     yield n, str(c.get("name", "")), c.get("input") or {}
 
 
+def work_profile():
+    """A profile with brainScope in its manifest has no brain memory, on purpose: nothing to ask."""
+    name = os.path.basename(os.environ.get("CLAUDE_CONFIG_DIR", "").rstrip("/"))
+    manifest = os.path.expanduser(f"~/.claude-multi/shared/../profiles/{name}/profile.json")
+    try:
+        with open(manifest) as f:
+            return bool(json.load(f).get("brainScope"))
+    except (OSError, ValueError):
+        return False
+
+
 def main():
+    if work_profile():
+        return
     data = json.load(sys.stdin)
     if data.get("stop_hook_active"):
         return

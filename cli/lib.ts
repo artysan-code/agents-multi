@@ -71,6 +71,10 @@ export interface Manifest {
   /** Switch off what the account brings in: the claude.ai connectors and the organisation's synced
    *  plugins. Applied by the launchers (bin/claude, bin/claude-launch), not by install. */
   disableAccountMcp?: boolean;
+  /** A work profile on an account others administer: of Samuel's brain it sees only the tasks of
+   *  these projects (comma-separated folder prefixes, `work/acme`), and no memory pages. Its
+   *  conversations belong to that account, so nothing personal goes into them. */
+  brainScope?: string;
 }
 const MANIFEST_DEFAULT: Manifest = { skills: "all", agents: "all", commands: "all" };
 

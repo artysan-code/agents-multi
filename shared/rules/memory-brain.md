@@ -1,6 +1,6 @@
 # Regola: La memoria è il brain (always-on, ogni profilo)
 
-**Principio: la memoria di Samuel è il brain, un servizio sul suo server (`https://brain.example.com`), lo stesso da ogni Claude: CLI, Desktop, app, telefono.** Gli strumenti sono `brain_*`: connettore "Brain" nel profilo personal, server MCP `brain` negli altri. Le regole di forma (aree, lunghezza, link, doppioni, segreti) le applica il servizio e le spiega nelle sue istruzioni; qui c'è *quando* usarlo.
+**Principio: la memoria di Samuel è il brain, un servizio sul suo server (`https://brain.example.com`), lo stesso da ogni Claude: CLI, Desktop, app, telefono.** Gli strumenti sono `brain_*`, dal connettore "Brain" del profilo personal. **I profili di lavoro (Acme, Agency) non hanno il brain, di proposito**: sono account aziendali con amministratori, e le loro conversazioni non devono contenere niente di personale. Lì le task mostrano solo i progetti di lavoro; le pagine dei progetti di lavoro si scrivono da una sessione del profilo personal (`/brain-init`). Le regole di forma (aree, lunghezza, link, doppioni, segreti) le applica il servizio e le spiega nelle sue istruzioni; qui c'è *quando* usarlo.
 
 ## Leggere
 
