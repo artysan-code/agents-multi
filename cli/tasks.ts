@@ -1,5 +1,6 @@
-// tasks.ts — `claude-multi tasks …`: the task list from the terminal, and the desktop reminders the
-// timer sends (claude-tasks.timer → `tasks remind`, every five minutes).
+// tasks.ts — `claude-multi tasks …`: the task list from the terminal, the desktop reminders the
+// timer sends (claude-tasks.timer → `tasks remind`, every five minutes), and `migrate`, which moves
+// the old task files into the brain.
 //
 // The list itself is shared/mcp/lib/tasks.ts; the MCP server `tasks` is how Claude reads and keeps
 // it in every chat. Here: a brief to read, a quick add, done, and the reminders — the briefs at the
@@ -10,8 +11,10 @@ import { ANSI, readJson, STATE, uiLanguage } from "./lib.ts";
 import { desktopNotify } from "./notify.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import {
-  addTask, brief, dayOf, dueBriefs, dueReminders, listTasks, loadSettings, type Task, updateTask,
+  addTask, brief, dayOf, dueBriefs, dueReminders, fromFile, listTasks, loadSettings, type Task, tasksRoot, updateTask,
 } from "../shared/mcp/lib/tasks.ts";
+import { brainAccount, brainStore, connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
+import { getSecret } from "../shared/mcp/lib/vault.ts";
 
 const SENT = `${STATE}/tasks-sent.json`;
 const it = uiLanguage(Deno.env.toObject()) === "it";
@@ -69,7 +72,44 @@ function print(title: string, xs: Task[]) {
   for (const t of xs) console.log(`    ${t.due && t.due !== dayOf(new Date()) ? `${ANSI.d}${t.due}${ANSI.x} ` : ""}${t.time ? `${ANSI.c}${t.time}${ANSI.x} ` : ""}${t.title}${t.project ? ` ${ANSI.d}[${t.project}]${ANSI.x}` : ""}${t.owner && t.owner !== "samuel" ? ` ${ANSI.y}(${t.owner})${ANSI.x}` : ""}  ${ANSI.d}#${t.id}${ANSI.x}`);
 }
 
+/** The task files of ~/brains/tasks/items copied into the brain, once: those it already has are
+ *  left alone, then the folder is renamed so that nothing reads the old list by mistake. */
+async function migrate(dry: boolean): Promise<number> {
+  const account = brainAccount();
+  const token = account && await getSecret("brain", account.name).catch(() => null);
+  if (!account || !token) {
+    console.error(account ? `no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections` : "no brain account in shared/mcp/accounts.json");
+    return 1;
+  }
+  const items = `${tasksRoot()}/items`;
+  const local: Task[] = [];
+  try {
+    for await (const e of Deno.readDir(items)) {
+      if (!e.isFile || !/^t-[\w-]+\.md$/.test(e.name)) continue;
+      const t = fromFile(await Deno.readTextFile(`${items}/${e.name}`));
+      if (t) local.push(t);
+    }
+  } catch {
+    console.log("no local tasks to move");
+    return 0;
+  }
+  const store = brainStore(account.url!, token);
+  const there = new Set((await store.list()).map((t) => t.id));
+  const todo = local.filter((t) => !there.has(t.id));
+  for (const t of todo) {
+    console.log(`${dry ? "would move" : "moved"}  ${t.id}  ${t.title}`);
+    if (!dry) await store.write(t);
+  }
+  console.log(`${todo.length} moved, ${local.length - todo.length} already in the brain`);
+  if (dry) return 0;
+  const aside = `${items}-moved-to-brain-${dayOf(new Date())}`;
+  await Deno.rename(items, aside);
+  console.log(`the old files are in ${aside}`);
+  return 0;
+}
+
 export async function tasksCommand(args: string[]): Promise<number> {
+  await connectTasks();
   const [sub = "brief", ...rest] = args;
   const opt = (name: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : undefined; };
   switch (sub) {
@@ -98,8 +138,9 @@ export async function tasksCommand(args: string[]): Promise<number> {
       return 0;
     }
     case "remind": return await remind(rest.includes("--dry-run"));
+    case "migrate": return await migrate(rest.includes("--dry-run"));
     default:
-      console.error("usage: claude-multi tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]]");
+      console.error("usage: claude-multi tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]|migrate [--dry-run]]");
       return 2;
   }
 }

@@ -70,16 +70,20 @@
       "args": [
         "run",
         "--quiet",
-        "--allow-read=~/brains/tasks,~/.cache/deno",
+        "--allow-net={hosts}",
+        "--allow-read=~/brains/tasks,~/vault/claude-multi,~/.claude-multi/shared/mcp/accounts.json,~/.cache/deno",
         "--allow-write=~/brains/tasks",
-        "--allow-env=HOME,CLAUDE_MULTI_TASKS",
+        "--allow-env=HOME,CLAUDE_MULTI_TASKS,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
+        "--allow-run=/usr/bin/secret-tool",
         "--lock=~/.claude-multi/shared/mcp/tasks/deno.lock",
         "~/.claude-multi/shared/mcp/tasks/server.ts"
       ],
       "_surfaces": [
         "cli",
         "desktop"
-      ]
+      ],
+      "_service": "brain",
+      "_note": "Le task stanno nel brain (shared/mcp/lib/brain-tasks.ts): _service brain dà l'host e il profilo, il token personale sta nel vault (brain/brain). ~/brains/tasks resta per settings.json e i file allegati dalla console."
     },
     "google": {
       "_service": "google",

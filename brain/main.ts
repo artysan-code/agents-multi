@@ -123,6 +123,23 @@ async function handle(req: Request): Promise<Response> {
     const res = await caller.run(who, () => transport.handleRequest(req));
     return withCors(res);
   }
+  // the tasks as files, for Samuel's machines (the console, the reminders, the local tasks tools):
+  // the TaskStore of shared/mcp/lib/brain-tasks.ts on the other side; the rules run there
+  if (p === "/api/tasks" && req.method === "GET") {
+    const rows = store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as { body: string }[];
+    return json({ tasks: rows.map((r) => r.body) });
+  }
+  const one = p.match(/^\/api\/tasks\/(t-[\w-]+)$/);
+  if (one && req.method === "GET") {
+    const d = store.get(`tasks/${one[1]}.md`);
+    return d ? json({ task: d.body }) : json({ error: "no such task" }, 404);
+  }
+  if (one && req.method === "PUT") {
+    const body = await req.text();
+    if (fromFile(body)?.id !== one[1]) return json({ error: "not a task file, or its id is not the one in the path" }, 400);
+    await caller.run(who, () => taskStore.write(fromFile(body)!));
+    return json({ written: one[1] });
+  }
   if (p === "/backup" && who.startsWith("token:")) {
     const key = env("BRAIN_BACKUP_KEY");
     if (!key) return json({ error: "no BRAIN_BACKUP_KEY on the server" }, 503);

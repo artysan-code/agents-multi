@@ -94,7 +94,8 @@ const chk = await call("brain_check", {});
 ok(Array.isArray(chk.orphans) && chk.broken_links.some((b: { link: string }) => b.link === "progetti/claude-multi"), "check finds the link the deletion broke");
 ok((await call("brain_history", { path: "progetti/claude-multi.md" })).versions[0].op === "delete", "deletion is a revision");
 
-const t = await call("tasks_add", { title: "Provare il cervello dal telefono", due: "2026-10-02", project: "claude-multi" });
+const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString("sv"); // YYYY-MM-DD, local
+const t = await call("tasks_add", { title: "Provare il cervello dal telefono", due: tomorrow, project: "claude-multi" });
 ok(/Provare il cervello/.test(t.added), "tasks_add in the brain");
 const st = await call("tasks_steps", { id: t.task.id, add: ["Collegare il connettore", "Provare la voce"] });
 ok(st.steps.length === 2, "task steps");
@@ -121,3 +122,18 @@ ok(!!pt, "personal token shown once");
 r = await fetch(`${B}/backup`, { headers: { authorization: `Bearer ${pt}` } });
 const bytes = new Uint8Array(await r.arrayBuffer());
 ok(r.status === 200 && new TextDecoder().decode(bytes.subarray(0, 4)) === "BRN1" && bytes.length > 1000, `encrypted backup, ${bytes.length} bytes`);
+
+// the tasks as files, for the machines: the console's store on the other side
+const { brainStore } = await import("../../shared/mcp/lib/brain-tasks.ts");
+const remote = brainStore(B, pt!);
+const all = await remote.list();
+ok(all.some((x) => x.id === t.task.id), `/api/tasks lists the task added over MCP (${all.length})`);
+const moved = { ...all.find((x) => x.id === t.task.id)!, due: "2026-10-05", updated: new Date().toISOString() };
+await remote.write(moved);
+ok((await remote.get(t.task.id))?.due === "2026-10-05", "/api/tasks/<id>: written and read back");
+ok((await remote.get("t-20000101-000000")) === null, "an unknown task is null, not an error");
+r = await fetch(`${B}/api/tasks/${t.task.id}`, { method: "PUT", headers: { authorization: `Bearer ${pt}` }, body: "# not a task" });
+ok(r.status === 400, "a body that is not that task is refused");
+await r.body?.cancel();
+const stranger = brainStore(B, "brain_wrong-token-wrong-token-wrong");
+ok(await stranger.list().then(() => false, (e) => /refused the token/.test(e.message)), "a wrong token says so");

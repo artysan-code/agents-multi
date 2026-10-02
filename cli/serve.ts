@@ -25,6 +25,7 @@ import { probeAccount } from "./vault.ts";
 import { addToInbox, BRAIN, brainGraph, brainPage, INBOX_MAX } from "./brain.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
 import { addTask, brief, listTasks, tasksRoot, type TaskInput, updateTask } from "../shared/mcp/lib/tasks.ts";
+import { connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
 import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
@@ -277,6 +278,21 @@ function eventStream(): Response {
 }
 
 // ---------------------------------------------------------------- server
+/** With the tasks in the brain, a change made elsewhere (the phone, a chat on another machine)
+ *  touches no file here: the list is read every half minute and a `tasks` event goes out when it
+ *  differs. The console's own writes broadcast at once, through taskApi. */
+async function watchBrainTasks(signal: AbortSignal) {
+  let last = "";
+  while (!signal.aborted) {
+    try {
+      const now = JSON.stringify((await listTasks()).map((t) => [t.id, t.updated]).sort());
+      if (last && now !== last) broadcast("tasks");
+      last = now;
+    } catch { /* the brain is away: the panels say so when they ask */ }
+    await new Promise((r) => setTimeout(r, 30_000));
+  }
+}
+
 export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
   // The status report takes a second or more (it runs the doctor). Pages must not wait for it on
@@ -471,6 +487,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
 
   console.log(`${ANSI.b}claude-multi serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   void watchTree(ac.signal);
+  if (await connectTasks() === "brain") void watchBrainTasks(ac.signal);
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
   if (opts.open) { try { new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref(); } catch { /* no browser */ } }
   await srv.finished;

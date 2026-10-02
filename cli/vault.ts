@@ -34,6 +34,7 @@ export async function probeAccount(a: Account, secret: string): Promise<{ ok: bo
   const probes: Record<string, { path: string; header: string }> = {
     coolify: { path: "/api/v1/version", header: `Authorization: Bearer ${secret}` },
     n8n: { path: "/api/v1/workflows?limit=1", header: `X-N8N-API-KEY: ${secret}` },
+    brain: { path: "/api/tasks", header: `Authorization: Bearer ${secret}` },
   };
   const p = probes[a.service];
   if (!p || !a.url) return { ok: true, detail: "no check for this service" };

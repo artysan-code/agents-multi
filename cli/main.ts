@@ -122,7 +122,7 @@ switch (cmd) {
   vault   [status|init|pair|recovery-code|set|delete|import-legacy]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
-  tasks   [brief|add|done|remind]   the task list (~/brains/tasks); remind is what claude-tasks.timer runs
+  tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
 
   The console runs as a systemd user unit after install, so it is always there:

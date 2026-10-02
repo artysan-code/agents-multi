@@ -1,10 +1,10 @@
 // tasks.ts — Samuel's tasks: what there is to do, by when, at what time, and who has to move.
 //
-// One Markdown file per task in ~/brains/tasks/items (CLAUDE_MULTI_TASKS overrides the root): a
-// Syncthing folder, so every machine and every Claude session sees the same list, and an Obsidian
-// vault, so the files read well by hand too. One file per task means two machines only collide on
-// the same task at the same moment; a task is never deleted, it is `dropped` — a write, which
-// travels through Syncthing where a removal can get lost (see references/syncthing-operative-rules).
+// One Markdown file per task. Where the files are is the store's business: in Samuel's brain when
+// there is a brain account (brain-tasks.ts, the only list from 2026-10-02 on), otherwise in
+// ~/brains/tasks/items (CLAUDE_MULTI_TASKS overrides the root), a Syncthing folder. That root also
+// keeps settings.json and the files attached from the console. A task is never deleted, it is
+// `dropped`: a write, which keeps it in the history (and on Syncthing, where a removal can get lost).
 //
 // The owner is who has to move: `samuel` (the default), `claude` (work a session can pick up), or
 // anyone else — then the task is usually `waiting` on them. Dates and times are local (Europe/Rome

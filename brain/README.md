@@ -14,7 +14,9 @@ the machines: the brain is here.
   back (`brain_history`, `brain_restore`).
 - **Tasks**: one document per task under `tasks/`, with the same rules as the local tasks tools
   (`shared/mcp/lib/tasks.ts`, `shared/mcp/tasks/tools.ts`, shared code). Memory lists and searches
-  leave them out unless asked.
+  leave them out unless asked. Samuel's machines read and write them as files on `/api/tasks`
+  (`shared/mcp/lib/brain-tasks.ts`): the console, the reminders and the local `tasks` tools all use
+  this one list.
 - **Search**: full text (SQLite FTS5) and by meaning (chunks embedded by `bge-m3` behind Ollama),
   fused by reciprocal rank. The embeddings fill in the background after each write; when the model
   is down, search answers with words alone and says so.

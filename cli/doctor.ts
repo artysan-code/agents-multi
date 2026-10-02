@@ -5,6 +5,8 @@ import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_B
 import { settingsState } from "./settings.ts";
 import { ACCOUNTS, health, legacyStatePresent, plan } from "./mcp.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
+import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
+import { tasksRoot } from "../shared/mcp/lib/tasks.ts";
 import { keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { legacyFilesPresent } from "./vault.ts";
 import { PORT } from "./serve.ts";
@@ -274,6 +276,12 @@ export async function doctor(): Promise<Check[]> {
       if (t.out !== "enabled") add("desktop.timer", "warn", `claude-update-check.timer: ${t.out || "not installed"}`, "claude-multi install");
       const tt = await run("systemctl", ["--user", "is-enabled", "claude-tasks.timer"]);
       if (tt.out !== "enabled") add("tasks.timer", "warn", `claude-tasks.timer: ${tt.out || "not installed"} — no task reminders on this machine`, "claude-multi install");
+    }
+    // the tasks live in the brain when there is a brain account: old files left in place are a second list
+    if (brainAccount(undefined, loadAccounts())) {
+      const left = (await listDir(`${tasksRoot()}/items`)).filter((n) => /^t-[\w-]+\.md$/.test(n));
+      if (left.length) add("tasks.migrate", "warn", `${left.length} tasks are still files in ${shortHome(tasksRoot())}/items, not in the brain`, "claude-multi tasks migrate");
+      else add("tasks.store", "ok", "tasks: in the brain");
     }
     if (!(await lstat(`${REPO}/pkg/claude-desktop/anthropic-apt.asc`))) add("desktop.apt-key", "warn", "the Anthropic apt key is not in the repository: the InRelease signature cannot be verified", "fetch the key into pkg/claude-desktop/anthropic-apt.asc");
     else if (!(await has("gpgv"))) add("desktop.apt-key", "warn", "gpgv is missing: the apt repository signature is not verified", "install gnupg");
