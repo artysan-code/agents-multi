@@ -86,6 +86,15 @@
         "cli",
         "desktop"
       ]
+    },
+    "brain": {
+      "type": "http",
+      "url": "https://brain.example.com/mcp",
+      "_profiles": [
+        "acme",
+        "agency"
+      ],
+      "_note": "Il brain per i profili di lavoro: solo in Claude Code (l'accesso OAuth, passphrase + TOTP, si fa una volta per profilo con /mcp e il token resta su questo PC), non come connettore sull'account claude.ai, che è una casella condivisa. Il profilo personal lo ha già come connettore claude.ai."
     }
   }
 }
