@@ -18,6 +18,7 @@ services:
       - BRAIN_EMBED_MODEL=bge-m3
       - BRAIN_DATA=/data
       - PORT=8080
+      - TZ=Europe/Rome
     volumes:
       - brain-data:/data
     depends_on:

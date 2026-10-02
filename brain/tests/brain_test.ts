@@ -6,6 +6,7 @@ import { cleanPath, linksIn, Store, titleOf } from "../store.ts";
 import { chunk, fuse } from "../embed.ts";
 import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, totp, totpOk } from "../auth.ts";
 import { open, seal } from "../backup.ts";
+import { staleProjects } from "../tools.ts";
 import { check, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
 
 Deno.test("cleanPath: a folder/name.md inside the tree, nothing else", () => {
@@ -142,4 +143,18 @@ Deno.test("check: a link to an existing page, near copies refused unless distinc
 Deno.test("relink: links that meant the old page point at the new one, label and heading kept", () => {
   const resolve = (t: string) => ["note/a", "a"].includes(t) ? "note/a.md" : null;
   assertEquals(relink("vedi [[a]] e [[note/a#sez|qui]] e [[b]]", "note/a.md", "note/nuova.md", resolve), "vedi [[note/nuova]] e [[note/nuova#sez|qui]] e [[b]]");
+});
+
+Deno.test("staleProjects: a reminder when the diary moved on after the project page", () => {
+  const s = new Store(":memory:");
+  s.write("io/chi-sono.md", page("Chi sono"), "t");
+  s.write("progetti/x.md", page("X", "Frase, vedi [[io/chi-sono]]."), "t");
+  s.db.prepare("update docs set updated = ? where path = ?").run("2026-10-01T08:00:00", "progetti/x.md");
+  const now = new Date("2026-10-01T10:05:00");
+  const diary = "# 2026-10-01\n\nFrase.\n\n- 10:00 fatto qualcosa [[progetti/x]]\n- 10:05 altro [[progetti/x]]\n";
+  assert(staleProjects(s, diary, "altro [[progetti/x]]", now).reminder?.includes("progetti/x.md"));
+  // the page updated after the earlier line: nothing to remind
+  s.db.prepare("update docs set updated = ? where path = ?").run("2026-10-01T10:02:00", "progetti/x.md");
+  assertEquals(staleProjects(s, diary, "altro [[progetti/x]]", now), {});
+  s.close();
 });

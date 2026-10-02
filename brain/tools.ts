@@ -7,7 +7,7 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { z } from "npm:zod@^3.23";
 import { registerTaskTools } from "../shared/mcp/tasks/tools.ts";
-import type { Store } from "./store.ts";
+import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";
 import { AREAS, areaOf, check, LOGS, MAX_WORDS, relink, slugPath } from "./rules.ts";
 import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
@@ -40,6 +40,25 @@ export function instructions(store: Store): string {
 const text = (o: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(o, null, 2) }] });
 const READ = { readOnlyHint: true, openWorldHint: false };
 const CHANGE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+
+/** The projects a diary line names whose page is older than an earlier line about them today:
+ *  the diary moved on and the page did not. A reminder, not a refusal. */
+export function staleProjects(store: Store, diary: string, line: string, now: Date): { reminder?: string } {
+  const day = dayOf(now);
+  const stale: string[] = [];
+  for (const t of linksIn(line)) {
+    const proj = store.resolve(t);
+    if (!proj?.startsWith("progetti/")) continue;
+    const updated = store.get(proj)?.updated;
+    if (!updated) continue;
+    const name = proj.replace(/\.md$/, "");
+    // the earlier lines of today's page that link this project, by the time they carry
+    const earlier = diary.split("\n").filter((l) => /^- \d{2}:\d{2} /.test(l) && l.includes(`[[${name}`) && !l.includes(line.trim().split("\n")[0]));
+    const after = earlier.some((l) => new Date(`${day}T${l.slice(2, 7)}:00`) > new Date(updated));
+    if (after) stale.push(proj);
+  }
+  return stale.length ? { reminder: `${stale.join(", ")}: the diary has moved on since the page was last updated. If the state changed, update the page (brain_edit).` } : {};
+}
 
 export interface ToolContext { store: Store; embed: EmbedConfig; by: () => string; changed: () => void }
 
@@ -179,7 +198,7 @@ export function brainServer(ctx: ToolContext): McpServer {
     if (!v.ok) return refuse(v.errors);
     const d = store.write(p, body, ctx.by(), cur?.rev ?? 0);
     ctx.changed();
-    return text({ added: d.path, rev: d.rev });
+    return text({ added: d.path, rev: d.rev, ...(where === "inbox" ? {} : staleProjects(store, body, line, now)) });
   });
 
   server.registerTool("brain_inbox_clear", {
