@@ -99,6 +99,15 @@
         "cli",
         "desktop"
       ]
+    },
+    "brain": {
+      "type": "http",
+      "url": "https://brain.example.com/mcp",
+      "_profiles": [
+        "acme",
+        "agency"
+      ],
+      "_note": "Il brain di Samuel su ovh (brain/): server remoto, accesso OAuth (passphrase + TOTP) fatto una volta per profilo con /mcp; il token lo tiene Claude Code, non il vault. Il profilo personal lo ha già come connettore claude.ai, quindi qui no: avrebbe gli strumenti due volte."
     }
   }
 }
