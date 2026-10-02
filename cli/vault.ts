@@ -100,10 +100,10 @@ export async function vaultCommand(args: string[]): Promise<number> {
         return 0;
       }
       case "set": {
-        const [service, account] = rest;
-        if (!service || !account) { console.error("usage: claude-multi vault set <service> <account>   (the secret from stdin)"); return 2; }
-        await setSecret(service, account, await readStdin(`secret for ${service}/${account}: `));
-        console.log(`stored ${service}/${account}`);
+        const [service, account, field = "token"] = rest;
+        if (!service || !account) { console.error("usage: claude-multi vault set <service> <account> [field]   (the secret from stdin; field defaults to token)"); return 2; }
+        await setSecret(service, account, await readStdin(`secret for ${service}/${account}${field === "token" ? "" : ` (${field})`}: `), field);
+        console.log(`stored ${service}/${account}${field === "token" ? "" : ` ${field}`}`);
         return 0;
       }
       case "delete": {

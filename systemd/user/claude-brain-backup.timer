@@ -1,0 +1,12 @@
+[Unit]
+Description=Brain backup: every half hour while the machine is on, a copy only when the brain changed
+
+[Timer]
+# Relative to boot and to the last run, not on the clock: the machines are off at night, so there is
+# no night job; the check is cheap (one small request) and the copy comes only after a change.
+OnStartupSec=10min
+OnUnitActiveSec=30min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -140,6 +140,11 @@ async function handle(req: Request): Promise<Response> {
     await caller.run(who, () => taskStore.write(fromFile(body)!));
     return json({ written: one[1] });
   }
+  // what the machines compare before fetching a backup: it changes with every write, never otherwise
+  if (p === "/backup/state" && who.startsWith("token:")) {
+    const r = store.db.prepare("select count(*) n, max(at) last from revisions").get() as { n: number; last: string | null };
+    return json({ version: `${r.n}:${r.last ?? ""}`, revisions: r.n, last: r.last });
+  }
   if (p === "/backup" && who.startsWith("token:")) {
     const key = env("BRAIN_BACKUP_KEY");
     if (!key) return json({ error: "no BRAIN_BACKUP_KEY on the server" }, 503);

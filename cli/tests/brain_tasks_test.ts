@@ -2,6 +2,7 @@
 // store says when the brain refuses or is away. The HTTP side runs end to end in brain/tests/e2e.ts.
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { brainAccount, brainStore, scoped } from "../../shared/mcp/lib/brain-tasks.ts";
+import { toPrune } from "../brain-backup.ts";
 
 Deno.test("brainAccount: the brain account a profile sees, none without one", () => {
   const all = [
@@ -38,4 +39,10 @@ Deno.test("scoped: a work profile sees and writes only the tasks of its projects
   await assertRejects(() => s.write(mk("t-7", "personal/dnd")), Error, "work/acme");
   await assertRejects(() => s.write(mk("t-8")), Error, "work/acme");
   assertEquals(written, ["t-6"]);
+});
+
+Deno.test("toPrune: the oldest brain copies beyond the ones to keep, nothing else", () => {
+  const names = ["brain-2026-10-01T09-00.brn", "brain-2026-10-02T09-00.brn", "brain-2026-09-30T09-00.brn", "notes.txt", ".brain-x.brn.tmp"];
+  assertEquals(toPrune(names, 2), ["brain-2026-09-30T09-00.brn"]);
+  assertEquals(toPrune(names, 5), []);
 });

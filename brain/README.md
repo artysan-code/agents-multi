@@ -54,9 +54,10 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
 
 ## Backups
 
+`GET /backup/state` says what the brain is at (a version that changes with every write), and
 `GET /backup` with a personal token returns the whole brain as one file: a consistent copy of the
-database (`VACUUM INTO`), sealed with AES-256-GCM under `BRAIN_BACKUP_KEY`. Samuel's machines fetch
-it and keep the last ones; without the key from the vault a copy cannot be read. No third party
+database (`VACUUM INTO`), sealed with AES-256-GCM under `BRAIN_BACKUP_KEY`. Samuel's machines check the state every half hour while they are on and fetch a copy only when
+it changed (`claude-multi brain-backup`, `claude-brain-backup.timer`), keeping the last ones; without the key from the vault a copy cannot be read. No third party
 holds the brain.
 
 ## Running it

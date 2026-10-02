@@ -4,6 +4,8 @@
 import { AGENTS_SKILLS, ANSI, BIN, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { syncSettings } from "./settings.ts";
+import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
+import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 
 let DRY = false;
 const actions: string[] = [];
@@ -253,6 +255,8 @@ export async function install(dry: boolean) {
       if (m.graphical) wantEnabled.push("claude-update-check.timer");
       // task briefs and reminders are desktop notifications: only where there is a desktop
       if (m.graphical) wantEnabled.push("claude-tasks.timer");
+      // a copy of the brain on every machine that is on, fetched only when it changed
+      if (brainAccount(undefined, loadAccounts())) wantEnabled.push("claude-brain-backup.timer");
       // The desktop app sits in the tray from login (it exits by itself where there is no tray).
       if (m.graphical) wantEnabled.push("claude-multi-app.service");
       // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
