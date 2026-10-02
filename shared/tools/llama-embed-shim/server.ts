@@ -22,11 +22,6 @@
 const LLAMA = Deno.env.get("LLAMA_BASE_URL") ?? "http://127.0.0.1:8090";
 const PORT = Number(Deno.env.get("SHIM_PORT") ?? "11434");
 const MODEL = Deno.env.get("SHIM_MODEL") ?? "bge-m3";
-// Generazione: server SEPARATO, acceso solo quando serve (lo usa il distiller).
-const GEN = Deno.env.get("GEN_BASE_URL") ?? "http://127.0.0.1:8080";
-// GEN_UNIT set but empty = no generation on this machine (a laptop with no room for the model).
-const GEN_UNIT = Deno.env.get("GEN_UNIT") ?? "llama-generate.service";
-const GEN_IDLE_SEC = Number(Deno.env.get("GEN_IDLE_SEC") ?? "300");
 
 type Meta = { dim: number; ctx: number; digest: string };
 let meta: Meta | null = null;
@@ -52,47 +47,6 @@ async function getMeta(): Promise<Meta> {
   meta = { dim: emb.length, ctx, digest: "sha256:" + await sha256Hex(`${modelPath}:${emb.length}`) };
   console.error(`[shim] pronto — modello=${MODEL} dim=${meta.dim} ctx=${meta.ctx} backend=${LLAMA}`);
   return meta;
-}
-
-/* ── Ciclo di vita del server di generazione ────────────────────────────────
-   Il modello di generazione (8B) pesa GB di VRAM, e la GPU è anche il display.
-   Quindi NON sta acceso: lo accendiamo alla prima /api/generate e lo spegniamo
-   dopo GEN_IDLE_SEC senza richieste. Il distiller non se ne accorge: continua a
-   parlare con la stessa porta 11434 di sempre.                                */
-let idleTimer: ReturnType<typeof setTimeout> | undefined;
-
-async function sysctl(...args: string[]): Promise<void> {
-  const c = new Deno.Command("systemctl", { args: ["--user", ...args] });
-  await c.output();
-}
-
-function armIdleStop(): void {
-  if (idleTimer !== undefined) clearTimeout(idleTimer);
-  idleTimer = setTimeout(async () => {
-    console.error(`[shim] ${GEN_IDLE_SEC}s di inattività: spengo ${GEN_UNIT}`);
-    await sysctl("stop", GEN_UNIT);
-    idleTimer = undefined;
-  }, GEN_IDLE_SEC * 1000);
-}
-
-async function genUp(): Promise<boolean> {
-  try {
-    const r = await fetch(`${GEN}/health`, { signal: AbortSignal.timeout(2000) });
-    return r.ok;
-  } catch { return false; }
-}
-
-/** Accende il server di generazione e attende che risponda. Il primo avvio può
- *  richiedere minuti se il modello non è ancora in cache. */
-async function ensureGen(): Promise<void> {
-  if (await genUp()) return;
-  console.error(`[shim] accendo ${GEN_UNIT} (on-demand)`);
-  await sysctl("start", GEN_UNIT);
-  for (let i = 0; i < 180; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    if (await genUp()) { console.error("[shim] server di generazione pronto"); return; }
-  }
-  throw new Error(`${GEN_UNIT} non è diventato pronto entro 6 minuti`);
 }
 
 async function embed(text: string): Promise<number[]> {
@@ -132,31 +86,6 @@ async function handler(req: Request): Promise<Response> {
       const b = await req.json();
       const text = typeof b?.prompt === "string" ? b.prompt : "";
       return json({ embedding: await embed(text) });
-    }
-    if (pathname === "/api/generate") {
-      if (!GEN_UNIT) return json({ error: "generation is off on this machine (GEN_UNIT is empty)" }, 503);
-      const b = await req.json();
-      await ensureGen();
-      armIdleStop();
-      // Ollama /api/generate -> /v1/chat/completions di llama-server.
-      // Passiamo da chat/completions e NON da /completion perche' cosi' llama-server
-      // applica il template instruct del modello: il prompt del distiller e' una
-      // istruzione, senza template la risposta degenera (verificato: vuota o fuori tema).
-      const r = await fetch(`${GEN}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: b?.prompt ?? "" }],
-          temperature: b?.options?.temperature ?? 0.2,
-          max_tokens: b?.options?.num_predict ?? 4096,
-          stream: false,
-        }),
-      });
-      if (!r.ok) throw new Error(`llama-server chat HTTP ${r.status}: ${await r.text().catch(() => "")}`);
-      const j = await r.json();
-      const out = j?.choices?.[0]?.message?.content ?? "";
-      armIdleStop();
-      return json({ model: b?.model ?? MODEL, response: out.trim(), done: true });
     }
     if (pathname === "/api/pull") {
       // Non scarichiamo nulla: il modello è già servito da llama-server.

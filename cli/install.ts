@@ -198,6 +198,8 @@ export async function install(dry: boolean) {
   if (await lstat(`${BIN}/claude-multi-finalize`)) await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
   // updates install themselves now: the notifier that offered to install them is gone
   if ((await lstat(`${BIN}/claude-update-notify`))?.isSymlink) await removeLink(`${BIN}/claude-update-notify`, "updates install themselves");
+  // the wiki distiller is gone (2026-10-02): the memory is the brain now
+  if ((await lstat(`${BIN}/claude-distiller`))?.isSymlink) await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
   await ensureDir(LIB);
   // The update GUI became the desktop app (bin/claude-multi-app finds its code through the repo).
   for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");
@@ -231,6 +233,14 @@ export async function install(dry: boolean) {
   if (m.systemd) {
     const ud = `${HOME}/.config/systemd/user`; await ensureDir(ud);
     for (const u of await listDir(`${REPO}/systemd/user`)) await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
+    // a unit removed from the repository leaves its link behind: drop the ones pointing at nothing
+    for (const u of await listDir(ud)) {
+      const target = await readlink(`${ud}/${u}`);
+      if (target?.startsWith(`${REPO}/systemd/user/`) && !(await lstat(target))) {
+        say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
+        if (!DRY) { await run("systemctl", ["--user", "disable", "--now", u]); await Deno.remove(`${ud}/${u}`); }
+      }
+    }
     if (!DRY) {
       await run("systemctl", ["--user", "daemon-reload"]);
       // The console serves itself: enabled everywhere systemd exists, including headless boxes
@@ -244,8 +254,6 @@ export async function install(dry: boolean) {
       if (m.graphical) wantEnabled.push("claude-multi-app.service");
       // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
       if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
-      // llama-generate.service stays deliberately disabled: the shim starts it on demand and stops
-      // it when idle, which keeps the VRAM free.
       if (m.graphical && await lstat(`${HOME}/.local/opt/llama-vulkan/bin/llama-server`)) wantEnabled.push("llama-embed.service", "llama-embed-shim.service");
       else if (m.graphical) console.log(`  ${ANSI.d}no llama-server (~/.local/opt/llama-vulkan): skipping llama-embed*.service — wiki search will have no semantic mode here${ANSI.x}`);
       for (const u of wantEnabled) {

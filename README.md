@@ -392,11 +392,7 @@ EMBED_BATCH=8192
 EMBED_UBATCH=1024                               # a causal model can take a chunk in pieces: the compute buffer shrinks
 EMBED_PARALLEL=1
 GGML_VK_VISIBLE_DEVICES=1                       # which Vulkan device (llama-server --list-devices)
-GEN_UNIT=                                       # empty: no generation model here, the distiller waits
 ```
-
-With `GEN_UNIT` empty the shim answers 503 to `/api/generate` instead of starting
-`llama-generate.service`, whose 8B model does not fit a small machine.
 
 ---
 
