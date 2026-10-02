@@ -14,15 +14,17 @@ import { dayOf } from "../shared/mcp/lib/tasks.ts";
 type Json = (v: unknown, code?: number) => Response;
 export type AskKind = "ask" | "newtask" | "debrief";
 
+// Samuel's brain, read only: the claude.ai connector "Brain" of the personal profile, as the CLI names it
+const BRAIN_READ = ["mcp__claude_ai_Brain__brain_search", "mcp__claude_ai_Brain__brain_read", "mcp__claude_ai_Brain__brain_list"];
 const READ = [
   "mcp__google__calendar_list", "mcp__google__calendar_events",
   "mcp__google__gmail_search", "mcp__google__gmail_thread",
   "mcp__google__drive_search", "mcp__google__drive_read",
-  "mcp__wiki-claude__search", "mcp__wiki-claude__read_note",
+  ...BRAIN_READ,
 ];
 export const TOOLS: Record<AskKind, string[]> = {
   ask: ["mcp__tasks", ...READ],
-  newtask: ["mcp__tasks", "mcp__wiki-claude__search", "mcp__wiki-claude__read_note"],
+  newtask: ["mcp__tasks", ...BRAIN_READ],
   debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
 };
 
@@ -35,7 +37,7 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
   if (kind === "newtask") {
     const where = project ? `the project "${project}"` : noProject ? `no project (a simple thing to do)` : `a project you work out from what he says`;
     const set = project ? `project "${project}"` : noProject ? "no project" : `project: the folder under ~ it belongs to (work/acme/site, ` +
-      `personal/dnd/dragons-lair: look at the existing tasks' projects with tasks_list, or the wiki), or none for a simple thing`;
+      `personal/dnd/dragons-lair: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
     return `${BASE(now)}\nSamuel is describing a new task for ${where}. Create it with tasks_add: a short, clear title in his ` +
       `words, ${set}, a day and time only if he gave them (resolve "domani", "venerdì" ` +
       `from today), and in notes what he explained, as a short description. If it takes more than one action, add the steps ` +
@@ -48,11 +50,11 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
       `what he is waiting for from others, if anything. If the day is empty say so in one line.`;
   }
   return `${BASE(now)}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when he says ` +
-    `something to do, add it), his calendar, mail and Drive read only, the wiki. Never send mail or create events from ` +
+    `something to do, add it), his calendar, mail and Drive read only, his brain (memory: projects, people, notes) read only. Never send mail or create events from ` +
     `here: say it is for a conversation. When the request needs work inside a project's files (code, changes, looking ` +
     `through a repository), do not start it here: say in one line what you would do, then end with a line of its own ` +
     `[[code:PATH]] where PATH is the project's folder under ~ (for example ~/work/acme/site) if you know it or can find ` +
-    `it in the wiki, otherwise [[code:~]].`;
+    `it in the brain, otherwise [[code:~]].`;
 }
 
 /** The user's text as a positional argument: a leading "-" would read as an option. */
@@ -73,12 +75,12 @@ export function askArgs(kind: AskKind, text: string, now: string, opts: { sessio
 export type Out =
   | { t: "session"; id: string }
   | { t: "text"; d: string }
-  | { t: "tool"; k: "tasks" | "calendar" | "mail" | "drive" | "wiki" | "work" }
+  | { t: "tool"; k: "tasks" | "calendar" | "mail" | "drive" | "brain" | "work" }
   | { t: "done"; text: string; code: string | null; error?: string };
 
 export const toolKind = (name: string): Extract<Out, { t: "tool" }>["k"] =>
   /tasks/.test(name) ? "tasks" : /calendar/.test(name) ? "calendar" : /gmail/.test(name) ? "mail"
-  : /drive/.test(name) ? "drive" : /wiki/.test(name) ? "wiki" : "work";
+  : /drive/.test(name) ? "drive" : /brain_/.test(name) ? "brain" : "work";
 
 const CODE = /\[\[code:([^\]]+)\]\]/;
 

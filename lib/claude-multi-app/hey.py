@@ -4,7 +4,7 @@ Opened by `claude-multi-app --hey` (bind it to a global shortcut), by the tray m
 on the console's Today page. What is typed goes to `claude -p` in the default profile, streamed
 back under the field:
 
-  a thing to do, a question on the day, mail, calendar, Drive, the wiki
+  a thing to do, a question on the day, mail, calendar, Drive, the brain
       answered there, with the tools of those servers (the tasks can be changed; mail, calendar
       and Drive are read only: sending or inviting stays a conversation's job)
   work inside a project's files
@@ -42,18 +42,18 @@ ALLOWED = [
     "mcp__google__calendar_list", "mcp__google__calendar_events",
     "mcp__google__gmail_search", "mcp__google__gmail_thread",
     "mcp__google__drive_search", "mcp__google__drive_read",
-    "mcp__wiki-claude__search", "mcp__wiki-claude__read_note",
+    "mcp__claude_ai_Brain__brain_search", "mcp__claude_ai_Brain__brain_read", "mcp__claude_ai_Brain__brain_list",
 ]
 
 PROMPT = """You are «Hey Claude», Samuel's quick entry from the desktop: one field, one short answer.
 Answer in Italian unless he writes in another language. Be brief: one to four lines, no preamble, no
 closing question. Today is {today}.
 Use the tools: tasks (add, close, move, the day's brief: follow the tasks rule), his calendar, mail and
-Drive read only, the wiki. Never send mail or create events from here: say it is for a conversation.
+Drive read only, his brain (memory) read only. Never send mail or create events from here: say it is for a conversation.
 When the request needs work inside a project's files (code, changes, looking through a repository),
 do not start it here: say in one line what you would do, then end with a line of its own
 [[code:PATH]] where PATH is the project's folder under ~ (for example ~/work/acme/site) if you know it
-or can find it in the wiki, otherwise [[code:~]]."""
+or can find it in the brain, otherwise [[code:~]]."""
 
 CODE = re.compile(r"\[\[code:([^\]]+)\]\]")
 
@@ -324,7 +324,7 @@ class HeyPanel(QWidget):
     def _tool_label(name: str) -> str:
         short = name.split("__")[-1]
         for key, label in (("tasks", "Guardo le task"), ("calendar", "Guardo il calendario"), ("gmail", "Guardo la posta"),
-                           ("drive", "Cerco su Drive"), ("search", "Cerco nella wiki"), ("read_note", "Leggo la wiki")):
+                           ("drive", "Cerco su Drive"), ("brain_search", "Cerco nel brain"), ("brain_read", "Leggo il brain")):
             if key in short or key in name:
                 return label
         return "Lavoro"

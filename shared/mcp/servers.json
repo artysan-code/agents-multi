@@ -1,23 +1,6 @@
 {
-  "$schema-note": "Registry MCP unico dei profili claude-multi. Sorgente di verita': modifica QUI, poi `claude-multi mcp sync` (a Claude chiuso). Campi: _profiles (default: TUTTI i profili dichiarati in profiles/*/profile.json), _surfaces (cli|desktop, default cli). Nessun elenco di profili qui: si deriva dai manifest. wiki-claude: binario pnpm globale (pnpm add -g obsidian-brain), non npx: a freddo npx falliva la connessione. EMBEDDING_PROVIDER=ollama e' solo il PROTOCOLLO: sulla 11434 risponde llama-embed-shim (shared/tools) davanti a llama-server di llama.cpp (bge-m3, Vulkan), non Ollama. _service: il server è legato agli account di quel servizio (shared/mcp/accounts.json): mcp sync lo dà solo ai profili che ne vedono almeno uno, gli passa CLAUDE_MULTI_PROFILE e sostituisce {hosts} con gli host di quegli account (per --allow-net). I secret stanno nel vault, mai qui.",
+  "$schema-note": "Registry MCP unico dei profili claude-multi. Sorgente di verita': modifica QUI, poi `claude-multi mcp sync` (a Claude chiuso). Campi: _profiles (default: TUTTI i profili dichiarati in profiles/*/profile.json), _surfaces (cli|desktop, default cli). Nessun elenco di profili qui: si deriva dai manifest. _service: il server è legato agli account di quel servizio (shared/mcp/accounts.json): mcp sync lo dà solo ai profili che ne vedono almeno uno, gli passa CLAUDE_MULTI_PROFILE e sostituisce {hosts} con gli host di quegli account (per --allow-net). I secret stanno nel vault, mai qui.",
   "servers": {
-    "wiki-claude": {
-      "type": "stdio",
-      "command": "~/.local/share/pnpm/bin/obsidian-brain",
-      "args": [
-        "server"
-      ],
-      "env": {
-        "VAULT_PATH": "~/brains/claude",
-        "EMBEDDING_PROVIDER": "ollama",
-        "EMBEDDING_MODEL": "bge-m3",
-        "OLLAMA_BASE_URL": "http://localhost:11434",
-        "OLLAMA_EMBEDDING_DIM": "1024",
-        "OBSIDIAN_BRAIN_NO_WATCH": "1",
-        "PATH": "~/.nvm/versions/node/v24.21.0/bin:~/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin"
-      },
-      "_note": "PATH pinnato: obsidian-brain carica better-sqlite3 (modulo nativo) e deve girare SEMPRE con lo stesso Node (nvm 24, ABI 137). Con /usr/bin/node (26, ABI 147) davanti nel PATH il modulo non carica e l'MCP muore in 'connection closed' (incidente 2026-09-04). Se cambi Node: aggiorna qui e ricompila (claude-multi mcp health --probe lo verifica)."
-    },
     "syncthing-status": {
       "command": "deno",
       "args": [

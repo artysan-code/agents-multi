@@ -50,7 +50,7 @@ Deno.test("AskStream: deltas when streamed, the message otherwise, the result as
 Deno.test("toolKind: a tool's name to what the page says Claude is doing", () => {
   assertEquals(toolKind("mcp__google__calendar_events"), "calendar");
   assertEquals(toolKind("mcp__google__gmail_thread"), "mail");
-  assertEquals(toolKind("mcp__wiki-claude__read_note"), "wiki");
+  assertEquals(toolKind("mcp__claude_ai_Brain__brain_read"), "brain");
   assertEquals(toolKind("Bash"), "work");
 });
 

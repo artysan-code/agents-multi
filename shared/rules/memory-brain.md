@@ -6,7 +6,7 @@
 
 - **A inizio lavoro su un progetto**: la sua pagina in `progetti/`, con lo stesso percorso della cartella sotto `~` (l'hook d'avvio dice dove guardare). Se non c'è, proponi `/brain-init`.
 - **Prima di dare per scontato** qualcosa su Samuel, progetti, clienti, persone, strumenti: `brain_search`, poi leggi quello che trovi.
-- **La vecchia wiki** `~/brains/claude` (MCP `wiki-claude`) è un archivio in sola lettura: da lì si portano argomenti nel brain, riscritti, uno alla volta e quando Samuel lo chiede. Non scriverci più.
+- **La vecchia wiki** `~/brains/claude` è un archivio di file in sola lettura (niente più MCP: si legge con Read e grep): da lì si portano argomenti nel brain, riscritti, uno alla volta e quando Samuel lo chiede. Non scriverci più.
 
 ## Scrivere il giusto
 

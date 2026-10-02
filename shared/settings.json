@@ -124,15 +124,6 @@
         ]
       },
       {
-        "matcher": "mcp__wiki.claude__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/wiki-write-guard.sh"
-          }
-        ]
-      },
-      {
         "matcher": "Write|Edit",
         "hooks": [
           {
