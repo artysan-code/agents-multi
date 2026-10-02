@@ -166,7 +166,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi usage [--by …] [--since …]` | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite) |
 | `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
 | `claude-multi vault status\|init\|pair\|set\|delete\|import-legacy` | the secret vault the MCP servers read their credentials from (below) |
-| `claude-multi tasks brief\|add\|done\|remind` | the task list from the terminal; `remind` is what the timer runs |
+| `claude-multi tasks brief\|add\|done\|remind\|migrate` | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain |
 | `claude-multi google client <file.json>\|connect <account>` | the Google OAuth client, and connecting an account |
 | `claude-launch <profile>` | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app |
 | `claude-multi-app [--tray\|--hey]` | the desktop app: console window, tray icon, Hey Claude (below) |
@@ -319,8 +319,12 @@ token goes to the vault and the address next to the account's name.
 
 ### Tasks
 
-Samuel's tasks live in `~/brains/tasks` (`CLAUDE_MULTI_TASKS`): one Markdown file per task in
-`items/`, synced by Syncthing and readable in Obsidian. A task has a day and optionally a time,
+Samuel's tasks live in his brain (`brain/`), one Markdown file per task, so the phone sees the same
+list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
+from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
+are files in `~/brains/tasks/items` (`CLAUDE_MULTI_TASKS`), as they were until 2026-10-02;
+`claude-multi tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
+`settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
 completing one creates the next) and an owner — who has to move: `samuel`, `claude`, or someone else,
 and then it is waiting on them. Nothing is deleted: a task that no longer matters is `dropped`.
@@ -328,11 +332,12 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 - **The body is plain Markdown**: a description, a checklist of steps (`- [ ]` / `- [x]`, whose
   ticks give the progress on the board) and an `## Attachments` section — links, paths on this
   computer (opened with the desktop's default program), files dropped on the task in the console
-  (copied to `files/<id>/`, so they sync too) and wiki pages (`[[…]]`).
+  (copied to `files/<id>/` on this machine) and wiki pages (`[[…]]`).
 - **Projects are folders**: a task's project is its folder under `~` (`work/acme/site`), or a bare
   name that resolves to the shallowest folder with that name (`cli/projects.ts`; the roots are
   `projectRoots` in the settings, by default `personal`, `work`, `university`).
-- The **`tasks` MCP server** is in every profile, on the CLI and in Desktop: `tasks_brief` (the
+- The **`tasks` MCP server** is in every profile, on the CLI and in Desktop (the brain connector
+  has the same tools on the same list): `tasks_brief` (the
   debrief), `tasks_list`, `tasks_get`, `tasks_add`, `tasks_update`, `tasks_done`, `tasks_steps`,
   `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
   task that changed since it was opened. `shared/rules/tasks.md` tells every session to keep the

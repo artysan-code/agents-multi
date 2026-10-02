@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # PreToolUse guard: l'auto-memory di Claude Code è CONGELATA.
 #
-# La memoria canonica è la LLM-Wiki (~/brains/claude/) — vedi
-# shared/rules/memory-llm-wiki.md. Questo hook intercetta i tentativi di
+# La memoria canonica è il brain (brain_*) — vedi
+# shared/rules/memory-brain.md. Questo hook intercetta i tentativi di
 # scrivere nuovi fatti nell'auto-memory legacy
 # (<config>/projects/<slug>/memory/...) e le BLOCCA (deny), spingendo a
-# scrivere nella wiki. Per manutenzione legittima dei file legacy (es.
+# scrivere nel brain. Per manutenzione legittima dei file legacy (es.
 # cancellarli) disabilita temporaneamente il matcher Write|Edit in
 # settings.json o commenta questo hook.
 #
@@ -32,7 +32,7 @@ if printf '%s' "$FP" | grep -Eq '(\.claude-multi/[^/]+|\.claude)/projects/[^/]+/
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: "Auto-memory CONGELATA/OFF (shared/rules/memory-llm-wiki.md): scrittura BLOCCATA. La memoria canonica è la LLM-Wiki ~/brains/claude/ — scrivi il fatto lì (personal: /wiki-ingest o MCP wiki-claude; work: pagina sotto ~/brains/claude/ o skill wiki-update), rispettando il paletto NDA. Per manutenzione dei file legacy disabilita temporaneamente questo hook."
+      permissionDecisionReason: "Auto-memory CONGELATA/OFF (shared/rules/memory-brain.md): scrittura BLOCCATA. La memoria è il brain: scrivi il fatto lì con gli strumenti brain_* (diario, pagina del progetto, persone, note), rispettando il paletto NDA; un fatto di un solo repo va nel suo CLAUDE.md. Per manutenzione dei file legacy disabilita temporaneamente questo hook."
     }
   }' 2>/dev/null
   exit 0

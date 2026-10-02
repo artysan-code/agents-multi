@@ -194,7 +194,6 @@ export async function install(dry: boolean) {
   for (const l of await launchers()) {
     await ensureSymlink(`${REPO}/bin/claude`, `${BIN}/${l.command}`, `~/.local/bin/${l.command}`);
   }
-  await ensureSymlink(`${REPO}/shared/hooks/claude-distiller`, `${BIN}/claude-distiller`, "~/.local/bin/claude-distiller");
   await ensureSymlink(`${REPO}/shared/tools/stignore-gen/stignore-gen.ts`, `${BIN}/stignore-gen`, "~/.local/bin/stignore-gen");
   if (await lstat(`${BIN}/claude-multi-finalize`)) await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
   // updates install themselves now: the notifier that offered to install them is gone

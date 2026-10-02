@@ -176,15 +176,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/kb-nudge.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/wiki-distiller-maybe.sh"
+            "command": "bash ~/.claude-multi/shared/hooks/brain-nudge.sh"
           }
         ]
       }
@@ -220,7 +212,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/wiki-distiller-capture.sh"
+            "command": "python3 ~/.claude-multi/shared/hooks/brain-checkpoint.py"
           }
         ]
       }
