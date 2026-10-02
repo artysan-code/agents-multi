@@ -7,13 +7,16 @@ description: Write this project's page in Samuel's brain (and its client's, when
 Write the page of the project you are in into Samuel's brain (the `brain` MCP server, or the
 "brain" connector): a short page that lets any Claude, on any device, know what this project is
 and where it stands without opening the folder. You know this project better than anyone, so
-the page comes from here. This one task goes to the brain, not to the old wiki `~/brains/claude`.
+the page comes from here. It distils three sources (this folder, its repo, the old wiki) into one short page; nothing is copied whole.
 
 ## 1. Read
 
 - The folder's `CLAUDE.md` / `AGENTS.md`, its `notes/` (the latest status first: `STATO.md` and
   the like), the parent folder's `CLAUDE.md` (who the client is), the repo's README and
   `git log --oneline -20`.
+- The old wiki `~/brains/claude` (read-only archive): the page the folder's `CLAUDE.md` points
+  at (`projects/<name>`), or `grep -ril <project> ~/brains/claude/projects`. Take from it only
+  what still holds and matters: it was written loosely, and much of it is history.
 - In the brain: `brain_search` for the project and its client, `brain_read` of what you find, and
   of `clienti/acme` or the client page when it is a work project. Update a page that exists
   rather than writing a new one.
