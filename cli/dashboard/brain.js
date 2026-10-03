@@ -3,7 +3,8 @@
    (cli/memory.ts, the token stays there). The seven areas as a tree, search by words and by meaning,
    a reader with who wrote what and when, the links both ways, every version and what changed, the
    page's neighbourhood as a small live graph, the whole graph on its own screen, the diary as a
-   timeline and the brain's health. Only a view: changes are asked of Claude in the field below
+   timeline, the brain's health, and the old wiki (~/brains/claude) as a read-only Archive whose
+   subjects Claude brings over one at a time. Only a view: changes are asked of Claude in the field below
    (ask.ts, kind "brain"), who writes only in the brain, where its rules answer.
    Loaded after app.js (helpers: $, esc, api, t, toast, mdToHtml, ago, short). */
 
@@ -14,7 +15,7 @@ const bOff = new Set();
 let bPage = null; // the page on screen, as /api/brain/page answers it
 let bVer = null; // an older version on screen: { rev, body, at, by, diff }
 let bFound = null; // the last search: { q, results, note }
-const MODES = ["read", "graph", "diary", "health"];
+const MODES = ["read", "graph", "diary", "health", "archive"];
 try {
   bMode = MODES.includes(localStorage.getItem("cm-bmode")) ? localStorage.getItem("cm-bmode") : "read";
   bOpen = new Set(JSON.parse(localStorage.getItem("cm-bopen2") ?? '["progetti"]'));
@@ -64,6 +65,7 @@ function renderBrainAll() {
   if (bMode === "graph") showGlobalGraph();
   if (bMode === "diary") renderDiary();
   if (bMode === "health") renderHealth();
+  if (bMode === "archive") (ARCH ? Promise.resolve(renderArchive()) : loadArchive()).catch((e) => toast(errText(e), true));
 }
 
 /** Opens a page in the reader from elsewhere (a task's attachment, a link). */
@@ -617,6 +619,68 @@ function fixWithClaude() {
   $("#composer").requestSubmit();
 }
 
+/* ---------------- the archive ---------------- */
+let ARCH = null, aSel = null, aPage = null;
+const aOpen = new Set();
+
+async function loadArchive() {
+  ARCH = await api("/api/archive");
+  renderArchive();
+}
+
+function renderArchive() {
+  const box = $("#bn-archive");
+  if (!box.firstElementChild) {
+    box.innerHTML = `<nav class="bn-tree" id="ba-tree"></nav><article class="panel bn-page" id="ba-page"><div class="bn-body"><p class="sub">${esc(t("brain.a.lede", { r: ARCH.root }))}</p></div></article>`;
+  }
+  const q = $("#b-q").value.trim().toLowerCase();
+  const pages = ARCH.pages.filter((p) => !q || `${p.title} ${p.path} ${p.summary}`.toLowerCase().includes(q));
+  const groups = new Map();
+  for (const p of pages) {
+    if (!groups.has(p.group)) groups.set(p.group, []);
+    groups.get(p.group).push(p);
+  }
+  $("#ba-tree").innerHTML = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([g, ps]) => {
+    const open = q || aOpen.has(g);
+    return `<div class="bt-dir${open ? " open" : ""}">
+      <button class="bt-f" data-adir="${esc(g)}" style="--d:0"><svg viewBox="0 0 24 24" class="ico chev"><path d="M9 6l6 6-6 6"/></svg><span>${esc(g)}</span><em>${ps.length}</em></button>
+      ${open ? ps.sort((a, b) => a.title.localeCompare(b.title)).map((p) =>
+        `<button class="bt-p${p.path === aSel ? " on" : ""}" data-apage="${esc(p.path)}" style="--d:1" title="${esc(p.path)}">${esc(p.title)}</button>`).join("") : ""}
+    </div>`;
+  }).join("") || `<div class="sub bt-note">${esc(t("cat.nothing"))}</div>`;
+}
+
+async function readArchive(path) {
+  aSel = path;
+  renderArchive();
+  const el = $("#ba-page");
+  try {
+    aPage = await api(`/api/archive/page?path=${encodeURIComponent(path)}`);
+    if (aSel !== path) return;
+    const p = ARCH.pages.find((x) => x.path === path);
+    el.innerHTML = `<div class="bn-body">
+      <div class="bn-crumb">${path.split("/").map(esc).join(" <span>/</span> ")}</div>
+      <h1 class="bn-title">${esc(p?.title ?? path)}</h1>
+      <div class="bn-meta">
+        <span class="chip">${esc(t("brain.a.chip"))}</span>
+        ${p?.updated ? `<span>${esc(t("brain.a.updated", { d: p.updated }))}</span>` : ""}
+        <button class="btn primary sm bn-bring" data-bring>${esc(t("brain.a.bring"))}</button>
+      </div>
+      ${p?.summary ? `<p class="sub bn-asum">${esc(p.summary)}</p>` : ""}
+      <div class="md bn-md">${mdToHtml(aPage.body.replace(/^\s*#\s+.*\n/, ""))}</div>
+    </div>`;
+    el.scrollTop = 0;
+  } catch (e) { el.innerHTML = `<div class="bn-body"><p class="sub">${esc(errText(e))}</p></div>`; }
+}
+
+/** The page on screen handed to Claude, who rewrites into the brain what still holds. */
+function bringOver() {
+  if (!aPage) return;
+  askContext("brain", null);
+  $("#ask-text").value = t("brain.a.prompt", { f: `${ARCH.root}/${aPage.path}.md` });
+  $("#composer").requestSubmit();
+}
+
 /* ---------------- the two graphs ---------------- */
 let gLocal = null, gGlobal = null;
 const nodeOf = (p) => ({ id: p.path, title: p.title, group: areaOf(p.area) });
@@ -691,13 +755,14 @@ function renderCard(id) {
     searchSeq++; // a search still on its way is for a query no longer there
     qTimer = setTimeout(() => {
       if (bMode === "diary") return renderDiary();
+      if (bMode === "archive") return renderArchive();
       renderTree();
       if (bMode === "graph") gGlobal?.setMatch(matches());
     }, 120);
   });
   $("#b-q").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.target.value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
-    if (e.key !== "Enter" || !BRAIN || bMode === "diary") return;
+    if (e.key !== "Enter" || !BRAIN || bMode === "diary" || bMode === "archive") return;
     const q = e.target.value.trim();
     if (!q) return;
     // a second Enter on the same results opens the first one
@@ -709,6 +774,11 @@ function renderCard(id) {
   root.addEventListener("click", (e) => {
     if (e.target.closest("[data-dmore]")) { bDays += 14; return renderDiary(); }
     if (e.target.closest("[data-fix]")) return fixWithClaude();
+    const ap = e.target.closest("[data-apage]");
+    if (ap) return void readArchive(ap.dataset.apage);
+    const ad = e.target.closest("[data-adir]");
+    if (ad) { aOpen.has(ad.dataset.adir) ? aOpen.delete(ad.dataset.adir) : aOpen.add(ad.dataset.adir); return renderArchive(); }
+    if (e.target.closest("[data-bring]")) return bringOver();
     if (e.target.closest("[data-clear]")) { $("#b-q").value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
     const d = e.target.closest("[data-dir]");
     if (d) {

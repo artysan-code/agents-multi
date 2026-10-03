@@ -2426,6 +2426,15 @@ body.plbusy #mk-add button {
 .dy-e .md p {
   margin: 0;
 }
+.bn-arch {
+  grid-template-columns: 270px minmax(0, 1fr);
+}
+.bn-bring {
+  margin-left: auto;
+}
+.bn-asum {
+  margin: 14px 0 0;
+}
 .hl-top {
   display: flex;
   align-items: center;

@@ -11,6 +11,7 @@
 
 import { BIN, expandHome, HOME, launchers, readJson, running, STATE } from "./lib.ts";
 import { dayOf } from "../shared/mcp/lib/tasks.ts";
+import { BRAIN as WIKI } from "./brain.ts";
 
 type Json = (v: unknown, code?: number) => Response;
 export type AskKind = "ask" | "newtask" | "debrief" | "brain";
@@ -30,8 +31,11 @@ export const TOOLS: Record<AskKind, string[]> = {
   ask: ["mcp__tasks", ...READ],
   newtask: ["mcp__tasks", ...BRAIN_READ],
   debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
-  brain: [...BRAIN_READ, ...BRAIN_WRITE],
+  // and the old wiki, read only, for what is brought over from the Archive
+  brain: [...BRAIN_READ, ...BRAIN_WRITE, `Read(/${WIKI}/**)`],
 };
+/** Claude Code's own tools a kind may use at all (the rules above narrow them): none, except reading the old wiki. */
+const BUILTIN: Record<AskKind, string> = { ask: "", newtask: "", debrief: "", brain: "Read" };
 
 const BASE = (now: string) =>
   `You answer inside Samuel's console (claude-multi), in a panel above the field he typed in. Answer in Italian ` +
@@ -54,7 +58,9 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
     return `${BASE(now)}\nSamuel asks for a change to his brain, from its page in the console. ${on} Make the change with the ` +
       `brain tools, by the brain's rules (they refuse what breaks them: fix and try again). You can only write in the brain, ` +
       `nothing else. Prefer brain_edit to rewriting a page; read before changing; never invent facts he did not give or ` +
-      `that the brain does not already hold: if something is missing, ask him one short question instead. Then answer ` +
+      `that the brain does not already hold: if something is missing, ask him one short question instead. The old wiki ` +
+      `(${WIKI}, an archive) can be read with Read, never written: to bring a subject over, rewrite what still holds ` +
+      `into the right page (search first: update rather than copy). Then answer ` +
       `in one or two lines: what you changed, page by page.`;
   }
   if (kind === "debrief") {
@@ -93,7 +99,7 @@ async function setAskModel(model: AskModel) {
 export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null; noProject?: boolean; model?: AskModel } = {}) {
   const args = [
     "-p", asArg(text), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-    "--tools", "", "--permission-mode", "dontAsk", "--allowedTools", ...TOOLS[kind],
+    "--tools", BUILTIN[kind], "--permission-mode", "dontAsk", "--allowedTools", ...TOOLS[kind],
     "--append-system-prompt", promptFor(kind, now, opts.project, opts.noProject),
   ];
   if (opts.session) args.push("--resume", opts.session);
@@ -180,7 +186,9 @@ function ask(kind: AskKind, text: string, opts: { session?: string | null; proje
       let child: Deno.ChildProcess;
       try {
         child = new Deno.Command(`${BIN}/${launcher.command}`, {
-          args: askArgs(kind, text, now, { ...opts, model: await askModel() }), cwd: HOME, stdin: "null", stdout: "piped", stderr: "piped", signal,
+          // a change to the brain runs in the old wiki: Claude Code lets a session read its own folder
+          // whatever the rules, so that folder must be the only one it may read
+          args: askArgs(kind, text, now, { ...opts, model: await askModel() }), cwd: kind === "brain" ? WIKI : HOME, stdin: "null", stdout: "piped", stderr: "piped", signal,
         }).spawn();
       } catch (e) {
         send({ t: "done", text: "", code: null, error: (e as Error).message });

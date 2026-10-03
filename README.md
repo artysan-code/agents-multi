@@ -182,10 +182,11 @@ would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 <http://127.0.0.1:7331>. It is not tied to a graphical session — over an ssh tunnel it works
 exactly the same, which is the point on a headless box.
 
-Updates are **pushed, not polled**: the server watches the transcript tree, the shared config, the
-wiki and the tasks, and the page redraws the view you are actually looking at. The page itself is HTML, CSS and
-vanilla JS with no dependencies and no external assets, so it renders on a machine that has never
-been online.
+Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
+asks the brain every half minute whether its tasks or pages moved, and the page redraws the view you
+are actually looking at. The page itself is HTML, CSS and vanilla JS with no build step; the libraries
+it uses are vendored in `cli/dashboard/vendor/` (d3-force, for the brain's graph) and nothing is
+loaded from elsewhere, so it renders on a machine that has never been online.
 
 Five sections, in English or Italian. The language follows the machine's locale — the regional
 format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
@@ -198,11 +199,17 @@ the globe button in the rail overrides it per browser.
   month calendar with the Google events, and one small board per project folder. The folder tree
   on the left filters every view. A task opens as a page: its fields, its steps and their
   progress, a Markdown description that saves as you type, and its attachments. See [Tasks](#tasks).
-- **Brain** (`#brain`) — still the old wiki (`~/brains/claude`, `CLAUDE_MULTI_BRAIN`), a read-only archive since 2026-10-02, until the page is rebuilt on the brain service: the pages as a tree of
-  folders, a reader with what links in and out and the page's neighbourhood as a live graph, and
-  the whole wiki as a full-screen graph (drag, pan, zoom, filter by folder; the index and log are
-  hidden by default, they link to everything). A view, not an editor: what you add (a document, a
-  link, a note) waits in `_raw/`.
+- **Brain** (`#brain`) — the brain service, read through the console with this machine's token
+  (`cli/memory.ts`; the browser never sees it). **Pages**: the seven areas as a tree, search by
+  words at once and by meaning on Enter, a reader with who wrote the page and when, the links both
+  ways (broken ones struck through), every version and what changed since, and the page's
+  neighbourhood as a live graph. **Graph**: the whole brain, laid out by d3-force with each area in
+  its own region (drag, pan, zoom, filter by area). **Diary**: the days as a timeline. **Health**:
+  what `brain_check` finds, with "Fix with Claude". **Archive**: the old wiki (`~/brains/claude`,
+  `CLAUDE_MULTI_BRAIN`), read only since 2026-10-02, with "Bring into the brain". The page does not
+  edit: the field at the bottom asks Claude for a change (ask kind `brain`), with the brain's tools
+  and nothing else, never deletion, running inside the old wiki so the only files it can read are
+  there.
 - **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
   where, and whether each profile actually mounted it at its last sync.
 - **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or
@@ -243,7 +250,7 @@ tunnel still reaches it.
 
 - **Hey Claude** — `claude-multi-app --hey` (also in the tray menu, and the bar on Today) opens one
   floating field. What you write goes to `claude -p` in the default profile and the answer streams
-  under it: the tasks can be changed from there, calendar, mail, Drive and the wiki only read
+  under it: the tasks can be changed from there, calendar, mail, Drive and the brain only read
   (sending mail or inviting stays a conversation's job). A follow-up continues the same
   conversation, which can move to a terminal; a request that needs work inside a project's files
   becomes one button that opens Claude Code in that folder with the request. Bind it to a global
@@ -369,7 +376,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 - **The body is plain Markdown**: a description, a checklist of steps (`- [ ]` / `- [x]`, whose
   ticks give the progress on the board) and an `## Attachments` section — links, paths on this
   computer (opened with the desktop's default program), files dropped on the task in the console
-  (copied to `files/<id>/` on this machine) and wiki pages (`[[…]]`).
+  (copied to `files/<id>/` on this machine) and brain pages (`[[…]]`).
 - **Projects are folders**: a task's project is its folder under `~` (`work/acme/site`), or a bare
   name that resolves to the shallowest folder with that name (`cli/projects.ts`; the roots are
   `projectRoots` in the settings, by default `personal`, `work`, `university`).

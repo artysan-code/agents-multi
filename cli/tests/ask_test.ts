@@ -11,7 +11,9 @@ Deno.test("askArgs: the tools are a fixed list per kind, and anything else is re
   assert(!askArgs("debrief", "debrief", "now").includes("mcp__google__gmail_search"));
   assert(!a.includes("--resume"));
   // a change from the Brain page writes only in the brain, and never deletes
-  assert(TOOLS.brain.every((t) => t.startsWith("mcp__claude_ai_Brain__brain_")));
+  assert(TOOLS.brain.every((t) => t.startsWith("mcp__claude_ai_Brain__brain_") || /^Read\(\/\/.+\/\*\*\)$/.test(t)));
+  const c = askArgs("brain", "porta nel brain", "now");
+  assertEquals(c[c.indexOf("--tools") + 1], "Read");
   assert(TOOLS.brain.includes("mcp__claude_ai_Brain__brain_edit"));
   assert(!TOOLS.brain.includes("mcp__claude_ai_Brain__brain_delete"));
   const b = askArgs("ask", "e dopo?", "now", { session: "s-1" });
