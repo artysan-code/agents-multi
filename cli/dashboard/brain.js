@@ -299,14 +299,14 @@ function diffHtml(old, cur) {
 }
 
 /* ---------------- a force graph on a canvas ---------------- */
-/** A small live graph in the way of Obsidian's: nodes repel, links pull, the whole drifts to the
-    centre; drag a node, drag the background to pan, wheel to zoom, hover lights a node's
-    neighbours. No library: a hundred pages settle in a few hundred frames, and O(n²) repulsion
-    is nothing at that size. */
-function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labelRoom = 0 } = {}) {
+/** A small live graph in the way of Obsidian's, laid out by d3-force (vendor/d3-force.min.js):
+    pages repel and do not overlap, links pull, and each area gathers around its own place so the
+    colours read as regions; drag a node, drag the background to pan, wheel to zoom, hover lights a
+    node's neighbours. Drawn on a canvas: d3 only moves the points. */
+function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labelRoom = 0, cluster = .05 } = {}) {
   const ctx = canvas.getContext("2d");
   let nodes = [], links = [], byId = new Map(), adj = new Map(), top = new Set();
-  let tf = { k: 1, x: 0, y: 0 }, alpha = 0, raf = 0, W = 0, H = 0, dpr = 1, moved = false, fitted = false;
+  let tf = { k: 1, x: 0, y: 0 }, raf = 0, W = 0, H = 0, dpr = 1, moved = false, fitted = false;
   let hover = null, drag = null, pan = null, selected = null, match = null, colorsAt = 0;
   const colors = {};
 
@@ -347,34 +347,29 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
     tf = { k, x: (W - room) / 2 - (x0 + x1) / 2 * k, y: H / 2 - (y0 + y1) / 2 * k };
   }
 
-  function tick() {
-    const N = nodes.length;
-    for (let i = 0; i < N; i++) {
-      const a = nodes[i];
-      for (let j = i + 1; j < N; j++) {
-        const b = nodes[j];
-        let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
-        if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
-        if (d2 > 250000) continue; // far apart: no measurable push
-        const w = -charge * alpha / d2;
-        a.vx += dx * w; a.vy += dy * w; b.vx -= dx * w; b.vy -= dy * w;
-      }
-    }
-    for (const l of links) {
-      const dx = l.t.x + l.t.vx - l.s.x - l.s.vx, dy = l.t.y + l.t.vy - l.s.y - l.s.vy;
-      const d = Math.hypot(dx, dy) || 1, k = (d - distance) / d * alpha * (0.9 / Math.min(l.s.deg, l.t.deg));
-      l.t.vx -= dx * k * .5; l.t.vy -= dy * k * .5; l.s.vx += dx * k * .5; l.s.vy += dy * k * .5;
-    }
-    for (const n of nodes) {
-      // pages with no links would drift to the edge and shrink the picture when it is fitted
-      const g = n.deg ? .03 : .12;
-      n.vx -= n.x * g * alpha; n.vy -= n.y * g * alpha;
-      if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = n.vy = 0; continue; }
-      n.vx *= .6; n.vy *= .6;
-      n.x += n.vx; n.y += n.vy;
-    }
-    alpha += (0 - alpha) * .0228;
-  }
+  // where each area gathers: points on a circle, in the order of AREAS
+  const anchors = new Map();
+  const place = () => {
+    const groups = [...AREAS, "other"].filter((g) => nodes.some((n) => n.group === g));
+    const R = groups.length > 1 ? 30 + Math.sqrt(nodes.length) * 16 : 0;
+    groups.forEach((g, i) => {
+      const a = i / groups.length * Math.PI * 2 - Math.PI / 2;
+      anchors.set(g, { x: Math.cos(a) * R, y: Math.sin(a) * R });
+    });
+  };
+  const anchor = (n) => anchors.get(n.group) ?? { x: 0, y: 0 };
+  const linkForce = d3.forceLink().distance(distance).strength((l) => 0.9 / Math.min(l.source.deg, l.target.deg));
+  // a page with no links would drift to the edge and shrink the picture: it is held closer
+  const pull = (n) => n.deg ? cluster : cluster * 3;
+  const sim = d3.forceSimulation()
+    .force("charge", d3.forceManyBody().strength(-charge / 4).distanceMax(600))
+    .force("link", linkForce)
+    .force("collide", d3.forceCollide((n) => radius(n) + 10))
+    .force("x", d3.forceX((n) => anchor(n).x).strength(pull))
+    .force("y", d3.forceY((n) => anchor(n).y).strength(pull))
+    .stop(); // the frames below drive it: drawing and settling stay in step
+  const tick = () => sim.tick();
+  const alpha = () => sim.alpha();
 
   function draw() {
     if (!W || !H) return;
@@ -431,13 +426,13 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
 
   function frame() {
     raf = 0;
-    if (alpha > .004) {
+    if (alpha() > .004) {
       tick();
       if (!moved && !fitted) fit();
-      if (alpha < .2) fitted = true;
+      if (alpha() < .2) fitted = true;
     }
     draw();
-    if (alpha > .004 || drag) raf = requestAnimationFrame(frame);
+    if (alpha() > .004 || drag) raf = requestAnimationFrame(frame);
   }
   const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
 
@@ -457,7 +452,7 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
     if (drag && down?.far) {
       const p = world(sx, sy);
       drag.fx = p.x; drag.fy = p.y;
-      alpha = Math.max(alpha, .25);
+      sim.alpha(Math.max(alpha(), .25));
       kick();
       return;
     }
@@ -512,12 +507,16 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
       for (const l of links) { adj.get(l.s.id).add(l.t.id); adj.get(l.t.id).add(l.s.id); }
       for (const n of nodes) n.deg = adj.get(n.id).size;
       top = new Set([...nodes].sort((a, b) => b.deg - a.deg).slice(0, 8).map((n) => n.id));
+      // d3 reads the anchors, the degrees and the links when it is handed the nodes
+      place();
+      sim.nodes(nodes);
+      linkForce.links(links.map((l) => ({ source: l.s, target: l.t })));
       const fresh = nodes.some((n) => !old.has(n.id)) || nodes.length !== old.size;
       if (fresh) {
         // most of the settling happens before the first frame: the graph opens in order, and
         // keeps moving only when touched
-        alpha = 1;
-        for (let i = 0; i < 260 && alpha > .03; i++) tick();
+        sim.alpha(1);
+        for (let i = 0; i < 300 && alpha() > .03; i++) tick();
         moved = false;
         fitted = true;
         fit();
@@ -539,7 +538,7 @@ const nodeOf = (p) => ({ id: p.path, title: p.title, group: areaOf(p.area) });
 
 function showLocalGraph() {
   if (!bSel) return;
-  gLocal ??= forceGraph($("#bn-local"), { onClick: (id) => id && id !== bSel && selectPage(id), onOpen: selectPage, charge: 180, distance: 55, labelRoom: 110 });
+  gLocal ??= forceGraph($("#bn-local"), { onClick: (id) => id && id !== bSel && selectPage(id), onOpen: selectPage, charge: 180, distance: 55, labelRoom: 110, cluster: .02 });
   const ids = new Set([bSel]);
   const grow = () => {
     for (const id of [...ids]) {

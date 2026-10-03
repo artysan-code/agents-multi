@@ -8,6 +8,7 @@
     "lineWidth": 120
   },
   "lint": {
+    "exclude": ["cli/dashboard/vendor/"],
     "rules": {
       "exclude": [
         "no-explicit-any",

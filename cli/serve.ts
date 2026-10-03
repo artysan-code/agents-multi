@@ -33,7 +33,7 @@ import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 const DASH = `${REPO}/cli/dashboard`;
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml" };
+const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8" };
 
 /** Allowed actions to CLI arguments. `opts` accepted per action (anything else is ignored). */
 const ACTIONS: Record<string, { args: string[]; opts?: Record<string, string[]>; timeoutMs?: number }> = {
@@ -462,7 +462,8 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         return new Response(bytes, { headers: { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" } });
       }
       const path = u.pathname === "/" ? "/index.html" : u.pathname;
-      if (!/^\/[a-z0-9_.-]+$/i.test(path)) return new Response("not found", { status: 404 });
+      // the page's files, and the libraries it carries in vendor/ (no CDN: the console works offline)
+      if (!/^\/(vendor\/)?[a-z0-9_.-]+$/i.test(path)) return new Response("not found", { status: 404 });
       const ext = path.slice(path.lastIndexOf("."));
       const body = await readText(`${DASH}${path}`);
       if (body === null || !MIME[ext]) return new Response("not found", { status: 404 });
