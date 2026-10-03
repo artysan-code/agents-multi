@@ -123,6 +123,57 @@
         "tool": "execute",
         "hook": "cloudflare-guard.ts"
       }
+    },
+    "supabase": {
+      "_service": "supabase",
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?features=account,database,debugging,development,docs,functions,branching,storage",
+      "_perAccount": {
+        "headers": {
+          "Authorization": "Bearer {secret}"
+        }
+      },
+      "_deny": [
+        "delete_branch",
+        "reset_branch"
+      ],
+      "_note": "Supabase's official MCP, one server per Supabase login: supabase-<account>, with that login's personal access token (every org and project it can see; every feature group). Full scope on purpose: each Claude works on its own project. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only (http)."
+    },
+    "lovable": {
+      "_service": "lovable",
+      "type": "http",
+      "url": "https://mcp.lovable.dev",
+      "_perAccount": {},
+      "_note": "Lovable's official MCP, one server per Lovable account: lovable-<account>. OAuth only (no API keys for MCP): sign in once per server and per machine with /mcp, in a browser logged into that account. Full access to that account. CLI only (http)."
+    },
+    "railway": {
+      "_service": "railway",
+      "type": "stdio",
+      "command": "railway",
+      "args": [
+        "mcp",
+        "local"
+      ],
+      "_perAccount": {
+        "env": {
+          "RAILWAY_API_TOKEN": "{secret}"
+        }
+      },
+      "_deny": [
+        "delete_domain",
+        "remove_bucket",
+        "remove_service",
+        "remove_tcp_proxy",
+        "remove_volume"
+      ],
+      "_note": "Railway's own MCP, served in-process by the CLI (railway mcp local), one per Railway account token: railway-<account>. RAILWAY_API_TOKEN comes from the vault, so the CLI's own login is not used. Its destructive tools (the ones it marks destructiveHint) are denied. CLI only: the railway binary lives in ~/.railway/bin, off Desktop's PATH."
+    },
+    "zapier": {
+      "_service": "zapier",
+      "type": "http",
+      "url": "https://mcp.zapier.com/api/v1/connect",
+      "_perAccount": {},
+      "_note": "Zapier's official MCP, one server per Zapier account: zapier-<account>. OAuth: sign in with /mcp; the actions it may run are chosen on Zapier's side. Each successful call costs Zapier tasks. CLI only (http)."
     }
   }
 }
