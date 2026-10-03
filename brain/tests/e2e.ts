@@ -137,3 +137,20 @@ ok(r.status === 400, "a body that is not that task is refused");
 await r.body?.cancel();
 const stranger = brainStore(B, "brain_wrong-token-wrong-token-wrong");
 ok(await stranger.list().then(() => false, (e) => /refused the token/.test(e.message)), "a wrong token says so");
+
+// the memory read over HTTP, for the console's Brain page
+const api = async (q: string, token = pt) => {
+  const res = await fetch(`${B}/api/brain/${q}`, { headers: { authorization: `Bearer ${token}` } });
+  return { status: res.status, body: await res.json().catch(() => null) };
+};
+const pages = await api("pages");
+ok(pages.status === 200 && pages.body.pages.length > 0 && !pages.body.pages.some((x: { path: string }) => x.path.startsWith("tasks/")), `/api/brain/pages: ${pages.body?.pages?.length} pages, no tasks`);
+const first = pages.body.pages[0].path;
+const one = await api(`page?path=${encodeURIComponent(first)}`);
+ok(one.status === 200 && !!one.body.body && Array.isArray(one.body.versions) && !!one.body.links, `/api/brain/page: ${first} with links and versions`);
+ok((await api("health")).status === 200, "/api/brain/health");
+ok((await api("state")).body?.version === pages.body.version, "/api/brain/state: the version of the pages");
+ok((await api("pages", "brain_wrong-token-wrong-token-wrong")).status === 401, "/api/brain without a good token: 401");
+r = await fetch(`${B}/api/brain/pages`, { method: "POST", headers: { authorization: `Bearer ${pt}` } });
+ok(r.status === 404, "/api/brain only reads");
+await r.body?.cancel();

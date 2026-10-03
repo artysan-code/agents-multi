@@ -15,6 +15,7 @@ import { indexer } from "./embed.ts";
 import { accountPage, authorizePage, html, signInPage } from "./pages.ts";
 import { Store } from "./store.ts";
 import { brainServer } from "./tools.ts";
+import { brainApi } from "./api.ts";
 import { snapshot } from "./backup.ts";
 
 if (Deno.args[0] === "totp") {
@@ -139,6 +140,11 @@ async function handle(req: Request): Promise<Response> {
     if (fromFile(body)?.id !== one[1]) return json({ error: "not a task file, or its id is not the one in the path" }, 400);
     await caller.run(who, () => taskStore.write(fromFile(body)!));
     return json({ written: one[1] });
+  }
+  // the memory read over HTTP, for the console's Brain page (brain/api.ts): only reads
+  if (p.startsWith("/api/brain/") && req.method === "GET") {
+    const r = await brainApi({ store, embed: embedCfg, by, changed: index.kick }, u);
+    if (r) return json(r.body, r.status);
   }
   // what the machines compare before fetching a backup: it changes with every write, never otherwise
   if (p === "/backup/state" && who.startsWith("token:")) {

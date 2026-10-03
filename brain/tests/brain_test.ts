@@ -7,6 +7,7 @@ import { chunk, fuse } from "../embed.ts";
 import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, totp, totpOk } from "../auth.ts";
 import { open, seal } from "../backup.ts";
 import { staleProjects } from "../tools.ts";
+import { brainApi } from "../api.ts";
 import { check, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
 
 Deno.test("cleanPath: a folder/name.md inside the tree, nothing else", () => {
@@ -160,5 +161,35 @@ Deno.test("staleProjects: a reminder when the diary moved on after the project p
   // the page updated after the earlier line: nothing to remind
   s.db.prepare("update docs set updated = ? where path = ?").run("2026-10-01T10:02:00", "progetti/x.md");
   assertEquals(staleProjects(s, diary, "altro [[progetti/x]]", now), {});
+  s.close();
+});
+
+Deno.test("brainApi: pages by area, a page with links and versions, an old version, health, a version that ignores tasks", async () => {
+  const s = new Store(":memory:");
+  const ctx = { store: s, embed: { url: "http://127.0.0.1:9", model: "none" }, by: () => "test", changed: () => {} };
+  const get = (q: string) => brainApi(ctx, new URL(`http://x/api/brain/${q}`));
+  s.write("progetti/claude-multi.md", "# claude-multi\nIl setup. Vedi [[io/chi-sono]] e [[note/manca]].", "test");
+  s.write("io/chi-sono.md", "# Chi sono\nSamuel.", "test");
+  s.write("io/chi-sono.md", "# Chi sono\nSamuel, sviluppatore.", "claude:app");
+  const v = (await get("state"))!.body as { version: string };
+  s.write("tasks/t-1.md", "una task", "test");
+  assertEquals(((await get("state"))!.body as { version: string }).version, v.version);
+  const pages = (await get("pages"))!.body as { areas: Record<string, number>; pages: { path: string; area: string }[]; edges: [string, string][] };
+  assertEquals(pages.areas.io, 1);
+  assertEquals(pages.areas.progetti, 1);
+  assertEquals(pages.pages.length, 2);
+  assertEquals(pages.edges, [["progetti/claude-multi.md", "io/chi-sono.md"]]);
+  const page = (await get("page?path=chi-sono"))!.body as { path: string; links: { back: string[] }; versions: { rev: number }[] };
+  assertEquals(page.path, "io/chi-sono.md");
+  assertEquals(page.links.back, ["progetti/claude-multi.md"]);
+  assertEquals(page.versions.map((x) => x.rev), [2, 1]);
+  assertEquals(((await get("page?path=io/chi-sono&rev=1"))!.body as { body: string }).body, "# Chi sono\nSamuel.");
+  assertEquals((await get("page?path=nessuna"))!.status, 404);
+  const h = (await get("health"))!.body as { broken_links: { link: string }[] };
+  assertEquals(h.broken_links.map((b) => b.link), ["note/manca"]);
+  const found = (await get("search?q=sviluppatore"))!.body as { results: { path: string }[]; note?: string };
+  assertEquals(found.results[0].path, "io/chi-sono.md");
+  assert(found.note, "the model is unreachable here: words only, and it says so");
+  assertEquals(await get("altro"), null);
   s.close();
 });

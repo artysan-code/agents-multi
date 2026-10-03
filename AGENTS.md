@@ -38,7 +38,8 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   `data-i18n*`): a string added in one language only falls back to English, visibly. The page is
   classic scripts sharing one global scope (`i18n.js`, `app.js`, `brain.js`, `tasks.js`, in that
   order); `app.js` boots on `DOMContentLoaded`, so code that runs at start may use the later ones.
-  No libraries: the brain's graph is a canvas force layout in `brain.js`.
+  Libraries are welcome when they make the page better: vendored in `cli/dashboard/vendor/` with
+  their licence, never loaded from a CDN (the console works offline).
 - **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `claude-multi vault`):
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
   A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A

@@ -9,7 +9,7 @@ import { z } from "npm:zod@^3.23";
 import { registerTaskTools } from "../shared/mcp/tasks/tools.ts";
 import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";
-import { AREAS, areaOf, check, LOGS, MAX_WORDS, relink, slugPath } from "./rules.ts";
+import { AREAS, areaOf, check, LOGS, MAX_WORDS, MAX_WORDS_LOG, relink, slugPath } from "./rules.ts";
 import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
 
 /** How the brain is used and written, for every Claude connected to it; then who Samuel is, from
@@ -60,6 +60,25 @@ export function staleProjects(store: Store, diary: string, line: string, now: Da
     if (after) stale.push(proj);
   }
   return stale.length ? { reminder: `${stale.join(", ")}: the diary has moved on since the page was last updated. If the state changed, update the page (brain_edit).` } : {};
+}
+
+/** The brain's health against its rules: what brain_check answers and the console shows. */
+export function health(store: Store) {
+  const pages = store.list("", { limit: 100000 });
+  const linked = new Set<string>(), broken: { page: string; link: string }[] = [], long: { page: string; words: number }[] = [];
+  for (const p of pages) {
+    const body = store.get(p.path)!.body;
+    for (const l of store.links(p.path).out) {
+      if (l.path) linked.add(l.path); else broken.push({ page: p.path, link: l.target });
+    }
+    const n = (body.match(/[\p{L}\p{N}]+/gu) ?? []).length;
+    if (n > (LOGS.includes(areaOf(p.path)) ? MAX_WORDS_LOG : MAX_WORDS)) long.push({ page: p.path, words: n });
+  }
+  const orphans = pages.filter((p) => !linked.has(p.path) && !["io", "diario", "inbox"].includes(areaOf(p.path))).map((p) => p.path);
+  const weekAgo = dayOf(new Date(Date.now() - 7 * 86400_000));
+  const stale = (store.get("inbox/inbox.md")?.body.split("\n") ?? []).filter((l) => /^- \d{4}-\d{2}-\d{2}/.test(l) && l.slice(2, 12) < weekAgo);
+  const outside = pages.filter((p) => !AREAS.includes(areaOf(p.path))).map((p) => p.path);
+  return { pages: pages.length, orphans, broken_links: broken, too_long: long, inbox_older_than_a_week: stale, outside_the_areas: outside };
 }
 
 export interface ToolContext { store: Store; embed: EmbedConfig; by: () => string; changed: () => void }
@@ -248,23 +267,7 @@ export function brainServer(ctx: ToolContext): McpServer {
       "inbox lines older than a week. Run it now and then and fix what it finds.",
     inputSchema: {},
     annotations: READ,
-  }, () => {
-    const pages = store.list("", { limit: 100000 });
-    const linked = new Set<string>(), broken: { page: string; link: string }[] = [], long: { page: string; words: number }[] = [];
-    for (const p of pages) {
-      const body = store.get(p.path)!.body;
-      for (const l of store.links(p.path).out) {
-        if (l.path) linked.add(l.path); else broken.push({ page: p.path, link: l.target });
-      }
-      const n = (body.match(/[\p{L}\p{N}]+/gu) ?? []).length;
-      if (n > (LOGS.includes(areaOf(p.path)) ? 1000 : MAX_WORDS)) long.push({ page: p.path, words: n });
-    }
-    const orphans = pages.filter((p) => !linked.has(p.path) && !["io", "diario", "inbox"].includes(areaOf(p.path))).map((p) => p.path);
-    const weekAgo = dayOf(new Date(Date.now() - 7 * 86400_000));
-    const stale = (store.get("inbox/inbox.md")?.body.split("\n") ?? []).filter((l) => /^- \d{4}-\d{2}-\d{2}/.test(l) && l.slice(2, 12) < weekAgo);
-    const outside = pages.filter((p) => !AREAS.includes(areaOf(p.path))).map((p) => p.path);
-    return text({ pages: pages.length, orphans, broken_links: broken, too_long: long, inbox_older_than_a_week: stale, outside_the_areas: outside });
-  });
+  }, () => text(health(store)));
 
   registerTaskTools(server);
   return server;
