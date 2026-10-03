@@ -1,0 +1,1 @@
+{ "description": "The default profile of the test configuration.", "command": "claude", "skills": "all", "agents": "all", "commands": "all" }

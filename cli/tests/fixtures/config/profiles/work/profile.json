@@ -1,0 +1,1 @@
+{ "description": "A work profile with its own Desktop, alias and a skill of its own.", "command": "claude-work", "alias": "cw", "desktopDir": "~/.config/Claude-Work", "skills": "all", "agents": "all", "commands": "all" }

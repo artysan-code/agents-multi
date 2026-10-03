@@ -1,5 +1,6 @@
 // Tests for mcp.ts: projecting the registry onto surfaces (profiles, _surfaces, private keys, `type`).
-// The profile names come from the repository, never from a literal: a rename must not break this.
+// The profile names come from the configuration (the tests run on cli/tests/fixtures/config), never
+// from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
 import { permissionRules, type RawRegistry, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
 import { desktopDir, profileNames } from "../lib.ts";

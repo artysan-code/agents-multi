@@ -1,4 +1,5 @@
-// Tests for the profile manifests in the repository: shape, defaults, and agreement with shared/
+// Tests for the profile manifests of the configuration (cli/tests/fixtures/config when run by
+// deno task test): shape, defaults, and agreement with shared/
 // (every selected entry has to exist). Written against whatever profiles the repository declares,
 // so adding or removing one does not break the suite.
 import { assert, assertEquals } from "jsr:@std/assert@1";
@@ -7,7 +8,7 @@ import { desktopEntry } from "../install.ts";
 
 Deno.test("manifest: every profile has a valid profile.json and its selections exist in shared/", async () => {
   const profiles = await profileNames();
-  assert(profiles.length > 0, "the repository declares no profiles");
+  assert(profiles.length > 0, "the configuration declares no profiles");
   for (const p of profiles) {
     const m = await loadManifest(p);
     for (const k of KINDS) {
