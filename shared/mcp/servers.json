@@ -166,7 +166,10 @@
         "remove_tcp_proxy",
         "remove_volume"
       ],
-      "_note": "Railway's own MCP, served in-process by the CLI (railway mcp local), one per Railway account token: railway-<account>. RAILWAY_API_TOKEN comes from the vault, so the CLI's own login is not used. Its destructive tools (the ones it marks destructiveHint) are denied. CLI only: the railway binary lives in ~/.railway/bin, off Desktop's PATH."
+      "_note": "Railway's own MCP, served in-process by the CLI (railway mcp local), one per Railway account token: railway-<account>. RAILWAY_API_TOKEN comes from the vault, so the CLI's own login is not used. Its destructive tools (the ones it marks destructiveHint) are denied; list_variables returns values in clear (sealed ones excepted), so it asks first. CLI only: the railway binary lives in ~/.railway/bin, off Desktop's PATH.",
+      "_ask": [
+        "list_variables"
+      ]
     },
     "zapier": {
       "_service": "zapier",
