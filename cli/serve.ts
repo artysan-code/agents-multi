@@ -1,7 +1,7 @@
 // serve.ts — the local console: `claude-multi serve` listens on http://127.0.0.1:7331.
 //
 // Page in cli/dashboard/ (HTML/CSS/JS, no dependencies, no build step: works offline). Data comes
-// from status(), the tasks (taskboard.ts), the wiki (brain.ts), the vault and accounts, and the
+// from status(), the tasks (taskboard.ts), the brain (memory.ts), the old wiki (brain.ts), the vault and accounts, and the
 // session index of usage.ts (Today's "pick up again").
 //
 // Live updates are pushed, not polled. The browser holds one EventSource on /api/events; the
@@ -22,7 +22,8 @@ import { taskApi } from "./taskboard.ts";
 import { askApi } from "./ask.ts";
 import { assetsApi, claudeAssets } from "./claude-assets.ts";
 import { probeAccount } from "./vault.ts";
-import { BRAIN, brainGraph, brainPage } from "./brain.ts";
+import { brainGraph, brainPage } from "./brain.ts";
+import { memoryApi, memoryVersion } from "./memory.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
 import { addTask, brief, listTasks, tasksRoot, type TaskInput, updateTask } from "../shared/mcp/lib/tasks.ts";
 import { connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
@@ -204,7 +205,7 @@ function broadcast(topic: Topic, sessions: string[] = []) {
  * Watch what the console displays and say which half moved.
  * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
- * `brain`  a page of the old wiki changed (Syncthing)
+ * `brain`  a page of the brain changed (anywhere: watchBrain asks it every half minute)
  * `tasks`  a task changed: a chat, another machine, the console
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
@@ -216,7 +217,7 @@ async function watchTree(signal: AbortSignal) {
   // those two are watched only where they are.
   const paths = [RUNTIME, `${REPO}/shared`];
   // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
-  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), BRAIN, tasksRoot()]) if (await lstat(d)) paths.push(d);
+  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), tasksRoot()]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
   try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
   signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
@@ -234,8 +235,6 @@ async function watchTree(signal: AbortSignal) {
       if (e.kind === "access") continue;
       for (const p of e.paths) {
         if (p.endsWith(".tmp") || p.includes("/.git/") || p.includes("/.obsidian/")) continue;
-        // the wiki is its own topic: an Obsidian save should not reload the doctor
-        if (p.startsWith(`${BRAIN}/`)) { if (p.endsWith(".md")) pending.add("brain"); continue; }
         if (p.startsWith(`${tasksRoot()}/`)) { pending.add("tasks"); continue; }
         const transcript = p.includes("/projects/") && p.endsWith(".jsonl");
         pending.add(transcript ? "usage" : "state");
@@ -278,17 +277,22 @@ function eventStream(): Response {
 }
 
 // ---------------------------------------------------------------- server
-/** With the tasks in the brain, a change made elsewhere (the phone, a chat on another machine)
- *  touches no file here: the list is read every half minute and a `tasks` event goes out when it
- *  differs. The console's own writes broadcast at once, through taskApi. */
-async function watchBrainTasks(signal: AbortSignal) {
-  let last = "";
+/** The brain changes elsewhere (the phone, a chat on another machine) and touches no file here:
+ *  every half minute its tasks and its memory version are read, and a `tasks` or `brain` event goes
+ *  out when one differs. The console's own task writes broadcast at once, through taskApi. */
+async function watchBrain(signal: AbortSignal, tasks: boolean) {
+  let lastTasks = "", lastMemory: string | null = null;
   while (!signal.aborted) {
-    try {
-      const now = JSON.stringify((await listTasks()).map((t) => [t.id, t.updated]).sort());
-      if (last && now !== last) broadcast("tasks");
-      last = now;
-    } catch { /* the brain is away: the panels say so when they ask */ }
+    if (tasks) {
+      try {
+        const now = JSON.stringify((await listTasks()).map((t) => [t.id, t.updated]).sort());
+        if (lastTasks && now !== lastTasks) broadcast("tasks");
+        lastTasks = now;
+      } catch { /* the brain is away: the panels say so when they ask */ }
+    }
+    const memory = await memoryVersion().catch(() => null);
+    if (memory && lastMemory && memory !== lastMemory) broadcast("brain");
+    if (memory) lastMemory = memory;
     await new Promise((r) => setTimeout(r, 30_000));
   }
 }
@@ -414,8 +418,11 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         const earlier = cal.tasks.filter((t) => t.due === b.day && t.time && t.time < clock);
         return json({ ...b, earlier, calendarErrors: cal.errors });
       }
-      if (u.pathname === "/api/brain") return json(await brainGraph());
-      if (u.pathname === "/api/brain/page") return json(await brainPage(u.searchParams.get("path") ?? ""));
+      const mr = req.method === "GET" ? await memoryApi(u) : null;
+      if (mr) return mr;
+      // the old wiki, read-only: the Brain page's Archive
+      if (u.pathname === "/api/archive") return json(await brainGraph());
+      if (u.pathname === "/api/archive/page") return json(await brainPage(u.searchParams.get("path") ?? ""));
       if (u.pathname === "/api/profile") {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);
         if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
@@ -467,7 +474,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
 
   console.log(`${ANSI.b}claude-multi serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   void watchTree(ac.signal);
-  if (await connectTasks() === "brain") void watchBrainTasks(ac.signal);
+  void watchBrain(ac.signal, await connectTasks() === "brain");
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
   if (opts.open) { try { new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref(); } catch { /* no browser */ } }
   await srv.finished;

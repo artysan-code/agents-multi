@@ -1,55 +1,69 @@
 // deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — the Brain: the old wiki (~/brains/claude), a read-only archive since
-   2026-10-02, the way Obsidian shows it, until this page is rebuilt on the brain service. Pages as
-   a tree of folders, a reader with what links in and out, the page's neighbourhood as a small live
-   graph, and the whole graph on its own screen. Only a view.
-   Loaded after app.js (helpers: $, esc, api, t, toast, drawer, mdToHtml, ago). */
+/* claude-multi console — the Brain: Samuel's memory on the brain service, read through the console
+   (cli/memory.ts, the token stays there). The seven areas as a tree, search by words and by meaning,
+   a reader with who wrote what and when, the links both ways, every version and what changed, the
+   page's neighbourhood as a small live graph, and the whole graph on its own screen. Only a view:
+   changes are Claude's, where the brain's rules answer.
+   Loaded after app.js (helpers: $, esc, api, t, toast, mdToHtml, ago, short). */
 
-const GROUPS = ["projects", "references", "concepts", "skills", "entities", "synthesis", "journal"];
-const groupOf = (g) => GROUPS.includes(g) ? g : "other";
-/** Pages that link to everything (the index, the log): in a graph they are a star that hides the
-    structure, so the graph leaves them out unless asked. They stay in the tree and the reader. */
-const HUBS = new Set(["index", "log", "CONVENTIONS", "README", "hot"]);
-let BRAIN = null, bSel = null, bMode = "read", bShowHubs = false, bDepth2 = false, bOpen = new Set(["projects"]);
+const AREAS = ["io", "progetti", "clienti", "persone", "note", "diario", "inbox"];
+const areaOf = (a) => AREAS.includes(a) ? a : "other";
+let BRAIN = null, bSel = null, bMode = "read", bDepth2 = false, bOpen = new Set(["progetti"]);
 const bOff = new Set();
-let bPage = null; // the page on screen: { path, body, data }
+let bPage = null; // the page on screen, as /api/brain/page answers it
+let bVer = null; // an older version on screen: { rev, body, at, by, diff }
+let bFound = null; // the last search: { q, results, note }
 try {
   bMode = localStorage.getItem("cm-bmode") === "graph" ? "graph" : "read";
-  bOpen = new Set(JSON.parse(localStorage.getItem("cm-bopen") ?? '["projects"]'));
+  bOpen = new Set(JSON.parse(localStorage.getItem("cm-bopen2") ?? '["progetti"]'));
 } catch { /* storage blocked: defaults */ }
-const remember = () => { try { localStorage.setItem("cm-bopen", JSON.stringify([...bOpen])); localStorage.setItem("cm-bmode", bMode); } catch { /* not remembered */ } };
+const remember = () => { try { localStorage.setItem("cm-bopen2", JSON.stringify([...bOpen])); localStorage.setItem("cm-bmode", bMode); } catch { /* not remembered */ } };
+const bare = (path) => String(path).replace(/\.md$/, "");
 
 async function loadBrain() {
-  BRAIN = await api("/api/brain");
+  try {
+    BRAIN = await api("/api/brain/pages");
+  } catch (e) {
+    BRAIN = null;
+    $("#bn-tree").innerHTML = "";
+    $("#bn-page").innerHTML = `<div class="bn-body"><p class="sub">${esc(t("brain.away", { e: errText(e) }))}</p></div>`;
+    throw e;
+  }
   BRAIN.byPath = new Map(BRAIN.pages.map((p) => [p.path, p]));
   BRAIN.out = new Map(), BRAIN.in = new Map();
-  for (const [a, b] of BRAIN.links) {
+  for (const [a, b] of BRAIN.edges) {
     if (!BRAIN.out.has(a)) BRAIN.out.set(a, new Set());
     if (!BRAIN.in.has(b)) BRAIN.in.set(b, new Set());
     BRAIN.out.get(a).add(b);
     BRAIN.in.get(b).add(a);
   }
   if (bSel && !BRAIN.byPath.has(bSel)) bSel = null;
-  bSel ??= BRAIN.byPath.has("index") ? "index" : BRAIN.pages[0]?.path ?? null;
+  bSel ??= BRAIN.byPath.has("progetti/claude-multi.md") ? "progetti/claude-multi.md" : BRAIN.pages[0]?.path ?? null;
   renderBrainAll();
-  if (bSel && bPage?.path !== bSel) readInto(bSel);
+  // a change elsewhere: the page on screen is read again, unless an old version is being looked at
+  if (bSel && !bVer && (bPage?.path !== bSel || BRAIN.byPath.get(bSel)?.rev !== bPage?.rev)) readInto(bSel);
 }
+
+/** The service's answer inside an error, without the status line. */
+const errText = (e) => {
+  const m = String(e.message ?? e).match(/\{.*\}/s);
+  try { return m ? JSON.parse(m[0]).error ?? e.message : e.message; } catch { return e.message; }
+};
 
 function renderBrainAll() {
   if (!BRAIN) return;
   $$("#bn-modes [data-bmode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.bmode === bMode)));
   $("#bn-read").hidden = bMode !== "read";
   $("#bn-graph").hidden = bMode !== "graph";
-  $("#b-sum").textContent = t("brain.sum", { p: BRAIN.pages.length, l: BRAIN.links.length });
+  $("#b-sum").textContent = t("brain.sum", { p: BRAIN.pages.length, l: BRAIN.edges.length });
   renderTree();
-  renderSide();
   if (bMode === "graph") showGlobalGraph();
   else showLocalGraph();
 }
 
 /** Opens a page in the reader from elsewhere (a task's attachment, a link). */
 async function openBrainPage(target) {
-  if (!BRAIN) await loadBrain().catch((e) => toast(e.message, true)); // the tab may never have been opened
+  if (!BRAIN) await loadBrain().catch((e) => toast(errText(e), true)); // the tab may never have been opened
   const path = resolvePage(target);
   if (!path) return toast(t("brain.missing", { p: target }), true);
   bMode = "read";
@@ -57,20 +71,22 @@ async function openBrainPage(target) {
   selectPage(path);
 }
 
-/** A wikilink target to a page: the full path, or the one page with that file name. */
+/** Where a [[target]] points, as the brain resolves it: the exact path, else the shallowest page
+    with that name. */
 function resolvePage(target) {
   if (!BRAIN || !target) return null;
-  const tg = String(target).replace(/\.md$/, "").replace(/^\/+/, "");
-  if (BRAIN.byPath.has(tg)) return tg;
-  const name = tg.split("/").pop();
-  const hits = BRAIN.pages.filter((p) => p.path.split("/").pop() === name);
-  return hits.length === 1 ? hits[0].path : null;
+  const tg = bare(String(target).replace(/^\/+/, ""));
+  if (BRAIN.byPath.has(`${tg}.md`)) return `${tg}.md`;
+  const name = tg.split("/").pop().toLowerCase();
+  const hits = BRAIN.pages.filter((p) => bare(p.path).split("/").pop().toLowerCase() === name);
+  hits.sort((a, b) => a.path.split("/").length - b.path.split("/").length || a.path.localeCompare(b.path));
+  return hits[0]?.path ?? null;
 }
 
 function selectPage(path) {
   bSel = path;
-  // the folders down to the page open in the tree
-  const parts = path.split("/");
+  bVer = null;
+  const parts = bare(path).split("/");
   for (let i = 1; i < parts.length; i++) bOpen.add(parts.slice(0, i).join("/"));
   remember();
   renderBrainAll();
@@ -78,92 +94,208 @@ function selectPage(path) {
   $(`#bn-tree [data-page="${CSS.escape(path)}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
+/** Who wrote: "claude:Claude Code" → "Claude · Claude Code", "token:fisso" → "fisso". */
+const who = (by) => {
+  const [kind, rest] = String(by ?? "").split(/:(.*)/s);
+  if (kind === "claude") return rest && rest !== "Claude" ? `Claude · ${rest}` : "Claude";
+  if (kind === "token") return rest || t("brain.machine");
+  return by || "—";
+};
+const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
 /* ---------------- the tree ---------------- */
+/** Titles and paths matching what is typed, at once; the service's search follows on Enter. */
 function matches() {
   const q = $("#b-q").value.trim().toLowerCase();
   if (!q) return null;
-  return new Set(BRAIN.pages.filter((p) => `${p.title} ${p.path} ${p.summary} ${p.tags.join(" ")}`.toLowerCase().includes(q)).map((p) => p.path));
+  const set = new Set(BRAIN.pages.filter((p) => `${p.title} ${p.path}`.toLowerCase().includes(q)).map((p) => p.path));
+  if (bFound?.q === $("#b-q").value.trim()) for (const r of bFound.results) set.add(r.path);
+  return set;
 }
 
 function renderTree() {
+  if (bFound && bFound.q === $("#b-q").value.trim()) return renderResults();
   const hits = matches();
-  const root = { dirs: new Map(), pages: [] };
+  const roots = new Map(AREAS.map((a) => [a, { dirs: new Map(), pages: [], path: a }]));
   for (const p of BRAIN.pages) {
     if (hits && !hits.has(p.path)) continue;
-    const parts = p.path.split("/");
-    let node = root;
-    for (let i = 0; i < parts.length - 1; i++) {
+    const parts = bare(p.path).split("/");
+    if (!roots.has(parts[0])) roots.set(parts[0], { dirs: new Map(), pages: [], path: parts[0] });
+    let node = roots.get(parts[0]);
+    for (let i = 1; i < parts.length - 1; i++) {
       if (!node.dirs.has(parts[i])) node.dirs.set(parts[i], { dirs: new Map(), pages: [], path: parts.slice(0, i + 1).join("/") });
       node = node.dirs.get(parts[i]);
     }
     node.pages.push(p);
   }
   const count = (n) => n.pages.length + [...n.dirs.values()].reduce((s, d) => s + count(d), 0);
-  const draw = (node, depth) => {
-    // a project folder usually has a page with its own name: that page stands for the folder
+  const pageBtn = (p, depth) =>
+    `<button class="bt-p${p.path === bSel ? " on" : ""}" data-page="${esc(p.path)}" style="--d:${depth}" title="${esc(bare(p.path))}">${esc(p.title)}</button>`;
+  const draw = (node, depth, area) => {
     const dirs = [...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b));
-    const pages = [...node.pages].sort((a, b) => a.title.localeCompare(b.title));
-    return dirs.map(([name, d]) => {
-      const open = hits ? true : bOpen.has(d.path);
-      const g = depth === 0 ? groupOf(name) : null;
-      return `<div class="bt-dir${open ? " open" : ""}">
-        <button class="bt-f" data-dir="${esc(d.path)}" style="--d:${depth}">
-          <svg viewBox="0 0 24 24" class="ico chev"><path d="M9 6l6 6-6 6"/></svg>
-          ${g ? `<i class="gdot" style="background:var(--g-${g})"></i>` : ""}
-          <span>${esc(depth === 0 && GROUPS.includes(name) ? t(`brain.g.${name}`) : name)}</span><em>${count(d)}</em>
-        </button>
-        ${open ? draw(d, depth + 1) : ""}
-      </div>`;
-    }).join("") + pages.map((p) =>
-      `<button class="bt-p${p.path === bSel ? " on" : ""}" data-page="${esc(p.path)}" style="--d:${depth}" title="${esc(p.path)}">${esc(p.title)}</button>`
-    ).join("");
+    // the diary reads newest first; elsewhere by title
+    const pages = [...node.pages].sort(area === "diario" ? (a, b) => b.path.localeCompare(a.path) : (a, b) => a.title.localeCompare(b.title));
+    return dirs.map(([name, d]) => folder(d, name, depth, area)).join("") + pages.map((p) => pageBtn(p, depth)).join("");
   };
-  $("#bn-tree").innerHTML = draw(root, 0) || `<div class="sub" style="padding:10px">${esc(t("cat.nothing"))}</div>`;
+  const folder = (d, label, depth, area) => {
+    const n = count(d);
+    const open = hits ? n > 0 : bOpen.has(d.path);
+    return `<div class="bt-dir${open ? " open" : ""}${n ? "" : " empty"}">
+      <button class="bt-f" data-dir="${esc(d.path)}" style="--d:${depth}">
+        <svg viewBox="0 0 24 24" class="ico chev"><path d="M9 6l6 6-6 6"/></svg>
+        ${depth === 0 ? `<i class="gdot" style="background:var(--g-${areaOf(area)})"></i>` : ""}
+        <span>${esc(label)}</span><em>${n}</em>
+      </button>
+      ${open ? draw(d, depth + 1, area) : ""}
+    </div>`;
+  };
+  $("#bn-tree").innerHTML = [...roots.entries()]
+    .map(([a, node]) => folder(node, AREAS.includes(a) ? t(`brain.g.${a}`) : a, 0, a)).join("");
+}
+
+/* ---------------- search ---------------- */
+let searchSeq = 0;
+async function searchBrain(q) {
+  const seq = ++searchSeq;
+  $("#bn-tree").innerHTML = `<div class="sub bt-note">${esc(t("brain.searching"))}</div>`;
+  try {
+    const r = await api(`/api/brain/search?q=${encodeURIComponent(q)}&limit=30`);
+    if (seq !== searchSeq) return;
+    bFound = { q, results: r.results ?? [], note: r.note };
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    bFound = { q, results: [], note: errText(e) };
+  }
+  renderTree();
+  if (bMode === "graph") gGlobal?.setMatch(matches());
+}
+
+function renderResults() {
+  const mark = (s) => esc(s).replace(/«/g, "<mark>").replace(/»/g, "</mark>");
+  // an excerpt is raw Markdown: links read as their names, headings and emphasis without the marks
+  const plain = (s) => s.replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, tg, label) => label ?? tg.trim().split("/").pop())
+    .replace(/\[\[[^\]]*$/, "…").replace(/(^|\s)#{1,6}\s/g, "$1").replace(/\*\*|`/g, "").replace(/\s+/g, " ");
+  const rows = bFound.results.map((r) => {
+    const p = BRAIN.byPath.get(r.path);
+    return `<button class="bt-r${r.path === bSel ? " on" : ""}" data-page="${esc(r.path)}">
+      <span class="bt-rt"><i class="gdot" style="background:var(--g-${areaOf(p?.area)})"></i>${esc(r.title)}</span>
+      <span class="bt-rp">${esc(bare(r.path))}</span>
+      ${r.excerpt ? `<span class="bt-rx">${mark(short(plain(r.excerpt), 180))}</span>` : ""}
+    </button>`;
+  }).join("");
+  $("#bn-tree").innerHTML = `<div class="bt-rh"><b>${esc(t("brain.results", { n: bFound.results.length }))}</b>
+      <button class="btn sm" data-clear>${esc(t("brain.clear"))}</button></div>
+    ${bFound.note ? `<div class="sub bt-note">${esc(/words only|parole/.test(bFound.note) ? t("brain.wordsOnly") : bFound.note)}</div>` : ""}
+    ${rows || `<div class="sub bt-note">${esc(t("cat.nothing"))}</div>`}`;
 }
 
 /* ---------------- the reader ---------------- */
 async function readInto(path) {
   const el = $("#bn-page");
-  const p = BRAIN.byPath.get(path);
-  if (!p) return;
+  if (!BRAIN.byPath.get(path)) return;
   if (bPage?.path !== path) el.innerHTML = `<div class="bn-body"><p class="sub">${esc(t("pl.loading"))}</p></div>`;
   try {
     const page = await api(`/api/brain/page?path=${encodeURIComponent(path)}`);
     if (bSel !== path) return; // another page was chosen meanwhile
+    const same = bPage?.path === path;
     bPage = page;
-    const body = page.body.replace(/^\s*#\s+.*\n/, ""); // the title is shown above
-    const vault = BRAIN.root.split("/").pop();
-    const chips = [p.category && p.category !== p.group ? p.category : null, p.lifecycle].filter(Boolean);
-    el.innerHTML = `<div class="bn-body">
-      <div class="bn-crumb">${path.split("/").map(esc).join(" <span>/</span> ")}</div>
-      <h1 class="bn-title">${esc(p.title)}</h1>
-      <div class="bn-meta">
-        <i class="gdot" style="background:var(--g-${groupOf(p.group)})"></i>${esc(t(`brain.g.${groupOf(p.group)}`))}
-        ${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}
-        ${p.updated ? `<span>${esc(t("brain.updated", { d: ago(p.updated) }))}</span>` : ""}
-        <a class="btn sm" href="obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(p.path)}">${esc(t("brain.obsidian"))}</a>
-      </div>
-      ${p.tags.length ? `<div class="bn-tags">${p.tags.map((x) => `<button class="tag" data-tag="${esc(x)}">#${esc(x)}</button>`).join("")}</div>` : ""}
-      ${p.summary ? `<p class="bn-sum">${esc(p.summary)}</p>` : ""}
-      <div class="md bn-md">${mdToHtml(body)}</div>
-    </div>`;
-    el.scrollTop = 0;
+    renderPage(!same);
+    renderSide();
   } catch (e) {
-    el.innerHTML = `<div class="bn-body"><p class="sub">${esc(e.message)}</p></div>`;
+    el.innerHTML = `<div class="bn-body"><p class="sub">${esc(errText(e))}</p></div>`;
   }
+}
+
+function renderPage(top = true) {
+  const el = $("#bn-page"), p = bPage;
+  const v = bVer;
+  const body = (v ? v.body : p.body).replace(/^\s*#\s+.*\n/, ""); // the title is shown above
+  const banner = v
+    ? `<div class="bn-ver">
+        <span>${esc(t("brain.ver.title", { n: v.rev, d: when(v.at), w: who(v.by) }))}</span>
+        <span class="seg">
+          <button data-vview="read" aria-pressed="${!v.diff}">${esc(t("brain.ver.read"))}</button>
+          <button data-vview="diff" aria-pressed="${!!v.diff}">${esc(t("brain.ver.diff"))}</button>
+        </span>
+        <button class="btn sm" data-vclose>${esc(t("brain.ver.back"))}</button>
+      </div>`
+    : "";
+  el.innerHTML = `<div class="bn-body">
+    <div class="bn-crumb">${bare(p.path).split("/").map(esc).join(" <span>/</span> ")}</div>
+    <h1 class="bn-title">${esc(p.title)}</h1>
+    <div class="bn-meta">
+      <i class="gdot" style="background:var(--g-${areaOf(p.area)})"></i>${esc(AREAS.includes(p.area) ? t(`brain.g.${p.area}`) : p.area)}
+      <span title="${esc(when(p.updated))}">${esc(t("brain.updatedBy", { d: ago(p.updated), w: who(p.by) }))}</span>
+      <span class="chip">${esc(t("brain.rev", { n: p.rev }))}</span>
+    </div>
+    ${banner}
+    ${v?.diff ? diffHtml(v.body, p.body) : `<div class="md bn-md">${mdToHtml(body)}</div>`}
+  </div>`;
+  if (top) el.scrollTop = 0;
 }
 
 function renderSide() {
   const box = $("#bn-links");
-  if (!bSel) { box.innerHTML = ""; return; }
-  const out = [...(BRAIN.out.get(bSel) ?? [])], inn = [...(BRAIN.in.get(bSel) ?? [])];
-  const list = (xs) => xs.map((x) => BRAIN.byPath.get(x)).filter(Boolean).sort((a, b) => a.title.localeCompare(b.title))
-    .map((p) => `<button class="bl" data-page="${esc(p.path)}"><i class="gdot" style="background:var(--g-${groupOf(p.group)})"></i><span>${esc(p.title)}</span></button>`).join("");
+  if (!bPage || bPage.path !== bSel) { box.innerHTML = ""; return; }
+  const area = (path) => areaOf(BRAIN.byPath.get(path)?.area);
+  const row = (path, label) =>
+    `<button class="bl" data-page="${esc(path)}"><i class="gdot" style="background:var(--g-${area(path)})"></i><span>${esc(label)}</span></button>`;
+  const back = bPage.links.back.map((x) => BRAIN.byPath.get(x)).filter(Boolean).sort((a, b) => a.title.localeCompare(b.title));
+  const out = bPage.links.out.map((l) => l.path ? row(l.path, BRAIN.byPath.get(l.path)?.title ?? bare(l.path))
+    : `<span class="bl broken" title="${esc(t("brain.broken"))}"><i class="gdot"></i><span>${esc(l.target)}</span></span>`);
+  const versions = bPage.versions.map((x) => `<button class="bv${bVer?.rev === x.rev ? " on" : ""}${x.rev === bPage.rev ? " cur" : ""}" data-rev="${x.rev}">
+      <b>${esc(String(x.rev))}</b><span>${esc(ago(x.at))} · ${esc(who(x.by))}</span><em>${esc(t(`brain.op.${x.op}`))}</em>
+    </button>`).join("");
   box.innerHTML = `
-    <div class="panel-h"><h3>${esc(t("brain.backlinks"))}</h3><span class="r">${inn.length}</span></div>
-    <div class="bl-list">${list(inn) || `<span class="sub">${esc(t("brain.none"))}</span>`}</div>
+    <div class="panel-h"><h3>${esc(t("brain.backlinks"))}</h3><span class="r">${back.length}</span></div>
+    <div class="bl-list">${back.map((p) => row(p.path, p.title)).join("") || `<span class="sub">${esc(t("brain.none"))}</span>`}</div>
     <div class="panel-h"><h3>${esc(t("brain.outlinks"))}</h3><span class="r">${out.length}</span></div>
-    <div class="bl-list">${list(out) || `<span class="sub">${esc(t("brain.none"))}</span>`}</div>`;
+    <div class="bl-list">${out.join("") || `<span class="sub">${esc(t("brain.none"))}</span>`}</div>
+    <div class="panel-h"><h3>${esc(t("brain.versions"))}</h3><span class="r">${bPage.versions.length}</span></div>
+    <div class="bl-list">${versions}</div>`;
+}
+
+async function showVersion(rev) {
+  if (!bPage) return;
+  if (rev === bPage.rev) { bVer = null; renderPage(false); renderSide(); return; }
+  try {
+    const r = await api(`/api/brain/page?path=${encodeURIComponent(bPage.path)}&rev=${rev}`);
+    bVer = { rev, body: r.body, at: r.at, by: r.by, diff: bVer?.diff ?? true };
+    renderPage(false);
+    renderSide();
+  } catch (e) { toast(errText(e), true); }
+}
+
+/** Pure: the lines of two texts as kept, removed and added (a longest common subsequence: pages
+    are a few hundred lines at most). */
+function lineDiff(a, b) {
+  const x = a.split("\n"), y = b.split("\n"), n = x.length, m = y.length;
+  const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (x[i] === y[j]) { out.push([" ", x[i]]); i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) out.push(["-", x[i++]]);
+    else out.push(["+", y[j++]]);
+  }
+  while (i < n) out.push(["-", x[i++]]);
+  while (j < m) out.push(["+", y[j++]]);
+  return out;
+}
+
+/** The old version against the current one, changed lines with three lines of context around. */
+function diffHtml(old, cur) {
+  const d = lineDiff(old, cur);
+  const near = d.map((_, k) => d.slice(Math.max(0, k - 3), k + 4).some(([op]) => op !== " "));
+  if (!d.some(([op]) => op !== " ")) return `<p class="sub">${esc(t("brain.ver.same"))}</p>`;
+  let gap = false;
+  const rows = d.map(([op, line], k) => {
+    if (!near[k]) { const g = gap ? "" : `<div class="df-gap">⋯</div>`; gap = true; return g; }
+    gap = false;
+    return `<div class="df-l${op === "+" ? " add" : op === "-" ? " del" : ""}"><i>${op === " " ? "" : op}</i><span>${esc(line) || "&nbsp;"}</span></div>`;
+  }).join("");
+  return `<p class="sub bn-dlegend">${esc(t("brain.ver.legend"))}</p><div class="df">${rows}</div>`;
 }
 
 /* ---------------- a force graph on a canvas ---------------- */
@@ -180,7 +312,7 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
 
   const readColors = () => {
     const cs = getComputedStyle(document.documentElement);
-    for (const g of [...GROUPS, "other"]) colors[g] = cs.getPropertyValue(`--g-${g}`).trim() || "#888";
+    for (const g of [...AREAS, "other"]) colors[g] = cs.getPropertyValue(`--g-${g}`).trim() || "#888";
     for (const k of ["line", "fg", "fg-dim", "fg-faint", "accent", "surface"]) colors[k] = cs.getPropertyValue(`--${k}`).trim();
     colorsAt = Date.now();
   };
@@ -403,7 +535,7 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
 
 /* ---------------- the two graphs ---------------- */
 let gLocal = null, gGlobal = null;
-const nodeOf = (p) => ({ id: p.path, title: p.title, group: groupOf(p.group) });
+const nodeOf = (p) => ({ id: p.path, title: p.title, group: areaOf(p.area) });
 
 function showLocalGraph() {
   if (!bSel) return;
@@ -417,10 +549,8 @@ function showLocalGraph() {
   };
   grow();
   if (bDepth2) grow();
-  // the hubs only when they are the page, or on request: otherwise every neighbourhood includes them
-  for (const h of HUBS) if (h !== bSel && !bShowHubs) ids.delete(h);
   const pages = [...ids].map((id) => BRAIN.byPath.get(id)).filter(Boolean);
-  gLocal.setData(pages.map(nodeOf), BRAIN.links.filter(([a, b]) => ids.has(a) && ids.has(b)));
+  gLocal.setData(pages.map(nodeOf), BRAIN.edges.filter(([a, b]) => ids.has(a) && ids.has(b)));
   gLocal.select(bSel);
   gLocal.resize();
 }
@@ -431,17 +561,16 @@ function showGlobalGraph() {
     onClick: (id) => { bSel = id ?? bSel; gGlobal.select(id); renderCard(id); },
     onOpen: (id) => { bMode = "read"; remember(); selectPage(id); },
   });
-  const pages = BRAIN.pages.filter((p) => (bShowHubs || !HUBS.has(p.path)) && !bOff.has(groupOf(p.group)));
+  const pages = BRAIN.pages.filter((p) => !bOff.has(areaOf(p.area)));
   const ids = new Set(pages.map((p) => p.path));
-  gGlobal.setData(pages.map(nodeOf), BRAIN.links.filter(([a, b]) => ids.has(a) && ids.has(b)));
+  gGlobal.setData(pages.map(nodeOf), BRAIN.edges.filter(([a, b]) => ids.has(a) && ids.has(b)));
   gGlobal.setMatch(matches());
   gGlobal.select(bSel);
   gGlobal.resize();
-  const present = new Set(BRAIN.pages.map((p) => groupOf(p.group)));
-  $("#bn-legend").innerHTML = [...GROUPS, "other"].filter((g) => present.has(g)).map((g) =>
+  const present = new Set(BRAIN.pages.map((p) => areaOf(p.area)));
+  $("#bn-legend").innerHTML = [...AREAS, "other"].filter((g) => present.has(g)).map((g) =>
     `<button class="lg${bOff.has(g) ? " off" : ""}" data-group="${g}"><i style="background:var(--g-${g})"></i>${esc(t(`brain.g.${g}`))}</button>`
   ).join("");
-  $("#bn-hubs").checked = bShowHubs;
   renderCard(ids.has(bSel) ? bSel : null);
 }
 
@@ -451,9 +580,9 @@ function renderCard(id) {
   el.hidden = !p;
   if (!p) return;
   const nIn = BRAIN.in.get(id)?.size ?? 0, nOut = BRAIN.out.get(id)?.size ?? 0;
-  el.innerHTML = `<div class="sub">${esc(p.path)}</div>
+  el.innerHTML = `<div class="sub">${esc(bare(p.path))}</div>
     <b>${esc(p.title)}</b>
-    ${p.summary ? `<p>${esc(short(p.summary, 220))}</p>` : ""}
+    <div class="sub">${esc(t("brain.updatedBy", { d: ago(p.updated), w: who(p.by) }))}</div>
     <div class="sub">${esc(t("brain.linkCount", { i: nIn, o: nOut }))}</div>
     <button class="btn primary sm" data-read="${esc(p.path)}">${esc(t("brain.read"))}</button>`;
 }
@@ -463,7 +592,7 @@ function renderCard(id) {
   const root = $("#v-brain");
   $("#bn-modes").addEventListener("click", (e) => {
     const b = e.target.closest("[data-bmode]");
-    if (!b) return;
+    if (!b || !BRAIN) return;
     bMode = b.dataset.bmode;
     remember();
     renderBrainAll();
@@ -473,17 +602,23 @@ function renderCard(id) {
   let qTimer = null;
   $("#b-q").addEventListener("input", () => {
     clearTimeout(qTimer);
+    if (!BRAIN) return;
+    searchSeq++; // a search still on its way is for a query no longer there
     qTimer = setTimeout(() => { renderTree(); if (bMode === "graph") gGlobal?.setMatch(matches()); }, 120);
   });
   $("#b-q").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    const first = $("#bn-tree .bt-p");
-    if (first) selectPage(first.dataset.page);
+    if (e.key === "Escape") { e.target.value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
+    if (e.key !== "Enter" || !BRAIN) return;
+    const q = e.target.value.trim();
+    if (!q) return;
+    // a second Enter on the same results opens the first one
+    if (bFound?.q === q) { const first = bFound.results[0]; if (first) selectPage(first.path); return; }
+    searchBrain(q);
   });
   $("#bn-d2").addEventListener("change", (e) => { bDepth2 = e.target.checked; showLocalGraph(); });
-  $("#bn-hubs").addEventListener("change", (e) => { bShowHubs = e.target.checked; showGlobalGraph(); });
   $("#bn-fit").addEventListener("click", () => gGlobal?.refit());
   root.addEventListener("click", (e) => {
+    if (e.target.closest("[data-clear]")) { $("#b-q").value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
     const d = e.target.closest("[data-dir]");
     if (d) {
       const k = d.dataset.dir;
@@ -491,6 +626,11 @@ function renderCard(id) {
       remember();
       return renderTree();
     }
+    const rv = e.target.closest("[data-rev]");
+    if (rv) return void showVersion(Number(rv.dataset.rev));
+    const vv = e.target.closest("[data-vview]");
+    if (vv && bVer) { bVer.diff = vv.dataset.vview === "diff"; return renderPage(false); }
+    if (e.target.closest("[data-vclose]")) { bVer = null; renderPage(false); return renderSide(); }
     const pg = e.target.closest("[data-page]");
     if (pg) {
       e.preventDefault();
@@ -499,8 +639,6 @@ function renderCard(id) {
     }
     const rd = e.target.closest("[data-read]");
     if (rd) { bMode = "read"; remember(); return selectPage(rd.dataset.read); }
-    const tg = e.target.closest("[data-tag]");
-    if (tg) { $("#b-q").value = tg.dataset.tag; renderTree(); return; }
     const lg = e.target.closest("[data-group]");
     if (lg) {
       const g = lg.dataset.group;

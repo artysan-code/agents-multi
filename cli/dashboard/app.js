@@ -653,7 +653,10 @@ function mdToHtml(src) {
       const kind = li[2] ? "ol" : "ul";
       if (list !== kind) { flush(); out.push(`<${kind}>`); list = kind; }
       const box = li[3].match(/^\[([ xX])\]\s+(.*)/);
-      out.push(box ? `<li class="task${box[1] !== " " ? " done" : ""}"><span class="cb">${box[1] !== " " ? "✓" : ""}</span>${inline(box[2])}</li>` : `<li>${inline(li[3])}</li>`);
+      // a nested item keeps its depth (two spaces a level), without building nested lists
+      const depth = Math.min(Math.floor(line.match(/^\s*/)[0].replace(/\t/g, "  ").length / 2), 4);
+      const lvl = depth ? ` style="--lv:${depth}"` : "";
+      out.push(box ? `<li class="task${box[1] !== " " ? " done" : ""}"${lvl}><span class="cb">${box[1] !== " " ? "✓" : ""}</span>${inline(box[2])}</li>` : `<li${lvl}>${inline(li[3])}</li>`);
       continue;
     }
     if (/^\|.*\|\s*$/.test(line)) {
