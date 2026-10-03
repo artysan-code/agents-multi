@@ -44,6 +44,8 @@ the second is only an optional dependency of the first on Arch, so install it ex
 
 ### First run
 
+Someone new is best guided by a Claude Code session following [ONBOARDING.md](ONBOARDING.md).
+
 1. `claude-multi init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
    `profiles/` (one folder per Claude account).
 2. `claude-multi install` — the runtime, the launchers, the console and the tray app.

@@ -191,6 +191,12 @@ function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry
       // with no address at all, reach nothing rather than everything
       const hosts = accountHosts(visible).join(",") || "127.0.0.1:9";
       if (Array.isArray(clean.args)) clean.args = clean.args.map((a) => typeof a === "string" ? a.replaceAll("{hosts}", hosts) : a);
+      if (isHttp(clean)) {
+        // a remote server at the account's address ({url}): the person's own brain, not anyone's written in
+        if (visible.length !== 1) continue; // which one would it be? accounts.json must say, with profiles
+        out.push({ entry: name, name, cfg: forAccount(clean, visible[0]) });
+        continue;
+      }
       clean.env = { ...(clean.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
       // a work profile sees only its part of the brain (manifest brainScope)
       const scope = cfg._service === "brain" ? reg.brainScopes?.[t.profile] : undefined;

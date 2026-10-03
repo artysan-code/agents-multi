@@ -1,10 +1,10 @@
 ---
-description: Write this project's page in Samuel's brain (and its client's, when it needs one), from what this folder and its repo say.
+description: Write this project's page in the owner's brain (and its client's, when it needs one), from what this folder and its repo say.
 ---
 
 # Brain init
 
-Write the page of the project you are in into Samuel's brain (the `brain` MCP server, or the
+Write the page of the project you are in into the owner's brain (the `brain` MCP server, or the
 "brain" connector): a short page that lets any Claude, on any device, know what this project is
 and where it stands without opening the folder. You know this project better than anyone, so
 the page comes from here. It distils three sources (this folder, its repo, the old wiki) into one short page; nothing is copied whole.
@@ -18,7 +18,7 @@ the page comes from here. It distils three sources (this folder, its repo, the o
   at (`projects/<name>`), or `grep -ril <project> ~/brains/claude/projects`. Take from it only
   what still holds and matters: it was written loosely, and much of it is history.
 - In the brain: `brain_search` for the project and its client, `brain_read` of what you find, and
-  of `clienti/acme` or the client page when it is a work project. Update a page that exists
+  of `clienti/<client>` or the client page when it is a work project. Update a page that exists
   rather than writing a new one.
 
 ## 2. Write the project page
@@ -43,7 +43,7 @@ Leave out what the code or the repo already says, work steps, history that no lo
 ## 3. The client, when it needs a page
 
 `clienti/<name>` holds the relationship, not the work: who the client is (one line), direct or
-through whom (`[[clienti/acme]]`, `[[clienti/agency]]`, …), the people of
+through whom (`[[clienti/acme]]`, …), the people of
 reference, the projects. Write one only when there is something to say about the relationship
 or the client has more than one project; a client that is just this project stays a line in the
 project page. People get a page in `persone/` only when they matter beyond this project.
@@ -52,12 +52,12 @@ project page. People get a page in `persone/` only when they matter beyond this 
 
 - NDA: no code, secrets, credentials, amounts, addresses, clients' customers or personal data.
   Only what the relationship and the work are, at a high level. In doubt, leave it out.
-- Do not guess: what the folder does not say, ask Samuel at the end (at most three questions),
+- Do not guess: what the folder does not say, ask the owner at the end (at most three questions),
   or leave it out.
 - Tasks stay where they are (`tasks` MCP, `TASKS.md`): do not copy them into the page.
 - Touch nothing else in the folder or the repo; no commits, no pushes.
 
 ## 5. Close
 
-`brain_append` one line in today's diary linking the page, `brain_check`, then tell Samuel in
+`brain_append` one line in today's diary linking the page, `brain_check`, then tell the owner in
 two lines what you wrote and ask your questions, if any.

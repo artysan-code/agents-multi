@@ -2,8 +2,7 @@
 # PreToolUse(Bash) — commit-trailer-guard: BLOCCA i `git commit` il cui messaggio
 # contiene una firma/attribuzione dell'assistente.
 #
-# Regola Samuel (2026-09-03, esplicita): nessun trailer `Co-Authored-By: Claude`
-# né `Generated with Claude Code` nei commit, in nessuna repo, in nessun caso.
+# Per chi la sceglie: nessun trailer di attribuzione dell'assistente nei commit, in nessuna repo.
 # Il default di fabbrica dell'harness è di aggiungerli: questo hook è la garanzia
 # che non dipenda dal ricordarselo.
 #
@@ -12,6 +11,10 @@
 # Policy-neutral (entrambi i profili). Parte dello standard repository
 # (wiki: skills/repo-standard).
 set -uo pipefail
+
+# Opt-in: a preference of the person, not of the setup. Their config/settings.json turns it on with
+#   "env": { "CLAUDE_MULTI_NO_ASSISTANT_TRAILER": "1" }
+[ "${CLAUDE_MULTI_NO_ASSISTANT_TRAILER:-}" = "1" ] || exit 0
 
 INPUT=$(cat 2>/dev/null) || exit 0
 [ "$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" = "Bash" ] || exit 0
@@ -30,7 +33,7 @@ BLOCCATO — commit-trailer-guard.
 Il messaggio di commit contiene una firma dell'assistente (Co-Authored-By: Claude,
 "Generated with Claude Code", noreply@anthropic.com o simili).
 
-Regola esplicita di Samuel: quelle righe non entrano MAI nei commit, in nessuna repo.
+Regola esplicita del proprietario: quelle righe non entrano MAI nei commit, in nessuna repo.
 
 Riscrivi il messaggio senza il trailer e ripeti il comando. Non aggirare l'hook
 (niente file temporanei con -F, niente git -c core.hooksPath): la regola vale

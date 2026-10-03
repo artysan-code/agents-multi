@@ -101,9 +101,10 @@
       ]
     },
     "brain": {
+      "_service": "brain",
       "type": "http",
-      "url": "https://brain.example.com/mcp",
-      "_note": "Il brain per i profili di lavoro: solo in Claude Code (l'accesso OAuth, passphrase + TOTP, si fa una volta per profilo con /mcp e il token resta su questo PC), non come connettore sull'account claude.ai, che è una casella condivisa. Il profilo personal lo ha già come connettore claude.ai."
+      "url": "{url}/mcp",
+      "_note": "The person's brain (brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. CLI only (http)."
     },
     "cloudflare": {
       "_service": "cloudflare",

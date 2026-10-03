@@ -188,3 +188,15 @@ Deno.test("shellQuote: plain words stay bare, the rest is single-quoted safely",
   assertEquals(shellQuote("Authorization=Bearer {secret}"), "'Authorization=Bearer {secret}'");
   assertEquals(shellQuote("it's"), `'it'\\''s'`);
 });
+
+Deno.test("wanted: a remote account-backed server is at its one account's address, nobody's written in", () => {
+  const r: Registry = {
+    profiles: PROFILES,
+    servers: { brain: { type: "http", url: "{url}/mcp", _service: "brain" } },
+    accounts: [{ service: "brain", name: "brain", url: "https://brain-ann.example" }],
+  };
+  assertEquals(wanted(r, t(A, "cli")).brain, { type: "http", url: "https://brain-ann.example/mcp" });
+  // two brains for one profile: which one would it be? none, rather than a guess
+  const two = { ...r, accounts: [...r.accounts!, { service: "brain", name: "b2", url: "https://b2.example" }] };
+  assertEquals(wanted(two, t(A, "cli")).brain, undefined);
+});
