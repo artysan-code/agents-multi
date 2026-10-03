@@ -13,12 +13,17 @@ credentials.
 
 ## Getting started
 
+The repository is code; what is yours — profiles, accounts, rules, preferences — lives in a folder
+of yours that `~/.claude-multi/config` links to (see [Your configuration](#your-configuration)).
+
 ```bash
-git clone <your fork> ~/.local/src/claude-multi
+git clone <the repository> ~/.local/src/claude-multi
+~/.local/src/claude-multi/bin/claude-multi init ~/claude-multi-config --name Ann --language Italian
 ~/.local/src/claude-multi/bin/claude-multi install
 ```
 
-`install` is idempotent and reversible: it never deletes real content, it moves it aside to
+On a second machine of yours, `init` the same folder once it is there (Syncthing, a private git
+repository): it only links it. `install` is idempotent and reversible: it never deletes real content, it moves it aside to
 `*.pre-repo-<stamp>` and says so. Run `install --dry-run` first if you want to read the plan.
 
 Then sign in to each profile and check the result:
@@ -37,24 +42,40 @@ Requirements: `deno`, `git`. For Claude Desktop also `gnupg`, `binutils` (`ar`),
 package. For the desktop app `pyside6` **and** `qt6-webengine` —
 the second is only an optional dependency of the first on Arch, so install it explicitly. OAuth credentials are per-machine and never leave it.
 
-### Making it yours
+### First run
 
-A fork starts with the profiles and servers of whoever you forked. Three directories are *content*,
-not code, and are meant to be replaced:
+1. `claude-multi init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
+   `profiles/` (one folder per Claude account).
+2. `claude-multi install` — the runtime, the launchers, the console and the tray app.
+3. `claude-multi vault init` — the secret vault; keep the recovery code somewhere safe. Then each
+   account's secret: `claude-multi vault set <service> <account>`, or the console's Connections.
+4. `claude` (and each profile's command) — sign in with `/login`.
+5. Optionally your own brain: an instance of `brain/` on your server (`brain/README.md`), its address
+   as a `brain` account in `accounts.json`, a personal token from its `/account` page in the vault.
+6. `claude-multi mcp sync` with Claude closed, then `claude-multi doctor`.
 
-| Directory | What it holds |
-|---|---|
-| `profiles/<name>/` | one directory per profile: `profile.json` (the manifest), `CLAUDE.md`, any skills the profile owns, and optionally `settings.json` — its differences from the shared settings |
-| `shared/` | what every profile gets: rules, skills, agents, commands, hooks, `settings.json`, the MCP registry |
-| `shared/mcp/servers.json` | the MCP registry — the servers, and which profiles and surfaces see them |
+### Your configuration
 
-Everything under `cli/`, `bin/`, `systemd/` and `lib/` is the machinery, and reads those three.
+```
+~/.claude-multi/config → your folder
+  owner.json           id (the owner written in your tasks), name, language
+  profiles/<name>/     profile.json (the manifest), CLAUDE.md, settings.json, skills/ agents/ commands/
+  settings.json        what every profile gets, over shared/settings.json (a JSON Merge Patch)
+  servers.json         your choices over shared/mcp/servers.json: who sees which server, your own servers
+  accounts.json        the accounts the servers use (no secrets: those are in the vault)
+  rules/               your rules, imported by each profile's CLAUDE.md
+  icons/<size>/        claude-desktop-<profile>.png, for a profile with its own Desktop
+```
+
+Keep it in step between your machines; Syncthing leaves a `.sync-conflict-` copy when two edits
+collide, and the doctor reports it. Everything under `cli/`, `bin/`, `systemd/`, `lib/` and
+`shared/` is the machinery, the same for everyone who uses the repository.
 
 ---
 
 ## Profiles
 
-A profile is a directory under `profiles/` containing a `profile.json`. That is the whole
+A profile is a directory under your configuration's `profiles/` containing a `profile.json`. That is the whole
 definition — there is no list of profile names anywhere in the code, so adding a third one is a
 matter of adding a directory.
 
@@ -94,10 +115,11 @@ claude.ai account and is not affected. It is the **Account MCP** checkbox in the
 Each profile's `settings.json` is a generated file, not a link:
 
 ```
-shared/settings.json          what every profile gets
-profiles/<p>/settings.json    that profile's differences, as a JSON Merge Patch (RFC 7386:
-                              objects merge, anything else replaces, null deletes the key)
-profiles/<p>/profile.json     what the manifest implies (disableAccountMcp)
+shared/settings.json                 the setup's own: hooks, statusline, the safety rules
+config/settings.json                 yours: what every profile gets, as a JSON Merge Patch over it
+                                     (RFC 7386: objects merge, anything else replaces, null deletes)
+config/profiles/<p>/settings.json    that profile's differences, the same kind of patch
+config/profiles/<p>/profile.json     what the manifest implies (disableAccountMcp)
   → ~/.claude-multi/<p>/settings.json
 ```
 
@@ -105,8 +127,8 @@ It has to be per profile because of plugins: Claude Code installs every plugin `
 marks true when a session starts, so a plugin is off for one profile only if that profile's own
 file says so. Claude Code also writes into this file (`/plugin`, `/config`): before regenerating,
 the difference from the last generated copy (kept in `~/.local/state/claude-multi/settings/`) is
-**adopted** into `profiles/<p>/settings.json`, so nothing is lost and the change stays with the
-profile it was made in. To give it to every profile, move it into `shared/settings.json`.
+**adopted** into `config/profiles/<p>/settings.json`, so nothing is lost and the change stays with
+the profile it was made in. To give it to every profile, move it into `config/settings.json`.
 
 `claude-multi settings` regenerates (and adopts); `install` does the same, and so does every launch
 when Deno is there and a source is newer than the last run (`bin/lib/prelaunch.sh`). The doctor
@@ -115,8 +137,8 @@ reports a file Claude wrote into and that is not adopted yet, and one that is be
 ### Plugins
 
 The console's **Plugins** view is the plugin manager. The repository decides which plugin is on
-where: `enabledPlugins` in `shared/settings.json` for every profile (the **All** column), in
-`profiles/<p>/settings.json` for one (a profile's column; each cell cycles inherit → on → off). The
+where: `enabledPlugins` in `config/settings.json` for every profile (the **All** column), in
+`config/profiles/<p>/settings.json` for one (a profile's column; each cell cycles inherit → on → off). The
 marketplaces are the shared `extraKnownMarketplaces`. Claude Code owns the runtime — plugin cache,
 marketplace clones — and every change there goes through its CLI (`claude plugin … --json`),
 never by editing its files.
@@ -157,7 +179,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude` | Claude Code on the default profile |
 | `claude-agency`, `claude-acme` | Claude Code on that profile (each profile declares its own `command`) |
 | `claude-multi install [--dry-run]` | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent |
-| `claude-multi settings [--dry-run]` | regenerate each profile's `settings.json`, adopting into `profiles/<p>/settings.json` what Claude wrote into it |
+| `claude-multi settings [--dry-run]` | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it |
 | `claude-multi doctor [--json\|--notify]` | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a *new* failure appears, or when everything clears |
 | `claude-multi status [--json]` | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
 | `claude-multi sync [--fetch]` | align the repository from the remote (fetch when stale, ff-only pull on a clean tree) |
@@ -384,7 +406,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   has the same tools on the same list): `tasks_brief` (the
   debrief), `tasks_list`, `tasks_get`, `tasks_add`, `tasks_update`, `tasks_done`, `tasks_steps`,
   `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
-  task that changed since it was opened. `shared/rules/tasks.md` tells every session to keep the
+  task that changed since it was opened. The tasks rule (in your `rules/`) tells every session to keep the
   list current from the conversation.
 - **Reminders**: `claude-tasks.timer` runs `claude-multi tasks remind` every five minutes: the
   briefs at the times in `~/brains/tasks/settings.json` (default 08:30, 13:30, 19:00; an empty brief
@@ -398,7 +420,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 
 ### Accounts and the secret vault
 
-- **Accounts** are listed in `shared/mcp/accounts.json`, with no secret in it: service, a short
+- **Accounts** are listed in your configuration's `accounts.json`, with no secret in it: service, a short
   name, the address, and the profiles that see it (none = every profile). A profile can see several
   accounts of one service; each tool then takes `account`, required as soon as there is more than
   one — never a silent default. A registry entry with `_service` goes only to the profiles that see
@@ -427,8 +449,8 @@ bin/            wrappers and scripts: claude, claude-multi, claude-multi-app, cl
 bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
 cli/            the claude-multi CLI (Deno, zero dependencies)
 cli/dashboard/  the console page (HTML/CSS/JS, no build step)
-shared/         config shared across profiles: agents, commands, hooks, skills, rules, mcp, settings.json
-profiles/       one directory per profile: manifest, CLAUDE.md, owned entries
+shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
+config.example/ the configuration `claude-multi init` starts from
 lib/            the desktop app: tray and console window (PySide6)
 systemd/user/   console and app units, update-check and tasks timers, optional local inference units
 desktop/        .desktop entries and icons
@@ -440,9 +462,10 @@ Runtime, generated by `install`:
 ```
 ~/.claude-multi/
   shared         → <repo>/shared
+  config         → your configuration folder
   marketplaces/  plugin marketplace clones (per-machine, re-clonable)
-  <profile>/     CLAUDE.md, hooks, skills, agents, commands → shared or the repo
-                 settings.json — generated: shared ⊕ profiles/<p>/settings.json ⊕ the manifest
+  <profile>/     CLAUDE.md, hooks, skills, agents, commands → shared or your configuration
+                 settings.json — generated: shared ⊕ config ⊕ config/profiles/<p> ⊕ the manifest
                  .claude.json, .credentials.json (600), projects/  — per-machine, never committed
 ```
 

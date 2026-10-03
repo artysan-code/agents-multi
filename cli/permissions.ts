@@ -1,21 +1,23 @@
 // permissions.ts — the permission rules, as System › Permissions shows and edits them.
 //
-// shared/settings.json holds the rules every profile gets. A profile's patch (profiles/<p>/settings.json)
+// What every profile gets is the repository's base (shared/settings.json, the safety rules) with the
+// person's settings over it (config/settings.json, settings.ts: sharedLayer). A profile's patch
+// (config/profiles/<p>/settings.json)
 // can hold its own lists, and a list there replaces the shared one whole (settings.ts: a JSON Merge
 // Patch compares arrays whole). That is also where "always allow" answers land, adopted from what
 // Claude writes into a profile's generated settings. So what matters for a profile is how its list
 // differs from the shared one: the rules it adds, and the shared rules it drops.
 //
-// Writes go to the repository; each profile's settings.json is regenerated from it on the next
+// Writes go to the person's configuration; each profile's settings.json is regenerated from it on the next
 // launch (bin/lib/prelaunch.sh), so a change applies from the next session.
 
-import { profileNames, readJson, REPO } from "./lib.ts";
+import { PROFILES, profileNames, readJson } from "./lib.ts";
+import { type Obj, sharedLayer, writeSharedLayer } from "./settings.ts";
 
 export const LISTS = ["allow", "ask", "deny"] as const;
 export type List = typeof LISTS[number];
 export type Rules = Record<List, string[]>;
-const SHARED = `${REPO}/shared/settings.json`;
-const patchOf = (p: string) => `${REPO}/profiles/${p}/settings.json`;
+const patchOf = (p: string) => `${PROFILES}/${p}/settings.json`;
 
 /** Pure: a rule Claude Code understands — a tool name, optionally with a specifier in parentheses
  *  (`Bash(git:*)`, `Read(~/.aws/**)`, `mcp__n8n__n8n_workflows`, `WebFetch(domain:example.com)`). */
@@ -33,7 +35,7 @@ export function ruleDiff(shared: string[], own: string[] | undefined): { added: 
 type Settings = { permissions?: Partial<Rules> & { defaultMode?: string } } & Record<string, unknown>;
 
 export async function permissionsView() {
-  const shared = await readJson<Settings>(SHARED) ?? {};
+  const shared = await sharedLayer() as Settings;
   const sp = shared.permissions ?? {};
   const rules = Object.fromEntries(LISTS.map((l) => [l, sp[l] ?? []])) as Rules;
   const profiles: Record<string, { mode?: string; lists: Partial<Record<List, { added: string[]; dropped: string[] }>> }> = {};
@@ -59,13 +61,12 @@ export type PermOp =
   | { op: "promote"; profile: string };
 
 export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: string }> {
-  const shared = await readJson<Settings>(SHARED);
-  if (!shared) return { ok: false, message: "shared/settings.json is missing" };
+  const shared = await sharedLayer() as Settings;
   const perms = shared.permissions ??= {};
   if (b.op === "mode") {
     if (!["default", "acceptEdits", "plan", "auto"].includes(b.mode)) return { ok: false, message: `unknown mode ${b.mode}` };
     perms.defaultMode = b.mode;
-    await write(SHARED, shared);
+    await writeSharedLayer(shared as Obj);
     return { ok: true, message: `default mode: ${b.mode}` };
   }
   if (b.op === "add" || b.op === "remove") {
@@ -82,7 +83,7 @@ export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: 
       if (i < 0) return { ok: false, message: `${rule} is not in ${b.list}` };
       list.splice(i, 1);
     }
-    await write(SHARED, shared);
+    await writeSharedLayer(shared as Obj);
     return { ok: true, message: `${b.op === "add" ? "added to" : "removed from"} ${b.list}: ${rule}` };
   }
   if (b.op === "promote") {
@@ -98,7 +99,7 @@ export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: 
       delete pp[l];
     }
     if (!Object.keys(pp).length) delete patch.permissions;
-    await write(SHARED, shared);
+    await writeSharedLayer(shared as Obj);
     await write(patchOf(b.profile), patch);
     return { ok: true, message: `${moved} rules moved from ${b.profile} to every profile` };
   }

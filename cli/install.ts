@@ -1,7 +1,7 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
-import { AGENTS_SKILLS, ANSI, BIN, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "./lib.ts";
+import { AGENTS_SKILLS, ANSI, BIN, CONFIG, PROFILES, stat, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
@@ -119,7 +119,7 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
     if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) { say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`); continue; }
     expected.add(n); await ensureSymlink(`../../shared/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`);
   }
-  for (const n of own) { expected.add(n); await ensureSymlink(`${REPO}/profiles/${p}/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`); }
+  for (const n of own) { expected.add(n); await ensureSymlink(`${PROFILES}/${p}/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`); }
   // links the manifest does not call for: removed only when they are symlinks. Real content stays
   // untouched — it is the profile's own runtime (skills/synced/, agents created in session).
   for (const n of await listDir(dir)) {
@@ -133,6 +133,12 @@ export async function install(dry: boolean) {
   DRY = dry;
   const m = await machine();
   console.log(`${ANSI.b}claude-multi install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`);
+
+  // 0. the person's configuration: without it there is no profile to install
+  if (!(await stat(`${CONFIG}/owner.json`))) {
+    console.log(`  ${ANSI.r}✗${ANSI.x} no configuration at ${shortHome(CONFIG)}: make one with  claude-multi init <folder>  (or link an existing one there)`);
+    return 1;
+  }
 
   // 1. runtime + marketplaces outside shared (per-machine, re-clonable)
   await ensureDir(RUNTIME);
@@ -169,10 +175,10 @@ export async function install(dry: boolean) {
   for (const p of await profileNames()) {
     const dir = `${RUNTIME}/${p}`;
     await ensureDir(dir, 0o700);
-    await ensureSymlink(`${REPO}/profiles/${p}/CLAUDE.md`, `${dir}/CLAUDE.md`, `${p}/CLAUDE.md`);
-    // settings.json is generated (settings.ts): shared ⊕ the profile's patch ⊕ the manifest.
+    await ensureSymlink(`${PROFILES}/${p}/CLAUDE.md`, `${dir}/CLAUDE.md`, `${p}/CLAUDE.md`);
+    // settings.json is generated (settings.ts): shared ⊕ the person's ⊕ the profile's patch ⊕ the manifest.
     const set = await syncSettings(p, { dry: DRY });
-    if (set.adopted.length) say(`${ANSI.y}→${ANSI.x} ${p}: adopting what Claude wrote into profiles/${p}/settings.json: ${set.adopted.join(", ")}`);
+    if (set.adopted.length) say(`${ANSI.y}→${ANSI.x} ${p}: adopting what Claude wrote into config/profiles/${p}/settings.json: ${set.adopted.join(", ")}`);
     if (set.orphan) say(`${ANSI.r}!${ANSI.x} ${p}/settings.json was a file with no record of generating it: kept aside as ${shortHome(set.orphan)}`);
     if (set.migrated) say(`${ANSI.y}→${ANSI.x} ${p}/settings.json: from a link to shared/ to a generated file`);
     else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
@@ -279,9 +285,10 @@ export async function install(dry: boolean) {
     // a copy install wrote itself, of a file the repository no longer has
     if (await lstat(`${apps}/claude-update-gui.desktop`)) await removeLink(`${apps}/claude-update-gui.desktop`, "replaced by claude-multi.desktop");
     await writeDesktopEntries(apps);
-    for (const s of await listDir(`${REPO}/desktop/icons`)) {
-      for (const f of await listDir(`${REPO}/desktop/icons/${s}`)) {
-        await ensureCopy(`${REPO}/desktop/icons/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);
+    // the icons of the person's Desktop profiles (config/icons/<size>/claude-desktop-<profile>.png)
+    for (const root of [`${REPO}/desktop/icons`, `${CONFIG}/icons`]) {
+      for (const s of await listDir(root)) {
+        for (const f of await listDir(`${root}/${s}`)) await ensureCopy(`${root}/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);
       }
     }
     const handlerP = `${apps}/claude-code-url-handler.desktop`; const handler = await readText(handlerP);

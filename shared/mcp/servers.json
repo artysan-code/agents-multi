@@ -53,7 +53,7 @@
         "run",
         "--quiet",
         "--allow-net={hosts}",
-        "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/shared/mcp/accounts.json,${HOME}/.cache/deno",
+        "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/config,${HOME}/.cache/deno",
         "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
         "--lock=${HOME}/.claude-multi/shared/mcp/coolify/deno.lock",
@@ -67,7 +67,7 @@
         "run",
         "--quiet",
         "--allow-net={hosts}",
-        "--allow-read=${HOME}/brains/tasks,${HOME}/vault/claude-multi,${HOME}/.claude-multi/shared/mcp/accounts.json,${HOME}/.claude-multi/config,${HOME}/.cache/deno",
+        "--allow-read=${HOME}/brains/tasks,${HOME}/vault/claude-multi,${HOME}/.claude-multi/config,${HOME}/.cache/deno",
         "--allow-write=${HOME}/brains/tasks",
         "--allow-env=HOME,CLAUDE_MULTI_TASKS,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_BRAIN_SCOPE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS,CLAUDE_MULTI_CONFIG,CLAUDE_MULTI_OWNER_ID,CLAUDE_MULTI_OWNER_NAME,CLAUDE_MULTI_LANGUAGE",
         "--allow-run=/usr/bin/secret-tool",
@@ -89,7 +89,7 @@
         "run",
         "--quiet",
         "--allow-net=oauth2.googleapis.com,gmail.googleapis.com,www.googleapis.com",
-        "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/shared/mcp/accounts.json,${HOME}/.cache/deno",
+        "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/config,${HOME}/.cache/deno",
         "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
         "--lock=${HOME}/.claude-multi/shared/mcp/google/deno.lock",
@@ -103,10 +103,6 @@
     "brain": {
       "type": "http",
       "url": "https://brain.example.com/mcp",
-      "_profiles": [
-        "acme",
-        "agency"
-      ],
       "_note": "Il brain per i profili di lavoro: solo in Claude Code (l'accesso OAuth, passphrase + TOTP, si fa una volta per profilo con /mcp e il token resta su questo PC), non come connettore sull'account claude.ai, che è una casella condivisa. Il profilo personal lo ha già come connettore claude.ai."
     },
     "cloudflare": {

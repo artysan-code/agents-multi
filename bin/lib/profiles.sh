@@ -8,10 +8,13 @@
 # Repository root, from this file's real location.
 cm_repo() { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd; }
 
+# The person's configuration (profiles, accounts, rules): ~/.claude-multi/config, a link to their folder.
+cm_config() { printf '%s\n' "${CLAUDE_MULTI_CONFIG:-${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}/config}"; }
+
 # Every declared profile, one per line.
 cm_profiles() {
   local m
-  for m in "$(cm_repo)/profiles"/*/profile.json; do
+  for m in "$(cm_config)/profiles"/*/profile.json; do
     [[ -e "$m" ]] || continue
     basename "$(dirname "$m")"
   done
@@ -28,14 +31,14 @@ cm_has_profile() {
 
 # cm_field <profile> <key> — a string value from the manifest, empty when absent.
 cm_field() {
-  local f="$(cm_repo)/profiles/$1/profile.json"
+  local f="$(cm_config)/profiles/$1/profile.json"
   [[ -f "$f" ]] || return 0
   sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$f" | head -n1
 }
 
 # cm_flag <profile> <key> — succeeds when the manifest sets this boolean key to true.
 cm_flag() {
-  local f="$(cm_repo)/profiles/$1/profile.json"
+  local f="$(cm_config)/profiles/$1/profile.json"
   [[ -f "$f" ]] && grep -Eq "\"$2\"[[:space:]]*:[[:space:]]*true" "$f"
 }
 

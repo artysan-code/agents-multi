@@ -1,0 +1,7 @@
+{
+  "description": "Personal profile.",
+  "command": "claude",
+  "skills": "all",
+  "agents": "all",
+  "commands": "all"
+}

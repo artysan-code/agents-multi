@@ -5,6 +5,10 @@
 export const HOME = Deno.env.get("HOME") ?? "";
 export const REPO = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 export const RUNTIME = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${HOME}/.claude-multi`;
+/** The person's own configuration (profiles, accounts, rules, preferences): a folder of theirs, outside
+ *  the repository, that ~/.claude-multi/config links to (`claude-multi init`). The repository is code. */
+export const CONFIG = Deno.env.get("CLAUDE_MULTI_CONFIG") ?? `${RUNTIME}/config`;
+export const PROFILES = `${CONFIG}/profiles`;
 export const BIN = `${HOME}/.local/bin`;
 export const LIB = `${HOME}/.local/lib`;
 export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/claude-multi`;
@@ -17,7 +21,7 @@ export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
 
 /** Reserved entries under RUNTIME that are not profiles. */
-export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins"]);
+export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "config"]);
 
 export type Profile = string;
 export type Status = "ok" | "warn" | "fail";
@@ -79,16 +83,16 @@ export interface Manifest {
 const MANIFEST_DEFAULT: Manifest = { skills: "all", agents: "all", commands: "all" };
 
 export async function loadManifest(p: Profile): Promise<Manifest> {
-  const m = await readJson<Partial<Manifest>>(`${REPO}/profiles/${p}/profile.json`);
+  const m = await readJson<Partial<Manifest>>(`${PROFILES}/${p}/profile.json`);
   return { ...MANIFEST_DEFAULT, ...(m ?? {}) };
 }
 
-/** Profiles declared in the repo — the source of truth. Any directory holding a profile.json. */
+/** Profiles declared in the person's configuration — the source of truth. Any directory holding a profile.json. */
 export async function profileNames(): Promise<Profile[]> {
   const out: Profile[] = [];
-  for (const n of await listDir(`${REPO}/profiles`)) {
+  for (const n of await listDir(PROFILES)) {
     if (n.startsWith(".")) continue;
-    if (await stat(`${REPO}/profiles/${n}/profile.json`)) out.push(n);
+    if (await stat(`${PROFILES}/${n}/profile.json`)) out.push(n);
   }
   return out;
 }
@@ -155,7 +159,7 @@ export async function desktopDir(p: Profile, manifest?: Manifest): Promise<strin
 export const KINDS = ["skills", "agents", "commands"] as const;
 export type Kind = typeof KINDS[number];
 /** Items the profile owns for a kind (profiles/<p>/<kind>/*), always mounted. */
-export async function ownItems(p: Profile, kind: Kind) { return await listDir(`${REPO}/profiles/${p}/${kind}`); }
+export async function ownItems(p: Profile, kind: Kind) { return await listDir(`${PROFILES}/${p}/${kind}`); }
 
 // ---------------------------------------------------------------- git / repo
 export async function repoState() {
@@ -433,7 +437,7 @@ export async function sharedInventory() {
   return {
     skills: await items("skills"), agents: await items("agents"), commands: await items("commands"),
     hooks: (await listDir(`${REPO}/shared/hooks`)).filter((f) => /\.(sh|js|py)$/.test(f)),
-    rules: (await listDir(`${REPO}/shared/rules`)).map((f) => f.replace(/\.md$/, "")),
+    rules: (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, "")),
     agentsSkills: await listDir(AGENTS_SKILLS),
   };
 }

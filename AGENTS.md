@@ -22,7 +22,12 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   covers the backups (`*.bak*`, `*.backup`).
 - **Every new invariant goes in `cli/doctor.ts`**, not in the README. The README describes, the
   doctor verifies. Those two have already drifted apart once.
-- **No per-profile constants.** Profiles are discovered from `profiles/*/profile.json`
+- **The repository is code; what is a person's is in their configuration** (`~/.claude-multi/config`,
+  a link to a folder of theirs, made by `claude-multi init` from `config.example/`): profiles,
+  `accounts.json`, rules, their settings and server choices (merge patches over `shared/settings.json`
+  and `shared/mcp/servers.json`), `owner.json`. Nothing personal goes back into the repository —
+  no names, clients, accounts or preferences; the repository is shared by everyone who uses it.
+- **No per-profile constants.** Profiles are discovered from `config/profiles/*/profile.json`
   (`profileNames()`), the Desktop directory comes from the manifest (`desktopDir()`), and the
   launcher name from `commandOf()` / `launchers()`. A check that names "work" or "personal" is a
   bug: derive it from the manifests instead. This holds for materialising a profile too, not just

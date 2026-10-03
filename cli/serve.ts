@@ -12,8 +12,8 @@
 // `x-claude-multi` anti-CSRF header. Updating needs no privilege any more (Claude Desktop lives in
 // user space), so it is an action like the others.
 
-import { ANSI, HOME, lstat, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
-import { ACCOUNTS, loadRegistry, type RawRegistry, selectServers } from "./mcp.ts";
+import { ANSI, CONFIG, HOME, listDir, lstat, PROFILES, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
+import { ACCOUNTS, loadRegistry, rawRegistry, selectServers, writePersonRegistry } from "./mcp.ts";
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
@@ -86,7 +86,7 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
   const name = String(b.name ?? "").trim();
   if (!NAME_RE.test(name)) return { error: "name must be lowercase, start with a letter, and use only letters, digits, - or _" };
 
-  const dir = `${REPO}/profiles/${name}`;
+  const dir = `${PROFILES}/${name}`;
   const manifestPath = `${dir}/profile.json`;
   const existing = await readJson<Record<string, unknown>>(manifestPath);
   const isNew = !existing;
@@ -105,7 +105,9 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   if (isNew && !(await readText(`${dir}/CLAUDE.md`))) {
-    await Deno.writeTextFile(`${dir}/CLAUDE.md`, `# CLAUDE.md — ${name} profile\n\n${manifest.description}\n\n## Shared rules\n\n@${RUNTIME}/shared/rules/collaboration.md\n`);
+    // the person's rules, all of them, as the other profiles import them
+    const rules = (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) => `@~/.claude-multi/config/rules/${f}`).join("\n");
+    await Deno.writeTextFile(`${dir}/CLAUDE.md`, `# CLAUDE.md — ${name} profile\n\n${manifest.description}\n${rules ? `\n## Rules\n\n${rules}\n` : ""}`);
   }
 
   if (Array.isArray(b.mcp)) await applyRegistrySelection(name, b.mcp);
@@ -119,14 +121,13 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
   };
 }
 
-/** Reflect a profile's server selection into shared/mcp/servers.json. An absent `_profiles` means
+/** Reflect a profile's server selection into the person's servers.json. An absent `_profiles` means
  *  "every profile", so opting one out has to materialise the list rather than just remove a name. */
 async function applyRegistrySelection(name: string, picked: string[]) {
-  const path = `${REPO}/shared/mcp/servers.json`;
-  const reg = await readJson<RawRegistry>(path);
+  const reg = await rawRegistry().catch(() => null);
   if (!reg?.servers) return;
   const next = selectServers(reg, await profileNames(), name, picked);
-  if (JSON.stringify(next) !== JSON.stringify(reg)) await Deno.writeTextFile(path, JSON.stringify(next, null, 2) + "\n");
+  if (JSON.stringify(next) !== JSON.stringify(reg)) await writePersonRegistry(next);
 }
 
 // ---------------------------------------------------------------- accounts

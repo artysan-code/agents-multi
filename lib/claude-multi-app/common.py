@@ -20,7 +20,7 @@ CONSOLE_URL = f"http://127.0.0.1:{PORT}"
 def owner() -> dict:
     """Whose setup this is (shared/mcp/lib/owner.ts reads the same file): name and language for the prompts."""
     o = {"name": "the user", "language": "English"}
-    path = Path(os.environ.get("CLAUDE_MULTI_CONFIG") or Path.home() / ".claude-multi" / "config") / "owner.json"
+    path = config_dir() / "owner.json"
     try:
         data = json.loads(path.read_text())
         o.update({k: v.strip() for k, v in data.items() if k in o and isinstance(v, str) and v.strip()})
@@ -38,10 +38,15 @@ def repo() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def config_dir() -> Path:
+    """The person's configuration: ~/.claude-multi/config, a link to their own folder."""
+    return Path(os.environ.get("CLAUDE_MULTI_CONFIG") or Path.home() / ".claude-multi" / "config")
+
+
 def manifests() -> dict[str, dict]:
-    """profile name → its profile.json, for every profile the repository declares."""
+    """profile name → its profile.json, for every profile the configuration declares."""
     out: dict[str, dict] = {}
-    for m in sorted((repo() / "profiles").glob("*/profile.json")):
+    for m in sorted((config_dir() / "profiles").glob("*/profile.json")):
         try:
             out[m.parent.name] = json.loads(m.read_text(encoding="utf-8"))
         except (OSError, ValueError):

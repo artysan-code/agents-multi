@@ -37,7 +37,7 @@ export function registerTaskTools(server: McpServer) {
   server.registerTool("tasks_brief", {
     description:
       "The owner's debrief: what is overdue, what was missed earlier today, the rest of today by time, tomorrow, the next days, what waits on others. " +
-      "Call it when he asks for a debrief, what he has today or tomorrow, or when the day's plan is the topic. For the full picture add his calendar " +
+      "Call it when the owner asks for a debrief, what they have today or tomorrow, or when the day's plan is the topic. For the full picture add their calendar " +
       "(the google server's calendar tools). Read it back briefly: times first, then the rest; mention overdue items plainly.",
     inputSchema: {},
   }, async () => {
@@ -82,7 +82,7 @@ export function registerTaskTools(server: McpServer) {
   server.registerTool("tasks_add", {
     description:
       "Add a task. Use it whenever the owner says there is something to do (\"devo…\", \"ricordami…\", \"entro venerdì…\"), in any conversation, " +
-      "and say in one line what you added. Put a time only when he gave one.",
+      "and say in one line what you added. Put a time only when they gave one.",
     inputSchema: { title: z.string(), ...fields },
   }, async (input: TaskInput) => {
     const t = await addTask(input);

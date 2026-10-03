@@ -1,14 +1,16 @@
 // accounts.ts — which accounts an MCP server may use, and which one a call means.
 //
-// shared/mcp/accounts.json lists them, with no secret in it: service, a short name, the address,
-// and the profiles that see it. It lives in the repository and travels with it; each account's
-// secret is in the vault (vault.ts) under the same service/name.
+// accounts.json lists them, with no secret in it: service, a short name, the address, and the
+// profiles that see it. It is the person's (their config folder, ~/.claude-multi/config); each
+// account's secret is in the vault (vault.ts) under the same service/name.
 //
 // A server learns its profile from CLAUDE_MULTI_PROFILE, which `claude-multi mcp sync` writes into
 // each profile's configuration, and sees only that profile's accounts: the personal Google account
 // does not exist for agency. A profile can hold several accounts of one service; a tool call then
 // names the one it means, and with a single one the name can be left out. Never a silent default
 // among several.
+
+import { configDir } from "./owner.ts";
 
 export interface Account {
   service: string;
@@ -24,7 +26,7 @@ export interface Account {
 }
 
 export function accountsFile(): string {
-  return Deno.env.get("CLAUDE_MULTI_ACCOUNTS") ?? `${Deno.env.get("HOME") ?? ""}/.claude-multi/shared/mcp/accounts.json`;
+  return Deno.env.get("CLAUDE_MULTI_ACCOUNTS") ?? `${configDir()}/accounts.json`;
 }
 
 export function loadAccounts(path = accountsFile()): Account[] {

@@ -1,63 +1,6 @@
 {
-  "env": {
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
-  },
   "permissions": {
     "allow": [
-      "Bash(git:*)",
-      "Bash(gh api:*)",
-      "Bash(gh auth:*)",
-      "Bash(gh pr:*)",
-      "Bash(gh repo:*)",
-      "Bash(ssh -T git@github.com)",
-      "Bash(ssh nuclear-reactor:*)",
-      "Bash(ssh ark:*)",
-      "Bash(pnpm install:*)",
-      "Bash(pnpm add:*)",
-      "Bash(pnpm remove:*)",
-      "Bash(pnpm update:*)",
-      "Bash(pnpm exec:*)",
-      "Bash(pnpm dlx:*)",
-      "Bash(pnpm run:*)",
-      "Bash(pnpm test:*)",
-      "Bash(pnpm tsx:*)",
-      "Bash(pnpm tsc:*)",
-      "Bash(pnpm typecheck:*)",
-      "Bash(pnpm lint:*)",
-      "Bash(pnpm build:*)",
-      "Bash(pnpm list:*)",
-      "Bash(pnpm info:*)",
-      "Bash(pnpm view:*)",
-      "Bash(pnpm search:*)",
-      "Bash(pnpm drizzle-kit:*)",
-      "Bash(pnpm --version)",
-      "Bash(npm view:*)",
-      "Bash(npm audit:*)",
-      "Bash(npx tsc:*)",
-      "Bash(npx tsx:*)",
-      "Bash(npx drizzle-kit:*)",
-      "Bash(python3:*)",
-      "Bash(uvx:*)",
-      "Bash(uv:*)",
-      "Bash(cp:*)",
-      "Bash(jq:*)",
-      "Bash(curl https://registry.npmjs.org/*)",
-      "Bash(curl https://api.github.com/*)",
-      "Bash(openssl rand:*)",
-      "Bash(docker --version)",
-      "Bash(docker pull:*)",
-      "Bash(railway:*)",
-      "Bash(systemctl is-active:*)",
-      "Bash(pacman -Qs:*)",
-      "Read(//tmp/**)",
-      "Read(//var/run/**)",
-      "WebSearch",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:registry.npmjs.org)",
-      "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:bundlephobia.com)",
-      "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:orm.drizzle.team)",
       "mcp__tasks"
     ],
     "deny": [
@@ -82,10 +25,8 @@
       "Bash(wget * | bash*)",
       "Bash(wget * | sh*)",
       "mcp__google__gmail_send"
-    ],
-    "defaultMode": "auto"
+    ]
   },
-  "model": "opus[1m]",
   "hooks": {
     "PreToolUse": [
       {
@@ -213,21 +154,6 @@
     "type": "command",
     "command": "bash \"$HOME\"/.claude-multi/shared/statusline-command.sh"
   },
-  "enabledPlugins": {
-    "pr-review-toolkit@claude-plugins-official": true,
-    "commit-commands@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true,
-    "obsidian@obsidian-skills": true,
-    "vue-volar@claude-code-lsps": true,
-    "brand-voice@synced": false,
-    "data@synced": false,
-    "engineering@synced": false,
-    "operations@synced": false,
-    "productivity@synced": false,
-    "product-management@synced": false,
-    "pdf-viewer@synced": false
-  },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
       "source": {
@@ -254,22 +180,5 @@
       }
     }
   },
-  "effortLevel": "medium",
-  "modelSettings": {
-    "claude-opus-5": {
-      "effortLevel": "xhigh"
-    },
-    "claude-opus-5-5": {
-      "effortLevel": "xhigh"
-    }
-  },
-  "promptSuggestionEnabled": false,
-  "tui": "fullscreen",
-  "skipWorkflowUsageWarning": true,
-  "theme": "dark",
-  "preferredNotifChannel": "auto",
-  "remoteControlAtStartup": false,
-  "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true,
   "disableDeepLinkRegistration": "disable"
 }

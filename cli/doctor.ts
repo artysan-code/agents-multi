@@ -1,7 +1,7 @@
 // doctor.ts — every invariant of the setup as a check with a verdict and a fix.
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
-import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, CONFIG, PROFILES, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog } from "./lib.ts";
 import { settingsState } from "./settings.ts";
 import { ACCOUNTS, health, legacyStatePresent, loadRegistry, plan, registryProblems } from "./mcp.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
@@ -11,6 +11,17 @@ import { lastBackup } from "./brain-backup.ts";
 import { keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { legacyFilesPresent } from "./vault.ts";
 import { PORT } from "./serve.ts";
+
+/** The Syncthing conflict copies (name.sync-conflict-…) under a folder, as paths relative to it. */
+async function syncConflicts(root: string, rel = ""): Promise<string[]> {
+  const out: string[] = [];
+  for (const n of await listDir(`${root}/${rel}`)) {
+    const r = rel ? `${rel}/${n}` : n;
+    if (n.includes(".sync-conflict-")) out.push(r);
+    else if ((await lstat(`${root}/${r}`))?.isDirectory && !n.startsWith(".")) out.push(...await syncConflicts(root, r));
+  }
+  return out;
+}
 
 /** Pure: the home folders written out in a text (/home/<name>), each once. */
 export function writtenHomes(text: string): string[] {
@@ -42,11 +53,21 @@ export async function doctor(): Promise<Check[]> {
   // folder written out (/home/<name>/…) breaks for anyone else: $HOME in shell commands, ~ in
   // CLAUDE.md imports, ${HOME} in servers.json (filled in by mcp sync)
   if (repo.isRepo) {
-    const files = (await run("git", ["-C", REPO, "ls-files", "shared", "profiles"])).out.split("\n").filter((f) => f && !/\.(lock|png|svg|woff2)$/.test(f));
+    const files = (await run("git", ["-C", REPO, "ls-files", "shared", "config.example"])).out.split("\n").filter((f) => f && !/\.(lock|png|svg|woff2)$/.test(f));
     const hits: string[] = [];
     for (const f of files) if (writtenHomes((await readText(`${REPO}/${f}`)) ?? "").length) hits.push(f);
     if (hits.length) add("repo.homes", "warn", `home folder written out in ${hits.length} shared files: ${hits.slice(0, 3).join(", ")}${hits.length > 3 ? "…" : ""}`, "write $HOME (shell), ~ (CLAUDE.md imports) or ${HOME} (servers.json) instead");
-    else add("repo.homes", "ok", "no home folder written out in shared/ and profiles/");
+    else add("repo.homes", "ok", "no home folder written out in the repository");
+  }
+
+  // --- the person's configuration: a folder of theirs that ~/.claude-multi/config links to,
+  // usually kept in step between machines by Syncthing, which leaves a copy when two edits collide
+  const cfgLink = await readlink(CONFIG);
+  if (!(await stat(`${CONFIG}/owner.json`))) add("config", "fail", `no configuration at ${shortHome(CONFIG)}${cfgLink ? ` (it links to ${shortHome(cfgLink)})` : ""}`, "claude-multi init <folder>, or link your configuration folder there");
+  else {
+    add("config", "ok", `configuration ${cfgLink ? shortHome(cfgLink) : shortHome(CONFIG)}: ${(await profileNames()).length} profiles`);
+    const conflicts = await syncConflicts(CONFIG);
+    if (conflicts.length) add("config.conflicts", "warn", `${conflicts.length} Syncthing conflict copies in the configuration: ${conflicts.slice(0, 3).join(", ")}`, "compare each with its original, keep one, delete the copy");
   }
 
   // --- shared: broken symlinks, skills installed but not mounted
@@ -77,7 +98,7 @@ export async function doctor(): Promise<Check[]> {
   for (const p of declared) {
     const info = await profileInfo(p);
     if (!info.exists) { add(`profile.${p}`, "fail", `profile ${p} is not materialised`, "claude-multi install"); continue; }
-    if (info.claudeMd !== `${REPO}/profiles/${p}/CLAUDE.md`) add(`profile.${p}.claudemd`, "fail", `${p}/CLAUDE.md does not point at the repository`, "claude-multi install");
+    if (info.claudeMd !== `${PROFILES}/${p}/CLAUDE.md`) add(`profile.${p}.claudemd`, "fail", `${p}/CLAUDE.md does not point at the configuration`, "claude-multi install");
     const set = await settingsState(p);
     const list = (xs: string[]) => xs.slice(0, 4).join(", ") + (xs.length > 4 ? ` +${xs.length - 4}` : "");
     if (set.kind === "symlink" || set.kind === "missing") add(`profile.${p}.settings`, "fail", `${p}/settings.json is ${set.kind === "symlink" ? "still a link to shared/: it is generated now" : "missing"}`, "claude-multi install");

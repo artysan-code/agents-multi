@@ -1,8 +1,10 @@
 // settings.ts — each profile's settings.json is generated, not linked.
 //
-//   shared/settings.json            what every profile gets
-//   profiles/<p>/settings.json      that profile's differences, as a JSON Merge Patch (RFC 7386:
-//                                   objects merge, anything else replaces, null deletes the key)
+//   shared/settings.json            the setup's own: hooks, statusline, the safety rules (repository)
+//   config/settings.json            the person's: what every profile of theirs gets, as a JSON
+//                                   Merge Patch over the above (RFC 7386: objects merge, anything
+//                                   else replaces, null deletes the key)
+//   config/profiles/<p>/settings.json   that profile's differences, a merge patch over both
 //   the manifest                    what it implies (disableAccountMcp)
 //     → ~/.claude-multi/<p>/settings.json
 //
@@ -10,13 +12,13 @@
 // the generated file. Before regenerating, the difference between the file and the last generated
 // copy (kept in XDG state, per machine) is adopted into the profile's patch — nothing Claude wrote
 // is lost, and it stays with the profile it was written in. Moving a change to every profile means
-// moving it into shared/settings.json.
+// moving it into the person's config/settings.json ("shared" below: base ⊕ person).
 //
 // Plugins are why this exists: Claude Code installs every plugin `enabledPlugins` marks true when a
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
 import { loadRegistry, permissionRules, type RegistryRules } from "./mcp.ts";
-import { loadManifest, lstat, type Manifest, type Profile, profileNames, readJson, REPO, RUNTIME, STAMP, STATE, syncedPlugins } from "./lib.ts";
+import { CONFIG, loadManifest, lstat, type Manifest, PROFILES, type Profile, profileNames, readJson, REPO, RUNTIME, STAMP, STATE, syncedPlugins } from "./lib.ts";
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 export type Obj = { [k: string]: Json };
@@ -119,8 +121,9 @@ export function paths(p: Obj, prefix = ""): string[] {
 }
 
 // ---------------------------------------------------------------- files
-export const SHARED_SETTINGS = `${REPO}/shared/settings.json`;
-export const patchPath = (p: Profile) => `${REPO}/profiles/${p}/settings.json`;
+export const BASE_SETTINGS = `${REPO}/shared/settings.json`;
+export const PERSON_SETTINGS = `${CONFIG}/settings.json`;
+export const patchPath = (p: Profile) => `${PROFILES}/${p}/settings.json`;
 export const runtimePath = (p: Profile) => `${RUNTIME}/${p}/settings.json`;
 export const builtPath = (p: Profile) => `${STATE}/settings/${p}.json`;
 
@@ -147,9 +150,18 @@ export interface SettingsResult {
   orphan?: string;
 }
 
+/** What every profile gets: the repository's base with the person's settings over it. */
+export async function sharedLayer(): Promise<Obj> {
+  return mergePatch(await readObj(BASE_SETTINGS) ?? {}, await readObj(PERSON_SETTINGS) ?? {}) as Obj;
+}
+/** Keep `layer` as what every profile gets: the person's file becomes its difference from the base. */
+export async function writeSharedLayer(layer: Obj) {
+  await writeJson(PERSON_SETTINGS, diffPatch(await readObj(BASE_SETTINGS) ?? {}, layer));
+}
+
 /** The inputs and the expected file for one profile, without touching anything. */
 export async function expectedSettings(p: Profile) {
-  const shared = await readObj(SHARED_SETTINGS) ?? {};
+  const shared = await sharedLayer();
   const patch = await readObj(patchPath(p)) ?? {};
   const rules = await registryRules(p);
   const fromManifest = manifestPatch(await loadManifest(p), await syncedPlugins(`${RUNTIME}/${p}`));
@@ -233,7 +245,16 @@ export async function settingsState(p: Profile): Promise<{ kind: "symlink" | "mi
 
 /** Read-modify-write of a settings source in the repository (shared, or a profile's patch). */
 export async function editSettingsSource(target: "shared" | Profile, edit: (o: Obj) => void) {
-  const path = target === "shared" ? SHARED_SETTINGS : patchPath(target);
+  if (target === "shared") {
+    // edited as what every profile gets, kept as the person's difference from the repository's base
+    const o = await sharedLayer();
+    const before = JSON.stringify(o);
+    edit(o);
+    if (JSON.stringify(o) === before) return false;
+    await writeSharedLayer(o);
+    return true;
+  }
+  const path = patchPath(target);
   const o = await readObj(path) ?? {};
   const before = JSON.stringify(o);
   edit(o);

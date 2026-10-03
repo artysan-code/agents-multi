@@ -1,6 +1,7 @@
 #!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
 // claude-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
 //
+//   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.claude-multi/config
 //   install [--dry-run]     materialise ~/.claude-multi, ~/.local/bin, units and .desktop entries (idempotent)
 //   settings [--dry-run] [--quiet]   regenerate each profile's settings.json, adopting what Claude wrote into it
 //   doctor  [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only
@@ -25,6 +26,7 @@ import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
 import { install } from "./install.ts";
+import { init } from "./init.ts";
 import { syncAllSettings } from "./settings.ts";
 import { printStatus, status } from "./status.ts";
 import { apply, blockers, describe, health, plan } from "./mcp.ts";
@@ -37,6 +39,7 @@ const flag = (f: string) => rest.includes(f);
 const opt = (name: string, def?: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : def; };
 
 switch (cmd) {
+  case "init": Deno.exit(await init(rest)); break;
   case "install": Deno.exit(await install(flag("--dry-run"))); break;
   case "settings": {
     const dry = flag("--dry-run");
@@ -115,6 +118,7 @@ switch (cmd) {
   default:
     console.log(`claude-multi — manage a multi-profile Claude setup (repository ${REPO})
 
+  init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.claude-multi/config
   install [--dry-run]         materialise runtime, wrappers, units and desktop entries (idempotent)
   doctor  [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances

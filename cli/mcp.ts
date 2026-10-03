@@ -27,7 +27,8 @@
 
 import { type Account, accountHosts, loadAccounts, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
 import { vaultDir } from "../shared/mcp/lib/vault.ts";
-import { type Check, desktopDir, has, HOME, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { CONFIG, type Check, desktopDir, has, HOME, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { diffPatch, mergePatch } from "./settings.ts";
 
 export interface PerAccount { env?: Record<string, string>; headers?: Record<string, string> }
 export type ServerCfg = Record<string, unknown> & {
@@ -46,8 +47,11 @@ export interface RawRegistry { profiles?: string[]; servers: Record<string, Serv
 export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
 export interface Change { target: Target; name: string; kind: "add" | "update" | "remove" }
 
-const REGISTRY = `${REPO}/shared/mcp/servers.json`;
-export const ACCOUNTS = `${REPO}/shared/mcp/accounts.json`;
+/** The servers the setup knows how to run (repository), and the person's choices over them: which
+ *  profiles see which (`_profiles`), servers of their own, `null` to drop one — a JSON Merge Patch. */
+export const REGISTRY = `${REPO}/shared/mcp/servers.json`;
+export const PERSON_REGISTRY = `${CONFIG}/servers.json`;
+export const ACCOUNTS = `${CONFIG}/accounts.json`;
 const STATE_FILE = `${STATE}/mcp-state.json`;
 const LEGACY_STATE = `${REPO}/shared/mcp/.sync-state.json`;
 const BACKUPS = `${STATE}/mcp-sync-backups`;
@@ -63,9 +67,20 @@ export function expandHome<T>(v: T, home = HOME): T {
   return v;
 }
 
+/** servers.json as the person has it: the repository's catalogue with their patch over it. */
+export async function rawRegistry(): Promise<RawRegistry> {
+  const base = await readJson<RawRegistry>(REGISTRY);
+  if (!base?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
+  return mergePatch(base as never, (await readJson(PERSON_REGISTRY) ?? {}) as never) as unknown as RawRegistry;
+}
+/** Keep `reg` as the person's registry: their file becomes its difference from the catalogue. */
+export async function writePersonRegistry(reg: RawRegistry) {
+  const base = await readJson<RawRegistry>(REGISTRY) ?? { servers: {} };
+  await Deno.writeTextFile(PERSON_REGISTRY, JSON.stringify(diffPatch(base as never, reg as never), null, 2) + "\n");
+}
+
 export async function loadRegistry(): Promise<Registry> {
-  const raw = await readJson<Registry>(REGISTRY);
-  if (!raw?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
+  const raw = await rawRegistry();
   const r = { ...raw, servers: expandHome(raw.servers) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) { const s = (await loadManifest(p)).brainScope; if (s) brainScopes[p] = s; }
@@ -75,7 +90,7 @@ export async function loadRegistry(): Promise<Registry> {
 /** launch.ts as the servers start it: through the runtime path, like every registry server. */
 export function launchPaths(): LaunchPaths {
   const mcp = `${RUNTIME}/shared/mcp`;
-  return { script: `${mcp}/lib/launch.ts`, read: [vaultDir(), `${mcp}/accounts.json`, `${HOME}/.cache/deno`], hooks: `${RUNTIME}/shared/hooks` };
+  return { script: `${mcp}/lib/launch.ts`, read: [vaultDir(), `${RUNTIME}/config`, `${HOME}/.cache/deno`], hooks: `${RUNTIME}/shared/hooks` };
 }
 /**
  * A profile's server selection applied to the raw registry file. `everyone` is what an absent

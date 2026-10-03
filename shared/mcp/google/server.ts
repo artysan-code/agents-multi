@@ -4,8 +4,8 @@
 //
 // Mail goes out in two steps, and the second one always asks: gmail_draft writes a draft the owner
 // can read, gmail_send sends an existing draft — and mcp__google__gmail_send is in the shared `ask`
-// permissions, so it needs his yes even in auto mode. Nothing here deletes anything.
-// Calendar writes default to sendUpdates "none": invitations go out only when he asks for them.
+// permissions, so it needs the user's yes even in auto mode. Nothing here deletes anything.
+// Calendar writes default to sendUpdates "none": invitations go out only when the user asks for them.
 // Drive is read-only: search, and a file's text (Docs, Sheets and Slides exported, text files read).
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";

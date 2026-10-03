@@ -75,11 +75,12 @@ main() {
 # generato l'ultima volta. Lock a parte, e mai bloccante.
 regen_settings() {
   local runtime="${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}" stamp="$CACHE/settings.stamp"
+  local config="${CLAUDE_MULTI_CONFIG:-$runtime/config}"
   [[ -x "$REPO/bin/claude-multi" ]] && command -v deno >/dev/null 2>&1 || return 0
   mkdir -p "$CACHE"
   exec 8>"$CACHE/settings.lock"
   flock -n 8 || return 0
-  if [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/profiles" "$REPO/shared/mcp/servers.json" "$REPO/shared/mcp/accounts.json" \
+  if [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/shared/mcp/servers.json" "$config"/settings.json "$config"/profiles "$config"/servers.json "$config"/accounts.json \
         "$runtime"/*/settings.json "$runtime"/*/plugins/synced -newer "$stamp" -print -quit 2>/dev/null)" ]]; then
     return 0
   fi

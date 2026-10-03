@@ -22,7 +22,7 @@ source "$HERE/lib/profiles.sh"
 PROFILE="$(cm_profile_for "$SELF")"
 
 if [[ -z "$PROFILE" ]]; then
-  echo "$SELF: no profile in $(cm_repo)/profiles declares this command." >&2
+  echo "$SELF: no profile in $(cm_config)/profiles declares this command." >&2
   echo "Add \"command\": \"$SELF\" to a profiles/<name>/profile.json, then run: claude-multi install" >&2
   exit 1
 fi
