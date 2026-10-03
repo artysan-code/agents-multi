@@ -361,9 +361,10 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = reachOf(reg, cfg).join("+");
     let live = "";
     if (opts.live && !problems.length && cmd) {
-      // a per-account entry is probed as each of its servers, through launch.ts with the account's secret
+      // an account-backed entry is probed as the profile gets it ({hosts} filled in, its profile set),
+      // and a per-account one as each of its servers, through launch.ts with the account's secret
       const profile = reachOf(reg, cfg)[0];
-      const runs: [string, string, string[], Record<string, string>][] = cfg._perAccount
+      const runs: [string, string, string[], Record<string, string>][] = cfg._service
         ? (profile ? servers(reg, { profile, surface: "cli" }).filter((s) => s.entry === name && s.cfg.command) : [])
           .map((s) => [s.name, String(s.cfg.command), s.cfg.args as string[] ?? [], s.cfg.env as Record<string, string> ?? {}])
         : [[name, cmd, args, env]];
