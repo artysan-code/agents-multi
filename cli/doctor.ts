@@ -12,6 +12,11 @@ import { keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/va
 import { legacyFilesPresent } from "./vault.ts";
 import { PORT } from "./serve.ts";
 
+/** Pure: the home folders written out in a text (/home/<name>), each once. */
+export function writtenHomes(text: string): string[] {
+  return [...new Set(text.match(/\/home\/[a-z_][\w.-]*/g) ?? [])];
+}
+
 export async function doctor(): Promise<Check[]> {
   const c: Check[] = [];
   const add = (id: string, status: Status, msg: string, fix?: string) => c.push({ id, status, msg, fix });
@@ -31,6 +36,17 @@ export async function doctor(): Promise<Check[]> {
 
   if (repo.isRepo && (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out !== ".githooks") {
     add("repo.hooks", "warn", "repository pre-commit is not active (secret guard + type check)", "claude-multi install");
+  }
+
+  // --- portability: what the repository carries is shared by everyone who uses it, so a home
+  // folder written out (/home/<name>/…) breaks for anyone else: $HOME in shell commands, ~ in
+  // CLAUDE.md imports, ${HOME} in servers.json (filled in by mcp sync)
+  if (repo.isRepo) {
+    const files = (await run("git", ["-C", REPO, "ls-files", "shared", "profiles"])).out.split("\n").filter((f) => f && !/\.(lock|png|svg|woff2)$/.test(f));
+    const hits: string[] = [];
+    for (const f of files) if (writtenHomes((await readText(`${REPO}/${f}`)) ?? "").length) hits.push(f);
+    if (hits.length) add("repo.homes", "warn", `home folder written out in ${hits.length} shared files: ${hits.slice(0, 3).join(", ")}${hits.length > 3 ? "…" : ""}`, "write $HOME (shell), ~ (CLAUDE.md imports) or ${HOME} (servers.json) instead");
+    else add("repo.homes", "ok", "no home folder written out in shared/ and profiles/");
   }
 
   // --- shared: broken symlinks, skills installed but not mounted

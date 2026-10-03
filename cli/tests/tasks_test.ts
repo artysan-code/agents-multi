@@ -133,12 +133,12 @@ Deno.test("addStep: a Steps section is created, before the attachments when they
 
 Deno.test("attachments: urls, local paths, stored files, wiki pages; add and remove", () => {
   let n = T.addAttachment("Testo.", "https://docs.google.com/x", "Specifiche");
-  n = T.addAttachment(n, "~/work/acme/site/Documento finale.pdf");
+  n = T.addAttachment(n, "/home/someone/work/acme/site/Documento finale.pdf");
   n = T.addAttachment(n, "files/t-1/foto.png");
   n = T.addAttachment(n, "[[projects/claude-multi/visione-assistente]]");
   assertEquals(T.attachments(n), [
     { label: "Specifiche", target: "https://docs.google.com/x", kind: "url" },
-    { label: "Documento finale.pdf", target: "~/work/acme/site/Documento finale.pdf", kind: "path" },
+    { label: "Documento finale.pdf", target: "/home/someone/work/acme/site/Documento finale.pdf", kind: "path" },
     { label: "foto.png", target: "files/t-1/foto.png", kind: "file" },
     { label: "visione-assistente", target: "projects/claude-multi/visione-assistente", kind: "page" },
   ]);

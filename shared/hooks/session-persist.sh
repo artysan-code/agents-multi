@@ -11,7 +11,7 @@ if [ -f "${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks/session-persist.sh" ]; then
   exec bash "${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks/session-persist.sh"
 fi
 
-SESSION_DIR="~/.local/share/claude-sessions"
+SESSION_DIR="$HOME/.local/share/claude-sessions"
 mkdir -p "$SESSION_DIR"
 chmod 700 "$SESSION_DIR"
 

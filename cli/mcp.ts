@@ -53,9 +53,20 @@ const LEGACY_STATE = `${REPO}/shared/mcp/.sync-state.json`;
 const BACKUPS = `${STATE}/mcp-sync-backups`;
 const KEEP = 5;
 
+/** Pure: every `${HOME}` in a registry entry's strings as this user's home. servers.json is shared
+ *  by everyone who uses the repository, and Desktop and the CLI start servers without a shell, so
+ *  the home is filled in here rather than written out. */
+export function expandHome<T>(v: T, home = HOME): T {
+  if (typeof v === "string") return v.replaceAll("${HOME}", home) as T;
+  if (Array.isArray(v)) return v.map((x) => expandHome(x, home)) as T;
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, expandHome(x, home)])) as T;
+  return v;
+}
+
 export async function loadRegistry(): Promise<Registry> {
-  const r = await readJson<Registry>(REGISTRY);
-  if (!r?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
+  const raw = await readJson<Registry>(REGISTRY);
+  if (!raw?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
+  const r = { ...raw, servers: expandHome(raw.servers) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) { const s = (await loadManifest(p)).brainScope; if (s) brainScopes[p] = s; }
   return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS), bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS"), brainScopes, launch: launchPaths() };

@@ -5,7 +5,7 @@
 
 set -uo pipefail
 
-SESSION_DIR="~/.local/share/claude-sessions"
+SESSION_DIR="$HOME/.local/share/claude-sessions"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 project_name=$(basename "$PROJECT_DIR")
 date_str=$(date +%Y-%m-%d)

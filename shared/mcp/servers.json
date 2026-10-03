@@ -6,11 +6,11 @@
       "args": [
         "run",
         "--allow-net=127.0.0.1:8384",
-        "--allow-read=~",
+        "--allow-read=${HOME}",
         "--allow-env=HOME,ST_URL,ST_CONFIG,STGUI_APIKEY",
         "--allow-run=git",
-        "--lock=~/.claude-multi/shared/mcp/syncthing-status/deno.lock",
-        "~/.claude-multi/shared/mcp/syncthing-status/server.ts"
+        "--lock=${HOME}/.claude-multi/shared/mcp/syncthing-status/deno.lock",
+        "${HOME}/.claude-multi/shared/mcp/syncthing-status/server.ts"
       ]
     },
     "n8n": {
@@ -53,11 +53,11 @@
         "run",
         "--quiet",
         "--allow-net={hosts}",
-        "--allow-read=~/vault/claude-multi,~/.claude-multi/shared/mcp/accounts.json,~/.cache/deno",
+        "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/shared/mcp/accounts.json,${HOME}/.cache/deno",
         "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
-        "--lock=~/.claude-multi/shared/mcp/coolify/deno.lock",
-        "~/.claude-multi/shared/mcp/coolify/server.ts"
+        "--lock=${HOME}/.claude-multi/shared/mcp/coolify/deno.lock",
+        "${HOME}/.claude-multi/shared/mcp/coolify/server.ts"
       ]
     },
     "tasks": {
@@ -67,12 +67,12 @@
         "run",
         "--quiet",
         "--allow-net={hosts}",
-        "--allow-read=~/brains/tasks,~/vault/claude-multi,~/.claude-multi/shared/mcp/accounts.json,~/.cache/deno",
-        "--allow-write=~/brains/tasks",
+        "--allow-read=${HOME}/brains/tasks,${HOME}/vault/claude-multi,${HOME}/.claude-multi/shared/mcp/accounts.json,${HOME}/.cache/deno",
+        "--allow-write=${HOME}/brains/tasks",
         "--allow-env=HOME,CLAUDE_MULTI_TASKS,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_BRAIN_SCOPE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
-        "--lock=~/.claude-multi/shared/mcp/tasks/deno.lock",
-        "~/.claude-multi/shared/mcp/tasks/server.ts"
+        "--lock=${HOME}/.claude-multi/shared/mcp/tasks/deno.lock",
+        "${HOME}/.claude-multi/shared/mcp/tasks/server.ts"
       ],
       "_surfaces": [
         "cli",
@@ -89,11 +89,11 @@
         "run",
         "--quiet",
         "--allow-net=oauth2.googleapis.com,gmail.googleapis.com,www.googleapis.com",
-        "--allow-read=~/vault/claude-multi,~/.claude-multi/shared/mcp/accounts.json,~/.cache/deno",
+        "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/shared/mcp/accounts.json,${HOME}/.cache/deno",
         "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
-        "--lock=~/.claude-multi/shared/mcp/google/deno.lock",
-        "~/.claude-multi/shared/mcp/google/server.ts"
+        "--lock=${HOME}/.claude-multi/shared/mcp/google/deno.lock",
+        "${HOME}/.claude-multi/shared/mcp/google/server.ts"
       ],
       "_surfaces": [
         "cli",
@@ -152,7 +152,7 @@
     "railway": {
       "_service": "railway",
       "type": "stdio",
-      "command": "~/.railway/bin/railway",
+      "command": "${HOME}/.railway/bin/railway",
       "args": [
         "mcp",
         "local"

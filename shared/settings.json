@@ -93,7 +93,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/read-guard-global.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/read-guard-global.sh"
           }
         ]
       },
@@ -102,15 +102,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/destructive-blocker.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/destructive-blocker.sh"
           },
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/branch-guard.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/branch-guard.sh"
           },
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/graphify-nudge.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/graphify-nudge.sh"
           }
         ]
       },
@@ -119,7 +119,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/graphify-nudge.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/graphify-nudge.sh"
           }
         ]
       },
@@ -128,7 +128,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/memory-legacy-guard.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/memory-legacy-guard.sh"
           }
         ]
       },
@@ -137,7 +137,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/commit-trailer-guard.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/commit-trailer-guard.sh"
           }
         ]
       },
@@ -146,7 +146,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/agents-md-nested.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/agents-md-nested.sh"
           }
         ]
       }
@@ -157,7 +157,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/typecheck-after-edit.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/typecheck-after-edit.sh"
           }
         ]
       }
@@ -167,7 +167,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/brain-nudge.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/brain-nudge.sh"
           }
         ]
       }
@@ -177,7 +177,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/pre-compact.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/pre-compact.sh"
           }
         ]
       }
@@ -187,7 +187,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/notify-stop.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/notify-stop.sh"
           }
         ]
       },
@@ -195,7 +195,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude-multi/shared/hooks/session-persist.sh"
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/session-persist.sh"
           }
         ]
       },
@@ -203,7 +203,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.claude-multi/shared/hooks/brain-checkpoint.py"
+            "command": "python3 \"$HOME\"/.claude-multi/shared/hooks/brain-checkpoint.py"
           }
         ]
       }
@@ -211,7 +211,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude-multi/shared/statusline-command.sh"
+    "command": "bash \"$HOME\"/.claude-multi/shared/statusline-command.sh"
   },
   "enabledPlugins": {
     "pr-review-toolkit@claude-plugins-official": true,

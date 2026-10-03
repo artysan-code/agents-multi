@@ -29,6 +29,9 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   reading one — `install` links one launcher per manifest and builds the `~/.zshrc` block from
   them; there is a single launcher script (`bin/claude`) that identifies its profile from the name
   it was invoked as.
+- **No home folder written out** (`/home/<name>`): the repository is shared by everyone who uses
+  it. Shell commands (hooks, statusline) say `"$HOME"`, CLAUDE.md imports `@~/`, servers.json
+  `${HOME}` (filled in by `loadRegistry()`); the doctor's `repo.homes` check finds the rest.
 - **The cost in `usage` is a list-price equivalent, not a charge**, and nothing in this repository
   monitors billing: the budget module was removed on purpose (2026-09-30). Do not bring back
   thresholds or notifications on spending.

@@ -66,5 +66,5 @@ PreToolUse hook on Edit/Write/MultiEdit — warns on: GitHub Actions injection, 
 
 ## Known Limitations
 
-- **security-guidance state files**: The plugin tries to write per-session state to ~/.claude/ which is a permission-000 tripwire. The PermissionError is caught silently (IOError subclass in Python 3). Result: warnings are not deduplicated per session. Patch target: line 132 of security_reminder_hook.py — change os.path.expanduser('~/.claude') to '~/.claude-multi/shared/security-guidance-state'.
+- **security-guidance state files**: The plugin tries to write per-session state to ~/.claude/ which is a permission-000 tripwire. The PermissionError is caught silently (IOError subclass in Python 3). Result: warnings are not deduplicated per session. Patch target: line 132 of security_reminder_hook.py — change os.path.expanduser('~/.claude') to '~/.claude-multi/shared/security-guidance-state' (expanded).
 - **code-review plugin**: Requires gh CLI authentication and an open PR number. Does not work for local (uncommitted) diff review. For local review, invoke the code-reviewer Tier-2 agent manually, or `/react-review` per le lane React.

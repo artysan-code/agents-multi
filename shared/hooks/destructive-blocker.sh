@@ -22,7 +22,10 @@ if has '\bmkfs(\.|[[:space:]])' || has '(>|of=)[[:space:]]*/dev/(sd|nvme|vd|mmcb
 fi
 
 # ---- rm ricorsivo su radice/path di sistema/wildcard -> ask (i subpath nominati passano) ----
-if has 'rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(~|/\*|\$HOME|\.\.|~|\.|\*|/)([[:space:]]|$)' \
+# the home folder itself, written out (whoever's it is): the same as ~ and $HOME below
+HOME_RE=$(printf '%s' "$HOME" | sed 's/[][\.*^$()+?{}|]/\\&/g')
+if has "rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*${HOME_RE}/?([[:space:]]|\$)" \
+   || has 'rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/\*|\$HOME|\.\.|~|\.|\*|/)([[:space:]]|$)' \
    || has 'rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*/(etc|usr|bin|sbin|var|boot|lib|lib64|opt|sys|proc|root|dev|home)([[:space:]/]|$)'; then
   emit ask "rm su radice / path di sistema / wildcard / '.' / '~' / '\$HOME'. Verifica BENE il percorso: è una cancellazione potenzialmente irreversibile e ampia."
 fi
