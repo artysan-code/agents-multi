@@ -21,6 +21,13 @@ export function classify(code: string): Decision {
   if (/\bDELETE\b/i.test(code) || /\bdeletes?\s*:/i.test(code)) {
     return { decision: "deny", reason: "Cloudflare: deletions are done by hand, in the dashboard (cloudflare-guard)." };
   }
+  // a read is let through only when every call can be read: request({ … }) with an object written
+  // out, no spread, no computed key, no way around request() — anything else is a question
+  const calls = (code.match(/\brequest\s*\(/g) ?? []).length;
+  const readable = (code.match(/\brequest\s*\(\s*\{/g) ?? []).length;
+  if (calls > readable || /\.\.\.|\]\s*:|\bfetch\s*\(|Object\.assign|Reflect\.|\beval\s*\(|\bFunction\s*\(|globalThis/.test(code)) {
+    return { decision: "ask", reason: "Cloudflare: this call is built in a way the guard cannot read: check it before it runs." };
+  }
   const literal = [...code.matchAll(/\bmethod\s*:\s*(["'`])([A-Za-z]+)\1/g)].map((m) => m[2].toUpperCase());
   const mentions = (code.match(/\bmethod\b/g) ?? []).length;
   if (mentions > literal.length) return { decision: "ask", reason: "Cloudflare: the HTTP method is computed, not written out: check what this call does." };

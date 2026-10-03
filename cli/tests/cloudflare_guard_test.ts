@@ -26,3 +26,11 @@ Deno.test("classify: writes and methods it cannot read ask first", () => {
   // one write among reads is still a write
   assertEquals(classify(`${call(`{ method: "GET", path: "/a" }`)}; ${call(`{ method: "PUT", path: "/b" }`)}`).decision, "ask");
 });
+
+Deno.test("classify: a call it cannot read is a question, even when it looks like a read", () => {
+  // the method key spelled so that a text check misses it
+  assertEquals(classify(call(`{ path: "/x", ["meth" + "od"]: "PUT" }`)).decision, "ask");
+  assertEquals(classify(call(`{ ...opts, path: "/x" }`)).decision, "ask");
+  assertEquals(classify(`const o = { path: "/x" }; return cloudflare.request(o);`).decision, "ask");
+  assertEquals(classify(`return fetch("https://api.cloudflare.com/client/v4/zones", { method: "GET" });`).decision, "ask");
+});
