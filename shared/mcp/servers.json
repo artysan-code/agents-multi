@@ -118,10 +118,11 @@
           "Authorization": "Bearer {secret}"
         }
       },
-      "_ask": [
-        "execute"
-      ],
-      "_note": "Cloudflare's official MCP (Code Mode: docs, search, execute — execute runs JavaScript against the whole API), one server per Cloudflare API token: cloudflare-<account>. It cannot switch deletions off and masks nothing, so the token's scope is the boundary: give each token only what is needed (an account token also needs Account Resources: Read, to find its account). execute asks first, so every call shows its code before it runs. CLI only (http)."
+      "_note": "Cloudflare's official MCP (Code Mode: docs, search, execute — execute runs JavaScript against the whole API), one server per Cloudflare account token: cloudflare-<account>. It cannot switch deletions off and masks nothing: shared/hooks/cloudflare-guard.ts reads the code of every execute — reads pass, any DELETE is denied, writes ask. It stops mistakes, not code written to slip past it: the token (broad, but no members, tokens or account settings) stays the hard boundary. An account token also needs Account Settings: Read, to find its account. CLI only (http).",
+      "_guard": {
+        "tool": "execute",
+        "hook": "cloudflare-guard.ts"
+      }
     }
   }
 }

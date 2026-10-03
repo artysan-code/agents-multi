@@ -15,7 +15,7 @@
 // Plugins are why this exists: Claude Code installs every plugin `enabledPlugins` marks true when a
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
-import { loadRegistry, permissionRules } from "./mcp.ts";
+import { loadRegistry, permissionRules, type RegistryRules } from "./mcp.ts";
 import { loadManifest, lstat, type Manifest, type Profile, profileNames, readJson, REPO, RUNTIME, STAMP, STATE, syncedPlugins } from "./lib.ts";
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -58,30 +58,38 @@ export function manifestPatch(m: Pick<Manifest, "disableAccountMcp">, synced: st
   return { disableClaudeAiConnectors: true, enabledPlugins: Object.fromEntries(synced.map((id) => [id, false])) };
 }
 
-export interface Rules { deny: string[]; ask: string[] }
+type Rules = RegistryRules;
+const isGenerated = (rules: Rules, h: Json) => rules.hooks.some((g) => same(g, h));
 
-/** What the MCP registry implies (`_deny`, `_ask`): its rules added to the permission lists the
- *  profile already has. Added, not replacing: a merge patch replaces arrays whole, so the derived
- *  list carries the base one with it. */
+/** What the MCP registry implies (`_deny`, `_ask`, `_guard`): its rules added to the permission
+ *  lists and its guards to the PreToolUse hooks the profile already has. Added, not replacing: a
+ *  merge patch replaces arrays whole, so the derived list carries the base one with it. */
 export function registryPatch(base: Obj, rules: Rules): Obj {
   const perms = isObj(base.permissions) ? base.permissions : {};
-  const out: Obj = {};
+  const permissions: Obj = {};
   for (const k of ["deny", "ask"] as const) {
     if (!rules[k].length) continue;
     const have = Array.isArray(perms[k]) ? perms[k] as Json[] : [];
-    out[k] = [...have, ...rules[k].filter((r) => !have.includes(r))];
+    permissions[k] = [...have, ...rules[k].filter((r) => !have.includes(r))];
   }
-  return Object.keys(out).length ? { permissions: out } : {};
+  const out: Obj = {};
+  if (Object.keys(permissions).length) out.permissions = permissions;
+  if (rules.hooks.length) {
+    const have = isObj(base.hooks) && Array.isArray(base.hooks.PreToolUse) ? base.hooks.PreToolUse : [];
+    out.hooks = { PreToolUse: [...have, ...rules.hooks.filter((h) => !have.some((x) => same(x, h))) as unknown as Json[]] };
+  }
+  return out;
 }
 
 /** A patch without the rules the registry generates: they are rebuilt from it every time, and an
  *  adopted copy in the repository would outlive the server they were for. */
 export function withoutRules(shared: Obj, patch: Obj, rules: Rules): Obj {
-  const perms = patch.permissions;
-  if (!isObj(perms)) return patch;
   const p: Obj = structuredClone(patch);
-  const pp = p.permissions as Obj;
-  for (const k of ["deny", "ask"] as const) if (Array.isArray(pp[k])) pp[k] = (pp[k] as Json[]).filter((r) => !rules[k].includes(r as string));
+  if (isObj(p.permissions)) {
+    const pp = p.permissions;
+    for (const k of ["deny", "ask"] as const) if (Array.isArray(pp[k])) pp[k] = (pp[k] as Json[]).filter((r) => !rules[k].includes(r as string));
+  }
+  if (isObj(p.hooks) && Array.isArray(p.hooks.PreToolUse)) p.hooks.PreToolUse = p.hooks.PreToolUse.filter((h) => !isGenerated(rules, h));
   return diffPatch(shared, mergePatch(shared, p) as Obj);
 }
 
@@ -155,7 +163,7 @@ function derive(fromManifest: Obj, shared: Obj, patch: Obj, rules: Rules): Obj {
 }
 
 async function registryRules(p: Profile): Promise<Rules> {
-  try { return permissionRules(await loadRegistry(), p); } catch { return { deny: [], ask: [] }; } // no registry: the doctor says so
+  try { return permissionRules(await loadRegistry(), p); } catch { return { deny: [], ask: [], hooks: [] }; } // no registry: the doctor says so
 }
 
 /**

@@ -84,21 +84,31 @@ Deno.test("paths: dotted leaves, an emptied object counts as one", () => {
 
 Deno.test("registryPatch: the registry's rules join the lists the profile has, never replace them", () => {
   const base: Obj = { permissions: { deny: ["Bash(secret-tool:*)"], allow: ["Read"] } };
-  const rules = { deny: ["mcp__n8n-ark__n8n_delete_workflow", "Bash(secret-tool:*)"], ask: ["mcp__n8n-ark__n8n_test_workflow"] };
+  const rules = { deny: ["mcp__n8n-ark__n8n_delete_workflow", "Bash(secret-tool:*)"], ask: ["mcp__n8n-ark__n8n_test_workflow"], hooks: [] };
   const built = buildSettings(base, {}, registryPatch(base, rules));
   assertEquals(built.permissions, {
     deny: ["Bash(secret-tool:*)", "mcp__n8n-ark__n8n_delete_workflow"],
     allow: ["Read"],
     ask: ["mcp__n8n-ark__n8n_test_workflow"],
   });
-  assertEquals(registryPatch(base, { deny: [], ask: [] }), {});
+  assertEquals(registryPatch(base, { deny: [], ask: [], hooks: [] }), {});
+  // a guard joins the PreToolUse hooks already there
+  const guard = { matcher: "^(mcp__cf-a__execute)$", hooks: [{ type: "command" as const, command: "deno run g.ts" }] };
+  const withHooks: Obj = { hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "x.sh" }] }] } };
+  assertEquals(buildSettings(withHooks, {}, registryPatch(withHooks, { deny: [], ask: [], hooks: [guard] })).hooks, {
+    PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "x.sh" }] }, guard],
+  });
 });
 
 Deno.test("withoutRules: an adopted list drops the generated rules, and what is left equal to shared goes too", () => {
   const shared: Obj = { permissions: { deny: ["A"] } };
-  const rules = { deny: ["mcp__x__del"], ask: [] };
+  const guard = { matcher: "^(mcp__cf-a__execute)$", hooks: [{ type: "command" as const, command: "deno run g.ts" }] };
+  const rules = { deny: ["mcp__x__del"], ask: [], hooks: [guard] };
   // Claude rewrote deny whole: adopting it would copy the generated rule into the repository
   assertEquals(withoutRules(shared, { permissions: { deny: ["A", "mcp__x__del"] } }, rules), {});
   assertEquals(withoutRules(shared, { permissions: { deny: ["A", "B", "mcp__x__del"] } }, rules), { permissions: { deny: ["A", "B"] } });
   assertEquals(withoutRules(shared, { model: "opus" }, rules), { model: "opus" });
+  // Claude rewrote the hooks: the adopted list, minus the guard, is shared's again — nothing to keep
+  const bash: Obj = { matcher: "Bash", hooks: [{ type: "command", command: "x.sh" }] };
+  assertEquals(withoutRules({ hooks: { PreToolUse: [bash] } }, { hooks: { PreToolUse: [bash, guard as unknown as Obj] } }, rules), {});
 });

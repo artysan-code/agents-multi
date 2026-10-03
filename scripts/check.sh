@@ -4,7 +4,7 @@
 # Used by `deno task check`, by the pre-commit hook and by CI. Exits non-zero on the first problem.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-deno check cli/*.ts cli/tests/*.ts shared/mcp/lib/*.ts shared/mcp/*/server.ts brain/*.ts brain/tests/*.ts
+deno check cli/*.ts cli/tests/*.ts shared/mcp/lib/*.ts shared/mcp/*/server.ts shared/hooks/*.ts brain/*.ts brain/tests/*.ts
 deno lint --quiet
 # Globs, not a list: a wrapper added to bin/ is checked without editing this file.
 for f in bin/* bin/lib/*.sh shared/statusline-command.sh shared/hooks/*.sh .githooks/pre-commit scripts/check.sh; do

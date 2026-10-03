@@ -100,7 +100,7 @@ Deno.test("selectServers: an explicit profile list gains a new profile", () => {
 });
 
 // ---------------------------------------------------------------- one server per account (_perAccount)
-const LAUNCH = { script: "/rt/shared/mcp/lib/launch.ts", read: ["/vault", "/rt/accounts.json"] };
+const LAUNCH = { script: "/rt/shared/mcp/lib/launch.ts", read: ["/vault", "/rt/accounts.json"], hooks: "/rt/shared/hooks" };
 const perAccountReg: Registry = {
   profiles: PROFILES, launch: LAUNCH,
   servers: {
@@ -109,7 +109,10 @@ const perAccountReg: Registry = {
       _perAccount: { env: { FLOWS_URL: "{url}", FLOWS_KEY: "{secret}" } }, _surfaces: ["cli", "desktop"],
       _deny: ["delete_flow"], _ask: ["run_flow"],
     },
-    remote: { _service: "remote", type: "http", url: "{url}", _perAccount: { headers: { Authorization: "Bearer {secret}" } }, _deny: ["drop"] },
+    remote: {
+      _service: "remote", type: "http", url: "{url}", _perAccount: { headers: { Authorization: "Bearer {secret}" } }, _deny: ["drop"],
+      _guard: { tool: "execute", hook: "remote-guard.ts" },
+    },
     oauth: { _service: "oauth", type: "http", url: "https://mcp.example/{name}", _perAccount: {} },
   },
   accounts: [
@@ -157,10 +160,14 @@ Deno.test("permissionRules: _deny and _ask under each server's name, only where 
   assertEquals(permissionRules(perAccountReg, A), {
     deny: ["mcp__flows-mine__delete_flow", "mcp__flows-work__delete_flow", "mcp__remote-proj__drop"],
     ask: ["mcp__flows-mine__run_flow", "mcp__flows-work__run_flow"],
+    hooks: [{ matcher: "^(mcp__remote-proj__execute)$", hooks: [{ type: "command", command: "deno run --quiet --no-lock /rt/shared/hooks/remote-guard.ts" }] }],
   });
-  assertEquals(permissionRules(perAccountReg, B), { deny: ["mcp__flows-work__delete_flow"], ask: ["mcp__flows-work__run_flow"] });
+  assertEquals(permissionRules(perAccountReg, B), { deny: ["mcp__flows-work__delete_flow"], ask: ["mcp__flows-work__run_flow"], hooks: [] });
   // a plain server's rules use its own name
-  assertEquals(permissionRules({ profiles: PROFILES, servers: { s: { command: "s", _deny: ["x"] } } }, A), { deny: ["mcp__s__x"], ask: [] });
+  assertEquals(permissionRules({ profiles: PROFILES, servers: { s: { command: "s", _deny: ["x"] } } }, A), { deny: ["mcp__s__x"], ask: [], hooks: [] });
+  // the guard's matcher matches its servers and nothing else
+  const m = new RegExp(permissionRules(perAccountReg, A).hooks[0].matcher);
+  assertEquals([m.test("mcp__remote-proj__execute"), m.test("mcp__remote-proj__search"), m.test("mcp__remote-projx__execute")], [true, false, false]);
 });
 
 Deno.test("registryProblems: {secret} outside _perAccount, missing _service, wrong template kind, http on Desktop", () => {

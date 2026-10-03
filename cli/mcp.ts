@@ -18,6 +18,8 @@
 //              http servers do not go to Desktop, whose config holds commands only.
 //   _deny / _ask  tool names this server must never run / must ask before running: they become
 //              mcp__<server>__<tool> permission rules in each profile's generated settings (settings.ts)
+//   _guard     { tool, hook }: a PreToolUse hook of shared/hooks that decides on each call of that tool
+//              (allow / ask / deny), wired by the same generated settings
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
 // State (which servers were managed per target) lives in XDG state: it is per-machine, not in the repo.
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
@@ -30,10 +32,12 @@ import { type Check, desktopDir, has, HOME, loadManifest, lstat, type Profile, p
 export interface PerAccount { env?: Record<string, string>; headers?: Record<string, string> }
 export type ServerCfg = Record<string, unknown> & {
   _profiles?: string[]; _surfaces?: Surface[]; _service?: string; _perAccount?: PerAccount; _deny?: string[]; _ask?: string[];
+  /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` */
+  _guard?: { tool: string; hook: string };
 };
 type Surface = "cli" | "desktop";
 /** Where launch.ts is and what it may read: the paths of this machine, kept out of the pure code. */
-export interface LaunchPaths { script: string; read: string[] }
+export interface LaunchPaths { script: string; read: string[]; hooks: string }
 export interface Registry {
   profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[]; bus?: string; brainScopes?: Record<string, string>; launch?: LaunchPaths;
 }
@@ -60,7 +64,7 @@ export async function loadRegistry(): Promise<Registry> {
 /** launch.ts as the servers start it: through the runtime path, like every registry server. */
 export function launchPaths(): LaunchPaths {
   const mcp = `${RUNTIME}/shared/mcp`;
-  return { script: `${mcp}/lib/launch.ts`, read: [vaultDir(), `${mcp}/accounts.json`, `${HOME}/.cache/deno`] };
+  return { script: `${mcp}/lib/launch.ts`, read: [vaultDir(), `${mcp}/accounts.json`, `${HOME}/.cache/deno`], hooks: `${RUNTIME}/shared/hooks` };
 }
 /**
  * A profile's server selection applied to the raw registry file. `everyone` is what an absent
@@ -176,16 +180,26 @@ function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry
 export function wanted(reg: Registry, t: Pick<Target, "profile" | "surface">): Record<string, Record<string, unknown>> {
   return Object.fromEntries(servers(reg, t).map((s) => [s.name, s.cfg]));
 }
-/** Pure: the permission rules the registry implies for one profile — `_deny` and `_ask` of every
- *  server it gets on the CLI, under the name each one has there (one per account, for `_perAccount`). */
-export function permissionRules(reg: Registry, profile: string): { deny: string[]; ask: string[] } {
-  const deny: string[] = []; const ask: string[] = [];
+export interface GuardHook { matcher: string; hooks: { type: "command"; command: string }[] }
+export interface RegistryRules { deny: string[]; ask: string[]; hooks: GuardHook[] }
+
+/** Pure: what the registry implies for one profile's settings — `_deny` and `_ask` of every server
+ *  it gets on the CLI as permission rules, and each `_guard` as a PreToolUse hook on exactly those
+ *  servers, under the name each one has there (one per account, for `_perAccount`). */
+export function permissionRules(reg: Registry, profile: string): RegistryRules {
+  const deny: string[] = []; const ask: string[] = []; const guarded = new Map<string, string[]>();
   for (const { entry, name } of servers(reg, { profile, surface: "cli" })) {
     const cfg = reg.servers[entry];
     for (const tool of cfg._deny ?? []) deny.push(`mcp__${name}__${tool}`);
     for (const tool of cfg._ask ?? []) ask.push(`mcp__${name}__${tool}`);
+    if (cfg._guard) guarded.set(entry, [...guarded.get(entry) ?? [], `mcp__${name}__${cfg._guard.tool}`]);
   }
-  return { deny: deny.sort(), ask: ask.sort() };
+  const dir = (reg.launch ?? launchPaths()).hooks;
+  const hooks: GuardHook[] = [...guarded].map(([entry, tools]) => ({
+    matcher: `^(${tools.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`,
+    hooks: [{ type: "command", command: `deno run --quiet --no-lock ${dir}/${reg.servers[entry]._guard!.hook}` }],
+  }));
+  return { deny: deny.sort(), ask: ask.sort(), hooks };
 }
 
 /** Pure: what is wrong with the registry as written. The doctor reports it; sync still runs, and
@@ -200,6 +214,7 @@ export function registryProblems(reg: Pick<Registry, "servers">): string[] {
     if (isHttp(cfg) && _perAccount.env) out.push(`${name}: an http server takes _perAccount.headers, not env`);
     if (!isHttp(cfg) && _perAccount.headers) out.push(`${name}: a stdio server takes _perAccount.env, not headers`);
     if (isHttp(cfg) && cfg._surfaces?.includes("desktop")) out.push(`${name}: an http server cannot go to Desktop, whose config holds commands only`);
+    if (cfg._guard && !/^[\w.-]+$/.test(cfg._guard.hook)) out.push(`${name}: _guard.hook is a file name in shared/hooks, not a path`);
   }
   return out;
 }
@@ -340,6 +355,7 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
       if (a.startsWith("/") && /\.(ts|js|py|lock)$/.test(a) && !(await stat(a))) problems.push(`missing file: ${a}`);
       const lock = a.match(/^--lock=(.+)$/); if (lock && !(await stat(lock[1]))) problems.push(`missing lock file: ${lock[1]}`);
     }
+    if (cfg._guard && !(await stat(`${REPO}/shared/hooks/${cfg._guard.hook}`))) problems.push(`missing guard hook: shared/hooks/${cfg._guard.hook}`);
     const envFile = args.join(" ").match(/\. "?\$HOME\/([^"\s;]+)/); // the `. "$HOME/.config/x/.env"` pattern
     if (envFile && !(await stat(`${Deno.env.get("HOME")}/${envFile[1]}`))) problems.push(`missing env file: ~/${envFile[1]}`);
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = reachOf(reg, cfg).join("+");
