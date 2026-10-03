@@ -3,6 +3,9 @@
 //   desktop  → <profile desktop dir>/claude_desktop_config.json     (the Claude Desktop chat)
 //
 // Registry: { "profiles": [...], "servers": { name: { ...config, "_profiles": [...], "_surfaces": ["cli","desktop"] } } }
+//   The repository's servers.json is a catalogue of templates, off until the person turns one on:
+//   an account-backed entry by an account in their accounts.json, any other by `_profiles` in their
+//   servers.json (the catalogue writes `[]`). Their own servers go in their servers.json only.
 //   _profiles  defaults to every profile · _surfaces defaults to ["cli"]
 //   _service   the server works on the accounts of that service (shared/mcp/accounts.json): only the
 //              profiles that see one of them get it, with CLAUDE_MULTI_PROFILE in its env and
@@ -374,10 +377,13 @@ export async function probe(cmd: string, args: string[], env: Record<string, str
   }
 }
 
-/** Cheap static checks per registry server: binary, files, dependencies. With `live`, also the initialize probe. */
+/** Cheap static checks per server the person uses (it reaches a profile): binary, files,
+ *  dependencies. With `live`, also the initialize probe. */
 export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
   const reg = await loadRegistry(); const out: Check[] = [];
   for (const [name, cfg] of Object.entries(reg.servers)) {
+    // a template nobody turned on (no profile, no account) is not this person's: nothing to check
+    if (!reachOf(reg, cfg).length) continue;
     const cmd = String(cfg.command ?? ""); const args = (cfg.args ?? []) as string[]; const env = (cfg.env ?? {}) as Record<string, string>;
     const problems: string[] = [];
     if (env.PATH) for (const dir of env.PATH.split(":").slice(0, 2)) if (!(await stat(dir))) problems.push(`pinned PATH: missing directory ${dir}`);

@@ -2,7 +2,7 @@
 // The profile names come from the configuration (the tests run on cli/tests/fixtures/config), never
 // from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
-import { permissionRules, type RawRegistry, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
+import { permissionRules, type RawRegistry, reachOf, REGISTRY, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
 import { desktopDir, profileNames } from "../lib.ts";
 
 const PROFILES = await profileNames();
@@ -200,4 +200,18 @@ Deno.test("wanted: a remote account-backed server is at its one account's addres
   // two brains for one profile: which one would it be? none, rather than a guess
   const two = { ...r, accounts: [...r.accounts!, { service: "brain", name: "b2", url: "https://b2.example" }] };
   assertEquals(wanted(two, t(A, "cli")).brain, undefined);
+});
+
+Deno.test("reachOf: a template turned on by nobody reaches no profile, so health skips it", () => {
+  const r: Registry = { profiles: PROFILES, servers: {}, accounts: [{ service: "svc", name: "one", profiles: [A] }] };
+  assertEquals(reachOf(r, { command: "x", _profiles: [] }), []);
+  assertEquals(reachOf(r, { command: "x", _service: "other" }), []);
+  assertEquals(reachOf(r, { command: "x", _service: "svc" }), [A]);
+  assertEquals(reachOf(r, { command: "x" }), PROFILES);
+});
+
+Deno.test("catalogue: shared/mcp/servers.json turns nothing on for someone with no accounts and no choices", async () => {
+  const catalogue = JSON.parse(await Deno.readTextFile(REGISTRY)) as RawRegistry;
+  const fresh: Registry = { profiles: PROFILES, servers: catalogue.servers, accounts: [] };
+  for (const [name, cfg] of Object.entries(catalogue.servers)) assertEquals(reachOf(fresh, cfg), [], `${name} is on for everyone: give it _service or "_profiles": []`);
 });

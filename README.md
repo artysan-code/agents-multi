@@ -63,7 +63,7 @@ Someone new is best guided by a Claude Code session following [ONBOARDING.md](ON
   owner.json           id (the owner written in your tasks), name, language
   profiles/<name>/     profile.json (the manifest), CLAUDE.md, settings.json, skills/ agents/ commands/
   settings.json        what every profile gets, over shared/settings.json (a JSON Merge Patch)
-  servers.json         your choices over shared/mcp/servers.json: who sees which server, your own servers
+  servers.json         your choices over shared/mcp/servers.json: which templates are on, for whom; your own servers
   accounts.json        the accounts the servers use (no secrets: those are in the vault)
   rules/               your rules, imported by each profile's CLAUDE.md
   icons/<size>/        claude-desktop-<profile>.png, for a profile with its own Desktop
@@ -313,7 +313,13 @@ claude-multi usage --by command --since all
 
 ## MCP
 
-One registry, `shared/mcp/servers.json`. Per server, `_profiles` (default: all) and `_surfaces`:
+One registry, `shared/mcp/servers.json`: a **catalogue of templates, all off** until the person
+turns one on — an entry with `_service` by an account of that service in their `accounts.json`,
+any other by `_profiles` in their `servers.json` (the catalogue writes `"_profiles": []`; `null` there
+means every profile). Servers of one's own go in one's `servers.json`, never in the repository. A
+template nobody uses is not checked by the doctor or `mcp health`, so a missing binary of a service
+someone does not use is not their problem. A test keeps the catalogue off for a fresh configuration.
+Per server, `_profiles` (default: all) and `_surfaces`:
 
 - `cli` → the profile's `.claude.json`, read by Claude Code and by the copy embedded in Desktop
 - `desktop` → that profile's `claude_desktop_config.json`, read by the Desktop chat
