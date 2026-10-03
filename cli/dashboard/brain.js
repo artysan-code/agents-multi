@@ -64,7 +64,7 @@ function renderBrainAll() {
   if (bMode === "read") { renderTree(); showLocalGraph(); }
   if (bMode === "graph") showGlobalGraph();
   if (bMode === "diary") renderDiary();
-  if (bMode === "health") renderHealth();
+  if (bMode === "health") renderBrainHealth();
   if (bMode === "archive") (ARCH ? Promise.resolve(renderArchive()) : loadArchive()).catch((e) => toast(errText(e), true));
 }
 
@@ -590,7 +590,7 @@ const healthIssues = () => {
   return h ? h.orphans.length + h.broken_links.length + h.too_long.length + h.inbox_older_than_a_week.length + h.outside_the_areas.length : 0;
 };
 
-function renderHealth() {
+function renderBrainHealth() {
   const box = $("#bn-health"), h = BRAIN.health;
   if (!h) { box.innerHTML = `<p class="sub">${esc(t("brain.away", { e: "/api/brain/health" }))}</p>`; return; }
   const page = (path, extra = "") => {
