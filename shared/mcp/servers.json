@@ -144,7 +144,10 @@
       "type": "http",
       "url": "https://mcp.lovable.dev",
       "_perAccount": {},
-      "_note": "Lovable's official MCP, one server per Lovable account: lovable-<account>. OAuth only (no API keys for MCP): sign in once per server and per machine with /mcp, in a browser logged into that account. Full access to that account. CLI only (http)."
+      "_note": "Lovable's official MCP, one server per Lovable account: lovable-<account>. OAuth only (no API keys for MCP): sign in once per server and per machine with /mcp, in a browser logged into that account. Full access to that account. CLI only (http).",
+      "_deny": [
+        "delete_workspace_skill"
+      ]
     },
     "railway": {
       "_service": "railway",
