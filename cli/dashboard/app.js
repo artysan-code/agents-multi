@@ -489,9 +489,12 @@ function askContext(kind, project = null) {
   ASK.project = project;
   const ctx = $("#ask-ctx");
   ctx.hidden = kind === "ask";
-  // a new task: in the project on screen, in none, or (null) wherever Claude finds it belongs
-  $("span", ctx).textContent = kind !== "newtask" ? "" : project === null ? t("tb.new") : t("ask.ctx.newtask", { p: project === "~none" ? t("tb.noProject") : project.split("/").pop() });
-  $("#ask-text").placeholder = t(kind === "newtask" ? "ask.ph.newtask" : "ask.ph");
+  // a new task: in the project on screen, in none, or (null) wherever Claude finds it belongs;
+  // a change to the brain: on the page on screen, or (null) on the brain as a whole
+  $("span", ctx).textContent = kind === "brain"
+    ? (project ? t("ask.ctx.brain", { p: BRAIN?.byPath.get(project)?.title ?? project }) : t("ask.ctx.brainAll"))
+    : kind !== "newtask" ? "" : project === null ? t("tb.new") : t("ask.ctx.newtask", { p: project === "~none" ? t("tb.noProject") : project.split("/").pop() });
+  $("#ask-text").placeholder = t(kind === "newtask" ? "ask.ph.newtask" : kind === "brain" ? "ask.ph.brain" : "ask.ph");
 }
 $("#ask-ctx button").addEventListener("click", () => { askContext("ask"); $("#ask-text").focus(); });
 
@@ -565,6 +568,8 @@ $("#composer").addEventListener("submit", async (e) => {
   // a new task is one thing: the next request is a plain one again
   if (kind === "newtask") askContext("ask");
   if (ASK.tools) { loadTasks().catch(() => {}); if (view === "tasks") loadBoard().catch(() => {}); }
+  // what Claude changed in the brain shows at once, not at the next half-minute check
+  if (kind === "brain" && ASK.tools && view === "brain") loadBrain().catch(() => {});
   ta.focus();
 });
 
@@ -1431,6 +1436,9 @@ function go(hash) {
   // the field to ask Claude lives where there is something to ask about
   $("#ask-dock").hidden = !["today", "tasks", "brain"].includes(view);
   if (view !== "tasks" && ASK.kind === "newtask") askContext("ask");
+  // on the Brain page the field asks for changes to the brain; elsewhere it is a plain question again
+  if (view !== "brain" && ASK.kind === "brain") askContext("ask");
+  if (view === "brain" && ASK.kind === "ask") askContext("brain", bMode === "read" ? bSel : null);
   $$("#tabs a").forEach((a) => a.setAttribute("aria-selected", String(a.dataset.t === sub)));
   $$(".sub-view").forEach((el) => el.hidden = el.id !== `s-${sub}`);
   renderTitle();

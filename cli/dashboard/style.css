@@ -2367,6 +2367,87 @@ body.plbusy #mk-add button {
   background: var(--raised);
   color: var(--fg);
 }
+#bn-hn {
+  margin-left: 6px;
+  font: 600 10.5px var(--mono);
+  font-style: normal;
+  color: var(--warn, var(--accent));
+}
+#bn-hn:empty {
+  display: none;
+}
+.bn-diary,
+.bn-health {
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.bn-diary > .btn {
+  align-self: flex-start;
+}
+.dy-day {
+  display: flex;
+  flex-direction: column;
+}
+.dy-h {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 6px;
+}
+.dy-h h3 {
+  font: 400 20px/1.3 var(--serif);
+  margin: 0;
+  flex: 1;
+}
+.dy-h h3::first-letter {
+  text-transform: uppercase;
+}
+.dy-e {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  padding: 6px 0;
+  position: relative;
+}
+.dy-e time {
+  font: 500 12px/1.9 var(--mono);
+  color: var(--fg-faint);
+  text-align: right;
+}
+.dy-e .md {
+  padding: 0;
+  border-left: 2px solid var(--line-soft);
+  padding-left: 14px;
+}
+.dy-e .md p {
+  margin: 0;
+}
+.hl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.hl-x {
+  margin-left: auto;
+  font: 400 11.5px var(--mono);
+  font-style: normal;
+  color: var(--fg-faint);
+  flex: none;
+}
+.hl-line {
+  padding: 4px 6px;
+  font-size: 13px;
+}
+.hl-line p {
+  margin: 0;
+}
 .bn-graph {
   position: relative;
 }

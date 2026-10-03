@@ -2,8 +2,9 @@
 /* claude-multi console — the Brain: Samuel's memory on the brain service, read through the console
    (cli/memory.ts, the token stays there). The seven areas as a tree, search by words and by meaning,
    a reader with who wrote what and when, the links both ways, every version and what changed, the
-   page's neighbourhood as a small live graph, and the whole graph on its own screen. Only a view:
-   changes are Claude's, where the brain's rules answer.
+   page's neighbourhood as a small live graph, the whole graph on its own screen, the diary as a
+   timeline and the brain's health. Only a view: changes are asked of Claude in the field below
+   (ask.ts, kind "brain"), who writes only in the brain, where its rules answer.
    Loaded after app.js (helpers: $, esc, api, t, toast, mdToHtml, ago, short). */
 
 const AREAS = ["io", "progetti", "clienti", "persone", "note", "diario", "inbox"];
@@ -13,8 +14,9 @@ const bOff = new Set();
 let bPage = null; // the page on screen, as /api/brain/page answers it
 let bVer = null; // an older version on screen: { rev, body, at, by, diff }
 let bFound = null; // the last search: { q, results, note }
+const MODES = ["read", "graph", "diary", "health"];
 try {
-  bMode = localStorage.getItem("cm-bmode") === "graph" ? "graph" : "read";
+  bMode = MODES.includes(localStorage.getItem("cm-bmode")) ? localStorage.getItem("cm-bmode") : "read";
   bOpen = new Set(JSON.parse(localStorage.getItem("cm-bopen2") ?? '["progetti"]'));
 } catch { /* storage blocked: defaults */ }
 const remember = () => { try { localStorage.setItem("cm-bopen2", JSON.stringify([...bOpen])); localStorage.setItem("cm-bmode", bMode); } catch { /* not remembered */ } };
@@ -22,7 +24,8 @@ const bare = (path) => String(path).replace(/\.md$/, "");
 
 async function loadBrain() {
   try {
-    BRAIN = await api("/api/brain/pages");
+    const [pages, health] = await Promise.all([api("/api/brain/pages"), api("/api/brain/health").catch(() => null)]);
+    BRAIN = { ...pages, health };
   } catch (e) {
     BRAIN = null;
     $("#bn-tree").innerHTML = "";
@@ -53,12 +56,14 @@ const errText = (e) => {
 function renderBrainAll() {
   if (!BRAIN) return;
   $$("#bn-modes [data-bmode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.bmode === bMode)));
-  $("#bn-read").hidden = bMode !== "read";
-  $("#bn-graph").hidden = bMode !== "graph";
+  for (const m of MODES) $(`#bn-${m}`).hidden = bMode !== m;
   $("#b-sum").textContent = t("brain.sum", { p: BRAIN.pages.length, l: BRAIN.edges.length });
-  renderTree();
+  const issues = healthIssues();
+  $("#bn-hn").textContent = issues || "";
+  if (bMode === "read") { renderTree(); showLocalGraph(); }
   if (bMode === "graph") showGlobalGraph();
-  else showLocalGraph();
+  if (bMode === "diary") renderDiary();
+  if (bMode === "health") renderHealth();
 }
 
 /** Opens a page in the reader from elsewhere (a task's attachment, a link). */
@@ -86,6 +91,8 @@ function resolvePage(target) {
 function selectPage(path) {
   bSel = path;
   bVer = null;
+  // the field below now asks for changes to this page
+  if (view === "brain" && ASK.kind !== "newtask") askContext("brain", path);
   const parts = bare(path).split("/");
   for (let i = 1; i < parts.length; i++) bOpen.add(parts.slice(0, i).join("/"));
   remember();
@@ -532,6 +539,84 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
   };
 }
 
+/* ---------------- the diary ---------------- */
+let bDays = 14; // how many days the timeline shows
+const dayCache = new Map(); // path → { rev, body }: a day already read is not asked again until it changes
+
+/** Pure: a diary page's lines ("- 15:21 text", continued by indented lines) as { time, text }. */
+function diaryEntries(body) {
+  const out = [];
+  for (const line of body.split("\n")) {
+    const m = line.match(/^- (\d{2}:\d{2}) (.*)$/);
+    if (m) out.push({ time: m[1], text: m[2] });
+    else if (/^\s+\S/.test(line) && out.length) out[out.length - 1].text += `\n${line.trim()}`;
+  }
+  return out;
+}
+
+let diarySeq = 0;
+async function renderDiary() {
+  const box = $("#bn-diary"), seq = ++diarySeq;
+  const days = BRAIN.pages.filter((p) => p.area === "diario").sort((a, b) => b.path.localeCompare(a.path));
+  if (!days.length) { box.innerHTML = `<p class="sub">${esc(t("brain.d.empty"))}</p>`; return; }
+  const shown = days.slice(0, bDays);
+  await Promise.all(shown.filter((p) => dayCache.get(p.path)?.rev !== p.rev).map(async (p) => {
+    const d = await api(`/api/brain/page?path=${encodeURIComponent(p.path)}`).catch(() => null);
+    if (d) dayCache.set(p.path, { rev: d.rev, body: d.body });
+  }));
+  if (seq !== diarySeq) return;
+  const q = $("#b-q").value.trim().toLowerCase();
+  const html = shown.map((p) => {
+    const entries = diaryEntries(dayCache.get(p.path)?.body ?? "").reverse().filter((e) => !q || e.text.toLowerCase().includes(q));
+    if (q && !entries.length) return "";
+    const day = bare(p.path).split("/").pop();
+    const label = /^\d{4}-\d{2}-\d{2}$/.test(day)
+      ? new Date(`${day}T12:00`).toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      : p.title;
+    return `<section class="dy-day">
+      <div class="dy-h"><h3>${esc(label)}</h3><button class="btn sm" data-read="${esc(p.path)}">${esc(t("brain.d.open"))}</button></div>
+      ${entries.map((e) => `<div class="dy-e"><time>${esc(e.time)}</time><div class="md">${mdToHtml(e.text)}</div></div>`).join("")}
+    </section>`;
+  }).join("");
+  box.innerHTML = (html || `<p class="sub">${esc(t("brain.d.none"))}</p>`) +
+    (days.length > bDays ? `<button class="btn" data-dmore>${esc(t("brain.d.more"))}</button>` : "");
+}
+
+/* ---------------- health ---------------- */
+const healthIssues = () => {
+  const h = BRAIN?.health;
+  return h ? h.orphans.length + h.broken_links.length + h.too_long.length + h.inbox_older_than_a_week.length + h.outside_the_areas.length : 0;
+};
+
+function renderHealth() {
+  const box = $("#bn-health"), h = BRAIN.health;
+  if (!h) { box.innerHTML = `<p class="sub">${esc(t("brain.away", { e: "/api/brain/health" }))}</p>`; return; }
+  const page = (path, extra = "") => {
+    const p = BRAIN.byPath.get(path);
+    return `<button class="bl" data-page="${esc(path)}"><i class="gdot" style="background:var(--g-${areaOf(p?.area)})"></i><span>${esc(p?.title ?? bare(path))}</span>${extra}</button>`;
+  };
+  const group = (key, rows) => rows.length
+    ? `<section class="panel hl-g"><div class="panel-h"><h3>${esc(t(`brain.h.${key}`))}</h3><span class="r">${rows.length}</span></div><div class="bl-list">${rows.join("")}</div></section>`
+    : "";
+  const groups = [
+    group("orphans", h.orphans.map((x) => page(x))),
+    group("broken", h.broken_links.map((b) => page(b.page, `<em class="hl-x">→ ${esc(b.link)}</em>`))),
+    group("long", h.too_long.map((x) => page(x.page, `<em class="hl-x">${esc(t("brain.h.words", { n: x.words }))}</em>`))),
+    group("inbox", h.inbox_older_than_a_week.map((l) => `<div class="hl-line">${mdToHtml(l.replace(/^- /, ""))}</div>`)),
+    group("outside", h.outside_the_areas.map((x) => page(x))),
+  ].join("");
+  box.innerHTML = groups
+    ? `<div class="hl-top"><span>${esc(t("brain.sum", { p: h.pages, l: BRAIN.edges.length }))}</span><button class="btn primary sm" data-fix>${esc(t("brain.h.fix"))}</button></div>${groups}`
+    : `<div class="status-card ok"><i></i><div>${esc(t("brain.h.ok"))}</div></div>`;
+}
+
+/** The health's findings handed to Claude in the field below, as a change to the brain. */
+function fixWithClaude() {
+  askContext("brain", null);
+  $("#ask-text").value = t("brain.h.prompt");
+  $("#composer").requestSubmit();
+}
+
 /* ---------------- the two graphs ---------------- */
 let gLocal = null, gGlobal = null;
 const nodeOf = (p) => ({ id: p.path, title: p.title, group: areaOf(p.area) });
@@ -595,6 +680,7 @@ function renderCard(id) {
     bMode = b.dataset.bmode;
     remember();
     renderBrainAll();
+    if (ASK.kind !== "newtask") askContext("brain", bMode === "read" ? bSel : null);
     // a page picked in the graph is the one to read
     if (bMode === "read" && bSel && bPage?.path !== bSel) readInto(bSel);
   });
@@ -603,11 +689,15 @@ function renderCard(id) {
     clearTimeout(qTimer);
     if (!BRAIN) return;
     searchSeq++; // a search still on its way is for a query no longer there
-    qTimer = setTimeout(() => { renderTree(); if (bMode === "graph") gGlobal?.setMatch(matches()); }, 120);
+    qTimer = setTimeout(() => {
+      if (bMode === "diary") return renderDiary();
+      renderTree();
+      if (bMode === "graph") gGlobal?.setMatch(matches());
+    }, 120);
   });
   $("#b-q").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.target.value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
-    if (e.key !== "Enter" || !BRAIN) return;
+    if (e.key !== "Enter" || !BRAIN || bMode === "diary") return;
     const q = e.target.value.trim();
     if (!q) return;
     // a second Enter on the same results opens the first one
@@ -617,6 +707,8 @@ function renderCard(id) {
   $("#bn-d2").addEventListener("change", (e) => { bDepth2 = e.target.checked; showLocalGraph(); });
   $("#bn-fit").addEventListener("click", () => gGlobal?.refit());
   root.addEventListener("click", (e) => {
+    if (e.target.closest("[data-dmore]")) { bDays += 14; return renderDiary(); }
+    if (e.target.closest("[data-fix]")) return fixWithClaude();
     if (e.target.closest("[data-clear]")) { $("#b-q").value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
     const d = e.target.closest("[data-dir]");
     if (d) {
@@ -634,7 +726,9 @@ function renderCard(id) {
     if (pg) {
       e.preventDefault();
       const path = resolvePage(pg.dataset.page);
-      return path ? selectPage(path) : toast(t("brain.missing", { p: pg.dataset.page }), true);
+      if (!path) return toast(t("brain.missing", { p: pg.dataset.page }), true);
+      if (bMode !== "read") { bMode = "read"; remember(); } // a page named in the diary or the health opens in the reader
+      return selectPage(path);
     }
     const rd = e.target.closest("[data-read]");
     if (rd) { bMode = "read"; remember(); return selectPage(rd.dataset.read); }

@@ -6,16 +6,20 @@
 // back to the page as NDJSON on the response of the POST that asked: one request, one answer, no
 // polling. The tools are a fixed list per kind of request and `--permission-mode dontAsk` refuses
 // everything else, whatever the profile's own mode: from here Claude reads and keeps the tasks; it
-// never sends mail or creates events.
+// never sends mail or creates events. A change asked from the Brain page gets the brain's tools and
+// nothing else: it writes only there.
 
 import { BIN, expandHome, HOME, launchers, readJson, running, STATE } from "./lib.ts";
 import { dayOf } from "../shared/mcp/lib/tasks.ts";
 
 type Json = (v: unknown, code?: number) => Response;
-export type AskKind = "ask" | "newtask" | "debrief";
+export type AskKind = "ask" | "newtask" | "debrief" | "brain";
 
 // Samuel's brain, read only: the claude.ai connector "Brain" of the personal profile, as the CLI names it
 const BRAIN_READ = ["mcp__claude_ai_Brain__brain_search", "mcp__claude_ai_Brain__brain_read", "mcp__claude_ai_Brain__brain_list"];
+// what a change to the brain may use: its writing tools, never deletion (brain_delete stays out)
+const BRAIN_WRITE = ["brain_write", "brain_edit", "brain_append", "brain_move", "brain_inbox_clear", "brain_check", "brain_history", "brain_restore"]
+  .map((t) => `mcp__claude_ai_Brain__${t}`);
 const READ = [
   "mcp__google__calendar_list", "mcp__google__calendar_events",
   "mcp__google__gmail_search", "mcp__google__gmail_thread",
@@ -26,6 +30,7 @@ export const TOOLS: Record<AskKind, string[]> = {
   ask: ["mcp__tasks", ...READ],
   newtask: ["mcp__tasks", ...BRAIN_READ],
   debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
+  brain: [...BRAIN_READ, ...BRAIN_WRITE],
 };
 
 const BASE = (now: string) =>
@@ -43,6 +48,14 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
       `from today), and in notes what he explained, as a short description. If it takes more than one action, add the steps ` +
       `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what he wrote is too ` +
       `vague to be a task, ask him one short question instead of creating it.`;
+  }
+  if (kind === "brain") {
+    const on = project ? `He is looking at the page ${project}: "this page" means it; read it first (brain_read).` : "He is looking at the brain as a whole.";
+    return `${BASE(now)}\nSamuel asks for a change to his brain, from its page in the console. ${on} Make the change with the ` +
+      `brain tools, by the brain's rules (they refuse what breaks them: fix and try again). You can only write in the brain, ` +
+      `nothing else. Prefer brain_edit to rewriting a page; read before changing; never invent facts he did not give or ` +
+      `that the brain does not already hold: if something is missing, ask him one short question instead. Then answer ` +
+      `in one or two lines: what you changed, page by page.`;
   }
   if (kind === "debrief") {
     return `${BASE(now)}\nWrite Samuel's debrief for today from tasks_brief and today's calendar events: at most three short ` +
@@ -277,7 +290,7 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
   }
 
   if (p === "/api/ask" || p === "/api/debrief") {
-    const kind: AskKind = p === "/api/debrief" ? "debrief" : b.kind === "newtask" ? "newtask" : "ask";
+    const kind: AskKind = p === "/api/debrief" ? "debrief" : b.kind === "newtask" ? "newtask" : b.kind === "brain" ? "brain" : "ask";
     const text = kind === "debrief" ? "debrief" : String(b.text ?? "").trim().slice(0, 4000);
     if (!text) return json({ error: "empty" }, 400);
     const session = typeof b.session === "string" && SESSION_ID.test(b.session) ? b.session : null;

@@ -10,6 +10,10 @@ Deno.test("askArgs: the tools are a fixed list per kind, and anything else is re
   assertEquals(a.slice(a.indexOf("--allowedTools") + 1, a.indexOf("--append-system-prompt")), TOOLS.ask);
   assert(!askArgs("debrief", "debrief", "now").includes("mcp__google__gmail_search"));
   assert(!a.includes("--resume"));
+  // a change from the Brain page writes only in the brain, and never deletes
+  assert(TOOLS.brain.every((t) => t.startsWith("mcp__claude_ai_Brain__brain_")));
+  assert(TOOLS.brain.includes("mcp__claude_ai_Brain__brain_edit"));
+  assert(!TOOLS.brain.includes("mcp__claude_ai_Brain__brain_delete"));
   const b = askArgs("ask", "e dopo?", "now", { session: "s-1" });
   assertEquals(b.slice(-2), ["--resume", "s-1"]);
 });
@@ -24,6 +28,7 @@ Deno.test("promptFor: a new task names its project, says there is none, or leave
   assert(promptFor("newtask", "now", null, true).includes("no project (a simple thing to do)"));
   assert(promptFor("newtask", "now", null).includes("work out from what he says"));
   assert(promptFor("ask", "now").includes("[[code:PATH]]"));
+  assert(promptFor("brain", "now", "progetti/claude-multi.md").includes("progetti/claude-multi.md"));
 });
 
 Deno.test("AskStream: deltas when streamed, the message otherwise, the result as a last resort", () => {
