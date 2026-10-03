@@ -1,5 +1,5 @@
 // pages.ts — the only two pages a person sees here: signing in when Claude asks to connect, and
-// the account (personal tokens for Samuel's machines, the Claude connections). Claude's palette,
+// the account (personal tokens for the owner's machines, the Claude connections). Claude's palette,
 // the system's faces: nothing is loaded from elsewhere.
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

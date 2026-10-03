@@ -1,4 +1,4 @@
-// api.ts — the brain read over plain HTTP, for Samuel's machines: the console's Brain page asks
+// api.ts — the brain read over plain HTTP, for the owner's machines: the console's Brain page asks
 // here with the personal token from the vault (the browser never sees it). Only reads: writing
 // stays with Claude, over MCP, where the rules answer.
 //

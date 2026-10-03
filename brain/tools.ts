@@ -11,23 +11,26 @@ import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";
 import { AREAS, areaOf, check, LOGS, MAX_WORDS, MAX_WORDS_LOG, relink, slugPath } from "./rules.ts";
 import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
+import { type Owner, owner } from "../shared/mcp/lib/owner.ts";
 
-/** How the brain is used and written, for every Claude connected to it; then who Samuel is, from
- *  io/, so each conversation starts knowing him. */
-export function instructions(store: Store): string {
+/** How the brain is used and written, for every Claude connected to it; then who its owner is
+ *  (owner.ts: CLAUDE_MULTI_OWNER_NAME, CLAUDE_MULTI_LANGUAGE), from io/, so each conversation starts
+ *  knowing them. */
+export function instructions(store: Store, o: Owner = owner()): string {
+  const who = o.name;
   const rules =
-    "Samuel's brain: his memory and his tasks, the same from every Claude he uses. Seven areas: io/ (who he is, how he works), " +
-    "progetti/ (one page per project, the same path as his folder: progetti/work/acme/site.md), " +
-    "clienti/ (who Samuel works for, directly or through another client: the relationship, the people, links to the projects; a client " +
+    `${who}'s brain: their memory and their tasks, the same from every Claude they use. Seven areas: io/ (who they are, how they work), ` +
+    "progetti/ (one page per project, the same path as their folder: progetti/work/acme/site.md), " +
+    `clienti/ (who ${who} works for, directly or through another client: the relationship, the people, links to the projects; a client ` +
     "that is only one project stays on the project page), persone/ (people only), " +
     "note/ (how things are done: setups, fixes, procedures), diario/ (what happened, one page a day, only added to), inbox/ (said in passing, to sort). " +
-    "Before assuming anything about Samuel, his projects or tools, search here (brain_search) and read what you find. " +
+    `Before assuming anything about ${who}, their projects or tools, search here (brain_search) and read what you find. ` +
     `Write without asking, by these rules (the brain refuses what breaks them, with the reason): one subject per page, at most ${MAX_WORDS} words; ` +
     "it starts with '# Title' and one sentence saying what it is; it links at least one existing page with [[path]]; search before creating, and update " +
     "a page rather than making a near copy. Write only what lasts: decisions, state, how things are done, preferences, who is who; never work steps, " +
     "transcripts, what the code already says, secrets or clients' data. While working, add one line to today's diary (brain_append) linking the project; " +
-    "when the state of a project changes, update its page. Change io/ only when Samuel says something about himself, never by inference. " +
-    "Italian. Say in one line what you wrote.";
+    `when the state of a project changes, update its page. Change io/ only when ${who} says something about themselves, never by inference. ` +
+    `Write in ${o.language}. Say in one line what you wrote.`;
   const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like 'io/%' order by path").all() as { path: string; title: string; body: string }[];
   if (!io.length) return rules;
   // each io page by its title and what stands above its first "## ": the part meant for every
@@ -36,7 +39,7 @@ export function instructions(store: Store): string {
     const top = d.body.replace(/^---\n[\s\S]*?\n---\n?/, "").replace(/^# .*\n+/, "").split(/\n## /)[0].replace(/\s+/g, " ").trim();
     return `${d.title} (${d.path}): ${top.slice(0, 900)}`;
   }).join("\n").slice(0, 4000);
-  return `${rules}\n\nWho Samuel is (from io/, read the pages for more):\n${portrait}`;
+  return `${rules}\n\nWho ${who} is (from io/, read the pages for more):\n${portrait}`;
 }
 
 const text = (o: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(o, null, 2) }] });
@@ -104,7 +107,7 @@ export function brainServer(ctx: ToolContext): McpServer {
   const refuse = (errors: string[], extra: Record<string, unknown> = {}) => text({ refused: true, errors, ...extra });
 
   server.registerTool("brain_search", {
-    description: "Search Samuel's memory by words and by meaning. Returns paths, titles and an excerpt: read the documents that matter with brain_read.",
+    description: "Search the owner's memory by words and by meaning. Returns paths, titles and an excerpt: read the documents that matter with brain_read.",
     inputSchema: { query: z.string(), limit: z.number().int().min(1).max(50).optional(), include_tasks: z.boolean().optional() },
     annotations: READ,
   }, async ({ query, limit, include_tasks }: { query: string; limit?: number; include_tasks?: boolean }) => text(await search(ctx, query, limit, include_tasks)));
@@ -184,7 +187,7 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_history", {
-    description: "The versions of a document: revision, when, by whom (Samuel, or Claude from which client), and what happened.",
+    description: "The versions of a document: revision, when, by whom (the owner, or Claude from which client), and what happened.",
     inputSchema: { path: z.string() },
     annotations: READ,
   }, ({ path }: { path: string }) => text({ path, versions: store.history(path) }));

@@ -1,4 +1,4 @@
-// backup.ts — the brain as one encrypted file, for Samuel's machines to fetch and keep.
+// backup.ts — the brain as one encrypted file, for the owner's machines to fetch and keep.
 //
 // A consistent copy of the database (see snapshot), sealed with
 // AES-256-GCM under BRAIN_BACKUP_KEY (32 bytes, base64): the server never hands out the brain in

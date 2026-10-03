@@ -6,7 +6,7 @@ import { cleanPath, linksIn, Store, titleOf } from "../store.ts";
 import { chunk, fuse } from "../embed.ts";
 import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, totp, totpOk } from "../auth.ts";
 import { open, seal } from "../backup.ts";
-import { staleProjects } from "../tools.ts";
+import { instructions, staleProjects } from "../tools.ts";
 import { brainApi } from "../api.ts";
 import { check, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
 
@@ -191,5 +191,16 @@ Deno.test("brainApi: pages by area, a page with links and versions, an old versi
   assertEquals(found.results[0].path, "io/chi-sono.md");
   assert(found.note, "the model is unreachable here: words only, and it says so");
   assertEquals(await get("altro"), null);
+  s.close();
+});
+
+Deno.test("instructions: whose brain it is and the language, from the owner; nobody else's name", () => {
+  const s = new Store(":memory:");
+  s.write("io/chi-sono.md", "# Chi sono\nAnn, sviluppatrice.", "test");
+  const txt = instructions(s, { id: "ann", name: "Ann", language: "Italian" });
+  assert(txt.startsWith("Ann's brain:"));
+  assert(txt.includes("Write in Italian."));
+  assert(txt.includes("Who Ann is (from io/"));
+  assert(!txt.includes("Samuel"));
   s.close();
 });

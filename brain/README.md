@@ -1,7 +1,7 @@
 # brain
 
-Samuel's brain as a service: his memory and his tasks in one place on his server, reached by
-every Claude he uses — the Claude apps and claude.ai as a custom connector, Claude Code and Claude
+One person's brain as a service: their memory and their tasks in one place on a server, reached by
+every Claude they use — the Claude apps and claude.ai as a custom connector, Claude Code and Claude
 Desktop as a remote MCP server — and by his machines with a personal token. There is no copy on
 the machines: the brain is here.
 
@@ -87,10 +87,22 @@ BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… BRAIN_DEV=1 BRAIN_DATA=$(mk
 BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e.ts   # on an empty database
 ```
 
+## Another person's brain
+
+One instance per person: the same code, a Coolify application of its own (`compose.instance.yaml`),
+its own domain, volume, passphrase, TOTP and backup key, so nothing a person writes can reach another
+one's brain. Whose brain it is comes from `CLAUDE_MULTI_OWNER_ID`, `CLAUDE_MULTI_OWNER_NAME` and
+`CLAUDE_MULTI_LANGUAGE` (the name the instructions use, the language Claude writes in). The embedding
+model is the first instance's Ollama, reached over Coolify's shared network ("Connect to Predefined
+Network" on both applications, `BRAIN_EMBED_URL=http://ollama-<first instance's uuid>:11434`); after
+the first deploy `/health` must show `index.lastError` empty. The owner signs in with their own
+passphrase and TOTP; the server's administrator can still read the database, and that is said to
+them plainly.
+
 ## Connecting
 
-- **Claude apps and claude.ai**: Customize → Connectors → Add custom connector, URL
-  `https://brain.example.com/mcp`; sign in on the page that opens. It is then in the Android app too.
+- **Claude apps and claude.ai**: Customize → Connectors → Add custom connector named **Brain**
+  (the console and Hey Claude address its tools as `mcp__claude_ai_Brain__*`), URL `https://<the brain>/mcp`; sign in on the page that opens. It is then in the Android app too.
 - **Claude Code**: `claude mcp add --transport http brain https://brain.example.com/mcp`, then `/mcp`
   to sign in.
 - **Samuel's machines** (the console, backups): a personal token from `/account`, kept in the vault.

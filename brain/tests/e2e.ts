@@ -57,7 +57,7 @@ const call = async (name: string, args: unknown) => {
   return JSON.parse(j.result.content[0].text);
 };
 const init = await mcp("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "e2e", version: "1" } });
-ok(init.result?.serverInfo?.name === "brain" && /Samuel's brain/.test(init.result?.instructions ?? ""), "initialize with instructions");
+ok(init.result?.serverInfo?.name === "brain" && /'s brain: their memory/.test(init.result?.instructions ?? ""), "initialize with instructions");
 const tools = (await mcp("tools/list")).result.tools.map((t: { name: string }) => t.name);
 ok(["brain_search", "brain_write", "brain_edit", "tasks_add", "tasks_brief"].every((n) => tools.includes(n)), `tools: ${tools.length}`);
 

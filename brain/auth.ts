@@ -1,4 +1,4 @@
-// auth.ts — who may talk to the brain: Samuel, through Claude (OAuth) or through his own machines
+// auth.ts — who may talk to the brain: its owner, through Claude (OAuth) or through their own machines
 // (personal tokens).
 //
 // OAuth 2.1 as claude.ai, the Claude apps and Claude Code expect it from a remote MCP server: the

@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-env
-// brain — Samuel's brain as a service: his memory and his tasks in one place, reached by every
-// Claude he uses (the apps and claude.ai as a custom connector, Claude Code and Desktop) over MCP,
-// and by his machines over a personal token. Runs on his server (Coolify), one SQLite file in
-// BRAIN_DATA; the design is in brain/README.md.
+// brain — one person's brain as a service: their memory and their tasks in one place, reached by
+// every Claude they use (the apps and claude.ai as a custom connector, Claude Code and Desktop) over
+// MCP, and by their machines over a personal token. One instance per person (Coolify), one SQLite
+// file in BRAIN_DATA; whose it is comes from CLAUDE_MULTI_OWNER_* (owner.ts). Design: brain/README.md.
 //
 //   deno run -A brain/main.ts          serve
 //   deno run -A brain/main.ts totp     a new TOTP secret, and the line to add to an authenticator app
@@ -17,11 +17,12 @@ import { Store } from "./store.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
 import { snapshot } from "./backup.ts";
+import { owner } from "../shared/mcp/lib/owner.ts";
 
 if (Deno.args[0] === "totp") {
   const secret = base32Encode(crypto.getRandomValues(new Uint8Array(20)));
   console.log(`BRAIN_TOTP_SECRET=${secret}`);
-  console.log(`otpauth://totp/Brain:samuel?secret=${secret}&issuer=Brain&digits=6&period=30`);
+  console.log(`otpauth://totp/Brain:${encodeURIComponent(owner().id)}?secret=${secret}&issuer=Brain&digits=6&period=30`);
   Deno.exit(0);
 }
 
@@ -124,7 +125,7 @@ async function handle(req: Request): Promise<Response> {
     const res = await caller.run(who, () => transport.handleRequest(req));
     return withCors(res);
   }
-  // the tasks as files, for Samuel's machines (the console, the reminders, the local tasks tools):
+  // the tasks as files, for the owner's machines (the console, the reminders, the local tasks tools):
   // the TaskStore of shared/mcp/lib/brain-tasks.ts on the other side; the rules run there
   if (p === "/api/tasks" && req.method === "GET") {
     const rows = store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as { body: string }[];
