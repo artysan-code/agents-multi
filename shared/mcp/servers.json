@@ -108,6 +108,20 @@
         "agency"
       ],
       "_note": "Il brain per i profili di lavoro: solo in Claude Code (l'accesso OAuth, passphrase + TOTP, si fa una volta per profilo con /mcp e il token resta su questo PC), non come connettore sull'account claude.ai, che è una casella condivisa. Il profilo personal lo ha già come connettore claude.ai."
+    },
+    "cloudflare": {
+      "_service": "cloudflare",
+      "type": "http",
+      "url": "{url}",
+      "_perAccount": {
+        "headers": {
+          "Authorization": "Bearer {secret}"
+        }
+      },
+      "_ask": [
+        "execute"
+      ],
+      "_note": "Cloudflare's official MCP (Code Mode: docs, search, execute — execute runs JavaScript against the whole API), one server per Cloudflare API token: cloudflare-<account>. It cannot switch deletions off and masks nothing, so the token's scope is the boundary: give each token only what is needed (an account token also needs Account Resources: Read, to find its account). execute asks first, so every call shows its code before it runs. CLI only (http)."
     }
   }
 }
