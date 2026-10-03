@@ -329,6 +329,10 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
   generated `settings.json`, for every server the entry expands to (any entry may use them). This is
   how "no deletion tools" holds on a server that has some: deny them here, or switch them off in the
   server itself when it can.
+- **`_guard: { tool, hook }`**: a PreToolUse hook of `shared/hooks` that decides on each call of
+  that tool, wired by the same generated settings on exactly the entry's servers. For a server whose
+  one tool does everything: `cloudflare-guard.ts` reads the code `execute` would run, lets reads
+  through, denies any deletion and asks for writes.
 - http servers stay off Desktop, whose config holds commands only. The doctor checks the entries
   (`{secret}` outside `_perAccount`, a template of the wrong kind); `mcp health --probe` starts each
   expanded server through `launch.ts`, with its real secret.
