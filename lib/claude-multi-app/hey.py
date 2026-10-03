@@ -23,16 +23,18 @@ import codecs
 import json
 import re
 import shutil
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QProcess, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut, QTextBlockFormat, QTextCursor
 from PySide6.QtWidgets import (
-    QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QVBoxLayout,
+    QWidget,
 )
 
-from common import BIN, HOME, NAME, default_profile, manifests
+from common import BIN, CONSOLE_URL, HOME, NAME, default_profile, manifests
 
 # The only tools the answer may use: the tasks (all of them), and reading the rest. With
 # --permission-mode dontAsk anything else — sending mail, creating events, the other servers'
@@ -57,6 +59,20 @@ or can find it in the brain, otherwise [[code:~]]."""
 
 CODE = re.compile(r"\[\[code:([^\]]+)\]\]")
 
+# The model the answer comes from: one choice shared with the console's field, kept by the console
+# server (/api/ask/model). Without the console, the default: nothing is written anywhere else.
+MODEL_NAMES = {"sonnet": "Sonnet", "haiku": "Haiku", "opus": "Opus"}
+
+
+def console_api(path: str, body: dict | None = None) -> dict | None:
+    req = urllib.request.Request(f"{CONSOLE_URL}{path}", data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"content-type": "application/json", "x-claude-multi": "1"})
+    try:
+        with urllib.request.urlopen(req, timeout=1.5) as r:
+            return json.loads(r.read().decode())
+    except (OSError, ValueError):
+        return None
+
 STYLE = """
 QFrame#card {{
   background: {bg};
@@ -78,6 +94,16 @@ QLineEdit#ask {{
   color: {fg};
   selection-background-color: {accent};
 }}
+QComboBox#model {{
+  color: {dim};
+  background: transparent;
+  border: 1px solid {line};
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+}}
+QComboBox#model:hover {{ color: {fg}; border-color: {dim}; }}
+QComboBox#model::drop-down {{ border: none; width: 14px; }}
 QLabel#esc {{
   color: {dim};
   border: 1px solid {line};
@@ -188,6 +214,14 @@ class HeyPanel(QWidget):
         self.ask.setText(text)
         self.ask.returnPressed.connect(self.submit)
         row.addWidget(self.ask, 1)
+        self.model = QComboBox(objectName="model")
+        self.model.setToolTip("Il modello con cui risponde Claude (qui e nella console)")
+        got = console_api("/api/ask/model") or {}
+        for m in got.get("models") or list(MODEL_NAMES):
+            self.model.addItem(MODEL_NAMES.get(m, m), m)
+        self.model.setCurrentIndex(max(0, self.model.findData(got.get("model", "sonnet"))))
+        self.model.currentIndexChanged.connect(lambda _i: console_api("/api/ask/model", {"model": self.model.currentData()}))
+        row.addWidget(self.model, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(QLabel("Esc", objectName="esc"), 0, Qt.AlignmentFlag.AlignVCenter)
         col.addLayout(row)
 
@@ -279,6 +313,7 @@ class HeyPanel(QWidget):
                 "--append-system-prompt", PROMPT.format(today=datetime.now().strftime("%A %d %B %Y, %H:%M"))]
         if self.session:
             args += ["--resume", self.session]
+        args += ["--model", self.model.currentData() or "sonnet"]
         self._question = q
         self.proc = QProcess(self)
         self.proc.setWorkingDirectory(str(HOME))
@@ -412,7 +447,8 @@ class HeyPanel(QWidget):
         if e.type() == QEvent.Type.ActivationChange:
             if self.isActiveWindow():
                 self._was_active = True
-            elif getattr(self, "_was_active", False) and not self.body.isVisible():
+            # the model list opens as a popup of its own: choosing in it is not clicking elsewhere
+            elif getattr(self, "_was_active", False) and not self.body.isVisible() and not self.model.view().isVisible():
                 QTimer.singleShot(0, self.close)
         super().changeEvent(e)
 

@@ -2675,6 +2675,24 @@ body.plbusy #mk-add button {
   margin-bottom: 5px;
   flex: none;
 }
+/* the model the request goes to: quiet, next to the send button */
+.ask-model {
+  flex: none;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg-dim);
+  font: 500 13px var(--sans);
+  cursor: pointer;
+}
+.ask-model:hover,
+.ask-model:focus-visible {
+  background: var(--line);
+  color: var(--fg);
+  outline: none;
+}
 .send {
   width: 32px;
   height: 32px;

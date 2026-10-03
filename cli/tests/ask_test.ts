@@ -1,6 +1,6 @@
 // Tests for cli/ask.ts: what the console asks `claude -p`, and how its stream becomes the page's.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { ancestry, askArgs, AskStream, asArg, promptFor, toolKind, TOOLS } from "../ask.ts";
+import { ancestry, askArgs, AskStream, asArg, promptFor, sessionEnv, toolKind, TOOLS } from "../ask.ts";
 
 Deno.test("askArgs: the tools are a fixed list per kind, and anything else is refused", () => {
   const a = askArgs("ask", "cosa ho domani?", "now");
@@ -58,4 +58,25 @@ Deno.test("ancestry: up the parents to init, never in a loop", () => {
   const parents: Record<number, number> = { 900: 800, 800: 50, 50: 1 };
   assertEquals(ancestry(900, (p) => parents[p] ?? null), [900, 800, 50]);
   assertEquals(ancestry(7, () => 7).length, 64);
+});
+
+Deno.test("sessionEnv: the graphical session's variables, unquoted; everything else left out", () => {
+  const text = [
+    "HOME=/home/u",
+    "DISPLAY=:0",
+    "WAYLAND_DISPLAY=wayland-0",
+    "XDG_CURRENT_DESKTOP=KDE",
+    "XAUTHORITY=$'/run/user/1000/xauth_ab cd'",
+    "PATH=/usr/bin",
+    "",
+  ].join("\n");
+  assertEquals(sessionEnv(text), { DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0", XDG_CURRENT_DESKTOP: "KDE", XAUTHORITY: "/run/user/1000/xauth_ab cd" });
+  assertEquals(sessionEnv(""), {});
+});
+
+Deno.test("askArgs: the chosen model goes with every request but the debrief, which keeps the profile's", () => {
+  const ask = askArgs("ask", "ciao", "now", { model: "haiku" });
+  assertEquals(ask.slice(ask.indexOf("--model"), ask.indexOf("--model") + 2), ["--model", "haiku"]);
+  assertEquals(askArgs("debrief", "debrief", "now", { model: "opus" }).includes("--model"), false);
+  assertEquals(askArgs("ask", "ciao", "now").includes("--model"), false);
 });

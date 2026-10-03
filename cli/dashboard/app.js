@@ -521,7 +521,7 @@ $("#composer").addEventListener("submit", async (e) => {
   $("#answer-q").textContent = text;
   body.innerHTML = "";
   $("#answer-term").hidden = $("#answer-code").hidden = true;
-  status.innerHTML = `${sparkHtml(true)}<span>${esc(t("ask.thinking"))}</span>`;
+  status.innerHTML = `${sparkHtml(true)}<span class="ask-state">${esc(t("ask.thinking"))}</span>`;
   $("#ask-spark").dataset.spark = "thinking";
   let acc = "", frame = 0;
   const paint = () => { frame = 0; body.innerHTML = mdToHtml(acc.replace(/\[\[code:[^\]]*\]\]/g, "")); body.scrollTop = body.scrollHeight; };
@@ -539,7 +539,8 @@ $("#composer").addEventListener("submit", async (e) => {
       },
       tool: (o) => {
         ASK.tools = true;
-        $("span:last-child", status).textContent = toolLabel(o.k);
+        // by class: "span:last-child" also matches the strip inside the spark, which then shows the label
+        $(".ask-state", status).textContent = toolLabel(o.k);
         const sp = $(".spark", status);
         if (sp) sp.dataset.spark = "thinking";
       },
@@ -575,6 +576,23 @@ $("#answer-code").addEventListener("click", async () => {
   const r = await post("/api/terminal", { cwd: ASK.code, ask: ASK.last }).catch((err) => ({ ok: false, message: err.message }));
   if (!r.ok) toast(r.message, true);
 });
+
+// the model the requests go to: one choice, shared with the Hey window (kept by the server)
+async function loadAskModel() {
+  const sel = $("#ask-model");
+  try {
+    const r = await api("/api/ask/model");
+    sel.innerHTML = r.models.map((m) => `<option value="${esc(m)}">${esc(t(`ask.model.${m}`))}</option>`).join("");
+    sel.value = r.model;
+    sel.hidden = false;
+  } catch { sel.hidden = true; }
+}
+$("#ask-model").addEventListener("change", async (e) => {
+  const r = await post("/api/ask/model", { model: e.target.value }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) { toast(r.message, true); loadAskModel(); }
+  $("#ask-text").focus();
+});
+loadAskModel();
 
 function autosize() {
   const ta = $("#ask-text");

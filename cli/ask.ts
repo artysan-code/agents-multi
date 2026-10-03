@@ -60,14 +60,31 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
 /** The user's text as a positional argument: a leading "-" would read as an option. */
 export const asArg = (s: string) => s.startsWith("-") ? ` ${s}` : s;
 
+/** The models a request can be asked of, by Claude Code's aliases; the first is the default. The
+ *  debrief is not among the choices: it runs on the profile's own model. */
+export const ASK_MODELS = ["sonnet", "haiku", "opus"] as const;
+export type AskModel = typeof ASK_MODELS[number];
+const ASK_MODEL_FILE = `${STATE}/ask-model.json`;
+export const isAskModel = (m: unknown): m is AskModel => ASK_MODELS.includes(m as AskModel);
+/** The model chosen last, in the console or in the Hey window: one choice for both. */
+export async function askModel(): Promise<AskModel> {
+  const m = (await readJson<{ model?: string }>(ASK_MODEL_FILE))?.model;
+  return isAskModel(m) ? m : ASK_MODELS[0];
+}
+async function setAskModel(model: AskModel) {
+  await Deno.mkdir(STATE, { recursive: true });
+  await Deno.writeTextFile(ASK_MODEL_FILE, JSON.stringify({ model }) + "\n");
+}
+
 /** Pure: the arguments of `claude -p` for one request. */
-export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null; noProject?: boolean } = {}) {
+export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null; noProject?: boolean; model?: AskModel } = {}) {
   const args = [
     "-p", asArg(text), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     "--tools", "", "--permission-mode", "dontAsk", "--allowedTools", ...TOOLS[kind],
     "--append-system-prompt", promptFor(kind, now, opts.project, opts.noProject),
   ];
   if (opts.session) args.push("--resume", opts.session);
+  if (opts.model && kind !== "debrief") args.push("--model", opts.model);
   return args;
 }
 
@@ -150,7 +167,7 @@ function ask(kind: AskKind, text: string, opts: { session?: string | null; proje
       let child: Deno.ChildProcess;
       try {
         child = new Deno.Command(`${BIN}/${launcher.command}`, {
-          args: askArgs(kind, text, now, opts), cwd: HOME, stdin: "null", stdout: "piped", stderr: "piped", signal,
+          args: askArgs(kind, text, now, { ...opts, model: await askModel() }), cwd: HOME, stdin: "null", stdout: "piped", stderr: "piped", signal,
         }).spawn();
       } catch (e) {
         send({ t: "done", text: "", code: null, error: (e as Error).message });
@@ -187,6 +204,23 @@ async function terminalArgv(workdir: string, argv: string[]): Promise<string[] |
   }
   if (await which("wezterm")) return ["wezterm", "start", "--cwd", workdir, "--", ...argv];
   return null;
+}
+
+/** Pure: the graphical session's variables out of `systemctl --user show-environment`. The console
+ *  service can start before the desktop exports them, and a terminal started without them dies at
+ *  once: they are read when a terminal is opened, not when the service started. */
+export function sessionEnv(text: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const l of text.split("\n")) {
+    const m = l.match(/^(DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|DBUS_SESSION_BUS_ADDRESS)=(.*)$/);
+    if (m) env[m[1]] = m[2].replace(/^\$?'(.*)'$/, "$1");
+  }
+  return env;
+}
+
+async function graphicalEnv(): Promise<Record<string, string>> {
+  const out = await new Deno.Command("systemctl", { args: ["--user", "show-environment"], stdout: "piped", stderr: "null" }).output().catch(() => null);
+  return out?.success ? sessionEnv(new TextDecoder().decode(out.stdout)) : {};
 }
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -229,11 +263,18 @@ for (const p of pids) { const w = ws.find((x) => x.pid === p && x.normalWindow);
 
 export async function askApi(req: Request, u: URL, json: Json): Promise<Response | null> {
   const p = u.pathname;
-  if (!["/api/ask", "/api/debrief", "/api/terminal", "/api/focus"].includes(p)) return null;
+  if (!["/api/ask", "/api/ask/model", "/api/debrief", "/api/terminal", "/api/focus"].includes(p)) return null;
   if (p === "/api/debrief" && req.method === "GET") return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
+  if (p === "/api/ask/model" && req.method === "GET") return json({ model: await askModel(), models: ASK_MODELS });
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
   const b = await req.json().catch(() => ({})) as Record<string, unknown>;
+
+  if (p === "/api/ask/model") {
+    if (!isAskModel(b.model)) return json({ ok: false, message: `model: one of ${ASK_MODELS.join(", ")}` }, 400);
+    await setAskModel(b.model);
+    return json({ ok: true, model: b.model });
+  }
 
   if (p === "/api/ask" || p === "/api/debrief") {
     const kind: AskKind = p === "/api/debrief" ? "debrief" : b.kind === "newtask" ? "newtask" : "ask";
@@ -263,7 +304,13 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
     } else if (typeof b.ask === "string" && b.ask.trim()) argv.push(asArg(b.ask.trim().slice(0, 4000)));
     const cmd = await terminalArgv(real, argv);
     if (!cmd) return json({ ok: false, message: "no terminal found (konsole, kitty, alacritty, wezterm)" });
-    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: real, stdin: "null", stdout: "null", stderr: "null" }).spawn().unref();
+    const env = await graphicalEnv();
+    if (!env.WAYLAND_DISPLAY && !env.DISPLAY) return json({ ok: false, message: "no graphical session to open a terminal in" });
+    const child = new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: real, env, stdin: "null", stdout: "null", stderr: "null" }).spawn();
+    // a terminal that cannot open its window exits at once: say so, instead of a button that does nothing
+    const early = await Promise.race([child.status, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
+    if (early && !early.success) return json({ ok: false, message: `${cmd[0]} did not start (exit ${early.code})` });
+    child.unref();
     return json({ ok: true });
   }
 
