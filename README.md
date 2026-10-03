@@ -297,7 +297,41 @@ starts each server and waits for its `initialize` reply, which catches what stat
 native modules built for the wrong Node ABI, missing environment, cold-start crashes.
 
 Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege). The ones that work on
-an external service share `shared/mcp/lib/`: `coolify` and `n8n` today.
+an external service share `shared/mcp/lib/`: `coolify` and `google` today. n8n is not ours any more: it runs n8n-mcp, one server per account (below).
+
+### Servers that are not ours: one per account
+
+An official MCP server (or a good community one) works on one account at a time. An entry with
+`_service` and `_perAccount` becomes **one server per account the profile sees**, named
+`<entry>-<account>`: which profile sees which account is `profiles` in `accounts.json`, as for every
+account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are that account's.
+
+```json
+"n8n": {
+  "_service": "n8n", "type": "stdio", "command": "npx", "args": ["-y", "n8n-mcp@2"],
+  "_perAccount": { "env": { "N8N_API_URL": "{url}", "N8N_API_KEY": "{secret}" } },
+  "_deny": ["n8n_delete_workflow"], "_ask": ["n8n_test_workflow"]
+},
+"supabase": {
+  "_service": "supabase", "type": "http", "url": "{url}",
+  "_perAccount": { "headers": { "Authorization": "Bearer {secret}" } }
+},
+"lovable": { "_service": "lovable", "type": "http", "url": "https://mcp.lovable.dev", "_perAccount": {} }
+```
+
+- **The secret never enters a config.** `{secret}` stays a placeholder; `shared/mcp/lib/launch.ts`
+  fills it in from the vault when the server starts: as the wrapper of a stdio command (`env`), or
+  as Claude Code's `headersHelper` for an http server (`headers`). It refuses an account the profile
+  does not see.
+- `"_perAccount": {}` is a server that signs in by itself (OAuth): one per account, each logged in
+  once with `/mcp`. Mark those accounts `"auth": "oauth"`: they have nothing in the vault.
+- **`_deny` / `_ask`**: tool names that become `mcp__<server>__<tool>` rules in each profile's
+  generated `settings.json`, for every server the entry expands to (any entry may use them). This is
+  how "no deletion tools" holds on a server that has some: deny them here, or switch them off in the
+  server itself when it can.
+- http servers stay off Desktop, whose config holds commands only. The doctor checks the entries
+  (`{secret}` outside `_perAccount`, a template of the wrong kind); `mcp health --probe` starts each
+  expanded server through `launch.ts`, with its real secret.
 
 ### Google (Gmail, Calendar, Drive)
 
@@ -358,7 +392,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   accounts of one service; each tool then takes `account`, required as soon as there is more than
   one — never a silent default. A registry entry with `_service` goes only to the profiles that see
   one of that service's accounts, with `CLAUDE_MULTI_PROFILE` in its environment and `{hosts}` in
-  its arguments replaced by those accounts' hosts (its `--allow-net`).
+  its arguments replaced by those accounts' hosts (its `--allow-net`). A server that is not ours is
+  one per account instead ([above](#servers-that-are-not-ours-one-per-account)).
 - **Secrets** are in the vault, `~/vault/claude-multi` (a Syncthing folder: they travel between
   machines already encrypted, ark relays them without reading them). One file per secret,
   AES-GCM with a fresh IV per write, named by an HMAC so the names say nothing. The key is in each

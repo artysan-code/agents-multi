@@ -699,6 +699,7 @@ function renderAccounts() {
       <td>${
       a.service === "google"
         ? (a.hasSecret ? `<span class="ok-t">${esc(a.email ?? t("google.connected"))}</span>` : `<span class="warn-t">${esc(t("google.notConnected"))}</span>`)
+        : a.auth === "oauth" ? `<span class="sub">${esc(t("acc.oauth"))}</span>`
         : a.hasSecret ? `<span class="ok-t">${esc(t("acc.hasSecret"))}</span>` : `<span class="warn-t">${esc(t("acc.noSecret"))}</span>`
     }</td>
       <td class="acts">${

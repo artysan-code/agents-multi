@@ -1,7 +1,7 @@
 // Tests for settings.ts: the merge patch algebra and adopting what Claude Code writes into a
 // generated settings.json.
 import { assertEquals } from "jsr:@std/assert@1";
-import { adopt, buildSettings, diffPatch, manifestPatch, mergePatch, type Obj, paths } from "../settings.ts";
+import { adopt, buildSettings, diffPatch, manifestPatch, mergePatch, type Obj, paths, registryPatch, withoutRules } from "../settings.ts";
 
 Deno.test("mergePatch: RFC 7386 — objects merge, null deletes, arrays and scalars replace", () => {
   assertEquals(mergePatch({ a: "b", c: { d: "e", f: "g" } }, { a: "z", c: { f: null } }), { a: "z", c: { d: "e" } });
@@ -80,4 +80,25 @@ Deno.test("manifestPatch: disableAccountMcp turns the connectors off and every s
 
 Deno.test("paths: dotted leaves, an emptied object counts as one", () => {
   assertEquals(paths({ a: { b: 1, c: { d: null } }, e: {} }), ["a.b", "a.c.d", "e"]);
+});
+
+Deno.test("registryPatch: the registry's rules join the lists the profile has, never replace them", () => {
+  const base: Obj = { permissions: { deny: ["Bash(secret-tool:*)"], allow: ["Read"] } };
+  const rules = { deny: ["mcp__n8n-ark__n8n_delete_workflow", "Bash(secret-tool:*)"], ask: ["mcp__n8n-ark__n8n_test_workflow"] };
+  const built = buildSettings(base, {}, registryPatch(base, rules));
+  assertEquals(built.permissions, {
+    deny: ["Bash(secret-tool:*)", "mcp__n8n-ark__n8n_delete_workflow"],
+    allow: ["Read"],
+    ask: ["mcp__n8n-ark__n8n_test_workflow"],
+  });
+  assertEquals(registryPatch(base, { deny: [], ask: [] }), {});
+});
+
+Deno.test("withoutRules: an adopted list drops the generated rules, and what is left equal to shared goes too", () => {
+  const shared: Obj = { permissions: { deny: ["A"] } };
+  const rules = { deny: ["mcp__x__del"], ask: [] };
+  // Claude rewrote deny whole: adopting it would copy the generated rule into the repository
+  assertEquals(withoutRules(shared, { permissions: { deny: ["A", "mcp__x__del"] } }, rules), {});
+  assertEquals(withoutRules(shared, { permissions: { deny: ["A", "B", "mcp__x__del"] } }, rules), { permissions: { deny: ["A", "B"] } });
+  assertEquals(withoutRules(shared, { model: "opus" }, rules), { model: "opus" });
 });

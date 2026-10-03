@@ -9,17 +9,34 @@
 //              {hosts} in its args replaced by those accounts' hosts (its --allow-net); on Desktop
 //              also the session bus address, because Desktop starts servers with a bare env (HOME,
 //              PATH, USER…) and the vault key is read from the keyring over D-Bus (secret-tool)
+//   _perAccount  the server is not ours and works on one account: it becomes one server per account
+//              the profile sees, named <entry>-<account>, with {url} {host} {name} replaced by that
+//              account's. The secret never enters a config: `env` (stdio) and `headers` (http) are
+//              templates where {secret} is filled in at start by shared/mcp/lib/launch.ts, from the
+//              vault — as the command's wrapper (stdio) or as Claude Code's headersHelper (http).
+//              `{}` is a server that logs in by itself (OAuth): one per account, nothing to fill.
+//              http servers do not go to Desktop, whose config holds commands only.
+//   _deny / _ask  tool names this server must never run / must ask before running: they become
+//              mcp__<server>__<tool> permission rules in each profile's generated settings (settings.ts)
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
 // State (which servers were managed per target) lives in XDG state: it is per-machine, not in the repo.
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
 import { type Account, accountHosts, loadAccounts, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
-import { type Check, desktopDir, has, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
+import { vaultDir } from "../shared/mcp/lib/vault.ts";
+import { type Check, desktopDir, has, HOME, loadManifest, lstat, type Profile, profileNames, readJson, readText, REPO, run, running, RUNTIME, STATE, stat } from "./lib.ts";
 
-type ServerCfg = Record<string, unknown> & { _profiles?: string[]; _surfaces?: Surface[]; _service?: string };
+export interface PerAccount { env?: Record<string, string>; headers?: Record<string, string> }
+export type ServerCfg = Record<string, unknown> & {
+  _profiles?: string[]; _surfaces?: Surface[]; _service?: string; _perAccount?: PerAccount; _deny?: string[]; _ask?: string[];
+};
 type Surface = "cli" | "desktop";
-export interface Registry { profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[]; bus?: string; brainScopes?: Record<string, string> }
+/** Where launch.ts is and what it may read: the paths of this machine, kept out of the pure code. */
+export interface LaunchPaths { script: string; read: string[] }
+export interface Registry {
+  profiles: string[]; servers: Record<string, ServerCfg>; accounts?: Account[]; bus?: string; brainScopes?: Record<string, string>; launch?: LaunchPaths;
+}
 /** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
 export interface RawRegistry { profiles?: string[]; servers: Record<string, ServerCfg> }
 export interface Target { profile: Profile; surface: Surface; path: string; managedKey: string }
@@ -37,7 +54,13 @@ export async function loadRegistry(): Promise<Registry> {
   if (!r?.servers) throw new Error(`MCP registry missing or invalid: ${REGISTRY}`);
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) { const s = (await loadManifest(p)).brainScope; if (s) brainScopes[p] = s; }
-  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS), bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS"), brainScopes };
+  return { profiles: r.profiles ?? await profileNames(), servers: r.servers, accounts: loadAccounts(ACCOUNTS), bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS"), brainScopes, launch: launchPaths() };
+}
+
+/** launch.ts as the servers start it: through the runtime path, like every registry server. */
+export function launchPaths(): LaunchPaths {
+  const mcp = `${RUNTIME}/shared/mcp`;
+  return { script: `${mcp}/lib/launch.ts`, read: [vaultDir(), `${mcp}/accounts.json`, `${HOME}/.cache/deno`] };
 }
 /**
  * A profile's server selection applied to the raw registry file. `everyone` is what an absent
@@ -65,14 +88,73 @@ export function reachOf(reg: Registry, cfg: ServerCfg): string[] {
   return (cfg._profiles ?? reg.profiles).filter((p) => !cfg._service || visibleAccounts(reg.accounts ?? [], cfg._service, p).length);
 }
 
-export function wanted(reg: Registry, t: Target): Record<string, Record<string, unknown>> {
-  const out: Record<string, Record<string, unknown>> = {};
+const isHttp = (cfg: Record<string, unknown>) => cfg.type === "http" || cfg.type === "sse" || (!cfg.command && typeof cfg.url === "string");
+
+/** Pure: a value with {url} {host} {name} {hosts} replaced by the account's. {secret} is left alone. */
+function forAccount<T>(v: T, a: Account): T {
+  let host = "";
+  try { host = a.url ? new URL(a.url).host : ""; } catch { /* an invalid address has no host */ }
+  const sub = (s: string) => s.replaceAll("{url}", a.url ?? "").replaceAll("{hosts}", host || "127.0.0.1:9").replaceAll("{host}", host).replaceAll("{name}", a.name);
+  const walk = (x: unknown): unknown =>
+    typeof x === "string" ? sub(x) : Array.isArray(x) ? x.map(walk) : x && typeof x === "object" ? Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y)])) : x;
+  return walk(v) as T;
+}
+
+/** Pure: one word for a POSIX shell. */
+export const shellQuote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
+
+/** Pure: the deno command line of launch.ts, allowed to run `run` and nothing else. */
+export function launcher(paths: LaunchPaths, run?: string): string[] {
+  return [
+    "deno", "run", "--quiet", "--no-lock",
+    `--allow-read=${paths.read.join(",")}`,
+    "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
+    `--allow-run=/usr/bin/secret-tool${run ? `,${run}` : ""}`,
+    paths.script,
+  ];
+}
+
+/** Pure: a `_perAccount` entry made into one server for one account (name and config). */
+export function perAccount(reg: Registry, name: string, cfg: ServerCfg, clean: Record<string, unknown>, a: Account, t: Pick<Target, "profile" | "surface">): [string, Record<string, unknown>] {
+  const paths = reg.launch ?? launchPaths();
+  const out = forAccount(clean, a);
+  const tpl = forAccount(cfg._perAccount ?? {}, a);
+  const service = cfg._service!;
+  if (isHttp(out)) {
+    const headers = Object.entries(tpl.headers ?? {}).map(([k, v]) => `${k}=${v}`);
+    // Claude Code runs it through a shell, with its own env: the profile goes on the line
+    if (headers.length) out.headersHelper = [`CLAUDE_MULTI_PROFILE=${shellQuote(t.profile)}`, ...launcher(paths), "headers", service, a.name, ...headers].map((w, i) => i ? shellQuote(w) : w).join(" ");
+  } else {
+    const env = Object.entries(tpl.env ?? {});
+    if (env.length) {
+      const cmd = String(out.command);
+      out.args = [...launcher(paths, cmd).slice(1), "run", service, a.name, ...env.flatMap(([k, v]) => ["--env", `${k}=${v}`]), "--", cmd, ...(out.args as string[] ?? [])];
+      out.command = "deno";
+    }
+    out.env = { ...(out.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
+    if (t.surface === "desktop" && reg.bus) (out.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
+  }
+  return [`${name}-${a.name}`, out];
+}
+
+/** Pure: the servers one target gets, each with the registry entry it comes from. */
+function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry: string; name: string; cfg: Record<string, unknown> }[] {
+  const out: { entry: string; name: string; cfg: Record<string, unknown> }[] = [];
   for (const [name, cfg] of Object.entries(reg.servers)) {
     const profiles = cfg._profiles ?? reg.profiles;
     const surfaces = cfg._surfaces ?? ["cli"];
     if (!profiles.includes(t.profile) || !surfaces.includes(t.surface)) continue;
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(cfg)) if (!k.startsWith("_")) clean[k] = v;
+    if (cfg._perAccount && cfg._service) {
+      if (t.surface === "desktop" && isHttp(clean)) continue; // Desktop's config holds commands only
+      for (const a of visibleAccounts(reg.accounts ?? [], cfg._service, t.profile)) {
+        const [n, c] = perAccount(reg, name, cfg, clean, a, t);
+        if (t.surface === "desktop") delete c.type;
+        out.push({ entry: name, name: n, cfg: c });
+      }
+      continue;
+    }
     if (cfg._service) {
       const visible = visibleAccounts(reg.accounts ?? [], cfg._service, t.profile);
       if (!visible.length) continue; // nothing this profile could use it for
@@ -86,10 +168,42 @@ export function wanted(reg: Registry, t: Target): Record<string, Record<string, 
       if (t.surface === "desktop" && reg.bus) (clean.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
     }
     if (t.surface === "desktop") delete clean.type; // Desktop takes command/args/env; "type" is CLI vocabulary
-    out[name] = clean;
+    out.push({ entry: name, name, cfg: clean });
   }
   return out;
 }
+
+export function wanted(reg: Registry, t: Pick<Target, "profile" | "surface">): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(servers(reg, t).map((s) => [s.name, s.cfg]));
+}
+/** Pure: the permission rules the registry implies for one profile — `_deny` and `_ask` of every
+ *  server it gets on the CLI, under the name each one has there (one per account, for `_perAccount`). */
+export function permissionRules(reg: Registry, profile: string): { deny: string[]; ask: string[] } {
+  const deny: string[] = []; const ask: string[] = [];
+  for (const { entry, name } of servers(reg, { profile, surface: "cli" })) {
+    const cfg = reg.servers[entry];
+    for (const tool of cfg._deny ?? []) deny.push(`mcp__${name}__${tool}`);
+    for (const tool of cfg._ask ?? []) ask.push(`mcp__${name}__${tool}`);
+  }
+  return { deny: deny.sort(), ask: ask.sort() };
+}
+
+/** Pure: what is wrong with the registry as written. The doctor reports it; sync still runs, and
+ *  what it writes can at worst hold a literal "{secret}", never a secret. */
+export function registryProblems(reg: Pick<Registry, "servers">): string[] {
+  const out: string[] = [];
+  for (const [name, cfg] of Object.entries(reg.servers)) {
+    const { _perAccount, ...rest } = cfg;
+    if (JSON.stringify(rest).includes("{secret}")) out.push(`${name}: {secret} outside _perAccount would be written into a config as it is`);
+    if (!_perAccount) continue;
+    if (!cfg._service) out.push(`${name}: _perAccount needs _service (whose accounts?)`);
+    if (isHttp(cfg) && _perAccount.env) out.push(`${name}: an http server takes _perAccount.headers, not env`);
+    if (!isHttp(cfg) && _perAccount.headers) out.push(`${name}: a stdio server takes _perAccount.env, not headers`);
+    if (isHttp(cfg) && cfg._surfaces?.includes("desktop")) out.push(`${name}: an http server cannot go to Desktop, whose config holds commands only`);
+  }
+  return out;
+}
+
 export async function targets(): Promise<Target[]> {
   const t: Target[] = [];
   for (const p of await profileNames()) {
@@ -231,9 +345,19 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
     const surfaces = (cfg._surfaces ?? ["cli"]).join("+"); const profiles = reachOf(reg, cfg).join("+");
     let live = "";
     if (opts.live && !problems.length && cmd) {
-      const r = await probe(cmd, args, env);
-      if (r.ok) live = ` · initialize ok in ${(r.ms / 1000).toFixed(1)}s${r.detail ? ` (${r.detail})` : ""}`;
-      else problems.push(`no answer to initialize: ${r.detail}`);
+      // a per-account entry is probed as each of its servers, through launch.ts with the account's secret
+      const profile = reachOf(reg, cfg)[0];
+      const runs: [string, string, string[], Record<string, string>][] = cfg._perAccount
+        ? (profile ? servers(reg, { profile, surface: "cli" }).filter((s) => s.entry === name && s.cfg.command) : [])
+          .map((s) => [s.name, String(s.cfg.command), s.cfg.args as string[] ?? [], s.cfg.env as Record<string, string> ?? {}])
+        : [[name, cmd, args, env]];
+      const oks: string[] = [];
+      for (const [n, c, a, e] of runs) {
+        const r = await probe(c, a, e);
+        if (r.ok) oks.push(`${runs.length > 1 ? `${n} ` : ""}initialize ok in ${(r.ms / 1000).toFixed(1)}s${r.detail ? ` (${r.detail})` : ""}`);
+        else problems.push(`${runs.length > 1 ? `${n}: ` : ""}no answer to initialize: ${r.detail}`);
+      }
+      if (oks.length) live = ` · ${oks.join(", ")}`;
     }
     if (problems.length) {
       const fix = problems.some((x) => x.includes("ABI") || x.includes("NODE_MODULE_VERSION")) ? "native module built for a different Node: rebuild it with the Node on the pinned PATH (prebuild-install)"

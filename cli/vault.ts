@@ -90,6 +90,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
         const l = await listSecrets(key);
         const accounts = loadAccounts(ACCOUNTS);
         for (const a of accounts) {
+          if (a.auth === "oauth") { console.log(`  ${ANSI.d}· ${a.service}/${a.name} (signs in by itself, /mcp)${ANSI.x}`); continue; }
           const has = l.entries.some((e) => e.service === a.service && e.account === a.name);
           console.log(`  ${has ? `${ANSI.g}✓${ANSI.x}` : `${ANSI.y}!${ANSI.x}`} ${a.service}/${a.name}${has ? "" : "  no secret"}`);
         }

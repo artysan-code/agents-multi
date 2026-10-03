@@ -79,7 +79,7 @@ regen_settings() {
   mkdir -p "$CACHE"
   exec 8>"$CACHE/settings.lock"
   flock -n 8 || return 0
-  if [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/profiles" \
+  if [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/profiles" "$REPO/shared/mcp/servers.json" "$REPO/shared/mcp/accounts.json" \
         "$runtime"/*/settings.json "$runtime"/*/plugins/synced -newer "$stamp" -print -quit 2>/dev/null)" ]]; then
     return 0
   fi

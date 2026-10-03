@@ -15,6 +15,7 @@
 // Plugins are why this exists: Claude Code installs every plugin `enabledPlugins` marks true when a
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
+import { loadRegistry, permissionRules } from "./mcp.ts";
 import { loadManifest, lstat, type Manifest, type Profile, profileNames, readJson, REPO, RUNTIME, STAMP, STATE, syncedPlugins } from "./lib.ts";
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -55,6 +56,33 @@ export function diffPatch(from: Obj, to: Obj): Obj {
 export function manifestPatch(m: Pick<Manifest, "disableAccountMcp">, synced: string[]): Obj {
   if (!m.disableAccountMcp) return {};
   return { disableClaudeAiConnectors: true, enabledPlugins: Object.fromEntries(synced.map((id) => [id, false])) };
+}
+
+export interface Rules { deny: string[]; ask: string[] }
+
+/** What the MCP registry implies (`_deny`, `_ask`): its rules added to the permission lists the
+ *  profile already has. Added, not replacing: a merge patch replaces arrays whole, so the derived
+ *  list carries the base one with it. */
+export function registryPatch(base: Obj, rules: Rules): Obj {
+  const perms = isObj(base.permissions) ? base.permissions : {};
+  const out: Obj = {};
+  for (const k of ["deny", "ask"] as const) {
+    if (!rules[k].length) continue;
+    const have = Array.isArray(perms[k]) ? perms[k] as Json[] : [];
+    out[k] = [...have, ...rules[k].filter((r) => !have.includes(r))];
+  }
+  return Object.keys(out).length ? { permissions: out } : {};
+}
+
+/** A patch without the rules the registry generates: they are rebuilt from it every time, and an
+ *  adopted copy in the repository would outlive the server they were for. */
+export function withoutRules(shared: Obj, patch: Obj, rules: Rules): Obj {
+  const perms = patch.permissions;
+  if (!isObj(perms)) return patch;
+  const p: Obj = structuredClone(patch);
+  const pp = p.permissions as Obj;
+  for (const k of ["deny", "ask"] as const) if (Array.isArray(pp[k])) pp[k] = (pp[k] as Json[]).filter((r) => !rules[k].includes(r as string));
+  return diffPatch(shared, mergePatch(shared, p) as Obj);
 }
 
 /** shared ⊕ profile patch ⊕ manifest. */
@@ -115,8 +143,19 @@ export interface SettingsResult {
 export async function expectedSettings(p: Profile) {
   const shared = await readObj(SHARED_SETTINGS) ?? {};
   const patch = await readObj(patchPath(p)) ?? {};
-  const derived = manifestPatch(await loadManifest(p), await syncedPlugins(`${RUNTIME}/${p}`));
-  return { shared, patch, derived, built: buildSettings(shared, patch, derived) };
+  const rules = await registryRules(p);
+  const fromManifest = manifestPatch(await loadManifest(p), await syncedPlugins(`${RUNTIME}/${p}`));
+  const derived = derive(fromManifest, shared, patch, rules);
+  return { shared, patch, fromManifest, derived, rules, built: buildSettings(shared, patch, derived) };
+}
+
+/** manifest ⊕ registry, the registry's rules added to the lists shared ⊕ patch has. */
+function derive(fromManifest: Obj, shared: Obj, patch: Obj, rules: Rules): Obj {
+  return mergePatch(fromManifest, registryPatch(mergePatch(shared, patch) as Obj, rules)) as Obj;
+}
+
+async function registryRules(p: Profile): Promise<Rules> {
+  try { return permissionRules(await loadRegistry(), p); } catch { return { deny: [], ask: [] }; } // no registry: the doctor says so
 }
 
 /**
@@ -133,12 +172,13 @@ export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: bo
   const current = st && !st.isSymlink ? await readObj(rt) : null;
   const lastBuilt = await readObj(builtPath(p));
 
-  let { shared, patch, derived } = await expectedSettings(p);
+  let { shared, patch, derived, rules, fromManifest } = await expectedSettings(p);
   if (current && lastBuilt && adoptWrites) {
     const a = adopt(shared, patch, lastBuilt, current);
     if (a.changed.length) {
       res.adopted = a.changed;
-      patch = a.patch;
+      patch = withoutRules(shared, a.patch, rules);
+      derived = derive(fromManifest, shared, patch, rules);
       if (!opts.dry) {
         if (Object.keys(patch).length) await writeJson(patchPath(p), patch);
         else if (await lstat(patchPath(p))) await Deno.remove(patchPath(p));

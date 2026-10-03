@@ -79,6 +79,8 @@ switch (cmd) {
     if (sub !== "sync") { console.error(`mcp: unknown subcommand "${sub}" (check|sync|health)`); Deno.exit(2); }
     try {
       await apply({ force: flag("--force") });
+      // the registry's _deny/_ask live in each profile's generated settings.json
+      for (const r of await syncAllSettings()) if (r.wrote) console.log(`  ${r.profile}/settings.json regenerated`);
       console.log(`\n${changes.length} changes applied. Restart the affected Claude instances to load them.`);
     } catch (e) {
       console.error(`\n! ${(e as Error).message}`);

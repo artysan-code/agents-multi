@@ -18,6 +18,8 @@ export interface Account {
   profiles?: string[];
   /** the address the account signed in as (Google): shown, and used as the login hint */
   email?: string;
+  /** "oauth": the server signs in by itself (a /mcp login per server): there is no secret in the vault */
+  auth?: "oauth";
   note?: string;
 }
 

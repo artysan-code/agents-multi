@@ -16,21 +16,34 @@
     "n8n": {
       "_service": "n8n",
       "type": "stdio",
-      "command": "deno",
+      "command": "npx",
       "args": [
-        "run",
-        "--quiet",
-        "--allow-net={hosts}",
-        "--allow-read=~/vault/claude-multi,~/.claude-multi/shared/mcp/accounts.json,~/.cache/deno",
-        "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
-        "--allow-run=/usr/bin/secret-tool",
-        "--lock=~/.claude-multi/shared/mcp/n8n/deno.lock",
-        "~/.claude-multi/shared/mcp/n8n/server.ts"
+        "-y",
+        "n8n-mcp@2.91.0"
       ],
-      "_surfaces": [
-        "cli",
-        "desktop"
-      ]
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOG_LEVEL": "error",
+        "DISABLE_CONSOLE_OUTPUT": "true",
+        "DISABLED_TOOLS": "n8n_delete_workflow,n8n_manage_credentials",
+        "DISABLED_TOOL_OPERATIONS": "n8n_executions:delete;n8n_workflow_versions:delete,prune;n8n_manage_folders:delete;n8n_manage_datatable:deletetable,deleterows,deletecolumn"
+      },
+      "_perAccount": {
+        "env": {
+          "N8N_API_URL": "{url}",
+          "N8N_API_KEY": "{secret}"
+        }
+      },
+      "_deny": [
+        "n8n_delete_workflow",
+        "n8n_manage_credentials"
+      ],
+      "_ask": [
+        "n8n_update_full_workflow",
+        "n8n_update_partial_workflow",
+        "n8n_test_workflow"
+      ],
+      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose."
     },
     "coolify": {
       "_service": "coolify",

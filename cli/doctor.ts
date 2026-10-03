@@ -3,7 +3,7 @@
 
 import { AGENTS_SKILLS, BIN, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog } from "./lib.ts";
 import { settingsState } from "./settings.ts";
-import { ACCOUNTS, health, legacyStatePresent, plan } from "./mcp.ts";
+import { ACCOUNTS, health, legacyStatePresent, loadRegistry, plan, registryProblems } from "./mcp.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 import { dayOf, hhmm, tasksRoot } from "../shared/mcp/lib/tasks.ts";
@@ -178,6 +178,8 @@ export async function doctor(): Promise<Check[]> {
     const { changes } = await plan();
     if (!changes.length) add("mcp.sync", "ok", "MCP registry applied on CLI and Desktop");
     else add("mcp.sync", "warn", `MCP registry out of sync: ${changes.length} changes (${[...new Set(changes.map((x) => x.target.managedKey))].join(", ")})`, "claude-multi mcp sync (with Claude closed)");
+    const problems = registryProblems(await loadRegistry());
+    if (problems.length) add("mcp.registry", "fail", `MCP registry: ${problems.join("; ")}`, "correct shared/mcp/servers.json (README › MCP)");
   } catch (e) { add("mcp.sync", "fail", `MCP registry: ${(e as Error).message}`); }
   for (const h of await health()) c.push(h);
 
@@ -192,7 +194,8 @@ export async function doctor(): Promise<Check[]> {
       add("vault", "fail", "this machine's vault key does not open the vault", "claude-multi vault pair (with the right recovery code)");
     } else {
       const l = await listSecrets(key);
-      const missing = accounts.filter((a) => !l.entries.some((e) => e.service === a.service && e.account === a.name));
+      // an OAuth account signs in by itself, per server (/mcp): there is nothing of it in the vault
+      const missing = accounts.filter((a) => a.auth !== "oauth" && !l.entries.some((e) => e.service === a.service && e.account === a.name));
       if (missing.length) add("vault.secrets", "warn", `no secret for ${missing.map((a) => `${a.service}/${a.name}`).join(", ")}`, "console › Connections, or claude-multi vault set <service> <account>");
       if (l.conflicts) add("vault.conflicts", "warn", `${l.conflicts} Syncthing conflict copies in the vault`, `ls ${vaultDir()}/secrets/*sync-conflict*`);
       if (l.unreadable) add("vault.unreadable", "fail", `${l.unreadable} vault entries this key cannot open`, "claude-multi vault status");

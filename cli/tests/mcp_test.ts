@@ -1,7 +1,7 @@
 // Tests for mcp.ts: projecting the registry onto surfaces (profiles, _surfaces, private keys, `type`).
 // The profile names come from the repository, never from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
-import { type RawRegistry, type Registry, selectServers, type Target, targets, wanted } from "../mcp.ts";
+import { permissionRules, type RawRegistry, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
 import { desktopDir, profileNames } from "../lib.ts";
 
 const PROFILES = await profileNames();
@@ -97,4 +97,87 @@ Deno.test("selectServers: an explicit profile list gains a new profile", () => {
   const next = selectServers({ profiles: [A], servers: { a: { command: "a" } } }, PROFILES, B, ["a"]);
   assertEquals(next.profiles, [A, B].sort());
   assertEquals(next.servers.a._profiles, undefined);
+});
+
+// ---------------------------------------------------------------- one server per account (_perAccount)
+const LAUNCH = { script: "/rt/shared/mcp/lib/launch.ts", read: ["/vault", "/rt/accounts.json"] };
+const perAccountReg: Registry = {
+  profiles: PROFILES, launch: LAUNCH,
+  servers: {
+    flows: {
+      _service: "flows", type: "stdio", command: "npx", args: ["-y", "flows-mcp", "--base={url}"], env: { MODE: "stdio" },
+      _perAccount: { env: { FLOWS_URL: "{url}", FLOWS_KEY: "{secret}" } }, _surfaces: ["cli", "desktop"],
+      _deny: ["delete_flow"], _ask: ["run_flow"],
+    },
+    remote: { _service: "remote", type: "http", url: "{url}", _perAccount: { headers: { Authorization: "Bearer {secret}" } }, _deny: ["drop"] },
+    oauth: { _service: "oauth", type: "http", url: "https://mcp.example/{name}", _perAccount: {} },
+  },
+  accounts: [
+    { service: "flows", name: "mine", url: "https://flows.mine.example", profiles: [A] },
+    { service: "flows", name: "work", url: "https://flows.work.example:8443", profiles: [A, B] },
+    { service: "remote", name: "proj", url: "https://mcp.remote.example/mcp?project_ref=abc&read_only=true", profiles: [A] },
+    { service: "oauth", name: "acme", auth: "oauth", profiles: [B] },
+  ],
+};
+
+Deno.test("perAccount: one server per account the profile sees, named <entry>-<account>", () => {
+  assertEquals(Object.keys(wanted(perAccountReg, t(A, "cli"))).sort(), ["flows-mine", "flows-work", "remote-proj"]);
+  assertEquals(Object.keys(wanted(perAccountReg, t(B, "cli"))).sort(), ["flows-work", "oauth-acme"]);
+});
+
+Deno.test("perAccount (stdio): launch.ts wraps the command, the secret stays a placeholder", () => {
+  const s = wanted(perAccountReg, t(A, "cli"))["flows-work"];
+  assertEquals(s.command, "deno");
+  assertEquals(s.args, [
+    "run", "--quiet", "--no-lock", "--allow-read=/vault,/rt/accounts.json",
+    "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS", "--allow-run=/usr/bin/secret-tool,npx",
+    "/rt/shared/mcp/lib/launch.ts", "run", "flows", "work",
+    "--env", "FLOWS_URL=https://flows.work.example:8443", "--env", "FLOWS_KEY={secret}",
+    "--", "npx", "-y", "flows-mcp", "--base=https://flows.work.example:8443",
+  ]);
+  assertEquals(s.env, { MODE: "stdio", CLAUDE_MULTI_PROFILE: A });
+  assertEquals(s.type, "stdio");
+  // on Desktop: no `type`, and the session bus is not pinned unless the registry knows it
+  assertEquals("type" in wanted(perAccountReg, t(A, "desktop"))["flows-work"], false);
+});
+
+Deno.test("perAccount (http): headers come from a headersHelper, never written; http stays off Desktop", () => {
+  const s = wanted(perAccountReg, t(A, "cli"))["remote-proj"];
+  assertEquals(s.url, "https://mcp.remote.example/mcp?project_ref=abc&read_only=true");
+  assertEquals(s.headersHelper, `CLAUDE_MULTI_PROFILE=${A} deno run --quiet --no-lock --allow-read=/vault,/rt/accounts.json ` +
+    "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS --allow-run=/usr/bin/secret-tool " +
+    "/rt/shared/mcp/lib/launch.ts headers remote proj 'Authorization=Bearer {secret}'");
+  assertEquals("env" in s, false);
+  // an OAuth server: one per account, nothing to fill in
+  assertEquals(wanted(perAccountReg, t(B, "cli"))["oauth-acme"], { type: "http", url: "https://mcp.example/acme" });
+  assertEquals(Object.keys(wanted(perAccountReg, t(B, "desktop"))), ["flows-work"]);
+});
+
+Deno.test("permissionRules: _deny and _ask under each server's name, only where the profile gets it", () => {
+  assertEquals(permissionRules(perAccountReg, A), {
+    deny: ["mcp__flows-mine__delete_flow", "mcp__flows-work__delete_flow", "mcp__remote-proj__drop"],
+    ask: ["mcp__flows-mine__run_flow", "mcp__flows-work__run_flow"],
+  });
+  assertEquals(permissionRules(perAccountReg, B), { deny: ["mcp__flows-work__delete_flow"], ask: ["mcp__flows-work__run_flow"] });
+  // a plain server's rules use its own name
+  assertEquals(permissionRules({ profiles: PROFILES, servers: { s: { command: "s", _deny: ["x"] } } }, A), { deny: ["mcp__s__x"], ask: [] });
+});
+
+Deno.test("registryProblems: {secret} outside _perAccount, missing _service, wrong template kind, http on Desktop", () => {
+  assertEquals(registryProblems(perAccountReg), []);
+  const bad = registryProblems({
+    servers: {
+      leak: { command: "x", env: { K: "{secret}" } },
+      orphan: { command: "x", _perAccount: { env: { K: "{secret}" } } },
+      mixed: { _service: "s", type: "http", url: "u", _perAccount: { env: { K: "{secret}" } }, _surfaces: ["cli", "desktop"] },
+    },
+  });
+  assertEquals(bad.length, 4);
+  assertEquals(bad.map((p) => p.split(":")[0]), ["leak", "orphan", "mixed", "mixed"]);
+});
+
+Deno.test("shellQuote: plain words stay bare, the rest is single-quoted safely", () => {
+  assertEquals(shellQuote("--allow-read=/a,/b"), "--allow-read=/a,/b");
+  assertEquals(shellQuote("Authorization=Bearer {secret}"), "'Authorization=Bearer {secret}'");
+  assertEquals(shellQuote("it's"), `'it'\\''s'`);
 });
