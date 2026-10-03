@@ -176,6 +176,49 @@
       "url": "https://mcp.zapier.com/api/v1/connect",
       "_perAccount": {},
       "_note": "Zapier's official MCP, one server per Zapier account: zapier-<account>. OAuth: sign in with /mcp; the actions it may run are chosen on Zapier's side. Each successful call costs Zapier tasks. CLI only (http)."
+    },
+    "gitea": {
+      "_service": "gitea",
+      "type": "stdio",
+      "command": "${HOME}/.local/lib/gitea-mcp/gitea-mcp",
+      "args": [
+        "-t",
+        "stdio"
+      ],
+      "_perAccount": {
+        "env": {
+          "GITEA_HOST": "{url}",
+          "GITEA_ACCESS_TOKEN": "{secret}"
+        }
+      },
+      "_deny": [
+        "delete_branch",
+        "delete_file",
+        "delete_release",
+        "delete_tag"
+      ],
+      "_ask": [
+        "actions_config_write",
+        "actions_run_write",
+        "create_branch",
+        "create_or_update_file",
+        "create_release",
+        "create_repo",
+        "create_tag",
+        "fork_repo",
+        "issue_write",
+        "label_write",
+        "milestone_write",
+        "notification_write",
+        "package_write",
+        "project_write",
+        "pull_request_review_write",
+        "pull_request_write",
+        "rename_branch",
+        "timetracking_write",
+        "wiki_write"
+      ],
+      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied; every other write asks: the consolidated *_write tools carry a method, so a delete inside one is caught by the question, not by the list. CLI only."
     }
   }
 }
