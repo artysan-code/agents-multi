@@ -43,6 +43,7 @@ const dur = (iso) => {
 const modelShort = (m) => String(m).replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(/-(\d)-(\d)$/, "-$1.$2");
 
 let S = null; // last /api/status payload
+let OWNER = { id: "me", name: "" }; // whose console this is (/api/owner): their tasks are "mine"
 let SUM = null; // last /api/summary payload
 let view = "today";
 let sub = "profiles"; // the System tab
@@ -234,7 +235,7 @@ function renderTasks() {
   const row = (x, when = x.time ?? "", cls = "") => {
     const ev = x.source === "calendar";
     const p = ev ? null : notesProgress(x.notes);
-    const sub = ev ? t("day.calendar", { a: x.project ?? "" }) : [x.project, x.owner && x.owner !== "samuel" ? x.owner : null].filter(Boolean).join("  ");
+    const sub = ev ? t("day.calendar", { a: x.project ?? "" }) : [x.project, x.owner && x.owner !== OWNER.id ? x.owner : null].filter(Boolean).join("  ");
     return `<div class="it${ev ? " event" : ""}${x.priority === 1 ? " hi" : ""}${cls ? ` ${cls}` : ""}"${ev ? "" : ` data-tk-open="${esc(x.id)}"`}>
       <span class="tm">${esc(when)}</span>
       ${ev ? `<span class="ev"><i></i></span>` : `<button class="ck" data-tk-done="${esc(x.id)}" title="${esc(t("ts.done"))}" aria-label="${esc(t("ts.done"))}"></button>`}
@@ -1605,6 +1606,7 @@ addEventListener("DOMContentLoaded", async () => {
   applyLang();
   askContext("ask");
   void loadClaude();
+  OWNER = await api("/api/owner").catch(() => OWNER); // before the tasks draw: it says which are "mine"
   go(location.hash.slice(1)); // what needs no status report draws now
   try {
     await loadStatus();

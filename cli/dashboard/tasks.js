@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — the Tasks tab. A task lives in a project: the projects are Samuel's
+/* claude-multi console — the Tasks tab. A task lives in a project: the projects are the owner's
    folders (personal/…, work/…), plus the short names a chat used, plus "no project" for simple
    things. On the left the projects that have something open; on the right either all of them at a
    glance or one project's board, and each task's own page (steps, description, attachments).
@@ -22,7 +22,7 @@ async function loadBoard() {
 }
 
 /* ---------------- helpers ---------------- */
-const isMine = (x) => !x.owner || x.owner === "samuel";
+const isMine = (x) => !x.owner || x.owner === OWNER.id;
 const open = (x) => x.status !== "done" && x.status !== "dropped";
 const dayLabel = (day, time) => {
   if (!day) return "";
@@ -123,7 +123,7 @@ function cardHtml(x) {
     <div class="tc-m">${[
       x.due ? `<span class="tc-due${late ? " late" : x.due === today ? " now" : ""}">${esc(dayLabel(x.due, x.time))}</span>` : "",
       where ? `<span>${esc(where)}</span>` : "",
-      x.owner && x.owner !== "samuel" ? `<span>${esc(x.owner)}</span>` : "",
+      x.owner && x.owner !== OWNER.id ? `<span>${esc(x.owner)}</span>` : "",
       x.repeat ? `<span title="${esc(t(`ts.r.${x.repeat}`))}">${esc(t(`ts.r.${x.repeat}`))}</span>` : "",
       x.attachments ? `<span>${esc(t("tb.attN", { n: x.attachments }))}</span>` : "",
     ].join("")}</div>
@@ -244,11 +244,11 @@ function renderSheet(data) {
       <label><span>${esc(t("ts.due"))}</span><input type="date" name="due" class="search" value="${esc(x.due ?? "")}"></label>
       <label><span>${esc(t("ts.time"))}</span><input type="time" name="time" class="search" value="${esc(x.time ?? "")}"></label>
       <label><span>${esc(t("ts.priority"))}</span><select name="priority" class="sel">${[1, 2, 3].map((n) => opt(n, t(`ts.p${n}`), x.priority ?? 2)).join("")}</select></label>
-      <label><span>${esc(t("ts.owner"))}</span><input name="owner" class="search" list="ts-owners" value="${esc(x.owner ?? "samuel")}" autocomplete="off"></label>
+      <label><span>${esc(t("ts.owner"))}</span><input name="owner" class="search" list="ts-owners" value="${esc(x.owner ?? OWNER.id)}" autocomplete="off"></label>
       <label class="wide"><span>${esc(t("ts.project"))}</span><input name="project" class="search" list="ts-projects" value="${esc(x.project ?? "")}" autocomplete="off"></label>
       <label><span>${esc(t("ts.repeat"))}</span><select name="repeat" class="sel">${opt("", t("ts.r.none"), x.repeat)}${["daily", "weekdays", "weekly", "monthly"].map((r) => opt(r, t(`ts.r.${r}`), x.repeat)).join("")}</select></label>
       <label><span>${esc(t("ts.remind"))}</span><input type="number" min="0" max="1440" name="remind" class="search" value="${esc(x.remind ?? "")}" placeholder="15"></label>
-      <datalist id="ts-owners">${["samuel", "claude"].map((o) => `<option value="${o}">`).join("")}</datalist>
+      <datalist id="ts-owners">${[OWNER.id, "claude"].map((o) => `<option value="${o}">`).join("")}</datalist>
       <datalist id="ts-projects">${projects.map((pp) => `<option value="${esc(pp)}">`).join("")}</datalist>
     </div>
 

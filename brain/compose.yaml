@@ -14,6 +14,10 @@ services:
       - BRAIN_PASSPHRASE=${BRAIN_PASSPHRASE}
       - BRAIN_TOTP_SECRET=${BRAIN_TOTP_SECRET}
       - BRAIN_BACKUP_KEY=${BRAIN_BACKUP_KEY}
+      # whose brain this is (shared/mcp/lib/owner.ts): the default owner of a task, the name and language
+      - CLAUDE_MULTI_OWNER_ID=${CLAUDE_MULTI_OWNER_ID}
+      - CLAUDE_MULTI_OWNER_NAME=${CLAUDE_MULTI_OWNER_NAME}
+      - CLAUDE_MULTI_LANGUAGE=${CLAUDE_MULTI_LANGUAGE}
       - BRAIN_EMBED_URL=http://ollama:11434
       - BRAIN_EMBED_MODEL=bge-m3
       - BRAIN_DATA=/data

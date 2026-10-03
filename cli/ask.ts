@@ -12,11 +12,12 @@
 import { BIN, expandHome, HOME, launchers, readJson, running, STATE } from "./lib.ts";
 import { dayOf } from "../shared/mcp/lib/tasks.ts";
 import { BRAIN as WIKI } from "./brain.ts";
+import { owner } from "../shared/mcp/lib/owner.ts";
 
 type Json = (v: unknown, code?: number) => Response;
 export type AskKind = "ask" | "newtask" | "debrief" | "brain";
 
-// Samuel's brain, read only: the claude.ai connector "Brain" of the personal profile, as the CLI names it
+// The owner's brain, read only: the claude.ai connector "Brain" of the personal profile, as the CLI names it
 const BRAIN_READ = ["mcp__claude_ai_Brain__brain_search", "mcp__claude_ai_Brain__brain_read", "mcp__claude_ai_Brain__brain_list"];
 // what a change to the brain may use: its writing tools, never deletion (brain_delete stays out)
 const BRAIN_WRITE = ["brain_write", "brain_edit", "brain_append", "brain_move", "brain_inbox_clear", "brain_check", "brain_history", "brain_restore"]
@@ -37,39 +38,40 @@ export const TOOLS: Record<AskKind, string[]> = {
 /** Claude Code's own tools a kind may use at all (the rules above narrow them): none, except reading the old wiki. */
 const BUILTIN: Record<AskKind, string> = { ask: "", newtask: "", debrief: "", brain: "Read" };
 
-const BASE = (now: string) =>
-  `You answer inside Samuel's console (claude-multi), in a panel above the field he typed in. Answer in Italian ` +
-  `unless he writes in another language. No preamble, no closing question. Now: ${now}.`;
+const BASE = (now: string, o = owner()) =>
+  `You answer inside ${o.name}'s console (claude-multi), in a panel above the field they typed in. Answer in ${o.language} ` +
+  `unless they write in another language. No preamble, no closing question. Now: ${now}.`;
 
-/** Pure: the instructions for a kind of request. */
-export function promptFor(kind: AskKind, now: string, project?: string | null, noProject = false): string {
+/** Pure but for the owner (owner.ts, passed in tests): the instructions for a kind of request. */
+export function promptFor(kind: AskKind, now: string, project?: string | null, noProject = false, o = owner()): string {
+  const base = BASE(now, o), who = o.name;
   if (kind === "newtask") {
-    const where = project ? `the project "${project}"` : noProject ? `no project (a simple thing to do)` : `a project you work out from what he says`;
+    const where = project ? `the project "${project}"` : noProject ? `no project (a simple thing to do)` : `a project you work out from what they say`;
     const set = project ? `project "${project}"` : noProject ? "no project" : `project: the folder under ~ it belongs to (work/acme/site, ` +
-      `personal/dnd/dragons-lair: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
-    return `${BASE(now)}\nSamuel is describing a new task for ${where}. Create it with tasks_add: a short, clear title in his ` +
-      `words, ${set}, a day and time only if he gave them (resolve "domani", "venerdì" ` +
-      `from today), and in notes what he explained, as a short description. If it takes more than one action, add the steps ` +
-      `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what he wrote is too ` +
-      `vague to be a task, ask him one short question instead of creating it.`;
+      `personal/blog: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
+    return `${base}\n${who} is describing a new task for ${where}. Create it with tasks_add: a short, clear title in their ` +
+      `words, ${set}, a day and time only if they gave them (resolve "tomorrow", "Friday" ` +
+      `from today), and in notes what they explained, as a short description. If it takes more than one action, add the steps ` +
+      `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what they wrote is too ` +
+      `vague to be a task, ask one short question instead of creating it.`;
   }
   if (kind === "brain") {
-    const on = project ? `He is looking at the page ${project}: "this page" means it; read it first (brain_read).` : "He is looking at the brain as a whole.";
-    return `${BASE(now)}\nSamuel asks for a change to his brain, from its page in the console. ${on} Make the change with the ` +
+    const on = project ? `They are looking at the page ${project}: "this page" means it; read it first (brain_read).` : "They are looking at the brain as a whole.";
+    return `${base}\n${who} asks for a change to their brain, from its page in the console. ${on} Make the change with the ` +
       `brain tools, by the brain's rules (they refuse what breaks them: fix and try again). You can only write in the brain, ` +
-      `nothing else. Prefer brain_edit to rewriting a page; read before changing; never invent facts he did not give or ` +
-      `that the brain does not already hold: if something is missing, ask him one short question instead. The old wiki ` +
+      `nothing else. Prefer brain_edit to rewriting a page; read before changing; never invent facts they did not give or ` +
+      `that the brain does not already hold: if something is missing, ask one short question instead. The old wiki ` +
       `(${WIKI}, an archive) can be read with Read, never written: to bring a subject over, rewrite what still holds ` +
       `into the right page (search first: update rather than copy). Then answer ` +
       `in one or two lines: what you changed, page by page.`;
   }
   if (kind === "debrief") {
-    return `${BASE(now)}\nWrite Samuel's debrief for today from tasks_brief and today's calendar events: at most three short ` +
+    return `${base}\nWrite ${who}'s debrief for today from tasks_brief and today's calendar events: at most three short ` +
       `lines, plain sentences, no headings, no bullets. First what matters today, with times; then anything late; then ` +
-      `what he is waiting for from others, if anything. If the day is empty say so in one line.`;
+      `what they are waiting for from others, if anything. If the day is empty say so in one line.`;
   }
-  return `${BASE(now)}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when he says ` +
-    `something to do, add it), his calendar, mail and Drive read only, his brain (memory: projects, people, notes) read only. Never send mail or create events from ` +
+  return `${base}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when they say ` +
+    `something to do, add it), their calendar, mail and Drive read only, their brain (memory: projects, people, notes) read only. Never send mail or create events from ` +
     `here: say it is for a conversation. When the request needs work inside a project's files (code, changes, looking ` +
     `through a repository), do not start it here: say in one line what you would do, then end with a line of its own ` +
     `[[code:PATH]] where PATH is the project's folder under ~ (for example ~/work/acme/site) if you know it or can find ` +

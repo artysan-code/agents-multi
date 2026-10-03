@@ -24,6 +24,7 @@ import { assetsApi, claudeAssets } from "./claude-assets.ts";
 import { probeAccount } from "./vault.ts";
 import { brainGraph, brainPage } from "./brain.ts";
 import { memoryApi, memoryVersion } from "./memory.ts";
+import { owner } from "../shared/mcp/lib/owner.ts";
 import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
 import { addTask, brief, listTasks, tasksRoot, type TaskInput, updateTask } from "../shared/mcp/lib/tasks.ts";
 import { connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
@@ -418,6 +419,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         const earlier = cal.tasks.filter((t) => t.due === b.day && t.time && t.time < clock);
         return json({ ...b, earlier, calendarErrors: cal.errors });
       }
+      if (u.pathname === "/api/owner") return json(owner()); // whose console this is: the tasks page needs the id
       const mr = req.method === "GET" ? await memoryApi(u) : null;
       if (mr) return mr;
       // the old wiki, read-only: the Brain page's Archive

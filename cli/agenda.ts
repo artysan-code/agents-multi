@@ -3,6 +3,7 @@
 // same way. Marked `source: "calendar"` (and never written back: they are not tasks), with the
 // account as their project. Any account that cannot be read is skipped, and said in `errors`.
 
+import { owner } from "../shared/mcp/lib/owner.ts";
 import { ACCOUNTS } from "./mcp.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { accessToken, loadClient } from "../shared/mcp/lib/google.ts";
@@ -22,7 +23,7 @@ export function eventAsTask(e: Doc, account: string): Task | null {
   if (!due) return null;
   return {
     id: `ev-${account}-${e.id}`, title: e.summary ?? "(no title)", status: "todo", due, ...(start ? { time: hhmm(start) } : {}),
-    project: account, owner: "samuel", source: "calendar", created: e.created ?? "", updated: e.updated ?? "",
+    project: account, owner: owner().id, source: "calendar", created: e.created ?? "", updated: e.updated ?? "",
   };
 }
 

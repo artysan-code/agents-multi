@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --allow-net --allow-read --allow-env --allow-run=/usr/bin/secret-tool
-// google — MCP server on Samuel's Google accounts (accounts.json, service "google"): Gmail,
+// google — MCP server on the owner's Google accounts (accounts.json, service "google"): Gmail,
 // Calendar, Drive. Several accounts per profile (personal, acme…): each tool takes `account`.
 //
-// Mail goes out in two steps, and the second one always asks: gmail_draft writes a draft Samuel
+// Mail goes out in two steps, and the second one always asks: gmail_draft writes a draft the owner
 // can read, gmail_send sends an existing draft — and mcp__google__gmail_send is in the shared `ask`
 // permissions, so it needs his yes even in auto mode. Nothing here deletes anything.
 // Calendar writes default to sendUpdates "none": invitations go out only when he asks for them.
@@ -77,7 +77,7 @@ server.registerTool("gmail_thread", {
 server.registerTool("gmail_draft", {
   description:
     "Write a draft (plain text), or replace an existing one (draftId). To reply, pass the thread's threadId and the last message's messageId " +
-    "(from gmail_thread) so it stays in the conversation. It does NOT send: show Samuel the draft, then gmail_send only if he says so.",
+    "(from gmail_thread) so it stays in the conversation. It does NOT send: show the user the draft, then gmail_send only if they say so.",
   inputSchema: {
     account, to: z.string(), subject: z.string(), body: z.string(), cc: z.string().optional(), bcc: z.string().optional(),
     threadId: z.string().optional(), inReplyTo: z.string().optional().describe("Message-ID of the message answered"),
@@ -101,7 +101,7 @@ server.registerTool("gmail_drafts", {
 });
 
 server.registerTool("gmail_send", {
-  description: "Send an existing draft. Only when Samuel has asked to send it (this tool always asks for his approval).",
+  description: "Send an existing draft. Only when the user has asked to send it (this tool always asks for their approval).",
   inputSchema: { account, draftId: z.string() },
 }, async ({ account, draftId }: { account?: string; draftId: string }) => {
   const r = await api(account, `${GMAIL}/drafts/send`, { method: "POST", body: JSON.stringify({ id: draftId }) });
@@ -140,7 +140,7 @@ server.registerTool("calendar_events", {
 const eventFields = {
   title: z.string().optional(), start: when.optional(), end: when.optional(), description: z.string().optional(), location: z.string().optional(),
   attendees: z.array(z.string()).optional().describe("email addresses"),
-  sendUpdates: z.enum(["none", "all", "externalOnly"]).optional().describe("invitations by mail: default none; 'all' only when Samuel asks"),
+  sendUpdates: z.enum(["none", "all", "externalOnly"]).optional().describe("invitations by mail: default none; 'all' only when the user asks"),
 };
 const eventBody = (a: { title?: string; start?: string; end?: string; description?: string; location?: string; attendees?: string[] }) => ({
   ...(a.title !== undefined ? { summary: a.title } : {}), ...(a.start ? { start: slot(a.start) } : {}), ...(a.end ? { end: slot(a.end) } : {}),

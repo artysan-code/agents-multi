@@ -6,5 +6,16 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 command -v deno >/dev/null 2>&1 || { echo "claude-multi: serve deno (https://deno.land)" >&2; exit 1; }
-exec deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com,brain.example.com,"unix:${XDG_RUNTIME_DIR:-/tmp}/claude-multi-app.sock" \
+# the brain's host, from the brain accounts of accounts.json: whoever's brain it is
+ACCOUNTS="${CLAUDE_MULTI_ACCOUNTS:-$HOME/.claude-multi/shared/mcp/accounts.json}"
+BRAIN_HOSTS=$(python3 - "$ACCOUNTS" 2>/dev/null <<'PY' || true
+import json, sys, urllib.parse
+try:
+    accounts = json.load(open(sys.argv[1])).get("accounts", [])
+except (OSError, ValueError):
+    accounts = []
+print(",".join(sorted({urllib.parse.urlparse(a["url"]).netloc for a in accounts if a.get("service") == "brain" and a.get("url")})))
+PY
+)
+exec deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com${BRAIN_HOSTS:+,$BRAIN_HOSTS},"unix:${XDG_RUNTIME_DIR:-/tmp}/claude-multi-app.sock" \
   "$REPO/cli/main.ts" "$@"

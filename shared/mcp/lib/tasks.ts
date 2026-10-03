@@ -1,17 +1,19 @@
-// tasks.ts — Samuel's tasks: what there is to do, by when, at what time, and who has to move.
+// tasks.ts — the owner's tasks: what there is to do, by when, at what time, and who has to move.
 //
-// One Markdown file per task. Where the files are is the store's business: in Samuel's brain when
+// One Markdown file per task. Where the files are is the store's business: in the owner's brain when
 // there is a brain account (brain-tasks.ts, the only list from 2026-10-02 on), otherwise in
 // ~/brains/tasks/items (CLAUDE_MULTI_TASKS overrides the root), a Syncthing folder. That root also
 // keeps settings.json and the files attached from the console. A task is never deleted, it is
 // `dropped`: a write, which keeps it in the history (and on Syncthing, where a removal can get lost).
 //
-// The owner is who has to move: `samuel` (the default), `claude` (work a session can pick up), or
-// anyone else — then the task is usually `waiting` on them. Dates and times are local (Europe/Rome
-// on these machines): `due` is a day, `time` an hour of that day, `remind` minutes before it.
+// The owner is who has to move: the setup's owner (owner.ts, the default), `claude` (work a session
+// can pick up), or anyone else — then the task is usually `waiting` on them. Dates and times are local
+// (the machine's time zone): `due` is a day, `time` an hour of that day, `remind` minutes before it.
 //
 // Everything below the store is pure and takes `now`, so the brief and the reminders are tested
 // without a clock.
+
+import { owner } from "./owner.ts";
 
 export type Status = "todo" | "doing" | "waiting" | "done" | "dropped";
 export const STATUSES: Status[] = ["todo", "doing", "waiting", "done", "dropped"];
@@ -25,7 +27,7 @@ export interface Task {
   due?: string; // YYYY-MM-DD
   time?: string; // HH:MM
   remind?: number; // minutes before `time`
-  owner?: string; // samuel · claude · someone else
+  owner?: string; // the setup's owner (owner.ts) · claude · someone else
   project?: string;
   priority?: 1 | 2 | 3; // 1 high
   repeat?: Repeat;
@@ -231,7 +233,7 @@ export function addTask(input: TaskInput, now = new Date()): Promise<Task> {
 }
 async function addTaskNow(input: TaskInput, now: Date): Promise<Task> {
   const base: Task = { id: newId(now), title: "", status: "todo", created: now.toISOString(), updated: now.toISOString() };
-  const t = applyInput(base, { owner: "samuel", ...input }, now);
+  const t = applyInput(base, { owner: owner().id, ...input }, now);
   if (!t.title) throw new Error("a task needs a title");
   await write(t);
   return t;
@@ -392,9 +394,9 @@ export const momentOf = (now: Date): Moment => now.getHours() < 13 ? "morning" :
 
 /** Pure: what the day holds, seen from `now`. `later` is the rest of today still ahead; in the
  *  evening `tomorrow` is what comes next. Tasks owned by someone else are listed as waiting. */
-export function brief(tasks: Task[], now: Date, horizon = 3) {
+export function brief(tasks: Task[], now: Date, horizon = 3, me = owner().id) {
   const today = dayOf(now), clock = hhmm(now);
-  const mine = tasks.filter((t) => open(t) && (!t.owner || t.owner === "samuel" || t.owner === "claude"));
+  const mine = tasks.filter((t) => open(t) && (!t.owner || t.owner === me || t.owner === "claude"));
   const todayAll = mine.filter((t) => t.due === today).sort(byTimeThenPriority);
   return {
     day: today,
@@ -406,7 +408,7 @@ export function brief(tasks: Task[], now: Date, horizon = 3) {
     tomorrow: mine.filter((t) => t.due === addDays(today, 1)).sort(byTimeThenPriority),
     upcoming: mine.filter((t) => t.due && t.due > addDays(today, 1) && t.due <= addDays(today, horizon)).sort((a, b) => a.due!.localeCompare(b.due!) || byTimeThenPriority(a, b)),
     undated: mine.filter((t) => !t.due).sort(byTimeThenPriority),
-    waiting: tasks.filter((t) => t.status === "waiting" || (open(t) && t.owner && t.owner !== "samuel" && t.owner !== "claude")),
+    waiting: tasks.filter((t) => t.status === "waiting" || (open(t) && t.owner && t.owner !== me && t.owner !== "claude")),
     doneToday: tasks.filter((t) => t.status === "done" && t.done && dayOf(new Date(t.done)) === today).length,
   };
 }

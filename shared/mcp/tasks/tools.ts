@@ -7,16 +7,17 @@ import {
   addAttachment, addStep, attachments, addTask, brief, dayOf, getTask, hhmm, listTasks, progress, REPEATS, setStep, STATUSES, steps, type Task,
   type TaskInput, updateTask,
 } from "../lib/tasks.ts";
+import { owner } from "../lib/owner.ts";
 
 const text = (o: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(o, null, 2) }] });
 const clock = () => {
   const now = new Date();
   return { today: dayOf(now), now: hhmm(now), weekday: now.toLocaleDateString("en-GB", { weekday: "long" }) };
 };
-/** A task as a line: easy to read back to Samuel, the id kept for the next call. */
+/** A task as a line: easy to read back to the owner, the id kept for the next call. */
 const line = (t: Task) => {
   const p = progress(t.notes);
-  return [t.due && t.due !== dayOf(new Date()) ? t.due : null, t.time, t.title, t.project ? `[${t.project}]` : null, t.owner && t.owner !== "samuel" ? `(${t.owner})` : null,
+  return [t.due && t.due !== dayOf(new Date()) ? t.due : null, t.time, t.title, t.project ? `[${t.project}]` : null, t.owner && t.owner !== owner().id ? `(${t.owner})` : null,
     t.status === "doing" ? "in progress" : null, p ? `${p.done}/${p.total}` : null, t.priority === 1 ? "!" : null, `#${t.id}`]
     .filter(Boolean).join(" · ");
 };
@@ -25,8 +26,8 @@ const fields = {
   due: z.string().nullable().optional().describe("day, YYYY-MM-DD (resolve relative days from `today` in any answer); null clears"),
   time: z.string().nullable().optional().describe("hour of that day, HH:MM, 24h; null clears"),
   remind: z.number().int().nullable().optional().describe("minutes of warning before `time` (default 15)"),
-  owner: z.string().nullable().optional().describe("who has to move: samuel (default), claude, or someone's name — then it is waiting on them"),
-  project: z.string().nullable().optional().describe("the project's folder under $HOME when there is one (work/acme/site, personal/dnd/dragons-lair), otherwise a short name (claude-multi)"),
+  owner: z.string().nullable().optional().describe(`who has to move: ${owner().id} (default: the owner), claude, or someone's name — then it is waiting on them`),
+  project: z.string().nullable().optional().describe("the project's folder under $HOME when there is one (work/acme/site, personal/blog), otherwise a short name (claude-multi)"),
   priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional().describe("1 high, 2 normal, 3 low"),
   repeat: z.enum(REPEATS as [string, ...string[]]).nullable().optional().describe("completing it creates the next one"),
   notes: z.string().nullable().optional().describe("the whole Markdown body: description, `- [ ]` steps, `## Attachments`. It replaces what is there: read it with tasks_get first, or use tasks_steps / tasks_attach"),
@@ -35,7 +36,7 @@ const fields = {
 export function registerTaskTools(server: McpServer) {
   server.registerTool("tasks_brief", {
     description:
-      "Samuel's debrief: what is overdue, what was missed earlier today, the rest of today by time, tomorrow, the next days, what waits on others. " +
+      "The owner's debrief: what is overdue, what was missed earlier today, the rest of today by time, tomorrow, the next days, what waits on others. " +
       "Call it when he asks for a debrief, what he has today or tomorrow, or when the day's plan is the topic. For the full picture add his calendar " +
       "(the google server's calendar tools). Read it back briefly: times first, then the rest; mention overdue items plainly.",
     inputSchema: {},
@@ -71,7 +72,7 @@ export function registerTaskTools(server: McpServer) {
     const hits = (await listTasks()).filter((t) =>
       (q.status ? t.status === q.status : t.status === "todo" || t.status === "doing" || t.status === "waiting") &&
       (!q.project || t.project === q.project) &&
-      (!q.owner || (t.owner ?? "samuel") === q.owner.toLowerCase()) &&
+      (!q.owner || (t.owner ?? owner().id) === q.owner.toLowerCase()) &&
       (!q.from || (t.due ?? "") >= q.from) && (!q.to || (!!t.due && t.due <= q.to)) &&
       (!words || `${t.title} ${t.notes ?? ""}`.toLowerCase().includes(words))
     ).sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || (a.time ?? "99").localeCompare(b.time ?? "99"));
@@ -80,7 +81,7 @@ export function registerTaskTools(server: McpServer) {
 
   server.registerTool("tasks_add", {
     description:
-      "Add a task. Use it whenever Samuel says there is something to do (\"devo…\", \"ricordami…\", \"entro venerdì…\"), in any conversation, " +
+      "Add a task. Use it whenever the owner says there is something to do (\"devo…\", \"ricordami…\", \"entro venerdì…\"), in any conversation, " +
       "and say in one line what you added. Put a time only when he gave one.",
     inputSchema: { title: z.string(), ...fields },
   }, async (input: TaskInput) => {
@@ -89,7 +90,7 @@ export function registerTaskTools(server: McpServer) {
   });
 
   server.registerTool("tasks_update", {
-    description: "Change a task: its day, time, owner, project, priority, notes, or status (todo, doing, waiting, done, dropped) — the status is its column on Samuel's board: set `doing` when work on it starts. Dropped instead of deleting.",
+    description: "Change a task: its day, time, owner, project, priority, notes, or status (todo, doing, waiting, done, dropped) — the status is its column on the owner's board: set `doing` when work on it starts. Dropped instead of deleting.",
     inputSchema: { id: z.string(), title: z.string().optional(), status: z.enum(STATUSES as [string, ...string[]]).optional(), ...fields },
   }, async ({ id, ...input }: TaskInput & { id: string }) => {
     const r = await updateTask(id.replace(/^#/, ""), input);
@@ -107,7 +108,7 @@ export function registerTaskTools(server: McpServer) {
 
   server.registerTool("tasks_steps", {
     description:
-      "The steps of a task (its checklist, which gives the progress Samuel sees on the board): add steps, and tick or untick them by index (from tasks_get). " +
+      "The steps of a task (its checklist, which gives the progress the owner sees on the board): add steps, and tick or untick them by index (from tasks_get). " +
       "Use it to break a task down, and to tick what is done as you work — in any chat.",
     inputSchema: {
       id: z.string(),
@@ -129,7 +130,7 @@ export function registerTaskTools(server: McpServer) {
   server.registerTool("tasks_attach", {
     description:
       "Attach something to a task: a link (https://…), a file or folder on this computer (absolute path or ~/…), or a wiki page ([[projects/x/y]]). " +
-      "Links only: to copy a file into the task, Samuel drops it on the task in the console.",
+      "Links only: to copy a file into the task, the owner drops it on the task in the console.",
     inputSchema: { id: z.string(), target: z.string(), label: z.string().optional() },
   }, async ({ id, target, label }: { id: string; target: string; label?: string }) => {
     const r = await updateTask(id.replace(/^#/, ""), (t) => ({ notes: addAttachment(t.notes ?? "", target, label) }));
@@ -137,7 +138,7 @@ export function registerTaskTools(server: McpServer) {
   });
 
   server.registerTool("tasks_done", {
-    description: "Mark a task done — when Samuel says it is done, or when you finished it yourself. A repeating task gets its next occurrence.",
+    description: "Mark a task done — when the owner says it is done, or when you finished it yourself. A repeating task gets its next occurrence.",
     inputSchema: { id: z.string() },
   }, async ({ id }: { id: string }) => {
     const r = await updateTask(id.replace(/^#/, ""), { status: "done" });

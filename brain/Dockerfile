@@ -5,7 +5,7 @@ FROM denoland/deno:2.9.7
 
 WORKDIR /app
 COPY brain/ brain/
-COPY shared/mcp/lib/tasks.ts shared/mcp/lib/mask.ts shared/mcp/lib/
+COPY shared/mcp/lib/tasks.ts shared/mcp/lib/mask.ts shared/mcp/lib/owner.ts shared/mcp/lib/
 COPY shared/mcp/tasks/tools.ts shared/mcp/tasks/tools.ts
 RUN deno cache brain/main.ts
 

@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from common import BIN, CONSOLE_URL, HOME, NAME, default_profile, manifests
+from common import BIN, CONSOLE_URL, HOME, NAME, default_profile, manifests, owner
 
 # The only tools the answer may use: the tasks (all of them), and reading the rest. With
 # --permission-mode dontAsk anything else — sending mail, creating events, the other servers'
@@ -47,11 +47,11 @@ ALLOWED = [
     "mcp__claude_ai_Brain__brain_search", "mcp__claude_ai_Brain__brain_read", "mcp__claude_ai_Brain__brain_list",
 ]
 
-PROMPT = """You are «Hey Claude», Samuel's quick entry from the desktop: one field, one short answer.
-Answer in Italian unless he writes in another language. Be brief: one to four lines, no preamble, no
+PROMPT = """You are «Hey Claude», {name}'s quick entry from the desktop: one field, one short answer.
+Answer in {language} unless they write in another language. Be brief: one to four lines, no preamble, no
 closing question. Today is {today}.
-Use the tools: tasks (add, close, move, the day's brief: follow the tasks rule), his calendar, mail and
-Drive read only, his brain (memory) read only. Never send mail or create events from here: say it is for a conversation.
+Use the tools: tasks (add, close, move, the day's brief: follow the tasks rule), their calendar, mail and
+Drive read only, their brain (memory) read only. Never send mail or create events from here: say it is for a conversation.
 When the request needs work inside a project's files (code, changes, looking through a repository),
 do not start it here: say in one line what you would do, then end with a line of its own
 [[code:PATH]] where PATH is the project's folder under ~ (for example ~/work/acme/site) if you know it
@@ -310,7 +310,7 @@ class HeyPanel(QWidget):
 
         args = ["-p", arg(q), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
                 "--tools", "", "--permission-mode", "dontAsk", "--allowedTools", *ALLOWED,
-                "--append-system-prompt", PROMPT.format(today=datetime.now().strftime("%A %d %B %Y, %H:%M"))]
+                "--append-system-prompt", PROMPT.format(today=datetime.now().strftime("%A %d %B %Y, %H:%M"), **owner())]
         if self.session:
             args += ["--resume", self.session]
         args += ["--model", self.model.currentData() or "sonnet"]

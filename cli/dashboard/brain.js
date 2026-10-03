@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — the Brain: Samuel's memory on the brain service, read through the console
+/* claude-multi console — the Brain: the owner's memory on the brain service, read through the console
    (cli/memory.ts, the token stays there). The seven areas as a tree, search by words and by meaning,
    a reader with who wrote what and when, the links both ways, every version and what changed, the
    page's neighbourhood as a small live graph, the whole graph on its own screen, the diary as a

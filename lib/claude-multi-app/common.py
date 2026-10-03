@@ -15,6 +15,18 @@ HOME = Path.home()
 BIN = HOME / ".local" / "bin"
 PORT = int(os.environ.get("CLAUDE_MULTI_PORT", "7331"))
 CONSOLE_URL = f"http://127.0.0.1:{PORT}"
+
+
+def owner() -> dict:
+    """Whose setup this is (shared/mcp/lib/owner.ts reads the same file): name and language for the prompts."""
+    o = {"name": "the user", "language": "English"}
+    path = Path(os.environ.get("CLAUDE_MULTI_CONFIG") or Path.home() / ".claude-multi" / "config") / "owner.json"
+    try:
+        data = json.loads(path.read_text())
+        o.update({k: v.strip() for k, v in data.items() if k in o and isinstance(v, str) and v.strip()})
+    except (OSError, ValueError):
+        pass
+    return o
 CONSOLE_UNIT = f"{NAME}-console.service"
 DATA_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local" / "share")) / NAME / "app"
 STATE_FILE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state")) / NAME / "app.json"
