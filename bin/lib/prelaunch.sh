@@ -62,6 +62,10 @@ main() {
     if g pull -q --ff-only 2>/dev/null; then
       pulled=$behind; behind=0
       echo "claude-multi: config aggiornata (+$pulled commit)" >&2
+      # la console tiene in memoria il codice con cui è partita: se il pull lo ha cambiato, ripartire
+      if ! g diff --quiet ORIG_HEAD HEAD -- cli shared/mcp/lib 2>/dev/null; then
+        systemctl --user try-restart claude-multi-console.service >/dev/null 2>&1 || true
+      fi
     fi
   fi
 

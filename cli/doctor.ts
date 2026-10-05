@@ -11,6 +11,7 @@ import { lastBackup } from "./brain-backup.ts";
 import { getSecret, keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { legacyFilesPresent, probeAccount } from "./vault.ts";
 import { PORT } from "./serve.ts";
+import { codeVersion } from "./codeversion.ts";
 
 /** The Syncthing conflict copies (name.sync-conflict-…) under a folder, as paths relative to it. */
 async function syncConflicts(root: string, rel = ""): Promise<string[]> {
@@ -212,7 +213,14 @@ export async function doctor(): Promise<Check[]> {
     const act = (await run("systemctl", ["--user", "is-active", "claude-multi-console.service"])).out;
     if (en !== "enabled") add("console.unit", "warn", `claude-multi-console.service: ${en || "not installed"}`, "claude-multi install");
     else if (act !== "active") add("console.unit", "warn", `claude-multi-console.service is ${act}`, "systemctl --user restart claude-multi-console.service");
-    else add("console.unit", "ok", `console on http://127.0.0.1:${PORT} (systemd user unit)`);
+    else {
+      // a console started before a pull or an edit runs old code: its pages show what that code knew
+      const running = await fetch(`http://127.0.0.1:${PORT}/api/code`, { signal: AbortSignal.timeout(3000) })
+        .then(async (r): Promise<{ code?: string }> => r.ok ? await r.json() : (await r.body?.cancel(), {})).catch(() => null);
+      const now = await codeVersion();
+      if (running && running.code !== now) add("console.code", "warn", "the console runs older code than the repository (started before a pull or an edit)", "systemctl --user restart claude-multi-console.service");
+      else add("console.unit", "ok", `console on http://127.0.0.1:${PORT} (systemd user unit)`);
+    }
   }
 
   // --- MCP: registry against the surfaces, plus dependencies

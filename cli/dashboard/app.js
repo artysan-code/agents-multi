@@ -76,7 +76,14 @@ const post = (path, body) =>
   });
 
 /* ---------------- live connection ---------------- */
-let es = null, lastEvent = 0, esRetry = 0, liveState = "busy";
+let es = null, lastEvent = 0, esRetry = 0, liveState = "busy", bootCode = "";
+/** A reload, but not under someone's fingers: while a field has focus, or a drawer with a form is
+    open, it waits and asks again. */
+function reloadWhenIdle() {
+  const busy = document.activeElement?.matches?.("input, textarea, select, [contenteditable]") || document.querySelector(".drawer form, dialog[open]");
+  if (busy) return setTimeout(reloadWhenIdle, 5000);
+  location.reload();
+}
 function connect() {
   es?.close();
   es = new EventSource("/api/events");
@@ -91,6 +98,13 @@ function connect() {
     // silently stale; a bounded backoff makes the reconnection visible instead.
     if (esRetry < 6) setTimeout(connect, Math.min(30000, 2000 * 2 ** esRetry++));
   };
+  // the code serving this page: another one after a restart means this page is old, and it reloads
+  es.addEventListener("hello", (e) => {
+    let code = "";
+    try { code = JSON.parse(e.data).code ?? ""; } catch { /* an old console says nothing */ }
+    if (!bootCode) bootCode = code;
+    else if (code && code !== bootCode) reloadWhenIdle();
+  });
   es.addEventListener("usage", (e) => {
     lastEvent = Date.now();
     // the event names the sessions that just wrote: light those up now, redraw the rest later

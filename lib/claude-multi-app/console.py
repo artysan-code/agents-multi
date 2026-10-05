@@ -11,7 +11,7 @@ The web engine keeps its storage (the page's theme, say) under DATA_DIR.
 from __future__ import annotations
 
 from PySide6.QtCore import QProcess, QTimer, QUrl, Qt, Signal
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget, QVBoxLayout, QWidget
@@ -78,6 +78,10 @@ class ConsoleWindow(QMainWindow):
         self.stack.addWidget(self._offline())
         self.setCentralWidget(self.stack)
 
+        # F5 and Ctrl+R reload, as in a browser (the page also reloads itself when the console's code changes)
+        for keys in (QKeySequence.StandardKey.Refresh, QKeySequence("Ctrl+R")):
+            QShortcut(keys, self, activated=self._reload)
+
     def _offline(self) -> QWidget:
         w = QWidget(self)
         col = QVBoxLayout(w)
@@ -102,6 +106,12 @@ class ConsoleWindow(QMainWindow):
         col.addLayout(row)
         col.addStretch(2)
         return w
+
+    def _reload(self) -> None:
+        if self.stack.currentIndex() == 0:
+            self.view.reload()
+        else:
+            self.open()
 
     def _start_console(self) -> None:
         QProcess.startDetached("systemctl", ["--user", "start", CONSOLE_UNIT])

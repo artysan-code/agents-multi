@@ -18,6 +18,7 @@ import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
 import { startBrainLogin } from "./brain-login.ts";
+import { codeVersion } from "./codeversion.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import { taskApi } from "./taskboard.ts";
 import { askApi } from "./ask.ts";
@@ -34,6 +35,8 @@ import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
+/** The code this console started with (codeversion.ts): set by serve(), told to every page. */
+let CODE = "";
 const DASH = `${REPO}/cli/dashboard`;
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8" };
 
@@ -271,6 +274,8 @@ function eventStream(): Response {
         try { controller.enqueue(enc.encode(s)); } catch { close(); }
       };
       write("retry: 2000\n\n");
+      // first, which code is serving: a page loaded from an older console reloads itself
+      write(`event: hello\ndata: ${JSON.stringify({ code: CODE })}\n\n`);
       send = (topic, ids = []) => write(`event: ${topic}\ndata: ${JSON.stringify({ at: Date.now(), sessions: ids })}\n\n`);
       clients.add(send);
       // A proxy or a sleeping laptop can drop a silent connection: a comment every 25s keeps it
@@ -307,6 +312,7 @@ async function watchBrain(signal: AbortSignal, tasks: boolean) {
 
 export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
+  CODE = await codeVersion();
   // The status report takes a second or more (it runs the doctor). Pages must not wait for it on
   // every open: it is computed at start, kept, and refreshed behind the scenes when it ages; a
   // request waits only when something changed (a state event, an action) and the old report would
@@ -346,6 +352,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     if (!["127.0.0.1", "localhost", "[::1]"].includes(host)) return new Response("forbidden host", { status: 403 });
     try {
       if (u.pathname === "/api/events") return eventStream();
+      if (u.pathname === "/api/code") return json({ code: CODE });
 
       if (u.pathname === "/api/status") {
         await statusCache(u.searchParams.has("fresh"));
