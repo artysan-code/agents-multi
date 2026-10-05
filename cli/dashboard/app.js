@@ -1214,6 +1214,9 @@ document.addEventListener("click", (e) => {
 
 /* ---------------- plugins ---------------- */
 let PL = null, CAT = null, plBusy = false;
+// the catalog draws a page at a time; a new search or marketplace starts again from the first
+const CAT_PAGE = 20;
+let catShown = CAT_PAGE;
 
 async function loadPlugins(fresh = false) {
   PL = await api("/api/plugins" + (fresh ? "?fresh" : ""));
@@ -1328,10 +1331,11 @@ function renderCatalog() {
   const hits = CAT.filter((c) =>
     (!mk || c.marketplace === mk) && (!q || `${c.id} ${c.description}`.toLowerCase().includes(q))
   );
-  $("#cat-sum").textContent = t("cat.sum", { n: hits.length, t: CAT.length });
+  const page = hits.slice(0, catShown);
+  $("#cat-sum").textContent = t("cat.sum", { n: page.length, t: hits.length });
   const profs = PL?.profiles ?? [];
   const where = (id) => profs.filter((p) => PL?.plugins.find((r) => r.id === id)?.profiles[p]?.installed);
-  $("#cat-rows").innerHTML = hits.slice(0, 80).map((c) => {
+  $("#cat-rows").innerHTML = page.map((c) => {
     const w = where(c.id);
     return `<tr>
       <td class="cdesc"><span class="pname">${esc(c.name)}</span> <span class="dim">${esc(c.marketplace)}${
@@ -1351,7 +1355,11 @@ function renderCatalog() {
         <button class="btn sm" data-cat-install="${esc(c.id)}">${esc(t("pl.install"))}</button>
       </td>
     </tr>`;
-  }).join("") || `<tr><td class="empty">${esc(t("cat.nothing"))}</td></tr>`;
+  }).join("") + (hits.length > page.length
+    ? `<tr><td class="empty" colspan="3"><button class="btn ghost sm" data-cat-more>${
+      esc(t("cat.more", { n: Math.min(CAT_PAGE, hits.length - page.length) }))
+    }</button></td></tr>`
+    : "") || `<tr><td class="empty">${esc(t("cat.nothing"))}</td></tr>`;
 }
 
 /** Run one operation. A marketplace-declared command comes back as `confirm`: it is shown, and
@@ -1449,11 +1457,17 @@ $("#mk-add").addEventListener("submit", (e) => {
   });
 });
 let catTimer = null;
+const catFilter = () => { catShown = CAT_PAGE; renderCatalog(); };
 $("#cat-q").addEventListener("input", () => {
   clearTimeout(catTimer);
-  catTimer = setTimeout(renderCatalog, 120);
+  catTimer = setTimeout(catFilter, 120);
 });
-$("#cat-mk").addEventListener("change", renderCatalog);
+$("#cat-mk").addEventListener("change", catFilter);
+$("#cat-rows").addEventListener("click", (e) => {
+  if (!e.target.closest("[data-cat-more]")) return;
+  catShown += CAT_PAGE;
+  renderCatalog();
+});
 
 /* ---------------- navigation ---------------- */
 // #today · #connections · #system/<tab>. The tray opens a view by setting the hash.
