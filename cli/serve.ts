@@ -478,7 +478,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
 
   console.log(`${ANSI.b}claude-multi serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   void watchTree(ac.signal);
-  void watchBrain(ac.signal, await connectTasks() === "brain");
+  void watchBrain(ac.signal, connectTasks() === "brain");
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
   if (opts.open) { try { new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref(); } catch { /* no browser */ } }
   await srv.finished;

@@ -54,10 +54,22 @@ export function scoped(store: TaskStore, prefixes: string[]): TaskStore {
   };
 }
 
-/** A store that only says why there is no list: a brain account without its token on this machine. */
-function missing(why: string): TaskStore {
-  const fail = () => Promise.reject(new Error(why));
-  return { list: fail, get: fail, write: fail };
+/** The store on a brain account whose token is read from the vault when first needed, and read again
+ *  while it is missing: a process started before the vault could be read (at login, before
+ *  Syncthing or the keyring) would otherwise say "no token" until restarted. */
+export function lazyStore(account: Account, token: () => Promise<string | null>, make = brainStore): TaskStore {
+  let store: TaskStore | null = null;
+  const ready = async () => {
+    if (store) return store;
+    const t = await token().catch(() => null);
+    if (!t) throw new Error(`no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`);
+    return store = make(account.url!, t);
+  };
+  return {
+    list: async () => (await ready()).list(),
+    get: async (id) => (await ready()).get(id),
+    write: async (t) => (await ready()).write(t),
+  };
 }
 
 /** The brain account a profile sees, if there is one. */
@@ -66,11 +78,10 @@ export function brainAccount(profile = Deno.env.get("CLAUDE_MULTI_PROFILE") || u
 }
 
 /** Point this process's tasks at the brain when there is a brain account; say where they are. */
-export async function connectTasks(): Promise<"brain" | "files"> {
+export function connectTasks(): "brain" | "files" {
   const account = brainAccount();
   if (!account) return "files";
-  const token = await getSecret("brain", account.name).catch(() => null);
-  const store = token ? brainStore(account.url!, token) : missing(`no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`);
+  const store = lazyStore(account, () => getSecret("brain", account.name));
   const scope = (Deno.env.get("CLAUDE_MULTI_BRAIN_SCOPE") ?? "").split(",").map((s) => s.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean);
   useTaskStore(scope.length ? scoped(store, scope) : store);
   return "brain";

@@ -1,7 +1,7 @@
 // The tasks in the brain (shared/mcp/lib/brain-tasks.ts): which profiles use it, and what the
 // store says when the brain refuses or is away. The HTTP side runs end to end in brain/tests/e2e.ts.
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { brainAccount, brainStore, scoped } from "../../shared/mcp/lib/brain-tasks.ts";
+import { brainAccount, brainStore, lazyStore, scoped } from "../../shared/mcp/lib/brain-tasks.ts";
 import { toPrune } from "../brain-backup.ts";
 
 Deno.test("brainAccount: the brain account a profile sees, none without one", () => {
@@ -39,6 +39,21 @@ Deno.test("scoped: a work profile sees and writes only the tasks of its projects
   await assertRejects(() => s.write(mk("t-7", "personal/dnd")), Error, "work/acme");
   await assertRejects(() => s.write(mk("t-8")), Error, "work/acme");
   assertEquals(written, ["t-6"]);
+});
+
+Deno.test("lazyStore: a token missing at start is read again later, then kept", async () => {
+  const account = { service: "brain", name: "brain", url: "https://b" };
+  let token: string | null = null, reads = 0;
+  const made: string[] = [];
+  const s = lazyStore(account, () => { reads++; return Promise.resolve(token); }, (url, tok) => {
+    made.push(`${url} ${tok}`);
+    return { list: () => Promise.resolve([]), get: () => Promise.resolve(null), write: () => Promise.resolve() };
+  });
+  await assertRejects(() => s.list(), Error, "https://b/account");
+  token = "tok";
+  assertEquals(await s.list(), []);
+  await s.get("t-1");
+  assertEquals([reads, made], [2, ["https://b tok"]]);
 });
 
 Deno.test("toPrune: the oldest brain copies beyond the ones to keep, nothing else", () => {

@@ -112,7 +112,7 @@ async function migrate(dry: boolean): Promise<number> {
 }
 
 export async function tasksCommand(args: string[]): Promise<number> {
-  await connectTasks();
+  connectTasks();
   const [sub = "brief", ...rest] = args;
   const opt = (name: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : undefined; };
   switch (sub) {

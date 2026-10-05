@@ -12,6 +12,6 @@ import { registerTaskTools } from "./tools.ts";
 import { connectTasks } from "../lib/brain-tasks.ts";
 
 const server = new McpServer({ name: "tasks", version: "0.1.0" });
-await connectTasks(); // in the brain when there is a brain account, otherwise the files
+connectTasks(); // in the brain when there is a brain account, otherwise the files
 registerTaskTools(server);
 await server.connect(new StdioServerTransport());
