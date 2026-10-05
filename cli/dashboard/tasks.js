@@ -118,18 +118,22 @@ function cardHtml(x) {
   const today = TB.today;
   const late = x.due && x.due < today && open(x);
   const where = tProject ? "" : projectLabel(projectOf(x));
-  return `<article class="tcard${x.priority === 1 ? " hi" : ""}${x.status === "doing" ? " doing" : ""}" draggable="true" data-task="${esc(x.id)}">
-    <div class="tc-t">${x.ref ? `<span class="tc-ref">${esc(x.ref)}</span>` : ""}${esc(x.title)}</div>
+  return `<article class="tcard${x.status === "doing" ? " doing" : ""}" draggable="true" data-task="${esc(x.id)}">
+    <div class="tc-top">${[
+      x.ref ? `<span class="tc-ref">${esc(x.ref)}</span>` : "",
+      x.priority === 1 ? `<span class="tc-prio">${esc(t("ts.p1"))}</span>` : "",
+      where ? `<span class="tc-where">${esc(where)}</span>` : "",
+      x.due ? `<span class="tc-due${late ? " tc-late" : x.due === today ? " tc-today" : ""}">${esc(dayLabel(x.due, x.time))}</span>` : "",
+    ].join("")}</div>
+    <div class="tc-t">${esc(x.title)}</div>
+    ${x.blocked && open(x) ? `<span class="tc-blocked">${esc(t("tb.blocked"))}</span>` : ""}
     <div class="tc-m">${[
-      x.blocked && open(x) ? `<span class="tc-blocked">${esc(t("tb.blocked"))}</span>` : "",
       x.stage ? `<span class="tc-stage">${esc(x.stage)}</span>` : "",
-      x.due ? `<span class="tc-due${late ? " late" : x.due === today ? " now" : ""}">${esc(dayLabel(x.due, x.time))}</span>` : "",
-      where ? `<span>${esc(where)}</span>` : "",
-      x.owner && x.owner !== OWNER.id ? `<span>${esc(x.owner)}</span>` : "",
+      ...(x.labels ?? []).map((l) => `<span class="tc-label">${esc(l)}</span>`),
+      x.owner && x.owner !== OWNER.id ? `<span class="tc-who"><i>${esc(x.owner[0])}</i>${esc(x.owner)}</span>` : "",
       x.repeat ? `<span title="${esc(t(`ts.r.${x.repeat}`))}">${esc(t(`ts.r.${x.repeat}`))}</span>` : "",
       x.attachments ? `<span>${esc(t("tb.attN", { n: x.attachments }))}</span>` : "",
       x.parts ? `<span>${esc(t("tb.parts", { d: x.parts.done, n: x.parts.total }))}</span>` : "",
-      ...(x.labels ?? []).map((l) => `<span class="tc-label">${esc(l)}</span>`),
     ].join("")}</div>
     ${x.progress && x.status !== "done" ? `<div class="tc-pr">${bar(x.progress)}</div>` : ""}
   </article>`;
