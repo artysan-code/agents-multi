@@ -184,8 +184,12 @@ export async function cachedDebrief(): Promise<{ day: string; text: string } | n
   return d && d.day === dayOf(new Date()) ? d : null;
 }
 
-function ask(kind: AskKind, text: string, opts: { session?: string | null; project?: string | null; noProject?: boolean }, signal: AbortSignal) {
+function ask(kind: AskKind, text: string, opts: { session?: string | null; project?: string | null; noProject?: boolean }) {
   const enc = new TextEncoder();
+  // the page going away cancels the response's stream: that, and nothing else, stops claude -p
+  // (Deno.serve's request.signal also fires once a response has been delivered, and is changing)
+  const stop = new AbortController();
+  const signal = stop.signal;
   const now = new Date().toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   return new ReadableStream<Uint8Array>({
     async start(ctl) {
@@ -222,6 +226,7 @@ function ask(kind: AskKind, text: string, opts: { session?: string | null; proje
       send(done);
       ctl.close();
     },
+    cancel() { stop.abort(); },
   });
 }
 
@@ -312,7 +317,7 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
     if (!text) return json({ error: "empty" }, 400);
     const session = typeof b.session === "string" && SESSION_ID.test(b.session) ? b.session : null;
     const project = typeof b.project === "string" && /^[\w./ -]{1,200}$/.test(b.project) && !b.project.includes("..") ? b.project : null;
-    return new Response(ask(kind, text, { session, project, noProject: b.noProject === true }, req.signal), {
+    return new Response(ask(kind, text, { session, project, noProject: b.noProject === true }), {
       headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
     });
   }
