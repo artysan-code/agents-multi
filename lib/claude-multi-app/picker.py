@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QFontDatabase, QIcon, QKeyEvent, QMouseEvent
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -206,9 +206,13 @@ class Picker(QWidget):
             super().keyPressEvent(e)
 
     def changeEvent(self, e) -> None:
-        # a launcher: clicking elsewhere puts it away
-        if e.type() == e.Type.ActivationChange and not self.isActiveWindow() and self.isVisible():
-            self.close()
+        # a launcher: clicking elsewhere puts it away — only once it has had the focus (on Wayland it
+        # may never get it), and later, not inside the event: closing deletes it (WA_DeleteOnClose)
+        if e.type() == e.Type.ActivationChange:
+            if self.isActiveWindow():
+                self._had_focus = True
+            elif getattr(self, "_had_focus", False) and self.isVisible():
+                QTimer.singleShot(0, self.close)
         super().changeEvent(e)
 
     def closeEvent(self, e) -> None:
