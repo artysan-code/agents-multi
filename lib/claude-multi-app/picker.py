@@ -27,7 +27,7 @@ from common import CONSOLE_URL, HOME, default_profile, manifests, repo
 # the console's tokens (cli/dashboard/style.css), light and dark
 TOKENS = {
     False: {"surface": "#ffffff", "raised": "#f4f3ef", "line": "#e4e3df", "fg": "#0b0b0b", "dim": "#52514e",
-            "faint": "#75736d", "accent": "#c6613f", "ok": "#4f7a3a", "ok_wash": "#e6eedf"},
+            "faint": "#75736d", "accent": "#ad4e2c", "ok": "#4f7a3a", "ok_wash": "#e6eedf"},
     True: {"surface": "#1a1a19", "raised": "#232322", "line": "#2c2c2a", "fg": "#f0efec", "dim": "#c3c2b7",
            "faint": "#929089", "accent": "#d97757", "ok": "#94bd7f", "ok_wash": "rgba(148,189,127,0.14)"},
 }

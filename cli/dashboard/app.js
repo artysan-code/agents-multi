@@ -1424,7 +1424,7 @@ function renderPlugins() {
   $("#mk-rows").innerHTML = PL.marketplaces.map((m) =>
     `<tr>
       <td><span class="pname">${esc(m.name)}</span> <span class="dim">${esc(m.source)}</span></td>
-      <td>${
+      <td class="txt">${
       m.declared
         ? `<span class="chip on">${esc(t("mk.shared"))}</span>`
         : `<span class="chip" title="${esc(t("mk.localTitle"))}">${esc(t("mk.local"))}</span>`
