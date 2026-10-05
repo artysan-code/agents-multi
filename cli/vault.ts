@@ -29,18 +29,30 @@ async function readStdin(prompt: string): Promise<string> {
   return (await new Response(Deno.stdin.readable).text()).trim();
 }
 
-/** Does this secret open this account? One authenticated request, the secret passed to curl as a
- *  header file on stdin, never on its command line. */
-export async function probeAccount(a: Account, secret: string): Promise<{ ok: boolean; detail: string }> {
+/** Pure: the one request that says whether a secret opens an account — where, and the header that
+ *  carries it — or null for a service with no such check. A path is on the account's address; a
+ *  full URL is the service's own API (Supabase: a personal access token is not tied to an address). */
+export function probeRequest(a: Pick<Account, "service" | "url">, secret: string): { url: string; header: string } | null {
   const probes: Record<string, { path: string; header: string }> = {
     coolify: { path: "/api/v1/version", header: `Authorization: Bearer ${secret}` },
     n8n: { path: "/api/v1/workflows?limit=1", header: `X-N8N-API-KEY: ${secret}` },
     brain: { path: "/api/tasks", header: `Authorization: Bearer ${secret}` },
+    gitea: { path: "/api/v1/user", header: `Authorization: token ${secret}` },
+    supabase: { path: "https://api.supabase.com/v1/projects", header: `Authorization: Bearer ${secret}` },
   };
   const p = probes[a.service];
-  if (!p || !a.url) return { ok: true, detail: "no check for this service" };
+  if (!p) return null;
+  if (/^https:\/\//.test(p.path)) return { url: p.path, header: p.header };
+  return a.url ? { url: `${a.url.replace(/\/+$/, "")}${p.path}`, header: p.header } : null;
+}
+
+/** Does this secret open this account? One authenticated request, the secret passed to curl as a
+ *  header file on stdin, never on its command line. `checked` false: nothing to try it against. */
+export async function probeAccount(a: Account, secret: string): Promise<{ ok: boolean; detail: string; checked?: boolean }> {
+  const p = probeRequest(a, secret);
+  if (!p) return { ok: true, detail: "no check for this service", checked: false };
   const child = new Deno.Command("curl", {
-    args: ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "15", "-H", "@-", `${a.url}${p.path}`],
+    args: ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "15", "-H", "@-", p.url],
     stdin: "piped", stdout: "piped", stderr: "null",
   }).spawn();
   const w = child.stdin.getWriter();

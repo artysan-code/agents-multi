@@ -47,3 +47,14 @@ Deno.test("store: set, get, list without values, delete as a tombstone", async (
   await Deno.writeTextFile(`${dir}/secrets/${files[0].slice(0, -5)}.sync-conflict-20260930-120000-ABCDEFG.json`, "{}");
   assertEquals((await v.listSecrets(k)).conflicts, 1);
 });
+
+Deno.test("probeRequest: on the account's address, on the service's API, or no check", async () => {
+  const { probeRequest } = await import("../vault.ts");
+  assertEquals(probeRequest({ service: "n8n", url: "https://n8n.example/" }, "k"), { url: "https://n8n.example/api/v1/workflows?limit=1", header: "X-N8N-API-KEY: k" });
+  assertEquals(probeRequest({ service: "gitea", url: "https://git.example" }, "k")?.header, "Authorization: token k");
+  // a Supabase token is not tied to an address: it is tried on Supabase's own API
+  assertEquals(probeRequest({ service: "supabase" }, "k")?.url, "https://api.supabase.com/v1/projects");
+  // no address to try it on, or no check for the service
+  assertEquals(probeRequest({ service: "coolify" }, "k"), null);
+  assertEquals(probeRequest({ service: "railway", url: "https://x" }, "k"), null);
+});

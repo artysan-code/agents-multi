@@ -250,6 +250,20 @@ export async function doctor(): Promise<Check[]> {
       if (l.conflicts) add("vault.conflicts", "warn", `${l.conflicts} Syncthing conflict copies in the vault`, `ls ${vaultDir()}/secrets/*sync-conflict*`);
       if (l.unreadable) add("vault.unreadable", "fail", `${l.unreadable} vault entries this key cannot open`, "claude-multi vault status");
       if (!missing.length && !l.conflicts && !l.unreadable) add("vault", "ok", `secret vault: ${accounts.length} accounts, every secret here`);
+      // a secret can be here and dead (expired, revoked): one request each says whether the service
+      // still takes it. The brain has its own check below; a service with no probe is not counted.
+      const held = accounts.filter((a) => a.service !== "brain" && a.auth !== "oauth" && l.entries.some((e) => e.service === a.service && e.account === a.name));
+      const tried = await Promise.all(held.map(async (a) => {
+        const secret = await getSecret(a.service, a.name).catch(() => null);
+        return { a, r: secret ? await probeAccount(a, secret) : { ok: false, detail: "unreadable", checked: true } };
+      }));
+      const checked = tried.filter((x) => x.r.checked !== false);
+      const refused = checked.filter((x) => /HTTP 40[13]/.test(x.r.detail));
+      const silent = checked.filter((x) => !x.r.ok && !refused.includes(x));
+      const name = (x: { a: { service: string; name: string }; r: { detail: string } }) => `${x.a.service}/${x.a.name} (${x.r.detail})`;
+      if (refused.length) add("vault.keys", "fail", `the service refuses the key of ${refused.map(name).join(", ")}: expired or revoked`, "a new key: console › Connections › the account › Edit");
+      if (silent.length) add("vault.reach", "warn", `no answer to check the key of ${silent.map(name).join(", ")}`, "claude-multi doctor (later)");
+      if (checked.length && !refused.length && !silent.length) add("vault.keys", "ok", `account keys: ${checked.length} tried, every one accepted`);
       if (accounts.some((a) => a.service === "google") && !l.entries.some((e) => e.service === "google-oauth" && e.account === "client"))
         add("google.client", "warn", "Google accounts are listed but the OAuth client is not in the vault: none of them can connect", "console › Connections › Import the JSON, or claude-multi google client <file.json>");
     }
