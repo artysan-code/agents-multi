@@ -13,6 +13,7 @@ import { BIN, expandHome, HOME, launchers, readJson, running, STATE } from "./li
 import { dayOf } from "../shared/mcp/lib/tasks.ts";
 import { BRAIN as WIKI } from "./brain.ts";
 import { owner } from "../shared/mcp/lib/owner.ts";
+import { recordLogin } from "./login.ts";
 
 type Json = (v: unknown, code?: number) => Response;
 export type AskKind = "ask" | "newtask" | "debrief" | "brain";
@@ -219,6 +220,7 @@ function ask(kind: AskKind, text: string, opts: { session?: string | null; proje
       if (rest) stream.line(rest).forEach(send);
       const { code } = await child.status;
       const done = stream.end(code, await errText);
+      if (done.error || done.text) await recordLogin(launcher.profile, launcher.command, done.error ?? null);
       if (kind === "debrief" && done.text && !done.error) {
         await Deno.mkdir(STATE, { recursive: true }).catch(() => {});
         await Deno.writeTextFile(DEBRIEF, JSON.stringify({ day: dayOf(new Date()), text: done.text })).catch(() => {});

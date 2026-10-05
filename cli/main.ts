@@ -4,7 +4,8 @@
 //   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.claude-multi/config
 //   install [--dry-run]     materialise ~/.claude-multi, ~/.local/bin, units and .desktop entries (idempotent)
 //   settings [--dry-run] [--quiet]   regenerate each profile's settings.json, adopting what Claude wrote into it
-//   doctor  [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only
+//   doctor  [--probe] [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only;
+//           --probe also sends each profile one tiny request (Haiku) to check its Claude Code login
 //   status  [--json]        versions, updates, repo sync, profiles (what is mounted), running instances
 //   sync    [--fetch]       align the repository (fetch when stale, ff-only pull on a clean tree)
 //   mcp     check|sync|health [--force]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop)
@@ -55,7 +56,7 @@ switch (cmd) {
     break;
   }
   case "doctor": {
-    const c = await doctor();
+    const c = await doctor({ probe: flag("--probe") });
     if (flag("--notify")) { const sent = await notifyDoctor(c, { dryRun: flag("--dry-run") }); console.log(sent ? "notification sent" : "nothing new, no notification"); break; }
     if (flag("--json")) console.log(JSON.stringify(c, null, 2)); else Deno.exit(printDoctor(c));
     break;
@@ -139,7 +140,8 @@ switch (cmd) {
 
   init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.claude-multi/config
   install [--dry-run]         materialise runtime, wrappers, units and desktop entries (idempotent)
-  doctor  [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only
+  doctor  [--probe] [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only;
+          --probe: one tiny request per profile, to see that its Claude Code login works
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
   mcp     check|sync|health [--probe]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop); --force ignores running instances; --probe really starts each server and waits for initialize

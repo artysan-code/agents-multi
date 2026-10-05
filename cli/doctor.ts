@@ -12,6 +12,7 @@ import { getSecret, keyMatches, listSecrets, loadKey, vaultDir } from "../shared
 import { legacyFilesPresent, probeAccount } from "./vault.ts";
 import { PORT } from "./serve.ts";
 import { codeVersion } from "./codeversion.ts";
+import { loginFailures, probeLogin, recordLogin } from "./login.ts";
 
 /** The Syncthing conflict copies (name.sync-conflict-…) under a folder, as paths relative to it. */
 async function syncConflicts(root: string, rel = ""): Promise<string[]> {
@@ -29,7 +30,7 @@ export function writtenHomes(text: string): string[] {
   return [...new Set(text.match(/\/home\/[a-z_][\w.-]*/g) ?? [])];
 }
 
-export async function doctor(): Promise<Check[]> {
+export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
   const c: Check[] = [];
   const add = (id: string, status: Status, msg: string, fix?: string) => c.push({ id, status, msg, fix });
   const m = await machine();
@@ -392,6 +393,22 @@ export async function doctor(): Promise<Check[]> {
     if (handler && !handler.includes("claude-bin")) add("desktop.urlhandler", "fail", "the claude-cli:// url handler does not point at claude-bin", "claude-multi install");
   }
 
+
+  // --- Claude Code logins: what the console's requests found, and with --probe one request each
+  const failed = await loginFailures();
+  if (opts.probe) {
+    const ls = await launchers();
+    const verdicts = await Promise.all(ls.map(async (l) => ({ l, v: await probeLogin(l.command) })));
+    for (const { l, v } of verdicts) {
+      await recordLogin(l.profile, l.command, v.ok ? null : v.error ?? "error");
+      if (v.ok) add(`login.${l.profile}`, "ok", `${l.profile}: Claude Code login works`);
+      else add(`login.${l.profile}`, "warn", `${l.profile}: Claude Code cannot sign in (${v.error})`, `${l.command}, then /login`);
+    }
+  } else {
+    for (const [p, f] of Object.entries(failed)) {
+      add(`login.${p}`, "warn", `${p}: Claude Code's login stopped working (${f.error}, ${dayOf(new Date(f.at))} ${hhmm(new Date(f.at))})`, `${f.command}, then /login`);
+    }
+  }
 
   if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills is missing: external skills are unavailable on this machine", "create it, or sync it from your other machine");
   return c;
