@@ -1,5 +1,5 @@
 [Unit]
-Description=Update Claude (Code + Desktop) in the background, and check the setup's health (doctor)
+Description=Update Claude (Code + Desktop) and claude-multi in the background, and check the setup's health (doctor)
 Documentation=file://%h/.local/bin/claude-update
 # Needs the graphical session: the only notifications (a failed verification, a new doctor failure)
 # go to the desktop.

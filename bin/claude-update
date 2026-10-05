@@ -3,11 +3,14 @@
 #
 #   [CLI]     Claude Code   — updater interno + ripristino di claude-bin e del wrapper ~/.local/bin/claude
 #   [Desktop] Claude Desktop — claude-desktop-update: .deb ufficiale verificato, in user space, niente root
+#   [Self]    claude-multi   — il repo stesso: pull solo fast-forward a working tree pulito, poi riavvio di
+#                              console e app se il loro codice è cambiato e install a Claude chiuso (cli/selfupdate.ts)
 #
 # USO:
-#   claude-update              # tutto: CLI + Desktop
+#   claude-update              # tutto: CLI + Desktop + claude-multi
 #   claude-update --cli        # solo Claude Code
 #   claude-update --desktop    # solo Claude Desktop (tutte le varianti)
+#   claude-update --self       # solo claude-multi
 #   claude-update --auto       # quello che fa il timer: controlla e aggiorna ciò che è indietro, in silenzio
 #   claude-update --check      # NON aggiorna: dice solo cosa è obsoleto (--json per gli script)
 #   claude-update --rollback [--desktop]   # torna alla versione precedente (Code, o Desktop)
@@ -26,6 +29,8 @@ source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/updates.sh"
 
 VERSIONS_DIR="$HOME/.local/share/claude/versions"
+REPO_DIR="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
+CM="$REPO_DIR/bin/claude-multi"
 BIN_DIR="$HOME/.local/bin"
 
 # Canale usato dall'updater nativo: `stable` è indietro di qualche release (rollout graduale),
@@ -196,15 +201,22 @@ do_check() {
       && mv -f "$CACHE_DIR/check.json.tmp" "$CACHE_DIR/check.json"
   fi
 
+  # claude-multi stesso: solo nel testo e nell'exit code (la console legge il repo da sé)
+  local self_line="" self_out=false
+  if [[ $json -eq 0 ]]; then
+    self_line="$("$CM" self-update --check 2>/dev/null)"; [[ $? -eq 10 ]] && self_out=true
+  fi
+
   if [[ $json -eq 1 ]]; then
     cat "$CACHE_DIR/check.json" 2>/dev/null || printf '{"cli":{"current":"%s","latest":"","outdated":false},"desktop":{"current":"%s","latest":"","outdated":false}}\n' "$cc" "$dc"
   else
     printf "  Code     %s → %s   %s\n" "${cc:-?}" "${cl:-?}" "$([[ $cli_out  == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
     printf "  Desktop  %s → %s   %s\n" "${dc:-?}" "${dl:-?}" "$([[ $desk_out == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
+    [[ -n "$self_line" ]] && echo "$self_line"
   fi
 
   # exit 10 = c'e' almeno un aggiornamento; 0 = tutto allineato. Comodo negli `if` di shell.
-  [[ $cli_out == true || $desk_out == true ]] && return 10
+  [[ $cli_out == true || $desk_out == true || $self_out == true ]] && return 10
   return 0
 }
 
@@ -214,13 +226,14 @@ case "${1:-}" in
   ""|--all)    scope="all" ;;
   --cli)       scope="cli" ;;
   --desktop)   scope="desktop" ;;
+  --self)      scope="self" ;;
   --auto)      scope="auto" ;;
   --check)     do_check "${2:-}"; exit $? ;;
   --rollback)
     if [[ "${2:-}" == "--desktop" ]]; then "$BIN_DIR/claude-desktop-update" --rollback; exit $?; fi
     take_lock; do_rollback; exit $? ;;
-  -h|--help)   sed -n '2,19p' "$0"; exit 0 ;;
-  *) echo "Uso: claude-update [--cli|--desktop|--auto|--check [--json]|--rollback [--desktop]]  (default: entrambi)" >&2; exit 2 ;;
+  -h|--help)   sed -n '2,22p' "$0"; exit 0 ;;
+  *) echo "Uso: claude-update [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]  (default: tutti)" >&2; exit 2 ;;
 esac
 
 # --auto: il giro del timer. Aggiorna ciò che il check trova indietro, senza chiedere e senza
@@ -238,12 +251,14 @@ if [[ "$scope" == "auto" ]]; then
   fi
   QUIET=1 "$BIN_DIR/claude-desktop-update" >/dev/null; rc=$?
   do_check >/dev/null 2>&1 || true
-  [[ $rc -eq 0 || $rc -eq 5 ]] || exit 1
+  # per ultimo: può riavviare la console, che potrebbe essere chi ha lanciato questo giro
+  "$CM" self-update --quiet; src=$?
+  [[ $rc -eq 0 || $rc -eq 5 ]] && [[ $src -eq 0 ]] || exit 1
   exit 0
 fi
 
 take_lock
-cli_res="—"; desk_res="—"
+cli_res="—"; desk_res="—"; self_res="—"
 
 # NB: do_cli/do_desktop sono subshell con `set -e` interno. NON invocarle come condizione
 # di `if` (`if do_cli; then`): in quel contesto bash DISABILITA il `set -e` della subshell
@@ -271,6 +286,12 @@ if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
   fi
 fi
 
+if [[ "$scope" == "all" || "$scope" == "self" ]]; then
+  echo "==> [Self] aggiornamento claude-multi..."
+  "$CM" self-update; rc=$?
+  if [[ $rc -eq 0 ]]; then self_res="ok    $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null)"; else self_res="FAIL"; fi
+fi
+
 # La cache del check (statusline, console) descrive il mondo di prima: si rigenera subito.
 [[ "$cli_res" == ok* || "$desk_res" == ok* ]] && { do_check --json >/dev/null 2>&1 || true; }
 
@@ -278,8 +299,9 @@ echo
 echo "──────── riepilogo ────────"
 [[ "$scope" == "all" || "$scope" == "cli"     ]] && printf "  Code     %s\n" "$cli_res"
 [[ "$scope" == "all" || "$scope" == "desktop" ]] && printf "  Desktop  %s\n" "$desk_res"
+[[ "$scope" == "all" || "$scope" == "self"    ]] && printf "  claude-multi %s\n" "$self_res"
 
-if [[ "$cli_res" == FAIL || "$desk_res" == FAIL ]]; then
+if [[ "$cli_res" == FAIL || "$desk_res" == FAIL || "$self_res" == FAIL ]]; then
   echo "  (qualcosa è fallito — vedi log sopra)" >&2
   exit 1
 fi

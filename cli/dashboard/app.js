@@ -1050,6 +1050,18 @@ document.addEventListener("click", (e) => {
 });
 
 /* ---------------- updates ---------------- */
+const COMPONENTS = { cli: "Claude Code", desktop: "Claude Desktop", "claude-multi": "claude-multi" };
+/** claude-multi itself: the repository is the program, so its state is the repository's. */
+function selfCard(card) {
+  const r = S.repo ?? {};
+  if (!r.isRepo) return "";
+  const state = !r.upstream ? t("up.self.noUpstream", { b: r.branch })
+    : r.behind && r.ahead ? t("up.self.diverged", { n: r.behind, m: r.ahead })
+    : r.behind && r.dirty ? t("up.self.dirty", { n: r.behind, d: r.dirty })
+    : r.behind ? t("up.self.behind", { n: r.behind })
+    : t("up.uptodate");
+  return card("claude-multi", (r.head ?? "").split(" ")[0], [state, S.selfInstall ? t("up.self.install") : null], null);
+}
 function renderUpdates() {
   const m = S.machine;
   const u = S.update ?? {};
@@ -1076,7 +1088,7 @@ function renderUpdates() {
       m.desktopPrevious ? t("up.previous", { v: m.desktopPrevious }) : null,
     ],
     m.desktopPrevious ? "rollback-desktop" : null,
-  );
+  ) + selfCard(card);
   $("#embedded").textContent = Object.entries(m.embeddedCode ?? {})
     .map(([v, vs]) => t("up.embedded", { v, vs: vs.join(", ") })).join(" · ");
   const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -1084,7 +1096,7 @@ function renderUpdates() {
     const bad = e.event === "failed" || e.event === "verify-failed";
     return `<div class="log-row${bad ? " bad" : ""}">
       <span class="when">${esc(when(e.at))}</span>
-      <span>${esc(e.component === "cli" ? "Claude Code" : "Claude Desktop")}</span>
+      <span>${esc(COMPONENTS[e.component] ?? e.component)}</span>
       <span>${esc(e.from || "—")} → ${esc(e.to || "—")}</span>
       <span>${esc(t(`up.ev.${e.event}`))}${e.detail ? ` · ${esc(e.detail)}` : ""}</span>
     </div>`;

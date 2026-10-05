@@ -2,6 +2,7 @@
 // notifier and the console. Everything that reads state reads this shape.
 
 import { ANSI, CACHE, HOME, machine, profileInfo, profileNames, readJson, repoState, running, sharedInventory, uiLanguage, updateLog } from "./lib.ts";
+import { installWaiting } from "./selfupdate.ts";
 import { doctor } from "./doctor.ts";
 import { loadRegistry, reachOf } from "./mcp.ts";
 
@@ -18,6 +19,8 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
   } catch { /* no registry */ }
   return {
     generatedAt: new Date().toISOString(), machine: m, repo, sync, update, updateLog: await updateLog(),
+    // an install that a claude-multi update left for when every Claude is closed: the commit it came with
+    selfInstall: await installWaiting(),
     // what the console shows when the viewer has not picked a language: the machine's, not the browser's
     language: uiLanguage(Deno.env.toObject()),
     shared: { ...inv, mcpRegistry: registry },

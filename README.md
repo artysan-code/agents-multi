@@ -187,7 +187,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi status [--json]` | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
 | `claude-multi sync [--fetch]` | align the repository from the remote (fetch when stale, ff-only pull on a clean tree) |
 | `claude-multi mcp check\|sync\|health` | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server |
-| `claude-multi update [--cli\|--desktop\|--check\|--rollback]` | update Claude Code and/or Claude Desktop |
+| `claude-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and claude-multi itself |
 | `claude-multi usage [--by …] [--since …]` | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite) |
 | `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
 | `claude-multi vault status\|init\|pair\|set\|delete\|import-legacy` | the secret vault the MCP servers read their credentials from (below) |
@@ -513,7 +513,7 @@ Everything updates itself, in the background, with no approval and no window. `D
 stays set everywhere: the updates are driven from here, not by each binary on its own.
 
 - **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) runs
-  `claude-update --auto`, then `doctor --notify`. Nice and idle I/O: it should not be felt.
+  `claude-update --auto` (Code, Desktop, then claude-multi), then `doctor --notify`. Nice and idle I/O: it should not be felt.
 - **Claude Code** is installed as soon as a new version is out. The native updater downloads into
   `~/.local/share/claude/versions/X.Y.Z`; `claude-update` re-points `claude-bin`, restores the
   wrapper, prunes old versions (keeping N-1) and fixes the `claude-cli://` handler. Open sessions
@@ -524,6 +524,12 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   each profile's variant, install the icons) only when no Claude Desktop runs: replacing files
   under a running Electron app crashes it. `claude-launch` applies a staged version right before it
   starts the app, so in practice an update lands at the next launch. The previous version is kept.
+- **claude-multi** updates itself in the same round, last (`claude-multi self-update`,
+  `cli/selfupdate.ts`): a fetch, then a pull only fast-forward and only on a clean tree that follows
+  a remote branch (local changes or diverged history: nothing is touched, the log says why, once).
+  After a pull the console and the tray app restart if their code changed, the generated settings
+  are rebuilt, and `install` runs when it has work to do — only with every Claude closed; otherwise
+  it waits for a later round, and System › Updates says so. The launch-time pull above stays.
 - **Rollback**: `claude-multi update --rollback [--desktop]`, or the button in System › Updates.
 - **Log**: every result is a line in `~/.local/state/claude-multi/updates.jsonl`, shown in
   System › Updates. The doctor turns a failed last attempt into a warning, a failed verification
