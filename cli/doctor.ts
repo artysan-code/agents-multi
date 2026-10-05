@@ -246,6 +246,11 @@ export async function doctor(): Promise<Check[]> {
     const needed = ["Bash(secret-tool:*)", "Bash(kwallet-query:*)", "Bash(claude-multi vault recovery-code:*)", "Read(~/vault/claude-multi/**)", "Edit(~/vault/claude-multi/**)"];
     const absent = needed.filter((r) => !deny.includes(r));
     if (absent.length) add("vault.deny", "fail", `Claude sessions could read the vault key or entries: shared deny lacks ${absent.join(", ")}`, "console › System › Permissions › Denied");
+    // wrangler's own login keeps a broad OAuth token outside the vault, where vault run's checks do not reach
+    const wranglerLogin = [`${HOME}/.config/.wrangler/config/default.toml`, `${HOME}/.wrangler/config/default.toml`];
+    for (const f of wranglerLogin) {
+      if (await lstat(f)) add("vault.wrangler", "warn", `wrangler is logged in outside the vault (${shortHome(f)})`, "wrangler logout, then claude-multi vault run cloudflare -- wrangler …");
+    }
     const legacy = await legacyFilesPresent();
     if (legacy.length) add("vault.legacy", "warn", `secrets still outside the vault: ${legacy.map(shortHome).join(", ")}`, "claude-multi vault import-legacy (imports, checks, then removes them)");
   }

@@ -4,9 +4,10 @@
 // A secret is never an argument: it is read from stdin, so it does not land in the shell history or
 // in `ps`. And nothing here prints one, except `recovery-code`, which prints the key on purpose.
 
-import { ANSI, HOME, lstat, readText } from "./lib.ts";
+import { ANSI, HOME, lstat, readText, RUNTIME } from "./lib.ts";
+import { parseRun, profileFrom, runTool } from "./toolrun.ts";
 import { ACCOUNTS } from "./mcp.ts";
-import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
+import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
 import {
   currentRecoveryCode, deleteSecret, getSecret, initVault, keyMatches, listSecrets, loadKey, pairVault, setSecret, vaultDir, VaultError,
 } from "../shared/mcp/lib/vault.ts";
@@ -113,6 +114,15 @@ export async function vaultCommand(args: string[]): Promise<number> {
         console.log(await deleteSecret(service, account) ? `deleted ${service}/${account}` : `no secret ${service}/${account}`);
         return 0;
       }
+      case "run": {
+        // a service's command-line tool with the account's token in its environment (toolrun.ts)
+        const plan = parseRun(rest);
+        const profile = profileFrom({ profile: Deno.env.get("CLAUDE_MULTI_PROFILE"), configDir: Deno.env.get("CLAUDE_CONFIG_DIR") }, RUNTIME);
+        const account = resolveAccount(visibleAccounts(loadAccounts(ACCOUNTS), plan.service, profile), plan.account, plan.service);
+        const secret = await getSecret(plan.service, account.name);
+        if (!secret) { console.error(`no secret for ${plan.service}/${account.name} on this machine: console › Connections, or claude-multi vault set ${plan.service} ${account.name}`); return 1; }
+        return await runTool({ ...plan, account: account.name }, secret);
+      }
       case "import-legacy": {
         // import, check that the secret really opens its account, and only then remove the old file
         const accounts = loadAccounts(ACCOUNTS);
@@ -133,11 +143,12 @@ export async function vaultCommand(args: string[]): Promise<number> {
         return failed ? 1 : 0;
       }
       default:
-        console.error("usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|import-legacy]");
+        console.error("usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …|import-legacy]");
         return 2;
     }
   } catch (e) {
     if (e instanceof VaultError) { console.error(`vault: ${e.message}`); return 1; }
+    if (sub === "run" && e instanceof Error) { console.error(e.message); return 2; }
     throw e;
   }
 }

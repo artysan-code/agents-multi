@@ -455,6 +455,13 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 - **Adding an account**: console › Connections (the secret is checked against the service before it
   is stored, and never comes back to the page), or `claude-multi vault set <service> <account>`
   with the secret on stdin. A secret is never a command-line argument and never a tool result.
+- **A service's own command-line tool** gets the same token: `claude-multi vault run cloudflare
+  [account] -- wrangler deploy` (`cli/toolrun.ts`). Only that tool runs (the project's
+  `node_modules/.bin`, else PATH; `pnpm add -D wrangler` in the project), the token is in its
+  environment and hidden if it ever reaches the output, and its own login is refused. What deletes,
+  rolls back, applies remote migrations or runs DROP/DELETE/TRUNCATE/ALTER on a remote D1 asks for a
+  typed "yes" on a terminal: a Claude session has none, so there it is refused with the command to
+  run. The doctor warns when wrangler is logged in on its own, outside the vault.
 
 ---
 
