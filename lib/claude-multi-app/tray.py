@@ -53,6 +53,7 @@ class Tray(QObject):
         self.inflight: QNetworkReply | None = None
         self.stream: QNetworkReply | None = None
         self.backoff = 0
+        self.shown: tuple | None = None  # what the menu holds now: rebuilt only when it changes
 
         self.menu = QMenu()
         self.menu.aboutToShow.connect(self.refresh)
@@ -144,21 +145,30 @@ class Tray(QObject):
                 lines.append(f"Claude Desktop {s['staged']} is ready: it switches at the next launch")
             if s["warns"]:
                 lines.append(f"{len(s['warns'])} warning{'s' if len(s['warns']) != 1 else ''}")
+            # always there, 0 · 0 too: the menu keeps its width, and Plasma draws the submenu arrow
+            # of "Open Claude Desktop" over the label when that is the widest line (issue #3)
             run = s["running"]
-            if run["cli"] or run["desktop"]:
-                lines.append(f"Running: {run['cli']} CLI · {run['desktop']} Desktop")
+            lines.append(f"Running: {run['cli']} CLI · {run['desktop']} Desktop")
         self.icon.setToolTip("\n".join([f"{NAME} — {HEADLINES[level]}", *lines]))
 
+        # the menu refetches as it opens: clearing it while it is on screen leaves Plasma a stale
+        # layout, so it changes only when what it shows does
+        profiles = manifests()
+        shown = lines[:-1][:5] + lines[-1:] if s else []  # the Running line survives the cut
+        view = (level, tuple(shown), tuple(profiles), bool(s))
+        if view == self.shown:
+            return
+        self.shown = view
         m = self.menu
         m.clear()
         self._label(HEADLINES[level])
-        for line in lines[:6]:
+        for line in shown:
             self._label(line)
         m.addSeparator()
         m.addAction("Hey Claude…", lambda: self.ctl.show_hey())
         m.addAction("Open console", lambda: self.ctl.show_console())
         launch = m.addMenu("Open Claude Desktop")
-        for p in manifests():
+        for p in profiles:
             launch.addAction(p, lambda p=p: self.ctl.launch(p))
         m.addAction("Updates", lambda: self.ctl.show_console("system/updates"))
         m.addAction("Health", lambda: self.ctl.show_console("system/health"))
