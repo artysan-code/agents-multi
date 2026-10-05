@@ -95,9 +95,9 @@ export function indexer(store: Store, cfg: EmbedConfig) {
       lastError = (e as Error).message; // the model is down: try again on the next write or tick
     } finally { running = false; }
   };
-  setInterval(run, 60_000);
+  const timer = setInterval(run, 60_000);
   void run();
-  return { kick: () => void run(), status: () => ({ lastError, pending: (store.db.prepare(
+  return { kick: () => void run(), stop: () => clearInterval(timer), status: () => ({ lastError, pending: (store.db.prepare(
     "select count(*) n from docs d where d.deleted = 0 and not exists (select 1 from chunks c where c.path = d.path and c.model = ?)",
   ).get(cfg.model) as { n: number }).n }) };
 }

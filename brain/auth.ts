@@ -1,26 +1,30 @@
-// auth.ts — who may talk to the brain: its owner, through Claude (OAuth) or through their own machines
-// (personal tokens).
+// auth.ts — who may talk to the brain: its people, through Claude (OAuth) or through their own
+// machines (personal tokens).
 //
 // OAuth 2.1 as claude.ai, the Claude apps and Claude Code expect it from a remote MCP server: the
 // protected resource points at this same service as its authorization server; clients register
 // themselves (RFC 7591) with a redirect back to Claude only; the authorization code is bound to a
 // PKCE S256 challenge; access tokens last an hour, refresh tokens rotate and a reused one revokes
-// its whole family. Signing in takes the passphrase and the current TOTP code; five wrong attempts
-// lock the door for fifteen minutes. Every token is stored as its SHA-256, never as itself.
+// its whole family. Signing in takes the account id, its passphrase and the current TOTP code
+// (users.ts); five wrong attempts lock that account for fifteen minutes. Every code, token and
+// session belongs to one account. Every token is stored as its SHA-256, never as itself.
 
 import type { DatabaseSync } from "node:sqlite";
+import type { Users } from "./users.ts";
 
 const SCHEMA = `
 create table if not exists oauth_clients (id text primary key, name text, redirects text not null, created text not null);
-create table if not exists oauth_codes (hash text primary key, client text not null, redirect text not null, challenge text not null, resource text, expires integer not null);
+create table if not exists oauth_codes (hash text primary key, user text not null, client text not null, redirect text not null, challenge text not null, resource text, expires integer not null);
 create table if not exists tokens (
-  hash text primary key, kind text not null, client text, name text, family text, expires integer,
+  hash text primary key, user text not null, kind text not null, client text, name text, family text, expires integer,
   created text not null, used text, revoked integer not null default 0);
-create table if not exists sessions (hash text primary key, expires integer not null);
-create table if not exists login_failures (at integer not null);
+create table if not exists sessions (hash text primary key, user text not null, expires integer not null);
+create table if not exists login_failures (user text not null, at integer not null);
 `;
 
-export interface AuthConfig { url: string; passphrase: string; totpSecret: string | null }
+export interface AuthConfig { url: string }
+/** Who is behind a request: the account, and how it came in ("claude:<client>" or "token:<name>"). */
+export interface Caller { user: string; label: string }
 
 const enc = new TextEncoder();
 const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -102,7 +106,7 @@ export function redirectMatches(registered: string[], uri: string): boolean {
 }
 
 export class Auth {
-  constructor(private db: DatabaseSync, private cfg: AuthConfig) {
+  constructor(private db: DatabaseSync, private users: Users, private cfg: AuthConfig) {
     db.exec(SCHEMA);
   }
 
@@ -125,31 +129,35 @@ export class Auth {
     });
   }
 
-  /** The caller behind a bearer token: "claude:<client name>" or "token:<name>", or null. */
-  async caller(req: Request): Promise<string | null> {
+  /** The account and the way in behind a bearer token, or null; a disabled account has no way in. */
+  async caller(req: Request): Promise<Caller | null> {
     const m = req.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i);
     if (!m) return null;
-    const row = this.db.prepare("select kind, client, name, expires, revoked from tokens where hash = ?").get(await sha256(m[1])) as
-      { kind: string; client: string | null; name: string | null; expires: number | null; revoked: number } | undefined;
+    const h = await sha256(m[1]);
+    const row = this.db.prepare("select user, kind, client, name, expires, revoked from tokens where hash = ?").get(h) as
+      { user: string; kind: string; client: string | null; name: string | null; expires: number | null; revoked: number } | undefined;
     if (!row || row.revoked || row.kind === "refresh" || (row.expires && row.expires < Date.now())) return null;
-    this.db.prepare("update tokens set used = ? where hash = ?").run(new Date().toISOString(), await sha256(m[1]));
-    if (row.kind === "personal") return `token:${row.name}`;
+    const u = this.users.get(row.user);
+    if (!u || u.disabled) return null;
+    this.db.prepare("update tokens set used = ? where hash = ?").run(new Date().toISOString(), h);
+    if (row.kind === "personal") return { user: row.user, label: `token:${row.name}` };
     const c = this.db.prepare("select name from oauth_clients where id = ?").get(row.client) as { name: string } | undefined;
-    return `claude:${c?.name ?? "client"}`;
+    return { user: row.user, label: `claude:${c?.name ?? "client"}` };
   }
 
   // ------------------------------------------------------------ the door
-  private locked(): boolean {
-    const since = Date.now() - 15 * 60_000;
-    this.db.prepare("delete from login_failures where at < ?").run(since);
-    return (this.db.prepare("select count(*) n from login_failures").get() as { n: number }).n >= 5;
+  /** Five wrong attempts on an account close it for fifteen minutes; an id that does not exist
+   *  counts the same way, so the answers say nothing about which ids do. */
+  private locked(user: string): boolean {
+    this.db.prepare("delete from login_failures where at < ?").run(Date.now() - 15 * 60_000);
+    return (this.db.prepare("select count(*) n from login_failures where user = ?").get(user) as { n: number }).n >= 5;
   }
-  /** The passphrase and the TOTP code; a wrong pair counts toward the lock. */
-  async signIn(passphrase: string, code: string): Promise<"ok" | "wrong" | "locked"> {
-    if (this.locked()) return "locked";
-    const ok = same(passphrase, this.cfg.passphrase) && (!this.cfg.totpSecret || await totpOk(this.cfg.totpSecret, code));
-    if (ok) { this.db.prepare("delete from login_failures").run(); return "ok"; }
-    this.db.prepare("insert into login_failures (at) values (?)").run(Date.now());
+  /** The account id, its passphrase and TOTP code; a wrong set counts toward that account's lock. */
+  async signIn(user: string, passphrase: string, code: string): Promise<"ok" | "wrong" | "locked"> {
+    const id = user.trim().toLowerCase().slice(0, 40);
+    if (this.locked(id)) return "locked";
+    if (await this.users.verify(id, passphrase, code)) { this.db.prepare("delete from login_failures where user = ?").run(id); return "ok"; }
+    this.db.prepare("insert into login_failures (user, at) values (?, ?)").run(id, Date.now());
     return "wrong";
   }
 
@@ -180,10 +188,11 @@ export class Auth {
     return { ok: true, client: c, redirect };
   }
 
-  async issueCode(p: URLSearchParams): Promise<string> {
+  /** A code for the account that just signed in: the tokens it turns into are that account's. */
+  async issueCode(p: URLSearchParams, user: string): Promise<string> {
     const code = randomToken();
-    this.db.prepare("insert into oauth_codes (hash, client, redirect, challenge, resource, expires) values (?, ?, ?, ?, ?, ?)")
-      .run(await sha256(code), p.get("client_id"), p.get("redirect_uri"), p.get("code_challenge"), p.get("resource"), Date.now() + 60_000);
+    this.db.prepare("insert into oauth_codes (hash, user, client, redirect, challenge, resource, expires) values (?, ?, ?, ?, ?, ?, ?)")
+      .run(await sha256(code), user, p.get("client_id"), p.get("redirect_uri"), p.get("code_challenge"), p.get("resource"), Date.now() + 60_000);
     const u = new URL(p.get("redirect_uri")!);
     u.searchParams.set("code", code);
     if (p.get("state")) u.searchParams.set("state", p.get("state")!);
@@ -191,10 +200,11 @@ export class Auth {
     return u.toString();
   }
 
-  private async pair(client: string, family = randomToken(12)) {
+  private async pair(user: string, client: string, family = randomToken(12)) {
     const access = randomToken(), refresh = randomToken(), now = new Date().toISOString();
-    this.db.prepare("insert into tokens (hash, kind, client, family, expires, created) values (?, 'access', ?, ?, ?, ?)").run(await sha256(access), client, family, Date.now() + 3600_000, now);
-    this.db.prepare("insert into tokens (hash, kind, client, family, expires, created) values (?, 'refresh', ?, ?, ?, ?)").run(await sha256(refresh), client, family, Date.now() + 30 * 86400_000, now);
+    const ins = this.db.prepare("insert into tokens (hash, user, kind, client, family, expires, created) values (?, ?, ?, ?, ?, ?, ?)");
+    ins.run(await sha256(access), user, "access", client, family, Date.now() + 3600_000, now);
+    ins.run(await sha256(refresh), user, "refresh", client, family, Date.now() + 30 * 86400_000, now);
     return { access_token: access, token_type: "Bearer", expires_in: 3600, refresh_token: refresh, scope: "brain" };
   }
 
@@ -202,56 +212,89 @@ export class Auth {
     const bad = (error: string, d?: string) => ({ status: 400, json: { error, ...(d ? { error_description: d } : {}) } });
     if (f.get("grant_type") === "authorization_code") {
       const h = await sha256(f.get("code") ?? "");
-      const c = this.db.prepare("select * from oauth_codes where hash = ?").get(h) as { client: string; redirect: string; challenge: string; expires: number } | undefined;
+      const c = this.db.prepare("select * from oauth_codes where hash = ?").get(h) as { user: string; client: string; redirect: string; challenge: string; expires: number } | undefined;
       this.db.prepare("delete from oauth_codes where hash = ? or expires < ?").run(h, Date.now()); // one use only
       if (!c || c.expires < Date.now()) return bad("invalid_grant", "code expired or used");
       if (c.client !== f.get("client_id") || c.redirect !== f.get("redirect_uri")) return bad("invalid_grant", "client or redirect differ");
       if (!same(await sha256(f.get("code_verifier") ?? ""), c.challenge)) return bad("invalid_grant", "PKCE verifier does not match");
-      return { status: 200, json: await this.pair(c.client) };
+      return { status: 200, json: await this.pair(c.user, c.client) };
     }
     if (f.get("grant_type") === "refresh_token") {
       const h = await sha256(f.get("refresh_token") ?? "");
-      const r = this.db.prepare("select client, family, expires, revoked from tokens where hash = ? and kind = 'refresh'").get(h) as
-        { client: string; family: string; expires: number; revoked: number } | undefined;
+      const r = this.db.prepare("select user, client, family, expires, revoked from tokens where hash = ? and kind = 'refresh'").get(h) as
+        { user: string; client: string; family: string; expires: number; revoked: number } | undefined;
       if (!r || r.expires < Date.now()) return bad("invalid_grant");
       if (r.revoked) { // a refresh token used twice: someone else has a copy, so the whole family goes
         this.db.prepare("update tokens set revoked = 1 where family = ?").run(r.family);
         return bad("invalid_grant", "token reused");
       }
       if (f.get("client_id") && f.get("client_id") !== r.client) return bad("invalid_grant");
+      const u = this.users.get(r.user);
+      if (!u || u.disabled) return bad("invalid_grant", "account disabled");
       this.db.prepare("update tokens set revoked = 1 where hash = ?").run(h);
-      return { status: 200, json: await this.pair(r.client, r.family) };
+      return { status: 200, json: await this.pair(r.user, r.client, r.family) };
     }
     return bad("unsupported_grant_type");
   }
 
   // ------------------------------------------------------------ the account page: sessions and personal tokens
-  async newSession(): Promise<string> {
+  async newSession(user: string): Promise<string> {
     const s = randomToken();
     this.db.prepare("delete from sessions where expires < ?").run(Date.now());
-    this.db.prepare("insert into sessions (hash, expires) values (?, ?)").run(await sha256(s), Date.now() + 15 * 60_000);
+    this.db.prepare("insert into sessions (hash, user, expires) values (?, ?, ?)").run(await sha256(s), user, Date.now() + 15 * 60_000);
     return s;
   }
-  async session(req: Request): Promise<boolean> {
+  /** The account signed in on the account page, or null. */
+  async session(req: Request): Promise<string | null> {
     const s = req.headers.get("cookie")?.match(/(?:^|;\s*)brain_session=([\w-]+)/)?.[1];
-    if (!s) return false;
-    const r = this.db.prepare("select expires from sessions where hash = ?").get(await sha256(s)) as { expires: number } | undefined;
-    return !!r && r.expires > Date.now();
+    if (!s) return null;
+    const r = this.db.prepare("select user, expires from sessions where hash = ?").get(await sha256(s)) as { user: string; expires: number } | undefined;
+    if (!r || r.expires < Date.now()) return null;
+    const u = this.users.get(r.user);
+    return u && !u.disabled ? r.user : null;
   }
-  async createPersonal(name: string): Promise<string> {
+  async endSession(req: Request) {
+    const s = req.headers.get("cookie")?.match(/(?:^|;\s*)brain_session=([\w-]+)/)?.[1];
+    if (s) this.db.prepare("delete from sessions where hash = ?").run(await sha256(s));
+  }
+  async createPersonal(user: string, name: string): Promise<string> {
     const t = `brain_${randomToken()}`;
-    this.db.prepare("insert into tokens (hash, kind, name, created) values (?, 'personal', ?, ?)").run(await sha256(t), name.slice(0, 60), new Date().toISOString());
+    this.db.prepare("insert into tokens (hash, user, kind, name, created) values (?, ?, 'personal', ?, ?)").run(await sha256(t), user, name.slice(0, 60), new Date().toISOString());
     return t;
   }
-  personalTokens(): { name: string; created: string; used: string | null; hash: string }[] {
-    return this.db.prepare("select name, created, used, hash from tokens where kind = 'personal' and revoked = 0 order by created").all() as never;
+  personalTokens(user: string): { name: string; created: string; used: string | null; hash: string }[] {
+    return this.db.prepare("select name, created, used, hash from tokens where user = ? and kind = 'personal' and revoked = 0 order by created").all(user) as never;
   }
-  connections(): { name: string; created: string; used: string | null }[] {
+  connections(user: string): { name: string; created: string; used: string | null }[] {
     return this.db.prepare(
       `select c.name, min(t.created) created, max(t.used) used from tokens t join oauth_clients c on c.id = t.client
-       where t.kind = 'access' and t.revoked = 0 group by t.family order by used desc limit 20`,
-    ).all() as never;
+       where t.user = ? and t.kind = 'access' and t.revoked = 0 group by t.family order by used desc limit 20`,
+    ).all(user) as never;
   }
-  revoke(hash: string) { this.db.prepare("update tokens set revoked = 1 where hash = ?").run(hash); }
-  revokeAllClaude() { this.db.prepare("update tokens set revoked = 1 where kind in ('access', 'refresh')").run(); }
+  /** A personal token of this account revoked; another account's is out of reach. */
+  revoke(user: string, hash: string) { this.db.prepare("update tokens set revoked = 1 where hash = ? and user = ?").run(hash, user); }
+  revokeAllClaude(user: string) { this.db.prepare("update tokens set revoked = 1 where user = ? and kind in ('access', 'refresh')").run(user); }
+  /** Everything an account holds here cut off: its tokens and its sessions. */
+  revokeAll(user: string) {
+    this.db.prepare("update tokens set revoked = 1 where user = ?").run(user);
+    this.db.prepare("delete from sessions where user = ?").run(user);
+  }
+
+  /** The clients and live tokens of the database the service kept before it served several people,
+   *  carried over to the account they belonged to: Claude's connections and the machines' tokens
+   *  keep working through the change. Tokens are hashes there and here: nothing is revealed. */
+  adopt(old: DatabaseSync, user: string): number {
+    const has = (t: string) => !!old.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t);
+    if (!has("tokens") || !has("oauth_clients")) return 0;
+    for (const c of old.prepare("select id, name, redirects, created from oauth_clients").all() as Record<string, string>[]) {
+      this.db.prepare("insert or ignore into oauth_clients (id, name, redirects, created) values (?, ?, ?, ?)").run(c.id, c.name, c.redirects, c.created);
+    }
+    let n = 0;
+    for (const t of old.prepare("select * from tokens where revoked = 0 and (expires is null or expires > ?)").all(Date.now()) as Record<string, string | number | null>[]) {
+      this.db.prepare("insert or ignore into tokens (hash, user, kind, client, name, family, expires, created, used, revoked) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")
+        .run(t.hash, user, t.kind, t.client, t.name, t.family, t.expires, t.created, t.used);
+      n++;
+    }
+    return n;
+  }
 }

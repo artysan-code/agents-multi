@@ -24,7 +24,8 @@ const line = (t: Task, all?: Task[]) => {
 };
 
 const key = z.string().describe("the task: its id (t-…) or its ref in its project (TASK-495)");
-const fields = {
+/** The fields of a task as tools take them; built per server, so `owner` names the person it serves. */
+const taskFields = () => ({
   due: z.string().nullable().optional().describe("day, YYYY-MM-DD (resolve relative days from `today` in any answer); null clears"),
   time: z.string().nullable().optional().describe("hour of that day, HH:MM, 24h; null clears"),
   remind: z.number().int().nullable().optional().describe("minutes of warning before `time` (default 15)"),
@@ -41,7 +42,7 @@ const fields = {
   notes: z.string().nullable().optional().describe(
     "the whole Markdown body: description, `- [ ]` steps, `## Log`, `## Decisions`, `## Attachments`. It replaces what is there: to change a part use tasks_edit, to add use tasks_note / tasks_steps / tasks_attach",
   ),
-};
+});
 
 /** The task a key names, read fresh. */
 async function find(k: string, project?: string): Promise<Task> {
@@ -57,6 +58,7 @@ async function find(k: string, project?: string): Promise<Task> {
 const open = (t: Task) => t.status !== "done" && t.status !== "dropped";
 
 export function registerTaskTools(server: McpServer) {
+  const fields = taskFields();
   server.registerTool("tasks_brief", {
     description:
       "The owner's debrief: what is overdue, what was missed earlier today, the rest of today by time, tomorrow, the next days, what waits on others. " +

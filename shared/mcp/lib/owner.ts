@@ -25,9 +25,17 @@ export function ownerFrom(o: Partial<Owner> | null | undefined): Owner {
   return { id: pick(o?.id, DEFAULT.id).toLowerCase(), name: pick(o?.name, DEFAULT.name), language: pick(o?.language, DEFAULT.language) };
 }
 
-/** This setup's owner: the variables first (the brain service, a test), then the file, then the
- *  defaults. Read on every call: a small file, and a change shows without a restart. */
+/** A process that serves several people (the brain service) says whose request this is: the owner
+ *  is then that person, whatever the environment or the file say. */
+let current: (() => Owner | null) | null = null;
+export function useOwner(fn: () => Owner | null) { current = fn; }
+
+/** This setup's owner: the person of the request when a process serves several, then the
+ *  variables (a test), then the file, then the defaults. Read on every call: a small file, and a
+ *  change shows without a restart. */
 export function owner(): Owner {
+  const now = current?.();
+  if (now) return now;
   const env = (k: string) => { try { return Deno.env.get(k) || undefined; } catch { return undefined; } };
   let file: Partial<Owner> | null = null;
   try { file = JSON.parse(Deno.readTextFileSync(`${configDir()}/owner.json`)); } catch { /* no file, or not readable here */ }

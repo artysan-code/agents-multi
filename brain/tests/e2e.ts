@@ -1,9 +1,11 @@
-// End to end against a running brain with an empty database: the OAuth dance Claude does, then
-// the MCP tools. Start one, then run this with the same URL and passphrase:
-//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… BRAIN_DEV=1 BRAIN_DATA=$(mktemp -d) PORT=8787 deno run -A brain/main.ts
-//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e.ts
+// End to end against a running brain with an empty data folder: the OAuth dance Claude does, then
+// the MCP tools, as the first account. Start one, then run this with the same URL, account and passphrase:
+//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_MASTER_KEY=$(head -c32 /dev/urandom | base64) BRAIN_ADMIN_ID=me BRAIN_PASSPHRASE=… \
+//     BRAIN_DEV=1 BRAIN_DATA=$(mktemp -d) PORT=8787 deno run -A brain/main.ts
+//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_USER=me BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e.ts
 const B = Deno.env.get("BRAIN_URL") ?? "http://127.0.0.1:8787";
 const PASS = Deno.env.get("BRAIN_PASSPHRASE") ?? "";
+const USER = Deno.env.get("BRAIN_USER") ?? "me";
 const ok = (c: boolean, m: string) => { console.log(`${c ? "ok  " : "FAIL"} ${m}`); if (!c) Deno.exitCode = 1; };
 const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
@@ -25,10 +27,10 @@ const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", ne
 const q = new URLSearchParams({ response_type: "code", client_id: reg.client_id, redirect_uri: "http://127.0.0.1:43210/callback", code_challenge: challenge, code_challenge_method: "S256", state: "s1", resource: `${B}/mcp` });
 r = await fetch(`${B}/authorize?${q}`);
 ok(r.status === 200 && (await r.text()).includes("Collega Claude Code"), "authorize page");
-r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), passphrase: "sbagliata-lunga" }), redirect: "manual" });
+r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), user: USER, passphrase: "sbagliata-lunga" }), redirect: "manual" });
 ok(r.status === 401, "wrong passphrase refused");
 await r.body?.cancel();
-r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), passphrase: PASS }), redirect: "manual" });
+r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), user: USER, passphrase: PASS }), redirect: "manual" });
 const loc = new URL(r.headers.get("location") ?? "http://x/");
 ok(r.status === 302 && loc.port === "43210" && loc.searchParams.get("state") === "s1", "signed in: redirected with code and state");
 const code = loc.searchParams.get("code")!;
@@ -37,7 +39,7 @@ r = await tokenReq({ grant_type: "authorization_code", code, client_id: reg.clie
 ok(r.status === 400, "bad PKCE verifier refused (and the code is now spent)");
 await r.body?.cancel();
 // a fresh code for the real exchange
-r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), passphrase: PASS }), redirect: "manual" });
+r = await fetch(`${B}/authorize`, { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(q), user: USER, passphrase: PASS }), redirect: "manual" });
 const code2 = new URL(r.headers.get("location")!).searchParams.get("code")!;
 const tok = await (await tokenReq({ grant_type: "authorization_code", code: code2, client_id: reg.client_id, redirect_uri: "http://127.0.0.1:43210/callback", code_verifier: verifier })).json();
 ok(!!tok.access_token && !!tok.refresh_token, "token exchange");
@@ -113,7 +115,7 @@ ok(r.status === 401, "…and the whole family with it");
 await r.body?.cancel();
 
 // the account page: a personal token, then the backup
-r = await fetch(`${B}/account/login`, { method: "POST", body: new URLSearchParams({ passphrase: PASS }), redirect: "manual" });
+r = await fetch(`${B}/account/login`, { method: "POST", body: new URLSearchParams({ user: USER, passphrase: PASS }), redirect: "manual" });
 const cookie = (r.headers.get("set-cookie") ?? "").split(";")[0];
 ok(r.status === 303 && cookie.startsWith("brain_session="), "account sign-in");
 const page = await (await fetch(`${B}/account/token`, { method: "POST", headers: { cookie }, body: new URLSearchParams({ name: "fisso" }) })).text();
