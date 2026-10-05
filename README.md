@@ -407,13 +407,21 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   ticks give the progress on the board) and an `## Attachments` section — links, paths on this
   computer (opened with the desktop's default program), files dropped on the task in the console
   (copied to `files/<id>/` on this machine) and brain pages (`[[…]]`).
+  `## Log` and `## Decisions` keep dated lines, added one at a time (`tasks_note`, or the page).
+- **A project's tasks keep the project's names**: `ref` (its id there, TASK-495: one open task per
+  ref in a project, and every tool takes it in place of the id), a free `stage` (spec, release
+  pending…; the column stays `status`), `parent` (a phase of a larger task), `blocked_by`,
+  `labels`, and `detail`: where the full story lives when the project keeps it (a file of the
+  repository, relative to the project's folder, a URL, a brain page). The brain holds the card of
+  every task; how much detail goes in it is the project's choice.
 - **Projects are folders**: a task's project is its folder under `~` (`work/acme/site`), or a bare
   name that resolves to the shallowest folder with that name (`cli/projects.ts`; the roots are
   `projectRoots` in the settings, by default `personal`, `work`, `university`).
 - The **`tasks` MCP server** is in every profile, on the CLI and in Desktop (the brain connector
   has the same tools on the same list): `tasks_brief` (the
-  debrief), `tasks_list`, `tasks_get`, `tasks_add`, `tasks_update`, `tasks_done`, `tasks_steps`,
-  `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
+  debrief), `tasks_list` (with `full` for the whole notes, `status: all` for the archive),
+  `tasks_get`, `tasks_add`, `tasks_update`, `tasks_done` (it says what it unblocked), `tasks_steps`,
+  `tasks_note`, `tasks_edit` (one passage of the notes), `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
   task that changed since it was opened. The tasks rule (in your `rules/`) tells every session to keep the
   list current from the conversation.
 - **Reminders**: `claude-tasks.timer` runs `claude-multi tasks remind` every five minutes: the

@@ -10,6 +10,12 @@
 // can pick up), or anyone else — then the task is usually `waiting` on them. Dates and times are local
 // (the machine's time zone): `due` is a day, `time` an hour of that day, `remind` minutes before it.
 //
+// A task of a project can carry how that project names and tracks it: its `ref` there (TASK-495),
+// a free `stage` (spec, release pending…; the column stays `status`), the task it is part of
+// (`parent`), the tasks it waits for (`blocked_by`), `labels`, and `detail`: where the full story
+// lives when it is not in the notes (a file of the repository, a page). The brain holds the card of
+// every task; the detail lives wherever the project keeps it.
+//
 // Everything below the store is pure and takes `now`, so the brief and the reminders are tested
 // without a clock.
 
@@ -31,6 +37,12 @@ export interface Task {
   project?: string;
   priority?: 1 | 2 | 3; // 1 high
   repeat?: Repeat;
+  ref?: string; // the project's own name for it: TASK-495
+  stage?: string; // spec, discovery, release pending…: free, lower case
+  parent?: string; // the id of the task this is part of
+  blocked_by?: string[]; // ids of the tasks that have to be done first
+  labels?: string[];
+  detail?: string; // where the full detail lives: a path, a path#anchor, a URL, [[page]]
   created: string;
   updated: string;
   done?: string;
@@ -84,7 +96,10 @@ export function nextDue(from: string, repeat: Repeat): string {
 }
 
 // ---------------------------------------------------------------- files
-const ORDER: (keyof Task)[] = ["id", "title", "status", "due", "time", "remind", "owner", "project", "priority", "repeat", "created", "updated", "done"];
+const ORDER: (keyof Task)[] = [
+  "id", "title", "status", "due", "time", "remind", "owner", "project", "priority", "repeat", "ref", "stage", "parent", "blocked_by", "labels", "detail",
+  "created", "updated", "done",
+];
 
 /** Pure: a task as its file. Values are JSON-quoted where YAML could misread them. */
 export function toFile(t: Task): string {
@@ -93,7 +108,7 @@ export function toFile(t: Task): string {
   const extra = Object.keys(t).filter((k) => !ORDER.includes(k as keyof Task) && k !== "notes" && k !== "source" && /^\w+$/.test(k));
   for (const k of [...ORDER, ...extra]) {
     const v = (t as unknown as Record<string, unknown>)[k];
-    if (v === undefined || v === "" || v === null) continue;
+    if (v === undefined || v === "" || v === null || (Array.isArray(v) && !v.length)) continue;
     lines.push(`${k}: ${typeof v === "number" ? v : JSON.stringify(v)}`);
   }
   lines.push("---", "", `# ${t.title}`, "");
@@ -185,7 +200,13 @@ export async function loadSettings(): Promise<TaskSettings> {
 export interface TaskInput {
   title?: string; status?: Status; due?: string | null; time?: string | null; remind?: number | null;
   owner?: string | null; project?: string | null; priority?: 1 | 2 | 3 | null; repeat?: Repeat | null; notes?: string | null;
+  ref?: string | null; stage?: string | null; parent?: string | null; blocked_by?: string[] | null; labels?: string[] | null; detail?: string | null;
 }
+
+const ID = /^t-[\w-]+$/;
+const oneLine = (s: string, max: number) => !/\n/.test(s) && s.length <= max;
+/** Pure: a list of words kept once each, in order, empty ones out. */
+const words = (xs: string[], lower = false) => [...new Set(xs.map((x) => (lower ? x.toLowerCase() : x).trim().replace(/\s+/g, " ")).filter(Boolean))];
 
 /** Pure: an input checked and applied onto a task (null clears a field). Throws with what is wrong. */
 export function applyInput(base: Task, input: TaskInput, now: Date): Task {
@@ -213,6 +234,22 @@ export function applyInput(base: Task, input: TaskInput, now: Date): Task {
   set("priority", input.priority, input.priority == null || [1, 2, 3].includes(input.priority), "priority is 1 (high), 2 or 3");
   set("repeat", input.repeat, input.repeat == null || REPEATS.includes(input.repeat), `repeat is one of ${REPEATS.join(", ")}`);
   set("notes", input.notes);
+  set("ref", input.ref === null ? null : input.ref?.trim(), !input.ref || oneLine(input.ref.trim(), 40), "ref is the project's name for the task, one line, at most 40 characters");
+  set("stage", input.stage === null ? null : input.stage?.trim().toLowerCase().replace(/\s+/g, " "), !input.stage || oneLine(input.stage.trim(), 40), "stage is a word or two, at most 40 characters");
+  set("parent", input.parent === null ? null : input.parent?.trim().replace(/^#/, ""), !input.parent || ID.test(input.parent.trim().replace(/^#/, "")), "parent is a task id, t-…");
+  if (input.blocked_by !== undefined) {
+    const ids = input.blocked_by === null ? [] : words(input.blocked_by.map((x) => x.replace(/^#/, "")));
+    if (!ids.every((x) => ID.test(x))) throw new Error("blocked_by lists task ids, t-…");
+    set("blocked_by", ids.length ? ids : null);
+  }
+  if (input.labels !== undefined) {
+    const ls = input.labels === null ? [] : words(input.labels, true);
+    if (ls.length > 12 || !ls.every((l) => oneLine(l, 30))) throw new Error("labels: at most 12, each at most 30 characters");
+    set("labels", ls.length ? ls : null);
+  }
+  set("detail", input.detail === null ? null : input.detail?.trim(), !input.detail || oneLine(input.detail.trim(), 500), "detail is one link or path, at most 500 characters");
+  if (t.parent === t.id) throw new Error("a task cannot be part of itself");
+  if (t.blocked_by?.includes(t.id)) throw new Error("a task cannot wait for itself");
   if (t.time && !t.due) throw new Error("a time needs a day: set due too");
   if (t.repeat && !t.due) throw new Error("a repeating task needs a first day: set due");
   t.updated = now.toISOString();
@@ -274,6 +311,8 @@ export class StaleError extends Error {
 const STEP = /^(\s*)[-*] \[([ xX])\] (.*)$/;
 const ATT_HEAD = /^##\s+(attachments|allegati)\s*$/i;
 const STEPS_HEAD = /^##\s+(steps|passi)\s*$/i;
+const LOG_HEAD = /^##\s+(log|diario)\s*$/i;
+const DECISIONS_HEAD = /^##\s+(decisions|decisioni)\s*$/i;
 
 export interface Step { text: string; done: boolean }
 /** Pure: the checklist of a task's notes, in order. */
@@ -304,8 +343,8 @@ function appendTo(notes: string, head: RegExp, title: string, line: string): str
   if (lines.length === 1 && lines[0] === "") lines.length = 0;
   const at = lines.findIndex((l) => head.test(l));
   if (at < 0) {
-    // a new steps section goes before the attachments, when they are there
-    const att = head === STEPS_HEAD ? lines.findIndex((l) => ATT_HEAD.test(l)) : -1;
+    // a new section goes before the attachments, when they are there
+    const att = head === ATT_HEAD ? -1 : lines.findIndex((l) => ATT_HEAD.test(l));
     const block = [`## ${title}`, "", line];
     if (att >= 0) { lines.splice(att, 0, ...block, ""); return lines.join("\n") + "\n"; }
     return [...lines, ...(lines.length ? [""] : []), ...block].join("\n") + "\n";
@@ -321,6 +360,101 @@ export function addStep(notes: string, text: string): string {
   const t = text.trim().replace(/\s+/g, " ");
   if (!t) throw new Error("a step needs some text");
   return appendTo(notes, STEPS_HEAD, "Steps", `- [ ] ${t}`);
+}
+
+export type NoteSection = "log" | "decisions";
+/** Pure: a dated line added to the task's log (what happened) or its decisions (what was decided,
+ *  by whom): the notes grow without being rewritten. */
+export function addNote(notes: string, section: NoteSection, text: string, day: string): string {
+  const t = text.trim().replace(/\s*\n\s*/g, " ");
+  if (!t) throw new Error("a note needs some text");
+  return section === "log" ? appendTo(notes, LOG_HEAD, "Log", `- ${day} · ${t}`) : appendTo(notes, DECISIONS_HEAD, "Decisions", `- ${day} · ${t}`);
+}
+/** Pure: the dated lines of a section, oldest first. */
+export function notesOf(notes = "", section: NoteSection): { day?: string; text: string }[] {
+  const head = section === "log" ? LOG_HEAD : DECISIONS_HEAD;
+  const lines = notes.split("\n");
+  const at = lines.findIndex((l) => head.test(l));
+  if (at < 0) return [];
+  const out = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^#{1,2}\s/.test(l)) break;
+    const m = l.match(/^\s*[-*]\s+(?:(\d{4}-\d{2}-\d{2})\s*·\s*)?(.+)$/);
+    if (m) out.push({ ...(m[1] ? { day: m[1] } : {}), text: m[2].trim() });
+  }
+  return out;
+}
+/** Pure: one exact passage of the notes replaced; it has to occur exactly once. */
+export function editNotes(notes: string, find: string, replace: string): string {
+  if (!find) throw new Error("say what to replace");
+  const n = notes.split(find).length - 1;
+  if (n !== 1) throw new Error(n ? `the passage occurs ${n} times: include more context` : "the passage is not in the notes: read them again (tasks_get)");
+  return notes.replace(find, () => replace);
+}
+
+// ---------------------------------------------------------------- references between tasks
+/** Pure: the task a reference names — its id (t-…, #t-…) or its ref (TASK-495, any case). A ref is
+ *  looked for in `project` first; one that names several tasks, or none, is an error that says so. */
+export function resolveTask(tasks: Task[], key: string, project?: string): Task {
+  const k = key.trim().replace(/^#(?=t-)/, "");
+  if (ID.test(k)) {
+    const t = tasks.find((x) => x.id === k);
+    if (!t) throw new Error(`no task ${k}`);
+    return t;
+  }
+  const named = tasks.filter((x) => x.ref?.toLowerCase() === k.toLowerCase());
+  const here = project ? named.filter((x) => x.project === project) : [];
+  const pick = here.length ? here : named;
+  if (pick.length === 1) return pick[0];
+  if (!pick.length) throw new Error(`no task with id or ref ${k}`);
+  const live = pick.filter((x) => x.status !== "done" && x.status !== "dropped");
+  if (live.length === 1) return live[0];
+  throw new Error(`${pick.length} tasks have ref ${k} (${pick.map((x) => `${x.id} in ${x.project ?? "no project"}`).join(", ")}): give the project or the id`);
+}
+/** Pure: another open task of the same project already called `ref`, if there is one. */
+export function refTaken(tasks: Task[], ref: string, project: string | undefined, self?: string): Task | null {
+  return tasks.find((x) => x.id !== self && x.project === project && x.ref?.toLowerCase() === ref.toLowerCase() && x.status !== "dropped") ?? null;
+}
+const closed = (t: Task) => t.status === "done" || t.status === "dropped";
+/** Pure: how a task stands with the others — its parts, what it waits for still open, what waits for it. */
+export function relations(tasks: Task[], t: Task) {
+  const byId = new Map(tasks.map((x) => [x.id, x]));
+  const parts = tasks.filter((x) => x.parent === t.id);
+  return {
+    parent: t.parent ? byId.get(t.parent) ?? null : null,
+    parts,
+    parts_done: parts.filter(closed).length,
+    waiting_for: (t.blocked_by ?? []).map((id) => byId.get(id)).filter((x): x is Task => !!x && !closed(x)),
+    blocking: tasks.filter((x) => !closed(x) && x.blocked_by?.includes(t.id)),
+  };
+}
+/** Pure: whether anything the task waits for is still open. */
+export function isBlocked(tasks: Task[], t: Task): boolean {
+  return relations(tasks, t).waiting_for.length > 0;
+}
+/** Pure: whether making `parent` the parent of `id` would go round in a circle. */
+export function wouldLoop(tasks: Task[], id: string, parent: string): boolean {
+  const byId = new Map(tasks.map((x) => [x.id, x]));
+  for (let cur: string | undefined = parent, n = 0; cur && n < 100; cur = byId.get(cur)?.parent, n++) if (cur === id) return true;
+  return false;
+}
+
+/** Pure: an input with its references to other tasks turned into ids and checked against the list:
+ *  a ref taken in the project, a parent that would go round in a circle. */
+export function resolveRefs(all: Task[], input: TaskInput, self: Task | null): TaskInput {
+  const project = input.project === undefined ? self?.project : input.project ?? undefined;
+  const out = { ...input };
+  if (input.parent) {
+    out.parent = resolveTask(all, input.parent, project).id;
+    if (self && wouldLoop(all, self.id, out.parent)) throw new Error("that parent is a part of this task: it would go round in a circle");
+  }
+  if (input.blocked_by) out.blocked_by = input.blocked_by.map((b) => resolveTask(all, b, project).id);
+  const ref = input.ref === undefined ? self?.ref : input.ref ?? undefined;
+  if (ref && (input.ref !== undefined || input.project !== undefined)) {
+    const other = refTaken(all, ref, project, self?.id);
+    if (other) throw new Error(`${ref} is already ${other.id} (${other.title}) in ${project ?? "no project"}: update that one`);
+  }
+  return out;
 }
 
 export type AttachmentKind = "url" | "file" | "path" | "page";

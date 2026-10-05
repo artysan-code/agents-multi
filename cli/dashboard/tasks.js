@@ -57,7 +57,7 @@ function visible() {
   return TB.tasks.filter((x) =>
     (!tProject || inProject(x, tProject)) &&
     (tOwner === "all" || (tOwner === "me" ? isMine(x) : tOwner === "claude" ? x.owner === "claude" : !isMine(x) && x.owner !== "claude")) &&
-    (!q || `${x.title} ${x.project ?? ""} ${x.folder ?? ""}`.toLowerCase().includes(q))
+    (!q || `${x.ref ?? ""} ${x.title} ${x.project ?? ""} ${x.folder ?? ""} ${x.stage ?? ""} ${(x.labels ?? []).join(" ")}`.toLowerCase().includes(q))
   );
 }
 
@@ -119,13 +119,17 @@ function cardHtml(x) {
   const late = x.due && x.due < today && open(x);
   const where = tProject ? "" : projectLabel(projectOf(x));
   return `<article class="tcard${x.priority === 1 ? " hi" : ""}${x.status === "doing" ? " doing" : ""}" draggable="true" data-task="${esc(x.id)}">
-    <div class="tc-t">${esc(x.title)}</div>
+    <div class="tc-t">${x.ref ? `<span class="tc-ref">${esc(x.ref)}</span>` : ""}${esc(x.title)}</div>
     <div class="tc-m">${[
+      x.blocked && open(x) ? `<span class="tc-blocked">${esc(t("tb.blocked"))}</span>` : "",
+      x.stage ? `<span class="tc-stage">${esc(x.stage)}</span>` : "",
       x.due ? `<span class="tc-due${late ? " late" : x.due === today ? " now" : ""}">${esc(dayLabel(x.due, x.time))}</span>` : "",
       where ? `<span>${esc(where)}</span>` : "",
       x.owner && x.owner !== OWNER.id ? `<span>${esc(x.owner)}</span>` : "",
       x.repeat ? `<span title="${esc(t(`ts.r.${x.repeat}`))}">${esc(t(`ts.r.${x.repeat}`))}</span>` : "",
       x.attachments ? `<span>${esc(t("tb.attN", { n: x.attachments }))}</span>` : "",
+      x.parts ? `<span>${esc(t("tb.parts", { d: x.parts.done, n: x.parts.total }))}</span>` : "",
+      ...(x.labels ?? []).map((l) => `<span class="tc-label">${esc(l)}</span>`),
     ].join("")}</div>
     ${x.progress && x.status !== "done" ? `<div class="tc-pr">${bar(x.progress)}</div>` : ""}
   </article>`;
@@ -206,8 +210,21 @@ async function openTask(id) {
   renderSheet(data);
 }
 
-/** The description is the notes up to the first section the page manages (steps, attachments). */
-const MANAGED = /^##\s+(steps|passi|attachments|allegati)\s*$/im;
+/** The description is the notes up to the first section the page manages (steps, log, decisions, attachments). */
+const MANAGED = /^##\s+(steps|passi|log|diario|decisions|decisioni|attachments|allegati)\s*$/im;
+/** Another task as a link on this page: its ref, its title, where it stands. */
+const linkHtml = (l) => `<li><button class="ts-link${open(l) ? "" : " closed"}" data-open-task="${esc(l.id)}">
+  ${l.ref ? `<span class="tc-ref">${esc(l.ref)}</span>` : ""}<span>${esc(l.title)}</span><small>${esc(t(`tb.col.${l.status}`))}</small></button></li>`;
+const refOf = (l) => l.ref ?? l.id;
+/** Where the detail of a task is, as something the console opens: a URL, a brain page, or a file
+ *  (a path relative to the project's folder, ~/…, or absolute; the #anchor is dropped). */
+function detailTarget(d, folder) {
+  if (/^https?:\/\//.test(d)) return { kind: "url", target: d };
+  const page = d.match(/^\[\[([^\]|]+)/);
+  if (page) return { kind: "page", target: page[1] };
+  const path = d.replace(/#.*$/, "");
+  return { kind: "path", target: path.startsWith("/") || path.startsWith("~/") ? path : folder ? `~/${folder}/${path}` : path };
+}
 function splitNotes(notes = "") {
   const m = notes.match(MANAGED);
   return m ? { desc: notes.slice(0, m.index).trim(), rest: notes.slice(m.index).trim() } : { desc: notes.trim(), rest: "" };
@@ -233,10 +250,19 @@ function renderSheet(data) {
     page: `<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M8.3 7l7.4.7M7 8.3l2.2 7.4"/>`,
   })[k];
   const projects = (TB?.projects ?? []).map((n) => n.path);
+  const stages = [...new Set((TB?.tasks ?? []).map((y) => y.stage).filter(Boolean))].sort();
+  const L = data.links ?? { parent: null, parts: [], blocked_by: [], blocking: [] };
+  const linked = L.parent || L.parts.length || L.blocked_by.length || L.blocking.length;
+  const notesSec = (key, items, ph) => `<section class="ts-sec">
+      <h4>${esc(t(`ts.${key}`))}${items.length ? `<span class="sub">${items.length}</span>` : ""}</h4>
+      <ul class="ts-log">${items.map((n) => `<li>${n.day ? `<small>${esc(dayLabel(n.day))}</small>` : ""}<span>${esc(n.text)}</span></li>`).join("")}</ul>
+      <form class="ts-row" data-form="${key === "log" ? "log" : "decisions"}"><input class="search" name="${key}" placeholder="${esc(t(ph))}" autocomplete="off"></form>
+    </section>`;
   $(".tsheet", sheet.host).innerHTML = `
     <div class="ts-crumb">
       ${folder ? `<svg viewBox="0 0 24 24" class="ico">${icon("path")}</svg><span>${esc(folder.split("/").join(" › "))}</span>
         <button class="btn sm" data-open-folder="${esc(folder)}">${esc(t("ts.openFolder"))}</button>` : `<span class="sub">${esc(x.project ?? t("tb.noProject"))}</span>`}
+      ${x.detail ? `<button class="btn sm" data-detail title="${esc(x.detail)}">${esc(t("ts.openDetail"))}</button>` : ""}
     </div>
     <input class="ts-title" name="title" value="${esc(x.title)}" aria-label="${esc(t("tb.h.title"))}">
     <div class="ts-props">
@@ -248,6 +274,13 @@ function renderSheet(data) {
       <label class="wide"><span>${esc(t("ts.project"))}</span><input name="project" class="search" list="ts-projects" value="${esc(x.project ?? "")}" autocomplete="off"></label>
       <label><span>${esc(t("ts.repeat"))}</span><select name="repeat" class="sel">${opt("", t("ts.r.none"), x.repeat)}${["daily", "weekdays", "weekly", "monthly"].map((r) => opt(r, t(`ts.r.${r}`), x.repeat)).join("")}</select></label>
       <label><span>${esc(t("ts.remind"))}</span><input type="number" min="0" max="1440" name="remind" class="search" value="${esc(x.remind ?? "")}" placeholder="15"></label>
+      <label><span>${esc(t("ts.ref"))}</span><input name="ref" class="search" value="${esc(x.ref ?? "")}" placeholder="TASK-1" autocomplete="off"></label>
+      <label><span>${esc(t("ts.stage"))}</span><input name="stage" class="search" list="ts-stages" value="${esc(x.stage ?? "")}" autocomplete="off"></label>
+      <label class="wide"><span>${esc(t("ts.labels"))}</span><input name="labels" class="search" value="${esc((x.labels ?? []).join(", "))}" autocomplete="off"></label>
+      <label><span>${esc(t("ts.parent"))}</span><input name="parent" class="search" value="${esc(L.parent ? refOf(L.parent) : x.parent ?? "")}" placeholder="${esc(t("ts.refPh"))}" autocomplete="off"></label>
+      <label><span>${esc(t("ts.blockedBy"))}</span><input name="blocked_by" class="search" value="${esc(L.blocked_by.map(refOf).join(", "))}" placeholder="${esc(t("ts.refsPh"))}" autocomplete="off"></label>
+      <label class="wide"><span>${esc(t("ts.detail"))}</span><input name="detail" class="search" value="${esc(x.detail ?? "")}" placeholder="${esc(t("ts.detailPh"))}" autocomplete="off"></label>
+      <datalist id="ts-stages">${stages.map((st) => `<option value="${esc(st)}">`).join("")}</datalist>
       <datalist id="ts-owners">${[OWNER.id, "claude"].map((o) => `<option value="${o}">`).join("")}</datalist>
       <datalist id="ts-projects">${projects.map((pp) => `<option value="${esc(pp)}">`).join("")}</datalist>
     </div>
@@ -259,6 +292,14 @@ function renderSheet(data) {
       <form class="ts-row" data-form="step"><input class="search" name="text" placeholder="${esc(t("ts.addStep"))}" autocomplete="off"></form>
     </section>
 
+    ${linked ? `<section class="ts-sec">
+      <h4>${esc(t("ts.links"))}</h4>
+      ${L.parent ? `<h5>${esc(t("ts.parent"))}</h5><ul class="ts-links">${linkHtml(L.parent)}</ul>` : ""}
+      ${L.parts.length ? `<h5>${esc(t("ts.parts"))} <span class="sub">${L.parts.filter((l) => !open(l)).length}/${L.parts.length}</span></h5><ul class="ts-links">${L.parts.map(linkHtml).join("")}</ul>` : ""}
+      ${L.blocked_by.length ? `<h5>${esc(t("ts.blockedBy"))}</h5><ul class="ts-links">${L.blocked_by.map(linkHtml).join("")}</ul>` : ""}
+      ${L.blocking.length ? `<h5>${esc(t("ts.blocking"))}</h5><ul class="ts-links">${L.blocking.map(linkHtml).join("")}</ul>` : ""}
+    </section>` : ""}
+
     <section class="ts-sec">
       <h4>${esc(t("ts.desc"))}<span class="seg sm">
         <button data-desc="view" aria-pressed="${sheet.mode === "view"}">${esc(t("ts.preview"))}</button>
@@ -267,6 +308,9 @@ function renderSheet(data) {
         ? `<textarea class="ts-desc search" name="desc" rows="8" placeholder="${esc(t("ts.descPh"))}">${esc(desc)}</textarea>`
         : `<div class="md ts-md" data-desc="edit">${desc ? mdToHtml(desc) : `<p class="sub">${esc(t("ts.descPh"))}</p>`}</div>`}
     </section>
+
+    ${notesSec("decisions", data.decisions ?? [], "ts.decPh")}
+    ${notesSec("log", data.log ?? [], "ts.logPh")}
 
     <section class="ts-sec">
       <h4>${esc(t("ts.att"))}</h4>
@@ -311,6 +355,7 @@ function wireSheet(host) {
   const save = (input) => enqueue(async () => {
     const r = await taskOp({ op: "update", id: me.id, base: me.data.task.updated, ...input });
     if (r) { me.data = r; if (alive()) renderSheet(r); loadBoard().catch(() => {}); }
+    else if (alive()) renderSheet(me.data); // a refused value goes back to the saved one
   });
   box.addEventListener("change", async (e) => {
     const f = e.target;
@@ -322,10 +367,11 @@ function wireSheet(host) {
     }
     if (f.type === "file") return uploadFiles([...f.files]);
     const name = f.name;
-    if (!["title", "status", "due", "time", "priority", "owner", "project", "repeat", "remind"].includes(name)) return;
+    if (!["title", "status", "due", "time", "priority", "owner", "project", "repeat", "remind", "ref", "stage", "labels", "detail", "parent", "blocked_by"].includes(name)) return;
     const v = f.value.trim();
     if (name === "title" && !v) return renderSheet(me.data);
-    const input = { [name]: v === "" ? null : name === "priority" || name === "remind" ? Number(v) : v };
+    const list = (s) => s.split(",").map((y) => y.trim()).filter(Boolean);
+    const input = { [name]: v === "" ? null : name === "priority" || name === "remind" ? Number(v) : name === "labels" || name === "blocked_by" ? list(v) : v };
     // a time needs a day: the page's own date field decides it, today when empty
     if (name === "time" && v && !me.data.task.due) input.due = TB?.today;
     await save(input);
@@ -368,7 +414,12 @@ function wireSheet(host) {
     const f = e.target, v = f.elements[0].value.trim();
     if (!v) return;
     f.elements[0].value = ""; // before the redraw, which keeps drafts
-    const r = await taskOp(f.dataset.form === "step" ? { op: "addstep", id: me.id, text: v } : { op: "attach", id: me.id, target: v });
+    const kind = f.dataset.form;
+    const r = await taskOp(
+      kind === "step" ? { op: "addstep", id: me.id, text: v }
+      : kind === "log" || kind === "decisions" ? { op: "note", id: me.id, section: kind, text: v }
+      : { op: "attach", id: me.id, target: v },
+    );
     if (r) {
       me.data = r;
       renderSheet(r);
@@ -390,6 +441,12 @@ function wireSheet(host) {
     }
     const s = e.target.closest("[data-set]");
     if (s) return save({ status: s.dataset.set });
+    const ot = e.target.closest("[data-open-task]");
+    if (ot) return openTask(ot.dataset.openTask);
+    if (e.target.closest("[data-detail]")) {
+      const folder = TB?.tasks.find((y) => y.id === me.id)?.folder ?? null;
+      return openAttachment(detailTarget(me.data.task.detail, folder));
+    }
     const a = e.target.closest("[data-att]");
     if (a) return openAttachment(me.data.attachments[Number(a.dataset.att)]);
     const x = e.target.closest("[data-detach]");

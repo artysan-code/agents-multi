@@ -189,3 +189,56 @@ Deno.test("applyInput: null clears project, owner and notes", () => {
   const t = T.applyInput(base, { project: null, owner: null, notes: null }, at("2026-09-30T10:00:00"));
   assertEquals([t.project, t.owner, t.notes], [undefined, undefined, undefined]);
 });
+
+Deno.test("project fields: ref, stage, parent, blocked_by, labels, detail checked, cleaned and kept in the file", () => {
+  const now = at("2026-10-05T10:00:00");
+  const t = T.applyInput(task({ id: "t-20261005-aaaaaa" }), {
+    ref: " TASK-495 ", stage: "Release  Pending", parent: "#t-20261005-bbbbbb", blocked_by: ["t-20261005-cccccc", "#t-20261005-cccccc"],
+    labels: ["Permessi", "permessi", " BE "], detail: "TASKS.md#task-495",
+  }, now);
+  assertEquals([t.ref, t.stage, t.parent, t.blocked_by, t.labels, t.detail], ["TASK-495", "release pending", "t-20261005-bbbbbb", ["t-20261005-cccccc"], ["permessi", "be"], "TASKS.md#task-495"]);
+  assertEquals(T.fromFile(T.toFile(t)), t);
+  const cleared = T.applyInput(t, { ref: null, blocked_by: [], labels: null, parent: null }, now);
+  assertEquals([cleared.ref, cleared.blocked_by, cleared.labels, cleared.parent], [undefined, undefined, undefined, undefined]);
+  assert(!T.toFile(cleared).includes("blocked_by"));
+  assertThrows(() => T.applyInput(t, { parent: "TASK-1" }, now), Error, "task id");
+  assertThrows(() => T.applyInput(t, { parent: t.id }, now), Error, "itself");
+  assertThrows(() => T.applyInput(t, { blocked_by: [t.id] }, now), Error, "itself");
+  assertThrows(() => T.applyInput(t, { ref: "a\nb" }, now), Error, "ref");
+});
+
+Deno.test("addNote / notesOf: dated lines in Log and Decisions, before the attachments; editNotes replaces one passage", () => {
+  let n = T.addAttachment("Descrizione", "https://x.test/a", "spec");
+  n = T.addNote(n, "log", "su dev\ncon la CI verde", "2026-10-05");
+  n = T.addNote(n, "decisions", "opzione C (Samuel)", "2026-10-05");
+  n = T.addNote(n, "log", "in prod", "2026-10-06");
+  assert(n.indexOf("## Log") < n.indexOf("## Attachments") && n.indexOf("## Decisions") < n.indexOf("## Attachments"));
+  assertEquals(T.notesOf(n, "log"), [{ day: "2026-10-05", text: "su dev con la CI verde" }, { day: "2026-10-06", text: "in prod" }]);
+  assertEquals(T.notesOf(n, "decisions"), [{ day: "2026-10-05", text: "opzione C (Samuel)" }]);
+  assertEquals(T.attachments(n).length, 1);
+  assertEquals(T.editNotes("a b a", "b", "c"), "a c a");
+  assertThrows(() => T.editNotes("a b a", "a", "c"), Error, "2 times");
+  assertThrows(() => T.editNotes("a b a", "z", "c"), Error, "not in the notes");
+});
+
+Deno.test("references: by id or ref, the project first, ambiguity said; relations, blocked, loops", () => {
+  const a = task({ id: "t-1", ref: "TASK-430", project: "work/x" });
+  const b = task({ id: "t-2", ref: "TASK-495", project: "work/x", blocked_by: ["t-1"], parent: "t-4" });
+  const c = task({ id: "t-3", ref: "TASK-495", project: "work/y" });
+  const d = task({ id: "t-4", ref: "TASK-500", project: "work/x" });
+  const all = [a, b, c, d];
+  assertEquals(T.resolveTask(all, "#t-3").id, "t-3");
+  assertEquals(T.resolveTask(all, "task-430").id, "t-1");
+  assertEquals(T.resolveTask(all, "TASK-495", "work/y").id, "t-3");
+  assertThrows(() => T.resolveTask(all, "TASK-495"), Error, "2 tasks");
+  assertThrows(() => T.resolveTask(all, "TASK-9"), Error, "no task");
+  assertEquals(T.refTaken(all, "task-495", "work/x")?.id, "t-2");
+  assertEquals(T.refTaken(all, "TASK-495", "work/x", "t-2"), null);
+  assert(T.isBlocked(all, b));
+  const r = T.relations(all, d);
+  assertEquals([r.parts.map((x) => x.id), r.parts_done], [["t-2"], 0]);
+  assertEquals(T.relations(all, a).blocking.map((x) => x.id), ["t-2"]);
+  assert(!T.isBlocked([{ ...a, status: "done" }, b, c, d], b));
+  assert(T.wouldLoop(all, "t-4", "t-2"));
+  assert(!T.wouldLoop(all, "t-2", "t-4"));
+});

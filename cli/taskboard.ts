@@ -7,8 +7,8 @@
 import { HOME } from "./lib.ts";
 import { projectTree, resolveProject } from "./projects.ts";
 import {
-  addAttachment, addDays, addStep, addTask, attachments, dayOf, getTask, listTasks, progress, removeAttachment, setStep, StaleError, steps,
-  storeFile, type Task, type TaskInput, tasksRoot, updateTask,
+  addAttachment, addDays, addNote, addStep, addTask, attachments, dayOf, getTask, listTasks, notesOf, progress, relations, removeAttachment, resolveRefs,
+  setStep, StaleError, steps, storeFile, type Task, type TaskInput, tasksRoot, updateTask,
 } from "../shared/mcp/lib/tasks.ts";
 
 export const TASK_FILE_MAX = 50 * 1024 * 1024;
@@ -31,13 +31,36 @@ async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
 type Json = (o: unknown, status?: number) => Response;
 
 /** A task as the board shows it: the folder its project means, the checklist's progress, how many
- *  attachments. The notes travel only with the task's own page. */
-function card(t: Task, tree: Awaited<ReturnType<typeof projectTree>>) {
+ *  attachments, whether it waits for an open task, how many of its parts are done. The notes travel
+ *  only with the task's own page. */
+function card(t: Task, all: Task[], tree: Awaited<ReturnType<typeof projectTree>>) {
   const { notes: _notes, ...rest } = t;
-  return { ...rest, folder: resolveProject(t.project, tree), progress: progress(t.notes), attachments: attachments(t.notes).length };
+  const r = relations(all, t);
+  return {
+    ...rest, folder: resolveProject(t.project, tree), progress: progress(t.notes), attachments: attachments(t.notes).length,
+    ...(r.waiting_for.length ? { blocked: true } : {}), ...(r.parts.length ? { parts: { done: r.parts_done, total: r.parts.length } } : {}),
+  };
 }
 
-const full = (t: Task) => ({ task: t, steps: steps(t.notes), progress: progress(t.notes), attachments: attachments(t.notes) });
+/** Another task as a link on a task's page. */
+const brief = (t: Task) => ({ id: t.id, ref: t.ref, title: t.title, status: t.status });
+/** A task's page: the task, its steps, attachments, log and decisions, and the tasks it is tied to. */
+function full(t: Task, all: Task[]) {
+  const r = relations(all, t);
+  const byId = new Map(all.map((x) => [x.id, x]));
+  return {
+    task: t, steps: steps(t.notes), progress: progress(t.notes), attachments: attachments(t.notes),
+    log: notesOf(t.notes, "log"), decisions: notesOf(t.notes, "decisions"),
+    links: {
+      parent: r.parent ? brief(r.parent) : null,
+      parts: r.parts.map(brief),
+      blocked_by: (t.blocked_by ?? []).map((id) => byId.get(id)).filter((x): x is Task => !!x).map(brief),
+      blocking: r.blocking.map(brief),
+    },
+  };
+}
+/** The page of a task just written: the list read again, with this task as it now is. */
+const page = async (t: Task) => full(t, (await listTasks()).map((x) => x.id === t.id ? t : x));
 
 /** Where an attachment points on this machine: a stored file under files/, or a path under $HOME.
  *  Null for anything else, so the console never opens a path it was not meant to. */
@@ -69,21 +92,31 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
     const shown = tasks.filter((t) => t.status !== "dropped" || u.searchParams.has("dropped"))
       // done tasks stay on the board for two weeks, then only in the files (and in search)
       .filter((t) => t.status !== "done" || (t.done ?? t.updated).slice(0, 10) >= since || u.searchParams.has("done"));
-    return json({ today: dayOf(new Date()), tasks: shown.map((t) => card(t, tree)), projects: tree });
+    return json({ today: dayOf(new Date()), tasks: shown.map((t) => card(t, tasks, tree)), projects: tree });
   }
 
   if (p === "/api/tasks/item") {
     const t = await getTask(u.searchParams.get("id") ?? "");
-    return t ? json(full(t)) : json({ error: "no such task" }, 404);
+    return t ? json(await page(t)) : json({ error: "no such task" }, 404);
   }
 
   if (p === "/api/tasks/op" && write) {
-    const b = await req.json().catch(() => ({})) as TaskInput & { op?: string; id?: string; base?: string; index?: number; done?: boolean; text?: string; target?: string; label?: string };
-    const { op, id = "", base, index, done, text, target, label, ...input } = b;
+    const b = await req.json().catch(() => ({})) as TaskInput & {
+      op?: string; id?: string; base?: string; index?: number; done?: boolean; text?: string; target?: string; label?: string; section?: string;
+    };
+    const { op, id = "", base, index, done, text, target, label, section, ...input } = b;
     try {
       let r: { task: Task };
-      if (op === "add") r = { task: await addTask(input) };
-      else if (op === "update") r = await updateTask(id, input, new Date(), base);
+      if (op === "add") r = { task: await addTask(resolveRefs(await listTasks(), input, null)) };
+      else if (op === "update") {
+        const all = await listTasks();
+        const cur = all.find((x) => x.id === id);
+        r = await updateTask(id, cur ? resolveRefs(all, input, cur) : input, new Date(), base);
+      }
+      else if (op === "note") {
+        if (section !== "log" && section !== "decisions") return json({ ok: false, message: "a note goes in the log or in the decisions" });
+        r = await updateTask(id, (t) => ({ notes: addNote(t.notes ?? "", section, String(text ?? ""), dayOf(new Date())) }));
+      }
       else if (op === "step") {
         if (!Number.isInteger(index)) return json({ ok: false, message: "a step is chosen by its index" });
         r = await updateTask(id, (t) => ({ notes: setStep(t.notes ?? "", index!, done) }));
@@ -96,9 +129,9 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
       }
       else return json({ ok: false, message: "unknown operation" });
       changed();
-      return json({ ok: true, ...full(r.task) });
+      return json({ ok: true, ...(await page(r.task)) });
     } catch (e) {
-      if (e instanceof StaleError) return json({ ok: false, stale: true, message: e.message, ...full(e.current) });
+      if (e instanceof StaleError) return json({ ok: false, stale: true, message: e.message, ...(await page(e.current)) });
       return json({ ok: false, message: (e as Error).message });
     }
   }
@@ -113,7 +146,7 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
       const rel = await storeFile(id, name, bytes);
       const r = await updateTask(id, (t) => ({ notes: addAttachment(t.notes ?? "", rel, name) }));
       changed();
-      return json({ ok: true, ...full(r.task) });
+      return json({ ok: true, ...(await page(r.task)) });
     } catch (e) {
       return json({ ok: false, message: (e as Error).message });
     }
