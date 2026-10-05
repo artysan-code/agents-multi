@@ -547,6 +547,94 @@ kbd {
 }
 
 /* ---------------- connections ---------------- */
+.conn-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0 12px;
+}
+.conn-bar .r {
+  margin-left: auto;
+  font: 400 11.5px var(--mono);
+  color: var(--fg-faint);
+}
+.conn-h {
+  font-size: 15px;
+  margin: 28px 0 12px;
+}
+.svc {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px 18px;
+  margin-bottom: 12px;
+}
+.svc-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 10px;
+}
+.svc-h b {
+  font-weight: 600;
+}
+.svc-logo {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  font: 600 13px var(--sans);
+  color: var(--fg-dim);
+}
+.svc-logo svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--fg);
+}
+.acc-row {
+  display: grid;
+  grid-template-columns: minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.4fr) 170px; /* fixed actions: the columns line up across blocks */
+  gap: 14px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.acc-who,
+.acc-state {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.acc-who small,
+.acc-state small {
+  font-size: 12px;
+  color: var(--fg-faint);
+  overflow-wrap: anywhere;
+}
+.acc-row .acts {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+@media (max-width: 760px) {
+  .acc-row {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+  .acc-row .chips,
+  .acc-row .acc-state {
+    grid-column: 1 / -1;
+  }
+  .acc-row .acts {
+    grid-row: 1;
+    grid-column: 2;
+  }
+}
 .conn td:first-child b {
   display: block;
   font-weight: 600;

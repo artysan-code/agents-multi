@@ -129,33 +129,17 @@
           <p class="lede" data-i18n="conn.lede"></p>
           <div class="status-card" id="vault" style="margin-top:20px" hidden></div>
           <div class="status-card" id="gclient" style="margin-top:12px" hidden></div>
-          <div class="panel" style="margin-top:20px">
-            <div class="panel-h">
-              <h3 data-i18n="acc.title"></h3>
-              <span class="r" id="acc-sum"></span>
-              <button class="btn primary" id="acc-add" data-i18n="acc.add"></button>
-            </div>
-            <div class="scroll">
-              <table class="conn">
-                <thead><tr><th data-i18n="acc.service"></th><th data-i18n="acc.name"></th><th data-i18n="acc.url"></th><th data-i18n="conn.profiles"></th><th data-i18n="acc.secret"></th><th></th></tr></thead>
-                <tbody id="acc-rows"></tbody>
-              </table>
-            </div>
+          <div class="status-card update" id="conn-pending" style="margin-top:12px" hidden></div>
+          <div class="conn-bar">
+            <span class="sub" data-i18n="conn.show"></span>
+            <div class="chips" id="conn-filter"></div>
+            <span class="r" id="acc-sum"></span>
+            <button class="btn ghost sm" data-action="mcp-check" data-i18n="conn.check" data-i18n-title="conn.check.title"></button>
+            <button class="btn primary" id="acc-add" data-i18n="acc.add"></button>
           </div>
-          <div class="panel" style="margin-top:20px">
-            <div class="panel-h">
-              <h3 data-i18n="conn.servers"></h3>
-              <span class="r"></span>
-              <button class="btn" data-action="mcp-check" data-i18n="conn.check"></button>
-              <button class="btn" data-action="mcp-sync" data-i18n="conn.sync"></button>
-            </div>
-            <div class="scroll">
-              <table class="conn">
-                <thead><tr><th data-i18n="conn.server"></th><th data-i18n="conn.profiles"></th><th data-i18n="conn.surfaces"></th><th data-i18n="conn.state"></th></tr></thead>
-                <tbody id="conn-rows"></tbody>
-              </table>
-            </div>
-          </div>
+          <div id="conn-services"></div>
+          <h3 class="conn-h" data-i18n="conn.ours"></h3>
+          <div id="conn-ours"></div>
         </section>
 
         <!-- ============ SYSTEM ============ -->
@@ -300,6 +284,7 @@
       </div>
     </div>
     <script src="/i18n.js"></script>
+    <script src="/logos.js"></script>
     <script src="/app.js"></script>
     <script src="/vendor/d3-force.min.js"></script>
     <script src="/brain.js"></script>

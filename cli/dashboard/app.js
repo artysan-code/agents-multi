@@ -730,29 +730,123 @@ function renderAccounts() {
     if (seenConnect !== undefined) toast(last.message, !last.ok);
     seenConnect = last.at;
   }
-  $("#acc-sum").textContent = t("acc.sum", { n: ACC.accounts.length });
-  $("#acc-rows").innerHTML = ACC.accounts.map((a, i) =>
-    `<tr>
-      <td><b>${esc(a.service)}</b></td>
-      <td><code>${esc(a.name)}</code></td>
-      <td>${esc(a.url ?? "—")}</td>
-      <td>${a.profiles ? a.profiles.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ") : `<span class="sub">${esc(t("acc.allProfiles"))}</span>`}</td>
-      <td>${
-      a.service === "google"
-        ? (a.hasSecret ? `<span class="ok-t">${esc(a.email ?? t("google.connected"))}</span>` : `<span class="warn-t">${esc(t("google.notConnected"))}</span>`)
-        : a.auth === "oauth" ? `<span class="sub">${esc(t("acc.oauth"))}</span>`
-        : a.hasSecret ? `<span class="ok-t">${esc(t("acc.hasSecret"))}</span>` : `<span class="warn-t">${esc(t("acc.noSecret"))}</span>`
-    }${(a.missing ?? []).map((m) => `<br><span class="warn-t" title="${esc(m.problem)}">${esc(t("acc.missingProgram", { s: m.server }))}</span>${m.install ? `<br><code class="sub">${esc(m.install)}</code>` : ""}`).join("")}</td>
-      <td class="acts">${
-      a.service === "google" && ACC.google.client
-        ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button> `
-        : a.service === "brain" && a.url && ACC.vault.state === "ok"
-        ? `<button class="btn sm" data-b-login="${esc(a.name)}">${esc(t("brain.login"))}</button> `
-        : ""
-    }<button class="btn sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></td>
-    </tr>`
-  ).join("") || `<tr><td class="empty" colspan="6">${esc(t("acc.none"))}</td></tr>`;
+  renderConnList();
 }
+
+/* One block per service, its accounts inside, each with one state in plain words and one action;
+   brain and tasks — claude-multi's own — apart at the bottom. */
+const SVC_NAMES = {
+  n8n: "n8n", google: "Google", cloudflare: "Cloudflare", supabase: "Supabase", lovable: "Lovable", railway: "Railway",
+  zapier: "Zapier", gitea: "Gitea · Forgejo", coolify: "Coolify", "syncthing-status": "Syncthing", brain: "Brain",
+};
+let connFilter = "";
+try { connFilter = localStorage.getItem("conn.filter") ?? ""; } catch { /* storage off */ }
+
+function logo(service) {
+  const d = LOGOS[service];
+  return d
+    ? `<span class="svc-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg></span>`
+    : `<span class="svc-logo">${esc((SVC_NAMES[service] ?? service).slice(0, 1).toUpperCase())}</span>`;
+}
+const profileChips = (ps) => ps ? ps.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ") : `<span class="sub">${esc(t("acc.allProfiles"))}</span>`;
+
+/** The one state of an account, most urgent first: [class, text, sub-line or ""]. */
+function accState(a) {
+  const r = a.reach;
+  const desk = r.noDesktop.length ? t("conn.noDesktop", { p: r.noDesktop.join(", ") }) : "";
+  if (a.missing?.length) {
+    const m = a.missing[0];
+    return ["warn-t", t("acc.missingProgram", { s: m.server }), m.install ? `<code>${esc(m.install)}</code>` : ""];
+  }
+  if (a.service === "google" && !a.hasSecret) return ["warn-t", t("google.notConnected"), ""];
+  if (a.service === "brain" && !a.hasSecret) return ["warn-t", t("conn.brainOff"), ""];
+  if (a.auth !== "oauth" && a.service !== "google" && a.service !== "brain" && !a.hasSecret) return ["warn-t", t("acc.noSecret"), ""];
+  if (r.pending.length) return ["warn-t", t("conn.pending", { p: r.pending.join(", ") }), desk];
+  if (!r.profiles.length) return ["sub", t("conn.unused"), ""];
+  if (a.auth === "oauth") return ["sub", t("acc.oauth"), desk];
+  if (a.service === "brain") return ["ok-t", t("conn.brainOn"), desk];
+  if (a.service === "google") return ["ok-t", t("google.connected"), desk];
+  return ["ok-t", t("conn.ready"), desk];
+}
+
+function accRow(a) {
+  const i = ACC.accounts.indexOf(a);
+  const [cls, text, sub] = accState(a);
+  const who = a.service === "google" && a.email ? a.email : a.url ? a.url.replace(/^https?:\/\//, "").replace(/\/$/, "") : "";
+  const act = a.service === "google" && ACC.google.client
+    ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button>`
+    : a.service === "brain" && a.url && ACC.vault.state === "ok"
+    ? `<button class="btn sm" data-b-login="${esc(a.name)}">${esc(t("brain.login"))}</button>`
+    : "";
+  return `<div class="acc-row">
+    <div class="acc-who"${a.note ? ` title="${esc(a.note)}"` : ""}><b>${esc(a.name)}</b>${who ? `<small>${esc(who)}</small>` : ""}</div>
+    <div class="chips">${profileChips(a.profiles)}</div>
+    <div class="acc-state"><span class="${cls}">${esc(text)}</span>${sub ? `<small>${sub.startsWith("<code>") ? sub : esc(sub)}</small>` : ""}</div>
+    <div class="acts">${act}<button class="btn ghost sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></div>
+  </div>`;
+}
+
+/** A server that needs no account: on for some profiles, nothing to sign in to. */
+function serverRow(sv) {
+  const desk = sv.noDesktop.length ? t("conn.noDesktop", { p: sv.noDesktop.join(", ") }) : "";
+  const [cls, text] = sv.pending.length ? ["warn-t", t("conn.pending", { p: sv.pending.join(", ") })] : ["ok-t", t("conn.ready")];
+  return `<div class="acc-row">
+    <div class="acc-who"><span class="sub">${esc(t("conn.noAccount"))}</span></div>
+    <div class="chips">${profileChips(sv.profiles)}</div>
+    <div class="acc-state"><span class="${cls}">${esc(text)}</span>${desk ? `<small>${esc(desk)}</small>` : ""}</div>
+    <div class="acts"></div>
+  </div>`;
+}
+
+function svcBlock(service, rows) {
+  const desc = t(`svc.${service}`);
+  return `<div class="svc">
+    <div class="svc-h">${logo(service)}<b>${esc(SVC_NAMES[service] ?? service)}</b>${desc !== `svc.${service}` ? `<span class="sub">${esc(desc)}</span>` : ""}</div>
+    ${rows}
+  </div>`;
+}
+
+function renderConnList() {
+  const sees = (ps) => !connFilter || !ps || ps.includes(connFilter);
+  const accs = ACC.accounts.filter((a) => sees(a.profiles));
+  const servers = (ACC.servers ?? []).filter((sv) => sees(sv.profiles));
+  $("#conn-filter").innerHTML = ["", ...ACC.profiles].map((p) =>
+    `<button class="chip pick${p === connFilter ? " on" : ""}" data-conn-filter="${esc(p)}">${esc(p || t("conn.all"))}</button>`
+  ).join("");
+  $("#acc-sum").textContent = t("acc.sum", { n: accs.length });
+
+  // what a sync would still change: one notice for the whole page, not a word in every row
+  const pending = [...ACC.accounts, ...(ACC.servers ?? [])].filter((x) => (x.reach ?? x).pending.length).length;
+  const pc = $("#conn-pending");
+  pc.hidden = !pending;
+  if (pending) {
+    pc.innerHTML = `<i></i><div><b>${esc(t("conn.apply.title", { n: pending }))}</b><div class="sub">${esc(t("conn.apply.how"))}</div></div>
+      <button class="btn" data-action="mcp-sync">${esc(t("conn.apply"))}</button>`;
+  }
+
+  const bySvc = new Map();
+  for (const a of accs) if (a.service !== "brain") bySvc.set(a.service, [...bySvc.get(a.service) ?? [], a]);
+  const blocks = [
+    ...[...bySvc].map(([svc, list]) => [SVC_NAMES[svc] ?? svc, svcBlock(svc, list.map(accRow).join(""))]),
+    ...servers.map((sv) => [SVC_NAMES[sv.name] ?? sv.name, svcBlock(sv.name, serverRow(sv))]),
+  ].sort((x, y) => x[0].localeCompare(y[0]));
+  $("#conn-services").innerHTML = blocks.map((b) => b[1]).join("") || `<p class="sub">${esc(t("acc.none"))}</p>`;
+
+  const brain = accs.filter((a) => a.service === "brain");
+  $("#conn-ours").innerHTML = brain.length
+    ? `<div class="svc">
+        <div class="svc-h">${logo("brain")}<b>${esc(t("conn.brain"))}</b><span class="sub">${esc(t("svc.brain"))}</span></div>
+        ${brain.map(accRow).join("")}
+      </div>`
+    : `<p class="sub">${esc(t("conn.noBrain"))}</p>`;
+}
+document.addEventListener("click", (e) => {
+  const f = e.target.closest("[data-conn-filter]");
+  if (!f) return;
+  connFilter = f.dataset.connFilter;
+  try { localStorage.setItem("conn.filter", connFilter); } catch { /* storage off */ }
+  if (ACC) renderConnList();
+});
 
 /** The account form, in the drawer: `i` null for a new one. The secret field is never filled in:
     the page never receives a secret, it only sends one. */
@@ -850,32 +944,6 @@ document.addEventListener("click", (e) => {
 
 function renderConnections() {
   loadAccounts().catch((e) => toast(e.message, true));
-  const reg = S.shared.mcpRegistry ?? {};
-  const names = Object.keys(reg);
-  $("#conn-rows").innerHTML = names.map((n) => {
-    const r = reg[n];
-    // what the registry promises against what each profile actually mounted at its last sync
-    const missing = [], noDesk = [];
-    for (const p of r.profiles) {
-      const info = S.profiles[p];
-      if (!info) continue;
-      if (r.surfaces.includes("cli") && !info.mcp.includes(n)) missing.push(p);
-      else if (r.surfaces.includes("desktop") && S.machine.desktopVersion && !info.mcpDesktop.includes(n)) {
-        // a Desktop never opened for this profile has no config yet: nothing is wrong, sync applies on first use
-        (info.desktopConfig ? missing : noDesk).push(p);
-      }
-    }
-    return `<tr>
-      <td><b>${esc(n)}</b></td>
-      <td>${r.profiles.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ")}</td>
-      <td>${esc(r.surfaces.map((s) => s === "cli" ? "CLI" : "Desktop").join(" · "))}</td>
-      <td>${
-      missing.length
-        ? `<span class="warn-t">${esc(t("conn.missing", { p: missing.join(", ") }))}</span>`
-        : `<span class="ok-t">${esc(t("conn.mounted"))}</span>`
-    }${noDesk.length ? `<div class="sub">${esc(t("conn.noDesktop", { p: noDesk.join(", ") }))}</div>` : ""}</td>
-    </tr>`;
-  }).join("") || `<tr><td class="empty" colspan="4">${esc(t("conn.empty"))}</td></tr>`;
 }
 
 /* ---------------- profiles ---------------- */

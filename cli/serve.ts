@@ -12,8 +12,8 @@
 // `x-claude-multi` anti-CSRF header. Updating needs no privilege any more (Claude Desktop lives in
 // user space), so it is an action like the others.
 
-import { ANSI, CONFIG, HOME, listDir, lstat, PROFILES, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
-import { ACCOUNTS, loadRegistry, missingPrograms, rawRegistry, selectServers, writePersonRegistry } from "./mcp.ts";
+import { ANSI, CONFIG, HOME, listDir, lstat, machine, profileInfo, PROFILES, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
+import { ACCOUNTS, loadRegistry, missingPrograms, type Mounted, placements, rawRegistry, reach, selectServers, writePersonRegistry } from "./mcp.ts";
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
@@ -156,12 +156,25 @@ async function accountsView() {
   const googleClient = state === "ok" && !!(await getSecret("google-oauth", "client", "id").catch(() => null));
   const missing = new Map<string, Awaited<ReturnType<typeof missingPrograms>>>();
   for (const s of new Set(accounts.map((a) => a.service))) missing.set(s, await missingPrograms(s, reg));
+  // where each account is in use, against what every profile mounted at its last sync
+  const profiles = await profileNames();
+  const mounted: Record<string, Mounted> = {};
+  for (const p of profiles) {
+    const i = await profileInfo(p);
+    mounted[p] = { cli: i.mcp, desktop: i.desktopConfig ? i.mcpDesktop : null };
+  }
+  const where = reach(placements(reg), mounted, !!(await machine()).desktopVersion);
+  const none = { profiles: [], pending: [], noDesktop: [] };
   return {
     google: { client: googleClient, last: lastConnect },
     vault: { dir: vaultDir(), state, detail, initialised, conflicts, unreadable },
     services,
-    profiles: await profileNames(),
-    accounts: accounts.map((a) => ({ ...a, hasSecret: have.has(`${a.service}/${a.name}`), missing: missing.get(a.service) ?? [] })),
+    profiles,
+    accounts: accounts.map((a) => ({
+      ...a, hasSecret: have.has(`${a.service}/${a.name}`), missing: missing.get(a.service) ?? [], reach: where[`${a.service}/${a.name}`] ?? none,
+    })),
+    // the servers that need no account (the registry's own entries, turned on by profile)
+    servers: Object.entries(where).filter(([k]) => k.startsWith("server/")).map(([k, r]) => ({ name: k.slice(7), ...r })),
   };
 }
 

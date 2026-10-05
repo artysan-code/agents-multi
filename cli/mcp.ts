@@ -172,9 +172,12 @@ export function perAccount(reg: Registry, name: string, cfg: ServerCfg, clean: R
   return [`${name}-${a.name}`, out];
 }
 
+/** One server a target gets: the registry entry it comes from, the name it has there, the accounts it works on. */
+interface Placed { entry: string; name: string; cfg: Record<string, unknown>; accounts: string[] }
+
 /** Pure: the servers one target gets, each with the registry entry it comes from. */
-function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry: string; name: string; cfg: Record<string, unknown> }[] {
-  const out: { entry: string; name: string; cfg: Record<string, unknown> }[] = [];
+function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): Placed[] {
+  const out: Placed[] = [];
   for (const [name, cfg] of Object.entries(reg.servers)) {
     const profiles = cfg._profiles ?? reg.profiles;
     const surfaces = cfg._surfaces ?? ["cli"];
@@ -186,7 +189,7 @@ function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry
       for (const a of visibleAccounts(reg.accounts ?? [], cfg._service, t.profile)) {
         const [n, c] = perAccount(reg, name, cfg, clean, a, t);
         if (t.surface === "desktop") delete c.type;
-        out.push({ entry: name, name: n, cfg: c });
+        out.push({ entry: name, name: n, cfg: c, accounts: [a.name] });
       }
       continue;
     }
@@ -199,7 +202,7 @@ function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry
       if (isHttp(clean)) {
         // a remote server at the account's address ({url}): the person's own brain, not anyone's written in
         if (visible.length !== 1) continue; // which one would it be? accounts.json must say, with profiles
-        out.push({ entry: name, name, cfg: forAccount(clean, visible[0]) });
+        out.push({ entry: name, name, cfg: forAccount(clean, visible[0]), accounts: [visible[0].name] });
         continue;
       }
       clean.env = { ...(clean.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
@@ -209,9 +212,46 @@ function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): { entry
       if (t.surface === "desktop" && reg.bus) (clean.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
     }
     if (t.surface === "desktop") delete clean.type; // Desktop takes command/args/env; "type" is CLI vocabulary
-    out.push({ entry: name, name, cfg: clean });
+    const accounts = cfg._service ? visibleAccounts(reg.accounts ?? [], cfg._service, t.profile).map((a) => a.name) : [];
+    out.push({ entry: name, name, cfg: clean, accounts });
   }
   return out;
+}
+
+/** Pure: every server the registry places, per profile and surface, under the name it has there. */
+export function placements(reg: Registry): { entry: string; name: string; profile: string; surface: Surface; service?: string; accounts: string[] }[] {
+  return reg.profiles.flatMap((profile) =>
+    (["cli", "desktop"] as const).flatMap((surface) =>
+      servers(reg, { profile, surface }).map(({ entry, name, accounts }) => ({ entry, name, profile, surface, service: reg.servers[entry]._service, accounts }))
+    )
+  );
+}
+
+/** What one profile has mounted at its last sync: CLI servers, and Desktop's (null: never opened). */
+export interface Mounted { cli: string[]; desktop: string[] | null }
+/** Where one account (or one server that needs none) reaches: the profiles that get it, those still
+ *  waiting for a sync, those waiting for their Desktop to be opened once (not wrong: sync applies then). */
+export interface Reach { profiles: string[]; pending: string[]; noDesktop: string[] }
+
+/** Pure: Reach per account (`service/name`) and per server without accounts (`server/entry`),
+ *  against what each profile mounted. `desktop` false: no Claude Desktop here, its places do not count. */
+export function reach(places: ReturnType<typeof placements>, mounted: Record<string, Mounted>, desktop: boolean): Record<string, Reach> {
+  const out: Record<string, { profiles: Set<string>; pending: Set<string>; noDesktop: Set<string> }> = {};
+  const at = (k: string) => out[k] ??= { profiles: new Set(), pending: new Set(), noDesktop: new Set() };
+  for (const pl of places) {
+    if (pl.surface === "desktop" && !desktop) continue;
+    const keys = pl.service ? pl.accounts.map((a) => `${pl.service}/${a}`) : [`server/${pl.entry}`];
+    const m = mounted[pl.profile];
+    const have = pl.surface === "cli" ? m?.cli : m?.desktop;
+    for (const k of keys) {
+      const r = at(k);
+      r.profiles.add(pl.profile);
+      if (pl.surface === "desktop" && m && m.desktop === null) r.noDesktop.add(pl.profile);
+      else if (!have?.includes(pl.name)) r.pending.add(pl.profile);
+    }
+  }
+  const sorted = (x: Set<string>) => [...x].sort();
+  return Object.fromEntries(Object.entries(out).map(([k, r]) => [k, { profiles: sorted(r.profiles), pending: sorted(r.pending), noDesktop: sorted(r.noDesktop) }]));
 }
 
 export function wanted(reg: Registry, t: Pick<Target, "profile" | "surface">): Record<string, Record<string, unknown>> {

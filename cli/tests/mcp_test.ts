@@ -2,7 +2,7 @@
 // The profile names come from the configuration (the tests run on cli/tests/fixtures/config), never
 // from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
-import { permissionRules, type RawRegistry, reachOf, REGISTRY, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
+import { permissionRules, placements, type RawRegistry, reach, reachOf, REGISTRY, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
 import { desktopDir, profileNames } from "../lib.ts";
 
 const PROFILES = await profileNames();
@@ -127,6 +127,24 @@ const perAccountReg: Registry = {
 Deno.test("perAccount: one server per account the profile sees, named <entry>-<account>", () => {
   assertEquals(Object.keys(wanted(perAccountReg, t(A, "cli"))).sort(), ["flows-mine", "flows-work", "remote-proj"]);
   assertEquals(Object.keys(wanted(perAccountReg, t(B, "cli"))).sort(), ["flows-work", "oauth-acme"]);
+});
+
+Deno.test("reach: per account, under the names the servers have; pending, and Desktop never opened", () => {
+  const reg: Registry = { ...perAccountReg, servers: { ...perAccountReg.servers, sync: { command: "s", _profiles: [A] } } };
+  const r = reach(placements(reg), {
+    [A]: { cli: ["flows-mine", "flows-work", "sync"], desktop: null },
+    [B]: { cli: ["flows-work"], desktop: ["flows-work"] },
+  }, true);
+  // flows/mine: CLI mounted, Desktop never opened for A (not pending)
+  assertEquals(r["flows/mine"], { profiles: [A], pending: [], noDesktop: [A] });
+  assertEquals(r["flows/work"], { profiles: [A, B].sort(), pending: [], noDesktop: [A] });
+  // remote/proj (http, CLI only) is not in A's CLI config yet: a sync away
+  assertEquals(r["remote/proj"], { profiles: [A], pending: [A], noDesktop: [] });
+  assertEquals(r["oauth/acme"], { profiles: [B], pending: [B], noDesktop: [] });
+  // a server without accounts is keyed by its entry
+  assertEquals(r["server/sync"], { profiles: [A], pending: [], noDesktop: [] });
+  // no Claude Desktop on this machine: its places do not count
+  assertEquals(reach(placements(reg), { [A]: { cli: ["flows-mine"], desktop: null } }, false)["flows/mine"].noDesktop, []);
 });
 
 Deno.test("perAccount (stdio): launch.ts wraps the command, the secret stays a placeholder", () => {
