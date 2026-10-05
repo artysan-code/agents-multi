@@ -41,11 +41,12 @@
         "n8n_manage_credentials"
       ],
       "_ask": [
+        "n8n_get_workflow",
         "n8n_update_full_workflow",
         "n8n_update_partial_workflow",
         "n8n_test_workflow"
       ],
-      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose."
+      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05)."
     },
     "coolify": {
       "_service": "coolify",
