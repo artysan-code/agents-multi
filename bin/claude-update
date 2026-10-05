@@ -19,7 +19,7 @@
 # L'unica notifica è una verifica fallita: tutto il resto si legge nella console.
 #
 # I due sotto-aggiornamenti girano ISOLATI: il fallimento di uno NON blocca l'altro.
-# A fine run c'è un riepilogo per-componente e l'exit code è != 0 se qualcosa è fallito.
+# Una riga per componente (bin/lib/ui.sh), con sotto solo i dettagli che contano; exit != 0 se qualcosa è fallito.
 #
 # NB: niente `set -e` a livello top — i fallimenti sono gestiti a mano (subshell + report).
 #     Ogni componente ha il proprio `set -e` dentro la sua subshell.
@@ -27,6 +27,7 @@ set -uo pipefail
 
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/updates.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/ui.sh"
 
 VERSIONS_DIR="$HOME/.local/share/claude/versions"
 REPO_DIR="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
@@ -60,19 +61,24 @@ do_rollback() (
   cur="$(basename "$(readlink -f "$BIN_DIR/claude-bin")")"
   prev="$(ls -1v "$VERSIONS_DIR" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$cur" | tail -n1 || true)"
   [[ -n "$prev" ]] || { echo "ERROR: nessuna versione precedente in $VERSIONS_DIR (il prune tiene solo N-1)" >&2; exit 1; }
-  echo "==> [CLI] rollback $cur → $prev"
   ln -sfn "$VERSIONS_DIR/$prev" "$BIN_DIR/claude-bin"
   cm_update_log cli rollback "$cur" "$prev" ""
-  echo "    claude-bin → $prev (la $cur resta in cache: claude-multi update --cli per tornare avanti)"
+  cm_row ok "Claude Code" "$prev" "$(cm_t rolled "$prev")"
+  cm_note "$(cm_t forward "$cur")"
 )
 
 # --- [CLI] Claude Code ------------------------------------------------------
 # L'updater interno scarica in ~/.local/share/claude/versions/ e ricrea ~/.local/bin/claude
 # come symlink: questo bypassa il tripwire e lascia claude-bin (usato dai wrapper di
 # profilo) puntato alla vecchia versione. Qui rimettiamo a posto entrambi.
+# Silenzioso: i dettagli da mostrare sotto la riga vanno in $NOTES (uno per riga), l'output
+# dell'updater nativo solo se fallisce.
+NOTES="$(mktemp)"; trap 'rm -f -- "$NOTES"' EXIT
+note() { printf '%s\n' "$1" >> "$NOTES"; }
+show_notes() { local l; while IFS= read -r l; do [[ -n "$l" ]] && cm_note "$l"; done < "$NOTES"; : > "$NOTES"; }
+
 do_cli() (
   set -e
-  echo "==> [CLI] aggiornamento Claude Code..."
   # NB: lo shell dell'utente esporta DISABLE_AUTOUPDATER=1 (vedi .zshrc) e i wrapper di
   # profilo pure; in quel contesto il subcomando `update` può essere soppresso. Invochiamo
   # il binario DIRETTO strippando quel flag, così l'update esplicito gira sempre. Il binario
@@ -94,16 +100,15 @@ do_cli() (
   # dal caso (teorico) in cui grep filtri tutto e ritorni 1 sotto pipefail.
   local out rc=0
   out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" "$cbin" update 2>&1)" || rc=$?
-  printf '%s\n' "$out" \
-    | grep -vE 'was not created by the native installer|If you put a launcher wrapper there on purpose' \
-    || true
-  [[ $rc -eq 0 ]] || exit $rc
+  if [[ $rc -ne 0 ]]; then
+    printf '%s\n' "$out" | grep -vE '^\s*$|was not created by the native installer|If you put a launcher wrapper there on purpose' | tail -n 4 >> "$NOTES" || true
+    exit $rc
+  fi
 
   local latest
   latest="$(ls -1v "$VERSIONS_DIR" | tail -n1)"
-  [[ -n "$latest" ]] || { echo "ERROR: nessuna versione trovata in $VERSIONS_DIR" >&2; exit 1; }
+  [[ -n "$latest" ]] || { note "nessuna versione in $VERSIONS_DIR"; exit 1; }
 
-  echo "    claude-bin → $latest"
   ln -sfn "$VERSIONS_DIR/$latest" "$BIN_DIR/claude-bin"
 
   # GC delle versioni vecchie: l'updater nativo la DISABILITA perché il launcher è custom
@@ -115,31 +120,35 @@ do_cli() (
   # Guardie: mai la live ($latest, validata non-vuota sopra e bersaglio di claude-bin).
   # Cancellare l'ELF di una sessione in corso è innocuo: l'inode resta vivo fino all'exit.
   # Si tiene anche la penultima (N-1) per `claude-multi update --rollback`.
-  local v bn prev
+  local v bn prev pruned=()
   prev="$(ls -1v "$VERSIONS_DIR" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$latest" | tail -n1 || true)"
   for v in "$VERSIONS_DIR"/*; do
     [[ -e "$v" ]] || continue
     bn="$(basename "$v")"
     [[ "$bn" == "$latest" || "$bn" == "$prev" ]] && continue
     [[ "$bn" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
-    echo "    prune versione vecchia: $bn"
+    pruned+=("$bn")
     rm -rf -- "$v"
   done
-  [[ -n "$prev" ]] && echo "    rollback disponibile verso $prev"
+  (( ${#pruned[@]} )) && note "$(cm_t pruned "${pruned[*]}")"
+  [[ -n "$prev" && "${CLI_FROM:-}" != "$latest" ]] && note "$(cm_t keep "$prev")"
 
   # L'updater nativo riscrive ~/.local/bin/claude come symlink alla nuova versione: lo
   # rimettiamo al wrapper del repo (profilo personal). Gli altri launcher non sono toccati.
   local repo; repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
-  echo "    ripristino wrapper $BIN_DIR/claude → $repo/bin/claude"
-  ln -sfn "$repo/bin/claude" "$BIN_DIR/claude"
+  if [[ "$(readlink "$BIN_DIR/claude")" != "$repo/bin/claude" ]]; then
+    ln -sfn "$repo/bin/claude" "$BIN_DIR/claude"
+    note "$(cm_t wrapper)"
+  fi
 
   # Deep-link handler (claude-cli://): l'auto-generato punta a ~/.local/bin/claude, che dopo
   # il flip è il tripwire → i deep-link (login/IDE) si romperebbero. Ripunta a claude-bin.
   local handler="$HOME/.local/share/applications/claude-code-url-handler.desktop"
-  if [[ -f "$handler" ]] && grep -q -- '--handle-uri' "$handler"; then
+  if [[ -f "$handler" ]] && grep -q -- '--handle-uri' "$handler" && ! grep -qF -- "Exec=\"$BIN_DIR/claude-bin\" --handle-uri" "$handler"; then
     sed -i -E 's#^Exec=.*--handle-uri#Exec="'"$BIN_DIR"'/claude-bin" --handle-uri#' "$handler"
-    echo "    url-handler → claude-bin"
+    note "$(cm_t handler)"
   fi
+  true
 )
 
 # --- [Desktop] Claude Desktop (tutte le varianti) ---------------------------
@@ -147,10 +156,7 @@ do_cli() (
 # (con le varianti ricostruite) solo quando nessun Claude Desktop è aperto. Exit 5 = pronta ma in
 # attesa: non è un fallimento.
 do_desktop() {
-  echo "==> [Desktop] aggiornamento Claude Desktop (tutte le varianti)..."
-  "$BIN_DIR/claude-desktop-update"; local rc=$?
-  [[ $rc -eq 5 ]] && return 0
-  return $rc
+  QUIET=1 "$BIN_DIR/claude-desktop-update" 2>>"$NOTES" >/dev/null
 }
 
 # --- Check versioni (nessuna scrittura) -------------------------------------
@@ -201,18 +207,24 @@ do_check() {
       && mv -f "$CACHE_DIR/check.json.tmp" "$CACHE_DIR/check.json"
   fi
 
-  # claude-multi stesso: solo nel testo e nell'exit code (la console legge il repo da sé)
-  local self_line="" self_out=false
-  if [[ $json -eq 0 ]]; then
-    self_line="$("$CM" self-update --check 2>/dev/null)"; [[ $? -eq 10 ]] && self_out=true
-  fi
-
   if [[ $json -eq 1 ]]; then
     cat "$CACHE_DIR/check.json" 2>/dev/null || printf '{"cli":{"current":"%s","latest":"","outdated":false},"desktop":{"current":"%s","latest":"","outdated":false}}\n' "$cc" "$dc"
+    [[ $cli_out == true || $desk_out == true ]] && return 10
+    return 0
+  fi
+
+  # il testo: una riga per componente, claude-multi compreso (che si controlla da sé)
+  if [[ $cli_out == true ]]; then cm_row wait "Claude Code" "$cc" "$(cm_t available "$cl")"
+  else cm_row ok "Claude Code" "$cc" "$(cm_t latest)"; fi
+  if [[ $desk_out == true ]]; then cm_row wait "Claude Desktop" "$dc" "$(cm_t available "$dl")"
+  else cm_row ok "Claude Desktop" "$dc" "$(cm_t latest)"; fi
+  local self_out=false
+  CM_LANG="$CM_LANG" CM_COLOR="$CM_TTY" "$CM" self-update --check; [[ $? -eq 10 ]] && self_out=true
+  echo
+  if [[ $cli_out == true || $desk_out == true || $self_out == true ]]; then
+    printf "%s\n" "$(cm_t end_avail)"
   else
-    printf "  Code     %s → %s   %s\n" "${cc:-?}" "${cl:-?}" "$([[ $cli_out  == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
-    printf "  Desktop  %s → %s   %s\n" "${dc:-?}" "${dl:-?}" "$([[ $desk_out == true ]] && echo 'AGGIORNAMENTO' || echo 'ok')"
-    [[ -n "$self_line" ]] && echo "$self_line"
+    printf "%s%s%s\n" "$C_OK" "$(cm_t end_ok)" "$C_X"
   fi
 
   # exit 10 = c'e' almeno un aggiornamento; 0 = tutto allineato. Comodo negli `if` di shell.
@@ -241,16 +253,16 @@ esac
 # fallisce: una versione già pronta aspetta solo che l'app venga chiusa.
 if [[ "$scope" == "auto" ]]; then
   take_lock
-  do_check >/dev/null; state="$(cat "$CACHE_DIR/check.json" 2>/dev/null)"
+  do_check --json >/dev/null; state="$(cat "$CACHE_DIR/check.json" 2>/dev/null)"
   if grep -q '"cli":{[^}]*"outdated":true' <<<"$state"; then
     from="$(cli_current)"
     # non come condizione di `if`: lì bash spegnerebbe il `set -e` della subshell (vedi sotto)
-    out="$(do_cli 2>&1)"; rc=$?
+    do_cli >/dev/null 2>&1; rc=$?
     if [[ $rc -eq 0 ]]; then cm_update_log cli installed "$from" "$(cli_current)" ""
-    else cm_update_log cli failed "$from" "" "$(tail -n 3 <<<"$out")"; echo "$out" >&2; fi
+    else cm_update_log cli failed "$from" "" "$(tail -n 3 "$NOTES")"; cat "$NOTES" >&2; fi
   fi
   QUIET=1 "$BIN_DIR/claude-desktop-update" >/dev/null; rc=$?
-  do_check >/dev/null 2>&1 || true
+  do_check --json >/dev/null 2>&1 || true
   # per ultimo: può riavviare la console, che potrebbe essere chi ha lanciato questo giro
   "$CM" self-update --quiet; src=$?
   [[ $rc -eq 0 || $rc -eq 5 ]] && [[ $src -eq 0 ]] || exit 1
@@ -258,50 +270,62 @@ if [[ "$scope" == "auto" ]]; then
 fi
 
 take_lock
-cli_res="—"; desk_res="—"; self_res="—"
+failed=0
+# il titolo solo per il giro completo: con --cli, --desktop o --self la riga basta
+[[ "$scope" == "all" ]] && printf "\n%s%s%s\n\n" "$C_B" "$(cm_t title)" "$C_X"
 
-# NB: do_cli/do_desktop sono subshell con `set -e` interno. NON invocarle come condizione
-# di `if` (`if do_cli; then`): in quel contesto bash DISABILITA il `set -e` della subshell
-# per tutta la sua durata → un `die`/comando fallito NON aborta e il fallimento viene
-# mascherato da un falso "ok". Le chiamiamo dirette e catturiamo $? (qui il `set -e` interno
-# è di nuovo attivo). Lo script top-level non ha `set -e`, quindi un rc!=0 non ci fa uscire.
+# NB: do_cli è una subshell con `set -e` interno. NON invocarla come condizione di `if`
+# (`if do_cli; then`): in quel contesto bash DISABILITA il `set -e` della subshell per tutta la sua
+# durata → un comando fallito NON aborta e il fallimento viene mascherato da un falso "ok". La
+# chiamiamo diretta e catturiamo $? (qui il `set -e` interno è di nuovo attivo). Lo script top-level
+# non ha `set -e`, quindi un rc!=0 non ci fa uscire.
 if [[ "$scope" == "all" || "$scope" == "cli" ]]; then
-  from="$(cli_current)"
+  cm_working "Claude Code"
+  CLI_FROM="$(cli_current)"
   do_cli; rc=$?
-  if [[ $rc -eq 0 ]]; then
-    cli_res="ok    $(cli_current)"
-    [[ "$from" != "$(cli_current)" ]] && cm_update_log cli installed "$from" "$(cli_current)" ""
+  now="$(cli_current)"
+  if [[ $rc -ne 0 ]]; then
+    cm_row fail "Claude Code" "$CLI_FROM" "$(cm_t failed)"; failed=1
+    cm_update_log cli failed "$CLI_FROM" "" "manual update failed"
+  elif [[ "$CLI_FROM" != "$now" ]]; then
+    cm_row new "Claude Code" "$now" "$(cm_t updated "$CLI_FROM")"
+    cm_update_log cli installed "$CLI_FROM" "$now" ""
   else
-    cli_res="FAIL"
-    cm_update_log cli failed "$from" "" "manual update failed"
+    cm_row ok "Claude Code" "$now" "$(cm_t latest)"
   fi
+  show_notes
 fi
 
 if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
+  cm_working "Claude Desktop"
+  from="$(desk_current)"
   do_desktop; rc=$?
-  if [[ $rc -eq 0 ]]; then
-    desk_res="ok    $(desk_current)"
-  else
-    desk_res="FAIL"
-  fi
+  now="$(desk_current)"
+  case $rc in
+    0) if [[ -n "$from" && "$from" != "$now" ]]; then cm_row new "Claude Desktop" "$now" "$(cm_t updated "$from")"
+       else cm_row ok "Claude Desktop" "$now" "$(cm_t latest)"; fi ;;
+    5) cm_row wait "Claude Desktop" "$now" "$(cm_t desk_wait "$("$BIN_DIR/claude-desktop-update" --staged 2>/dev/null)")"; : > "$NOTES" ;;
+    3) cm_row wait "Claude Desktop" "$now" "$(cm_t busy)"; : > "$NOTES" ;;
+    4) cm_row fail "Claude Desktop" "$now" "$(cm_t desk_verify)"; failed=1 ;;
+    *) cm_row fail "Claude Desktop" "$now" "$(cm_t failed)"; failed=1 ;;
+  esac
+  # le righe di errore arrivano col prefisso del comando: qui il nome è già nella riga
+  sed -i 's/^claude-desktop-update: //' "$NOTES"
+  show_notes
 fi
 
 if [[ "$scope" == "all" || "$scope" == "self" ]]; then
-  echo "==> [Self] aggiornamento claude-multi..."
-  "$CM" self-update; rc=$?
-  if [[ $rc -eq 0 ]]; then self_res="ok    $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null)"; else self_res="FAIL"; fi
+  cm_working "claude-multi"
+  [[ -n "$CM_TTY" ]] && printf "\r\e[K"
+  CM_LANG="$CM_LANG" CM_COLOR="$CM_TTY" "$CM" self-update || failed=1
 fi
 
 # La cache del check (statusline, console) descrive il mondo di prima: si rigenera subito.
-[[ "$cli_res" == ok* || "$desk_res" == ok* ]] && { do_check --json >/dev/null 2>&1 || true; }
+do_check --json >/dev/null 2>&1 || true
 
 echo
-echo "──────── riepilogo ────────"
-[[ "$scope" == "all" || "$scope" == "cli"     ]] && printf "  Code     %s\n" "$cli_res"
-[[ "$scope" == "all" || "$scope" == "desktop" ]] && printf "  Desktop  %s\n" "$desk_res"
-[[ "$scope" == "all" || "$scope" == "self"    ]] && printf "  claude-multi %s\n" "$self_res"
-
-if [[ "$cli_res" == FAIL || "$desk_res" == FAIL || "$self_res" == FAIL ]]; then
-  echo "  (qualcosa è fallito — vedi log sopra)" >&2
+if [[ $failed -ne 0 ]]; then
+  printf "%s%s%s\n" "$C_BAD" "$(cm_t end_fail)" "$C_X" >&2
   exit 1
 fi
+printf "%s%s%s\n" "$C_OK" "$(cm_t end_ok)" "$C_X"

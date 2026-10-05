@@ -34,7 +34,7 @@ import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./us
 import { PORT, serve } from "./serve.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
-import { selfCheck, selfUpdate } from "./selfupdate.ts";
+import { selfCheck, selfCheckRow, selfUpdate } from "./selfupdate.ts";
 import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 
 const [cmd = "help", ...rest] = Deno.args;
@@ -117,10 +117,10 @@ switch (cmd) {
   case "tasks": Deno.exit(await tasksCommand(rest)); break;
   case "brain-backup": Deno.exit(await brainBackup(flag("--force"))); break;
   case "self-update": {
+    if (flag("--check") && !flag("--json")) Deno.exit(await selfCheckRow());
     if (flag("--check")) {
       const c = await selfCheck();
-      if (flag("--json")) console.log(JSON.stringify({ current: c.current, behind: c.behind, outdated: c.plan.do === "pull", blocked: c.plan.do === "skip" ? c.plan.why : null }));
-      else console.log(`  claude-multi ${c.current}${c.behind ? ` ↓${c.behind}` : ""}   ${c.plan.do === "pull" ? "AGGIORNAMENTO" : c.plan.do === "skip" ? `bloccato: ${c.plan.why}` : "ok"}`);
+      console.log(JSON.stringify({ current: c.current, behind: c.behind, outdated: c.plan.do === "pull", blocked: c.plan.do === "skip" ? c.plan.why : null }));
       Deno.exit(c.plan.do === "pull" ? 10 : 0);
     }
     Deno.exit(await selfUpdate({ quiet: flag("--quiet") }));
