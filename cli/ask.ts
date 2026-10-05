@@ -128,6 +128,8 @@ export class AskStream {
   text = "";
   session: string | null = null;
   private streamed = false;
+  /** a run that ended in an error the CLI reports as its result (an expired login, an API error) */
+  private failure: string | null = null;
 
   line(raw: string): Out[] {
     let ev: Record<string, unknown>;
@@ -150,6 +152,9 @@ export class AskStream {
           if (this.text && !this.text.endsWith("\n\n")) add("\n\n");
         } else if (b.type === "text" && !this.streamed) add(b.text ?? "");
       }
+    } else if (ev.type === "result" && ev.is_error) {
+      // `claude -p` puts the error where an answer goes, and may still exit 0: never show it as one
+      this.failure = typeof ev.result === "string" && ev.result ? ev.result : "error";
     } else if (ev.type === "result" && !this.text.trim() && typeof ev.result === "string") add(ev.result);
     return out;
   }
@@ -157,6 +162,7 @@ export class AskStream {
   end(code: number, stderr: string): Extract<Out, { t: "done" }> {
     const m = this.text.match(CODE);
     const text = this.text.replace(CODE, "").trim();
+    if (this.failure && !text) return { t: "done", text: "", code: null, error: this.failure };
     if (code !== 0 && !text) {
       const last = stderr.trim().split("\n").pop();
       return { t: "done", text: "", code: null, error: last || `exit ${code}` };

@@ -50,6 +50,11 @@ Deno.test("AskStream: deltas when streamed, the message otherwise, the result as
   r.line(JSON.stringify({ type: "result", result: "solo il risultato" }));
   assertEquals(r.end(0, "").text, "solo il risultato");
 
+  // an error the CLI reports as its result (and exit 0) is an error, not the answer
+  const e = new AskStream();
+  e.line(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: "Failed to authenticate: OAuth session expired" }));
+  assertEquals(e.end(0, ""), { t: "done", text: "", code: null, error: "Failed to authenticate: OAuth session expired" });
+
   const f = new AskStream();
   assertEquals(f.end(1, "warning\nError: not logged in\n"), { t: "done", text: "", code: null, error: "Error: not logged in" });
 });
