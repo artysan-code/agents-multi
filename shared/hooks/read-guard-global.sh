@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Global read-guard: enforces Serena MCP for large TS/TSX files.
+# Global read-guard: blocks full reads of large TS/JS files.
 #
 # Trigger: Read tool on a .ts/.tsx file ≥ READ_GUARD_THRESHOLD lines (default 300),
 # without `offset`/`limit` params, NOT in vendor/build directories.
 #
-# Rationale: Read full su file grandi brucia token e ignora il LSP-based
-# `find_symbol` / `get_symbols_overview` di Serena (~30× più efficienti per simboli TS).
+# Rationale: Read full su file grandi brucia token; grep trova la sezione, Read
+# con offset/limit legge solo quella.
 #
 # Coexists with repo-local read-guard.sh: deny è idempotente, il global cattura
 # anche file fuori scope di un eventuale read-guard.sh repo-local (es. scripts/,
 # packages/X/, root del repo, non solo apps/*/src/).
 #
-# Output: permissionDecision=deny + reason suggesting Serena alternative.
+# Output: permissionDecision=deny + reason suggesting grep + partial Read.
 # Files < threshold, non-TS, vendor dirs, partial reads → exit 0 (allow).
 
 set -euo pipefail
@@ -47,11 +47,9 @@ lines=$(wc -l < "$file_path" 2>/dev/null || echo 0)
 
 rel=${file_path#"${CLAUDE_PROJECT_DIR:-$PWD}/"}
 reason="READ GUARD — $rel = $lines righe (≥$THRESHOLD). Per file grandi: \
-(1) \`mcp__serena__get_symbols_overview\` per scoprire i simboli del file; \
-(2) \`mcp__serena__find_symbol\` con name_path per leggerne uno specifico; \
-(3) \`mcp__serena__find_referencing_symbols\` per usage; \
-(4) se DEVI leggere righe specifiche, riprova con Read + \`offset\`+\`limit\`. \
-Bootstrap Serena: \`mcp__serena__activate_project\` se non già fatto in sessione."
+(1) \`grep -n '<simbolo|pattern>' $rel\` per trovare la sezione; \
+(2) \`grep -rn '<simbolo>(' <src>\` per chi lo chiama; \
+(3) poi Read con \`offset\`+\`limit\` sulle sole righe che servono."
 
 jq -n --arg r "$reason" '{
   hookSpecificOutput: {

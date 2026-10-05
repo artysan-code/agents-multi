@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreCompact hook: mark session file before context compaction.
 # Appends compaction event to the project's .tmp so the next session
-# knows context was summarized and Serena needs re-activation.
+# knows context was summarized.
 
 set -uo pipefail
 
@@ -19,7 +19,7 @@ if [ ! -f "$session_file" ]; then
 fi
 
 if [ -f "$session_file" ]; then
-  printf '\n---\n[Compaction at %s] Context summarized. Re-run mcp__serena__activate_project before next edit in files >300 lines.\n' "$time_str" >> "$session_file"
+  printf '\n---\n[Compaction at %s] Context summarized.\n' "$time_str" >> "$session_file"
 fi
 
 exit 0

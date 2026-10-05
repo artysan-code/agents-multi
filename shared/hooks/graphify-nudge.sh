@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Global graphify-nudge — PreToolUse hook che spinge verso graphify/Serena
+# Global graphify-nudge — PreToolUse hook che spinge verso graphify
 # prima di search broad (grep/find/rg via Bash, oppure Grep/Glob nativi).
 #
 # Non blocca: solo emette additionalContext.
@@ -48,5 +48,5 @@ if [ "$AGE_DAYS" -gt 7 ]; then
 fi
 
 cat <<EOF
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"graphify decision tree: discovery broad/concettuale → \`graphify query \\\"<domanda>\\\"\` o \`graphify explain \\\"<nodo>\\\"\` (BFS subgraph, tokens scoped). Simbolo specifico/funzione/classe → \`mcp__serena__find_symbol\` o \`find_referencing_symbols\` (LSP-accurate). Pattern testuale letterale (TODO, env name, regex) → search nativa con scope limitato. Mai Read full su file ≥300 righe.${FRESH_WARN}"}}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"graphify decision tree: discovery broad/concettuale → \`graphify query \\\"<domanda>\\\"\` o \`graphify explain \\\"<nodo>\\\"\` (BFS subgraph, tokens scoped). Simbolo specifico o chi lo chiama → \`grep -rn 'nome('\` con scope limitato. Pattern testuale letterale (TODO, env name, regex) → search nativa con scope limitato. Mai Read full su file ≥300 righe.${FRESH_WARN}"}}
 EOF
