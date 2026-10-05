@@ -13,6 +13,9 @@ Keywords=AI;Chat;Assistant;Claude;Code;LLM;@KEYWORD@
 Exec=@LAUNCH@ @PROFILE@ %U
 Icon=@ICON@
 Type=Application
+# Out of the menu: «Claude» (claude-multi-launcher.desktop) asks which profile. The entry stays for
+# the taskbar (icon and grouping by StartupWMClass) and, on the default profile, claude://.
+NoDisplay=true
 StartupNotify=true
 # Matches the Wayland app_id / X11 WM_CLASS Chromium derives from package.json desktopName,
 # so docks group windows under this entry.

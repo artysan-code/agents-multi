@@ -194,7 +194,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi tasks brief\|add\|done\|remind\|migrate` | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain |
 | `claude-multi google client <file.json>\|connect <account>` | the Google OAuth client, and connecting an account |
 | `claude-launch <profile>` | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app |
-| `claude-multi-app [--tray\|--hey]` | the desktop app: console window, tray icon, Hey Claude (below) |
+| `claude-multi-app [--tray\|--hey\|--pick]` | the desktop app: console window, tray icon, Hey Claude, the profile picker (below) |
 
 `claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -272,6 +272,12 @@ tunnel still reaches it.
 - **At login** — `claude-multi-app.service` (graphical session only, enabled by `install`) runs
   `--tray`. One instance per session: a second start hands its request to the first over
   `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
+
+- **Claude in the menu** — one entry, *Claude*, for every profile: it runs `claude-multi-app --pick`,
+  a small window that lists the profiles (with the account each is signed in to, and which Desktop
+  is already open) and opens the chosen one through `claude-launch` — or brings it forward when it
+  is open. ↑ ↓ or 1–9, Enter, Esc. The per-profile entries are still installed, hidden from the menu
+  (`NoDisplay`): the taskbar groups each Desktop under its own, and the default one owns `claude://`.
 
 - **Hey Claude** — `claude-multi-app --hey` (also in the tray menu, and the bar on Today) opens one
   floating field. What you write goes to `claude -p` in the default profile and the answer streams

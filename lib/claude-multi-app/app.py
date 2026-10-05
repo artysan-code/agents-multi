@@ -8,6 +8,7 @@ through the same commands a terminal would run. There is no setup logic here.
   claude-multi-app              open the console window (starting the app if it is not running)
   claude-multi-app --tray       start in the tray, no window: what the login unit runs
   claude-multi-app --hey        «Hey Claude»: the quick entry (bind it to a global shortcut)
+  claude-multi-app --pick       «Claude» in the menu: choose the profile whose Desktop to open
 
 Updates need no window: the timer installs them (bin/claude-update --auto) and the console's
 System › Updates shows what happened.
@@ -42,11 +43,14 @@ class Controller(QObject):
         self.tray = None
         self.window = None
         self.hey = None
+        self.picker = None
         self._profile = None
 
     # ------------------------------------------------------------------ requests
     def handle(self, cmd: str) -> None:
-        if cmd.startswith("hey"):
+        if cmd == "pick":
+            self.show_picker()
+        elif cmd.startswith("hey"):
             self.show_hey(cmd.partition(":")[2])
         elif cmd.startswith("show"):
             self.show_console(cmd.partition(":")[2] or None)
@@ -92,6 +96,20 @@ class Controller(QObject):
         self.hey.activateWindow()
         self.hey.text.setFocus()
 
+    def show_picker(self) -> None:
+        from picker import Picker
+        if self.picker is None:
+            self.picker = Picker()
+            self.picker.chosen.connect(self.launch)
+            self.picker.closed.connect(self._picker_closed)
+        self.picker.show()
+        self.picker.raise_()
+        self.picker.activateWindow()
+
+    def _picker_closed(self) -> None:
+        self.picker = None  # WA_DeleteOnClose frees it
+        QTimer.singleShot(0, self._maybe_quit)
+
     def _hey_closed(self) -> None:
         self.hey.deleteLater()
         self.hey = None
@@ -113,7 +131,7 @@ class Controller(QObject):
 
     def _maybe_quit(self) -> None:
         """Without a tray nothing keeps the app alive but its windows."""
-        if not self.tray and not self.window and not self.hey:
+        if not self.tray and not self.window and not self.hey and not self.picker:
             self.app.quit()
 
     def quit(self) -> None:
@@ -154,7 +172,8 @@ def listen(ctl: Controller) -> QLocalServer:
 
 # ---------------------------------------------------------------------- entry points
 def main() -> int:
-    cmd = "tray" if "--tray" in sys.argv[1:] else "hey" if "--hey" in sys.argv[1:] else "show"
+    args = sys.argv[1:]
+    cmd = "tray" if "--tray" in args else "hey" if "--hey" in args else "pick" if "--pick" in args else "show"
 
     app = QApplication(sys.argv)
     app.setApplicationName(NAME)
@@ -186,6 +205,8 @@ def main() -> int:
         ctl.show_console()
     elif cmd == "hey":
         ctl.show_hey()
+    elif cmd == "pick":
+        ctl.show_picker()
     return app.exec()
 
 

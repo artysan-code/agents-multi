@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Claude
+GenericName=AI Assistant
+Comment=Open Claude Desktop: choose the profile
+# The one entry for every profile: a small window asks which (claude-multi-app --pick); the
+# per-profile entries install writes from entry.desktop.in stay, hidden, for the taskbar icons
+# and the claude:// handler.
+Exec=@BIN@/claude-multi-app --pick
+Icon=claude-desktop
+Terminal=false
+StartupNotify=false
+Categories=Utility;Development;
+Keywords=AI;Chat;Assistant;Claude;Code;LLM;profile;

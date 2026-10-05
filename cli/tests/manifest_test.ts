@@ -93,7 +93,7 @@ Deno.test("zshBlock: one alias line per declared alias, default profile exported
   assertEquals(block.split("\n").filter((x) => x.startsWith("alias ")).length, ls.filter((l) => l.alias).length);
 });
 
-Deno.test("desktopEntry: one entry per profile, scheme handler only on the default", async () => {
+Deno.test("desktopEntry: one hidden entry per profile, scheme handler only on the default", async () => {
   const tpl = await Deno.readTextFile(`${REPO}/desktop/entry.desktop.in`);
   const body = tpl.slice(tpl.indexOf("[Desktop Entry]"));
   const ls = await launchers();
@@ -108,6 +108,8 @@ Deno.test("desktopEntry: one entry per profile, scheme handler only on the defau
     files.add(e.file);
     const claimsScheme = e.text.includes("MimeType=x-scheme-handler/claude;");
     assertEquals(claimsScheme, profile === def, `${profile}: claude:// handler on the wrong profile`);
+    // Out of the menu: the single «Claude» entry (claude-multi-launcher.desktop) asks which profile.
+    assert(e.text.includes("\nNoDisplay=true\n"), `${profile}: still listed in the menu`);
     // A variant needs its own app_id, or KDE groups it with the system build.
     if (e.variant) assert(e.text.includes(`StartupWMClass=claude-desktop-${profile}`), `${profile}: no distinct app_id`);
   }
