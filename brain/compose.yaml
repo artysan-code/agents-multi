@@ -12,9 +12,6 @@ services:
     environment:
       - SERVICE_URL_BRAIN_8080
       - BRAIN_URL=${SERVICE_URL_BRAIN}
-      - BRAIN_PASSPHRASE=${BRAIN_PASSPHRASE}
-      - BRAIN_TOTP_SECRET=${BRAIN_TOTP_SECRET}
-      - BRAIN_BACKUP_KEY=${BRAIN_BACKUP_KEY}
       - BRAIN_MASTER_KEY=${BRAIN_MASTER_KEY}
       - BRAIN_ADMIN_ID=${BRAIN_ADMIN_ID:-}
       # whose brain this is (shared/mcp/lib/owner.ts): the default owner of a task, the name and language

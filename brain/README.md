@@ -84,16 +84,18 @@ holds the brain.
 | `BRAIN_DATA` | where `accounts.db` and `users/` live (`/data`) |
 | `BRAIN_DEV=1` | local only: signing in without TOTP |
 
-**The first account** is made on the first start, when there is none: the administrator, from
-`BRAIN_ADMIN_ID` (or `CLAUDE_MULTI_OWNER_ID`), `CLAUDE_MULTI_OWNER_NAME`, `CLAUDE_MULTI_LANGUAGE`,
-`BRAIN_PASSPHRASE`, `BRAIN_TOTP_SECRET` and `BRAIN_BACKUP_KEY` (made when absent). A service that kept
-one person's brain (`/data/brain.db`) becomes that account: the file moves under `users/`, and the
-tokens of its Claude connections and machines are carried over, so nothing has to be connected
-again. After that start those variables are no longer read and can be removed.
+**The first account** is made on the first start, when there is none: the administrator, with the
+id `BRAIN_ADMIN_ID` (or `CLAUDE_MULTI_OWNER_ID`) and the name and language of `CLAUDE_MULTI_OWNER_NAME`
+and `CLAUDE_MULTI_LANGUAGE`, as an invitation like everyone else's: its link is written to the log (on
+Coolify, the application's logs), and a new one on every start until it is accepted. No passphrase or
+TOTP secret sits in the environment. (`BRAIN_PASSPHRASE` and `BRAIN_TOTP_SECRET`, where given, make a
+ready account at once instead: a local run, the end-to-end test.) A service that kept one person's
+brain (`/data/brain.db`) gives it to that first account: the file moves under `users/`, and the tokens
+of its Claude connections and machines are carried over.
 
 On Coolify: a Docker Compose application from this repository, base directory `/brain`, compose file
 `/compose.yaml` (the service and Ollama, which pulls `bge-m3` into its own volume on first start),
-the domain on `brain`, `BRAIN_MASTER_KEY` and the first account's variables in Coolify. The repository is cloned over SSH
+the domain on `brain`, `BRAIN_MASTER_KEY` and `BRAIN_ADMIN_ID` in Coolify. The repository is cloned over SSH
 straight from the server's address (`git@<ip>:2222/…`): `git.example.com` is behind Cloudflare,
 which does not carry SSH. The secrets are made and typed in by Samuel, never passed
 through a chat.

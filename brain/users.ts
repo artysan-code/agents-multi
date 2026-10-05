@@ -98,13 +98,14 @@ export class Users {
     );
   }
 
-  /** A new account, waiting for its person: the link to send them. */
-  async invite(id: string, name: string, language: string): Promise<string> {
+  /** A new account, waiting for its person: the link to send them. The first account of a new
+   *  service is the administrator's, invited the same way (its link goes to the service's log). */
+  async invite(id: string, name: string, language: string, admin = false): Promise<string> {
     const err = accountError(id, name);
     if (err) throw new Error(err);
     if (this.get(id)) throw new Error(`l'account ${id} esiste già`);
-    this.db.prepare("insert into users (id, name, language, backup, created) values (?, ?, ?, ?, ?)").run(
-      id, name.trim(), language.trim() || "Italian", await wrap(this.key, b64(crypto.getRandomValues(new Uint8Array(32)))), new Date().toISOString(),
+    this.db.prepare("insert into users (id, name, language, backup, admin, created) values (?, ?, ?, ?, ?, ?)").run(
+      id, name.trim(), language.trim() || "Italian", await wrap(this.key, b64(crypto.getRandomValues(new Uint8Array(32)))), admin ? 1 : 0, new Date().toISOString(),
     );
     return await this.reinvite(id);
   }

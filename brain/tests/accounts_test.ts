@@ -158,3 +158,13 @@ Deno.test("tenants: one file per account, ids that are not accounts refused, not
   await new Promise((r) => setTimeout(r, 50)); // the indexers' first try at the (absent) model
   t.close();
 });
+
+Deno.test("invite: the first account of a new service is the administrator, invited like anyone else", async () => {
+  const { users } = await fresh();
+  const link = await users.invite("samuel", "Samuel", "Italian", true);
+  assertEquals([users.get("samuel")?.admin, users.get("samuel")?.ready], [true, false]);
+  const inv = (await users.invitation(link))!;
+  await users.accept(link, PASS, await totp(inv.totpSecret));
+  assertEquals(users.get("samuel")?.ready, true);
+  assertEquals((await users.invite("ann", "Ann", "Italian")).length > 20 && users.get("ann")?.admin, false);
+});

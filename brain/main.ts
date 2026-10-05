@@ -66,15 +66,24 @@ useTaskStore(tasks);
 const as = <T>(user: User, label: string, fn: () => T): T => ctx.run({ user, label, tenant: tenants.open(user.id) }, fn);
 
 // ---------------------------------------------------------------- the first account
-// A service that kept one person's brain becomes their account: the administrator, with the
-// passphrase, TOTP and backup key it ran with, their database moved under users/, and the tokens of
-// their Claude connections and machines carried over, so nothing has to be connected again.
+// A new service makes its administrator as an invitation, like everyone else: the link goes to the
+// log (on Coolify, the application's logs), and whoever installed it opens it and chooses a
+// passphrase and a TOTP secret. Until the administrator has accepted, every start writes a fresh
+// link, since an old one cannot be read back. Nothing secret has to sit in the environment.
+// (BRAIN_PASSPHRASE and BRAIN_TOTP_SECRET still make a ready account at once where they are given:
+// a local run, the end-to-end test.) A service that kept one person's brain (/data/brain.db) becomes
+// the administrator's: the file moves under users/, and the tokens of its Claude connections and
+// machines are carried over, so nothing has to be connected again.
 if (!users.count()) {
   const o = owner();
   const id = env("BRAIN_ADMIN_ID", o.id)!.toLowerCase();
-  const pass = env("BRAIN_PASSPHRASE") ?? "", totp = env("BRAIN_TOTP_SECRET") ?? null;
-  if (pass.length < 12 || (!totp && !DEV)) fail("no accounts yet: BRAIN_ADMIN_ID, BRAIN_PASSPHRASE (12+ characters) and BRAIN_TOTP_SECRET make the first one (BRAIN_DEV=1 allows no TOTP)");
-  await users.bootstrap({ id, name: o.name, language: o.language, passphrase: pass, totpSecret: totp, backupKey: env("BRAIN_BACKUP_KEY") });
+  const pass = env("BRAIN_PASSPHRASE"), totp = env("BRAIN_TOTP_SECRET") ?? null;
+  if (pass) {
+    if (pass.length < 12 || (!totp && !DEV)) fail("BRAIN_PASSPHRASE needs 12+ characters and BRAIN_TOTP_SECRET (BRAIN_DEV=1 allows no TOTP)");
+    await users.bootstrap({ id, name: o.name, language: o.language, passphrase: pass, totpSecret: totp, backupKey: env("BRAIN_BACKUP_KEY") });
+  } else {
+    await users.invite(id, o.name === "the user" ? id : o.name, o.language, true).catch((e) => fail(`BRAIN_ADMIN_ID: ${(e as Error).message}`));
+  }
   const old = `${DATA}/brain.db`, dest = tenantFile(DATA, id);
   if ((await Deno.stat(old).catch(() => null)) && !(await Deno.stat(dest).catch(() => null))) {
     const db = new DatabaseSync(old);
@@ -89,6 +98,8 @@ if (!users.count()) {
   }
   console.log(`brain: first account ${id}, administrator`);
 }
+const admin = users.list().find((u) => u.admin);
+if (admin && !admin.ready) console.log(`brain: the administrator ${admin.id} has not signed up yet — their invitation (one use, 7 days): ${URL_}/invite?t=${await users.reinvite(admin.id)}`);
 // every ready account's brain is opened now, so its indexer runs from the start
 for (const u of users.list()) if (u.ready && !u.disabled) tenants.open(u.id);
 
