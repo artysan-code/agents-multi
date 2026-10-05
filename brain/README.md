@@ -59,8 +59,13 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
   revokes its whole family.
 - **Signing in** takes the account, its passphrase and the current TOTP code. Five wrong attempts
   close that account for fifteen minutes; an id that does not exist answers the same way.
-- **Machines** use personal tokens, created on `/account` (shown once, to be put in the vault) and
-  revoked there. The same page lists Claude's connections and can cut them all.
+- **Machines** use personal tokens. claude-multi gets one by signing in (console › Connections ›
+  Sign in, or `claude-multi brain-login`): the brain's OAuth with scope `machine`, only to a loopback
+  redirect, answers with a token named after the machine and the account's backup key, and both go
+  straight into the vault. `/account` lists them, makes one by hand when needed, and revokes them;
+  it also lists Claude's connections and can cut them all.
+- **The web pages** (`/account`, `/tasks`) keep a session cookie: an hour from its last use, twelve
+  hours at most, `SameSite=Lax` (a link from elsewhere arrives signed in, a form from elsewhere does not).
 - Tokens are stored as their SHA-256, never as themselves. The TOTP secrets and backup keys are
   encrypted with `BRAIN_MASTER_KEY`, which exists only in the server's environment.
 
@@ -69,8 +74,8 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
 `GET /backup/state` says what the brain is at (a version that changes with every write), and
 `GET /backup` with a personal token returns the whole brain as one file: a consistent copy of the
 database (the WAL folded in and the file read in one go), sealed with AES-256-GCM under the
-account's own backup key (shown on `/account`, to be put in the vault of each machine as
-`brain/<account>` field `backup-key`): one person's copies never open with another's key. Samuel's machines check the state every half hour while they are on and fetch a copy only when
+account's own backup key (it reaches the vault, `brain/<account>` field `backup-key`, when a machine
+signs in; `/account` shows it too): one person's copies never open with another's key. Samuel's machines check the state every half hour while they are on and fetch a copy only when
 it changed (`claude-multi brain-backup`, `claude-brain-backup.timer`), keeping the last ones; without the key from the vault a copy cannot be read. No third party
 holds the brain.
 
@@ -121,5 +126,16 @@ file: copied to `users/<id>/brain.db` before the invitation is accepted, it is w
   (the console and Hey Claude address its tools as `mcp__claude_ai_Brain__*`), URL `https://<the brain>/mcp`; sign in on the page that opens. It is then in the Android app too.
 - **Claude Code**: `claude mcp add --transport http brain https://brain.example.com/mcp`, then `/mcp`
   to sign in.
-- **A person's machines** (the console, backups): a personal token from `/account`, kept in the vault
-  with the backup key.
+- **A person's machines** (the console, backups): `claude-multi brain-login`, or Sign in in the
+  console's Connections; the token and the backup key land in the vault.
+- **A browser**, a phone included: `https://<the brain>/tasks`, the board (below).
+
+## The board
+
+`/tasks` (`board.ts`): the person's tasks in four columns (to do, in progress, waiting, done in the
+last week), late ones first and in red, with their project, ref, stage, day, progress and labels; a
+filter by project and words, a line to add a task, buttons to start or finish one. `/tasks/<id>`
+shows one task: its description, steps to tick, decisions and log to add to, its links to other
+tasks, its attachments, and every field to change. Plain forms, no script; every change goes through
+the task rules of `shared/mcp/lib/tasks.ts`, as the chats' do (a repeating task done here makes the
+next one), and an edit made on a task someone changed meanwhile is refused rather than overwriting it.

@@ -5,7 +5,7 @@
 
 import type { User } from "./users.ts";
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const CSS = `
 :root{--bg:#fcfcfb;--card:#fff;--fg:#0b0b0b;--dim:#52514e;--faint:#75736d;--line:rgba(11,11,11,.1);--accent:#c6613f;--on:#fff;--crit:#bf4d43;color-scheme:light}
@@ -28,14 +28,44 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13.5px}
 td{padding:8px 4px;border-top:1px solid var(--line)}
 td.r{text-align:right}
 h2{font:500 14px/1.2 ui-sans-serif,system-ui,sans-serif;margin-top:26px}
-.row{display:flex;gap:8px;flex-wrap:wrap}.row input{flex:1;min-width:120px}
+.row{display:flex;flex-direction:row;gap:8px;flex-wrap:wrap;align-items:center}.row input{flex:1;min-width:120px}
 .sub{color:var(--faint);font-size:12.5px}
 form.inline{display:inline;margin:0}
+a{color:var(--accent)}
+select{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--fg)}
+button.sm{padding:3px 9px;font-size:12.5px}
+button.link{background:none;color:var(--accent);padding:0;font-weight:400}
+body.full{display:block;padding:20px 16px}
+main.board-main{width:min(1280px,100%);margin:0 auto;background:none;box-shadow:none;padding:0}
+header.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:14px}
+.filters,.add{margin-top:12px}.filters select{flex:0 1 240px}.add input[name=title]{flex:3;min-width:200px}.add input[type=date],.add input[type=time]{flex:0 1 auto;min-width:0}
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:20px;align-items:start}
+@media (max-width:900px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.board{grid-template-columns:1fr}}
+.board section{background:rgba(127,127,127,.06);border-radius:14px;padding:12px}
+.board h2{margin:0 0 10px;font-size:13.5px}
+.board ul,ul.plain,ul.steps{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
+.card{background:var(--card);border-radius:12px;padding:10px 12px;box-shadow:0 0 0 1px var(--line)}
+.card>a{color:var(--fg);text-decoration:none;font-weight:500;line-height:1.35}
+.meta{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:6px;font-size:12.5px;color:var(--faint)}
+.meta .late{color:var(--crit)}.meta .ref{font-family:ui-monospace,monospace}
+.lab{padding:0 7px;border-radius:99px;background:rgba(127,127,127,.12)}
+.bar{height:4px;border-radius:2px;background:var(--line);margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
+.acts{display:flex;gap:6px;margin-top:8px}
+.notes{white-space:pre-wrap;font-size:14px;color:var(--dim);margin-top:14px}
+ul.steps li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+button.tick{width:22px;height:22px;padding:0;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--on);flex:none;font-size:13px;line-height:1}
+button.tick.on{background:var(--accent);border-color:var(--accent)}
+ul.plain li{font-size:14px}
+h3{font:500 13px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--dim);margin-top:14px}
+form.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+form.grid button{grid-column:1/-1;justify-self:start}
 `;
 
-const page = (title: string, inner: string, wide = false) =>
+/** A page: a narrow card, a wide one (`true` or "wide"), or the whole width for the board. */
+export const page = (title: string, inner: string, wide: boolean | "wide" | "board" = false) =>
   `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><style>${CSS}</style></head><body><main${wide ? ' class="wide"' : ""}>${inner}</main></body></html>`;
+<title>${esc(title)}</title><style>${CSS}</style></head><body${wide === "board" ? ' class="full"' : ""}><main${wide === "board" ? ' class="board-main"' : wide ? ' class="wide"' : ""}>${inner}</main></body></html>`;
 
 export function html(body: string, status = 200, extra: Record<string, string> = {}) {
   return new Response(body, {
@@ -63,11 +93,11 @@ export function authorizePage(client: string, params: URLSearchParams, totp: boo
   ${error ? `<p class="err">${esc(error)}</p>` : ""}`);
 }
 
-export function signInPage(totp: boolean, error = "") {
+export function signInPage(totp: boolean, error = "", next = "/account") {
   return page("Il tuo cervello", `
   <h1>Il tuo cervello</h1>
-  <p>Accedi per gestire i token delle tue macchine e le connessioni di Claude.</p>
-  <form method="post" action="/account/login">${signInFields(totp)}<button>Accedi</button></form>
+  <p>${next.startsWith("/tasks") ? "Accedi per vedere e cambiare le tue task." : "Accedi per gestire i token delle tue macchine e le connessioni di Claude."}</p>
+  <form method="post" action="/account/login"><input type="hidden" name="next" value="${esc(next)}">${signInFields(totp)}<button>Accedi</button></form>
   ${error ? `<p class="err">${esc(error)}</p>` : ""}`);
 }
 
@@ -92,7 +122,7 @@ export function accountPage(
   const { fresh, backupKey, admin } = extra;
   return page("Il tuo cervello", `
   <h1>Il cervello di ${esc(user.name)}</h1>
-  <div class="sub">Account <b>${esc(user.id)}</b>${user.admin ? " · amministratore" : ""} ·
+  <div class="sub">Account <b>${esc(user.id)}</b>${user.admin ? " · amministratore" : ""} · <a href="/tasks">Le tue task</a> ·
     <form method="post" action="/account/logout" class="inline"><button class="ghost" style="padding:2px 8px">Esci</button></form></div>
   ${fresh ? `<p>Il token di <b>${esc(fresh.name)}</b>. Copialo ora nel vault della macchina: non verrà più mostrato.</p><div class="token">${esc(fresh.token)}</div>` : ""}
   <h2>Token delle tue macchine</h2>

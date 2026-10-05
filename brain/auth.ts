@@ -23,11 +23,14 @@ create table if not exists oauth_codes (hash text primary key, user text not nul
 create table if not exists tokens (
   hash text primary key, user text not null, kind text not null, client text, name text, family text, expires integer,
   created text not null, used text, revoked integer not null default 0);
-create table if not exists sessions (hash text primary key, user text not null, expires integer not null);
+create table if not exists sessions (hash text primary key, user text not null, expires integer not null, ends integer not null);
 create table if not exists login_failures (user text not null, at integer not null);
 `;
 
 export interface AuthConfig { url: string }
+const SESSION_IDLE = 3600_000, SESSION_MAX = 12 * 3600_000;
+/** How long the browser keeps the session cookie: the server ends it sooner when it is not used. */
+export const SESSION_SECONDS = SESSION_MAX / 1000;
 /** Who is behind a request: the account, and how it came in ("claude:<client>" or "token:<name>"). */
 export interface Caller { user: string; label: string }
 
@@ -123,6 +126,10 @@ export class Auth {
     db.exec(SCHEMA);
     // codes made before scope was kept: they last a minute, the column is simply added
     if (!(db.prepare("pragma table_info(oauth_codes)").all() as { name: string }[]).some((c) => c.name === "scope")) db.exec("alter table oauth_codes add column scope text");
+    // sessions from before they had an end: signing in again is all it costs
+    if (!(db.prepare("pragma table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "ends")) {
+      db.exec("drop table sessions; create table sessions (hash text primary key, user text not null, expires integer not null, ends integer not null);");
+    }
   }
 
   get resourceMeta() {
@@ -260,21 +267,25 @@ export class Auth {
     return bad("unsupported_grant_type");
   }
 
-  // ------------------------------------------------------------ the account page: sessions and personal tokens
-  async newSession(user: string): Promise<string> {
+  // ------------------------------------------------------------ the web pages: sessions and personal tokens
+  /** A session on the web pages (account, board): it lasts an hour from its last use, twelve at most. */
+  async newSession(user: string, now = Date.now()): Promise<string> {
     const s = randomToken();
-    this.db.prepare("delete from sessions where expires < ?").run(Date.now());
-    this.db.prepare("insert into sessions (hash, user, expires) values (?, ?, ?)").run(await sha256(s), user, Date.now() + 15 * 60_000);
+    this.db.prepare("delete from sessions where expires < ?").run(now);
+    this.db.prepare("insert into sessions (hash, user, expires, ends) values (?, ?, ?, ?)").run(await sha256(s), user, Math.min(now + SESSION_IDLE, now + SESSION_MAX), now + SESSION_MAX);
     return s;
   }
-  /** The account signed in on the account page, or null. */
-  async session(req: Request): Promise<string | null> {
+  /** The account signed in on the web pages, or null; each use moves the hour on. */
+  async session(req: Request, now = Date.now()): Promise<string | null> {
     const s = req.headers.get("cookie")?.match(/(?:^|;\s*)brain_session=([\w-]+)/)?.[1];
     if (!s) return null;
-    const r = this.db.prepare("select user, expires from sessions where hash = ?").get(await sha256(s)) as { user: string; expires: number } | undefined;
-    if (!r || r.expires < Date.now()) return null;
+    const h = await sha256(s);
+    const r = this.db.prepare("select user, expires, ends from sessions where hash = ?").get(h) as { user: string; expires: number; ends: number } | undefined;
+    if (!r || r.expires < now) return null;
     const u = this.users.get(r.user);
-    return u && !u.disabled ? r.user : null;
+    if (!u || u.disabled) return null;
+    this.db.prepare("update sessions set expires = ? where hash = ?").run(Math.min(now + SESSION_IDLE, r.ends), h);
+    return r.user;
   }
   async endSession(req: Request) {
     const s = req.headers.get("cookie")?.match(/(?:^|;\s*)brain_session=([\w-]+)/)?.[1];

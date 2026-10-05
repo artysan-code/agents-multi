@@ -53,7 +53,8 @@ Someone new is best guided by a Claude Code session following [ONBOARDING.md](ON
    account's secret: `claude-multi vault set <service> <account>`, or the console's Connections.
 4. `claude` (and each profile's command) — sign in with `/login`.
 5. Optionally your own brain: an instance of `brain/` on your server (`brain/README.md`), its address
-   as a `brain` account in `accounts.json`, a personal token from its `/account` page in the vault.
+   as a `brain` account in `accounts.json`, then `claude-multi brain-login` (or Sign in, console ›
+   Connections) puts its token and backup key in the vault.
 6. `claude-multi mcp sync` with Claude closed, then `claude-multi doctor`.
 
 ### Your configuration

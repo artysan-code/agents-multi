@@ -12,7 +12,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { DatabaseSync } from "node:sqlite";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/webStandardStreamableHttp.js";
 import { fromFile, type TaskStore, useTaskStore } from "../shared/mcp/lib/tasks.ts";
-import { Auth, base32Encode, type Caller } from "./auth.ts";
+import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
+import { boardRoute } from "./board.ts";
 import { accountPage, type AdminView, authorizePage, html, invitedPage, invitePage, SIGNED_OUT_ERROR, signInPage } from "./pages.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
@@ -107,7 +108,11 @@ const json = (v: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, mcp-protocol-version, mcp-session-id", "access-control-expose-headers": "www-authenticate, mcp-session-id" };
 const SECURE = URL_.startsWith("https:") ? "; Secure" : "";
-const SESSION_COOKIE = (s: string) => `brain_session=${s}; Path=/account; HttpOnly; SameSite=Strict; Max-Age=900${SECURE}`;
+// Lax, not Strict: a link to the board from elsewhere (a notification, the console) arrives signed in;
+// a form posted from another site still carries no cookie
+const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) => `brain_session=${s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${SECURE}`;
+/** Pure: a page of this service to go back to after signing in, or the account page. */
+const nextPage = (n: string | null) => n && /^\/(account|tasks)(\/[\w-]*)*(\?[^\s]*)?$/.test(n) ? n : "/account";
 const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
 const TOTP = !DEV;
 const otpauth = (id: string, secret: string) => `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
@@ -165,15 +170,16 @@ async function handle(req: Request): Promise<Response> {
       const f = new URLSearchParams(await req.text());
       const who = (f.get("user") ?? "").trim().toLowerCase();
       const r = await auth.signIn(who, f.get("passphrase") ?? "", f.get("code") ?? "");
-      if (r !== "ok") return html(signInPage(TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR), 401);
-      return new Response(null, { status: 303, headers: { location: "/account", "set-cookie": SESSION_COOKIE(await auth.newSession(who)) } });
+      const next = nextPage(f.get("next"));
+      if (r !== "ok") return html(signInPage(TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, next), 401);
+      return new Response(null, { status: 303, headers: { location: next, "set-cookie": SESSION_COOKIE(await auth.newSession(who)) } });
     }
     const id = await auth.session(req);
     const me = id ? users.get(id) : null;
     if (!me) return html(signInPage(TOTP));
     if (p === "/account/logout" && req.method === "POST") {
       await auth.endSession(req);
-      return new Response(null, { status: 303, headers: { location: "/account", "set-cookie": `brain_session=; Path=/account; HttpOnly; SameSite=Strict; Max-Age=0${SECURE}` } });
+      return new Response(null, { status: 303, headers: { location: "/account", "set-cookie": SESSION_COOKIE("", 0) } });
     }
     const extra: { fresh?: { name: string; token: string }; backupKey?: string; admin?: AdminView } = {};
     const adminView: AdminView = { users: [] };
@@ -206,6 +212,16 @@ async function handle(req: Request): Promise<Response> {
     }
     if (me.admin) extra.admin = { ...adminView, users: users.list() };
     return html(accountPage(me, auth.personalTokens(me.id), auth.connections(me.id), extra));
+  }
+
+  // ---------------- the board: the tasks on the web, signed in like the account page
+  if (p === "/") return new Response(null, { status: 303, headers: { location: "/tasks" } });
+  if (p === "/tasks" || p.startsWith("/tasks/")) {
+    const id = await auth.session(req);
+    const me = id ? users.get(id) : null;
+    // a change sent after the session ended comes back to its page, not to the form's address
+    if (!me) return html(signInPage(TOTP, "", req.method === "GET" ? `${p}${u.search}` : p.match(/^\/tasks\/t-[\w-]+/)?.[0] ?? "/tasks"), req.method === "GET" ? 200 : 401);
+    return await as(me, "web", () => boardRoute(req, u, me, html));
   }
 
   // ---------------- everything below needs a token, and runs as its account
