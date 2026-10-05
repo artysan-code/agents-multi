@@ -747,7 +747,7 @@ function renderAccounts() {
       a.service === "google" && ACC.google.client
         ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button> `
         : a.service === "brain" && a.url && ACC.vault.state === "ok"
-        ? `<button class="btn sm" data-b-login="${esc(a.name)}">${esc(t(a.hasSecret ? "brain.relogin" : "brain.login"))}</button> `
+        ? `<button class="btn sm" data-b-login="${esc(a.name)}">${esc(t("brain.login"))}</button> `
         : ""
     }<button class="btn sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></td>
     </tr>`
