@@ -8,6 +8,11 @@
 // its whole family. Signing in takes the account id, its passphrase and the current TOTP code
 // (users.ts); five wrong attempts lock that account for fifteen minutes. Every code, token and
 // session belongs to one account. Every token is stored as its SHA-256, never as itself.
+//
+// One more way in goes through the same door: claude-multi on a machine asks for scope `machine`
+// and gets, once the person has signed in, a personal token named after it (no expiry, listed and
+// revoked on /account like the ones made there) and the account's backup key: its console signs a
+// machine in without anything being copied by hand.
 
 import type { DatabaseSync } from "node:sqlite";
 import type { Users } from "./users.ts";
@@ -85,13 +90,21 @@ export async function totpOk(secret: string, code: string, at = Date.now()): Pro
 }
 
 // ---------------------------------------------------------------- redirects
+/** Pure: an http address on this machine, the only kind of redirect allowed besides Claude's. */
+function isLoopback(uri: string): boolean {
+  try {
+    const u = new URL(uri);
+    return u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) && !u.username && !u.password;
+  } catch { return false; }
+}
+
 /** Pure: where a registered client may be sent back — Claude's own callback, or a loopback port
  *  (Claude Code, which listens on a port it picks each time). */
 export function redirectAllowed(uri: string): boolean {
   try {
     const u = new URL(uri);
     if (u.protocol === "https:" && ["claude.ai", "claude.com"].includes(u.hostname) && u.pathname === "/api/mcp/auth_callback") return true;
-    return u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) && !u.username && !u.password;
+    return isLoopback(uri);
   } catch { return false; }
 }
 /** Pure: a redirect matches a registered one, ignoring the port on loopback (RFC 8252). */
@@ -108,6 +121,8 @@ export function redirectMatches(registered: string[], uri: string): boolean {
 export class Auth {
   constructor(private db: DatabaseSync, private users: Users, private cfg: AuthConfig) {
     db.exec(SCHEMA);
+    // codes made before scope was kept: they last a minute, the column is simply added
+    if (!(db.prepare("pragma table_info(oauth_codes)").all() as { name: string }[]).some((c) => c.name === "scope")) db.exec("alter table oauth_codes add column scope text");
   }
 
   get resourceMeta() {
@@ -118,7 +133,7 @@ export class Auth {
     return {
       issuer: u, authorization_endpoint: `${u}/authorize`, token_endpoint: `${u}/token`, registration_endpoint: `${u}/register`,
       response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"],
-      code_challenge_methods_supported: ["S256"], token_endpoint_auth_methods_supported: ["none"], scopes_supported: ["brain"],
+      code_challenge_methods_supported: ["S256"], token_endpoint_auth_methods_supported: ["none"], scopes_supported: ["brain", "machine"],
     };
   }
   /** What a request without a valid token is told: where to find how to get one. */
@@ -176,7 +191,7 @@ export class Auth {
   }
 
   /** Checks an authorization request; the message is what the page shows when it is not valid. */
-  checkAuthorize(p: URLSearchParams): { ok: true; client: { id: string; name: string }; redirect: string } | { ok: false; message: string } {
+  checkAuthorize(p: URLSearchParams): { ok: true; client: { id: string; name: string }; redirect: string; machine: boolean } | { ok: false; message: string } {
     const c = this.client(p.get("client_id") ?? "");
     if (!c) return { ok: false, message: "unknown client" };
     const redirect = p.get("redirect_uri") ?? "";
@@ -185,14 +200,18 @@ export class Auth {
     if (p.get("code_challenge_method") !== "S256" || !/^[\w-]{43,128}$/.test(p.get("code_challenge") ?? "")) return { ok: false, message: "PKCE S256 required" };
     const res = p.get("resource");
     if (res && res !== `${this.cfg.url}/mcp` && res !== this.cfg.url) return { ok: false, message: "unknown resource" };
-    return { ok: true, client: c, redirect };
+    const scope = p.get("scope") ?? "";
+    if (!["", "brain", "machine"].includes(scope)) return { ok: false, message: "unknown scope" };
+    // a token that does not expire goes only to a program on the person's own machine
+    if (scope === "machine" && !isLoopback(redirect)) return { ok: false, message: "scope machine is for a loopback redirect" };
+    return { ok: true, client: c, redirect, machine: scope === "machine" };
   }
 
   /** A code for the account that just signed in: the tokens it turns into are that account's. */
   async issueCode(p: URLSearchParams, user: string): Promise<string> {
     const code = randomToken();
-    this.db.prepare("insert into oauth_codes (hash, user, client, redirect, challenge, resource, expires) values (?, ?, ?, ?, ?, ?, ?)")
-      .run(await sha256(code), user, p.get("client_id"), p.get("redirect_uri"), p.get("code_challenge"), p.get("resource"), Date.now() + 60_000);
+    this.db.prepare("insert into oauth_codes (hash, user, client, redirect, challenge, resource, scope, expires) values (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(await sha256(code), user, p.get("client_id"), p.get("redirect_uri"), p.get("code_challenge"), p.get("resource"), p.get("scope"), Date.now() + 60_000);
     const u = new URL(p.get("redirect_uri")!);
     u.searchParams.set("code", code);
     if (p.get("state")) u.searchParams.set("state", p.get("state")!);
@@ -212,11 +231,15 @@ export class Auth {
     const bad = (error: string, d?: string) => ({ status: 400, json: { error, ...(d ? { error_description: d } : {}) } });
     if (f.get("grant_type") === "authorization_code") {
       const h = await sha256(f.get("code") ?? "");
-      const c = this.db.prepare("select * from oauth_codes where hash = ?").get(h) as { user: string; client: string; redirect: string; challenge: string; expires: number } | undefined;
+      const c = this.db.prepare("select * from oauth_codes where hash = ?").get(h) as { user: string; client: string; redirect: string; challenge: string; scope: string | null; expires: number } | undefined;
       this.db.prepare("delete from oauth_codes where hash = ? or expires < ?").run(h, Date.now()); // one use only
       if (!c || c.expires < Date.now()) return bad("invalid_grant", "code expired or used");
       if (c.client !== f.get("client_id") || c.redirect !== f.get("redirect_uri")) return bad("invalid_grant", "client or redirect differ");
       if (!same(await sha256(f.get("code_verifier") ?? ""), c.challenge)) return bad("invalid_grant", "PKCE verifier does not match");
+      if (c.scope === "machine") {
+        const token = await this.createPersonal(c.user, this.client(c.client)?.name ?? "machine");
+        return { status: 200, json: { access_token: token, token_type: "Bearer", scope: "machine", account: c.user, backup_key: await this.users.backupKey(c.user) } };
+      }
       return { status: 200, json: await this.pair(c.user, c.client) };
     }
     if (f.get("grant_type") === "refresh_token") {

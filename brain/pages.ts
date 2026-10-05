@@ -53,11 +53,12 @@ const signInFields = (totp: boolean) => `
   <label>Passphrase<input type="password" name="passphrase" autocomplete="current-password" required></label>
   ${totp ? `<label>Codice dell'app di autenticazione<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" required></label>` : ""}`;
 
-export function authorizePage(client: string, params: URLSearchParams, totp: boolean, error = "") {
+export function authorizePage(client: string, params: URLSearchParams, totp: boolean, error = "", machine = false) {
   const hidden = [...params].map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("");
   return page("Collega Claude al cervello", `
   <h1>Collega ${esc(client)}</h1>
   <p>${esc(client)} chiede di leggere e scrivere nel tuo cervello: memoria e task.</p>
+  ${machine ? `<p>Riceve un token che non scade e la chiave di backup, e li mette nel vault di claude-multi. Il token lo trovi e lo revochi nella pagina dell'account.</p>` : ""}
   <form method="post" action="/authorize">${hidden}${signInFields(totp)}<button>Collega</button></form>
   ${error ? `<p class="err">${esc(error)}</p>` : ""}`);
 }
@@ -102,7 +103,7 @@ export function accountPage(
   <table>${claude.map((c) => `<tr><td>${esc(c.name)}</td><td>dal ${esc(when(c.created))}</td><td class="r">usata ${esc(when(c.used))}</td></tr>`).join("") || `<tr><td>nessuna</td></tr>`}</table>
   <form method="post" action="/account/revoke-claude"><button class="ghost">Scollega tutte le connessioni di Claude</button></form>
   <h2>Chiave delle copie</h2>
-  <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Va nel vault di ogni macchina (<code>claude-multi vault set brain ${esc(user.id)} backup-key</code>).</p>
+  <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Arriva da sola nel vault quando una macchina accede dalla console (Connessioni › Accedi, o <code>claude-multi brain-login</code>).</p>
   ${backupKey ? `<div class="token">${esc(backupKey)}</div>` : `<form method="post" action="/account/backup-key"><button class="ghost">Mostra la chiave</button></form>`}
   ${admin ? adminSection(admin) : ""}`, true);
 }

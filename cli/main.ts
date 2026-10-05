@@ -33,6 +33,8 @@ import { apply, blockers, describe, health, plan } from "./mcp.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
 import { PORT, serve } from "./serve.ts";
 import { brainBackup } from "./brain-backup.ts";
+import { brainLoginCommand } from "./brain-login.ts";
+import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 
 const [cmd = "help", ...rest] = Deno.args;
 const flag = (f: string) => rest.includes(f);
@@ -113,6 +115,12 @@ switch (cmd) {
   case "vault": Deno.exit(await vaultCommand(rest)); break;
   case "tasks": Deno.exit(await tasksCommand(rest)); break;
   case "brain-backup": Deno.exit(await brainBackup(flag("--force"))); break;
+  case "brain-login": {
+    const account = rest[0] ?? brainAccount()?.name;
+    if (!account) { console.error("no brain account in accounts.json: add one (service brain, with its address) first"); Deno.exit(1); }
+    Deno.exit(await brainLoginCommand(account));
+    break;
+  }
   case "google": Deno.exit(await googleCommand(rest)); break;
   case "help": case "--help": case "-h":
   default:
@@ -131,6 +139,7 @@ switch (cmd) {
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs
+  brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
 

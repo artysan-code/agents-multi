@@ -732,6 +732,8 @@ function renderAccounts() {
       <td class="acts">${
       a.service === "google" && ACC.google.client
         ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button> `
+        : a.service === "brain" && a.url && ACC.vault.state === "ok"
+        ? `<button class="btn sm" data-b-login="${esc(a.name)}">${esc(t(a.hasSecret ? "brain.relogin" : "brain.login"))}</button> `
         : ""
     }<button class="btn sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></td>
     </tr>`
@@ -811,6 +813,14 @@ document.addEventListener("click", async (e) => {
   if (!r.ok) return toast(r.message, true);
   window.open(r.url, "_blank", "noopener");
   toast(t("google.finish"));
+});
+document.addEventListener("click", async (e) => {
+  const c = e.target.closest("[data-b-login]");
+  if (!c) return;
+  const r = await post("/api/brain/login", { account: c.dataset.bLogin }).catch((err) => ({ ok: false, message: err.message }));
+  if (!r.ok) return toast(r.message, true);
+  window.open(r.url, "_blank", "noopener");
+  toast(t("brain.finish"));
 });
 document.addEventListener("change", async (e) => {
   if (e.target.id !== "gclient-file" || !e.target.files[0]) return;

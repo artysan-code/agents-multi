@@ -133,10 +133,10 @@ async function handle(req: Request): Promise<Response> {
     const check = auth.checkAuthorize(params);
     if (!check.ok) return html(authorizePage("Claude", new URLSearchParams(), TOTP, check.message), 400);
     const oauth = new URLSearchParams([...params].filter(([k]) => !["user", "passphrase", "code"].includes(k)));
-    if (req.method === "GET") return html(authorizePage(check.client.name, oauth, TOTP));
+    if (req.method === "GET") return html(authorizePage(check.client.name, oauth, TOTP, "", check.machine));
     const who = (params.get("user") ?? "").trim().toLowerCase();
     const r = await auth.signIn(who, params.get("passphrase") ?? "", params.get("code") ?? "");
-    if (r !== "ok") return html(authorizePage(check.client.name, oauth, TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR), 401);
+    if (r !== "ok") return html(authorizePage(check.client.name, oauth, TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, check.machine), 401);
     return new Response(null, { status: 302, headers: { location: await auth.issueCode(oauth, who), "cache-control": "no-store" } });
   }
   if (p === "/token" && req.method === "POST") {

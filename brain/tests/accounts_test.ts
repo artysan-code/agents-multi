@@ -168,3 +168,33 @@ Deno.test("invite: the first account of a new service is the administrator, invi
   assertEquals(users.get("samuel")?.ready, true);
   assertEquals((await users.invite("ann", "Ann", "Italian")).length > 20 && users.get("ann")?.admin, false);
 });
+
+Deno.test("OAuth scope machine: a personal token named after the client and the backup key, only to a loopback redirect", async () => {
+  const { users, auth } = await fresh();
+  await ready(users, "ann");
+  const reg = auth.register({ redirect_uris: ["http://127.0.0.1/callback"], client_name: "claude-multi su fisso" }).json as { client_id: string };
+  const verifier = "w".repeat(43);
+  const challenge = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const q = new URLSearchParams({ client_id: reg.client_id, redirect_uri: "http://127.0.0.1:4000/callback", code_challenge: challenge, response_type: "code", code_challenge_method: "S256", scope: "machine" });
+  const check = auth.checkAuthorize(q);
+  assert(check.ok && check.machine);
+  assertEquals(auth.checkAuthorize(new URLSearchParams({ ...Object.fromEntries(q), scope: "everything" })), { ok: false, message: "unknown scope" });
+  const code = new URL(await auth.issueCode(q, "ann")).searchParams.get("code")!;
+  const r = await auth.token(new URLSearchParams({ grant_type: "authorization_code", code, client_id: reg.client_id, redirect_uri: "http://127.0.0.1:4000/callback", code_verifier: verifier }));
+  const tok = r.json as { access_token: string; refresh_token?: string; backup_key: string; account: string };
+  assertEquals([r.status, tok.account, tok.refresh_token], [200, "ann", undefined]);
+  assertEquals(tok.backup_key, await users.backupKey("ann"));
+  assertEquals(await auth.caller(bearer(tok.access_token)), { user: "ann", label: "token:claude-multi su fisso" });
+  assertEquals(auth.personalTokens("ann").map((t) => t.name), ["claude-multi su fisso"]);
+  // Claude's own callback never gets a token that does not expire
+  const claude = auth.register({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }).json as { client_id: string };
+  const viaClaude = auth.checkAuthorize(new URLSearchParams({ client_id: claude.client_id, redirect_uri: "https://claude.ai/api/mcp/auth_callback", code_challenge: challenge, response_type: "code", code_challenge_method: "S256", scope: "machine" }));
+  assertEquals(viaClaude, { ok: false, message: "scope machine is for a loopback redirect" });
+});
+
+Deno.test("auth: a database made before codes kept their scope gets the column", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("create table oauth_codes (hash text primary key, user text not null, client text not null, redirect text not null, challenge text not null, resource text, expires integer not null)");
+  new Auth(db, new Users(db, await masterKey(KEY)), { url: "https://b.test" });
+  assert((db.prepare("pragma table_info(oauth_codes)").all() as { name: string }[]).some((c) => c.name === "scope"));
+});

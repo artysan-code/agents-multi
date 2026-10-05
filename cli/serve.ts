@@ -17,6 +17,7 @@ import { ACCOUNTS, loadRegistry, missingPrograms, rawRegistry, selectServers, wr
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
+import { startBrainLogin } from "./brain-login.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import { taskApi } from "./taskboard.ts";
 import { askApi } from "./ask.ts";
@@ -162,7 +163,7 @@ async function accountsView() {
 }
 
 const ACCOUNT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
-/** How the last Google connection ended: the page shows it when the browser comes back. */
+/** How the last Google connection or brain sign-in ended: the page shows it when the browser comes back. */
 let lastConnect: { account: string; ok: boolean; message: string; at: string } | null = null;
 
 /** Add or change an account (and its secret), or remove one. The secret, when given, is checked
@@ -360,6 +361,21 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         const r = sessions(db, { since: u.searchParams.get("since") ?? "7d", profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60) });
         db.close();
         return json(r);
+      }
+      if (u.pathname === "/api/brain/login") {
+        if (req.method !== "POST") return json({ error: "POST required" }, 405);
+        if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
+        try {
+          const { account } = await req.json() as { account: string };
+          const url = await startBrainLogin(String(account), (r) => {
+            lastConnect = { account, ...r, at: new Date().toISOString() };
+            invalidate();
+            broadcast("state");
+          });
+          return json({ ok: true, url });
+        } catch (e) {
+          return json({ ok: false, message: (e as Error).message });
+        }
       }
       if (u.pathname === "/api/google/client" || u.pathname === "/api/google/connect") {
         if (req.method !== "POST") return json({ error: "POST required" }, 405);

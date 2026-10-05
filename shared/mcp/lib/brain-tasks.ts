@@ -23,7 +23,7 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
     if (r.status === 404 && !init.method) { await r.body?.cancel(); return null; }
     if (!r.ok) {
       await r.body?.cancel();
-      throw new Error(r.status === 401 ? "the brain refused the token in the vault: make a new one on its /account page and put it in the console, Connections" : `the brain answered ${r.status} on ${path}`);
+      throw new Error(r.status === 401 ? "the brain refused the token in the vault: sign this machine in again (console › Connections › Sign in, or claude-multi brain-login)" : `the brain answered ${r.status} on ${path}`);
     }
     return await r.json();
   }
