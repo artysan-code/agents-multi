@@ -162,7 +162,8 @@ export class AskStream {
   end(code: number, stderr: string): Extract<Out, { t: "done" }> {
     const m = this.text.match(CODE);
     const text = this.text.replace(CODE, "").trim();
-    if (this.failure && !text) return { t: "done", text: "", code: null, error: this.failure };
+    // the CLI may also have sent the error as an assistant message: the run failed, whatever came before
+    if (this.failure) return { t: "done", text: "", code: null, error: this.failure };
     if (code !== 0 && !text) {
       const last = stderr.trim().split("\n").pop();
       return { t: "done", text: "", code: null, error: last || `exit ${code}` };

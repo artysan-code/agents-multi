@@ -54,6 +54,11 @@ Deno.test("AskStream: deltas when streamed, the message otherwise, the result as
   const e = new AskStream();
   e.line(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: "Failed to authenticate: OAuth session expired" }));
   assertEquals(e.end(0, ""), { t: "done", text: "", code: null, error: "Failed to authenticate: OAuth session expired" });
+  // …also when it came first as an assistant message
+  const e2 = new AskStream();
+  e2.line(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Failed to authenticate: OAuth session expired" }] } }));
+  e2.line(JSON.stringify({ type: "result", is_error: true, result: "Failed to authenticate: OAuth session expired" }));
+  assertEquals(e2.end(0, "").error, "Failed to authenticate: OAuth session expired");
 
   const f = new AskStream();
   assertEquals(f.end(1, "warning\nError: not logged in\n"), { t: "done", text: "", code: null, error: "Error: not logged in" });
