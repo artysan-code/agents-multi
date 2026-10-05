@@ -1081,7 +1081,122 @@ tbody tr[aria-selected="true"] {
   margin-left: auto;
 }
 
+/* ---------------- system overview ---------------- */
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .ov-grid {
+    grid-template-columns: minmax(0,1fr);
+  }
+}
+.ov-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 18px 12px;
+  min-width: 0;
+}
+.ov-card.fail {
+  border-color: var(--crit);
+}
+.ov-card.warn {
+  border-color: var(--warn);
+}
+.ov-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ov-h h3 {
+  font-size: 15px;
+}
+.ov-line {
+  display: grid;
+  grid-template-columns: 16px minmax(0,1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 6px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ov-line .ic {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 700 9px/1 var(--sans);
+  margin-top: 1px;
+}
+.ov-line .fix {
+  font: 400 11.5px var(--mono);
+  color: var(--accent);
+  background: var(--accent-wash);
+  border: 1px solid var(--accent-dim);
+  border-radius: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-acts {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+}
+.ov-prof {
+  display: grid;
+  grid-template-columns: 10px auto minmax(0,1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 7px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+.ov-prof:first-of-type {
+  border-top: none;
+}
+.ov-prof > .sub:last-child {
+  grid-column: 2 / -1;
+  font-size: 12px;
+}
+.ov-prof > .sub:last-child:empty {
+  display: none;
+}
+
 /* ---------------- health ---------------- */
+.chk-none {
+  padding: 14px 16px;
+  color: var(--ok);
+  font-size: 13px;
+}
+.chk-area {
+  margin-top: 10px;
+}
+.chk-area summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.chk-area summary .ic {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 700 9px/1 var(--sans);
+}
+.chk-area .checks {
+  border-top: 1px solid var(--line-soft);
+}
 .checks {
   display: flex;
   flex-direction: column;

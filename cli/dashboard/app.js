@@ -46,7 +46,7 @@ let S = null; // last /api/status payload
 let OWNER = { id: "me", name: "" }; // whose console this is (/api/owner): their tasks are "mine"
 let SUM = null; // last /api/summary payload
 let view = "today";
-let sub = "profiles"; // the System tab
+let sub = "overview"; // the System tab
 
 /* ---------------- toast ---------------- */
 let toastEl = null, toastTimer = null;
@@ -190,6 +190,7 @@ function renderView() {
   if (!S) return;
   if (view === "connections") renderConnections();
   if (view === "system") {
+    if (sub === "overview") renderOverview();
     if (sub === "profiles") renderProfiles();
     if (sub === "permissions") loadPermissions().catch((e) => toast(e.message, true));
     if (sub === "plugins") renderShared();
@@ -1200,19 +1201,92 @@ function showOutput(title, text) {
 }
 
 /* ---------------- health ---------------- */
+/** The area a check belongs to, from its id: the health list groups by it. */
+const CHK_AREAS = [
+  ["brain", /^(brain|tasks)\b|^mcp\.(brain|tasks)$/],
+  ["mcp", /^(mcp|vault)\b/],
+  ["desktop", /^(desktop|app)\b/],
+  ["profiles", /^(profile|bin|stub|zshrc|config)\b/],
+  ["setup", /./],
+];
+const chkAreaOf = (id) => CHK_AREAS.find(([, re]) => re.test(id))[0];
+const CHK_SYM = { ok: "✓", warn: "!", fail: "✕", run: "◠" };
+const chkRow = (c) =>
+  `<div class="chk">
+    <span class="ic ${c.status}">${c.status === "run" ? `<span class="spin">◠</span>` : CHK_SYM[c.status]}</span>
+    <div><div class="name">${esc(c.msg)}</div><div class="msg">${esc(c.id)}</div></div>
+    ${c.fix && c.status !== "ok" ? actionButton(c.fix) : "<span></span>"}
+  </div>`;
+
+/** Health: what needs you first, in the panel; what passes below, by area and folded. */
 function renderHealth(checks) {
-  const order = { fail: 0, warn: 1, ok: 2 };
-  const sorted = [...checks].sort((a, b) => order[a.status] - order[b.status]);
-  const sym = { ok: "✓", warn: "!", fail: "✕", run: "◠" };
-  $("#checks").innerHTML = sorted.map((c) =>
-    `<div class="chk">
-      <span class="ic ${c.status}">${c.status === "run" ? `<span class="spin">◠</span>` : sym[c.status]}</span>
-      <div><div class="name">${esc(c.id)}</div><div class="msg">${esc(c.msg)}</div></div>
-      ${c.fix && c.status !== "ok" ? actionButton(c.fix) : "<span></span>"}
-    </div>`
-  ).join("");
+  const order = { fail: 0, warn: 1, run: 2, ok: 3 };
+  const todo = [...checks].filter((c) => c.status !== "ok").sort((a, b) => order[a.status] - order[b.status]);
+  $("#checks").innerHTML = todo.map(chkRow).join("") || `<div class="chk-none">${esc(t("health.allGood", { n: checks.length }))}</div>`;
+  const ok = checks.filter((c) => c.status === "ok");
+  $("#checks-ok").innerHTML = CHK_AREAS.map(([a]) => {
+    const list = ok.filter((c) => chkAreaOf(c.id) === a);
+    return list.length
+      ? `<details class="panel chk-area"><summary><span class="ic ok">✓</span><b>${esc(t(`health.area.${a}`))}</b><span class="sub">${
+        esc(t("health.areaOk", { n: list.length }))
+      }</span></summary><div class="checks">${list.map(chkRow).join("")}</div></details>`
+      : "";
+  }).join("");
   const n = (s) => checks.filter((c) => c.status === s).length;
   $("#hsum").textContent = t("health.sum", { ok: n("ok"), w: n("warn"), f: n("fail") });
+}
+
+/* ---------------- system overview ---------------- */
+/** One card per part of the setup: its state in a line or two, what to do when there is something,
+    and a link to the tab with the detail. */
+function renderOverview() {
+  const card = (title, href, body, cls = "") =>
+    `<section class="ov-card ${cls}"><div class="ov-h"><h3>${esc(title)}</h3><a class="pane-link" href="${href}">${esc(t("ov.open"))}</a></div>${body}</section>`;
+  const line = (status, text, extra = "") =>
+    `<div class="ov-line"><span class="ic ${status}">${CHK_SYM[status]}</span><div>${text}</div>${extra}</div>`;
+  const checks = S.doctor ?? [];
+  const byId = (id) => checks.find((c) => c.id === id);
+
+  // health: the problems themselves, the passing count in one line
+  const todo = checks.filter((c) => c.status !== "ok").sort((a, b) => (a.status === "fail" ? -1 : 0) - (b.status === "fail" ? -1 : 0));
+  const health = todo.length
+    ? todo.slice(0, 5).map((c) => line(c.status, esc(c.msg), c.fix ? actionButton(c.fix) : "")).join("") +
+      (todo.length > 5 ? `<div class="sub">${esc(t("ov.more", { n: todo.length - 5 }))}</div>` : "")
+    : line("ok", esc(t("health.allGood", { n: checks.length })));
+
+  // updates: one line per component, the same words as the Updates tab
+  const m = S.machine, u = S.update ?? {}, r = S.repo ?? {};
+  const upLine = (name, v, pending) => line(pending ? "warn" : "ok", `<b>${esc(name)}</b> <code>${esc(v ?? "—")}</code> <span class="sub">${esc(pending ?? t("up.uptodate"))}</span>`);
+  const updates = upLine("Claude Code", m.cliVersion, u.cli?.latest && u.cli.latest !== m.cliVersion ? t("up.next", { v: u.cli.latest }) : null) +
+    (m.desktopVersion ? upLine("Claude Desktop", m.desktopVersion, m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : null) : "") +
+    (r.isRepo ? upLine("claude-multi", (r.head ?? "").split(" ")[0], r.behind ? t("up.self.behind", { n: r.behind }) : null) : "") +
+    `<div class="ov-acts"><button class="btn sm" data-action="update-now">${esc(t("up.now"))}</button></div>`;
+
+  // brain: whether this machine reaches it, and the last copy kept here
+  const b = S.brain, tok = byId("brain.token");
+  const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const brain = !b ? `<p class="sub">${esc(t("conn.noBrain"))}</p>`
+    : line(tok?.status ?? "warn", tok?.status === "ok" ? esc(t("ov.brain.on", { u: b.url.replace(/^https?:\/\//, "") })) : esc(tok?.msg ?? t("conn.brainOff")), tok?.fix ? actionButton(tok.fix) : "") +
+      line(byId("tasks.store")?.status ?? "warn", esc(t(byId("tasks.store")?.status === "ok" ? "ov.tasks.on" : "ov.tasks.off"))) +
+      (b.lastCopy
+        ? line(b.lastCopy.verified ? "ok" : "warn", esc(t(b.lastCopy.verified ? "ov.copy" : "ov.copyUnchecked", { d: when(b.lastCopy.checked) })))
+        : line("warn", esc(t("ov.noCopy"))));
+
+  // profiles: who each one is and what is open now
+  const live = new Set(S.running.cli.map((c) => c.profile));
+  const deskOpen = new Set(S.running.desktop.map((d) => d.variant));
+  const profiles = Object.entries(S.profiles).map(([n, p]) =>
+    `<div class="ov-prof"><span class="dot${live.has(n) || deskOpen.has(n) ? " active" : ""}"></span><b>${esc(n)}</b><span class="sub">${
+      esc(p.account ?? t("profile.notSignedIn"))
+    }</span><code>${esc(p.manifest.command ?? `claude-${n}`)}</code><span class="sub">${
+      esc([live.has(n) ? t("ov.cliOpen", { n: S.running.cli.filter((c) => c.profile === n).length }) : null, deskOpen.has(n) ? t("ov.deskOpen") : null].filter(Boolean).join(" · "))
+    }</span></div>`
+  ).join("");
+
+  $("#ov").innerHTML = card(t("sys.health"), "#system/health", health, todo.some((c) => c.status === "fail") ? "fail" : todo.length ? "warn" : "") +
+    card(t("sys.updates"), "#system/updates", updates) +
+    card(t("conn.brain"), "#connections", brain) +
+    card(t("sys.profiles"), "#system/profiles", profiles);
 }
 
 /** A fix line is a shell command. When it maps to an allowlisted action we offer the button;
@@ -1540,7 +1614,7 @@ $("#cat-rows").addEventListener("click", (e) => {
 /* ---------------- navigation ---------------- */
 // #today · #connections · #system/<tab>. The tray opens a view by setting the hash.
 const VIEWS = ["today", "tasks", "brain", "connections", "system"];
-const TABS = ["profiles", "permissions", "plugins", "updates", "health"];
+const TABS = ["overview", "profiles", "permissions", "plugins", "updates", "health"];
 
 function go(hash) {
   const [v, s] = String(hash).split("/");

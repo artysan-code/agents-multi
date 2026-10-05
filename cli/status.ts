@@ -4,7 +4,10 @@
 import { ANSI, CACHE, HOME, machine, profileInfo, profileNames, readJson, repoState, running, sharedInventory, uiLanguage, updateLog } from "./lib.ts";
 import { installWaiting } from "./selfupdate.ts";
 import { doctor } from "./doctor.ts";
-import { loadRegistry, reachOf } from "./mcp.ts";
+import { ACCOUNTS, loadRegistry, reachOf } from "./mcp.ts";
+import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
+import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
+import { lastBackup } from "./brain-backup.ts";
 
 export async function status(opts: { withDoctor?: boolean } = { withDoctor: true }) {
   const [m, repo, inst, inv] = await Promise.all([machine(), repoState(), running(), sharedInventory()]);
@@ -25,9 +28,18 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
     language: uiLanguage(Deno.env.toObject()),
     shared: { ...inv, mcpRegistry: registry },
     profiles, running: inst,
+    // the brain this machine uses and its last copy here (the doctor says whether the token still works)
+    brain: await brainState(),
     doctor: opts.withDoctor ? await doctor() : [],
   };
 }
+async function brainState() {
+  const a = brainAccount(undefined, loadAccounts(ACCOUNTS));
+  if (!a) return null;
+  const b = await lastBackup().catch(() => null);
+  return { url: a.url ?? null, lastCopy: b ? { file: b.file, checked: b.checked, verified: b.verified } : null };
+}
+
 export type StatusReport = Awaited<ReturnType<typeof status>>;
 
 /** What the tray icon says: one level, and the lines behind it. */

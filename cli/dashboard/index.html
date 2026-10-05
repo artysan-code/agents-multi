@@ -145,6 +145,7 @@
         <!-- ============ SYSTEM ============ -->
         <section class="view" id="v-system" hidden>
           <div class="tabs" role="tablist" id="tabs">
+            <a href="#system/overview" role="tab" data-t="overview" data-i18n="sys.overview"></a>
             <a href="#system/profiles" role="tab" data-t="profiles" data-i18n="sys.profiles"></a>
             <a href="#system/permissions" role="tab" data-t="permissions" data-i18n="sys.permissions"></a>
             <a href="#system/plugins" role="tab" data-t="plugins" data-i18n="sys.plugins"></a>
@@ -152,8 +153,13 @@
             <a href="#system/health" role="tab" data-t="health" data-i18n="sys.health"></a>
           </div>
 
+          <!-- overview: what needs you, and the state of each part, before the detail -->
+          <div class="sub-view" id="s-overview" role="tabpanel">
+            <div class="ov-grid" id="ov"></div>
+          </div>
+
           <!-- profiles -->
-          <div class="sub-view" id="s-profiles" role="tabpanel">
+          <div class="sub-view" id="s-profiles" role="tabpanel" hidden>
             <div class="panel">
               <div class="panel-h">
                 <h3 data-i18n="sys.profiles"></h3>
@@ -260,6 +266,7 @@
               </div>
               <div class="checks" id="checks"></div>
             </div>
+            <div id="checks-ok"></div>
           </div>
         </section>
         <div class="ask-dock" id="ask-dock" hidden>
