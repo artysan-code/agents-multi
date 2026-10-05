@@ -9,7 +9,7 @@ import { z } from "npm:zod@^3.23";
 import { registerTaskTools } from "../shared/mcp/tasks/tools.ts";
 import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";
-import { AREAS, areaOf, check, LOGS, MAX_WORDS, MAX_WORDS_LOG, relink, slugPath } from "./rules.ts";
+import { AREAS, areaOf, check, diaryRewriteErrors, entryErrors, LOGS, MAX_ENTRY_WORDS, MAX_WORDS, maxWords, relink, slugPath } from "./rules.ts";
 import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
 import { type Owner, owner } from "../shared/mcp/lib/owner.ts";
 
@@ -28,7 +28,8 @@ export function instructions(store: Store, o: Owner = owner()): string {
     `Write without asking, by these rules (the brain refuses what breaks them, with the reason): one subject per page, at most ${MAX_WORDS} words; ` +
     "it starts with '# Title' and one sentence saying what it is; it links at least one existing page with [[path]]; search before creating, and update " +
     "a page rather than making a near copy. Write only what lasts: decisions, state, how things are done, preferences, who is who; never work steps, " +
-    "transcripts, what the code already says, secrets or clients' data. While working, add one line to today's diary (brain_append) linking the project; " +
+    "transcripts, what the code already says, secrets or clients' data. While working, add one line to today's diary (brain_append) linking the project: " +
+    `what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words (the detail goes on the project page); ` +
     `when the state of a project changes, update its page. Change io/ only when ${who} says something about themselves, never by inference. ` +
     `Write in ${o.language}. Say in one line what you wrote.`;
   const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like 'io/%' order by path").all() as { path: string; title: string; body: string }[];
@@ -75,7 +76,7 @@ export function health(store: Store) {
       if (l.path) linked.add(l.path); else broken.push({ page: p.path, link: l.target });
     }
     const n = (body.match(/[\p{L}\p{N}]+/gu) ?? []).length;
-    if (n > (LOGS.includes(areaOf(p.path)) ? MAX_WORDS_LOG : MAX_WORDS)) long.push({ page: p.path, words: n });
+    if (n > maxWords(areaOf(p.path))) long.push({ page: p.path, words: n });
   }
   const orphans = pages.filter((p) => !linked.has(p.path) && !["io", "diario", "inbox"].includes(areaOf(p.path))).map((p) => p.path);
   const weekAgo = dayOf(new Date(Date.now() - 7 * 86400_000));
@@ -139,7 +140,7 @@ export function brainServer(ctx: ToolContext): McpServer {
   server.registerTool("brain_write", {
     description: "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the seven areas. " +
       "To replace, read it first and pass its rev as base_rev. The rules are checked: a refusal lists what to fix. The previous version is kept (brain_history). " +
-      "Diary and inbox are added to with brain_append, not rewritten.",
+      "Diary and inbox are added to with brain_append. A diary page may be replaced only to tidy it: every timed line kept, at its time and in its order.",
     inputSchema: {
       path: z.string().describe(`${AREAS.join("|")}/name.md (progetti/ follows the folder: progetti/work/acme/site.md)`),
       body: z.string().describe("the whole Markdown: '# Title', one sentence saying what it is, then the content with [[links]]"),
@@ -150,7 +151,11 @@ export function brainServer(ctx: ToolContext): McpServer {
   }, ({ path, body, base_rev, distinct }: { path: string; body: string; base_rev?: number; distinct?: boolean }) => {
     const p = slugPath(path);
     const cur = store.get(p);
-    if (cur && LOGS.includes(areaOf(p))) return refuse([`${p} is only added to: use brain_append`]);
+    if (cur && areaOf(p) === "inbox") return refuse([`${p} is only added to: use brain_append`]);
+    if (cur && areaOf(p) === "diario") {
+      const e = diaryRewriteErrors(cur.body, body);
+      if (e.length) return refuse(e);
+    }
     const v = check(store, p, body, { creating: !cur, distinct });
     if (!v.ok) return refuse(v.errors, v.similar ? { similar: v.similar } : {});
     const d = store.write(p, body, ctx.by(), base_rev);
@@ -203,15 +208,19 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_append", {
-    description: "Add a line to today's diary (what happened, what was decided: link the project with [[progetti/…]]), or to the inbox " +
+    description: `Add a line to today's diary (what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words: link the project with [[progetti/…]]), or to the inbox ` +
       "(something said in passing, to sort later). The page is created when it does not exist; lines are timed and never rewritten.",
     inputSchema: {
       where: z.enum(["diario", "inbox"]).optional().describe("default diario"),
-      text: z.string().min(1).max(1000).describe("one line, or a few"),
+      text: z.string().min(1).max(1000).describe("one line"),
     },
     annotations: CHANGE,
   }, ({ where, text: line }: { where?: "diario" | "inbox"; text: string }) => {
     const now = new Date(), day = dayOf(now);
+    if (where !== "inbox") {
+      const e = entryErrors(line);
+      if (e.length) return refuse(e);
+    }
     const p = where === "inbox" ? "inbox/inbox.md" : `diario/${day}.md`;
     const cur = store.get(p);
     const head = where === "inbox" ? "# Inbox\n\nCose dette al volo, da sistemare nelle pagine giuste e poi togliere da qui.\n"

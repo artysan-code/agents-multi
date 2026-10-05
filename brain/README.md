@@ -32,11 +32,11 @@ Seven areas, named the way Samuel thinks: `io/` (who he is, how he works — of 
 above its first `## ` goes into the instructions every connected Claude receives), `progetti/` (one page
 per project, the same path as his folder: `progetti/work/acme/site.md`), `clienti/` (who he works for, directly or through another
 client: the relationship and the people, linking the projects), `persone/` (people only), `note/` (how
-things are done), `diario/` (one page a day, only added to) and `inbox/` (said in passing, to sort).
+things are done), `diario/` (one page a day, added to a line at a time and only ever tidied) and `inbox/` (said in passing, to sort).
 
 Claude writes without asking, so the rules are enforced by the service (`rules.ts`, tested) and a
 write that breaks one is refused with the reasons: pages in the seven areas, `io`/`clienti`/`persone`/`note`
-flat; one subject per page, at most 400 words (1000 for the diary and the inbox); `# Title` and one
+flat; one subject per page, at most 400 words (1000 for the inbox; a diary page has no limit, but each line says what changed in at most 40 words and a page is tidied only keeping every timed line); `# Title` and one
 sentence saying what the page is; at least one link to an existing page; no near copy of a title
 in the same area (unless `distinct`); no secrets; at most 15 lines of code. Paths are normalised
 (lower case, no accents). The diary and the inbox are added to (`brain_append`), never rewritten;

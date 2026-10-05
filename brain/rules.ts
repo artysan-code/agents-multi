@@ -17,7 +17,8 @@ export type Area = typeof AREAS[number];
 /** Areas written by adding lines, not by rewriting. */
 export const LOGS: Area[] = ["diario", "inbox"];
 export const MAX_WORDS = 400;
-export const MAX_WORDS_LOG = 1000;
+export const MAX_WORDS_LOG = 1000; // the inbox: what is said in passing waits there to be sorted, it does not pile up
+export const MAX_ENTRY_WORDS = 40; // one diary line: what changed, in a sentence; the detail lives on the project page
 export const MAX_CODE_LINES = 15;
 export const DUPLICATE = 0.6; // title similarity from which a new page is taken for an existing one
 
@@ -30,6 +31,8 @@ export function slugPath(p: string): string {
   return `${slug}.md`;
 }
 
+/** The diary is a record: a busy day may be long, but nothing is refused for the size of the page. */
+export const maxWords = (area: Area) => area === "diario" ? Infinity : area === "inbox" ? MAX_WORDS_LOG : MAX_WORDS;
 const words = (s: string) => (s.replace(/^---\n[\s\S]*?\n---\n?/, "").match(/[\p{L}\p{N}]+/gu) ?? []).length;
 const titleWords = (s: string) => new Set((s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2));
 
@@ -43,6 +46,24 @@ export function similarity(a: string, b: string): number {
 }
 
 export const areaOf = (path: string) => path.split("/")[0] as Area;
+
+/** Pure: the words of a diary entry, its [[links]] not counted. */
+export const entryWords = (s: string) => words(s.replace(/\[\[[^\]]*\]\]/g, ""));
+
+/** Pure: a diary entry too long to be one line of the record. */
+export function entryErrors(text: string): string[] {
+  const n = entryWords(text);
+  return n > MAX_ENTRY_WORDS ? [`${n} words: a diary line says what changed in at most ${MAX_ENTRY_WORDS}; the detail goes on the project page`] : [];
+}
+
+/** Pure: whether a diary page may be rewritten as `next` — tidied, never edited away: every timed
+ *  line stays, at the same time and in the same order, none is added, and each fits a line. */
+export function diaryRewriteErrors(cur: string, next: string): string[] {
+  const entries = (b: string) => b.split("\n").filter((l) => /^- \d{2}:\d{2} /.test(l));
+  const was = entries(cur).map((l) => l.slice(2, 7)), now = entries(next);
+  if (now.map((l) => l.slice(2, 7)).join() !== was.join()) return [`a diary page is tidied, not edited: keep every timed line, at its time and in its order (${was.join(", ")})`];
+  return now.flatMap((l) => entryErrors(l.slice(8)).map((e) => `${l.slice(2, 7)}: ${e}`));
+}
 
 /** Pure: what is wrong with a page's place and shape, before anything is looked up. */
 export function shapeErrors(path: string, body: string): string[] {
@@ -60,7 +81,7 @@ export function shapeErrors(path: string, body: string): string[] {
   const first = lines.slice(1).find((l) => l.trim());
   if (!first || /^\s*([#>|-]|\*|\d+\.|```)/.test(first)) err.push("under the title, one plain sentence saying what the page is");
 
-  const n = words(body), max = LOGS.includes(area) ? MAX_WORDS_LOG : MAX_WORDS;
+  const n = words(body), max = maxWords(area);
   if (n > max) err.push(`${n} words: at most ${max}. Split it into smaller pages linked to each other`);
   let code = 0, inCode = false;
   for (const l of lines) {

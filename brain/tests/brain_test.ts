@@ -8,7 +8,7 @@ import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, tot
 import { open, seal } from "../backup.ts";
 import { instructions, staleProjects } from "../tools.ts";
 import { brainApi } from "../api.ts";
-import { check, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
+import { check, diaryRewriteErrors, entryErrors, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
 
 Deno.test("cleanPath: a folder/name.md inside the tree, nothing else", () => {
   assertEquals(cleanPath("progetti/claude-multi"), "progetti/claude-multi.md");
@@ -118,9 +118,20 @@ Deno.test("shapeErrors: areas, flat folders, diary days, title and sentence, len
   assert(shapeErrors("note/x.md", "Senza titolo").some((e) => e.includes("title")));
   assert(shapeErrors("note/x.md", "# X\n\n- solo elenco").some((e) => e.includes("sentence")));
   assert(shapeErrors("note/x.md", page("X", "Frase.\n\n" + "parola ".repeat(450))).some((e) => e.includes("at most 400")));
-  assertEquals(shapeErrors("diario/2026-10-01.md", page("2026-10-01", "Frase.\n\n" + "parola ".repeat(450))), []);
+  assertEquals(shapeErrors("diario/2026-10-01.md", page("2026-10-01", "Frase.\n\n" + "parola ".repeat(3000))), []); // a busy day is still recorded
+  assert(shapeErrors("inbox/inbox.md", page("Inbox", "Frase.\n\n" + "parola ".repeat(1100))).some((e) => e.includes("at most 1000")));
   assert(shapeErrors("note/x.md", page("X", "Frase.\n\n```\n" + "riga\n".repeat(20) + "```")).some((e) => e.includes("code")));
   assert(shapeErrors("note/x.md", page("X", "Frase.\n\nDB_PASSWORD=hunter2")).some((e) => e.includes("secret")));
+});
+
+Deno.test("diary lines: one sentence each, links not counted; a page tidied keeps every time in order", () => {
+  assertEquals(entryErrors("[[progetti/work/acme/crm]]: " + "parola ".repeat(40)), []);
+  assert(entryErrors("parola ".repeat(41))[0].includes("at most 40"));
+  const day = "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa lunga " + "parola ".repeat(50) + "\n- 17:04 Due.\n- 17:05 Correzione.\n";
+  assertEquals(diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa.\n- 17:04 Due.\n- 17:05 Correzione.\n"), []);
+  assert(diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa.\n- 17:04 Due.\n")[0].includes("keep every timed line"));
+  assert(diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 17:04 Due.\n- 09:37 Una cosa.\n- 17:05 Correzione.\n")[0].includes("in its order"));
+  assert(diaryRewriteErrors(day, day)[0].startsWith("09:37:"));
 });
 
 Deno.test("similarity: words in common, containment counts as the same", () => {
