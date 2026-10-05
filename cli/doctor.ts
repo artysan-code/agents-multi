@@ -251,6 +251,10 @@ export async function doctor(): Promise<Check[]> {
     const needed = ["Bash(secret-tool:*)", "Bash(kwallet-query:*)", "Bash(claude-multi vault recovery-code:*)", "Read(~/vault/claude-multi/**)", "Edit(~/vault/claude-multi/**)"];
     const absent = needed.filter((r) => !deny.includes(r));
     if (absent.length) add("vault.deny", "fail", `Claude sessions could read the vault key or entries: shared deny lacks ${absent.join(", ")}`, "console › System › Permissions › Denied");
+    // launch.ts hands a secret out (headers prints it): vault-guard.sh keeps sessions from running it
+    const settings = await readJson<{ hooks?: { PreToolUse?: { matcher?: string; hooks?: { command?: string }[] }[] } }>(`${REPO}/shared/settings.json`);
+    const guarded = (settings?.hooks?.PreToolUse ?? []).some((h) => h.matcher === "Bash" && h.hooks?.some((x) => x.command?.includes("hooks/vault-guard.sh")));
+    if (!guarded) add("vault.guard", "fail", "Claude sessions could run launch.ts and print a vault secret: shared/settings.json has no Bash hook vault-guard.sh", "add shared/hooks/vault-guard.sh to PreToolUse › Bash in shared/settings.json");
     // wrangler's own login keeps a broad OAuth token outside the vault, where vault run's checks do not reach
     const wranglerLogin = [`${HOME}/.config/.wrangler/config/default.toml`, `${HOME}/.wrangler/config/default.toml`];
     for (const f of wranglerLogin) {

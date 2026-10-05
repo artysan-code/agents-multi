@@ -47,6 +47,10 @@
           },
           {
             "type": "command",
+            "command": "bash \"$HOME\"/.claude-multi/shared/hooks/vault-guard.sh"
+          },
+          {
+            "type": "command",
             "command": "bash \"$HOME\"/.claude-multi/shared/hooks/branch-guard.sh"
           },
           {
