@@ -1,7 +1,7 @@
 // doctor.ts — every invariant of the setup as a check with a verdict and a fix.
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
-import { AGENTS_SKILLS, BIN, CONFIG, PROFILES, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog } from "./lib.ts";
+import { AGENTS_SKILLS, BIN, CONFIG, PROFILES, type Check, has, HOME, KINDS, launchers, LIB, ZSH_BEGIN, ZSH_END, zshBlock, listDir, loadManifest, lstat, machine, mode, ownItems, profileInfo, profileNames, readJson, readlink, readText, REPO, repoState, run, RUNTIME, runtimeProfiles, sharedInventory, shortHome, stat, STATE, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, type Status, updateLog, GIT_IGNORED, gitGlobalIgnore, missingIgnores } from "./lib.ts";
 import { settingsState } from "./settings.ts";
 import { ACCOUNTS, health, legacyStatePresent, loadRegistry, plan, registryProblems } from "./mcp.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
@@ -205,6 +205,14 @@ export async function doctor(): Promise<Check[]> {
     if (tpl !== STIGNORE_GEN_TEMPLATE) add("stignore-gen", "warn", `git init.templateDir is ${tpl || "unset"}: a clone inside a Syncthing folder waits for the timer`, "claude-multi install");
     else if (timer !== "enabled") add("stignore-gen", "warn", `stignore-gen.timer: ${timer || "not installed"}`, "claude-multi install");
     else add("stignore-gen", "ok", "stignore-gen: git repositories kept out of Syncthing (hook on clone, timer every 15 min)");
+  }
+
+  // --- git's global ignore: a project's .claude/claude-multi.json is never committed
+  {
+    const file = await gitGlobalIgnore();
+    const miss = missingIgnores(await readText(file) ?? "", GIT_IGNORED);
+    if (miss.length) add("git.ignore", "warn", `${shortHome(file)} does not ignore ${miss.join(", ")}: a project's binding could be committed`, "claude-multi install");
+    else add("git.ignore", "ok", "git ignores the projects' .claude/claude-multi.json everywhere");
   }
 
   // --- console: serving itself is the point of the unit

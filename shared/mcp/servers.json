@@ -126,18 +126,27 @@
     },
     "supabase": {
       "_service": "supabase",
-      "type": "http",
-      "url": "https://mcp.supabase.com/mcp?features=account,database,debugging,development,docs,functions,branching,storage",
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@0.13.0",
+        "--features=account,database,debugging,development,docs,functions,branching,storage"
+      ],
       "_perAccount": {
-        "headers": {
-          "Authorization": "Bearer {secret}"
+        "env": {
+          "SUPABASE_ACCESS_TOKEN": "{secret}"
         }
+      },
+      "_bind": {
+        "project": "--project-ref={value}",
+        "readOnly": "--read-only"
       },
       "_deny": [
         "delete_branch",
         "reset_branch"
       ],
-      "_note": "Supabase's official MCP, one server per Supabase login: supabase-<account>, with that login's personal access token (every org and project it can see; every feature group). Full scope on purpose: each Claude works on its own project. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only (http)."
+      "_note": "Supabase's official MCP (the npm package, the same tools as mcp.supabase.com), one server per Supabase login: supabase-<account>, with that login's personal access token. Unbound it sees every org and project of the login. A project ties it to itself in .claude/claude-multi.json (git-ignored everywhere by install): {\"supabase\": {\"project\": \"<ref>\", \"readOnly\": true|false}} — then it reaches that project only, and the account tools (list_projects…) are gone. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose."
     },
     "lovable": {
       "_service": "lovable",

@@ -21,6 +21,10 @@
 //              http servers do not go to Desktop, whose config holds commands only.
 //   _deny / _ask  tool names this server must never run / must ask before running: they become
 //              mcp__<server>__<tool> permission rules in each profile's generated settings (settings.ts)
+//   _bind      { key: argument }: a stdio `_perAccount` server a project can tie to itself. launch.ts
+//              reads the nearest .claude/claude-multi.json from the folder Claude started in, up to
+//              the home folder; each key the project sets under the service's name adds its argument
+//              ({value} filled in, true as it is). No file: the server is as it always was.
 //   _guard     { tool, hook }: a PreToolUse hook of shared/hooks that decides on each call of that tool
 //              (allow / ask / deny), wired by the same generated settings
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
@@ -38,6 +42,8 @@ export type ServerCfg = Record<string, unknown> & {
   _profiles?: string[]; _surfaces?: Surface[]; _service?: string; _perAccount?: PerAccount; _deny?: string[]; _ask?: string[];
   /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` */
   _guard?: { tool: string; hook: string };
+  /** a project's binding key → the argument it adds (stdio `_perAccount` servers): launch.ts */
+  _bind?: Record<string, string>;
   /** how to install the program the server runs, when it is not part of this repository */
   _install?: string;
 };
@@ -139,10 +145,11 @@ function forAccount<T>(v: T, a: Account): T {
 export const shellQuote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
 
 /** Pure: the deno command line of launch.ts, allowed to run `run` and nothing else. */
-export function launcher(paths: LaunchPaths, run?: string): string[] {
+export function launcher(paths: LaunchPaths, run?: string, bind = false): string[] {
   return [
     "deno", "run", "--quiet", "--no-lock",
-    `--allow-read=${paths.read.join(",")}`,
+    // a binding is looked for from the session's folder up to the home folder
+    `--allow-read=${(bind ? [...paths.read, HOME] : paths.read).join(",")}`,
     "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
     `--allow-run=/usr/bin/secret-tool${run ? `,${run}` : ""}`,
     paths.script,
@@ -163,7 +170,8 @@ export function perAccount(reg: Registry, name: string, cfg: ServerCfg, clean: R
     const env = Object.entries(tpl.env ?? {});
     if (env.length) {
       const cmd = String(out.command);
-      out.args = [...launcher(paths, cmd).slice(1), "run", service, a.name, ...env.flatMap(([k, v]) => ["--env", `${k}=${v}`]), "--", cmd, ...(out.args as string[] ?? [])];
+      const binds = Object.entries(cfg._bind ?? {}).flatMap(([k, v]) => ["--bind", `${k}=${v}`]);
+      out.args = [...launcher(paths, cmd, binds.length > 0).slice(1), "run", service, a.name, ...env.flatMap(([k, v]) => ["--env", `${k}=${v}`]), ...binds, "--", cmd, ...(out.args as string[] ?? [])];
       out.command = "deno";
     }
     out.env = { ...(out.env as Record<string, string> ?? {}), CLAUDE_MULTI_PROFILE: t.profile };
@@ -290,6 +298,7 @@ export function registryProblems(reg: Pick<Registry, "servers">): string[] {
     if (!cfg._service) out.push(`${name}: _perAccount needs _service (whose accounts?)`);
     if (isHttp(cfg) && _perAccount.env) out.push(`${name}: an http server takes _perAccount.headers, not env`);
     if (!isHttp(cfg) && _perAccount.headers) out.push(`${name}: a stdio server takes _perAccount.env, not headers`);
+    if (cfg._bind && (isHttp(cfg) || !_perAccount.env)) out.push(`${name}: _bind needs a stdio server started through launch.ts (_perAccount.env)`);
     if (isHttp(cfg) && cfg._surfaces?.includes("desktop")) out.push(`${name}: an http server cannot go to Desktop, whose config holds commands only`);
     if (cfg._guard && !/^[\w.-]+$/.test(cfg._guard.hook)) out.push(`${name}: _guard.hook is a file name in shared/hooks, not a path`);
   }

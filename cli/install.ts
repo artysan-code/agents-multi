@@ -1,7 +1,7 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
-import { AGENTS_SKILLS, ANSI, BIN, CONFIG, PROFILES, stat, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "./lib.ts";
+import { AGENTS_SKILLS, ANSI, BIN, CONFIG, PROFILES, stat, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, GIT_IGNORED, gitGlobalIgnore, missingIgnores } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
@@ -221,6 +221,20 @@ export async function install(dry: boolean) {
   if (await lstat(SYNCTHING_CONFIG)) {
     const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
     if (tpl !== STIGNORE_GEN_TEMPLATE) { say(`${ANSI.g}+${ANSI.x} git init.templateDir → stignore-gen template${tpl ? ` (was ${tpl})` : ""}`); if (!DRY) await run("git", ["config", "--global", "init.templateDir", STIGNORE_GEN_TEMPLATE]); }
+  }
+
+  // 5d. git's global ignore: what a project keeps for claude-multi stays out of every repository
+  {
+    const file = await gitGlobalIgnore();
+    const text = await readText(file) ?? "";
+    const add = missingIgnores(text, GIT_IGNORED);
+    if (add.length) {
+      say(`${ANSI.g}+${ANSI.x} ${shortHome(file)}: ${add.join(", ")}`);
+      if (!DRY) {
+        await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+        await Deno.writeTextFile(file, `${text}${text && !text.endsWith("\n") ? "\n" : ""}${add.join("\n")}\n`);
+      }
+    }
   }
 
   // 6. stub ~/.claude (500: stat → ENOENT sui settings, nessun "Settings Error")

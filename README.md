@@ -357,8 +357,9 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
   "_deny": ["n8n_delete_workflow"], "_ask": ["n8n_test_workflow"]
 },
 "supabase": {
-  "_service": "supabase", "type": "http", "url": "{url}",
-  "_perAccount": { "headers": { "Authorization": "Bearer {secret}" } }
+  "_service": "supabase", "type": "stdio", "command": "npx", "args": ["-y", "@supabase/mcp-server-supabase@0.13.0"],
+  "_perAccount": { "env": { "SUPABASE_ACCESS_TOKEN": "{secret}" } },
+  "_bind": { "project": "--project-ref={value}", "readOnly": "--read-only" }
 },
 "lovable": { "_service": "lovable", "type": "http", "url": "https://mcp.lovable.dev", "_perAccount": {} }
 ```
@@ -377,6 +378,13 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
   that tool, wired by the same generated settings on exactly the entry's servers. For a server whose
   one tool does everything: `cloudflare-guard.ts` reads the code `execute` would run, lets reads
   through, denies any deletion and asks for writes.
+- **`_bind: { key: argument }`**: a project ties a stdio server to itself. `launch.ts` looks for
+  `.claude/claude-multi.json` from the folder Claude started in up to the home folder, and each key
+  the project sets under the service's name adds that argument (`{value}` filled in, `true` as it
+  is). `{"supabase": {"project": "<ref>", "readOnly": false}}` starts that folder's `supabase-<account>`
+  on that project only, under the same name (its tools stay `mcp__supabase-<account>__*`). No file:
+  the server is as it always was. `install` keeps the file in git's global ignore, the doctor checks
+  it, and the server writes what it is tied to on its stderr, the client's log of it.
 - http servers stay off Desktop, whose config holds commands only. The doctor checks the entries
   (`{secret}` outside `_perAccount`, a template of the wrong kind); `mcp health --probe` starts each
   expanded server through `launch.ts`, with its real secret.

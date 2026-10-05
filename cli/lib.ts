@@ -17,6 +17,19 @@ export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
 export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
 export const STIGNORE_GEN_TEMPLATE = `${REPO}/shared/tools/stignore-gen/git-template`;
+/** What no repository on this machine ever commits, through git's global ignore: a project's
+ *  binding of claude-multi's servers (shared/mcp/lib/launch.ts, BINDING_FILE). */
+export const GIT_IGNORED = ["**/.claude/claude-multi.json"];
+
+/** Pure: the patterns of `want` that an ignore file's text does not list yet. */
+export const missingIgnores = (text: string, want: string[]) => want.filter((p) => !text.split("\n").some((l) => l.trim() === p));
+
+/** git's global ignore file: core.excludesFile, else the XDG default git reads without it. */
+export async function gitGlobalIgnore(): Promise<string> {
+  const set = (await run("git", ["config", "--global", "--get", "core.excludesFile"])).out;
+  if (set) return set.replace(/^~(?=\/)/, HOME);
+  return `${Deno.env.get("XDG_CONFIG_HOME") || `${HOME}/.config`}/git/ignore`;
+}
 export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (skills CLI) install skills
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
 

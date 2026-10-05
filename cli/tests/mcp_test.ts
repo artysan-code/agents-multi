@@ -3,7 +3,7 @@
 // from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
 import { permissionRules, placements, type RawRegistry, reach, reachOf, REGISTRY, type Registry, registryProblems, selectServers, shellQuote, type Target, targets, wanted } from "../mcp.ts";
-import { desktopDir, profileNames } from "../lib.ts";
+import { desktopDir, missingIgnores, profileNames } from "../lib.ts";
 
 const PROFILES = await profileNames();
 // One profile to single out, one to contrast it with. Which two does not matter.
@@ -163,6 +163,15 @@ Deno.test("perAccount (stdio): launch.ts wraps the command, the secret stays a p
   assertEquals("type" in wanted(perAccountReg, t(A, "desktop"))["flows-work"], false);
 });
 
+Deno.test("perAccount (stdio, _bind): the binding keys go to launch.ts, which may then read the home folder", () => {
+  const reg: Registry = { ...perAccountReg, servers: { flows: { ...perAccountReg.servers.flows, _bind: { project: "--project-ref={value}", readOnly: "--read-only" } } } };
+  const s = wanted(reg, t(A, "cli"))["flows-work"];
+  const args = s.args as string[];
+  assertEquals(args[3], `--allow-read=/vault,/rt/accounts.json,${Deno.env.get("HOME")}`);
+  assertEquals(args.slice(args.indexOf("--bind"), args.indexOf("--")), ["--bind", "project=--project-ref={value}", "--bind", "readOnly=--read-only"]);
+  assertEquals(registryProblems({ ...reg, servers: { r: { ...perAccountReg.servers.remote, _bind: { project: "x" } } } })[0], "r: _bind needs a stdio server started through launch.ts (_perAccount.env)");
+});
+
 Deno.test("perAccount (http): headers come from a headersHelper, never written; http stays off Desktop", () => {
   const s = wanted(perAccountReg, t(A, "cli"))["remote-proj"];
   assertEquals(s.url, "https://mcp.remote.example/mcp?project_ref=abc&read_only=true");
@@ -232,4 +241,11 @@ Deno.test("catalogue: shared/mcp/servers.json turns nothing on for someone with 
   const catalogue = JSON.parse(await Deno.readTextFile(REGISTRY)) as RawRegistry;
   const fresh: Registry = { profiles: PROFILES, servers: catalogue.servers, accounts: [] };
   for (const [name, cfg] of Object.entries(catalogue.servers)) assertEquals(reachOf(fresh, cfg), [], `${name} is on for everyone: give it _service or "_profiles": []`);
+});
+
+Deno.test("missingIgnores: the patterns a global ignore file does not list yet, whole lines only", () => {
+  const want = ["**/.claude/claude-multi.json"];
+  assertEquals(missingIgnores("", want), want);
+  assertEquals(missingIgnores("**/.claude/settings.local.json\n**/.claude/claude-multi.json\n", want), []);
+  assertEquals(missingIgnores("# **/.claude/claude-multi.json\n", want), want);
 });
