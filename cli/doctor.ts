@@ -132,7 +132,12 @@ export async function doctor(): Promise<Check[]> {
     const cmd = info.manifest.command;
     if (!info.credentials.present) add(`profile.${p}.login`, "warn", `${p}: no stored credentials, sign-in needed`, `${cmd ?? "claude"} → /login`);
     else if (info.credentials.mode !== "600") add(`profile.${p}.creds`, "fail", `${p}/.credentials.json mode ${info.credentials.mode}`, `chmod 600 ${info.dir}/.credentials.json`);
-    const junk = (await listDir(info.dir)).filter((f) => /\.(bak|backup|pre-|tmp\.)/.test(f) && /credentials|claude\.json|settings/.test(f));
+    // .claude.json.backup is Claude Code's own: it rewrites it with every .claude.json, so removing it
+    // is pointless. It holds the account, so it must stay private to this user.
+    const own = ".claude.json.backup";
+    const junk = (await listDir(info.dir)).filter((f) => f !== own && /\.(bak|backup|pre-|tmp\.)/.test(f) && /credentials|claude\.json|settings/.test(f));
+    const ownMode = mode(await stat(`${info.dir}/${own}`));
+    if (ownMode && ownMode !== "600") add(`profile.${p}.backup`, "fail", `${p}/${own} mode ${ownMode}: Claude Code's copy of the account, readable by others`, `chmod 600 ${info.dir}/${own}`);
     if (junk.length) add(`profile.${p}.junk`, "fail", `backups holding tokens or an account in the profile: ${junk.join(", ")}`, `rm ${junk.map((f) => `${info.dir}/${f}`).join(" ")}`);
     add(`profile.${p}`, "ok", `${p}: ${info.account ?? "no account"} · ${Object.keys(info.mounted.skills).length} skills · mcp cli ${info.mcp.length}${m.desktopVersion ? ` / desktop ${info.mcpDesktop.length}` : ""} · ${info.plugins.length} plugins${info.manifest.disableAccountMcp ? ` · account MCP off (connectors + ${info.synced.length} synced plugin${info.synced.length === 1 ? "" : "s"})` : ""}`);
   }

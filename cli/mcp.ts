@@ -38,6 +38,8 @@ export type ServerCfg = Record<string, unknown> & {
   _profiles?: string[]; _surfaces?: Surface[]; _service?: string; _perAccount?: PerAccount; _deny?: string[]; _ask?: string[];
   /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` */
   _guard?: { tool: string; hook: string };
+  /** how to install the program the server runs, when it is not part of this repository */
+  _install?: string;
 };
 type Surface = "cli" | "desktop";
 /** Where launch.ts is and what it may read: the paths of this machine, kept out of the pure code. */
@@ -377,6 +379,27 @@ export async function probe(cmd: string, args: string[], env: Record<string, str
   }
 }
 
+/** Why the program a server runs is not here (an absolute path that does not exist, a command not
+ *  on PATH), or null. */
+async function commandProblem(cmd: string): Promise<string | null> {
+  if (!cmd) return null;
+  if (cmd.startsWith("/")) return (await stat(cmd)) ? null : `missing binary: ${cmd}`;
+  return (await has(cmd)) ? null : `command not on PATH: ${cmd}`;
+}
+
+/** The servers of a service whose program is not installed on this machine, with how to install
+ *  it: what the Connections page says when an account of that service is added. */
+export async function missingPrograms(service: string, reg?: Registry): Promise<{ server: string; problem: string; install?: string }[]> {
+  const r = reg ?? await loadRegistry();
+  const out = [];
+  for (const [name, cfg] of Object.entries(r.servers)) {
+    if (cfg._service !== service) continue;
+    const problem = await commandProblem(String(cfg.command ?? ""));
+    if (problem) out.push({ server: name, problem, ...(cfg._install ? { install: cfg._install.replaceAll("{repo}", REPO) } : {}) });
+  }
+  return out;
+}
+
 /** Cheap static checks per server the person uses (it reaches a profile): binary, files,
  *  dependencies. With `live`, also the initialize probe. */
 export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
@@ -387,8 +410,8 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
     const cmd = String(cfg.command ?? ""); const args = (cfg.args ?? []) as string[]; const env = (cfg.env ?? {}) as Record<string, string>;
     const problems: string[] = [];
     if (env.PATH) for (const dir of env.PATH.split(":").slice(0, 2)) if (!(await stat(dir))) problems.push(`pinned PATH: missing directory ${dir}`);
-    if (cmd.startsWith("/")) { if (!(await stat(cmd))) problems.push(`missing binary: ${cmd}`); }
-    else if (cmd && !(await has(cmd))) problems.push(`command not on PATH: ${cmd}`);
+    const missing = await commandProblem(cmd);
+    if (missing) problems.push(cfg._install ? `${missing} (install: ${cfg._install.replaceAll("{repo}", REPO)})` : missing);
     for (const a of args) {
       if (a.startsWith("/") && /\.(ts|js|py|lock)$/.test(a) && !(await stat(a))) problems.push(`missing file: ${a}`);
       const lock = a.match(/^--lock=(.+)$/); if (lock && !(await stat(lock[1]))) problems.push(`missing lock file: ${lock[1]}`);

@@ -728,7 +728,7 @@ function renderAccounts() {
         ? (a.hasSecret ? `<span class="ok-t">${esc(a.email ?? t("google.connected"))}</span>` : `<span class="warn-t">${esc(t("google.notConnected"))}</span>`)
         : a.auth === "oauth" ? `<span class="sub">${esc(t("acc.oauth"))}</span>`
         : a.hasSecret ? `<span class="ok-t">${esc(t("acc.hasSecret"))}</span>` : `<span class="warn-t">${esc(t("acc.noSecret"))}</span>`
-    }</td>
+    }${(a.missing ?? []).map((m) => `<br><span class="warn-t" title="${esc(m.problem)}">${esc(t("acc.missingProgram", { s: m.server }))}</span>${m.install ? `<br><code class="sub">${esc(m.install)}</code>` : ""}`).join("")}</td>
       <td class="acts">${
       a.service === "google" && ACC.google.client
         ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button> `
@@ -788,7 +788,7 @@ function openAccountForm(i) {
     };
     f.elements.secret.value = "";
     const r = await post("/api/accounts", body).catch((e) => ({ ok: false, message: e.message }));
-    toast(r.message, !r.ok);
+    toast(r.message, !r.ok || !!r.missing?.length);
     if (r.ok) {
       host.remove();
       await loadAccounts();

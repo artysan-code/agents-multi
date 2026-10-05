@@ -182,6 +182,7 @@
     },
     "gitea": {
       "_service": "gitea",
+      "_install": "bash {repo}/scripts/install-gitea-mcp.sh",
       "type": "stdio",
       "command": "${HOME}/.local/lib/gitea-mcp/gitea-mcp",
       "args": [

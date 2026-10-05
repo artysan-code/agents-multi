@@ -13,7 +13,7 @@
 // user space), so it is an action like the others.
 
 import { ANSI, CONFIG, HOME, listDir, lstat, PROFILES, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
-import { ACCOUNTS, loadRegistry, rawRegistry, selectServers, writePersonRegistry } from "./mcp.ts";
+import { ACCOUNTS, loadRegistry, missingPrograms, rawRegistry, selectServers, writePersonRegistry } from "./mcp.ts";
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
 import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
@@ -150,12 +150,14 @@ async function accountsView() {
   } catch (e) { state = "no-key"; detail = (e as Error).message; }
   const initialised = !!(await readText(`${vaultDir()}/key-check.json`));
   const googleClient = state === "ok" && !!(await getSecret("google-oauth", "client", "id").catch(() => null));
+  const missing = new Map<string, Awaited<ReturnType<typeof missingPrograms>>>();
+  for (const s of new Set(accounts.map((a) => a.service))) missing.set(s, await missingPrograms(s, reg));
   return {
     google: { client: googleClient, last: lastConnect },
     vault: { dir: vaultDir(), state, detail, initialised, conflicts, unreadable },
     services,
     profiles: await profileNames(),
-    accounts: accounts.map((a) => ({ ...a, hasSecret: have.has(`${a.service}/${a.name}`) })),
+    accounts: accounts.map((a) => ({ ...a, hasSecret: have.has(`${a.service}/${a.name}`), missing: missing.get(a.service) ?? [] })),
   };
 }
 
@@ -190,7 +192,10 @@ async function accountOp(b: { op?: string; service?: string; name?: string; url?
   else raw.accounts.push(account);
   raw.accounts = raw.accounts.map((a) => JSON.parse(JSON.stringify(a))); // drop undefined keys
   await Deno.writeTextFile(ACCOUNTS, JSON.stringify(raw, null, 2) + "\n");
-  return { ok: true, message: `${service}/${name} saved${b.secret ? ", secret checked and stored" : ""}` };
+  // saved either way (the program can be installed afterwards), but said now: its server will not start until then
+  const missing = await missingPrograms(service);
+  const warn = missing.map((m) => `the ${m.server} server will not start: ${m.problem}${m.install ? ` — install it with: ${m.install}` : ""}`).join("; ");
+  return { ok: true, message: `${service}/${name} saved${b.secret ? ", secret checked and stored" : ""}${warn ? `. But ${warn}` : ""}`, ...(missing.length ? { missing } : {}) };
 }
 
 // ---------------------------------------------------------------- live updates
