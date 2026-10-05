@@ -110,8 +110,8 @@ BRAIN_URL=http://127.0.0.1:8787 BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e
 
 An account on this service: the administrator invites them from `/account` and sends the link. Their
 brain is a file of its own next to the others, with its own backup key; they connect Claude to the
-same address and sign in with their account. (`compose.instance.yaml`, one Coolify application per
-person, is what came before accounts: it goes once its brain has moved here.)
+same address and sign in with their account. A brain that already exists elsewhere comes in as its
+file: copied to `users/<id>/brain.db` before the invitation is accepted, it is what the account opens.
 
 ## Connecting
 

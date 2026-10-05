@@ -1,6 +1,5 @@
-# The brain on Coolify: the service, and the embedding model next to it on a private network. This
-# is the first instance, the one that also runs Ollama; every other person's brain is
-# compose.instance.yaml and uses this Ollama (one model in memory, not one per person).
+# The brain on Coolify: the service, for every account, and the embedding model next to it on a
+# private network.
 # Coolify builds this from the repository (base directory /brain, compose file /compose.yaml: the
 # build context is the repository root) and puts the domain in front of `brain`: SERVICE_URL_BRAIN_8080
 # tells its proxy the port, and SERVICE_URL_BRAIN is that domain. The secrets are set in Coolify,
@@ -39,8 +38,6 @@ services:
     restart: unless-stopped
 
   # bge-m3, pulled once into its volume; about 1.2 GB on disk and 2 GB of memory while it works.
-  # The other instances reach it over Coolify's shared network ("Connect to Predefined Network" on
-  # both applications) as ollama-<this application's uuid>:11434.
   ollama:
     image: ollama/ollama:0.35.0
     entrypoint: ["/bin/sh", "-c", "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull bge-m3; wait"]
