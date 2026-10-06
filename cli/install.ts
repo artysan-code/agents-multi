@@ -357,7 +357,7 @@ export async function install(dry: boolean) {
     }
   }
 
-  // 6. stub ~/.claude (500: stat → ENOENT sui settings, nessun "Settings Error")
+  // 6. stub ~/.claude (mode 500: stat fails with ENOENT on the settings, so Claude Code shows no "Settings Error")
   const stub = await lstat(`${HOME}/.claude`);
   if (!stub) {
     say(`${ANSI.g}+${ANSI.x} stub ~/.claude (500)`);

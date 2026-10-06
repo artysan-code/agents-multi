@@ -196,7 +196,7 @@ export function registerTaskTools(server: McpServer) {
 
   server.registerTool("tasks_add", {
     description:
-      'Add a task. Use it whenever the owner says there is something to do ("devo…", "ricordami…", "entro venerdì…"), in any conversation, ' +
+      'Add a task. Use it whenever the owner says there is something to do ("I need to…", "remind me…", "by Friday…", in whatever language they speak), in any conversation, ' +
       "and say in one line what you added. Put a time only when they gave one. A task of a project that names its tasks gets their `ref`, " +
       "and `detail` when the full story lives in the project (its TASKS.md, a decision file).",
     inputSchema: { title: z.string(), ...fields },

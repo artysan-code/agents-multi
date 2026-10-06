@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# claude-update: orchestratore aggiornamenti dell'intero setup Claude multi-account.
+# claude-update: update orchestrator for the whole multi-account Claude setup.
 #
-#   [CLI]     Claude Code   — updater interno + ripristino di claude-bin e del wrapper ~/.local/bin/claude
-#   [Desktop] Claude Desktop — claude-desktop-update: .deb ufficiale verificato, in user space, niente root
-#   [Self]    claude-multi   — il repo stesso: pull solo fast-forward a working tree pulito, poi riavvio di
-#                              console e app se il loro codice è cambiato e install a Claude chiuso (cli/selfupdate.ts)
+#   [CLI]     Claude Code    - internal updater, then restores claude-bin and the ~/.local/bin/claude wrapper
+#   [Desktop] Claude Desktop - claude-desktop-update: verified official .deb, user space, no root
+#   [Self]    claude-multi   - the repo itself: fast-forward-only pull on a clean working tree, then
+#                              console/app restart if their code changed and install with Claude closed (cli/selfupdate.ts)
 #
-# USO:
-#   claude-update              # tutto: CLI + Desktop + claude-multi
-#   claude-update --cli        # solo Claude Code
-#   claude-update --desktop    # solo Claude Desktop (tutte le varianti)
-#   claude-update --self       # solo claude-multi
-#   claude-update --auto       # quello che fa il timer: controlla e aggiorna ciò che è indietro, in silenzio
-#   claude-update --check      # NON aggiorna: dice solo cosa è obsoleto (--json per gli script)
-#   claude-update --rollback [--desktop]   # torna alla versione precedente (Code, o Desktop)
+# Usage:
+#   claude-update              # everything: CLI + Desktop + claude-multi
+#   claude-update --cli        # Claude Code only
+#   claude-update --desktop    # Claude Desktop only (all variants)
+#   claude-update --self       # claude-multi only
+#   claude-update --auto       # what the timer runs: check and update whatever is behind, silently
+#   claude-update --check      # does NOT update: only reports what is outdated (--json for scripts)
+#   claude-update --rollback [--desktop]   # back to the previous version (Code, or Desktop)
 #
-# Ogni esito finisce nel registro (~/.local/state/claude-multi/updates.jsonl, bin/lib/updates.sh).
-# L'unica notifica è una verifica fallita: tutto il resto si legge nella console.
+# Every outcome goes to the log (~/.local/state/claude-multi/updates.jsonl, bin/lib/updates.sh).
+# The only notification is a failed verification: everything else is read in the console.
 #
-# I due sotto-aggiornamenti girano ISOLATI: il fallimento di uno NON blocca l'altro.
-# Una riga per componente (bin/lib/ui.sh), con sotto solo i dettagli che contano; exit != 0 se qualcosa è fallito.
+# The components run ISOLATED: one failing does NOT block the other.
+# One row per component (bin/lib/ui.sh), with only the relevant details below; exit != 0 if anything failed.
 #
-# NB: niente `set -e` a livello top — i fallimenti sono gestiti a mano (subshell + report).
-#     Ogni componente ha il proprio `set -e` dentro la sua subshell.
+# Note: no top-level `set -e`; failures are handled by hand (subshell + report).
+#       Each component has its own `set -e` inside its subshell.
 set -uo pipefail
 
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
@@ -34,22 +34,22 @@ REPO_DIR="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
 CM="$REPO_DIR/bin/claude-multi"
 BIN_DIR="$HOME/.local/bin"
 
-# Canale usato dall'updater nativo: `stable` è indietro di qualche release (rollout graduale),
-# `latest` è ciò che `claude update` installa davvero. Confrontare con `stable` darebbe
-# falsi "aggiornamento disponibile"/"già aggiornato" rispetto a quello che poi succede.
-# (le URL sono override-abili via env: per provare un aggiornamento senza aspettare una release vera)
+# Channel used by the native updater: `stable` lags a few releases behind (gradual rollout), while
+# `latest` is what `claude update` really installs. Comparing against `stable` would give false
+# "update available"/"already up to date" results compared with what then happens.
+# (The URLs can be overridden via env, to test an update without waiting for a real release.)
 CLI_CHANNEL_URL="${CLAUDE_CLI_CHANNEL_URL:-https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest}"
 APT_INDEX_URL="${CLAUDE_APT_INDEX_URL:-https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages}"
 NET_TIMEOUT="${CLAUDE_UPDATE_TIMEOUT:-8}"
 CACHE_DIR="$HOME/.cache/claude-update"
 LOCK_FILE="$CACHE_DIR/update.lock"
 
-# Un solo aggiornamento alla volta (timer, avvio e terminale possono coincidere).
+# One update at a time (the timer, a launch and a terminal can coincide).
 take_lock() {
   mkdir -p "$CACHE_DIR"
   exec 8>"$LOCK_FILE"
   if ! flock -n 8; then
-    echo "ERROR: un altro claude-update è in corso (lock $LOCK_FILE)" >&2
+    echo "ERROR: another claude-update is running (lock $LOCK_FILE)" >&2
     exit 3
   fi
 }
@@ -63,13 +63,13 @@ semver_dirs() {
   done | sort -V
 }
 
-# Rollback: claude-bin torna alla versione precedente ancora in cache (il prune ne tiene una).
+# Rollback: claude-bin goes back to the previous version still cached (the prune keeps one).
 do_rollback() (
   set -e
   local cur prev
   cur="$(basename "$(readlink -f "$BIN_DIR/claude-bin")")"
   prev="$(semver_dirs "$VERSIONS_DIR" | grep -vx "$cur" | tail -n1 || true)"
-  [[ -n "$prev" ]] || { echo "ERROR: nessuna versione precedente in $VERSIONS_DIR (il prune tiene solo N-1)" >&2; exit 1; }
+  [[ -n "$prev" ]] || { echo "ERROR: no previous version in $VERSIONS_DIR (the prune only keeps N-1)" >&2; exit 1; }
   ln -sfn "$VERSIONS_DIR/$prev" "$BIN_DIR/claude-bin"
   cm_update_log cli rollback "$cur" "$prev" ""
   cm_row ok "Claude Code" "$prev" "$(cm_t rolled "$prev")"
@@ -77,36 +77,36 @@ do_rollback() (
 )
 
 # --- [CLI] Claude Code ------------------------------------------------------
-# L'updater interno scarica in ~/.local/share/claude/versions/ e ricrea ~/.local/bin/claude
-# come symlink: questo bypassa il tripwire e lascia claude-bin (usato dai wrapper di
-# profilo) puntato alla vecchia versione. Qui rimettiamo a posto entrambi.
-# Silenzioso: i dettagli da mostrare sotto la riga vanno in $NOTES (uno per riga), l'output
-# dell'updater nativo solo se fallisce.
+# The internal updater downloads into ~/.local/share/claude/versions/ and recreates
+# ~/.local/bin/claude as a symlink: that bypasses the tripwire and leaves claude-bin (used by the
+# profile wrappers) pointing at the old version. Both are put back here.
+# Silent: the details to show under the row go in $NOTES (one per line); the native updater's
+# output only if it fails.
 NOTES="$(mktemp)"; trap 'rm -f -- "$NOTES"' EXIT
 note() { printf '%s\n' "$1" >> "$NOTES"; }
 show_notes() { local l; while IFS= read -r l; do [[ -n "$l" ]] && cm_note "$l"; done < "$NOTES"; : > "$NOTES"; }
 
 do_cli() (
   set -e
-  # NB: lo shell dell'utente esporta DISABLE_AUTOUPDATER=1 (vedi .zshrc) e i wrapper di
-  # profilo pure; in quel contesto il subcomando `update` può essere soppresso. Invochiamo
-  # il binario DIRETTO strippando quel flag, così l'update esplicito gira sempre. Il binario
-  # è condiviso: aggiornarlo una volta basta per tutti i profili.
+  # The user's shell exports DISABLE_AUTOUPDATER=1 and so do the profile wrappers; in that
+  # context the `update` subcommand may be suppressed. The binary is invoked DIRECTLY with that
+  # flag stripped, so the explicit update always runs. The binary is shared: updating it once
+  # covers every profile.
   local cbin="$BIN_DIR/claude-bin"
   [[ -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(semver_dirs "$VERSIONS_DIR" | tail -n1)"
 
-  # CLAUDE_CONFIG_DIR usa-e-getta: `update` scarica solo il binario, non ha bisogno dello
-  # stato di un profilo — e scriverci dentro lo sporcherebbe. Puntava a
-  # ~/.claude-multi/work, nome morto dopo il rename del profilo (→ agency): la dir veniva
-  # RICREATA vuota a ogni update e il doctor la segnalava come runtime senza profilo.
+  # Throwaway CLAUDE_CONFIG_DIR: `update` only downloads the binary and needs no profile state,
+  # and writing into a real profile directory would dirty it (a fixed path would also be
+  # recreated empty on every update and flagged by doctor as a runtime without a profile).
   local tmpcfg; tmpcfg="$(mktemp -d)"
   trap 'rm -rf -- "$tmpcfg"' EXIT
 
-  # Cattura l'output per filtrare il blocco Warning/Fix noto: l'updater nativo avvisa che
-  # ~/.local/bin/claude non è un suo symlink — ma è il tripwire, VOLUTO → puro rumore.
-  # Preserviamo l'exit code reale: un fallimento vero propaga (do_cli → FAIL), non lo mascheriamo.
-  # `|| rc=$?` evita che `set -e` abortisca sul non-zero prima di catturarlo; `|| true` protegge
-  # dal caso (teorico) in cui grep filtri tutto e ritorni 1 sotto pipefail.
+  # Capture the output to filter the known Warning/Fix block: the native updater warns that
+  # ~/.local/bin/claude is not one of its symlinks, but that is the tripwire, which is INTENDED, so
+  # it is pure noise. The real exit code is preserved: a genuine failure propagates (do_cli ->
+  # FAIL) and is not masked. `|| rc=$?` keeps `set -e` from aborting on the non-zero before it is
+  # captured; `|| true` covers the (theoretical) case where grep filters everything out and
+  # returns 1 under pipefail.
   local out rc=0
   out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" "$cbin" update 2>&1)" || rc=$?
   if [[ $rc -ne 0 ]]; then
@@ -116,19 +116,17 @@ do_cli() (
 
   local latest
   latest="$(semver_dirs "$VERSIONS_DIR" | tail -n1)"
-  [[ -n "$latest" ]] || { note "nessuna versione in $VERSIONS_DIR"; exit 1; }
+  [[ -n "$latest" ]] || { note "no version in $VERSIONS_DIR"; exit 1; }
 
   ln -sfn "$VERSIONS_DIR/$latest" "$BIN_DIR/claude-bin"
 
-  # GC delle versioni vecchie: l'updater nativo la DISABILITA perché il launcher è custom
-  # (è il warning noto "keeps them all"). Senza questo, versions/ cresce a ogni update
-  # (~275 MB a botta).
-  # NB: le versioni sono FILE ELF singoli (`versions/2.1.220`), non directory — il glob
-  # `*/` di prima non matchava nulla e il GC era di fatto morto. Ora iteriamo su tutte le
-  # entry, filtrando per nome semver: così non tocchiamo mai file estranei finiti lì.
-  # Guardie: mai la live ($latest, validata non-vuota sopra e bersaglio di claude-bin).
-  # Cancellare l'ELF di una sessione in corso è innocuo: l'inode resta vivo fino all'exit.
-  # Si tiene anche la penultima (N-1) per `claude-multi update --rollback`.
+  # GC of old versions: the native updater DISABLES it because the launcher is custom (the known
+  # "keeps them all" warning). Without this, versions/ grows with every update (~275 MB each).
+  # The versions are single ELF FILES (`versions/2.1.220`), not directories, so iterate over all
+  # entries and filter by semver name: files that do not belong there are never touched.
+  # Guard: never the live version ($latest, validated non-empty above and the target of claude-bin).
+  # Deleting the ELF of a running session is harmless: the inode stays alive until exit.
+  # The second newest (N-1) is kept too, for `claude-multi update --rollback`.
   local v bn prev pruned=()
   prev="$(semver_dirs "$VERSIONS_DIR" | grep -vx "$latest" | tail -n1 || true)"
   for v in "$VERSIONS_DIR"/*; do
@@ -142,16 +140,16 @@ do_cli() (
   (( ${#pruned[@]} )) && note "$(cm_t pruned "${pruned[*]}")"
   [[ -n "$prev" && "${CLI_FROM:-}" != "$latest" ]] && note "$(cm_t keep "$prev")"
 
-  # L'updater nativo riscrive ~/.local/bin/claude come symlink alla nuova versione: lo
-  # rimettiamo al wrapper del repo (profilo personal). Gli altri launcher non sono toccati.
+  # The native updater rewrites ~/.local/bin/claude as a symlink to the new version: restore it
+  # to the repo wrapper (the default profile). Other launchers are untouched.
   local repo; repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
   if [[ "$(readlink "$BIN_DIR/claude")" != "$repo/bin/claude" ]]; then
     ln -sfn "$repo/bin/claude" "$BIN_DIR/claude"
     note "$(cm_t wrapper)"
   fi
 
-  # Deep-link handler (claude-cli://): l'auto-generato punta a ~/.local/bin/claude, che dopo
-  # il flip è il tripwire → i deep-link (login/IDE) si romperebbero. Ripunta a claude-bin.
+  # Deep-link handler (claude-cli://): the generated one points to ~/.local/bin/claude, which after
+  # the flip is the tripwire, so deep links (login/IDE) would break. Repoint it to claude-bin.
   local handler="$HOME/.local/share/applications/claude-code-url-handler.desktop"
   if [[ -f "$handler" ]] && grep -q -- '--handle-uri' "$handler" && ! grep -qF -- "Exec=\"$BIN_DIR/claude-bin\" --handle-uri" "$handler"; then
     sed -i -E 's#^Exec=.*--handle-uri#Exec="'"$BIN_DIR"'/claude-bin" --handle-uri#' "$handler"
@@ -160,20 +158,20 @@ do_cli() (
   true
 )
 
-# --- [Desktop] Claude Desktop (tutte le varianti) ---------------------------
-# claude-desktop-update scarica, verifica ed estrae in user space; la versione nuova entra in uso
-# (con le varianti ricostruite) solo quando nessun Claude Desktop è aperto. Exit 5 = pronta ma in
-# attesa: non è un fallimento.
+# --- [Desktop] Claude Desktop (all variants) ---------------------------------
+# claude-desktop-update downloads, verifies and extracts in user space; the new version is put in
+# use (with the variants rebuilt) only when no Claude Desktop is running. Exit 5 = staged but
+# waiting: not a failure.
 do_desktop() {
   QUIET=1 "$BIN_DIR/claude-desktop-update" 2>>"$NOTES" >/dev/null
 }
 
-# --- Check versioni (nessuna scrittura) -------------------------------------
-# Economico e non bloccante: l'indice apt è ~19 KB, il canale CLI ~10 byte. Ogni fetch ha timeout;
-# in mancanza di rete i campi `latest` restano vuoti e `outdated` è false.
+# --- Version check (no writes) ----------------------------------------------
+# Cheap and non-blocking: the apt index is ~19 KB, the CLI channel ~10 bytes. Every fetch has a
+# timeout; without network the `latest` fields stay empty and `outdated` is false.
 
-# newer A B → vero se B è strettamente più recente di A (ordinamento semver via sort -V).
-# Evita di proporre un "aggiornamento" quando il canale remoto è più indietro del locale.
+# newer A B: true if B is strictly newer than A (semver ordering via sort -V).
+# Avoids offering an "update" when the remote channel is behind the local version.
 newer() {
   local a="$1" b="$2"
   [[ -n "$b" ]] || return 1
@@ -184,7 +182,7 @@ newer() {
 
 cli_current()  { basename "$(readlink -f "$BIN_DIR/claude-bin" 2>/dev/null)" 2>/dev/null || true; }
 cli_latest()   { curl -fsSL --max-time "$NET_TIMEOUT" "$CLI_CHANNEL_URL" 2>/dev/null | tr -d '[:space:]'; }
-# la versione in uso in user space; prima della migrazione, quella del pacchetto di sistema
+# the version in use in user space; before the migration, the system package's version
 desk_current() {
   local v; v="$("$BIN_DIR/claude-desktop-update" --current 2>/dev/null)"
   [[ -n "$v" ]] && { echo "$v"; return; }
@@ -206,9 +204,9 @@ do_check() {
   newer "$cc" "$cl" && cli_out=true
   newer "$dc" "$dl" && desk_out=true
 
-  # La cache (~/.cache/claude-update/check.json) la scrive SEMPRE il check, in qualunque modalità:
-  # è ciò che leggono statusline, console e doctor. Scrittura atomica. Senza rete (entrambi i
-  # latest vuoti) non si sovrascrive una cache buona con una vuota.
+  # The cache (~/.cache/claude-update/check.json) is ALWAYS written by the check, in every mode:
+  # statusline, console and doctor read it. Atomic write. Without network (both latest values
+  # empty) a good cache is not overwritten with an empty one.
   if [[ -n "$cl" || -n "$dl" ]]; then
     mkdir -p "$CACHE_DIR"
     printf '{"cli":{"current":"%s","latest":"%s","outdated":%s},"desktop":{"current":"%s","latest":"%s","outdated":%s},"checked_at":%s}\n' \
@@ -222,7 +220,7 @@ do_check() {
     return 0
   fi
 
-  # il testo: una riga per componente, claude-multi compreso (che si controlla da sé)
+  # text output: one row per component, claude-multi included (it checks itself)
   if [[ $cli_out == true ]]; then cm_row wait "Claude Code" "$cc" "$(cm_t available "$cl")"
   else cm_row ok "Claude Code" "$cc" "$(cm_t latest)"; fi
   if [[ $desk_out == true ]]; then cm_row wait "Claude Desktop" "$dc" "$(cm_t available "$dl")"
@@ -236,12 +234,12 @@ do_check() {
     printf "%s%s%s\n" "$C_OK" "$(cm_t end_ok)" "$C_X"
   fi
 
-  # exit 10 = c'e' almeno un aggiornamento; 0 = tutto allineato. Comodo negli `if` di shell.
+  # exit 10 = at least one update available; 0 = everything up to date. Handy in shell `if`s.
   [[ $cli_out == true || $desk_out == true || $self_out == true ]] && return 10
   return 0
 }
 
-# --- Orchestrazione ---------------------------------------------------------
+# --- Orchestration ----------------------------------------------------------
 scope="all"
 case "${1:-}" in
   ""|--all)    scope="all" ;;
@@ -254,25 +252,25 @@ case "${1:-}" in
     if [[ "${2:-}" == "--desktop" ]]; then "$BIN_DIR/claude-desktop-update" --rollback; exit $?; fi
     take_lock; do_rollback; exit $? ;;
   -h|--help)   sed -n '2,22p' "$0"; exit 0 ;;
-  *) echo "Uso: claude-update [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]  (default: tutti)" >&2; exit 2 ;;
+  *) echo "Usage: claude-update [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]  (default: all)" >&2; exit 2 ;;
 esac
 
-# --auto: il giro del timer. Aggiorna ciò che il check trova indietro, senza chiedere e senza
-# output (i fallimenti vanno nel registro e nel journal). Desktop si aggiorna anche quando il check
-# fallisce: una versione già pronta aspetta solo che l'app venga chiusa.
+# --auto: the timer's run. Updates whatever the check finds outdated, without asking and without
+# output (failures go to the log and the journal). Desktop is updated even when the check fails: an
+# already-staged version is only waiting for the app to be closed.
 if [[ "$scope" == "auto" ]]; then
   take_lock
   do_check --json >/dev/null; state="$(cat "$CACHE_DIR/check.json" 2>/dev/null)"
   if grep -q '"cli":{[^}]*"outdated":true' <<<"$state"; then
     from="$(cli_current)"
-    # non come condizione di `if`: lì bash spegnerebbe il `set -e` della subshell (vedi sotto)
+    # not as an `if` condition: bash would disable the subshell's `set -e` there (see below)
     do_cli >/dev/null 2>&1; rc=$?
     if [[ $rc -eq 0 ]]; then cm_update_log cli installed "$from" "$(cli_current)" ""
     else cm_update_log cli failed "$from" "" "$(tail -n 3 "$NOTES")"; cat "$NOTES" >&2; fi
   fi
   QUIET=1 "$BIN_DIR/claude-desktop-update" >/dev/null; rc=$?
   do_check --json >/dev/null 2>&1 || true
-  # per ultimo: può riavviare la console, che potrebbe essere chi ha lanciato questo giro
+  # last: it may restart the console, which could be what started this run
   "$CM" self-update --quiet; src=$?
   [[ $rc -eq 0 || $rc -eq 5 ]] && [[ $src -eq 0 ]] || exit 1
   exit 0
@@ -280,14 +278,14 @@ fi
 
 take_lock
 failed=0
-# il titolo solo per il giro completo: con --cli, --desktop o --self la riga basta
+# the title only for the full run: with --cli, --desktop or --self the row is enough
 [[ "$scope" == "all" ]] && printf "\n%s%s%s\n\n" "$C_B" "$(cm_t title)" "$C_X"
 
-# NB: do_cli è una subshell con `set -e` interno. NON invocarla come condizione di `if`
-# (`if do_cli; then`): in quel contesto bash DISABILITA il `set -e` della subshell per tutta la sua
-# durata → un comando fallito NON aborta e il fallimento viene mascherato da un falso "ok". La
-# chiamiamo diretta e catturiamo $? (qui il `set -e` interno è di nuovo attivo). Lo script top-level
-# non ha `set -e`, quindi un rc!=0 non ci fa uscire.
+# Note: do_cli is a subshell with an internal `set -e`. Do NOT invoke it as an `if` condition
+# (`if do_cli; then`): in that context bash DISABLES the subshell's `set -e` for its whole run, so
+# a failing command would not abort and the failure would be masked as a false "ok". It is called
+# directly and $? captured (the internal `set -e` is active again). The top-level script has no
+# `set -e`, so a non-zero rc does not make it exit.
 if [[ "$scope" == "all" || "$scope" == "cli" ]]; then
   cm_working "Claude Code"
   CLI_FROM="$(cli_current)"
@@ -318,7 +316,7 @@ if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
     4) cm_row fail "Claude Desktop" "$now" "$(cm_t desk_verify)"; failed=1 ;;
     *) cm_row fail "Claude Desktop" "$now" "$(cm_t failed)"; failed=1 ;;
   esac
-  # le righe di errore arrivano col prefisso del comando: qui il nome è già nella riga
+  # error lines carry the command prefix: the name is already in the row
   sed -i 's/^claude-desktop-update: //' "$NOTES"
   show_notes
 fi
@@ -329,7 +327,7 @@ if [[ "$scope" == "all" || "$scope" == "self" ]]; then
   CM_LANG="$CM_LANG" CM_COLOR="$CM_TTY" "$CM" self-update || failed=1
 fi
 
-# La cache del check (statusline, console) descrive il mondo di prima: si rigenera subito.
+# The check cache (statusline, console) describes the state before the update: regenerate it now.
 do_check --json >/dev/null 2>&1 || true
 
 echo

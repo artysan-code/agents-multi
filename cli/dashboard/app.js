@@ -1075,7 +1075,7 @@ function openAccountForm(i) {
         t("acc.name"),
         `<input name="name" required pattern="[a-z][a-z0-9_-]{0,30}" value="${esc(a?.name ?? "")}" ${
           a ? "readonly" : ""
-        } placeholder="ark">`,
+        } placeholder="alice">`,
         t("acc.name.hint"),
       )
     }

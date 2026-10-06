@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# prelaunch.sh — allinea il repo claude-multi PRIMA che parta Claude, così la config
-# nuova è già caricata e non serve mai riavviare. Chiamato dai wrapper `claude`,
-# `claude-agency` e da `claude-launch`. Non fallisce mai il lancio: ogni errore → exit 0.
+# prelaunch.sh: aligns the claude-multi repo BEFORE Claude starts, so the new config is already
+# loaded and no restart is ever needed. Called by the `claude` wrapper, the per-profile launchers
+# and `claude-launch`. It never fails the launch: every error ends in exit 0.
 #
-# Regole:
-#   - la rete si tocca solo se l'ultimo fetch è più vecchio di TTL (default 12h),
-#     con timeout di 3s; offline → si va avanti con ciò che c'è
-#   - pull SOLO fast-forward e SOLO a working tree pulito; altrimenti non tocca nulla
-#   - push mai automatico
-#   - stato in ~/.cache/claude-multi/sync.json → letto dalla statusline (segmento cfg)
-#   - lock: due profili possono partire insieme
+# Rules:
+#   - the network is touched only if the last fetch is older than TTL (default 12h), with a 3s
+#     timeout; offline, it carries on with what is there
+#   - pull is fast-forward ONLY and ONLY on a clean working tree; otherwise it touches nothing
+#   - never pushes
+#   - state goes to ~/.cache/claude-multi/sync.json, read by the statusline (cfg segment)
+#   - locking: two profiles may start at the same time
 set -uo pipefail
 
 REPO="${CLAUDE_MULTI_REPO:-$HOME/.local/src/claude-multi}"
@@ -23,7 +23,7 @@ FETCH_TIMEOUT="${CLAUDE_MULTI_FETCH_TIMEOUT:-3}"
 g() { git -C "$REPO" "$@"; }
 
 write_state() {
-  # $1 behind $2 ahead $3 dirty $4 pulled $5 fetch_ok $6 upstream(0/1)
+  # $1 behind $2 ahead $3 dirty $4 pulled $5 fetch_ok $6 upstream (true/false)
   local now; now=$(date +%s)
   local fetched_at=0
   [[ -f "$STAMP" ]] && fetched_at=$(stat -c %Y "$STAMP" 2>/dev/null || echo 0)
@@ -44,7 +44,7 @@ main() {
 
   local fetch_ok=true age=$((TTL + 1))
   [[ -f "$STAMP" ]] && age=$(( $(date +%s) - $(stat -c %Y "$STAMP" 2>/dev/null || echo 0) ))
-  if (( age >= TTL )); then   # TTL=0 = "fetch sempre" (anche nello stesso secondo dello stamp)
+  if (( age >= TTL )); then   # TTL=0 = "always fetch" (even within the same second as the stamp)
     if timeout "$FETCH_TIMEOUT" git -C "$REPO" fetch -q origin 2>/dev/null; then
       touch "$STAMP"
     else
@@ -53,7 +53,7 @@ main() {
   fi
 
   local behind=0 ahead=0 dirty pulled=0
-  # rev-list separa con un TAB: `read` splitta su qualsiasi whitespace
+  # rev-list separates with a TAB: `read` splits on any whitespace
   read -r behind ahead <<< "$(g rev-list --left-right --count '@{u}...HEAD' 2>/dev/null || echo "0 0")"
   behind=${behind:-0}; ahead=${ahead:-0}
   dirty=$(g status --porcelain 2>/dev/null | wc -l)
@@ -61,8 +61,8 @@ main() {
   if (( behind > 0 && ahead == 0 && dirty == 0 )); then
     if g pull -q --ff-only 2>/dev/null; then
       pulled=$behind; behind=0
-      echo "claude-multi: config aggiornata (+$pulled commit)" >&2
-      # la console tiene in memoria il codice con cui è partita: se il pull lo ha cambiato, ripartire
+      echo "claude-multi: config updated (+$pulled commits)" >&2
+      # the console keeps in memory the code it started with: restart it if the pull changed that code
       if ! g diff --quiet ORIG_HEAD HEAD -- cli shared/mcp/lib 2>/dev/null; then
         systemctl --user try-restart claude-multi-console.service >/dev/null 2>&1 || true
       fi
@@ -72,11 +72,11 @@ main() {
   write_state "$behind" "$ahead" "$dirty" "$pulled" "$fetch_ok" true
 }
 
-# Ogni profilo ha un settings.json GENERATO (cli/settings.ts): shared ⊕ patch del profilo ⊕ manifest.
-# Si rigenera quando una sorgente è più recente dell'ultima generazione: un pull, una modifica nel
-# repo, un plugin sincronizzato dall'account, o Claude che ha scritto nel file generato (quelle
-# scritture vengono adottate nella patch del profilo). Serve Deno: senza, Claude parte col file
-# generato l'ultima volta. Lock a parte, e mai bloccante.
+# Every profile has a GENERATED settings.json (cli/settings.ts): shared + profile patch + manifest.
+# It is regenerated when a source is newer than the last generation: a pull, an edit in the repo,
+# a plugin synced from the account, or Claude writing into the generated file (those writes are
+# adopted into the profile patch). Requires Deno: without it, Claude starts with the file as last
+# generated. Uses its own lock and never blocks.
 regen_settings() {
   local runtime="${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}" stamp="$CACHE/settings.stamp"
   local config="${CLAUDE_MULTI_CONFIG:-$runtime/config}"
@@ -92,7 +92,7 @@ regen_settings() {
   "$REPO/bin/claude-multi" settings --quiet && mv -f "$stamp.next" "$stamp"
 }
 
-# stderr resta aperto: la riga "config aggiornata" deve arrivare all'utente; git ha già i suoi 2>/dev/null
+# stderr stays open: the "config updated" line must reach the user; git calls already have their own 2>/dev/null
 main || true
 regen_settings || true
 exit 0

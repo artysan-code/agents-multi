@@ -1,26 +1,27 @@
 #!/usr/bin/env bash
-# claude-launch: avvia Claude Desktop per un profilo qualsiasi. È lo script puntato dagli Exec= dei
-# .desktop.
+# claude-launch: starts Claude Desktop for any profile. It is the script the Exec= lines of the
+# .desktop entries point to.
 #
-# USO:
-#   claude-launch <profilo> [args...]  # i profili sono quelli di profiles/*/profile.json
-#   claude-launch --check-only         # diagnostica: dice cosa farebbe, non apre nulla
+# Usage:
+#   claude-launch <profile> [args...]  # profiles are those in profiles/*/profile.json
+#   claude-launch --check-only         # diagnostics: prints what it would do, opens nothing
 #
-# Quale eseguibile parte lo dice il manifest, non un ramo scritto qui: il profilo la cui
-# user-data-dir è ~/.config/Claude usa il Claude Desktop di serie (~/.local/lib/claude-desktop/current),
-# ogni altro ha una build con app_id distinto (bin/claude-desktop-rebuild), perché il binario
-# ufficiale si auto-assegna l'app_id e KDE darebbe la stessa icona a tutti.
+# Which executable runs is decided by the manifest, not by a branch written here: the profile whose
+# user-data-dir is ~/.config/Claude uses the stock Claude Desktop
+# (~/.local/lib/claude-desktop/current); every other profile has a build with a distinct app_id
+# (bin/claude-desktop-rebuild), because the official binary assigns its own app_id and KDE would
+# give every profile the same icon.
 #
-# Aggiornamenti: nessuna domanda. Il timer scarica e verifica le versioni nuove in background; qui,
-# prima di aprire l'app, una versione già pronta entra in uso se nessun Claude Desktop è aperto
-# (claude-desktop-update --apply: è il momento in cui sostituirla non fa crashare niente). Se
-# qualcosa va storto, l'app si apre comunque sulla versione di prima.
+# Updates: no prompts. A timer downloads and verifies new versions in the background; here, before
+# opening the app, an already-staged version is put in use if no Claude Desktop is running
+# (claude-desktop-update --apply: the only moment replacing it cannot crash a running app). If
+# anything goes wrong, the app still opens on the previous version.
 set -uo pipefail
 
 DESKTOP="${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}/current/claude-desktop"
 
-# Repo claude-multi: allinea la config PRIMA che parta l'app (fetch se stantio, pull ff-only,
-# mai bloccante). Stessa logica dei wrapper di lancio della CLI.
+# Align the config from the claude-multi repo BEFORE the app starts (fetch when stale, ff-only
+# pull, never blocking). Same logic as the CLI launch wrappers.
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 bash "$HERE/lib/prelaunch.sh" || true
 source "$HERE/lib/profiles.sh"
@@ -30,15 +31,15 @@ default_profile="$(cm_profile_for claude)"; default_profile="${default_profile:-
 profile="${1:-}"; [[ $# -gt 0 ]] && shift
 check_only=0
 [[ "$profile" == "--check-only" ]] && { check_only=1; profile="$default_profile"; }
-# ...oppure dopo il nome del profilo, per poter diagnosticare una variante senza aprirla.
+# ...or after the profile name, to diagnose a variant without opening it.
 [[ "${1:-}" == "--check-only" ]] && { check_only=1; shift; }
 if [[ -z "$profile" ]] || ! cm_has_profile "$profile"; then
-  echo "Uso: claude-launch <$known> [args...]" >&2; exit 2
+  echo "Usage: claude-launch <$known> [args...]" >&2; exit 2
 fi
 
-# --- lancio dell'app --------------------------------------------------------
-# Una sola strada per tutti i profili: config dir e user-data-dir dal manifest, eseguibile scelto
-# dalla presenza di un app_id dedicato.
+# --- app launch --------------------------------------------------------------
+# One path for every profile: config dir and user-data-dir come from the manifest, and the
+# executable is chosen by whether a dedicated app_id exists.
 # disableAccountMcp: Desktop runs its own bundled Claude Code for the Code tab, not bin/claude, so
 # the --settings overlay cannot reach it; the environment does, and this variable switches off the
 # claude.ai connectors there. The organisation's synced plugins stay on inside Desktop.
@@ -52,21 +53,21 @@ launch() {
       "$HOME/.local/lib/$appid/$appid" \
       --ozone-platform=wayland --user-data-dir="$data_dir" "$@"
   else
-    # prima della migrazione a user space c'è solo il pacchetto di sistema
+    # before the migration to user space only the system package exists
     local bin="$DESKTOP"; [[ -x "$bin" ]] || bin=claude-desktop
     exec env CLAUDE_CONFIG_DIR="$HOME/.claude-multi/$profile" "${account_env[@]}" "$bin" "$@"
   fi
 }
 if [[ $check_only -eq 1 ]]; then
-  # Diagnostica: stessa strada, ma invece di exec-are l'app si ferma e lo dichiara.
+  # Diagnostics: same path, but instead of exec'ing the app it stops and reports.
   launch() {
     local appid; appid="$(cm_desktop_appid "$profile")"
-    echo "(check-only) profilo '$profile'"
-    if [[ -n "$appid" ]]; then echo "  eseguibile:     $HOME/.local/lib/$appid/$appid"
-    elif [[ -x "$DESKTOP" ]]; then echo "  eseguibile:     $DESKTOP"
-    else echo "  eseguibile:     claude-desktop (pacchetto di sistema)"; fi
+    echo "(check-only) profile '$profile'"
+    if [[ -n "$appid" ]]; then echo "  executable:     $HOME/.local/lib/$appid/$appid"
+    elif [[ -x "$DESKTOP" ]]; then echo "  executable:     $DESKTOP"
+    else echo "  executable:     claude-desktop (system package)"; fi
     local staged; staged="$("$HERE/claude-desktop-update" --staged 2>/dev/null)"
-    [[ -n "$staged" ]] && echo "  versione pronta: $staged (entra in uso all'avvio, se nessun Desktop è aperto)"
+    [[ -n "$staged" ]] && echo "  staged version:  $staged (put in use at launch if no Desktop is running)"
     echo "  user-data-dir:  $(cm_desktop_dir "$profile")"
     echo "  CLAUDE_CONFIG_DIR: $HOME/.claude-multi/$profile"
     cm_flag "$profile" disableAccountMcp && echo "  ENABLE_CLAUDEAI_MCP_SERVERS=false (disableAccountMcp)"
@@ -74,9 +75,9 @@ if [[ $check_only -eq 1 ]]; then
   }
 fi
 
-# --- una versione pronta entra in uso adesso, se si può ------------------------
-# Quiet e senza rete: al massimo qualche secondo per ricostruire le varianti. Qualunque esito
-# (niente da fare, lock occupato, un altro Desktop aperto, errore), l'app parte lo stesso.
+# --- put a staged version in use now, if possible ----------------------------
+# Quiet and offline: at most a few seconds to rebuild the variants. Whatever the outcome (nothing
+# to do, lock held, another Desktop running, error), the app starts anyway.
 [[ $check_only -eq 1 ]] || QUIET=1 "$HERE/claude-desktop-update" --apply >/dev/null 2>&1 || true
 
 launch "$@"

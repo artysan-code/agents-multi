@@ -1,91 +1,91 @@
 #!/usr/bin/env bash
-# claude-desktop-rebuild <profilo> — costruisce un eseguibile Claude Desktop dedicato a un profilo,
-# con un app_id Wayland DISTINTO (claude-desktop-<profilo>) così KDE gli dà icona e gruppo separati.
+# claude-desktop-rebuild <profile>: builds a Claude Desktop executable dedicated to one profile,
+# with a DISTINCT Wayland app_id (claude-desktop-<profile>) so KDE gives it its own icon and group.
 #
-# Il profilo va dichiarato in profiles/<nome>/profile.json con una desktopDir diversa da
-# ~/.config/Claude: è quella a stabilire che serve una build propria (cm_desktop_appid).
+# The profile must be declared in profiles/<name>/profile.json with a desktopDir other than
+# ~/.config/Claude: that is what says it needs a build of its own (cm_desktop_appid).
 #
-# PERCHÉ SERVE: il binario ufficiale si auto-assegna l'app_id "claude-desktop" e ignora --class,
-# X11 e argv[0] (verificato). L'unico punto che cambia l'app_id è, dentro l'asar, una chiamata
-# app.setDesktopName(). Qui:
-#   1) estraggo l'app.asar ufficiale
-#   2) inietto in testa al main (index.pre.js) app.setDesktopName("claude-desktop-<profilo>") per
-#      l'app_id; e sostituisco la sorgente del tooltip della tray nel chunk che lo imposta, che
-#      altrimenti mostra "Claude" per ogni profilo
-#   3) ripacchettizzo (preservando i native modules *.node)
-#   4) assemblo ~/.local/lib/claude-desktop-<profilo>/: binario REALE copiato (necessario perché
-#      Electron risolve resources/ dal path reale dell'eseguibile) + resources con l'asar patchato;
-#      tutto il resto è SYMLINK alla versione in uso (~/.local/lib/claude-desktop/versions/<ver>,
-#      risolta da `current`): una variante resta legata alla sua versione finché non la si ricostruisce
-#   5) tingo le due icone della tray col colore dell'icona applicazione del profilo
+# Why: the official binary assigns itself the app_id "claude-desktop" and ignores --class, X11 and
+# argv[0]. The only thing that changes the app_id is an app.setDesktopName() call inside the asar.
+# Steps:
+#   1) extract the official app.asar
+#   2) inject app.setDesktopName("claude-desktop-<profile>") at the top of the main bundle
+#      (index.pre.js) for the app_id, and replace the tray tooltip source in the chunk that sets it
+#      (it would otherwise read "Claude" for every profile)
+#   3) repack (keeping the *.node native modules unpacked)
+#   4) assemble ~/.local/lib/claude-desktop-<profile>/: the REAL binary is copied (Electron resolves
+#      resources/ from the executable's real path) plus resources with the patched asar; everything
+#      else is a SYMLINK to the version in use (~/.local/lib/claude-desktop/versions/<ver>, resolved
+#      from `current`), so a variant stays tied to its version until it is rebuilt
+#   5) tint the two tray icons with the profile's application-icon colour
 #
-# La supply chain resta pulita: il binario è quello ufficiale Anthropic, l'unica modifica è UNA riga
-# nostra e trasparente nell'asar. claude-desktop-update la rilancia a ogni cambio di versione.
+# The supply chain stays clean: the binary is the official Anthropic one, and the only change is a
+# single, transparent line in the asar. claude-desktop-update re-runs this on every version change.
 set -euo pipefail
 
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/profiles.sh"
 
 PROFILE="${1:-}"
 if [[ -z "$PROFILE" ]] || ! cm_has_profile "$PROFILE"; then
-  echo "Uso: claude-desktop-rebuild <profilo>   (dichiarati: $(cm_profiles | tr '\n' ' '))" >&2
+  echo "Usage: claude-desktop-rebuild <profile>   (declared: $(cm_profiles | tr '\n' ' '))" >&2
   exit 2
 fi
 APPID="$(cm_desktop_appid "$PROFILE")"
 if [[ -z "$APPID" ]]; then
-  echo "ERRORE: il profilo '$PROFILE' usa ~/.config/Claude, cioè il Claude Desktop di serie:" >&2
-  echo "        non serve (e non si può fare) una build dedicata. Dagli una desktopDir propria." >&2
+  echo "ERROR: profile '$PROFILE' uses ~/.config/Claude, i.e. the stock Claude Desktop:" >&2
+  echo "       a dedicated build is neither needed nor possible. Give it its own desktopDir." >&2
   exit 2
 fi
 
 SRC="$(readlink -f "${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}/current" 2>/dev/null)"
-[[ -n "$SRC" && -x "$SRC/claude-desktop" ]] || { echo "ERRORE: nessun Claude Desktop in uso (claude-desktop-update)" >&2; exit 1; }
+[[ -n "$SRC" && -x "$SRC/claude-desktop" ]] || { echo "ERROR: no Claude Desktop in use (claude-desktop-update)" >&2; exit 1; }
 DST="$HOME/.local/lib/$APPID"
 export PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/share/npm/bin:$PATH"
 
-command -v asar    >/dev/null 2>&1 || { echo "ERRORE: 'asar' assente (pnpm add -g @electron/asar)" >&2; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "ERRORE: python3 assente" >&2; exit 1; }
-[ -f "$SRC/resources/app.asar" ] || { echo "ERRORE: $SRC/resources/app.asar non trovato" >&2; exit 1; }
+command -v asar    >/dev/null 2>&1 || { echo "ERROR: 'asar' missing (pnpm add -g @electron/asar)" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 missing" >&2; exit 1; }
+[ -f "$SRC/resources/app.asar" ] || { echo "ERROR: $SRC/resources/app.asar not found" >&2; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-echo "==> estraggo app.asar ufficiale"
+echo "==> extracting the official app.asar"
 asar extract "$SRC/resources/app.asar" "$TMP/src"
 
 APPNAME="Claude ${PROFILE^}"
-echo "==> inietto app_id=$APPID nel main"
+echo "==> injecting app_id=$APPID into the main bundle"
 python3 - "$TMP/src/.vite/build/index.pre.js" "$APPID" <<'PY'
 import sys, re
 p, appid = sys.argv[1], sys.argv[2]
 s = open(p, encoding='utf-8').read()
 MARK = '/*__claude_multi_appid__*/'
-# SOLO setDesktopName: da' l'app_id Wayland (icona e raggruppamento nella barra) e non tocca
-# nient'altro. NON usare app.setName(): Electron usa il nome dell'app come chiave nel portachiavi
-# di sistema, quindi rinominarla rende irraggiungibile il token salvato e l'utente si ritrova a
-# rifare il login. Il tooltip della tray si differenzia altrove (vedi patch_tooltip piu' sotto).
+# setDesktopName ONLY: it sets the Wayland app_id (icon and taskbar grouping) and touches nothing
+# else. Do NOT use app.setName(): Electron uses the app name as the system keyring key, so renaming
+# it makes the stored token unreachable and forces a new login. The tray tooltip is differentiated
+# separately (see the tooltip patch below).
 inj = MARK + 'try{const a=require("electron").app;a.setDesktopName&&a.setDesktopName("%s");}catch(e){};' % appid
 if MARK in s or 'setDesktopName("%s")' % appid in s:
-    print("    patch già presente"); sys.exit(0)
-# Assert solo su cose STRUTTURALI: il prologo emesso dal minifier è un dettaglio upstream
-# volatile (fino al 1.26831 era `"use strict";`, dal 1.26832 il file parte col banner Sentry).
-assert s.strip(), "main vuoto: layout dell'asar cambiato?"
-assert 'require(' in s[-4000:], "main non sembra CommonJS: verifica il layout dell'asar"
+    print("    patch already present"); sys.exit(0)
+# Assert only on STRUCTURAL properties: the prologue emitted by the minifier is a volatile upstream
+# detail (older builds start with `"use strict";`, newer ones with a Sentry banner).
+assert s.strip(), "main bundle is empty: did the asar layout change?"
+assert 'require(' in s[-4000:], "main bundle does not look like CommonJS: check the asar layout"
 m = re.match(r'''^\s*(?:(["'])use strict\1\s*;?)''', s)
 i = m.end() if m else 0
 open(p, 'w', encoding='utf-8').write(s[:i] + inj + s[i:])
-print("    patch iniettata (offset %d)" % i)
+print("    patch injected (offset %d)" % i)
 PY
 
-# Il tooltip della tray e' `tray.setToolTip(app.getName())`, e app.getName() NON si tocca: e' la
-# chiave con cui Electron trova il token nel portachiavi. Si sostituisce quindi solo l'argomento,
-# nel chunk che lo imposta. Best-effort: se il pattern non c'e' piu' (bundle riorganizzato) si
-# avvisa e si prosegue — un tooltip generico e' un fastidio, un rebuild fallito no.
-echo "==> differenzio il tooltip della tray (\"$APPNAME\")"
+# The tray tooltip is `tray.setToolTip(app.getName())`, and app.getName() must NOT be touched: it is
+# the key Electron uses to find the token in the keyring. Only the argument is replaced, in the
+# chunk that sets it. Best effort: if the pattern is gone (bundle reorganised) it warns and
+# carries on, since a generic tooltip is a nuisance and a failed rebuild is not.
+echo "==> differentiating the tray tooltip (\"$APPNAME\")"
 python3 - "$TMP/src/.vite/build" "$APPNAME" <<'PY'
 import sys, pathlib, re
 build, appname = pathlib.Path(sys.argv[1]), sys.argv[2]
 lit = '"' + appname.replace('"', '\\"') + '"'
-# Due forme nel bundle: setToolTip(X.app.getName()) e setToolTip(e?.tooltip??X.app.getName()).
-# Il prefisso opzionale (il default esplicito) si conserva: si sostituisce solo il fallback.
+# Two forms in the bundle: setToolTip(X.app.getName()) and setToolTip(e?.tooltip??X.app.getName()).
+# The optional prefix (the explicit default) is kept: only the fallback is replaced.
 PAT = re.compile(r'(setToolTip\((?:[A-Za-z_$][\w$]*\?\.[\w$]+\?\?)?)[A-Za-z_$][\w$]*\.app\.getName\(\)')
 total = 0
 for f in sorted(build.glob("*.js")):
@@ -96,32 +96,32 @@ for f in sorted(build.glob("*.js")):
     if n:
         f.write_text(s2, encoding="utf-8", errors="surrogateescape")
         total += n
-print(f"    {total} chiamate aggiornate" if total else "    ATTENZIONE: nessun setToolTip(app.getName()) trovato: il tooltip resta generico")
+print(f"    {total} calls updated" if total else "    WARNING: no setToolTip(app.getName()) found: the tooltip stays generic")
 PY
 
-echo "==> ripacchettizzo (native modules *.node unpacked)"
+echo "==> repacking (native *.node modules unpacked)"
 asar pack "$TMP/src" "$TMP/app.asar" --unpack "*.node" >/dev/null
 
-# Post-verify: la patch DEVE essere nel pacchetto finale. Senza questo, un futuro cambio di
-# layout dell'asar produrrebbe silenziosamente una variante Work senza app_id distinto
-# (stessa icona/gruppo del profilo di default) invece di fallire.
-# NB: `asar extract-file` NON scrive su stdout — deposita il file (basename) nella cwd.
+# Post-verify: the patch MUST be in the final package. Without this, a future asar layout change
+# would silently produce a variant without a distinct app_id (same icon/group as the default
+# profile) instead of failing.
+# Note: `asar extract-file` does NOT write to stdout; it drops the file (basename) in the cwd.
 mkdir -p "$TMP/verify"
 ( cd "$TMP/verify" && asar extract-file "$TMP/app.asar" .vite/build/index.pre.js )
 head -c 400 "$TMP/verify/index.pre.js" | grep -q '__claude_multi_appid__' \
-  || { echo "ERRORE: patch assente nell'asar ripacchettizzato" >&2; exit 1; }
-echo "    patch verificata nell'asar"
+  || { echo "ERROR: patch missing from the repacked asar" >&2; exit 1; }
+echo "    patch verified in the asar"
 
-echo "==> assemblo $DST"
+echo "==> assembling $DST"
 rm -rf "$DST"; mkdir -p "$DST/resources"
-# binario reale (rinominato: identifica i processi; l'app_id lo dà comunque setDesktopName)
+# real binary (renamed so processes are identifiable; the app_id still comes from setDesktopName)
 cp -f "$SRC/claude-desktop" "$DST/$APPID"; chmod +x "$DST/$APPID"
-# fratelli del binario: symlink (chromium .pak/.so, locales, version, chrome-sandbox SUID…)
+# siblings of the binary: symlinks (chromium .pak/.so, locales, version, chrome-sandbox SUID...)
 for f in "$SRC"/*; do
   bn="$(basename "$f")"; [ "$bn" = "claude-desktop" ] && continue
   ln -sfn "$f" "$DST/$bn"
 done
-# resources: asar patchato + unpacked reali, tutto il resto symlink (smol-bin.img, virtiofsd, icone…)
+# resources: patched asar + real unpacked dir, everything else symlinked (smol-bin.img, virtiofsd, icons...)
 cp -f "$TMP/app.asar" "$DST/resources/app.asar"
 cp -a "$TMP/app.asar.unpacked" "$DST/resources/app.asar.unpacked"
 for f in "$SRC"/resources/*; do
@@ -129,27 +129,27 @@ for f in "$SRC"/resources/*; do
   ln -sfn "$f" "$DST/resources/$bn"
 done
 
-# --- icona della system tray -------------------------------------------------
-# Quella di serie e' monocromatica (bianca su tema scuro, nera su chiaro): con piu' profili aperti
-# la tray mostra icone identiche. Qui i due PNG smettono di essere symlink e diventano copie tinte
-# col colore dell'icona applicazione di questo profilo, cosi' tray e lanciatore dicono la stessa
-# cosa. Se Pillow manca si tiene l'icona di serie: e' un di piu', non un requisito.
+# --- system tray icon ---------------------------------------------------------
+# The stock icon is monochrome (white on a dark theme, black on a light one), so with several
+# profiles open the tray shows identical icons. Here the two PNGs stop being symlinks and become
+# copies tinted with this profile's application-icon colour, so tray and launcher match. If Pillow
+# is missing the stock icon is kept: tinting is an extra, not a requirement.
 REPO_DIR="$(cm_repo)"
 HUE_SRC="$REPO_DIR/desktop/icons/256x256/$APPID.png"
 if [[ -f "$HUE_SRC" ]]; then
-  echo "==> tingo l'icona della tray col colore del profilo"
+  echo "==> tinting the tray icon with the profile colour"
   for icon in TrayIconLinux.png TrayIconLinux-Dark.png; do
     [[ -e "$SRC/resources/$icon" ]] || continue
     rm -f "$DST/resources/$icon"
     if python3 "$REPO_DIR/shared/tools/tint-tray-icon.py" "$SRC/resources/$icon" "$DST/resources/$icon" "$HUE_SRC" 2>/dev/null; then
-      echo "    $icon tinta"
+      echo "    $icon tinted"
     else
       ln -sfn "$SRC/resources/$icon" "$DST/resources/$icon"
-      echo "    $icon: tintura non riuscita, resta quella di serie"
+      echo "    $icon: tinting failed, keeping the stock icon"
     fi
   done
 else
-  echo "    nessuna icona applicazione per $APPID: la tray resta monocromatica"
+  echo "    no application icon for $APPID: the tray stays monochrome"
 fi
 
-echo "==> fatto: $DST/$APPID (app_id=$APPID, nome=\"$APPNAME\")"
+echo "==> done: $DST/$APPID (app_id=$APPID, name=\"$APPNAME\")"

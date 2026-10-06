@@ -1,4 +1,4 @@
-// Test di notify.ts: diff dei fail e testo della notifica (pure).
+// Tests for notify.ts: diff of failures and the notification text (pure functions).
 import { assertEquals } from "jsr:@std/assert@1";
 import { diffDoctor, notifyText } from "../notify.ts";
 import type { Check } from "../lib.ts";

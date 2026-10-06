@@ -317,7 +317,7 @@ export async function ingest(db: DatabaseSync, opts: { full?: boolean; quiet?: b
   const ver = (db.prepare("PRAGMA user_version").get() as { user_version: number } | undefined)?.user_version ?? 0;
   const full = opts.full || ver < SCHEMA_VERSION;
   if (full && ver < SCHEMA_VERSION && !opts.quiet) {
-    console.error(`schema usage ${ver} → ${SCHEMA_VERSION}: rilettura completa dei transcript`);
+    console.error(`schema usage ${ver} → ${SCHEMA_VERSION}: full re-read of the transcripts`);
   }
   const known = new Map<string, { size: number; mtime: number }>();
   if (!full) {

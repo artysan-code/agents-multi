@@ -147,7 +147,7 @@ def arg(text: str) -> str:
 
 
 def command_of(profile: str) -> str:
-    """The launcher a profile runs under (claude, claude-agency…), from its manifest."""
+    """The launcher a profile runs under (claude, claude-work…), from its manifest."""
     return manifests().get(profile, {}).get("command") or f"claude-{profile}"
 
 
@@ -210,12 +210,12 @@ class HeyPanel(QWidget):
         mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
         row.addWidget(mark)
         self.ask = QLineEdit(objectName="ask")
-        self.ask.setPlaceholderText("Chiedi a Claude, o di' cosa c'è da fare…")
+        self.ask.setPlaceholderText("Ask Claude, or say what needs doing…")
         self.ask.setText(text)
         self.ask.returnPressed.connect(self.submit)
         row.addWidget(self.ask, 1)
         self.model = QComboBox(objectName="model")
-        self.model.setToolTip("Il modello con cui risponde Claude (qui e nella console)")
+        self.model.setToolTip("The model Claude answers with (here and in the console)")
         got = console_api("/api/ask/model") or {}
         for m in got.get("models") or list(MODEL_NAMES):
             self.model.addItem(MODEL_NAMES.get(m, m), m)
@@ -250,7 +250,7 @@ class HeyPanel(QWidget):
         foot.setSpacing(10)
         self.status = QLabel("", objectName="status")
         foot.addWidget(self.status, 1)
-        self.b_term = QPushButton("Continua nel terminale", objectName="term")
+        self.b_term = QPushButton("Continue in the terminal", objectName="term")
         self.b_term.setCursor(Qt.CursorShape.PointingHandCursor)
         self.b_term.clicked.connect(self.open_terminal)
         self.b_term.hide()
@@ -295,7 +295,7 @@ class HeyPanel(QWidget):
         if not self.session:
             self.first_ask = q
         self.ask.clear()
-        self.ask.setPlaceholderText("Continua…")
+        self.ask.setPlaceholderText("Continue…")
         self.code_dir = None
         self.b_code.hide()
         self.b_term.hide()
@@ -358,8 +358,8 @@ class HeyPanel(QWidget):
     @staticmethod
     def _tool_label(name: str) -> str:
         short = name.split("__")[-1]
-        for key, label in (("tasks", "Guardo le task"), ("calendar", "Guardo il calendario"), ("gmail", "Guardo la posta"),
-                           ("drive", "Cerco su Drive"), ("brain_search", "Cerco nel brain"), ("brain_read", "Leggo il brain")):
+        for key, label in (("tasks", "Checking tasks"), ("calendar", "Checking the calendar"), ("gmail", "Checking mail"),
+                           ("drive", "Searching Drive"), ("brain_search", "Searching the brain"), ("brain_read", "Reading the brain")):
             if key in short or key in name:
                 return label
         return "Lavoro"
@@ -385,13 +385,13 @@ class HeyPanel(QWidget):
         self.dots.stop()
         if code != 0 and not self._buf.strip():
             err = bytes(self.proc.readAllStandardError()).decode(errors="replace").strip().splitlines()
-            self._buf = f"Claude non ha risposto ({err[-1] if err else f'uscita {code}'})."
+            self._buf = f"Claude did not answer ({err[-1] if err else f'exit {code}'})."
         self._render()
         self._state = ""
-        self.status.setText("Invio per continuare la conversazione")
+        self.status.setText("Enter to continue the conversation")
         if self.code_dir:
             name = Path(self.code_dir).expanduser().name or "~"
-            self.b_code.setText(f"Apri Claude Code in {name}  →")
+            self.b_code.setText(f"Open Claude Code in {name}  →")
             self.b_code.show()
         self.b_term.setVisible(bool(self.session))
         self.ask.setFocus()
@@ -402,7 +402,7 @@ class HeyPanel(QWidget):
         if err == QProcess.ProcessError.FailedToStart:
             self.dots.stop()
             self._state = ""
-            self.status.setText(f"Non riesco ad avviare {command_of(self.profile)}.")
+            self.status.setText(f"Cannot start {command_of(self.profile)}.")
 
     def _set_state(self, s: str) -> None:
         self._state = s
@@ -425,14 +425,14 @@ class HeyPanel(QWidget):
     def _launch(self, workdir: str, argv: list[str]) -> None:
         cmd = terminal_argv(workdir, argv)
         if not cmd or not QProcess.startDetached(cmd[0], cmd[1:]):
-            self.status.setText("Nessun terminale trovato (konsole, kitty, alacritty, wezterm).")
+            self.status.setText("No terminal found (konsole, kitty, alacritty, wezterm).")
             return
         self.close()
 
     def open_code(self) -> None:
         folder = Path(self.code_dir or "~").expanduser()
         if not folder.is_dir():
-            self.status.setText(f"La cartella non esiste: {folder}")
+            self.status.setText(f"The folder does not exist: {folder}")
             return
         self._launch(str(folder), [str(BIN / command_of(self.profile)), arg(self.code_ask or self.first_ask)])
 

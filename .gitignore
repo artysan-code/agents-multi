@@ -1,4 +1,4 @@
-# Stato runtime / cache: mai nel repo
+# Runtime state / caches: never in the repo
 __pycache__/
 *.pyc
 *.bak
@@ -9,15 +9,15 @@ __pycache__/
 .stversions/
 .stfolder/
 node_modules/
-# Cloni upstream dei marketplace plugin: per-macchina, riclonabili
+# Upstream clones of the plugin marketplaces: per-machine, re-clonable
 shared/plugins/
-# Artefatti estratti dall'asar (claude-desktop-work-rebuild)
+# Artifacts extracted from the asar (claude-desktop-rebuild)
 index.pre.js
-# Build locali
+# Local builds
 pkg/*/*.pkg.tar.*
 pkg/*/pkg/
 pkg/*/src/
 shared/mcp/.sync-state.json
 
-# Skills di ~/.agents: link assoluti creati da `claude-multi install`, per-macchina
+# Skills from ~/.agents: absolute links created by `claude-multi install`, per-machine
 shared/skills/use-railway

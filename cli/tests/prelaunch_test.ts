@@ -1,5 +1,5 @@
-// Test di integrazione di bin/lib/prelaunch.sh su repo git veri in una dir temporanea:
-// bare remote + clone "altra macchina" (che pusha) + clone "questa macchina" (che il wrapper allinea).
+// Integration tests for bin/lib/prelaunch.sh on real git repos in a temporary directory:
+// a bare remote + an "other machine" clone (which pushes) + a "this machine" clone (which the wrapper aligns).
 import { assert, assertEquals } from "jsr:@std/assert@1";
 
 const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
@@ -58,7 +58,7 @@ Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when
   );
   r = await sh(`bash "${PRELAUNCH}"`, undefined, env);
   assertEquals(r.code, 0);
-  assert(r.err.includes("config aggiornata (+2 commit)"), `stderr: ${r.err}`);
+  assert(r.err.includes("config updated (+2 commits)"), `stderr: ${r.err}`);
   st = JSON.parse(await Deno.readTextFile(`${cache}/claude-multi/sync.json`));
   assertEquals([st.behind, st.pulled], [0, 2]);
   assertEquals((await sh(`git -C "${mine}" log --oneline | wc -l`)).out, "3");

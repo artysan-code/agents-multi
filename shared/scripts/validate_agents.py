@@ -1,3 +1,8 @@
+"""validate_agents.py <agents-dir>: validates the frontmatter of agent files (*.md, except AGENTS.md).
+
+Checks: `name:` and `description:` present, `tools:` (if present) a valid JSON array, and `model:`
+(if present) one of opus|sonnet|haiku|inherit. Prints one line per file and a final RESULT line.
+"""
 import sys, os, json, re
 
 def check(path):

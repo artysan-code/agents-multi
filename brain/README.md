@@ -15,7 +15,7 @@ own; every request runs as the account its token or session belongs to.
   back (`brain_history`, `brain_restore`).
 - **Tasks**: one document per task under `tasks/`, with the same rules as the local tasks tools
   (`shared/mcp/lib/tasks.ts`, `shared/mcp/tasks/tools.ts`, shared code). Memory lists and searches
-  leave them out unless asked. Samuel's machines read and write them as files on `/api/tasks`
+  leave them out unless asked. The owner's machines read and write them as files on `/api/tasks`
   (`shared/mcp/lib/brain-tasks.ts`): the console, the reminders and the local `tasks` tools all use
   this one list.
 - **Search**: full text (SQLite FTS5) and by meaning (chunks embedded by `bge-m3` behind Ollama),
@@ -28,7 +28,7 @@ in `BRAIN_DATA/accounts.db`.
 
 ## How it is written
 
-Seven areas, named the way Samuel thinks: `io/` (who he is, how he works — of each page, what stands
+Seven areas, named the way the owner thinks: `io/` (who he is, how he works — of each page, what stands
 above its first `##` goes into the instructions every connected Claude receives), `progetti/` (one page
 per project, the same path as his folder: `progetti/work/acme/site.md`), `clienti/` (who he works for, directly or through another
 client: the relationship and the people, linking the projects), `persone/` (people only), `note/` (how
@@ -75,7 +75,7 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
 `GET /backup` with a personal token returns the whole brain as one file: a consistent copy of the
 database (the WAL folded in and the file read in one go), sealed with AES-256-GCM under the
 account's own backup key (it reaches the vault, `brain/<account>` field `backup-key`, when a machine
-signs in; `/account` shows it too): one person's copies never open with another's key. Samuel's machines check the state every half hour while they are on and fetch a copy only when
+signs in; `/account` shows it too): one person's copies never open with another's key. The owner's machines check the state every half hour while they are on and fetch a copy only when
 it changed (`claude-multi brain-backup`, `claude-brain-backup.timer`), keeping the last ones; without the key from the vault a copy cannot be read. No third party
 holds the brain.
 
@@ -104,7 +104,7 @@ On Coolify: a Docker Compose application from this repository, base directory `/
 `/compose.yaml` (the service and Ollama, which pulls `bge-m3` into its own volume on first start),
 the domain on `brain`, `BRAIN_MASTER_KEY` and `BRAIN_ADMIN_ID` in Coolify. The repository is cloned over SSH
 straight from the server's address (`git@<ip>:2222/…`): `git.example.com` is behind Cloudflare,
-which does not carry SSH. The secrets are made and typed in by Samuel, never passed
+which does not carry SSH. The secrets are made and typed in by the owner, never passed
 through a chat.
 
 Locally, with any Ollama-compatible API:

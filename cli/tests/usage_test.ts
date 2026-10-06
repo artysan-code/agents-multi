@@ -1,4 +1,4 @@
-// Test di usage.ts: tariffe, finestre temporali, ingest con dedupe dei chunk, report.
+// Tests for usage.ts: rates, time windows, ingest with chunk dedupe, reports.
 import { assert, assertAlmostEquals, assertEquals } from "jsr:@std/assert@1";
 import { costUsd, ingestFile, openDb, projectLabel, report, sessions, sinceDate } from "../usage.ts";
 
@@ -45,7 +45,7 @@ Deno.test("ingestFile: dedupe by message.id (max per field), sidechains, synthet
     f,
     [
       line({ type: "user", uuid: "u1", timestamp: "2026-09-04T10:00:00Z", message: { role: "user", content: "ciao" } }),
-      // stessa risposta in 2 chunk: input uguale, output cresce → si conta UNA volta col massimo
+      // same response split across 2 chunks: input equal, output grows → counted ONCE, at the maximum
       line({
         type: "assistant",
         uuid: "a1",
@@ -77,7 +77,7 @@ Deno.test("ingestFile: dedupe by message.id (max per field), sidechains, synthet
           }],
         },
       }),
-      // subagent (sidechain) con attribuzione
+      // subagent (sidechain) with attribution
       line({
         type: "assistant",
         uuid: "a3",
@@ -117,7 +117,7 @@ Deno.test("ingestFile: dedupe by message.id (max per field), sidechains, synthet
   assertEquals(rows[1].sidechain, 1);
   const spawns = db.prepare("SELECT subagent_type, description FROM agent_spawns").all() as Record<string, unknown>[];
   assertEquals(spawns, [{ subagent_type: "Explore", description: "cerca" }]);
-  // report per profilo e per agente
+  // report per profile and per agent
   const r = report(db, { by: "profile", since: "all" });
   assertEquals(r.rows.length, 1);
   assertEquals(r.rows[0].key, "personal");
@@ -128,14 +128,14 @@ Deno.test("ingestFile: dedupe by message.id (max per field), sidechains, synthet
   const d = report(db, { by: "day", since: "all", split: "profile" });
   assertEquals(d.rows[0].day, "2026-09-04");
   assertEquals(d.rows[0].profile, "personal");
-  // sessioni: una riga per session_id con durata, modelli e agenti
+  // sessions: one row per session_id with duration, models and agents
   const ss = sessions(db, { since: "all" });
   assertEquals(ss.length, 1);
   assertEquals(ss[0].session_id, "s1");
   assertEquals(ss[0].minutes, 1);
   assertEquals(ss[0].models.sort(), ["claude-opus-5", "claude-sonnet-5"]);
   assertEquals(ss[0].sidechain_msgs, 1);
-  // reingest dello stesso file: idempotente
+  // re-ingesting the same file is idempotent
   await ingestFile(db, "personal", f);
   assertEquals((db.prepare("SELECT COUNT(*) c FROM messages").get() as { c: number }).c, 2);
   db.close();
@@ -157,7 +157,7 @@ Deno.test("skill and command attribution: the turn, the split share, consecutive
   await Deno.writeTextFile(
     f,
     [
-      // turno 1: prompt umano → una sola skill → tutto il costo è suo
+      // turn 1: human prompt → a single skill → it takes the whole cost
       line({
         type: "user",
         uuid: "t1",
@@ -166,7 +166,7 @@ Deno.test("skill and command attribution: the turn, the split share, consecutive
         message: { role: "user", content: "fai una cosa" },
       }),
       asst("a1", "m1", 100, [{ type: "tool_use", name: "Skill", id: "u1", input: { skill: "dataviz" } }]),
-      // un tool_result non apre un turno nuovo: il costo che segue resta su t1
+      // a tool_result does not open a new turn: the cost that follows stays on t1
       line({
         type: "user",
         uuid: "r1",
@@ -175,7 +175,7 @@ Deno.test("skill and command attribution: the turn, the split share, consecutive
         message: { role: "user", content: [{ type: "tool_result", tool_use_id: "u1" }] },
       }),
       asst("a2", "m2", 100),
-      // turno 2: comando slash + la sua espansione (due user di fila) → un turno solo, con 2 skill
+      // turn 2: slash command + its expansion (two consecutive user messages) → one turn, with 2 skills
       line({
         type: "user",
         uuid: "t2",
@@ -196,7 +196,7 @@ Deno.test("skill and command attribution: the turn, the split share, consecutive
         id: "u3",
         input: { skill: "release-prod" },
       }]),
-      // un subagent lanciato dentro il turno resta nel turno: il suo costo è costo della skill che l'ha usato
+      // a subagent spawned inside the turn stays in the turn: its cost is the cost of the skill that used it
       line({
         type: "assistant",
         uuid: "a4",
@@ -212,12 +212,12 @@ Deno.test("skill and command attribution: the turn, the split share, consecutive
 
   const sk = report(db, { by: "skill", since: "all" });
   const byKey = Object.fromEntries(sk.rows.map((r) => [r.key, r]));
-  // turno 1 = 200 output, tutto a dataviz (sola skill); turno 2 = 400 + 999 del subagent, diviso 2 skill
+  // turn 1 = 200 output, all to dataviz (single skill); turn 2 = 400 + 999 from the subagent, split across 2 skills
   assertAlmostEquals(byKey["dataviz"].output, 200 + 1399 / 2);
   assertEquals(byKey["dataviz"].uses, 2);
   assertAlmostEquals(byKey["release-prod"].output, 1399 / 2);
   assertEquals(byKey["release-prod"].uses, 1);
-  // il comando è l'unico del turno 2: prende tutto quel turno, subagent compreso
+  // the command is the only one in turn 2: it takes that whole turn, subagent included
   const cm = report(db, { by: "command", since: "all" });
   assertEquals(cm.rows.length, 1);
   assertEquals(cm.rows[0].key, "pr-forge");

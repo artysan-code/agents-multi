@@ -1,10 +1,10 @@
-# shared/scripts — tool QA portabili
+# shared/scripts: portable QA tools
 
-Script di validazione riusabili, sincronizzati via Syncthing (folder `claude-multi`) su tutte le macchine. Spostati qui dalla working dir di ottimizzazione (`~/claude-multi-optimization/`, scratch non-syncata) il 2026-06-08.
+Reusable validation scripts, synced by Syncthing (folder `claude-multi`) to every machine.
 
 ## `validate_agents.py`
 
-Valida il frontmatter dei file agente: presenza di `name:`/`description:`, `tools:` come array JSON valido, `model:` tra `opus|sonnet|haiku|inherit`. Prende la **directory** degli agenti come argomento.
+Validates the frontmatter of agent files: `name:` and `description:` present, `tools:` a valid JSON array, `model:` one of `opus|sonnet|haiku|inherit`. Takes the agents **directory** as its argument.
 
 ```sh
 python3 ~/.claude-multi/shared/scripts/validate_agents.py ~/.claude-multi/shared/agents
@@ -12,11 +12,11 @@ python3 ~/.claude-multi/shared/scripts/validate_agents.py ~/.claude-multi/shared
 
 ## MCP registry
 
-Il sync del registry MCP (`shared/mcp/servers.json`) è passato in Deno: `claude-multi mcp check|sync|health`. Applica il registry sia ai `.claude.json` dei profili (superficie `cli`) sia ai `claude_desktop_config.json` delle istanze Desktop (superficie `desktop`), con backup in XDG state e stato per-macchina.
+Syncing the MCP registry (`shared/mcp/servers.json`) is done in Deno: `claude-multi mcp check|sync|health`. It applies the registry both to each profile's `.claude.json` (`cli` surface) and to the `claude_desktop_config.json` of the Desktop instances (`desktop` surface), with backups in the XDG state directory and per-machine state.
 
 ## `vault_lint.py`
 
-Linta il vault LLM Wiki in `~/brains/claude`: frontmatter richiesto (`title`, `category`, `tags`, `summary`, `base_confidence`, `lifecycle`), lunghezza `summary` ≤200, pagine orfane (nessun wikilink entrante), righe-dato nelle `references/`, bullet nelle `## Steps` delle `skills/`. Nessun argomento (path fisso `~/brains/claude`). Exit code 1 se trova problemi → utilizzabile in hook/CI.
+Lints the LLM Wiki vault at `~/brains/claude`: required frontmatter (`title`, `category`, `tags`, `summary`, `base_confidence`, `lifecycle`), `summary` length <= 200, orphan pages (no incoming wikilink), data rows in `references/`, bullets under `## Steps` in `skills/`. No arguments (fixed path `~/brains/claude`). Exits 1 if it finds problems, so it works in a hook or CI.
 
 ```sh
 python3 ~/.claude-multi/shared/scripts/vault_lint.py

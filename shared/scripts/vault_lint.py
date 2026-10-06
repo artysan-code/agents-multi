@@ -1,3 +1,10 @@
+"""vault_lint.py: lints the LLM Wiki vault at ~/brains/claude (fixed path, no arguments).
+
+Checks: required frontmatter keys (title, category, tags, summary, base_confidence, lifecycle),
+summary length <= 200, orphan pages (no incoming wikilink), data rows in references/ pages, and
+bullets under `## Steps` in skills/ pages.
+Exit code: 1 if any problem is found, 0 otherwise, so it can run in a hook or CI.
+"""
 import os, re, sys
 
 V = os.path.expanduser("~/brains/claude")
@@ -42,15 +49,15 @@ for rel, txt in sorted(pages.items()):
     else:
         print(f"OK   {rel}  (summary {slen} chars)")
 
-print("\n=== references: righe tabella (acc: >=8) ===")
+print("\n=== references: table rows (accept: >=8) ===")
 for rel, txt in sorted(pages.items()):
     if not rel.startswith("references/"):
         continue
     rows = len(re.findall(r"^\|.+\|.+\|", txt, re.M)) - len(re.findall(r"^\|[\s:|-]+\|", txt, re.M))
     status = "OK" if rows >= 8 else "WARN"
-    print(f"{status} {rel}: ~{rows} righe dati (header/separatori esclusi)")
+    print(f"{status} {rel}: ~{rows} data rows (header/separators excluded)")
 
-print("\n=== skills: ## Steps con >=3 bullet ===")
+print("\n=== skills: ## Steps with >=3 bullets ===")
 for rel, txt in sorted(pages.items()):
     if not rel.startswith("skills/"):
         continue
@@ -58,7 +65,7 @@ for rel, txt in sorted(pages.items()):
     bullets = len(re.findall(r"^- ", m.group(1), re.M)) if m else 0
     status = "OK" if bullets >= 3 else "FAIL"
     if bullets < 3: errs += 1
-    print(f"{status} {rel}: {bullets} bullet in ## Steps")
+    print(f"{status} {rel}: {bullets} bullets in ## Steps")
 
-print("\nRESULT:", "ALL OK" if errs == 0 else f"{errs} PROBLEMI")
+print("\nRESULT:", "ALL OK" if errs == 0 else f"{errs} PROBLEMS")
 sys.exit(1 if errs else 0)

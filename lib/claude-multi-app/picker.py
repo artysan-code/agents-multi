@@ -93,7 +93,7 @@ class Row(QFrame):
         self.account.hide()
         text.addWidget(self.account)
         lay.addLayout(text, 1)
-        self.open = QLabel("aperto", objectName="open")
+        self.open = QLabel("open", objectName="open")
         self.open.hide()
         lay.addWidget(self.open, 0, Qt.AlignmentFlag.AlignVCenter)
         lay.addWidget(QLabel(str(n), objectName="kbd"), 0, Qt.AlignmentFlag.AlignVCenter)
@@ -141,7 +141,7 @@ class Picker(QWidget):
         col.setSpacing(4)
         head = QHBoxLayout()
         head.setContentsMargins(4, 0, 0, 8)
-        head.addWidget(QLabel("Quale Claude?", objectName="title"), 1)
+        head.addWidget(QLabel("Which Claude?", objectName="title"), 1)
         head.addWidget(QLabel("Esc", objectName="kbd"), 0, Qt.AlignmentFlag.AlignVCenter)
         col.addLayout(head)
 
@@ -152,7 +152,7 @@ class Picker(QWidget):
             row.clicked.connect(self._choose)
             self.rows.append(row)
             col.addWidget(row)
-        hint = QLabel("↑ ↓ o il numero per scegliere · Invio per aprire", objectName="hint")
+        hint = QLabel("↑ ↓ or the number to choose · Enter to open", objectName="hint")
         hint.setContentsMargins(4, 8, 0, 0)
         col.addWidget(hint)
 

@@ -71,7 +71,7 @@ export async function startBrainLogin(
       );
     if (u.searchParams.get("state") !== state) {
       finish({ ok: false, message: "the answer did not match this request" });
-      return page("Questa risposta non appartiene alla richiesta: non è stato salvato niente.");
+      return page("This response does not belong to the request: nothing was saved.");
     }
     try {
       const r = await fetcher(`${base}/token`, {
@@ -103,13 +103,13 @@ export async function startBrainLogin(
       const who = d.account ? ` as ${d.account}` : "";
       finish({ ok: true, message: `brain/${account} signed in${who}: token and backup key in the vault` });
       return page(
-        `Collegato${
-          d.account ? ` come <b>${d.account}</b>` : ""
-        }: token e chiave di backup sono nel vault. Puoi chiudere questa scheda.`,
+        `Signed in${
+          d.account ? ` as <b>${d.account}</b>` : ""
+        }: token and backup key are in the vault. You can close this tab.`,
       );
     } catch (e) {
       finish({ ok: false, message: (e as Error).message });
-      return page(`Non collegato: ${(e as Error).message}`);
+      return page(`Not signed in: ${(e as Error).message}`);
     }
   });
   void srv.finished.catch(() => {});

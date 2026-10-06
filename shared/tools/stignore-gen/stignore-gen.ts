@@ -5,7 +5,7 @@
 // exist on one machine only: `.env`, `.env.*` (at any depth) and `.claude/settings.local.json`. Every
 // repository found inside a sendreceive folder gets the block of `repoBlock()` in the managed section.
 // The first matching rule wins, so the re-inclusions come before `/<repo>/*`; excluding the children
-// rather than the directory is what lets Syncthing walk in and find them (verified 2026-09-24).
+// rather than the directory is what lets Syncthing walk in and find them.
 //
 // The section only grows. A repository cloned on one machine is added there and reaches the other with
 // the file; dropping the entries of repositories gone from disk is explicit (`--prune`), otherwise two
