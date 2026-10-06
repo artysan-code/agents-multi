@@ -27,7 +27,7 @@ HEADLINES = {"ok": "All good", "fail": "Something needs attention", "down": "Con
 
 
 def icon_for(level: str) -> QIcon:
-    base = QIcon.fromTheme("claude-desktop")
+    base = QIcon.fromTheme("claude-multi", QIcon.fromTheme("claude-desktop"))
     pm = base.pixmap(64, 64) if not base.isNull() else QPixmap(64, 64)
     if base.isNull():
         pm.fill(QColor("#D97757"))

@@ -60,7 +60,7 @@ class ConsoleWindow(QMainWindow):
     def __init__(self, profile: QWebEngineProfile) -> None:
         super().__init__()
         self.setWindowTitle(NAME)
-        self.setWindowIcon(QIcon.fromTheme("claude-desktop"))
+        self.setWindowIcon(QIcon.fromTheme("claude-multi", QIcon.fromTheme("claude-desktop")))
         self.resize(1280, 860)
         # Closed, the window is hidden and kept a while: reopening is instant, where building the
         # web engine again takes seconds on a slower machine. After KEEP_MS unused it is destroyed,

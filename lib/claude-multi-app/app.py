@@ -178,7 +178,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(NAME)
     app.setDesktopFileName(NAME)
-    app.setWindowIcon(QIcon.fromTheme("claude-desktop"))
+    app.setWindowIcon(QIcon.fromTheme("claude-multi", QIcon.fromTheme("claude-desktop")))
     app.setQuitOnLastWindowClosed(False)
     if forward(cmd):
         return 0

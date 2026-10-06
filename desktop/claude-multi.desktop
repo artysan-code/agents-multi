@@ -4,7 +4,7 @@ Name=claude-multi
 GenericName=Claude profiles
 Comment=Console, tray and Hey Claude for the claude-multi profiles
 Exec=@BIN@/claude-multi-app
-Icon=claude-desktop
+Icon=claude-multi
 Terminal=false
 Categories=Utility;
 # The app sets its desktop file name to this one (QApplication.setDesktopFileName): Wayland and the

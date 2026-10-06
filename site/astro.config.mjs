@@ -19,6 +19,10 @@ export default defineConfig({
         { label: "Start here", items: ["docs", "docs/getting-started"] },
         { label: "Concepts", items: ["docs/profiles", "docs/console", "docs/brain", "docs/mcp-and-vault", "docs/updates"] },
       ],
+      head: [
+        { tag: "meta", attrs: { property: "og:image", content: "https://site.invalid/og.jpg" } },
+        { tag: "meta", attrs: { name: "twitter:image", content: "https://site.invalid/og.jpg" } },
+      ],
       lastUpdated: false,
       pagination: true,
     }),
