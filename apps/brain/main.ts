@@ -28,6 +28,7 @@ import {
 import { privacyPage, type Site, siteFile, siteMoved } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
+import { bodyLimit, capped, isTooLarge } from "./guard.ts";
 import { snapshot } from "./backup.ts";
 import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/owner.ts";
 import { masterKey, type User, Users } from "./users.ts";
@@ -427,10 +428,13 @@ const withCors = (r: Response) => {
 
 Deno.serve({ port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") }, async (req) => {
   try {
-    return await handle(req);
+    return await handle(capped(req, bodyLimit(new URL(req.url).pathname)));
   } catch (e) {
-    console.error(e);
-    return json({ error: (e as Error).message }, 500);
+    if (isTooLarge(e)) return json({ error: "request body too large" }, 413);
+    // what went wrong stays in the log: the answer carries only an id to find it there
+    const id = crypto.randomUUID().slice(0, 8);
+    console.error(`brain: error ${id}`, e);
+    return json({ error: "internal error", id }, 500);
   }
 });
 console.log(

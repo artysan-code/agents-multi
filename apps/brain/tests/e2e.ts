@@ -1,8 +1,8 @@
 // End to end against a running brain with an empty data folder: the OAuth dance Claude does, then
 // the MCP tools, as the first account. Start one, then run this with the same URL, account and passphrase:
 //   BRAIN_URL=http://127.0.0.1:8787 BRAIN_MASTER_KEY=$(head -c32 /dev/urandom | base64) BRAIN_ADMIN_ID=me BRAIN_PASSPHRASE=… \
-//     BRAIN_DEV=1 BRAIN_DATA=$(mktemp -d) PORT=8787 deno run -A brain/main.ts
-//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_USER=me BRAIN_PASSPHRASE=… deno run -A brain/tests/e2e.ts
+//     BRAIN_DEV=1 BRAIN_DATA=$(mktemp -d) PORT=8787 deno run -A apps/brain/main.ts
+//   BRAIN_URL=http://127.0.0.1:8787 BRAIN_USER=me BRAIN_PASSPHRASE=… deno run -A apps/brain/tests/e2e.ts
 const B = Deno.env.get("BRAIN_URL") ?? "http://127.0.0.1:8787";
 const PASS = Deno.env.get("BRAIN_PASSPHRASE") ?? "";
 const USER = Deno.env.get("BRAIN_USER") ?? "me";
