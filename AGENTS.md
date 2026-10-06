@@ -58,7 +58,9 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
   A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A
   server that returns data masks it (`lib/mask.ts`), and one that writes whole objects back refuses
-  payloads carrying the mask marker. No deletion tools on external services. The vault key is in
+  payloads carrying the mask marker. No deletion tools on external services — one exception, decided
+  with the owner (2026-10-06): `calendar_delete` in the google server, since a deleted event stays
+  thirty days in the calendar's bin, and it is in the shared `ask` permissions like `gmail_send`. The vault key is in
   the keyring, where any process of the user can ask for it: the shared deny rules on
   `secret-tool`, `kwallet-query`, `vault recovery-code` and `~/vault/claude-multi` are what keeps a
   session out (the doctor checks they are there).

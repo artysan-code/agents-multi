@@ -4,13 +4,18 @@
 //
 // Mail goes out in two steps, and the second one always asks: gmail_draft writes a draft the owner
 // can read, gmail_send sends an existing draft — and mcp__google__gmail_send is in the shared `ask`
-// permissions, so it needs the user's yes even in auto mode. Nothing here deletes anything.
+// permissions, so it needs the user's yes even in auto mode. Mail can be marked, archived and
+// labelled, never deleted; an attachment is saved into the downloads folder, never anywhere else.
 // Calendar writes default to sendUpdates "none": invitations go out only when the user asks for them.
-// Drive is read-only: search, and a file's text (Docs, Sheets and Slides exported, text files read).
+// One deletion exists, and asks like gmail_send: calendar_delete, since a deleted event stays in the
+// calendar's bin for thirty days (AGENTS.md, the exception to "no deletion tools").
+// Drive is read-only: search, and a file's text (Docs and Slides exported, every sheet of a Sheet,
+// a PDF's text, text files read).
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
 import { z } from "npm:zod@^3.23";
-import { accessToken, htmlToText, loadClient, rawMessage, readPayload } from "../lib/google.ts";
+import { extractText, getDocumentProxy } from "npm:unpdf@1.8.1";
+import { accessToken, attachmentBytes, freeName, htmlToText, labelChange, loadClient, rawMessage, readPayload, respondAttendees, safeFileName, sheetsText } from "../lib/google.ts";
 import { service, text } from "../lib/service.ts";
 
 const google = service("google");
@@ -27,6 +32,7 @@ async function api(acc: string | undefined, url: string, init?: RequestInit): Pr
   if (!r.ok) {
     let msg = body.slice(0, 300);
     try { msg = JSON.parse(body).error?.message ?? msg; } catch { /* not JSON */ }
+    if (r.status === 403 && /insufficient/i.test(msg)) msg += " — this account was connected before the permission was added: connect it again (console › Connections › Connect)";
     throw new Error(`Google ${r.status}: ${msg}`);
   }
   return body ? JSON.parse(body) : null;
@@ -34,6 +40,10 @@ async function api(acc: string | undefined, url: string, init?: RequestInit): Pr
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const CAL = "https://www.googleapis.com/calendar/v3";
 const DRIVE = "https://www.googleapis.com/drive/v3";
+const SHEETS = "https://sheets.googleapis.com/v4/spreadsheets";
+// where attachments go: the downloads folder, whichever spelling this machine has
+const HOME = Deno.env.get("HOME")!;
+const DOWNLOADS = [`${HOME}/Downloads`, `${HOME}/downloads`].find((d) => { try { return Deno.statSync(d).isDirectory; } catch { return false; } }) ?? `${HOME}/Downloads`;
 const header = (m: Doc, name: string) => m.payload?.headers?.find((h: Doc) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
 
 const server = new McpServer({ name: "google", version: "0.1.0" });
@@ -108,6 +118,44 @@ server.registerTool("gmail_send", {
   return text({ sent: true, messageId: r.id, threadId: r.threadId });
 });
 
+server.registerTool("gmail_attachment", {
+  description: `Save an attachment of a message or a draft into ${DOWNLOADS}, and say where. The message id is the one gmail_thread gives (for a draft, its message's id); the attachment by its name as listed there.`,
+  inputSchema: { account, messageId: z.string(), name: z.string().describe("the attachment's file name, as gmail_thread lists it") },
+}, async ({ account, messageId, name }: { account?: string; messageId: string; name: string }) => {
+  const m = await api(account, `${GMAIL}/messages/${messageId}?format=full`);
+  const { attachments } = readPayload(m.payload);
+  const a = attachments.find((x) => x.name === name) ?? attachments.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  if (!a?.attachmentId) throw new Error(`no attachment "${name}" in this message; it has: ${attachments.map((x) => x.name).join(", ") || "none"}`);
+  const data = await api(account, `${GMAIL}/messages/${messageId}/attachments/${a.attachmentId}`);
+  await Deno.mkdir(DOWNLOADS, { recursive: true });
+  const file = freeName(safeFileName(a.name), (n) => { try { Deno.statSync(`${DOWNLOADS}/${n}`); return true; } catch { return false; } });
+  await Deno.writeFile(`${DOWNLOADS}/${file}`, attachmentBytes(data.data), { createNew: true });
+  return text({ saved: `${DOWNLOADS}/${file}`, size: a.size, mime: a.mime });
+});
+
+const labelsOf = async (account?: string) =>
+  ((await api(account, `${GMAIL}/labels`)).labels ?? []).map((l: Doc) => ({ id: l.id, name: l.name, type: l.type }));
+
+server.registerTool("gmail_labels", {
+  description: "The account's labels: the system ones (INBOX, UNREAD, STARRED, IMPORTANT…) and the user's own.",
+  inputSchema: { account },
+}, async ({ account }: { account?: string }) => text(await labelsOf(account)));
+
+server.registerTool("gmail_modify", {
+  description: "Tidy messages: mark them read or unread, archive them (out of the inbox) or bring them back, add or remove labels by name. " +
+    "Nothing is deleted. A label that does not exist is refused, never created.",
+  inputSchema: {
+    account, ids: z.array(z.string()).min(1).max(100).describe("message ids (gmail_search)"),
+    read: z.boolean().optional(), archive: z.boolean().optional(),
+    addLabels: z.array(z.string()).optional(), removeLabels: z.array(z.string()).optional(),
+  },
+}, async (a: { account?: string; ids: string[]; read?: boolean; archive?: boolean; addLabels?: string[]; removeLabels?: string[] }) => {
+  const change = labelChange(a, a.addLabels?.length || a.removeLabels?.length ? await labelsOf(a.account) : []);
+  if (!change.addLabelIds.length && !change.removeLabelIds.length) throw new Error("nothing to change: say read, archive, addLabels or removeLabels");
+  await api(a.account, `${GMAIL}/messages/batchModify`, { method: "POST", body: JSON.stringify({ ids: a.ids, ...change }) });
+  return text({ changed: a.ids.length, ...change });
+});
+
 // ---------------------------------------------------------------- Calendar
 const when = z.string().describe("RFC 3339 with offset (2026-10-01T10:00:00+02:00), or a day YYYY-MM-DD for all-day");
 const slot = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) ? { date: v } : { dateTime: v };
@@ -164,6 +212,30 @@ server.registerTool("calendar_update", {
   return text({ id: e.id, title: e.summary, start: e.start, end: e.end, link: e.htmlLink });
 });
 
+server.registerTool("calendar_respond", {
+  description: "Answer an invitation as this account: accepted, declined or tentative. The organiser is told only if sendUpdates says so.",
+  inputSchema: {
+    account, calendarId: z.string().optional(), eventId: z.string(), response: z.enum(["accepted", "declined", "tentative"]),
+    sendUpdates: eventFields.sendUpdates,
+  },
+}, async (a: { account?: string; calendarId?: string; eventId: string; response: "accepted" | "declined" | "tentative"; sendUpdates?: string }) => {
+  const url = `${CAL}/calendars/${encodeURIComponent(a.calendarId ?? "primary")}/events/${encodeURIComponent(a.eventId)}`;
+  const e = await api(a.account, url);
+  const r = await api(a.account, `${url}?sendUpdates=${a.sendUpdates ?? "none"}`, { method: "PATCH", body: JSON.stringify({ attendees: respondAttendees(e.attendees, a.response) }) });
+  return text({ id: r.id, title: r.summary, start: r.start, response: a.response });
+});
+
+server.registerTool("calendar_delete", {
+  description: "Delete an event. Only when the user has asked for it (this tool always asks for their approval). Guests are told only if " +
+    "sendUpdates says so. The event stays in the calendar's bin for thirty days, where it can be restored.",
+  inputSchema: { account, calendarId: z.string().optional(), eventId: z.string(), sendUpdates: eventFields.sendUpdates },
+}, async (a: { account?: string; calendarId?: string; eventId: string; sendUpdates?: string }) => {
+  const url = `${CAL}/calendars/${encodeURIComponent(a.calendarId ?? "primary")}/events/${encodeURIComponent(a.eventId)}`;
+  const e = await api(a.account, url);
+  await api(a.account, `${url}?sendUpdates=${a.sendUpdates ?? "none"}`, { method: "DELETE" });
+  return text({ deleted: e.id, title: e.summary, start: e.start, note: "in the calendar's bin for 30 days" });
+});
+
 // ---------------------------------------------------------------- Drive
 server.registerTool("drive_search", {
   description: "Find files: by words in the name or content, optionally only the ones shared with the account. Newest first.",
@@ -183,25 +255,42 @@ server.registerTool("drive_search", {
 
 const EXPORT: Record<string, string> = {
   "application/vnd.google-apps.document": "text/plain",
-  "application/vnd.google-apps.spreadsheet": "text/csv",
   "application/vnd.google-apps.presentation": "text/plain",
 };
+const cut = (body: string, limit: number) => body.slice(0, limit) + (body.length > limit ? "\n[…cut]" : "");
 
 server.registerTool("drive_read", {
-  description: "A file's text: Google Docs and Slides as text, Sheets as CSV (first sheet), text files as they are. Other formats (PDF, images): details and link only.",
+  description: "A file's text: Google Docs and Slides as text, every sheet of a Sheet as CSV under its title, a PDF's text, text files as they are. " +
+    "Other formats (images, Office files): details and link only.",
   inputSchema: { account, id: z.string(), maxChars: z.number().int().optional().describe("default 20000") },
 }, async ({ account, id, maxChars }: { account?: string; id: string; maxChars?: number }) => {
   const f = await api(account, `${DRIVE}/files/${id}?fields=id,name,mimeType,size,webViewLink&supportsAllDrives=true`);
+  const limit = maxChars ?? 20000;
+  const out = (body: string) => text({ name: f.name, type: f.mimeType, link: f.webViewLink, text: body });
+  if (f.mimeType === "application/vnd.google-apps.spreadsheet") {
+    // the Sheets API reads with Drive's read-only permission, every sheet at once
+    const meta = await api(account, `${SHEETS}/${id}?fields=sheets.properties.title`);
+    const titles: string[] = (meta.sheets ?? []).map((s: Doc) => s.properties.title);
+    const q = new URLSearchParams(titles.map((t) => ["ranges", `'${t.replace(/'/g, "''")}'`]));
+    const v = await api(account, `${SHEETS}/${id}/values:batchGet?${q}`);
+    return out(sheetsText(titles.map((title, i) => ({ title, values: v.valueRanges?.[i]?.values })), limit));
+  }
   const { secret } = await google.use(account);
   const token = await accessToken(await loadClient(), secret);
-  const url = EXPORT[f.mimeType]
-    ? `${DRIVE}/files/${id}/export?mimeType=${encodeURIComponent(EXPORT[f.mimeType])}`
-    : f.mimeType.startsWith("text/") || f.mimeType === "application/json" ? `${DRIVE}/files/${id}?alt=media&supportsAllDrives=true` : null;
-  if (!url) return text({ name: f.name, type: f.mimeType, size: f.size ?? null, link: f.webViewLink, note: "not a text format: open the link" });
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!r.ok) throw new Error(`Google ${r.status} reading ${f.name}`);
-  const body = await r.text(), limit = maxChars ?? 20000;
-  return text({ name: f.name, type: f.mimeType, link: f.webViewLink, text: body.slice(0, limit) + (body.length > limit ? "\n[…cut]" : "") });
+  const get = async (url: string) => {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error(`Google ${r.status} reading ${f.name}`);
+    return r;
+  };
+  if (EXPORT[f.mimeType]) return out(cut(await (await get(`${DRIVE}/files/${id}/export?mimeType=${encodeURIComponent(EXPORT[f.mimeType])}`)).text(), limit));
+  const media = `${DRIVE}/files/${id}?alt=media&supportsAllDrives=true`;
+  if (f.mimeType === "application/pdf") {
+    const pdf = await getDocumentProxy(new Uint8Array(await (await get(media)).arrayBuffer()));
+    const { text: body } = await extractText(pdf, { mergePages: true });
+    return out(cut(body.trim() || "(no text in this PDF: it is probably scanned images)", limit));
+  }
+  if (f.mimeType.startsWith("text/") || f.mimeType === "application/json") return out(cut(await (await get(media)).text(), limit));
+  return text({ name: f.name, type: f.mimeType, size: f.size ?? null, link: f.webViewLink, note: "not a text format: open the link" });
 });
 
 await server.connect(new StdioServerTransport());

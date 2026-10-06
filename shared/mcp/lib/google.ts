@@ -17,8 +17,7 @@ import { getSecret } from "./vault.ts";
 export const SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/gmail.readonly", // read and search mail
-  "https://www.googleapis.com/auth/gmail.compose", // drafts, and sending them
+  "https://www.googleapis.com/auth/gmail.modify", // read, drafts and sending them, labels and archiving (never permanent deletion)
   "https://www.googleapis.com/auth/calendar.events", // read and write events
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly", // which calendars there are
   "https://www.googleapis.com/auth/drive.readonly", // files, the shared ones included
@@ -137,17 +136,77 @@ export function htmlToText(html: string): string {
 
 // deno-lint-ignore no-explicit-any
 type Part = any;
-/** Pure: a Gmail message payload to its text body and its attachments' names. */
-export function readPayload(payload: Part): { text: string; attachments: { name: string; size: number; mime: string }[] } {
+export interface Attachment { name: string; size: number; mime: string; attachmentId: string | null }
+/** Pure: a Gmail message payload to its text body and its attachments (with the id that fetches each). */
+export function readPayload(payload: Part): { text: string; attachments: Attachment[] } {
   let plain = "", html = "";
-  const attachments: { name: string; size: number; mime: string }[] = [];
+  const attachments: Attachment[] = [];
   const walk = (p: Part) => {
     if (!p) return;
-    if (p.filename) attachments.push({ name: p.filename, size: p.body?.size ?? 0, mime: p.mimeType });
+    if (p.filename) attachments.push({ name: p.filename, size: p.body?.size ?? 0, mime: p.mimeType, attachmentId: p.body?.attachmentId ?? null });
     else if (p.mimeType === "text/plain" && p.body?.data && !plain) plain = fromB64url(p.body.data);
     else if (p.mimeType === "text/html" && p.body?.data && !html) html = fromB64url(p.body.data);
     for (const c of p.parts ?? []) walk(c);
   };
   walk(payload);
   return { text: plain || htmlToText(html), attachments };
+}
+
+/** Pure: Gmail's base64url attachment data as bytes. */
+export function attachmentBytes(data: string): Uint8Array {
+  return Uint8Array.from(atob(data.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - data.length % 4) % 4)), (c) => c.charCodeAt(0));
+}
+
+/** Pure: a file name a sender chose, made safe to write: no folders, no control characters, not hidden. */
+export function safeFileName(name: string): string {
+  // deno-lint-ignore no-control-regex
+  const n = name.replace(/[\x00-\x1f\x7f]/g, "").replace(/[\/\\]/g, "_").replace(/^[.\s]+/, "").trim().slice(0, 200);
+  return n || "attachment";
+}
+
+/** Pure: the first of name, "name (1).ext", "name (2).ext"… that `taken` says is free. */
+export function freeName(name: string, taken: (n: string) => boolean): string {
+  if (!taken(name)) return name;
+  const dot = name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  for (let i = 1; ; i++) if (!taken(`${stem} (${i})${ext}`)) return `${stem} (${i})${ext}`;
+}
+
+// ---------------------------------------------------------------- labels and invitations
+export interface Label { id: string; name: string }
+
+/** Pure: what to add and remove on messages, from plain wishes and label names (any case). A name
+ *  that is not a label of the account is refused with the ones there are, never created. */
+export function labelChange(
+  want: { read?: boolean; archive?: boolean; addLabels?: string[]; removeLabels?: string[] },
+  labels: Label[],
+): { addLabelIds: string[]; removeLabelIds: string[] } {
+  const byName = new Map(labels.map((l) => [l.name.toLowerCase(), l.id]));
+  const ids = (names: string[] = []) => names.map((n) => {
+    const id = byName.get(n.toLowerCase());
+    if (!id) throw new Error(`no label "${n}" in this account; there are: ${labels.map((l) => l.name).join(", ")}`);
+    return id;
+  });
+  const add = ids(want.addLabels), remove = ids(want.removeLabels);
+  if (want.read === true) remove.push("UNREAD");
+  if (want.read === false) add.push("UNREAD");
+  if (want.archive === true) remove.push("INBOX");
+  if (want.archive === false) add.push("INBOX");
+  return { addLabelIds: [...new Set(add)], removeLabelIds: [...new Set(remove)] };
+}
+
+/** Pure: an event's attendees with the account's own answer changed; refused when it is not invited. */
+export function respondAttendees(attendees: Part[] | undefined, response: "accepted" | "declined" | "tentative"): Part[] {
+  const list = (attendees ?? []).map((a: Part) => ({ ...a }));
+  const self = list.find((a: Part) => a.self);
+  if (!self) throw new Error("this account is not among the event's guests: there is no invitation to answer");
+  self.responseStatus = response;
+  return list;
+}
+
+/** Pure: a spreadsheet's sheets as text, each under its title, cut at `limit` characters in all. */
+export function sheetsText(sheets: { title: string; values?: string[][] }[], limit: number): string {
+  const cell = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const all = sheets.map((s) => `## ${s.title}\n${(s.values ?? []).map((row) => row.map((v) => cell(String(v ?? ""))).join(",")).join("\n")}`).join("\n\n");
+  return all.length > limit ? `${all.slice(0, limit)}\n[…cut]` : all;
 }

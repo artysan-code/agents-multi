@@ -1,7 +1,10 @@
 // Tests for shared/mcp/lib/google.ts: the pieces of the OAuth flow and the mail format that do not
 // need Google to answer.
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
-import { authUrl, emailFromIdToken, encodeHeader, htmlToText, parseClientJson, pkce, rawMessage, readPayload, SCOPES } from "../../shared/mcp/lib/google.ts";
+import {
+  attachmentBytes, authUrl, emailFromIdToken, encodeHeader, freeName, htmlToText, labelChange, parseClientJson, pkce, rawMessage, readPayload,
+  respondAttendees, safeFileName, SCOPES, sheetsText,
+} from "../../shared/mcp/lib/google.ts";
 
 const unb64url = (s: string) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4)), (c) => c.charCodeAt(0)));
 const b64url = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -44,11 +47,45 @@ Deno.test("readPayload: plain text preferred, HTML as text otherwise, attachment
       { mimeType: "multipart/alternative", parts: [
         { mimeType: "text/html", body: { data: b64url("<p>Ciao <b>Samuel</b></p><p>riga</p>") } },
       ] },
-      { mimeType: "application/pdf", filename: "fattura.pdf", body: { size: 1234 } },
+      { mimeType: "application/pdf", filename: "fattura.pdf", body: { size: 1234, attachmentId: "att-1" } },
     ],
   };
   const r = readPayload(p);
   assertEquals(r.text, "Ciao Samuel\nriga");
-  assertEquals(r.attachments, [{ name: "fattura.pdf", size: 1234, mime: "application/pdf" }]);
+  assertEquals(r.attachments, [{ name: "fattura.pdf", size: 1234, mime: "application/pdf", attachmentId: "att-1" }]);
   assertEquals(htmlToText("a&nbsp;&amp;&nbsp;b<br>c"), "a & b\nc");
+});
+
+Deno.test("attachments: Gmail's base64url to bytes, a safe name, never over an existing file", () => {
+  assertEquals(new TextDecoder().decode(attachmentBytes(b64url("ciao è"))), "ciao è");
+  assertEquals(safeFileName("../../.bashrc"), "_.._.bashrc");
+  assertEquals(safeFileName(".hidden"), "hidden");
+  assertEquals(safeFileName("a\u0000b/c.pdf"), "ab_c.pdf");
+  assertEquals(safeFileName("  "), "attachment");
+  const taken = new Set(["fattura.pdf", "fattura (1).pdf"]);
+  assertEquals(freeName("fattura.pdf", (n) => taken.has(n)), "fattura (2).pdf");
+  assertEquals(freeName("README", (n) => n === "README"), "README (1)");
+  assertEquals(freeName("new.txt", () => false), "new.txt");
+});
+
+Deno.test("labelChange: read and archive as system labels, names in any case, an unknown label refused", () => {
+  const labels = [{ id: "Label_1", name: "Clienti" }, { id: "INBOX", name: "INBOX" }];
+  assertEquals(labelChange({ read: true, archive: true }, labels), { addLabelIds: [], removeLabelIds: ["UNREAD", "INBOX"] });
+  assertEquals(labelChange({ read: false, addLabels: ["clienti"] }, labels), { addLabelIds: ["Label_1", "UNREAD"], removeLabelIds: [] });
+  assertThrows(() => labelChange({ addLabels: ["Nope"] }, labels), Error, "there are: Clienti, INBOX");
+});
+
+Deno.test("respondAttendees: only the account's own answer changes; no invitation, no answer", () => {
+  const list = [{ email: "a@x.test", responseStatus: "accepted" }, { email: "me@x.test", self: true, responseStatus: "needsAction" }];
+  const r = respondAttendees(list, "declined");
+  assertEquals(r.map((a) => a.responseStatus), ["accepted", "declined"]);
+  assertEquals(list[1].responseStatus, "needsAction"); // the input is left alone
+  assertThrows(() => respondAttendees([{ email: "a@x.test" }], "accepted"), Error, "not among the event's guests");
+  assertThrows(() => respondAttendees(undefined, "accepted"), Error);
+});
+
+Deno.test("sheetsText: every sheet under its title, CSV quoting, cut at the limit", () => {
+  const t = sheetsText([{ title: "Q1", values: [["a", "b,c"], ['say "hi"']] }, { title: "Vuoto" }], 1000);
+  assertEquals(t, '## Q1\na,"b,c"\n"say ""hi"""\n\n## Vuoto\n');
+  assert(sheetsText([{ title: "X", values: [["0123456789"]] }], 8).endsWith("[…cut]"));
 });

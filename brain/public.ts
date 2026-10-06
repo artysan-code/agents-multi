@@ -26,9 +26,8 @@ export interface Site {
 export const PRIVACY_UPDATED = "6 ottobre 2026";
 
 const GOOGLE_SCOPES: [string, string][] = [
-  ["gmail.readonly", "leggere e cercare la posta"],
-  ["gmail.compose", "scrivere bozze e inviarle, solo quando lo chiedi tu"],
-  ["calendar.events", "leggere gli eventi e crearli o modificarli"],
+  ["gmail.modify", "leggere e cercare la posta, scrivere bozze e inviarle solo quando lo chiedi tu, segnarla come letta, archiviarla ed etichettarla; mai cancellarla"],
+  ["calendar.events", "leggere gli eventi, crearli, modificarli, rispondere agli inviti; cancellarli solo quando lo chiedi tu"],
   ["calendar.calendarlist.readonly", "sapere quali calendari hai"],
   ["drive.readonly", "cercare e leggere i file di Drive, senza modificarli"],
 ];
@@ -69,7 +68,7 @@ export function privacyPage(s: Site) {
   <h2>Google: cosa legge e cosa no</h2>
   <p>L'integrazione Google gira sul tuo computer, non su questo server. Chiede solo questi permessi, e li usa solo quando lo chiedi a Claude:</p>
   <ul class="list"><li><code>openid</code>, <code>email</code>: il tuo indirizzo email, per sapere quale account è collegato</li>${scopes}</ul>
-  <p>Il token di accesso resta nel tuo computer, in un archivio cifrato. Quello che legge va solo alla tua conversazione con Claude, per rispondere a quello che hai chiesto: non viene salvato su questo server né altrove, non viene usato per pubblicità, non viene venduto, non serve ad addestrare modelli di intelligenza artificiale, e nessuno lo legge se non tu.</p>
+  <p>Il token di accesso resta nel tuo computer, in un archivio cifrato; gli allegati che chiedi di scaricare finiscono nella tua cartella dei download. Quello che legge va solo alla tua conversazione con Claude, per rispondere a quello che hai chiesto: non viene salvato su questo server né altrove, non viene usato per pubblicità, non viene venduto, non serve ad addestrare modelli di intelligenza artificiale, e nessuno lo legge se non tu.</p>
   <p>L'uso e il trasferimento ad altre applicazioni delle informazioni ricevute dalle API di Google rispettano le <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, compresi i requisiti di Limited Use. Puoi togliere l'accesso in qualsiasi momento da <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
 
   <h2>Perché, e per quanto</h2>

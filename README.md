@@ -399,12 +399,21 @@ import it (console › Connections, or `claude-multi google client <file.json>`)
 add it, press **Connect**, grant access in the browser (loopback redirect with PKCE); the refresh
 token goes to the vault and the address next to the account's name.
 
-- **Scopes**: Gmail read + compose (drafts and sending them), Calendar events read/write and the
-  calendar list, Drive read-only (shared files included), and the account's address.
+- **Scopes**: Gmail modify (read, drafts and sending them, labels and archiving — never permanent
+  deletion), Calendar events read/write and the calendar list, Drive read-only (shared files
+  included; it also reads Sheets through the Sheets API), and the account's address. An account
+  connected before a scope was added answers 403 on what needs it: connect it again.
 - **Mail goes out in two steps**: `gmail_draft` writes a draft, `gmail_send` sends an existing one —
   and `mcp__google__gmail_send` is in the shared `ask` permissions, so it always asks.
-- **Calendar writes** send no invitation unless asked (`sendUpdates` defaults to `none`).
-- Nothing deletes: no mail, event or file removal tools.
+- **Mail is tidied, not removed**: `gmail_modify` marks read or unread, archives, adds and removes
+  labels by name (an unknown one is refused, never created); `gmail_attachment` saves an attachment
+  into the downloads folder, under a safe name that never overwrites a file — the only place the
+  server may write.
+- **Calendar writes** send no invitation unless asked (`sendUpdates` defaults to `none`);
+  `calendar_respond` answers an invitation.
+- **One deletion, and it asks**: `calendar_delete`, in the shared `ask` permissions like
+  `gmail_send`. A deleted event stays thirty days in the calendar's bin. No mail or file removal.
+- **Drive** reads Docs and Slides as text, every sheet of a Sheet, a PDF's text (unpdf), text files.
 
 ### Tasks
 
