@@ -58,7 +58,14 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
   account that signed in. Access tokens last an hour; refresh tokens rotate, and one used twice
   revokes its whole family.
 - **Signing in** takes the account, its passphrase and the current TOTP code. Five wrong attempts
-  close that account for fifteen minutes; an id that does not exist answers the same way.
+  from one address close that account to that address for fifteen minutes, so nobody can lock its
+  owner out from elsewhere; an id that does not exist answers the same way. Each address has a rate
+  limit on the sign-in forms and the OAuth endpoints (429), and the passphrase hashing runs two at a
+  time with a short line (503 past it). Behind a proxy, `BRAIN_CLIENT_IP_HEADER` names the header
+  that carries the client's address (`cf-connecting-ip` behind Cloudflare); trust it only when the
+  service cannot be reached around that proxy.
+- **Every request body is capped** by its path (64 KB for the sign-in and OAuth endpoints, 1 MB for
+  the rest: 413), and an error answers 500 with an id to find it in the log, never its message.
 - **Machines** use personal tokens. claude-multi gets one by signing in (console › Connections ›
   Sign in, or `claude-multi brain-login`): the brain's OAuth with scope `machine`, only to a loopback
   redirect, answers with a token named after the machine and the account's backup key, and both go

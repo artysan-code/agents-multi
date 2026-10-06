@@ -6,7 +6,9 @@
 // themselves (RFC 7591) with a redirect back to Claude only; the authorization code is bound to a
 // PKCE S256 challenge; access tokens last an hour, refresh tokens rotate and a reused one revokes
 // its whole family. Signing in takes the account id, its passphrase and the current TOTP code
-// (users.ts); five wrong attempts lock that account for fifteen minutes. Every code, token and
+// (users.ts); five wrong attempts from one address lock that account for that address for fifteen
+// minutes (the address's rate limit, in main.ts, stops one address trying many ids), and the hashing
+// runs two at a time with a short line, so a flood of attempts cannot take the CPU. Every code, token and
 // session belongs to one account. Every token is stored as its SHA-256, never as itself.
 //
 // One more way in goes through the same door: claude-multi on a machine asks for scope `machine`
@@ -16,6 +18,7 @@
 
 import type { DatabaseSync } from "node:sqlite";
 import type { Users } from "./users.ts";
+import { Gate } from "./guard.ts";
 
 const SCHEMA = `
 create table if not exists oauth_clients (id text primary key, name text, redirects text not null, created text not null);
@@ -24,7 +27,7 @@ create table if not exists tokens (
   hash text primary key, user text not null, kind text not null, client text, name text, family text, expires integer,
   created text not null, used text, revoked integer not null default 0);
 create table if not exists sessions (hash text primary key, user text not null, expires integer not null, ends integer not null);
-create table if not exists login_failures (user text not null, at integer not null);
+create table if not exists login_failures (user text not null, ip text not null, at integer not null);
 `;
 
 export interface AuthConfig {
@@ -159,6 +162,12 @@ export class Auth {
         "drop table sessions; create table sessions (hash text primary key, user text not null, expires integer not null, ends integer not null);",
       );
     }
+    // failures from before they were kept per address: they last fifteen minutes, so they simply go
+    if (!(db.prepare("pragma table_info(login_failures)").all() as { name: string }[]).some((c) => c.name === "ip")) {
+      db.exec(
+        "drop table login_failures; create table login_failures (user text not null, ip text not null, at integer not null);",
+      );
+    }
   }
 
   get resourceMeta() {
@@ -221,21 +230,33 @@ export class Auth {
   }
 
   // ------------------------------------------------------------ the door
-  /** Five wrong attempts on an account close it for fifteen minutes; an id that does not exist
-   *  counts the same way, so the answers say nothing about which ids do. */
-  private locked(user: string): boolean {
+  private hashing = new Gate(2, 32);
+  /** Five wrong attempts on an account from one address close it to that address for fifteen
+   *  minutes, so nobody can lock its owner out from elsewhere; an id that does not exist counts the
+   *  same way, so the answers say nothing about which ids do. */
+  private locked(user: string, ip: string): boolean {
     this.db.prepare("delete from login_failures where at < ?").run(Date.now() - 15 * 60_000);
-    return (this.db.prepare("select count(*) n from login_failures where user = ?").get(user) as { n: number }).n >= 5;
+    return (this.db.prepare("select count(*) n from login_failures where user = ? and ip = ?").get(user, ip) as {
+      n: number;
+    }).n >= 5;
   }
-  /** The account id, its passphrase and TOTP code; a wrong set counts toward that account's lock. */
-  async signIn(user: string, passphrase: string, code: string): Promise<"ok" | "wrong" | "locked"> {
+  /** The account id, its passphrase and TOTP code, from an address; a wrong set counts toward that
+   *  account's lock for that address. `busy` when too many attempts are already waiting. */
+  async signIn(
+    user: string,
+    passphrase: string,
+    code: string,
+    ip: string,
+  ): Promise<"ok" | "wrong" | "locked" | "busy"> {
     const id = user.trim().toLowerCase().slice(0, 40);
-    if (this.locked(id)) return "locked";
-    if (await this.users.verify(id, passphrase, code)) {
-      this.db.prepare("delete from login_failures where user = ?").run(id);
+    if (this.locked(id, ip)) return "locked";
+    const ok = await this.hashing.run(() => this.users.verify(id, passphrase, code));
+    if (ok === null) return "busy";
+    if (ok) {
+      this.db.prepare("delete from login_failures where user = ? and ip = ?").run(id, ip);
       return "ok";
     }
-    this.db.prepare("insert into login_failures (user, at) values (?, ?)").run(id, Date.now());
+    this.db.prepare("insert into login_failures (user, ip, at) values (?, ?, ?)").run(id, ip, Date.now());
     return "wrong";
   }
 

@@ -28,7 +28,7 @@ import {
 import { privacyPage, type Site, siteFile, siteMoved } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
-import { bodyLimit, capped, isTooLarge } from "./guard.ts";
+import { bodyLimit, Buckets, capped, clientIp, isTooLarge } from "./guard.ts";
 import { snapshot } from "./backup.ts";
 import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/owner.ts";
 import { masterKey, type User, Users } from "./users.ts";
@@ -169,6 +169,21 @@ const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) =>
 /** Pure: a page of this service to go back to after signing in, or the account page. */
 const nextPage = (n: string | null) => n && /^\/(account|tasks)(\/[\w-]*)*(\?[^\s]*)?$/.test(n) ? n : "/account";
 const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
+const BUSY = "Troppi accessi in corso: riprova tra qualche secondo.";
+const refused = (r: "wrong" | "locked" | "busy") => r === "locked" ? LOCKED : r === "busy" ? BUSY : SIGNED_OUT_ERROR;
+// per address: the forms a person signs in with (ten, then one every six seconds), and the OAuth
+// endpoints Claude's clients call (thirty, then one every two seconds)
+const FORMS = new Buckets(10, 6_000), OAUTH = new Buckets(30, 2_000);
+const IP_HEADER = env("BRAIN_CLIENT_IP_HEADER")?.toLowerCase();
+/** Pure: which bucket a request draws from, if any. */
+const bucketOf = (method: string, p: string) =>
+  method !== "POST"
+    ? null
+    : p === "/account/login" || p === "/authorize" || p === "/invite"
+    ? FORMS
+    : p === "/token" || p === "/register"
+    ? OAUTH
+    : null;
 const TOTP = !DEV;
 const SITE: Site = {
   url: URL_,
@@ -183,9 +198,16 @@ const SITE_HOST = SITE.siteUrl !== URL_ ? new URL(SITE.siteUrl).host : null;
 const otpauth = (id: string, secret: string) =>
   `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
-async function handle(req: Request): Promise<Response> {
+async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
   const p = u.pathname;
+  const wait = bucketOf(req.method, p)?.take(ip) ?? 0;
+  if (wait) {
+    return new Response("too many requests\n", {
+      status: 429,
+      headers: { "retry-after": String(wait), "content-type": "text/plain", ...CORS },
+    });
+  }
   if (SITE_HOST && u.host === SITE_HOST) {
     if (p === "/privacy") return html(privacyPage(SITE), 200, { "x-robots-tag": "all" });
     const r = req.method === "GET" || req.method === "HEAD" ? await siteFile(SITE_DIR, p, SITE) : null;
@@ -220,12 +242,9 @@ async function handle(req: Request): Promise<Response> {
     const oauth = new URLSearchParams([...params].filter(([k]) => !["user", "passphrase", "code"].includes(k)));
     if (req.method === "GET") return html(authorizePage(check.client.name, oauth, TOTP, "", check.machine));
     const who = (params.get("user") ?? "").trim().toLowerCase();
-    const r = await auth.signIn(who, params.get("passphrase") ?? "", params.get("code") ?? "");
+    const r = await auth.signIn(who, params.get("passphrase") ?? "", params.get("code") ?? "", ip);
     if (r !== "ok") {
-      return html(
-        authorizePage(check.client.name, oauth, TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, check.machine),
-        401,
-      );
+      return html(authorizePage(check.client.name, oauth, TOTP, refused(r), check.machine), r === "busy" ? 503 : 401);
     }
     return new Response(null, {
       status: 302,
@@ -261,9 +280,9 @@ async function handle(req: Request): Promise<Response> {
     if (p === "/account/login" && req.method === "POST") {
       const f = new URLSearchParams(await req.text());
       const who = (f.get("user") ?? "").trim().toLowerCase();
-      const r = await auth.signIn(who, f.get("passphrase") ?? "", f.get("code") ?? "");
+      const r = await auth.signIn(who, f.get("passphrase") ?? "", f.get("code") ?? "", ip);
       const next = nextPage(f.get("next"));
-      if (r !== "ok") return html(signInPage(TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, next), 401);
+      if (r !== "ok") return html(signInPage(TOTP, refused(r), next), r === "busy" ? 503 : 401);
       return new Response(null, {
         status: 303,
         headers: { location: next, "set-cookie": SESSION_COOKIE(await auth.newSession(who)) },
@@ -426,9 +445,10 @@ const withCors = (r: Response) => {
   return new Response(r.body, { status: r.status, headers: h });
 };
 
-Deno.serve({ port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") }, async (req) => {
+Deno.serve({ port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") }, async (req, info) => {
   try {
-    return await handle(capped(req, bodyLimit(new URL(req.url).pathname)));
+    const ip = clientIp(req.headers, (info.remoteAddr as Deno.NetAddr).hostname, IP_HEADER);
+    return await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip);
   } catch (e) {
     if (isTooLarge(e)) return json({ error: "request body too large" }, 413);
     // what went wrong stays in the log: the answer carries only an id to find it there

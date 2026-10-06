@@ -87,14 +87,17 @@ Deno.test("bootstrap: the first account is the administrator with the credential
   assertThrows(() => users.setDisabled("alice", true), Error, "amministratore");
 });
 
-Deno.test("sign in: per account, five wrong attempts lock that account only", async () => {
+Deno.test("sign in: five wrong attempts lock that account from that address only", async () => {
   const { users, auth } = await fresh();
   const a = await ready(users, "ann"), b = await ready(users, "bob");
-  assertEquals(await auth.signIn("ann", PASS, await totp(a)), "ok");
-  for (let i = 0; i < 5; i++) assertEquals(await auth.signIn("ann", "sbagliata!!!!", "000000"), "wrong");
-  assertEquals(await auth.signIn("ann", PASS, await totp(a)), "locked");
-  assertEquals(await auth.signIn("bob", PASS, await totp(b)), "ok");
-  assertEquals(await auth.signIn(" BOB ", PASS, await totp(b)), "ok");
+  const X = "203.0.113.1", Y = "198.51.100.7";
+  assertEquals(await auth.signIn("ann", PASS, await totp(a), X), "ok");
+  for (let i = 0; i < 5; i++) assertEquals(await auth.signIn("ann", "sbagliata!!!!", "000000", X), "wrong");
+  assertEquals(await auth.signIn("ann", PASS, await totp(a), X), "locked");
+  // the owner, from anywhere else, still gets in: nobody can lock them out from outside
+  assertEquals(await auth.signIn("ann", PASS, await totp(a), Y), "ok");
+  assertEquals(await auth.signIn("bob", PASS, await totp(b), X), "ok");
+  assertEquals(await auth.signIn(" BOB ", PASS, await totp(b), X), "ok");
 });
 
 Deno.test("tokens: each belongs to its account; one account cannot revoke another's; disabled means no way in", async () => {
