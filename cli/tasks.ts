@@ -25,6 +25,7 @@ import {
 } from "../shared/mcp/lib/tasks.ts";
 import { brainAccount, brainStore, connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
 import { getSecret } from "../shared/mcp/lib/vault.ts";
+import { owner } from "../shared/mcp/lib/owner.ts";
 
 const SENT = `${STATE}/tasks-sent.json`;
 const it = uiLanguage(Deno.env.toObject()) === "it";
@@ -116,7 +117,7 @@ function print(title: string, xs: Task[]) {
       `    ${t.due && t.due !== dayOf(new Date()) ? `${ANSI.d}${t.due}${ANSI.x} ` : ""}${
         t.time ? `${ANSI.c}${t.time}${ANSI.x} ` : ""
       }${t.title}${t.project ? ` ${ANSI.d}[${t.project}]${ANSI.x}` : ""}${
-        t.owner && t.owner !== "samuel" ? ` ${ANSI.y}(${t.owner})${ANSI.x}` : ""
+        t.owner && t.owner !== owner().id ? ` ${ANSI.y}(${t.owner})${ANSI.x}` : ""
       }  ${ANSI.d}#${t.id}${ANSI.x}`,
     );
   }

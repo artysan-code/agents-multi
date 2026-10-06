@@ -4,7 +4,7 @@
 // such file (the brain service: CLAUDE_MULTI_OWNER_ID, CLAUDE_MULTI_OWNER_NAME, CLAUDE_MULTI_LANGUAGE),
 // which also wins over the file.
 //
-//   { "id": "samuel", "name": "Samuel", "language": "Italian" }
+//   { "id": "alice", "name": "Alice", "language": "English" }
 //
 // `id` is what a task's `owner` says when it is this person's to do: it is written into the task
 // files, so it does not change once tasks exist.
