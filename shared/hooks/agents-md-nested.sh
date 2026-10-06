@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# PreToolUse(Read|Edit|Write) — agents-md-nested: carica in contesto l'AGENTS.md
-# della cartella in cui stai per operare, la prima volta che ci entri.
+# PreToolUse(Read|Edit|Write) hook: loads the AGENTS.md of the folder the agent is about to work
+# in, the first time that folder is touched in a session.
 #
-# Perché esiste: la discovery nativa del root AGENTS.md è confermata (test empirico
-# 2026-09-03, Claude Code 2.1.258: sessione con solo AGENTS.md → contenuto letto).
-# Quella NESTED invece non si è attivata in nessuna delle due varianti provate
-# (né AGENTS.md né CLAUDE.md di sottocartella, in print mode) → non è una base su
-# cui costruire uno standard. Questo hook la rende deterministica, e in più vale
-# per subagent e print mode.
+# Why: Claude Code natively discovers the root AGENTS.md, but a NESTED one (AGENTS.md or
+# CLAUDE.md in a subfolder) was not picked up in empirical tests (Claude Code 2.1.258, print
+# mode), so it cannot be relied on. This hook makes it deterministic, and it also works for
+# subagents and print mode.
 #
-# Lazy per design: inietta solo la cartella toccata, una volta per sessione, così
-# venti mappe non diventano migliaia di token morti.
+# Lazy by design: it injects only the touched folder's file, once per session, so twenty maps
+# do not become thousands of dead tokens.
 #
-# NON blocca mai. Parte dello standard repository (wiki: skills/repo-standard).
+# Input: PreToolUse JSON on stdin (tool_input.file_path, session_id, cwd).
+# Output: hookSpecificOutput.additionalContext JSON on stdout. Never blocks; always exit 0.
 set -uo pipefail
 trap 'exit 0' EXIT
 
@@ -27,17 +26,17 @@ CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null); CWD="${CWD:-$PW
 DIR=$(dirname "$FILE")
 [ -d "$DIR" ] || exit 0
 
-# Radice oltre cui non risalire: il progetto (il suo AGENTS.md è già nativo).
+# Root to stop at: the project (its own AGENTS.md is already loaded natively).
 ROOT="${CLAUDE_PROJECT_DIR:-}"
 [ -z "$ROOT" ] && ROOT=$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null)
 [ -z "$ROOT" ] && ROOT="$CWD"
 ROOT=$(cd "$ROOT" 2>/dev/null && pwd -P) || exit 0
 DIR=$(cd "$DIR" 2>/dev/null && pwd -P) || exit 0
 
-# il file deve stare dentro la radice
+# the file must be inside the root
 case "$DIR/" in "$ROOT"/*) ;; *) exit 0 ;; esac
 
-# AGENTS.md più vicino, risalendo ma SENZA arrivare alla radice
+# Nearest AGENTS.md walking upwards, stopping BEFORE the root
 FOUND=""
 D="$DIR"
 while [ "$D" != "$ROOT" ] && [ "$D" != "/" ]; do
@@ -46,18 +45,17 @@ while [ "$D" != "$ROOT" ] && [ "$D" != "/" ]; do
 done
 [ -n "$FOUND" ] || exit 0
 
-# già iniettato in questa sessione?
+# already injected in this session?
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/claude-agents-md/$SESSION"
 KEY=$(printf '%s' "$FOUND" | md5sum | cut -d' ' -f1)
 [ -f "$STATE_DIR/$KEY" ] && exit 0
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 
-# cap di sicurezza: un AGENTS.md sproporzionato è un bug di quel repo, non un
-# motivo per allagare il contesto
+# Safety cap: an oversized AGENTS.md is a bug in that repo, not a reason to flood the context.
 BYTES=$(wc -c < "$FOUND" 2>/dev/null || echo 0)
 if [ "$BYTES" -gt 12000 ]; then
   : > "$STATE_DIR/$KEY"
-  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"AGENTS.md nested in %s è %s byte (>12k): non iniettato. Leggilo tu se serve, e valuta di accorciarlo — deve contenere solo ciò che non invecchia a ogni commit."}}\n' \
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"Nested AGENTS.md in %s is %s bytes (>12k): not injected. Read it yourself if needed, and consider shortening it: it should only contain what does not go stale with every commit."}}\n' \
     "${FOUND#$ROOT/}" "$BYTES"
   exit 0
 fi
@@ -68,7 +66,7 @@ BODY=$(cat "$FOUND")
 REL="${FOUND#$ROOT/}"
 
 jq -cn --arg rel "$REL" --arg body "$BODY" \
-  '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:("ISTRUZIONI DI CARTELLA — " + $rel + " (caricate perché stai operando in quella cartella; valgono sopra le convenzioni di root per i file che contiene):\n\n" + $body)}}' \
+  '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:("FOLDER INSTRUCTIONS — " + $rel + " (loaded because you are working in that folder; they take precedence over the root conventions for the files it contains):\n\n" + $body)}}' \
   2>/dev/null || exit 0
 
 exit 0

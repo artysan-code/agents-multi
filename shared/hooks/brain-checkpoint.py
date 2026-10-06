@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-# Stop hook: chiede a Claude di scrivere "il giusto" nel brain dopo un blocco di lavoro vero.
+# Stop hook: asks Claude to write "the right amount" to the brain after a real block of work.
 #
-# Scatta solo quando, dall'ultima scrittura nel brain o dall'ultima volta che ha chiesto, la
-# sessione ha modificato almeno EDITS file oppure ha fatto un commit, un push o un deploy. Allora
-# ferma la chiusura del turno una volta, con una domanda breve: Claude scrive la riga di diario,
-# aggiorna la pagina o le task, oppure non scrive niente se non c'è niente che conti. Su
-# chiacchiere, domande e letture non dice niente; non scatta due volte di fila (stop_hook_active).
+# Fires only when, since the last brain write or the last time it asked, the session has edited at
+# least EDITS files or made commits/pushes/deploys worth SHIPS. It then blocks the end of the turn
+# once ({"decision": "block", "reason": ...} on stdout) with a short prompt: Claude writes the
+# diary line, updates the page or the tasks, or writes nothing if nothing matters. It stays silent
+# on chat, questions and reads, and does not fire twice in a row (stop_hook_active) nor within GAP
+# minutes of the previous reminder.
 #
-# Lo stato (fin dove ha già guardato, per sessione) è in ~/.local/state/claude-multi/brain-checkpoint/.
-# Robustezza: exit 0 SEMPRE; su qualunque errore non decide niente.
+# State (how far the transcript was already scanned, per session) lives in
+# ~/.local/state/claude-multi/brain-checkpoint/.
+# Robustness: always exit 0; on any error it decides nothing.
 import json, os, re, sys, time
 
 EDITS = 8
@@ -20,12 +22,12 @@ BRAIN_WRITE = re.compile(r"(brain_(append|edit|write|move|restore|inbox_clear)|t
 SHIPPED = re.compile(r"\bgit\s+(commit|push)\b")
 
 REASON = (
-    "Prima di chiudere, il brain: {what}, e nel brain non hai ancora scritto niente. "
-    "Scrivi il giusto, se c'è: una riga di diario (brain_append) con il link al progetto per ciò che conta "
-    "(una decisione, un risultato, un cambio di stato); la pagina del progetto (brain_edit) se sono cambiati "
-    "stato o prossimi passi; tasks_add / tasks_update / tasks_done per ciò che resta aperto o è chiuso. "
-    "Niente passi di lavoro, niente dati dei clienti. Se non c'è niente che valga, non scrivere niente. "
-    "Poi chiudi come avresti fatto, senza ripetere il riepilogo."
+    "Before closing, the brain: {what}, and you have not written anything to the brain yet. "
+    "Write the right amount, if anything: a diary line (brain_append) with a link to the project for what matters "
+    "(a decision, a result, a change of state); the project page (brain_edit) if state or next steps changed; "
+    "tasks_add / tasks_update / tasks_done for what stays open or is now closed. "
+    "No work steps, no client data. If nothing is worth recording, write nothing. "
+    "Then close as you would have, without repeating the summary."
 )
 
 
@@ -94,9 +96,9 @@ def main():
 
     if len(edited) < EDITS and shipped < SHIPS:
         return
-    what = " e ".join(filter(None, [
-        f"hai modificato {len(edited)} file" if len(edited) >= EDITS else "",
-        "hai fatto commit, push o deploy" if shipped >= SHIPS else "",
+    what = " and ".join(filter(None, [
+        f"you edited {len(edited)} files" if len(edited) >= EDITS else "",
+        "you made commits, pushes or deploys" if shipped >= SHIPS else "",
     ]))
     os.makedirs(state_dir, exist_ok=True)
     with open(state_file, "w") as f:

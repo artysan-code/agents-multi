@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Global graphify-nudge — PreToolUse hook che spinge verso graphify
-# prima di search broad (grep/find/rg via Bash, oppure Grep/Glob nativi).
+# Global graphify-nudge: PreToolUse hook that steers toward graphify before a broad search
+# (grep/find/rg via Bash, or the native Grep/Glob tools).
 #
-# Non blocca: solo emette additionalContext.
-# Auto-disabling: no-op se graphify-out/graph.json non esiste nel progetto corrente.
+# Never blocks: only emits additionalContext (hookSpecificOutput JSON on stdout).
+# Self-disabling: no-op if graphify-out/graph.json does not exist in the current project.
 #
 # Repo-specific override: if $CLAUDE_PROJECT_DIR/.claude/hooks/graphify-nudge.sh exists,
 # this global hook NO-OPs (the project's local version takes precedence).
@@ -38,15 +38,16 @@ except: pass' 2>/dev/null || echo "")
   *) exit 0 ;;
 esac
 
-# Freshness: warn if graph > 7 days old
+# Freshness: warn if the graph is more than 7 days old
 NOW=$(date +%s)
 MTIME=$(stat -c %Y "$GRAPH" 2>/dev/null || echo "$NOW")
 AGE_DAYS=$(( (NOW - MTIME) / 86400 ))
 FRESH_WARN=""
 if [ "$AGE_DAYS" -gt 7 ]; then
-  FRESH_WARN=" Graph è di $AGE_DAYS giorni fa — considera \`graphify update .\` (AST-only, zero costo) o \`graphify rebuild .\` (semantico, ~\$0.05) prima della query se l'area è cambiata."
+  FRESH_WARN=" The graph is $AGE_DAYS days old: consider \`graphify update .\` (AST-only, no cost) or \`graphify rebuild .\` (semantic, ~\$0.05) before querying if the area has changed."
 fi
 
-cat <<EOF
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"graphify decision tree: discovery broad/concettuale → \`graphify query \\\"<domanda>\\\"\` o \`graphify explain \\\"<nodo>\\\"\` (BFS subgraph, tokens scoped). Simbolo specifico o chi lo chiama → \`grep -rn 'nome('\` con scope limitato. Pattern testuale letterale (TODO, env name, regex) → search nativa con scope limitato. Mai Read full su file ≥300 righe.${FRESH_WARN}"}}
-EOF
+MSG='graphify decision tree: broad or conceptual discovery → `graphify query "<question>"` or `graphify explain "<node>"` (BFS subgraph, tokens scoped). A specific symbol or its callers → `grep -rn '"'"'name('"'"'` with a narrow scope. A literal text pattern (TODO, env name, regex) → native search with a narrow scope. Never Read a whole file of 300+ lines.'
+# serialised by Python, never by hand: the message holds quotes and backticks
+MSG="$MSG$FRESH_WARN" python3 -c 'import json,os
+print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":os.environ["MSG"]}}, ensure_ascii=False))'

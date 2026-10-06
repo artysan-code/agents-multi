@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# SessionStart hook: dove guardare nel brain per la cartella in cui parte la sessione.
+# SessionStart hook: tells Claude where to look in the brain for the folder the session starts in.
 #
-# Il brain tiene una pagina per progetto in progetti/, con lo stesso percorso della cartella sotto
-# ~ (~/work/acme/site → progetti/work/acme/site). L'hook non va in rete e non ha token: dice a
-# Claude quale cartella del brain guardare e lo fa leggere a lui, con i suoi strumenti. La regola
-# completa è shared/rules/memory-brain.md.
+# The brain keeps one page per project under progetti/, with the same path as the folder under ~
+# (~/work/acme/site -> progetti/work/acme/site). The hook makes no network calls and holds no
+# token: it only names the brain folder to check and lets Claude read it with its own tools.
+# Output: hookSpecificOutput.additionalContext JSON on stdout. The full rule is in
+# shared/rules/memory-brain.md.
 #
-# Robustezza: exit 0 SEMPRE; senza jq o fuori da ~ non dice niente.
+# Robustness: always exit 0; without jq or outside ~ it says nothing.
 
 set -uo pipefail
 trap 'exit 0' EXIT
@@ -21,12 +22,12 @@ case "$dir" in
   "$HOME"/*) rel="${dir#"$HOME"/}" ;;
   *) exit 0 ;;
 esac
-# le cartelle di sistema e di configurazione non sono progetti
+# system and config folders are not projects
 case "$rel" in
   .*|downloads*|Downloads*|vault*|brains*) exit 0 ;;
 esac
 rel=$(printf '%s' "$rel" | tr '[:upper:]' '[:lower:]')
 
-ctx="Brain: questa cartella è ~/${rel}. La pagina del progetto sta in progetti/ con lo stesso percorso, o un livello sopra se questa è la repo dentro la cartella del cliente: guarda con brain_list (folder progetti/${rel%/*}) e leggila con brain_read prima di lavorare; le sue task con tasks_list (project). Se la pagina non c'è, proponi /brain-init a Samuel. Mentre lavori scrivi il giusto (shared/rules/memory-brain.md): una riga di diario per ciò che conta, la pagina quando cambia lo stato, le task per ciò che resta aperto."
+ctx="Brain: this folder is ~/${rel}. The project page lives in progetti/ with the same path, or one level up if this is the repo inside the client folder: look with brain_list (folder progetti/${rel%/*}) and read it with brain_read before working; its tasks with tasks_list (project). If the page does not exist, suggest /brain-init. While you work, write the right amount (shared/rules/memory-brain.md): a diary line for what matters, the page when state changes, tasks for what stays open."
 
 jq -n --arg ctx "$ctx" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$ctx}}'

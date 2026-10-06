@@ -10,8 +10,8 @@ if [ -f "${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks/typecheck-after-edit.sh" ]; t
   exec bash "${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks/typecheck-after-edit.sh"
 fi
 
-# Global default is OPT-IN (decisione D-a): evita 5-15s di lag dopo ogni Edit
-# sul monorepo. Abilita con: export CLAUDE_TYPECHECK=1
+# The global default is OPT-IN: it avoids 5-15s of lag after every Edit on a monorepo.
+# Enable with: export CLAUDE_TYPECHECK=1
 [ "${CLAUDE_TYPECHECK:-0}" = "1" ] || exit 0
 
 input=$(cat)
