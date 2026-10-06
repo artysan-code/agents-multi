@@ -44,21 +44,21 @@ Deno.test("fuse: reciprocal rank, what both lists rank high comes first", () => 
 
 Deno.test("Store: history, restore, deletion as a revision, links both ways, words", () => {
   const s = new Store(":memory:");
-  s.write("p/claude-multi", "# claude-multi\nVedi [[samuel]].", "test");
-  s.write("persone/samuel.md", "Preferisce l'italiano.", "test");
-  assertThrows(() => s.write("persone/samuel.md", "x", "test", 0), Error, "changed meanwhile");
-  s.write("persone/samuel.md", "Preferisce l'italiano e risposte brevi.", "claude:app", 1);
-  assertEquals(s.history("persone/samuel.md").map((h) => h.rev), [2, 1]);
-  assertEquals(s.links("persone/samuel.md").back, ["p/claude-multi.md"]);
-  assertEquals(s.links("p/claude-multi.md").out[0].path, "persone/samuel.md");
-  assertEquals(s.restore("persone/samuel.md", 1, "test").body, "Preferisce l'italiano.");
-  assertEquals(s.searchWords("italiano")[0].path, "persone/samuel.md");
+  s.write("p/claude-multi", "# claude-multi\nVedi [[alice]].", "test");
+  s.write("persone/alice.md", "Preferisce l'italiano.", "test");
+  assertThrows(() => s.write("persone/alice.md", "x", "test", 0), Error, "changed meanwhile");
+  s.write("persone/alice.md", "Preferisce l'italiano e risposte brevi.", "claude:app", 1);
+  assertEquals(s.history("persone/alice.md").map((h) => h.rev), [2, 1]);
+  assertEquals(s.links("persone/alice.md").back, ["p/claude-multi.md"]);
+  assertEquals(s.links("p/claude-multi.md").out[0].path, "persone/alice.md");
+  assertEquals(s.restore("persone/alice.md", 1, "test").body, "Preferisce l'italiano.");
+  assertEquals(s.searchWords("italiano")[0].path, "persone/alice.md");
   s.remove("p/claude-multi.md", "test");
   assertEquals(s.get("p/claude-multi.md"), null);
   assertEquals(s.history("p/claude-multi.md")[0].op, "delete");
   assertEquals(s.graph().edges.length, 0);
   s.write("tasks/t-1.md", "una task", "test");
-  assertEquals(s.list().map((d) => d.path), ["persone/samuel.md"]);
+  assertEquals(s.list().map((d) => d.path), ["persone/alice.md"]);
   assertEquals(s.list("", { tasks: true }).length, 2);
   s.close();
 });
@@ -104,14 +104,14 @@ const page = (title: string, rest = "Una frase che dice cos'è.\n\nContenuto.") 
 
 Deno.test("slugPath: lower case, no accents, dashes", () => {
   assertEquals(slugPath("Note/Città Già Fatte"), "note/citta-gia-fatte.md");
-  assertEquals(slugPath("/progetti/work/acme/Site.md"), "progetti/work/acme/site.md");
+  assertEquals(slugPath("/progetti/work/acme/PORTAL.md"), "progetti/work/acme/portal.md");
 });
 
 Deno.test("shapeErrors: areas, flat folders, diary days, title and sentence, length, code, secrets", () => {
   assertEquals(shapeErrors("note/arctis.md", page("Arctis")), []);
-  assertEquals(shapeErrors("progetti/work/acme/site.md", page("Site")), []);
+  assertEquals(shapeErrors("progetti/work/acme/portal.md", page("PORTAL")), []);
   assertEquals(shapeErrors("clienti/acme.md", page("Acme")), []);
-  assert(shapeErrors("clienti/acme/site.md", page("Site")).some((e) => e.includes("flat")));
+  assert(shapeErrors("clienti/acme/portal.md", page("PORTAL")).some((e) => e.includes("flat")));
   assert(shapeErrors("concepts/x.md", page("X"))[0].includes("one of"));
   assert(shapeErrors("note/audio/arctis.md", page("A")).some((e) => e.includes("flat")));
   assert(shapeErrors("diario/oggi.md", page("Oggi")).some((e) => e.includes("YYYY-MM-DD")));
@@ -162,7 +162,7 @@ Deno.test("diary lines: one sentence each, links not counted; a page tidied keep
 
 Deno.test("similarity: words in common, containment counts as the same", () => {
   assertEquals(similarity("Audio Arctis su Linux", "Arctis audio"), 1);
-  assert(similarity("Migrazione server OVH", "Ricetta della pizza") === 0);
+  assert(similarity("Migrazione server relay", "Ricetta della pizza") === 0);
 });
 
 Deno.test("check: a link to an existing page, near copies refused unless distinct", () => {
@@ -212,8 +212,8 @@ Deno.test("brainApi: pages by area, a page with links and versions, an old versi
   const ctx = { store: s, embed: { url: "http://127.0.0.1:9", model: "none" }, by: () => "test", changed: () => {} };
   const get = (q: string) => brainApi(ctx, new URL(`http://x/api/brain/${q}`));
   s.write("progetti/claude-multi.md", "# claude-multi\nIl setup. Vedi [[io/chi-sono]] e [[note/manca]].", "test");
-  s.write("io/chi-sono.md", "# Chi sono\nSamuel.", "test");
-  s.write("io/chi-sono.md", "# Chi sono\nSamuel, sviluppatore.", "claude:app");
+  s.write("io/chi-sono.md", "# Chi sono\nAlice.", "test");
+  s.write("io/chi-sono.md", "# Chi sono\nAlice, sviluppatore.", "claude:app");
   const v = (await get("state"))!.body as { version: string };
   s.write("tasks/t-1.md", "una task", "test");
   assertEquals(((await get("state"))!.body as { version: string }).version, v.version);
@@ -234,7 +234,7 @@ Deno.test("brainApi: pages by area, a page with links and versions, an old versi
   assertEquals(page.path, "io/chi-sono.md");
   assertEquals(page.links.back, ["progetti/claude-multi.md"]);
   assertEquals(page.versions.map((x) => x.rev), [2, 1]);
-  assertEquals(((await get("page?path=io/chi-sono&rev=1"))!.body as { body: string }).body, "# Chi sono\nSamuel.");
+  assertEquals(((await get("page?path=io/chi-sono&rev=1"))!.body as { body: string }).body, "# Chi sono\nAlice.");
   assertEquals((await get("page?path=nessuna"))!.status, 404);
   const h = (await get("health"))!.body as { broken_links: { link: string }[] };
   assertEquals(h.broken_links.map((b) => b.link), ["note/manca"]);
@@ -252,6 +252,6 @@ Deno.test("instructions: whose brain it is and the language, from the owner; nob
   assert(txt.startsWith("Ann's brain:"));
   assert(txt.includes("Write in Italian."));
   assert(txt.includes("Who Ann is (from io/"));
-  assert(!txt.includes("Samuel"));
+  assert(!txt.includes("Alice"));
   s.close();
 });

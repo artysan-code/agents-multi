@@ -28,18 +28,18 @@ Deno.test("seal/open: round trip, and an entry moved to another id does not open
 
 Deno.test("store: set, get, list without values, delete as a tombstone", async () => {
   const k = await v.importKey(v.newKeyBytes());
-  await v.setSecret("n8n", "ark", "key-1", "token", k);
-  await v.setSecret("coolify", "ark", "key-2", "token", k);
-  assertEquals(await v.getSecret("n8n", "ark", "token", k), "key-1");
+  await v.setSecret("n8n", "main", "key-1", "token", k);
+  await v.setSecret("coolify", "main", "key-2", "token", k);
+  assertEquals(await v.getSecret("n8n", "main", "token", k), "key-1");
   const files = [...Deno.readDirSync(`${dir}/secrets`)].map((f) => f.name);
   // file names say nothing about what is inside
   assert(files.every((f) => /^[0-9a-f]{32}\.json$/.test(f)));
   assert(!files.some((f) => f.includes("n8n")));
   const listed = await v.listSecrets(k);
-  assertEquals(listed.entries.map((e) => `${e.service}/${e.account}`), ["coolify/ark", "n8n/ark"]);
+  assertEquals(listed.entries.map((e) => `${e.service}/${e.account}`), ["coolify/main", "n8n/main"]);
   assert(!JSON.stringify(listed).includes("key-1"));
-  assertEquals(await v.deleteSecret("n8n", "ark", "token", k), true);
-  assertEquals(await v.getSecret("n8n", "ark", "token", k), null);
+  assertEquals(await v.deleteSecret("n8n", "main", "token", k), true);
+  assertEquals(await v.getSecret("n8n", "main", "token", k), null);
   // the file stays, rewritten: a deletion travels through Syncthing as a modification
   assertEquals([...Deno.readDirSync(`${dir}/secrets`)].length, 2);
   assertEquals((await v.listSecrets(k)).entries.length, 1);

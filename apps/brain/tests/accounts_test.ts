@@ -73,18 +73,18 @@ Deno.test("bootstrap: the first account is the administrator with the credential
   const { users } = await fresh();
   const secret = base32Encode(crypto.getRandomValues(new Uint8Array(20)));
   await users.bootstrap({
-    id: "samuel",
-    name: "Samuel",
+    id: "alice",
+    name: "Alice",
     language: "Italian",
     passphrase: PASS,
     totpSecret: secret,
     backupKey: KEY,
   });
   await users.bootstrap({ id: "other", name: "Other", language: "Italian", passphrase: PASS, totpSecret: secret });
-  assertEquals(users.list().map((u) => [u.id, u.admin, u.ready]), [["samuel", true, true]]);
-  assertEquals(await users.backupKey("samuel"), KEY);
-  assert(await users.verify("samuel", PASS, await totp(secret)));
-  assertThrows(() => users.setDisabled("samuel", true), Error, "amministratore");
+  assertEquals(users.list().map((u) => [u.id, u.admin, u.ready]), [["alice", true, true]]);
+  assertEquals(await users.backupKey("alice"), KEY);
+  assert(await users.verify("alice", PASS, await totp(secret)));
+  assertThrows(() => users.setDisabled("alice", true), Error, "amministratore");
 });
 
 Deno.test("sign in: per account, five wrong attempts lock that account only", async () => {
@@ -156,7 +156,7 @@ Deno.test("OAuth: the code carries the account that signed in to the tokens", as
 
 Deno.test("adopt: the live tokens of a one-person brain become the first account's", async () => {
   const { users, auth } = await fresh();
-  await ready(users, "samuel");
+  await ready(users, "alice");
   const old = new DatabaseSync(":memory:");
   old.exec(`create table oauth_clients (id text primary key, name text, redirects text not null, created text not null);
     create table tokens (hash text primary key, kind text not null, client text, name text, family text, expires integer, created text not null, used text, revoked integer not null default 0);`);
@@ -168,8 +168,8 @@ Deno.test("adopt: the live tokens of a one-person brain become the first account
   old.prepare("insert into tokens (hash, kind, name, created, revoked) values (?, 'personal', 'vecchio', 'x', 1)").run(
     await sha256(gone),
   );
-  assertEquals(auth.adopt(old, "samuel"), 1);
-  assertEquals(await auth.caller(bearer(live)), { user: "samuel", label: "token:fisso" });
+  assertEquals(auth.adopt(old, "alice"), 1);
+  assertEquals(await auth.caller(bearer(live)), { user: "alice", label: "token:fisso" });
   assertEquals(await auth.caller(bearer(gone)), null);
   assertEquals(auth.client("c1")?.name, "Claude");
 });
@@ -194,11 +194,11 @@ Deno.test("tenants: one file per account, ids that are not accounts refused, not
 
 Deno.test("invite: the first account of a new service is the administrator, invited like anyone else", async () => {
   const { users } = await fresh();
-  const link = await users.invite("samuel", "Samuel", "Italian", true);
-  assertEquals([users.get("samuel")?.admin, users.get("samuel")?.ready], [true, false]);
+  const link = await users.invite("alice", "Alice", "Italian", true);
+  assertEquals([users.get("alice")?.admin, users.get("alice")?.ready], [true, false]);
   const inv = (await users.invitation(link))!;
   await users.accept(link, PASS, await totp(inv.totpSecret));
-  assertEquals(users.get("samuel")?.ready, true);
+  assertEquals(users.get("alice")?.ready, true);
   assertEquals((await users.invite("ann", "Ann", "Italian")).length > 20 && users.get("ann")?.admin, false);
 });
 

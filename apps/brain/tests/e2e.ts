@@ -132,46 +132,46 @@ ok(
 );
 
 let w = await call("brain_write", {
-  path: "persone/Samuel",
-  body: "# Samuel\n\nSviluppatore, lavora con Claude ogni giorno. Preferisce l'italiano e risposte compatte.",
+  path: "persone/Alice",
+  body: "# Alice\n\nSviluppatore, lavora con Claude ogni giorno. Preferisce l'italiano e risposte compatte.",
 });
-ok(w.title === "Samuel" && w.written === "persone/samuel.md", "create the first page (nothing yet to link)");
+ok(w.title === "Alice" && w.written === "persone/alice.md", "create the first page (nothing yet to link)");
 w = await call("brain_write", { path: "concepts/x", body: "# X\n\nFrase." });
 ok(w.refused && /one of/.test(w.errors[0]), "a page outside the seven areas is refused");
 w = await call("brain_write", {
   path: "progetti/claude-multi",
-  body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria.",
+  body: "# claude-multi\n\nL'assistente globale di Alice: console, task e memoria.",
 });
 ok(w.refused && /link at least one/.test(w.errors.join()), "a page without links is refused");
 w = await call("brain_write", {
   path: "progetti/claude-multi",
-  body: "# claude-multi\n\nL'assistente globale di Samuel: console, task e memoria. Vedi [[persone/samuel]].",
+  body: "# claude-multi\n\nL'assistente globale di Alice: console, task e memoria. Vedi [[persone/alice]].",
   base_rev: 0,
 });
 ok(w.rev === 1 && w.written === "progetti/claude-multi.md", "create a linked page");
 w = await call("brain_write", {
   path: "progetti/claude-multi-console",
-  body: "# Claude multi\n\nAltro. Vedi [[persone/samuel]].",
+  body: "# Claude multi\n\nAltro. Vedi [[persone/alice]].",
 });
 ok(w.refused && w.similar?.[0]?.path === "progetti/claude-multi.md", "a near copy is refused with the candidate");
 const ap = await call("brain_append", { text: "Provato il cervello, vedi [[progetti/claude-multi]]" });
 ok(/^diario\//.test(ap.added), "append to today's diary");
 w = await call("brain_write", {
   path: "progetti/claude-multi.md",
-  body: "# claude-multi\n\nAltro testo. Vedi [[persone/samuel]].",
+  body: "# claude-multi\n\nAltro testo. Vedi [[persone/alice]].",
   base_rev: 0,
 });
 ok(!!w.error && /changed meanwhile/.test(w.error), "base_rev refuses to overwrite");
-const read = await call("brain_read", { path: "persone/samuel" });
+const read = await call("brain_read", { path: "persone/alice" });
 ok(read.links.back[0] === "progetti/claude-multi.md", "backlink resolved by name");
 const e0 = await call("brain_edit", {
-  path: "persone/samuel.md",
+  path: "persone/alice.md",
   find: "risposte compatte",
   replace: "risposte compatte e concrete",
 });
 ok(e0.refused && /link at least one/.test(e0.errors.join()), "an edit that leaves a page without links is refused");
 const e = await call("brain_edit", {
-  path: "persone/samuel.md",
+  path: "persone/alice.md",
   find: "risposte compatte.",
   replace: "risposte compatte, vedi [[progetti/claude-multi]].",
 });
@@ -179,12 +179,12 @@ ok(e.rev === 2, "edit a passage");
 await new Promise((res) => setTimeout(res, 2500)); // the indexer embeds in the background
 const s1 = await call("brain_search", { query: "in che idioma devo parlargli" });
 ok(
-  s1.results.slice(0, 2).some((x: { path: string }) => x.path === "persone/samuel.md") && !s1.note,
+  s1.results.slice(0, 2).some((x: { path: string }) => x.path === "persone/alice.md") && !s1.note,
   `search by meaning: ${s1.results.map((x: { path: string }) => x.path).join(", ")}${s1.note ? ` (${s1.note})` : ""}`,
 );
-const h = await call("brain_history", { path: "persone/samuel.md" });
+const h = await call("brain_history", { path: "persone/alice.md" });
 ok(h.versions.length === 2 && /^claude:Claude Code/.test(h.versions[0].by), `history with author ${h.versions[0].by}`);
-const rs = await call("brain_restore", { path: "persone/samuel.md", rev: 1 });
+const rs = await call("brain_restore", { path: "persone/alice.md", rev: 1 });
 ok(rs.rev === 3, "restore an old version on top");
 await call("brain_delete", { path: "progetti/claude-multi.md" });
 ok(

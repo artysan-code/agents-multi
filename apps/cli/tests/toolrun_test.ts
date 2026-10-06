@@ -11,7 +11,7 @@ Deno.test("parseRun: only the service's own tool, never its login", () => {
     "--env",
     "prod",
   ]]);
-  assertEquals(parseRun(["cloudflare", "artysan", "--", "wrangler", "tail"]).account, "artysan");
+  assertEquals(parseRun(["cloudflare", "main", "--", "wrangler", "tail"]).account, "main");
   assertThrows(() => parseRun(["cloudflare", "--", "env"]), Error, "only to wrangler");
   assertThrows(() => parseRun(["cloudflare", "--", "pnpm", "wrangler", "deploy"]), Error, "only to wrangler");
   assertThrows(() => parseRun(["cloudflare", "--", "wrangler", "login"]), Error, "vault");
@@ -55,8 +55,8 @@ Deno.test("wranglerDestructive: deletions, rollbacks, remote migrations and dest
 
 Deno.test("profileFrom: the server's profile, else the Claude configuration directory under the runtime", () => {
   assertEquals(
-    profileFrom({ profile: "acme", configDir: "/h/.claude-multi/personal" }, "/h/.claude-multi"),
-    "acme",
+    profileFrom({ profile: "work", configDir: "/h/.claude-multi/personal" }, "/h/.claude-multi"),
+    "work",
   );
   assertEquals(profileFrom({ configDir: "/h/.claude-multi/personal/" }, "/h/.claude-multi"), "personal");
   assertEquals(profileFrom({ configDir: "/h/.claude" }, "/h/.claude-multi"), undefined);

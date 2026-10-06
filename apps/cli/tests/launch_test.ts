@@ -8,7 +8,7 @@ Deno.test("parseLaunchArgs: run takes --env and --bind pairs, then the command a
     parseLaunchArgs([
       "run",
       "n8n",
-      "ark",
+      "main",
       "--env",
       "URL=https://x",
       "--env",
@@ -23,7 +23,7 @@ Deno.test("parseLaunchArgs: run takes --env and --bind pairs, then the command a
     {
       mode: "run",
       service: "n8n",
-      account: "ark",
+      account: "main",
       vars: { URL: "https://x", KEY: "{secret}" },
       binds: {},
       command: "npx",

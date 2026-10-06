@@ -33,7 +33,7 @@ Deno.test("desktopVersions: temporary and foreign directories are ignored", () =
 Deno.test("desktopVariantOf: the user-space build is the default profile, a rebuilt one names its own", () => {
   const H = "/home/u/.local/lib";
   assertEquals(desktopVariantOf(`${H}/claude-desktop/versions/2.9939.4/claude-desktop`, "personal"), "personal");
-  assertEquals(desktopVariantOf(`${H}/claude-desktop-agency/claude-desktop-agency`, "personal"), "agency");
+  assertEquals(desktopVariantOf(`${H}/claude-desktop-client/claude-desktop-client`, "personal"), "client");
   assertEquals(desktopVariantOf("/usr/lib/claude-desktop/claude-desktop", "personal"), "personal");
   assertEquals(desktopVariantOf(`${H}/claude-desktop/versions/2.9939.4/chrome_crashpad_handler`, "personal"), null);
   assertEquals(desktopVariantOf("/home/u/.local/share/claude/versions/2.1.285", "personal"), null);

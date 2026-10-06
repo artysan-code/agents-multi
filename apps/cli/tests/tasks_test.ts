@@ -4,7 +4,7 @@ import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 
 const dir = await Deno.makeTempDir();
 Deno.env.set("CLAUDE_MULTI_TASKS", dir);
-Deno.env.set("CLAUDE_MULTI_OWNER_ID", "samuel"); // whose tasks these are (owner.ts), whatever this machine's config says
+Deno.env.set("CLAUDE_MULTI_OWNER_ID", "alice"); // whose tasks these are (owner.ts), whatever this machine's config says
 const T = await import("../../../shared/mcp/lib/tasks.ts");
 
 const at = (s: string) => new Date(s); // local time, no Z
@@ -14,7 +14,7 @@ const task = (over: Partial<import("../../../shared/mcp/lib/tasks.ts").Task>) =>
   status: "todo" as const,
   created: "2026-09-29T08:00:00.000Z",
   updated: "2026-09-29T08:00:00.000Z",
-  owner: "samuel",
+  owner: "alice",
   ...over,
 });
 
@@ -89,7 +89,7 @@ Deno.test("dueBriefs: reached today, within the hour, once", () => {
 Deno.test("store: add, complete a repeating task and get the next one, drop instead of delete", async () => {
   const now = at("2026-09-30T10:00:00");
   const t = await T.addTask({ title: "Backup", due: "2026-09-30", repeat: "weekly" }, now);
-  assertEquals(t.owner, "samuel");
+  assertEquals(t.owner, "alice");
   const { task: done, next } = await T.updateTask(t.id, { status: "done" }, now);
   assertEquals(done.status, "done");
   assertEquals(next?.due, "2026-10-07");
@@ -264,14 +264,14 @@ Deno.test("project fields: ref, stage, parent, blocked_by, labels, detail checke
 Deno.test("addNote / notesOf: dated lines in Log and Decisions, before the attachments; editNotes replaces one passage", () => {
   let n = T.addAttachment("Descrizione", "https://x.test/a", "spec");
   n = T.addNote(n, "log", "su dev\ncon la CI verde", "2026-10-05");
-  n = T.addNote(n, "decisions", "opzione C (Samuel)", "2026-10-05");
+  n = T.addNote(n, "decisions", "opzione C (Alice)", "2026-10-05");
   n = T.addNote(n, "log", "in prod", "2026-10-06");
   assert(n.indexOf("## Log") < n.indexOf("## Attachments") && n.indexOf("## Decisions") < n.indexOf("## Attachments"));
   assertEquals(T.notesOf(n, "log"), [{ day: "2026-10-05", text: "su dev con la CI verde" }, {
     day: "2026-10-06",
     text: "in prod",
   }]);
-  assertEquals(T.notesOf(n, "decisions"), [{ day: "2026-10-05", text: "opzione C (Samuel)" }]);
+  assertEquals(T.notesOf(n, "decisions"), [{ day: "2026-10-05", text: "opzione C (Alice)" }]);
   assertEquals(T.attachments(n).length, 1);
   assertEquals(T.editNotes("a b a", "b", "c"), "a c a");
   assertThrows(() => T.editNotes("a b a", "a", "c"), Error, "2 times");

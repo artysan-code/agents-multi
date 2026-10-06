@@ -7,7 +7,7 @@ import { toPrune } from "../brain-backup.ts";
 Deno.test("brainAccount: the brain account a profile sees, none without one", () => {
   const all = [
     { service: "brain", name: "brain", url: "https://brain.example" },
-    { service: "coolify", name: "ark", url: "https://ark.example" },
+    { service: "coolify", name: "main", url: "https://main.example" },
   ];
   assertEquals(brainAccount("acme", all)?.name, "brain");
   assertEquals(brainAccount(undefined, all)?.name, "brain"); // the console has no profile
@@ -54,7 +54,7 @@ Deno.test("scoped: a work profile sees and writes only the tasks of its projects
     ...(project ? { project } : {}),
   });
   const all = [
-    mk("t-1", "work/acme/site"),
+    mk("t-1", "work/acme/portal"),
     mk("t-2", "work/acme"),
     mk("t-3", "work"),
     mk("t-4", "work/acmex"),

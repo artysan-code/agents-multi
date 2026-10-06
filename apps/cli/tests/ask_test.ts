@@ -26,7 +26,7 @@ Deno.test("asArg: a leading dash is not read as an option", () => {
 });
 
 Deno.test("promptFor: a new task names its project, says there is none, or leaves it to Claude", () => {
-  assert(promptFor("newtask", "now", "work/acme/site").includes('"work/acme/site"'));
+  assert(promptFor("newtask", "now", "work/acme/portal").includes('"work/acme/portal"'));
   assert(promptFor("newtask", "now", null, true).includes("no project (a simple thing to do)"));
   assert(promptFor("newtask", "now", null).includes("work out from what they say"));
   assert(promptFor("ask", "now").includes("[[code:PATH]]"));

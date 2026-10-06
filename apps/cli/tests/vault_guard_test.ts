@@ -28,10 +28,10 @@ async function decide(command: string, tool: string, path?: string): Promise<str
 const L =
   "deno run --quiet --no-lock --allow-read=/v --allow-env=HOME --allow-run=/usr/bin/secret-tool /h/.claude-multi/shared/mcp/lib/launch.ts";
 const CASES: [string, string, string][] = [
-  ["deny", `${L} headers cloudflare artysan 'Authorization=Bearer {secret}'`, "Bash"],
-  ["deny", `CLAUDE_MULTI_PROFILE=personal ${L} 'headers' 'cloudflare' 'artysan'`, "Bash"],
-  ["deny", `${L} "run" gitea artysan -- env`, "Bash"],
-  ["deny", `cd /x && deno run -A shared/mcp/lib/launch.ts headers n8n ark`, "Bash"],
+  ["deny", `${L} headers cloudflare main 'Authorization=Bearer {secret}'`, "Bash"],
+  ["deny", `CLAUDE_MULTI_PROFILE=personal ${L} 'headers' 'cloudflare' 'main'`, "Bash"],
+  ["deny", `${L} "run" gitea main -- env`, "Bash"],
+  ["deny", `cd /x && deno run -A shared/mcp/lib/launch.ts headers n8n main`, "Bash"],
   ["allow", "grep -n headers shared/mcp/lib/launch.ts", "Bash"],
   ["allow", "sed -n 1,40p shared/mcp/lib/launch.ts", "Bash"],
   ["allow", "deno test -A apps/cli/tests/launch_test.ts", "Bash"],

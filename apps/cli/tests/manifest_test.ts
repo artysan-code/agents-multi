@@ -78,10 +78,10 @@ Deno.test("launchers: every profile gets a command, unique across profiles", asy
 
 Deno.test("commandOf: the manifest wins, otherwise claude-<name>", () => {
   const base = { skills: "all", agents: "all", commands: "all" } as const;
-  assertEquals(commandOf("acme", { ...base }), "claude-acme");
-  assertEquals(commandOf("acme", { ...base, command: "claude-oto" }), "claude-oto");
+  assertEquals(commandOf("work", { ...base }), "claude-work");
+  assertEquals(commandOf("work", { ...base, command: "claude-wk" }), "claude-wk");
   // A blank command is not a command: fall back rather than link an empty name.
-  assertEquals(commandOf("acme", { ...base, command: "  " }), "claude-acme");
+  assertEquals(commandOf("work", { ...base, command: "  " }), "claude-work");
 });
 
 Deno.test("launchers: exactly one profile answers to the bare `claude` default", async () => {

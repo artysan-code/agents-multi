@@ -19,17 +19,17 @@ Deno.test("frontmatter: scalars, quoted values and inline lists; the body after 
 Deno.test("wikilinks: plain, labelled, with a heading, .md tolerated", () => {
   assertEquals(
     wikilinks(
-      "see [[projects/ark/ark]], [[index|the index]] and [[references/claude-update-gate#Pezzi]] or [[hot.md]]",
+      "see [[projects/relay/relay]], [[index|the index]] and [[references/claude-update-gate#Pezzi]] or [[hot.md]]",
     ),
-    ["projects/ark/ark", "index", "references/claude-update-gate", "hot"],
+    ["projects/relay/relay", "index", "references/claude-update-gate", "hot"],
   );
 });
 
 Deno.test("resolveLink: full path, unique bare name, ambiguous or unknown → nothing", () => {
-  const paths = ["projects/ark/ark", "projects/claude-multi/claude-multi", "index", "a/readme", "b/readme"];
+  const paths = ["projects/relay/relay", "projects/claude-multi/claude-multi", "index", "a/readme", "b/readme"];
   const byName = new Map<string, string[]>();
   for (const p of paths) byName.set(p.split("/").pop()!, [...(byName.get(p.split("/").pop()!) ?? []), p]);
-  assertEquals(resolveLink("projects/ark/ark", paths, byName), "projects/ark/ark");
+  assertEquals(resolveLink("projects/relay/relay", paths, byName), "projects/relay/relay");
   assertEquals(resolveLink("claude-multi", paths, byName), "projects/claude-multi/claude-multi");
   assertEquals(resolveLink("readme", paths, byName), null);
   assertEquals(resolveLink("nowhere", paths, byName), null);

@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 
 Deno.env.set("CLAUDE_MULTI_TASKS", await Deno.makeTempDir());
-Deno.env.set("CLAUDE_MULTI_OWNER_ID", "samuel");
+Deno.env.set("CLAUDE_MULTI_OWNER_ID", "alice");
 const { registerTaskTools } = await import("../../../shared/mcp/tasks/tools.ts");
 
 type Handler = (input: Record<string, unknown>) => Promise<{ content: { text: string }[] }>;
@@ -45,12 +45,12 @@ Deno.test("task tools: a project's tasks by ref, phases and blockers, log and de
     ).blocked,
   );
 
-  await call("tasks_note", { id: "TASK-430", section: "decisions", text: "ruoli in DB (Samuel)" });
+  await call("tasks_note", { id: "TASK-430", section: "decisions", text: "ruoli in DB (Alice)" });
   await call("tasks_note", { id: "TASK-430", section: "log", text: "F0 su dev" });
   await call("tasks_edit", { id: "TASK-430", find: "F0 su dev", replace: "F0 su dev, CI verde" });
   const notes = (await call("tasks_get", { id: big.id })).task.notes as string;
   assert(
-    /## Decisions\n\n- \d{4}-\d{2}-\d{2} · ruoli in DB \(Samuel\)/.test(notes) &&
+    /## Decisions\n\n- \d{4}-\d{2}-\d{2} · ruoli in DB \(Alice\)/.test(notes) &&
       notes.includes("· F0 su dev, CI verde"),
   );
 

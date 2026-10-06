@@ -83,14 +83,14 @@ Deno.test("readPayload: plain text preferred, HTML as text otherwise, attachment
       {
         mimeType: "multipart/alternative",
         parts: [
-          { mimeType: "text/html", body: { data: b64url("<p>Ciao <b>Samuel</b></p><p>riga</p>") } },
+          { mimeType: "text/html", body: { data: b64url("<p>Ciao <b>Alice</b></p><p>riga</p>") } },
         ],
       },
       { mimeType: "application/pdf", filename: "fattura.pdf", body: { size: 1234, attachmentId: "att-1" } },
     ],
   };
   const r = readPayload(p);
-  assertEquals(r.text, "Ciao Samuel\nriga");
+  assertEquals(r.text, "Ciao Alice\nriga");
   assertEquals(r.attachments, [{ name: "fattura.pdf", size: 1234, mime: "application/pdf", attachmentId: "att-1" }]);
   assertEquals(htmlToText("a&nbsp;&amp;&nbsp;b<br>c"), "a & b\nc");
 });

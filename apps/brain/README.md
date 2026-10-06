@@ -30,7 +30,7 @@ in `BRAIN_DATA/accounts.db`.
 
 Seven areas, named the way the owner thinks: `io/` (who he is, how he works — of each page, what stands
 above its first `##` goes into the instructions every connected Claude receives), `progetti/` (one page
-per project, the same path as his folder: `progetti/work/acme/site.md`), `clienti/` (who he works for, directly or through another
+per project, the same path as his folder: `progetti/work/acme/portal.md`), `clienti/` (who he works for, directly or through another
 client: the relationship and the people, linking the projects), `persone/` (people only), `note/` (how
 things are done), `diario/` (one page a day, added to a line at a time and only ever tidied) and `inbox/` (said in passing, to sort).
 
@@ -83,7 +83,7 @@ holds the brain.
 
 | Variable                                           |                                                                                                                                                                                   |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BRAIN_URL`                                        | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain                                                                      |
+| `BRAIN_URL`                                        | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain                                                                     |
 | `BRAIN_MASTER_KEY`                                 | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost                                      |
 | `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL`             | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`)                                                                                                              |
 | `BRAIN_DATA`                                       | where `accounts.db` and `users/` live (`/data`)                                                                                                                                   |
@@ -103,7 +103,7 @@ of its Claude connections and machines are carried over.
 On Coolify: a Docker Compose application from this repository, base directory `/brain`, compose file
 `/compose.yaml` (the service and Ollama, which pulls `bge-m3` into its own volume on first start),
 the domain on `brain`, `BRAIN_MASTER_KEY` and `BRAIN_ADMIN_ID` in Coolify. The repository is cloned over SSH
-straight from the server's address (`git@<ip>:2222/…`): `git.example.com` is behind Cloudflare,
+straight from the server's address (`git@<ip>:2222/…`): your Git host (`git.example.com`) may be behind Cloudflare,
 which does not carry SSH. The secrets are made and typed in by the owner, never passed
 through a chat.
 

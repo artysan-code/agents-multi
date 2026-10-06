@@ -6,8 +6,8 @@ const compile = (lines: string[]) => lines.map(compilePattern).filter((c) => c !
 
 Deno.test("stignore: the raw '#include' line carries no rule, the expanded patterns do", () => {
   // git_guard must not treat raw '#include' lines as rules (that would mark every .git as synced).
-  assertEquals(isIgnored("artysan/artysan-me/.git", compile(["#include .stignore-common"])), false);
-  assertEquals(isIgnored("artysan/artysan-me/.git", compile(["(?d).stversions", "**/.git"])), true);
+  assertEquals(isIgnored("alice/alice-site/.git", compile(["#include .stignore-common"])), false);
+  assertEquals(isIgnored("alice/alice-site/.git", compile(["(?d).stversions", "**/.git"])), true);
 });
 
 Deno.test("stignore: '**/' also matches zero directories", () => {

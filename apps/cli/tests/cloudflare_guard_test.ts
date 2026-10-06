@@ -7,7 +7,7 @@ const call = (opts: string) => `async () => { const r = await cloudflare.request
 Deno.test("classify: reads pass without a question — GET, HEAD, or no method at all", () => {
   assertEquals(classify(call(`{ method: "GET", path: \`/zones/\${z}/dns_records\` }`)).decision, "allow");
   assertEquals(classify(call(`{ method: 'head', path: "/zones" }`)).decision, "allow");
-  assertEquals(classify(call(`{ path: "/zones?name=artysan.me" }`)).decision, "allow");
+  assertEquals(classify(call(`{ path: "/zones?name=example.com" }`)).decision, "allow");
 });
 
 Deno.test("classify: any deletion is denied, whatever spelling or shape", () => {

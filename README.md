@@ -180,7 +180,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | Command                                                               | What it does                                                                                                                                                 |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `claude`                                                              | Claude Code on the default profile                                                                                                                           |
-| `claude-agency`, `claude-acme`                                      | Claude Code on that profile (each profile declares its own `command`)                                                                                        |
+| `claude-work`, `claude-client`                                        | Claude Code on that profile (each profile declares its own `command`)                                                                                        |
 | `claude-multi install [--dry-run]`                                    | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent                                                              |
 | `claude-multi settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                       |
 | `claude-multi doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears          |
@@ -392,7 +392,7 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
 ### Google (Gmail, Calendar, Drive)
 
 The `google` server works on every Google account in `accounts.json` (service `google`: personal,
-acme…), each profile seeing its own. One OAuth client serves them all: create it once in a Google
+client…), each profile seeing its own. One OAuth client serves them all: create it once in a Google
 Cloud project (APIs: Gmail, Calendar, Drive; consent screen _External_ and **published** — in
 _Testing_ refresh tokens expire after seven days; client type _Desktop app_), download its JSON and
 import it (console › Connections, or `claude-multi google client <file.json>`). Then each account:
@@ -417,14 +417,14 @@ token goes to the vault and the address next to the account's name.
 
 ### Tasks
 
-Samuel's tasks live in his brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
+The owner's tasks live in their brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
 are files in `~/brains/tasks/items` (`CLAUDE_MULTI_TASKS`), as they were until 2026-10-02;
 `claude-multi tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
 `settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
-completing one creates the next) and an owner — who has to move: `samuel`, `claude`, or someone else,
+completing one creates the next) and an owner — who has to move: `alice`, `claude`, or someone else,
 and then it is waiting on them. Nothing is deleted: a task that no longer matters is `dropped`.
 
 - **The body is plain Markdown**: a description, a checklist of steps (`- [ ]` / `- [x]`, whose
@@ -438,7 +438,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   `labels`, and `detail`: where the full story lives when the project keeps it (a file of the
   repository, relative to the project's folder, a URL, a brain page). The brain holds the card of
   every task; how much detail goes in it is the project's choice.
-- **Projects are folders**: a task's project is its folder under `~` (`work/acme/site`), or a bare
+- **Projects are folders**: a task's project is its folder under `~` (`work/acme/portal`), or a bare
   name that resolves to the shallowest folder with that name (`apps/cli/projects.ts`; the roots are
   `projectRoots` in the settings, by default `personal`, `work`, `university`).
 - The **`tasks` MCP server** is in every profile, on the CLI and in Desktop (the brain connector
@@ -468,7 +468,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   its arguments replaced by those accounts' hosts (its `--allow-net`). A server that is not ours is
   one per account instead ([above](#servers-that-are-not-ours-one-per-account)).
 - **Secrets** are in the vault, `~/vault/claude-multi` (a Syncthing folder: they travel between
-  machines already encrypted, ark relays them without reading them). One file per secret,
+  machines already encrypted, a relay machine carries them without reading them). One file per secret,
   AES-GCM with a fresh IV per write, named by an HMAC so the names say nothing. The key is in each
   machine's keyring (Secret Service: KWallet here), so nothing is typed at login.
 - **Deleting** a secret rewrites it as a tombstone instead of removing the file: through an encrypted

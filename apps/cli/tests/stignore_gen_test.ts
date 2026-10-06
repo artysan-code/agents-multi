@@ -37,12 +37,12 @@ Deno.test("stignore-gen: a repository block lets only the files git ignores on p
 });
 
 Deno.test("stignore-gen: exceptions written above the markers match first", () => {
-  const manual = "!/bithub/CLAUDE.md\n/site/.env\n";
-  const c = compile(render(manual, ["bithub", "site"]));
+  const manual = "!/bithub/CLAUDE.md\n/portal/.env\n";
+  const c = compile(render(manual, ["bithub", "portal"]));
   assertEquals(isIgnored("bithub/CLAUDE.md", c), false);
   assertEquals(isIgnored("bithub/lesson.md", c), true);
-  assertEquals(isIgnored("site/.env", c), true); // tracked by git: kept out despite the block's re-include
-  assertEquals(isIgnored("site/.env.local", c), false);
+  assertEquals(isIgnored("portal/.env", c), true); // tracked by git: kept out despite the block's re-include
+  assertEquals(isIgnored("portal/.env.local", c), false);
 });
 
 Deno.test("stignore-gen: the section only grows unless pruned", () => {
