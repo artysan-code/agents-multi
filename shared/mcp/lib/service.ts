@@ -2,7 +2,7 @@
 // `account` argument of each tool, and the secret of the account a call means, read from the vault
 // when first needed and kept in memory for the life of the process only.
 
-import { z } from "npm:zod@^3.23";
+import { z } from "npm:zod@4.6.5";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
 

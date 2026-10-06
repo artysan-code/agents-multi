@@ -1,5 +1,12 @@
 {
   "version": "0.1.0",
+  "imports": {
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@1.32.1",
+    "zod": "npm:zod@4.6.5",
+    "unpdf": "npm:unpdf@1.8.1",
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/path": "jsr:@std/path@1"
+  },
   "tasks": {
     "check": "bash scripts/check.sh",
     "test": "CLAUDE_MULTI_CONFIG=cli/tests/fixtures/config deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 cli/tests brain/tests/brain_test.ts brain/tests/accounts_test.ts brain/tests/board_test.ts brain/tests/public_test.ts",

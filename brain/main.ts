@@ -11,7 +11,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { fromFileUrl } from "jsr:@std/path@1/from-file-url";
 import { DatabaseSync } from "node:sqlite";
-import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/webStandardStreamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/webStandardStreamableHttp.js";
 import { fromFile, type TaskStore, useTaskStore } from "../shared/mcp/lib/tasks.ts";
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";

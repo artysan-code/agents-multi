@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ci.sh — the whole gate, in the order CI runs it; the pre-push hook runs the same script.
 #
-#   scripts/ci.sh             check, commit subjects, tests, secret scan of the history, site build
+#   scripts/ci.sh             check, commit subjects, tests, MCP server probe, secret scan, site build
 #   scripts/ci.sh --no-site   the same without the site build
 #
 # gitleaks is optional on a workstation (skipped with a warning) and required in CI (CI=true).
@@ -21,6 +21,9 @@ deno run --quiet --allow-read --allow-run=git scripts/release.ts --lint
 
 step test
 deno task --quiet test
+
+step "mcp servers"
+deno run --quiet --allow-read --allow-run=deno --allow-env scripts/mcp-probe.ts
 
 step secrets
 if command -v gitleaks >/dev/null; then

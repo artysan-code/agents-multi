@@ -17,9 +17,9 @@
 //
 // Accounts and tokens: shared/mcp/lib (accounts.json + vault). Every tool takes `account`, required
 // only when the profile sees more than one instance. The token never goes through a tool.
-import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
-import { z } from "npm:zod@^3.23";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
+import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
+import { z } from "npm:zod@4.6.5";
 import { CREDENTIALS_IN_URL, HIDDEN, mask, maskDeep, maskText, SECRET_NAME } from "../lib/mask.ts";
 import { service, text as txt } from "../lib/service.ts";
 
@@ -722,7 +722,9 @@ server.registerTool(
     inputSchema: {
       account,
       application: z.string().describe("uuid or name"),
-      fields: z.record(z.unknown()).describe('e.g. { "domains": "https://app.example.com", "git_branch": "release" }'),
+      fields: z.record(z.string(), z.unknown()).describe(
+        'e.g. { "domains": "https://app.example.com", "git_branch": "release" }',
+      ),
     },
     annotations: CHANGES,
   },

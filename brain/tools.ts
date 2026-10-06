@@ -4,8 +4,8 @@
 // Every tool says plainly whether it only reads or changes something (annotations), so a client
 // that asks before changes — claude.ai's "needs approval" — asks for exactly those.
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
-import { z } from "npm:zod@^3.23";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
+import { z } from "npm:zod@4.6.5";
 import { registerTaskTools } from "../shared/mcp/tasks/tools.ts";
 import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";

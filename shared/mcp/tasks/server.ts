@@ -6,8 +6,8 @@
 // No deletion: a task that no longer matters is `dropped` (it survives Syncthing, and stays visible
 // in the history). Every answer carries today's date and the time, so "tomorrow at ten" resolves to
 // a real day.
-import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
+import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
 import { registerTaskTools } from "./tools.ts";
 import { connectTasks } from "../lib/brain-tasks.ts";
 

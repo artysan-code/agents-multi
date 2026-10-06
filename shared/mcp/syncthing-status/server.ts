@@ -3,8 +3,8 @@
 // Talks only to Syncthing's REST API on localhost (ST_URL, default http://127.0.0.1:8384).
 // The API key is read at runtime from Syncthing's config.xml (or the STGUI_APIKEY env variable)
 // and is never persisted anywhere else.
-import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
+import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
 import { type Compiled, compilePattern, isIgnored } from "./ignore.ts";
 
 /** Subset of Syncthing's REST objects that this server reads. */

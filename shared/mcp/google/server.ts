@@ -11,9 +11,9 @@
 // calendar's bin for thirty days (AGENTS.md, the exception to "no deletion tools").
 // Drive is read-only: search, and a file's text (Docs and Slides exported, every sheet of a Sheet,
 // a PDF's text, text files read).
-import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
-import { z } from "npm:zod@^3.23";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
+import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
+import { z } from "npm:zod@4.6.5";
 import { extractText, getDocumentProxy } from "npm:unpdf@1.8.1";
 import {
   accessToken,

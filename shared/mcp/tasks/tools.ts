@@ -1,8 +1,8 @@
 // tools.ts — the task tools, registered on any MCP server: the local one (server.ts, stdio, the
 // files under ~/brains/tasks) and the brain service (brain/, over HTTP, its own database). What
 // they read and write is whichever store shared/mcp/lib/tasks.ts was given.
-import type { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
-import { z } from "npm:zod@^3.23";
+import type { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
+import { z } from "npm:zod@4.6.5";
 import {
   addAttachment,
   addNote,
