@@ -9,7 +9,7 @@
 // never sends mail or creates events. A change asked from the Brain page gets the brain's tools and
 // nothing else: it writes only there.
 
-import { BIN, expandHome, HOME, launchers, readJson, running, STATE } from "./lib.ts";
+import { BIN, expandHome, has, HOME, launchers, readJson, running, STATE } from "./lib.ts";
 import { dayOf } from "../shared/mcp/lib/tasks.ts";
 import { BRAIN as WIKI } from "./brain.ts";
 import { owner } from "../shared/mcp/lib/owner.ts";
@@ -322,14 +322,11 @@ function ask(
 
 /** A terminal running argv in workdir: Konsole on this setup, the usual others as fallbacks. */
 async function terminalArgv(workdir: string, argv: string[]): Promise<string[] | null> {
-  const which = async (c: string) =>
-    (await new Deno.Command("sh", { args: ["-c", `command -v ${c}`], stdout: "null", stderr: "null" }).output())
-      .success;
-  if (await which("konsole")) return ["konsole", "--workdir", workdir, "-e", ...argv];
+  if (await has("konsole")) return ["konsole", "--workdir", workdir, "-e", ...argv];
   for (const [t, flag] of [["kitty", "--directory"], ["alacritty", "--working-directory"]]) {
-    if (await which(t)) return [t, flag, workdir, "-e", ...argv];
+    if (await has(t)) return [t, flag, workdir, "-e", ...argv];
   }
-  if (await which("wezterm")) return ["wezterm", "start", "--cwd", workdir, "--", ...argv];
+  if (await has("wezterm")) return ["wezterm", "start", "--cwd", workdir, "--", ...argv];
   return null;
 }
 
