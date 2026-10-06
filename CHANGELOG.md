@@ -5,6 +5,15 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.2.1] - 2026-10-06
+
+### Fixed
+
+- **brain**: forms act only from the brain's own pages; nosniff and HSTS on every answer (bd68ec5)
+- **brain**: registered OAuth clients expire when unused, and are capped (d3c7fbb)
+- **brain**: rate limit per address, lockout per account and address, hashing behind a gate (959452a)
+- **brain**: cap request bodies by path (413) and answer errors without their message (b244334)
+
 ## [0.2.0] - 2026-10-06
 
 ### Breaking changes
