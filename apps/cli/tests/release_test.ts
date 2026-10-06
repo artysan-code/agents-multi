@@ -2,6 +2,7 @@
 // parsing, the implied bump, the CHANGELOG section and the manifest rewrite.
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import {
+  baseTag,
   bump,
   changelogSection,
   formatVersion,
@@ -109,4 +110,12 @@ Deno.test("lintSubject: known types, lowercase scopes, git's own subjects, 100 c
   assertEquals(lintSubject("feature: x")?.startsWith("unknown type"), true);
   assertEquals(lintSubject("feat(Brain): x")?.includes("lowercase"), true);
   assertEquals(lintSubject(`docs: ${"a".repeat(100)}`)?.includes("at most 100"), true);
+});
+
+Deno.test("baseTag: a stable version counts from the last stable one, a beta from the last of any kind", () => {
+  const tags = ["v0.1.0", "v0.2.0-beta.1", "v0.2.0-beta.2", "not-a-version"];
+  assertEquals(baseTag(tags, false), "v0.1.0");
+  assertEquals(baseTag(tags, true), "v0.2.0-beta.2");
+  assertEquals(baseTag([...tags, "v0.2.0"], true), "v0.2.0");
+  assertEquals(baseTag([], false), null);
 });

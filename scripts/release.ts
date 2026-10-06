@@ -110,6 +110,26 @@ export function parseCommit(c: Commit): Change | null {
   };
 }
 
+/**
+ * The tag a new version's changes are counted from: the newest stable version for a stable
+ * release, so its CHANGELOG section covers everything since the previous stable one, betas
+ * included; the newest version of any kind for a beta. Null when there is none.
+ */
+export function baseTag(tags: string[], forBeta: boolean): string | null {
+  const versions = tags.flatMap((t) => {
+    try {
+      return [{ tag: t, v: parseVersion(t) }];
+    } catch {
+      return [];
+    }
+  }).filter((x) => forBeta || x.v.beta === undefined);
+  versions.sort((a, b) =>
+    b.v.major - a.v.major || b.v.minor - a.v.minor || b.v.patch - a.v.patch ||
+    (b.v.beta ?? Infinity) - (a.v.beta ?? Infinity)
+  );
+  return versions[0]?.tag ?? null;
+}
+
 /** The bump a set of changes calls for. Before 1.0.0 a breaking change raises the minor. */
 export function impliedBump(changes: Change[], current: Version): Exclude<Bump, "beta"> {
   if (changes.some((c) => c.breaking)) return current.major === 0 ? "minor" : "major";
@@ -176,7 +196,7 @@ async function lint(args: string[]): Promise<number> {
   const at = args.indexOf("--lint-subject");
   const subjects = at >= 0
     ? [{ hash: "", subject: args[at + 1] ?? "", body: "" }]
-    : await commitsSince((await git("tag", "--list", "v*", "--sort=-v:refname")).split("\n")[0] || null);
+    : await commitsSince(baseTag((await git("tag", "--list", "v*", "--merged", "HEAD")).split("\n"), true));
   let bad = 0;
   for (const c of subjects) {
     const why = lintSubject(c.subject);
@@ -207,7 +227,8 @@ async function main(args: string[]) {
   }
 
   const current = parseVersion(JSON.parse(await Deno.readTextFile("deno.json")).version);
-  const lastTag = (await git("tag", "--list", "v*", "--sort=-v:refname")).split("\n")[0] || null;
+  const tags = (await git("tag", "--list", "v*", "--merged", "HEAD")).split("\n").filter(Boolean);
+  const lastTag = baseTag(tags, kind === "beta");
   const changes = (await commitsSince(lastTag)).map(parseCommit).filter((c): c is Change => c !== null);
   const target = impliedBump(changes, current);
   const next = formatVersion(bump(current, kind ?? target, target));
