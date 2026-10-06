@@ -18,6 +18,10 @@ services:
       - CLAUDE_MULTI_OWNER_ID=${CLAUDE_MULTI_OWNER_ID}
       - CLAUDE_MULTI_OWNER_NAME=${CLAUDE_MULTI_OWNER_NAME}
       - CLAUDE_MULTI_LANGUAGE=${CLAUDE_MULTI_LANGUAGE}
+      # the public pages (public.ts): who runs this instance, how to reach them, where it is hosted
+      - BRAIN_OPERATOR=${BRAIN_OPERATOR:-}
+      - BRAIN_CONTACT=${BRAIN_CONTACT:-}
+      - BRAIN_HOSTING=${BRAIN_HOSTING:-}
       - BRAIN_EMBED_URL=${BRAIN_EMBED_URL:-http://ollama:11434}
       - BRAIN_EMBED_MODEL=bge-m3
       - BRAIN_DATA=/data

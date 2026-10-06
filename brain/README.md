@@ -87,6 +87,7 @@ holds the brain.
 | `BRAIN_MASTER_KEY` | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost |
 | `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL` | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`) |
 | `BRAIN_DATA` | where `accounts.db` and `users/` live (`/data`) |
+| `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server in un datacenter europeo") |
 | `BRAIN_DEV=1` | local only: signing in without TOTP |
 
 **The first account** is made on the first start, when there is none: the administrator, with the
@@ -139,3 +140,10 @@ shows one task: its description, steps to tick, decisions and log to add to, its
 tasks, its attachments, and every field to change. Plain forms, no script; every change goes through
 the task rules of `shared/mcp/lib/tasks.ts`, as the chats' do (a repeating task done here makes the
 next one), and an edit made on a task someone changed meanwhile is refused rather than overwriting it.
+
+## The public pages
+
+`/` says what the service is and where to sign in; `/privacy` is the privacy notice, for this
+service and for claude-multi's Google integration (its OAuth client points here). Both are open to
+anyone and read their particulars from `BRAIN_OPERATOR`, `BRAIN_CONTACT` and `BRAIN_HOSTING`
+(`public.ts`); a change of substance to the notice bumps `PRIVACY_UPDATED`.

@@ -15,6 +15,7 @@ import { fromFile, type TaskStore, useTaskStore } from "../shared/mcp/lib/tasks.
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";
 import { accountPage, type AdminView, authorizePage, html, invitedPage, invitePage, SIGNED_OUT_ERROR, signInPage } from "./pages.ts";
+import { landingPage, privacyPage, type Site } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
 import { snapshot } from "./backup.ts";
@@ -115,6 +116,12 @@ const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) => `brain_session=${s}
 const nextPage = (n: string | null) => n && /^\/(account|tasks)(\/[\w-]*)*(\?[^\s]*)?$/.test(n) ? n : "/account";
 const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
 const TOTP = !DEV;
+const SITE: Site = {
+  url: URL_,
+  operator: env("BRAIN_OPERATOR", owner().name)!,
+  contact: env("BRAIN_CONTACT", "")!,
+  hosting: env("BRAIN_HOSTING", "un server privato")!,
+};
 const otpauth = (id: string, secret: string) => `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 async function handle(req: Request): Promise<Response> {
@@ -214,8 +221,11 @@ async function handle(req: Request): Promise<Response> {
     return html(accountPage(me, auth.personalTokens(me.id), auth.connections(me.id), extra));
   }
 
+  // ---------------- the public pages: what this is, and the privacy notice
+  if (p === "/") return html(landingPage(SITE));
+  if (p === "/privacy") return html(privacyPage(SITE));
+
   // ---------------- the board: the tasks on the web, signed in like the account page
-  if (p === "/") return new Response(null, { status: 303, headers: { location: "/tasks" } });
   if (p === "/tasks" || p.startsWith("/tasks/")) {
     const id = await auth.session(req);
     const me = id ? users.get(id) : null;

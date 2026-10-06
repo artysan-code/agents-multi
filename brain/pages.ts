@@ -60,6 +60,14 @@ ul.plain li{font-size:14px}
 h3{font:500 13px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--dim);margin-top:14px}
 form.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
 form.grid button{grid-column:1/-1;justify-self:start}
+article.doc>p{margin-top:10px}
+ul.list{padding-left:18px;margin-top:10px;display:flex;flex-direction:column;gap:6px;color:var(--dim);font-size:14px}
+ul.list b{color:var(--fg);font-weight:500}
+code{font:12.5px ui-monospace,monospace;padding:1px 5px;border-radius:5px;background:rgba(127,127,127,.12)}
+.cta{margin-top:22px}
+a.btn{font-weight:500;padding:10px 16px;border-radius:10px;background:var(--accent);color:var(--on);text-decoration:none}
+a.btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+p.foot{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--faint)}
 `;
 
 /** A page: a narrow card, a wide one (`true` or "wide"), or the whole width for the board. */
