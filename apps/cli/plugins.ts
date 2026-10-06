@@ -14,9 +14,11 @@
 // A marketplace-declared command (a command-source install) is never accepted here: it comes back
 // to the page as `confirm`, and runs only when the person re-sends its sha256.
 
-import { BIN, listDir, lstat, type Profile, profileNames, readJson, RUNTIME, STATE } from "./lib.ts";
+import { listDir, lstat, readJson } from "./lib/fs.ts";
+import { BIN, RUNTIME, STATE } from "./lib/paths.ts";
+import { type Profile, profileNames } from "./lib/profiles.ts";
 import { editSettingsSource, expectedSettings, runtimePath, syncAllSettings, syncSettings } from "./settings.ts";
-import { isObj, type Obj } from "./json-patch.ts";
+import { isObj, type Obj } from "./lib/json-patch.ts";
 
 const CLAUDE = `${BIN}/claude-bin`;
 // Every value reaches `claude plugin` as an argument: one starting with "-" would be read as an

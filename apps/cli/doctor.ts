@@ -1,49 +1,38 @@
 // doctor.ts — every invariant of the setup as a check with a verdict and a fix.
 // The README describes, the doctor verifies. New invariants belong here, not in prose.
 
+import { listDir, lstat, mode, readJson, readlink, readText, stat } from "./lib/fs.ts";
+import { GIT_IGNORED, gitGlobalIgnore, missingIgnores, repoState } from "./lib/git.ts";
+import { machine } from "./lib/machine.ts";
+import { type Check, type Status } from "./lib/output.ts";
 import {
   AGENTS_SKILLS,
   BIN,
-  type Check,
   CONFIG,
-  GIT_IGNORED,
-  gitGlobalIgnore,
-  has,
   HOME,
-  KINDS,
-  launchers,
   LIB,
-  listDir,
-  loadManifest,
-  lstat,
-  machine,
-  missingIgnores,
-  mode,
-  ownItems,
   PORT,
-  profileInfo,
-  profileNames,
   PROFILES,
-  readJson,
-  readlink,
-  readText,
   REPO,
-  repoState,
-  run,
   RUNTIME,
-  runtimeProfiles,
-  sharedInventory,
   shortHome,
-  stat,
   STATE,
-  type Status,
   STIGNORE_GEN_TEMPLATE,
   SYNCTHING_CONFIG,
-  updateLog,
-  ZSH_BEGIN,
-  ZSH_END,
-  zshBlock,
-} from "./lib.ts";
+} from "./lib/paths.ts";
+import { has, run } from "./lib/proc.ts";
+import {
+  KINDS,
+  launchers,
+  loadManifest,
+  ownItems,
+  profileInfo,
+  profileNames,
+  runtimeProfiles,
+  sharedInventory,
+} from "./lib/profiles.ts";
+import { ZSH_BEGIN, ZSH_END, zshBlock } from "./lib/shell.ts";
+import { updateLog } from "./lib/versions.ts";
 import { settingsState } from "./settings.ts";
 import { ACCOUNTS, health, legacyStatePresent, loadRegistry, plan, registryProblems } from "./mcp.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";

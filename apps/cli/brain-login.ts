@@ -8,7 +8,7 @@
 // vault (brain/<account>, the token and its backup-key field) and from there to the other machines.
 
 import { ACCOUNTS } from "./mcp.ts";
-import { readJson } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
 import { pkce } from "../../shared/mcp/lib/google.ts";
 import { setSecret } from "../../shared/mcp/lib/vault.ts";

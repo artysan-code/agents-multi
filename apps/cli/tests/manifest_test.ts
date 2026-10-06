@@ -3,18 +3,9 @@
 // (every selected entry has to exist). Written against whatever profiles the repository declares,
 // so adding or removing one does not break the suite.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import {
-  BIN,
-  commandOf,
-  KINDS,
-  launchers,
-  loadManifest,
-  ownItems,
-  profileNames,
-  REPO,
-  RUNTIME,
-  zshBlock,
-} from "../lib.ts";
+import { BIN, REPO, RUNTIME } from "../lib/paths.ts";
+import { commandOf, KINDS, launchers, loadManifest, ownItems, profileNames } from "../lib/profiles.ts";
+import { zshBlock } from "../lib/shell.ts";
 import { desktopEntry } from "../install.ts";
 
 Deno.test("manifest: every profile has a valid profile.json and its selections exist in shared/", async () => {

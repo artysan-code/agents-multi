@@ -8,7 +8,9 @@
 // every Claude closed, since it rewrites files they hold; otherwise it waits for a later round (the
 // timer comes back every four hours) and the console says so. Every result lands in the update log.
 
-import { CACHE, REPO, run, STATE, uiLanguage } from "./lib.ts";
+import { uiLanguage } from "./lib/locale.ts";
+import { CACHE, REPO, STATE } from "./lib/paths.ts";
+import { run } from "./lib/proc.ts";
 import { blockers } from "./mcp.ts";
 import { syncAllSettings } from "./settings.ts";
 

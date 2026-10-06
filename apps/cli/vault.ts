@@ -4,7 +4,8 @@
 // A secret is never an argument: it is read from stdin, so it does not land in the shell history or
 // in `ps`. And nothing here prints one, except `recovery-code`, which prints the key on purpose.
 
-import { ANSI, RUNTIME } from "./lib.ts";
+import { ANSI } from "./lib/output.ts";
+import { RUNTIME } from "./lib/paths.ts";
 import { parseRun, profileFrom, runTool } from "./toolrun.ts";
 import { ACCOUNTS } from "./mcp.ts";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "../../shared/mcp/lib/accounts.ts";

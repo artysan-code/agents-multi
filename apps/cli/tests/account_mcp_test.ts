@@ -1,7 +1,9 @@
 // Tests for disableAccountMcp: the --settings overlay bin/claude builds from the sync manifests
 // (bin/lib/profiles.sh), its TypeScript mirror, and the manifest flag read from both sides.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { loadManifest, profileNames, REPO, syncedPluginNames, syncedPlugins } from "../lib.ts";
+import { REPO } from "../lib/paths.ts";
+import { syncedPluginNames, syncedPlugins } from "../lib/plugins.ts";
+import { loadManifest, profileNames } from "../lib/profiles.ts";
 
 const PROFILES_SH = `${REPO}/bin/lib/profiles.sh`;
 

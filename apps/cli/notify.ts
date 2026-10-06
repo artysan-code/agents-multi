@@ -3,7 +3,9 @@
 // failure clears, to say things are healthy again). Warnings never notify: every four hours they
 // would be noise. Driven by the claude-update-check timer, alongside the update check.
 
-import { type Check, has, run, STATE } from "./lib.ts";
+import { type Check } from "./lib/output.ts";
+import { STATE } from "./lib/paths.ts";
+import { has, run } from "./lib/proc.ts";
 
 const STATE_FILE = `${STATE}/doctor-last.json`;
 export interface DoctorDiff {

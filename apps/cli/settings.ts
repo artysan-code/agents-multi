@@ -18,22 +18,11 @@
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
 import { loadRegistry, permissionRules, type RegistryRules } from "./mcp.ts";
-import {
-  CONFIG,
-  loadManifest,
-  lstat,
-  type Manifest,
-  type Profile,
-  profileNames,
-  PROFILES,
-  readJson,
-  REPO,
-  RUNTIME,
-  STAMP,
-  STATE,
-  syncedPlugins,
-} from "./lib.ts";
-import { diffPatch, isObj, type Json, mergePatch, type Obj, same } from "./json-patch.ts";
+import { lstat, readJson } from "./lib/fs.ts";
+import { CONFIG, PROFILES, REPO, RUNTIME, STAMP, STATE } from "./lib/paths.ts";
+import { syncedPlugins } from "./lib/plugins.ts";
+import { loadManifest, type Manifest, type Profile, profileNames } from "./lib/profiles.ts";
+import { diffPatch, isObj, type Json, mergePatch, type Obj, same } from "./lib/json-patch.ts";
 
 /** What the manifest implies. disableAccountMcp: connectors off, every synced plugin disabled —
  *  here it reaches Desktop's Code tab too, which the launcher's --settings overlay cannot. */

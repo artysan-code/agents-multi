@@ -6,7 +6,7 @@
 // goes straight into the vault; the account's address is written next to its name in accounts.json.
 
 import { ACCOUNTS } from "./mcp.ts";
-import { readJson } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
 import { authUrl, exchangeCode, loadClient, parseClientJson, pkce } from "../../shared/mcp/lib/google.ts";
 import { setSecret } from "../../shared/mcp/lib/vault.ts";

@@ -1,6 +1,6 @@
 // Tests for pluginRecordState: which install records the doctor fails on, and which it only warns about.
 import { assertEquals } from "jsr:@std/assert@1";
-import { pluginRecordState } from "../lib.ts";
+import { pluginRecordState } from "../lib/plugins.ts";
 
 Deno.test("pluginRecordState: a missing cache is broken, a missing project is stale, never both", () => {
   const present = new Set(["/cache/ok", "/proj/here"]);

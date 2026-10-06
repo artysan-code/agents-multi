@@ -23,10 +23,6 @@ apps/
   brain/      the brain service: Dockerfile and compose.yaml in this folder (deployed)
   site/       the public site, Astro; built into the brain's image (deployed with it)
   tray/       the PySide6 tray app, until the desktop app replaces it
-packages/
-  core/       pure logic, no I/O: merge patches, versions, plugin records, settings layering
-  platform/   operating-system adapters behind one interface each: keyring, services,
-              processes, notifications, opening URLs, desktop entries, paths
 shared/       read at run time through ~/.claude-multi/shared: settings, hooks, agents, commands,
               skills, the MCP registry, the MCP servers and their library (shared/mcp/lib)
 bin/          the bash launchers (no Deno on the launch path)
@@ -36,7 +32,12 @@ docs/adr/     decisions like this one
 
 - `shared/` and `bin/` keep their paths: installed machines and Claude Code configurations refer
   to them, and moving them would need a migration on every machine for no gain.
-- An app may import `packages/*` and `shared/mcp/lib`; a package never imports an app.
+- Code shared by the CLI alone stays in the CLI, split by concern under `apps/cli/lib/` (paths,
+  fs, proc, output, git, profiles, machine, processes, …). A `packages/` folder appears when a
+  second consumer does, not before.
+- `shared/mcp/lib` never imports outside `shared/`: the MCP servers load it through the
+  `~/.claude-multi/shared` symlink, where the rest of the repository is not reachable by a
+  relative path. What the servers and the CLI both need (the vault, the task model) lives there.
 - `apps/brain/compose.yaml` builds with the repository root as context, so a platform pointed at
   `apps/brain` (base directory) gets the packages it needs. A prebuilt image is published as well
   (phase 6), for hosts that should not build at all.
@@ -47,5 +48,7 @@ docs/adr/     decisions like this one
   machine refers to the old folders.
 - The brain's deployment changes its base directory from `/brain` to `/apps/brain` in the same
   release that moves the folder.
-- Splitting `cli/lib.ts` lands its pure parts in `packages/core` and its OS calls in
-  `packages/platform`, so the split and the move are done once.
+- Operating-system specifics (systemd, the Secret Service keyring, /proc, pacman, KDE) are
+  confined to named modules (`apps/cli/lib/machine.ts`, `apps/cli/lib/processes.ts`,
+  `shared/mcp/lib/vault.ts`, `apps/cli/install.ts`), so macOS and Windows support (1.x) replaces
+  modules rather than lines spread across the code.

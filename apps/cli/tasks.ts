@@ -7,7 +7,10 @@
 // times in ~/brains/tasks/settings.json, and a warning before each timed task. Which notifications
 // went out is per machine (XDG state): each machine that is on reminds, none of them twice.
 
-import { ANSI, readJson, STATE, uiLanguage } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { uiLanguage } from "./lib/locale.ts";
+import { ANSI } from "./lib/output.ts";
+import { STATE } from "./lib/paths.ts";
 import { desktopNotify } from "./notify.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import {

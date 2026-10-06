@@ -11,9 +11,11 @@
 // Writes go to the person's configuration; each profile's settings.json is regenerated from it on the next
 // launch (bin/lib/prelaunch.sh), so a change applies from the next session.
 
-import { profileNames, PROFILES, readJson } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { PROFILES } from "./lib/paths.ts";
+import { profileNames } from "./lib/profiles.ts";
 import { sharedLayer, writeSharedLayer } from "./settings.ts";
-import type { Obj } from "./json-patch.ts";
+import type { Obj } from "./lib/json-patch.ts";
 
 export const LISTS = ["allow", "ask", "deny"] as const;
 export type List = typeof LISTS[number];

@@ -6,7 +6,8 @@
 //            clear it on the next success; the doctor reports what is recorded
 //   active   `claude-multi doctor --probe` sends each profile one tiny request (Haiku, no tools)
 
-import { BIN, HOME, readJson, STATE } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { BIN, HOME, STATE } from "./lib/paths.ts";
 
 const FILE = `${STATE}/claude-login.json`;
 export interface LoginFailure {

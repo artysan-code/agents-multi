@@ -8,7 +8,7 @@
 // favicon is the spark, the animations are the module that starts `var e={thinking:{svg:`, and the
 // icon font's code points are the `{icons:{Activity:` map in the shared frame bundle.
 
-import { LIB } from "./lib.ts";
+import { LIB } from "./lib/paths.ts";
 
 export interface Strip {
   svg: string;

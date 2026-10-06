@@ -2,7 +2,7 @@
 // and the links between them. A read-only archive since 2026-10-02 (the memory is the brain
 // service now); this page is to be rebuilt on it.
 
-import { HOME } from "./lib.ts";
+import { HOME } from "./lib/paths.ts";
 
 export const BRAIN = Deno.env.get("CLAUDE_MULTI_BRAIN") ?? `${HOME}/brains/claude`;
 const SKIP_DIRS = new Set(["_raw", "_archives", ".obsidian", ".git", ".stfolder", "wiki-export", "graphify-out"]);

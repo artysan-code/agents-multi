@@ -1,7 +1,8 @@
 // Tests for summarize() in status.ts: the tray icon's level and the lines behind it (pure).
 import { assertEquals } from "jsr:@std/assert@1";
 import { summarize } from "../status.ts";
-import type { Check, CliProc } from "../lib.ts";
+import type { Check } from "../lib/output.ts";
+import type { CliProc } from "../lib/processes.ts";
 
 const check = (id: string, status: Check["status"]): Check => ({ id, status, msg: `msg ${id}` });
 const proc = (embedded: boolean): CliProc => ({

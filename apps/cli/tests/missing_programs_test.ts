@@ -2,7 +2,7 @@
 // for a service whose server runs a program this machine does not have.
 import { assertEquals } from "jsr:@std/assert@1";
 import { missingPrograms, type Registry } from "../mcp.ts";
-import { REPO } from "../lib.ts";
+import { REPO } from "../lib/paths.ts";
 
 Deno.test("missingPrograms: an absent binary or command of that service's servers, with how to install it", async () => {
   const reg = {

@@ -1,7 +1,8 @@
 // Tests for desktopVersions (lib.ts): which user-space Claude Desktop is in use, staged, or the
 // rollback target, from the version directories and the `current` link.
 import { assertEquals } from "jsr:@std/assert@1";
-import { cmpVersion, desktopVariantOf, desktopVersions } from "../lib.ts";
+import { desktopVariantOf } from "../lib/processes.ts";
+import { cmpVersion, desktopVersions } from "../lib/versions.ts";
 
 Deno.test("cmpVersion: numeric, not lexical", () => {
   assertEquals(cmpVersion("2.10.0", "2.9.9") > 0, true);

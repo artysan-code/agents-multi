@@ -9,7 +9,11 @@
 // never sends mail or creates events. A change asked from the Brain page gets the brain's tools and
 // nothing else: it writes only there.
 
-import { BIN, expandHome, has, HOME, launchers, readJson, running, STATE } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { BIN, expandHome, HOME, STATE } from "./lib/paths.ts";
+import { has } from "./lib/proc.ts";
+import { running } from "./lib/processes.ts";
+import { launchers } from "./lib/profiles.ts";
 import { dayOf } from "../../shared/mcp/lib/tasks.ts";
 import { BRAIN as WIKI } from "./brain.ts";
 import { owner } from "../../shared/mcp/lib/owner.ts";

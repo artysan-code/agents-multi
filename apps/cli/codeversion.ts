@@ -4,7 +4,7 @@
 // another one reloads itself, and the doctor compares it with the files as they are now: a console
 // started before a pull or an edit is running old code, and says so instead of showing stale errors.
 
-import { REPO } from "./lib.ts";
+import { REPO } from "./lib/paths.ts";
 
 const ROOTS = ["apps/cli", "shared/mcp/lib"];
 const SKIP = /\/(tests|node_modules)(\/|$)/;

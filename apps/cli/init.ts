@@ -5,7 +5,9 @@
 //   claude-multi init ~/personal/claude-multi-config --name Ann --language Italian [--id ann]
 //   claude-multi init <existing folder>     only link it (a second machine)
 
-import { ANSI, CONFIG as CONFIG_DEFAULT, expandHome, lstat, readlink, REPO, shortHome } from "./lib.ts";
+import { lstat, readlink } from "./lib/fs.ts";
+import { ANSI } from "./lib/output.ts";
+import { CONFIG as CONFIG_DEFAULT, expandHome, REPO, shortHome } from "./lib/paths.ts";
 
 /** Pure: an owner id from a name — lower case, letters and digits only. */
 export function idFrom(name: string): string {

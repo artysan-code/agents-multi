@@ -12,23 +12,11 @@
 // `x-claude-multi` anti-CSRF header. Updating needs no privilege any more (Claude Desktop lives in
 // user space), so it is an action like the others.
 
-import {
-  ANSI,
-  CONFIG,
-  HOME,
-  listDir,
-  lstat,
-  machine,
-  PORT,
-  profileInfo,
-  profileNames,
-  PROFILES,
-  readJson,
-  readText,
-  REPO,
-  RUNTIME,
-  STATE,
-} from "./lib.ts";
+import { listDir, lstat, readJson, readText } from "./lib/fs.ts";
+import { machine } from "./lib/machine.ts";
+import { ANSI } from "./lib/output.ts";
+import { CONFIG, HOME, PORT, PROFILES, REPO, RUNTIME, STATE } from "./lib/paths.ts";
+import { profileInfo, profileNames } from "./lib/profiles.ts";
 import {
   ACCOUNTS,
   loadRegistry,

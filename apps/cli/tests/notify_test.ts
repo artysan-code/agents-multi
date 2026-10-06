@@ -1,7 +1,7 @@
 // Tests for notify.ts: diff of failures and the notification text (pure functions).
 import { assertEquals } from "jsr:@std/assert@1";
 import { diffDoctor, notifyText } from "../notify.ts";
-import type { Check } from "../lib.ts";
+import type { Check } from "../lib/output.ts";
 
 const c = (id: string, status: Check["status"], fix?: string): Check => ({ id, status, msg: `msg ${id}`, fix });
 

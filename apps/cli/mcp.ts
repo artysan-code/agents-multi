@@ -34,26 +34,13 @@
 
 import { type Account, accountHosts, loadAccounts, visibleAccounts } from "../../shared/mcp/lib/accounts.ts";
 import { vaultDir } from "../../shared/mcp/lib/vault.ts";
-import {
-  type Check,
-  CONFIG,
-  desktopDir,
-  has,
-  HOME,
-  loadManifest,
-  lstat,
-  type Profile,
-  profileNames,
-  readJson,
-  readText,
-  REPO,
-  run,
-  running,
-  RUNTIME,
-  stat,
-  STATE,
-} from "./lib.ts";
-import { diffPatch, mergePatch } from "./json-patch.ts";
+import { lstat, readJson, readText, stat } from "./lib/fs.ts";
+import { type Check } from "./lib/output.ts";
+import { CONFIG, HOME, REPO, RUNTIME, STATE } from "./lib/paths.ts";
+import { has, run } from "./lib/proc.ts";
+import { running } from "./lib/processes.ts";
+import { desktopDir, loadManifest, type Profile, profileNames } from "./lib/profiles.ts";
+import { diffPatch, mergePatch } from "./lib/json-patch.ts";
 
 export interface PerAccount {
   env?: Record<string, string>;

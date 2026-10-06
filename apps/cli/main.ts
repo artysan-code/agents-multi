@@ -24,7 +24,10 @@
 import { vaultCommand } from "./vault.ts";
 import { tasksCommand } from "./tasks.ts";
 import { googleCommand } from "./google.ts";
-import { ANSI, CACHE, PORT, printDoctor, readJson, REPO, run } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { ANSI, printDoctor } from "./lib/output.ts";
+import { CACHE, PORT, REPO } from "./lib/paths.ts";
+import { run } from "./lib/proc.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
 import { install } from "./install.ts";

@@ -4,7 +4,7 @@
 // and the console change a task the same way; `base` (the version the page holds) keeps the page
 // from overwriting a change a chat made meanwhile.
 
-import { HOME } from "./lib.ts";
+import { HOME } from "./lib/paths.ts";
 import { projectTree, resolveProject } from "./projects.ts";
 import {
   addAttachment,

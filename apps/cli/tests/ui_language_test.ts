@@ -1,6 +1,6 @@
 // Tests for uiLanguage (lib.ts): which language the console opens in on a given machine.
 import { assertEquals } from "jsr:@std/assert@1";
-import { uiLanguage } from "../lib.ts";
+import { uiLanguage } from "../lib/locale.ts";
 
 Deno.test("uiLanguage: the regional format outranks LANG, explicit message locales win", () => {
   // English messages with Italian formats: the format says where the person is

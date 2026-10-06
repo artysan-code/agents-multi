@@ -1,7 +1,7 @@
 // Tests for which()/has() in apps/cli/lib.ts: a PATH lookup with no shell, so a name taken from a
 // configuration file is looked up, never run.
 import { assertEquals } from "jsr:@std/assert@1";
-import { which } from "../lib.ts";
+import { which } from "../lib/proc.ts";
 
 Deno.test("which: PATH order, absolute paths, executables only, metacharacters looked up literally", async () => {
   const a = await Deno.makeTempDir();

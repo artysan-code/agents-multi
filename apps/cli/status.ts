@@ -1,20 +1,15 @@
 // status.ts — the whole state as one JSON document: the contract for the statusline, the GUI, the
 // notifier and the console. Everything that reads state reads this shape.
 
-import {
-  ANSI,
-  CACHE,
-  HOME,
-  machine,
-  profileInfo,
-  profileNames,
-  readJson,
-  repoState,
-  running,
-  sharedInventory,
-  uiLanguage,
-  updateLog,
-} from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { repoState } from "./lib/git.ts";
+import { uiLanguage } from "./lib/locale.ts";
+import { machine } from "./lib/machine.ts";
+import { ANSI } from "./lib/output.ts";
+import { CACHE, HOME } from "./lib/paths.ts";
+import { running } from "./lib/processes.ts";
+import { profileInfo, profileNames, sharedInventory } from "./lib/profiles.ts";
+import { updateLog } from "./lib/versions.ts";
 import { installWaiting } from "./selfupdate.ts";
 import { doctor } from "./doctor.ts";
 import { ACCOUNTS, loadRegistry, reachOf } from "./mcp.ts";

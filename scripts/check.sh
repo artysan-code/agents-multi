@@ -19,7 +19,7 @@ optional() {
 
 deno fmt --check --quiet
 deno lint --quiet
-deno check --quiet apps/cli/*.ts apps/cli/tests/*.ts shared/mcp/lib/*.ts shared/mcp/*/server.ts shared/hooks/*.ts \
+deno check --quiet apps/cli/*.ts apps/cli/lib/*.ts apps/cli/tests/*.ts shared/mcp/lib/*.ts shared/mcp/*/server.ts shared/hooks/*.ts \
   shared/tools/*/*.ts scripts/*.ts apps/brain/*.ts apps/brain/tests/*.ts
 
 # Every bash script, found by its shebang: a script added anywhere below is checked unedited.

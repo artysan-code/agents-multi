@@ -17,7 +17,8 @@ import {
   targets,
   wanted,
 } from "../mcp.ts";
-import { desktopDir, missingIgnores, profileNames } from "../lib.ts";
+import { missingIgnores } from "../lib/git.ts";
+import { desktopDir, profileNames } from "../lib/profiles.ts";
 
 const PROFILES = await profileNames();
 // One profile to single out, one to contrast it with. Which two does not matter.

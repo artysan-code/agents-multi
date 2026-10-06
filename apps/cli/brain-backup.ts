@@ -7,7 +7,8 @@
 // opens with the backup key from the vault when the vault has one, and keeps the newest KEEP
 // copies in DATA/brain-backups. The copies stay sealed on disk: reading one needs the key.
 
-import { DATA, readJson, STATE } from "./lib.ts";
+import { readJson } from "./lib/fs.ts";
+import { DATA, STATE } from "./lib/paths.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { getSecret } from "../../shared/mcp/lib/vault.ts";
 import { open } from "../brain/backup.ts";

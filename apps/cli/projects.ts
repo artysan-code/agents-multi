@@ -8,7 +8,7 @@
 // name; a name that matches no folder stays as it is and is grouped on its own.
 
 import { loadSettings } from "../../shared/mcp/lib/tasks.ts";
-import { HOME } from "./lib.ts";
+import { HOME } from "./lib/paths.ts";
 
 export interface ProjectNode {
   path: string;

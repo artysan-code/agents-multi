@@ -1,45 +1,36 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
+import { listDir, lstat, mode, readlink, readText, stat } from "./lib/fs.ts";
+import { GIT_IGNORED, gitGlobalIgnore, missingIgnores } from "./lib/git.ts";
+import { machine } from "./lib/machine.ts";
+import { ANSI, printDoctor } from "./lib/output.ts";
 import {
   AGENTS_SKILLS,
-  ANSI,
   BIN,
   CONFIG,
-  desktopDir,
-  GIT_IGNORED,
-  gitGlobalIgnore,
-  has,
   HOME,
-  type Kind,
-  KINDS,
-  launchers,
   LIB,
-  listDir,
-  loadManifest,
-  lstat,
-  machine,
-  missingIgnores,
-  mode,
-  ownItems,
-  printDoctor,
-  type Profile,
-  profileNames,
   PROFILES,
-  readlink,
-  readText,
   REPO,
-  run,
   RUNTIME,
   shortHome,
   STAMP,
-  stat,
   STIGNORE_GEN_TEMPLATE,
   SYNCTHING_CONFIG,
-  ZSH_BEGIN,
-  ZSH_END,
-  zshBlock,
-} from "./lib.ts";
+} from "./lib/paths.ts";
+import { has, run } from "./lib/proc.ts";
+import {
+  desktopDir,
+  type Kind,
+  KINDS,
+  launchers,
+  loadManifest,
+  ownItems,
+  type Profile,
+  profileNames,
+} from "./lib/profiles.ts";
+import { ZSH_BEGIN, ZSH_END, zshBlock } from "./lib/shell.ts";
 import { doctor } from "./doctor.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
