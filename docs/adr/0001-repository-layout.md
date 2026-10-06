@@ -39,7 +39,7 @@ docs/adr/     decisions like this one
   `~/.claude-multi/shared` symlink, where the rest of the repository is not reachable by a
   relative path. What the servers and the CLI both need (the vault, the task model) lives there.
 - `apps/brain/compose.yaml` builds with the repository root as context, so a platform pointed at
-  `apps/brain` (base directory) gets the packages it needs. A prebuilt image is published as well
+  `apps/brain` (base directory) still reaches the shared code it imports. A prebuilt image is published as well
   (phase 6), for hosts that should not build at all.
 
 ## Consequences

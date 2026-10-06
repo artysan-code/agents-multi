@@ -31,7 +31,7 @@ import {
   profileNames,
 } from "./lib/profiles.ts";
 import { ZSH_BEGIN, ZSH_END, zshBlock } from "./lib/shell.ts";
-import { doctor } from "./doctor.ts";
+import { doctor } from "./doctor/index.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";

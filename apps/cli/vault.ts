@@ -7,7 +7,7 @@
 import { ANSI } from "./lib/output.ts";
 import { RUNTIME } from "./lib/paths.ts";
 import { parseRun, profileFrom, runTool } from "./toolrun.ts";
-import { ACCOUNTS } from "./mcp.ts";
+import { ACCOUNTS } from "./mcp/registry.ts";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "../../shared/mcp/lib/accounts.ts";
 import {
   currentRecoveryCode,

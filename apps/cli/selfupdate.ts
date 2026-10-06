@@ -11,7 +11,7 @@
 import { uiLanguage } from "./lib/locale.ts";
 import { CACHE, REPO, STATE } from "./lib/paths.ts";
 import { run } from "./lib/proc.ts";
-import { blockers } from "./mcp.ts";
+import { blockers } from "./mcp/apply.ts";
 import { syncAllSettings } from "./settings.ts";
 
 export interface RepoView {

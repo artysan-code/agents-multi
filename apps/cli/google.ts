@@ -5,7 +5,7 @@
 // the redirect address, PKCE ties the code to this run, `state` to this request. The refresh token
 // goes straight into the vault; the account's address is written next to its name in accounts.json.
 
-import { ACCOUNTS } from "./mcp.ts";
+import { ACCOUNTS } from "./mcp/registry.ts";
 import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
 import { authUrl, exchangeCode, loadClient, parseClientJson, pkce } from "../../shared/mcp/lib/google.ts";

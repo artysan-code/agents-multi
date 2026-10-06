@@ -4,7 +4,7 @@
 // account as their project. Any account that cannot be read is skipped, and said in `errors`.
 
 import { owner } from "../../shared/mcp/lib/owner.ts";
-import { ACCOUNTS } from "./mcp.ts";
+import { ACCOUNTS } from "./mcp/registry.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
 import { accessToken, loadClient } from "../../shared/mcp/lib/google.ts";
 import { addDays, dayOf, hhmm, type Task } from "../../shared/mcp/lib/tasks.ts";

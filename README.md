@@ -581,7 +581,7 @@ deno task test    # usage (rates, dedupe, turns), notifications,
   TypeScript changed. Deliberate bypass: `git commit --no-verify`.
 - **CI** (`.forgejo/workflows/ci.yml`): check, test and a secret scan of the whole tree on every
   push. Needs a runner with the `docker` label.
-- Every new invariant goes in `apps/cli/doctor.ts` — the README describes, the doctor verifies. Every new
+- Every new invariant goes in `apps/cli/doctor/` — the README describes, the doctor verifies. Every new
   pure function gets a test in `apps/cli/tests/`.
 
 ---

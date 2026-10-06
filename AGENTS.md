@@ -22,7 +22,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
 - **Runtime never enters the repository**: credentials, `.claude.json`, sessions, plugin cache,
   marketplaces. A file containing `oauthAccount` or a token must never be committed. `.gitignore`
   covers the backups (`*.bak*`, `*.backup`).
-- **Every new invariant goes in `apps/cli/doctor.ts`**, not in the README. The README describes, the
+- **Every new invariant goes in `apps/cli/doctor/`**, not in the README. The README describes, the
   doctor verifies. Those two have already drifted apart once.
 - **The repository is code; what is a person's is in their configuration** (`~/.claude-multi/config`,
   a link to a folder of theirs, made by `claude-multi init` from `config.example/`): profiles,

@@ -1,8 +1,8 @@
 // Tests for what keeps the repository usable by someone else: no home folder written out, and the
 // ${HOME} of servers.json filled in for whoever runs it.
 import { assertEquals } from "jsr:@std/assert@1";
-import { writtenHomes } from "../doctor.ts";
-import { expandHome } from "../mcp.ts";
+import { writtenHomes } from "../doctor/checks/repo.ts";
+import { expandHome } from "../mcp/registry.ts";
 
 Deno.test("writtenHomes: /home/<name> once each; $HOME, ~ and ${HOME} are fine", () => {
   assertEquals(writtenHomes('bash /home/ann/.claude-multi/x.sh; cat /home/ann/y "$HOME/z" ~/w ${HOME}/v /home/bob.k'), [

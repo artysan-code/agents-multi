@@ -5,7 +5,7 @@
 # on its own, outside the Bash tool; a session that ran them would get a vault secret into the
 # conversation. Reading or editing the file stays allowed: only running it in either mode is denied.
 # The deny rules on secret-tool, kwallet-query and ~/vault/claude-multi cover the other ways in
-# (cli/doctor.ts checks this hook is registered, like it checks those rules).
+# (apps/cli/doctor/checks/vault.ts checks this hook is registered, like it checks those rules).
 set -uo pipefail
 trap 'exit 0' EXIT
 # shellcheck source=lib/guard.sh

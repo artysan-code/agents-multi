@@ -2,21 +2,9 @@
 // The profile names come from the configuration (the tests run on apps/cli/tests/fixtures/config), never
 // from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
-import {
-  permissionRules,
-  placements,
-  type RawRegistry,
-  reach,
-  reachOf,
-  REGISTRY,
-  type Registry,
-  registryProblems,
-  selectServers,
-  shellQuote,
-  type Target,
-  targets,
-  wanted,
-} from "../mcp.ts";
+import { permissionRules, placements, reach, reachOf, shellQuote, type Target, wanted } from "../mcp/placement.ts";
+import { targets } from "../mcp/apply.ts";
+import { type RawRegistry, REGISTRY, type Registry, registryProblems, selectServers } from "../mcp/registry.ts";
 import { missingIgnores } from "../lib/git.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 

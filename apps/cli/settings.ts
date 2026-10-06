@@ -17,7 +17,8 @@
 // Plugins are why this exists: Claude Code installs every plugin `enabledPlugins` marks true when a
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
-import { loadRegistry, permissionRules, type RegistryRules } from "./mcp.ts";
+import { permissionRules, type RegistryRules } from "./mcp/placement.ts";
+import { loadRegistry } from "./mcp/registry.ts";
 import { lstat, readJson } from "./lib/fs.ts";
 import { CONFIG, PROFILES, REPO, RUNTIME, STAMP, STATE } from "./lib/paths.ts";
 import { syncedPlugins } from "./lib/plugins.ts";
