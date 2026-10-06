@@ -18,3 +18,6 @@ pkg/*/*.pkg.tar.*
 pkg/*/pkg/
 pkg/*/src/
 shared/mcp/.sync-state.json
+
+# Skills di ~/.agents: link assoluti creati da `claude-multi install`, per-macchina
+shared/skills/use-railway

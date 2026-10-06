@@ -151,11 +151,10 @@ export async function install(dry: boolean) {
   await ensureDir(`${RUNTIME}/marketplaces`);
 
   // 2. skills installed by external tools in ~/.agents/skills → absolute links in shared/skills
-  if (await lstat(AGENTS_SKILLS)) {
-    for (const s of await listDir(AGENTS_SKILLS)) {
-      if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
-      if (!(await lstat(`${REPO}/shared/skills/${s}`))) await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${REPO}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
-    }
+  await ensureDir(AGENTS_SKILLS);
+  for (const s of await listDir(AGENTS_SKILLS)) {
+    if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
+    if (!(await lstat(`${REPO}/shared/skills/${s}`))) await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${REPO}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
   }
   // broken links in shared/skills (old relative paths, uninstalled skills)
   for (const s of await listDir(`${REPO}/shared/skills`)) {

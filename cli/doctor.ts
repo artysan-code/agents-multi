@@ -57,7 +57,11 @@ export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
   if (repo.isRepo) {
     const files = (await run("git", ["-C", REPO, "ls-files", "shared", "config.example"])).out.split("\n").filter((f) => f && !/\.(lock|png|svg|woff2)$/.test(f));
     const hits: string[] = [];
-    for (const f of files) if (writtenHomes((await readText(`${REPO}/${f}`)) ?? "").length) hits.push(f);
+    for (const f of files) {
+      // a symlink is read by its target: a broken one has no content, only the path it points to
+      const text = (await lstat(`${REPO}/${f}`))?.isSymlink ? await readlink(`${REPO}/${f}`) : await readText(`${REPO}/${f}`);
+      if (writtenHomes(text ?? "").length) hits.push(f);
+    }
     if (hits.length) add("repo.homes", "warn", `home folder written out in ${hits.length} shared files: ${hits.slice(0, 3).join(", ")}${hits.length > 3 ? "…" : ""}`, "write $HOME (shell), ~ (CLAUDE.md imports) or ${HOME} (servers.json) instead");
     else add("repo.homes", "ok", "no home folder written out in the repository");
   }
@@ -410,6 +414,6 @@ export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
     }
   }
 
-  if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills is missing: external skills are unavailable on this machine", "create it, or sync it from your other machine");
+  if (!(await lstat(AGENTS_SKILLS))) add("agents.dir", "warn", "~/.agents/skills is missing: external skills are unavailable on this machine", "claude-multi install creates it");
   return c;
 }
