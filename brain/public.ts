@@ -27,8 +27,9 @@ const GOOGLE_SCOPES: [string, string][] = [
   ["drive.readonly", "cercare e leggere i file di Drive, senza modificarli"],
 ];
 
+// email_off: Cloudflare's email obfuscation would swap the address for a script, which the CSP blocks
 const contactLine = (s: Site) =>
-  s.contact ? `<a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a>` : "l'amministratore del servizio";
+  s.contact ? `<!--email_off--><a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a><!--/email_off-->` : "l'amministratore del servizio";
 
 const footer = (here: "home" | "privacy") => `
   <p class="foot">${here === "home" ? `<a href="/privacy">Privacy</a>` : `<a href="/">Brain</a>`} · <a href="/tasks">Bacheca</a> · <a href="/account">Account</a></p>`;
