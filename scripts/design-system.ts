@@ -9,7 +9,7 @@
 // console's stylesheet without its @font-face, token blocks and full-window shell. Publishing the
 // two files back to the artifact is a separate step (the Artifact tool).
 
-const CSS = new URL("../cli/dashboard/style.css", import.meta.url);
+const CSS = new URL("../apps/cli/dashboard/style.css", import.meta.url);
 
 /** Pure: `--name: value;` of the first block opened by `selector`, as a map. */
 export function cssVars(css: string, selector: string): Record<string, string> {

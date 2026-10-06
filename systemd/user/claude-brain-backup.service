@@ -1,6 +1,6 @@
 [Unit]
 Description=A copy of the brain on this machine, when it changed (claude-multi brain-backup)
-Documentation=file://%h/.local/src/claude-multi/brain/README.md
+Documentation=file://%h/.local/src/claude-multi/apps/brain/README.md
 After=network-online.target
 
 [Service]

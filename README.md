@@ -52,7 +52,7 @@ Someone new is best guided by a Claude Code session following [ONBOARDING.md](ON
 3. `claude-multi vault init` — the secret vault; keep the recovery code somewhere safe. Then each
    account's secret: `claude-multi vault set <service> <account>`, or the console's Connections.
 4. `claude` (and each profile's command) — sign in with `/login`.
-5. Optionally your own brain: an instance of `brain/` on your server (`brain/README.md`), its address
+5. Optionally your own brain: an instance of `apps/brain/` on your server (`apps/brain/README.md`), its address
    as a `brain` account in `accounts.json`, then `claude-multi brain-login` (or Sign in, console ›
    Connections) puts its token and backup key in the vault.
 6. `claude-multi mcp sync` with Claude closed, then `claude-multi doctor`.
@@ -71,7 +71,7 @@ Someone new is best guided by a Claude Code session following [ONBOARDING.md](ON
 ```
 
 Keep it in step between your machines; Syncthing leaves a `.sync-conflict-` copy when two edits
-collide, and the doctor reports it. Everything under `cli/`, `bin/`, `systemd/`, `lib/` and
+collide, and the doctor reports it. Everything under `apps/cli/`, `bin/`, `systemd/`, `lib/` and
 `shared/` is the machinery, the same for everyone who uses the repository.
 
 ---
@@ -210,7 +210,7 @@ exactly the same, which is the point on a headless box.
 Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
 asks the brain every half minute whether its tasks or pages moved, and the page redraws the view you
 are actually looking at. The page itself is HTML, CSS and vanilla JS with no build step; the libraries
-it uses are vendored in `cli/dashboard/vendor/` (d3-force, for the brain's graph) and nothing is
+it uses are vendored in `apps/cli/dashboard/vendor/` (d3-force, for the brain's graph) and nothing is
 loaded from elsewhere, so it renders on a machine that has never been online.
 
 Five sections, in English or Italian. The language follows the machine's locale — the regional
@@ -225,7 +225,7 @@ the globe button in the rail overrides it per browser.
   on the left filters every view. A task opens as a page: its fields, its steps and their
   progress, a Markdown description that saves as you type, and its attachments. See [Tasks](#tasks).
 - **Brain** (`#brain`) — the brain service, read through the console with this machine's token
-  (`cli/memory.ts`; the browser never sees it). **Pages**: the seven areas as a tree, search by
+  (`apps/cli/memory.ts`; the browser never sees it). **Pages**: the seven areas as a tree, search by
   words at once and by meaning on Enter, a reader with who wrote the page and when, the links both
   ways (broken ones struck through), every version and what changed since, and the page's
   neighbourhood as a live graph. **Graph**: the whole brain, laid out by d3-force with each area in
@@ -253,7 +253,7 @@ rolling back are actions like the others: nothing in them needs root.
 
 ## The desktop app
 
-`claude-multi-app` (`lib/claude-multi-app/`, PySide6) makes the console an application. It is a
+`claude-multi-app` (`apps/tray/`, PySide6) makes the console an application. It is a
 **view**, like everything that is not the CLI: its state is the console's, its actions are the
 commands a terminal would run. The console server stays its own unit, so a browser or an ssh
 tunnel still reaches it.
@@ -417,7 +417,7 @@ token goes to the vault and the address next to the account's name.
 
 ### Tasks
 
-Samuel's tasks live in his brain (`brain/`), one Markdown file per task, so the phone sees the same
+Samuel's tasks live in his brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
 are files in `~/brains/tasks/items` (`CLAUDE_MULTI_TASKS`), as they were until 2026-10-02;
@@ -439,7 +439,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   repository, relative to the project's folder, a URL, a brain page). The brain holds the card of
   every task; how much detail goes in it is the project's choice.
 - **Projects are folders**: a task's project is its folder under `~` (`work/acme/site`), or a bare
-  name that resolves to the shallowest folder with that name (`cli/projects.ts`; the roots are
+  name that resolves to the shallowest folder with that name (`apps/cli/projects.ts`; the roots are
   `projectRoots` in the settings, by default `personal`, `work`, `university`).
 - The **`tasks` MCP server** is in every profile, on the CLI and in Desktop (the brain connector
   has the same tools on the same list): `tasks_brief` (the
@@ -480,7 +480,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   is stored, and never comes back to the page), or `claude-multi vault set <service> <account>`
   with the secret on stdin. A secret is never a command-line argument and never a tool result.
 - **A service's own command-line tool** gets the same token: `claude-multi vault run cloudflare
-  [account] -- wrangler deploy` (`cli/toolrun.ts`). Only that tool runs (the project's
+  [account] -- wrangler deploy` (`apps/cli/toolrun.ts`). Only that tool runs (the project's
   `node_modules/.bin`, else PATH; `pnpm add -D wrangler` in the project), the token is in its
   environment and hidden if it ever reaches the output, and its own login is refused. What deletes,
   rolls back, applies remote migrations or runs DROP/DELETE/TRUNCATE/ALTER on a remote D1 asks for a
@@ -494,8 +494,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 ```
 bin/            wrappers and scripts: claude, claude-multi, claude-multi-app, claude-launch, claude-update, …
 bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
-cli/            the claude-multi CLI (Deno, zero dependencies)
-cli/dashboard/  the console page (HTML/CSS/JS, no build step)
+apps/cli/            the claude-multi CLI (Deno, zero dependencies)
+apps/cli/dashboard/  the console page (HTML/CSS/JS, no build step)
 shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
 config.example/ the configuration `claude-multi init` starts from
 lib/            the desktop app: tray and console window (PySide6)
@@ -548,7 +548,7 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   under a running Electron app crashes it. `claude-launch` applies a staged version right before it
   starts the app, so in practice an update lands at the next launch. The previous version is kept.
 - **claude-multi** updates itself in the same round, last (`claude-multi self-update`,
-  `cli/selfupdate.ts`): a fetch, then a pull only fast-forward and only on a clean tree that follows
+  `apps/cli/selfupdate.ts`): a fetch, then a pull only fast-forward and only on a clean tree that follows
   a remote branch (local changes or diverged history: nothing is touched, the log says why, once).
   After a pull the console and the tray app restart if their code changed, the generated settings
   are rebuilt, and `install` runs when it has work to do — only with every Claude closed; otherwise
@@ -581,8 +581,8 @@ deno task test    # usage (rates, dedupe, turns), notifications,
   TypeScript changed. Deliberate bypass: `git commit --no-verify`.
 - **CI** (`.forgejo/workflows/ci.yml`): check, test and a secret scan of the whole tree on every
   push. Needs a runner with the `docker` label.
-- Every new invariant goes in `cli/doctor.ts` — the README describes, the doctor verifies. Every new
-  pure function gets a test in `cli/tests/`.
+- Every new invariant goes in `apps/cli/doctor.ts` — the README describes, the doctor verifies. Every new
+  pure function gets a test in `apps/cli/tests/`.
 
 ---
 

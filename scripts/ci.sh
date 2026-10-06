@@ -37,7 +37,7 @@ fi
 
 if ((site)); then
   step site
-  (cd site && pnpm install --frozen-lockfile --silent && pnpm build)
+  (cd apps/site && pnpm install --frozen-lockfile --silent && pnpm build)
 fi
 
 printf '\n\033[32mci ok\033[0m\n'

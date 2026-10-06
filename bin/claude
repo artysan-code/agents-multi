@@ -39,7 +39,7 @@ if [[ ! -x "$CLAUDE_BIN" ]]; then
   LATEST=$(ls -1v "$HOME/.local/share/claude/versions/" | tail -n1)
   CLAUDE_BIN="$HOME/.local/share/claude/versions/$LATEST"
 fi
-# disableAccountMcp: the generated settings.json already says it (cli/settings.ts); the overlay,
+# disableAccountMcp: the generated settings.json already says it (apps/cli/settings.ts); the overlay,
 # rebuilt here at every launch, also catches a plugin the organisation synced since the last
 # regeneration. A --settings file merges into the settings, enabledPlugins included.
 CONFIG_DIR="$HOME/.claude-multi/$PROFILE"

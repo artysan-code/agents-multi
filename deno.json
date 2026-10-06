@@ -9,17 +9,17 @@
   },
   "tasks": {
     "check": "bash scripts/check.sh",
-    "test": "CLAUDE_MULTI_CONFIG=cli/tests/fixtures/config deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 cli/tests brain/tests/brain_test.ts brain/tests/accounts_test.ts brain/tests/board_test.ts brain/tests/public_test.ts",
+    "test": "CLAUDE_MULTI_CONFIG=apps/cli/tests/fixtures/config deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 apps/cli/tests apps/brain/tests/brain_test.ts apps/brain/tests/accounts_test.ts apps/brain/tests/board_test.ts apps/brain/tests/public_test.ts",
     "ci": "bash scripts/ci.sh",
-    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 cli/main.ts doctor",
+    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 apps/cli/main.ts doctor",
     "release": "deno run --allow-read --allow-write --allow-run=git scripts/release.ts"
   },
   "fmt": {
     "lineWidth": 120,
     "proseWrap": "preserve",
     "exclude": [
-      "site/",
-      "cli/dashboard/vendor/",
+      "apps/site/",
+      "apps/cli/dashboard/vendor/",
       "shared/skills/graphify/",
       "desktop/icons/",
       "**/*.svg"
@@ -27,8 +27,8 @@
   },
   "lint": {
     "exclude": [
-      "cli/dashboard/vendor/",
-      "site/"
+      "apps/cli/dashboard/vendor/",
+      "apps/site/"
     ],
     "rules": {
       "exclude": [

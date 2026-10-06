@@ -2,7 +2,7 @@
 # ui.sh — how claude-update speaks: one row per component (an icon, its name, its version, what
 # happened) and, under it, dimmed, only the details worth knowing. Colours only on a terminal and
 # never with NO_COLOR. The language is the machine's, as the console picks it (uiLanguage() in
-# cli/lib.ts: LC_ALL, LC_MESSAGES, LC_TIME, LANG): Italian or English. cli/selfupdate.ts prints its
+# apps/cli/lib.ts: LC_ALL, LC_MESSAGES, LC_TIME, LANG): Italian or English. apps/cli/selfupdate.ts prints its
 # row in the same shape, so the three line up.
 
 cm_ui_lang() {

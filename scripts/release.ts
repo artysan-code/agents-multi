@@ -15,7 +15,7 @@
  */
 
 /** The manifests that carry the version, relative to the repository root. */
-export const MANIFESTS = ["deno.json", "site/package.json"];
+export const MANIFESTS = ["deno.json", "apps/site/package.json"];
 
 export type Bump = "major" | "minor" | "patch" | "beta";
 

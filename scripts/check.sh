@@ -19,8 +19,8 @@ optional() {
 
 deno fmt --check --quiet
 deno lint --quiet
-deno check --quiet cli/*.ts cli/tests/*.ts shared/mcp/lib/*.ts shared/mcp/*/server.ts shared/hooks/*.ts \
-  shared/tools/*/*.ts scripts/*.ts brain/*.ts brain/tests/*.ts
+deno check --quiet apps/cli/*.ts apps/cli/tests/*.ts shared/mcp/lib/*.ts shared/mcp/*/server.ts shared/hooks/*.ts \
+  shared/tools/*/*.ts scripts/*.ts apps/brain/*.ts apps/brain/tests/*.ts
 
 # Every bash script, found by its shebang: a script added anywhere below is checked unedited.
 shell=()
@@ -35,5 +35,5 @@ for f in bin/* bin/lib/*.sh shared/statusline-command.sh shared/hooks/*.sh share
 done
 if optional shellcheck; then shellcheck -S warning "${shell[@]}"; fi
 
-python3 -m py_compile lib/claude-multi-app/*.py
+python3 -m py_compile apps/tray/*.py
 echo "check ok"

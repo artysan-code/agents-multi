@@ -72,7 +72,7 @@ main() {
   write_state "$behind" "$ahead" "$dirty" "$pulled" "$fetch_ok" true
 }
 
-# Every profile has a GENERATED settings.json (cli/settings.ts): shared + profile patch + manifest.
+# Every profile has a GENERATED settings.json (apps/cli/settings.ts): shared + profile patch + manifest.
 # It is regenerated when a source is newer than the last generation: a pull, an edit in the repo,
 # a plugin synced from the account, or Claude writing into the generated file (those writes are
 # adopted into the profile patch). Requires Deno: without it, Claude starts with the file as last

@@ -1,5 +1,6 @@
-# the images build from the repository root (brain/Dockerfile): never the host's builds or modules
+# the brain's image builds from the repository root (apps/brain/Dockerfile): never the host's
+# builds or modules
 **/node_modules
-site/dist
-site/.astro
+apps/site/dist
+apps/site/.astro
 .git

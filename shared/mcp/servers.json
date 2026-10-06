@@ -108,7 +108,7 @@
       "_service": "brain",
       "type": "http",
       "url": "{url}/mcp",
-      "_note": "The person's brain (brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. CLI only (http)."
+      "_note": "The person's brain (apps/brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. CLI only (http)."
     },
     "cloudflare": {
       "_service": "cloudflare",
@@ -119,7 +119,7 @@
           "Authorization": "Bearer {secret}"
         }
       },
-      "_note": "Cloudflare's official MCP (Code Mode: docs, search, execute — execute runs JavaScript against the whole API), one server per Cloudflare account token: cloudflare-<account>. It cannot switch deletions off and masks nothing: shared/hooks/cloudflare-guard.ts reads the code of every execute — reads pass, any DELETE is denied, writes ask. It stops mistakes, not code written to slip past it: the token (broad, but no members, tokens or account settings) stays the hard boundary. An account token also needs Account Settings: Read, to find its account. Workers are built and deployed with wrangler, on the same token: claude-multi vault run cloudflare -- wrangler … (cli/toolrun.ts). CLI only (http).",
+      "_note": "Cloudflare's official MCP (Code Mode: docs, search, execute — execute runs JavaScript against the whole API), one server per Cloudflare account token: cloudflare-<account>. It cannot switch deletions off and masks nothing: shared/hooks/cloudflare-guard.ts reads the code of every execute — reads pass, any DELETE is denied, writes ask. It stops mistakes, not code written to slip past it: the token (broad, but no members, tokens or account settings) stays the hard boundary. An account token also needs Account Settings: Read, to find its account. Workers are built and deployed with wrangler, on the same token: claude-multi vault run cloudflare -- wrangler … (apps/cli/toolrun.ts). CLI only (http).",
       "_guard": {
         "tool": "execute",
         "hook": "cloudflare-guard.ts"

@@ -3,7 +3,7 @@
 // written into a configuration file.
 //
 // `claude-multi mcp sync` expands a registry entry with `_perAccount` into one server per account
-// (cli/mcp.ts). Everything about the account but its secret is already in that server's config:
+// (apps/cli/mcp.ts). Everything about the account but its secret is already in that server's config:
 // the address, the name. The secret stays a `{secret}` placeholder, and this script fills it in when
 // the server starts, reading the vault (vault.ts) like our own servers do:
 //

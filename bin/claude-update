@@ -4,7 +4,7 @@
 #   [CLI]     Claude Code    - internal updater, then restores claude-bin and the ~/.local/bin/claude wrapper
 #   [Desktop] Claude Desktop - claude-desktop-update: verified official .deb, user space, no root
 #   [Self]    claude-multi   - the repo itself: fast-forward-only pull on a clean working tree, then
-#                              console/app restart if their code changed and install with Claude closed (cli/selfupdate.ts)
+#                              console/app restart if their code changed and install with Claude closed (apps/cli/selfupdate.ts)
 #
 # Usage:
 #   claude-update              # everything: CLI + Desktop + claude-multi

@@ -37,7 +37,7 @@ while IFS= read -r line; do
 done < <(git diff --cached -U0 --diff-filter=ACMR | awk '/^\+\+\+ b\//{f=substr($0,7)} /^\+[^+]/{print f": "substr($0,2)}' | grep -E "$PAT" | cut -c1-160)
 
 # 3. check and tests, skipped for commits that touch neither code nor what the tests read
-if git diff --cached --name-only | grep -qE '\.(ts|js|sh|py|json|md|css|html)$|^bin/|^\.githooks/|^shared/|^config\.example/|^desktop/'; then
+if git diff --cached --name-only | grep -qE '\.(ts|js|sh|py|json|md|css|html)$|^bin/|^\.githooks/|^shared/|^config\.example/|^desktop/|^apps/'; then
   if command -v deno >/dev/null; then
     log=$(mktemp)
     bash scripts/check.sh >"$log" 2>&1 || {
