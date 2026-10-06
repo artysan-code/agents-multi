@@ -51,7 +51,7 @@ import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 import { dayOf, hhmm, tasksRoot } from "../shared/mcp/lib/tasks.ts";
 import { lastBackup } from "./brain-backup.ts";
 import { getSecret, keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
-import { legacyFilesPresent, probeAccount } from "./vault.ts";
+import { probeAccount } from "./vault.ts";
 import { codeVersion } from "./codeversion.ts";
 import { loginFailures, probeLogin, recordLogin } from "./login.ts";
 
@@ -764,15 +764,6 @@ export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
           "wrangler logout, then claude-multi vault run cloudflare -- wrangler …",
         );
       }
-    }
-    const legacy = await legacyFilesPresent();
-    if (legacy.length) {
-      add(
-        "vault.legacy",
-        "warn",
-        `secrets still outside the vault: ${legacy.map(shortHome).join(", ")}`,
-        "claude-multi vault import-legacy (imports, checks, then removes them)",
-      );
     }
   }
   if (await legacyStatePresent()) {

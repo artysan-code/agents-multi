@@ -236,7 +236,7 @@ switch (cmd) {
   self-update [--check [--json]] [--quiet]   claude-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  vault   [status|init|pair|recovery-code|set|delete|run|import-legacy]   the MCP servers' secrets: encrypted,
+  vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs

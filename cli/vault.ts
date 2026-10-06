@@ -4,7 +4,7 @@
 // A secret is never an argument: it is read from stdin, so it does not land in the shell history or
 // in `ps`. And nothing here prints one, except `recovery-code`, which prints the key on purpose.
 
-import { ANSI, HOME, lstat, readText, RUNTIME } from "./lib.ts";
+import { ANSI, RUNTIME } from "./lib.ts";
 import { parseRun, profileFrom, runTool } from "./toolrun.ts";
 import { ACCOUNTS } from "./mcp.ts";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
@@ -78,29 +78,6 @@ export async function probeAccount(
   await w.close();
   const code = new TextDecoder().decode((await child.output()).stdout).trim();
   return { ok: code.startsWith("2"), detail: `HTTP ${code || "unreachable"}` };
-}
-
-/** The secrets claude-multi used before the vault, where they were. */
-const LEGACY: { service: string; account: string; file: string; read: (text: string) => string | null }[] = [
-  {
-    service: "coolify",
-    account: "ark",
-    file: `${HOME}/.config/secrets/coolify-ark.token`,
-    read: (t) => t.trim() || null,
-  },
-  {
-    service: "n8n",
-    account: "ark",
-    file: `${HOME}/.config/n8n-ark/.env`,
-    read: (t) => t.match(/^N8N_API_KEY=["']?([^"'\n]+)/m)?.[1] ?? null,
-  },
-];
-
-/** Which of them are still there: presence only, their content is not read. */
-export async function legacyFilesPresent(): Promise<string[]> {
-  const out: string[] = [];
-  for (const l of LEGACY) if (await lstat(l.file)) out.push(l.file);
-  return out;
 }
 
 export async function vaultCommand(args: string[]): Promise<number> {
@@ -207,45 +184,9 @@ export async function vaultCommand(args: string[]): Promise<number> {
         }
         return await runTool({ ...plan, account: account.name }, secret);
       }
-      case "import-legacy": {
-        // import, check that the secret really opens its account, and only then remove the old file
-        const accounts = loadAccounts(ACCOUNTS);
-        let failed = 0;
-        for (const l of LEGACY) {
-          const text = await readText(l.file);
-          if (text === null) {
-            console.log(`  ${ANSI.d}· ${l.file}: not here${ANSI.x}`);
-            continue;
-          }
-          const secret = l.read(text);
-          const account = accounts.find((a) => a.service === l.service && a.name === l.account);
-          if (!secret || !account) {
-            console.log(`  ${ANSI.r}✗${ANSI.x} ${l.file}: nothing to import`);
-            failed++;
-            continue;
-          }
-          const probe = await probeAccount(account, secret);
-          if (!probe.ok) {
-            console.log(
-              `  ${ANSI.r}✗${ANSI.x} ${l.service}/${l.account}: the old secret does not work (${probe.detail}); file kept`,
-            );
-            failed++;
-            continue;
-          }
-          await setSecret(l.service, l.account, secret);
-          if ((await getSecret(l.service, l.account)) !== secret) {
-            console.log(`  ${ANSI.r}✗${ANSI.x} ${l.service}/${l.account}: read-back mismatch; file kept`);
-            failed++;
-            continue;
-          }
-          await Deno.remove(l.file);
-          console.log(`  ${ANSI.g}✓${ANSI.x} ${l.service}/${l.account} imported (${probe.detail}), ${l.file} removed`);
-        }
-        return failed ? 1 : 0;
-      }
       default:
         console.error(
-          "usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …|import-legacy]",
+          "usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
         );
         return 2;
     }
