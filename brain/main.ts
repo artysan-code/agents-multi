@@ -9,13 +9,14 @@
 //   deno run -A brain/main.ts totp     a new TOTP secret, and the line to add to an authenticator app
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import { fromFileUrl } from "jsr:@std/path@1/from-file-url";
 import { DatabaseSync } from "node:sqlite";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/webStandardStreamableHttp.js";
 import { fromFile, type TaskStore, useTaskStore } from "../shared/mcp/lib/tasks.ts";
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";
 import { accountPage, type AdminView, authorizePage, html, invitedPage, invitePage, SIGNED_OUT_ERROR, signInPage } from "./pages.ts";
-import { privacyPage, type Site, siteFile } from "./public.ts";
+import { privacyPage, type Site, siteFile, siteMoved } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
 import { snapshot } from "./backup.ts";
@@ -118,16 +119,24 @@ const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
 const TOTP = !DEV;
 const SITE: Site = {
   url: URL_,
+  siteUrl: (env("BRAIN_SITE_URL") ?? URL_).replace(/\/+$/, ""),
   operator: env("BRAIN_OPERATOR", owner().name)!,
   contact: env("BRAIN_CONTACT", "")!,
   hosting: env("BRAIN_HOSTING", "un server privato")!,
 };
-const SITE_DIR = env("BRAIN_SITE", new URL("../site/dist", import.meta.url).pathname)!;
+const SITE_DIR = env("BRAIN_SITE", fromFileUrl(new URL("../site/dist", import.meta.url)))!;
+// the site on an address of its own answers with the site and the privacy notice, nothing of the brain
+const SITE_HOST = SITE.siteUrl !== URL_ ? new URL(SITE.siteUrl).host : null;
 const otpauth = (id: string, secret: string) => `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 async function handle(req: Request): Promise<Response> {
   const u = new URL(req.url);
   const p = u.pathname;
+  if (SITE_HOST && u.host === SITE_HOST) {
+    if (p === "/privacy") return html(privacyPage(SITE), 200, { "x-robots-tag": "all" });
+    const r = req.method === "GET" || req.method === "HEAD" ? await siteFile(SITE_DIR, p, SITE) : null;
+    return r ?? await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
+  }
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...CORS, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } });
 
   if (p === "/health") return json({ ok: true, accounts: users.count(), index: tenants.status() });
@@ -223,7 +232,7 @@ async function handle(req: Request): Promise<Response> {
   }
 
   // ---------------- the privacy notice (the rest of what is public is the site, below)
-  if (p === "/privacy") return html(privacyPage(SITE));
+  if (p === "/privacy") return html(privacyPage(SITE), 200, { "x-robots-tag": "all" });
 
   // ---------------- the board: the tasks on the web, signed in like the account page
   if (p === "/tasks" || p.startsWith("/tasks/")) {
@@ -235,8 +244,12 @@ async function handle(req: Request): Promise<Response> {
   }
 
   // ---------------- claude-multi's site: the landing and the docs, built into site/dist
+  // (on the brain's address when the site has none of its own; otherwise a visitor is sent there)
   if (req.method === "GET" || req.method === "HEAD") {
-    const r = await siteFile(SITE_DIR, p, SITE);
+    if (SITE_HOST && p === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
+    const moved = await siteMoved(SITE_DIR, u, SITE);
+    if (moved) return new Response(null, { status: 301, headers: { location: moved } });
+    const r = SITE_HOST ? null : await siteFile(SITE_DIR, p, SITE);
     if (r) return r;
   }
 
@@ -244,7 +257,7 @@ async function handle(req: Request): Promise<Response> {
   const who: Caller | null = await auth.caller(req);
   if (!who) {
     if (p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup")) return withCors(auth.challenge());
-    return await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
+    return SITE_HOST ? new Response("not found", { status: 404 }) : await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
   }
   const user = users.get(who.user)!;
   return await as(user, who.label, () => served(req, u, who));

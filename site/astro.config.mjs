@@ -1,10 +1,12 @@
 // The public site of claude-multi: the landing (src/pages, English on /, Italian on /it/) and the
 // documentation (Starlight, on /docs). Static: the brain's image builds it and serves dist/ (brain/public.ts).
+// Its address is a placeholder the brain replaces with the real one when it serves a page: nothing of
+// one instance is built in.
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
 export default defineConfig({
-  site: "https://brain.example.com",
+  site: "https://site.invalid",
   build: { inlineStylesheets: "never" },
   integrations: [
     starlight({

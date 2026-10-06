@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://site.invalid/sitemap-index.xml

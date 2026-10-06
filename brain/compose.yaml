@@ -22,6 +22,8 @@ services:
       - BRAIN_OPERATOR=${BRAIN_OPERATOR:-}
       - BRAIN_CONTACT=${BRAIN_CONTACT:-}
       - BRAIN_HOSTING=${BRAIN_HOSTING:-}
+      # the site's own address (another origin than the brain's), when it has one
+      - BRAIN_SITE_URL=${BRAIN_SITE_URL:-}
       - BRAIN_EMBED_URL=${BRAIN_EMBED_URL:-http://ollama:11434}
       - BRAIN_EMBED_MODEL=bge-m3
       - BRAIN_DATA=/data

@@ -1,6 +1,7 @@
 ---
 // The console, drawn: three of its views (Today, Tasks, Brain) that take turns when the script runs
-// (src/scripts/landing.ts), Today alone without it. Invented data, never anyone's.
+// (src/scripts/landing.ts), Today alone without it. Decorative, so hidden from assistive technology
+// and inert; the data is invented, never anyone's.
 import mark from "../assets/mark.svg?raw";
 import type { Dict } from "../i18n";
 interface Props { t: Dict }
@@ -11,29 +12,29 @@ const profiles = [["personal", "var(--p-2)", "~/blog"], ["work", "var(--accent)"
 const nodes = [[150, 92, 1], [92, 60, 2], [210, 52, 3], [228, 128, 4], [88, 140, 1], [160, 160, 2], [40, 96, 3], [262, 88, 1], [124, 24, 4], [196, 196, 3], [52, 176, 2], [276, 170, 2]];
 const edges = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [1, 6], [1, 8], [2, 7], [2, 8], [3, 7], [3, 11], [4, 10], [5, 9], [5, 11], [4, 6]];
 ---
-<div class="window" data-mock>
+<div class="window" data-mock aria-hidden="true" inert>
   <div class="titlebar"><i></i><i></i><i></i><span>127.0.0.1:7331</span></div>
   <div class="app">
-    <nav class="rail">
+    <div class="rail">
       <div class="rb"><span class="mark" set:html={mark} />claude-multi</div>
-      <a class="on" data-tab="0"><i></i>{m.today}</a>
-      <a data-tab="1"><i></i>{m.tasks}</a>
-      <a data-tab="2"><i></i>{m.brain}</a>
-      <a><i></i>{m.connections}</a>
-      <a><i></i>{m.system}</a>
+      <span class="on" data-tab="0"><i></i>{m.today}</span>
+      <span data-tab="1"><i></i>{m.tasks}</span>
+      <span data-tab="2"><i></i>{m.brain}</span>
+      <span><i></i>{m.connections}</span>
+      <span><i></i>{m.system}</span>
       <div class="foot"><span class="dot"></span>{m.healthy}</div>
-    </nav>
+    </div>
     <div class="views">
       <div class="main view on" data-view="0">
-        <h4>{m.today}<small>{m.date}</small></h4>
+        <div class="h4">{m.today}<small>{m.date}</small></div>
         <div class="panel">
-          <h5>{m.sessions}</h5>
+          <div class="h5">{m.sessions}</div>
           {profiles.map(([p, c, path]) => (
-            <div class="sess"><span class="who" style={`background:${c}`}>{p}</span><span class="path">{path}</span><span class="live"><span class="dot"></span>live</span></div>
+            <div class="sess"><span class="who" style={`--c:${c}`}>{p}</span><span class="path">{path}</span><span class="live"><span class="dot"></span>{m.live}</span></div>
           ))}
         </div>
         <div class="panel">
-          <h5>{m.agenda}</h5>
+          <div class="h5">{m.agenda}</div>
           <div class="task"><span class="box done"></span><s>{m.t1}</s><time>09:30</time></div>
           <div class="task"><span class="box"></span>{m.t2}<time>11:00</time></div>
           <div class="task"><span class="box"></span>{m.t3}<time>15:00</time></div>
@@ -41,16 +42,16 @@ const edges = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [1, 6], [1, 8], [2, 7], [
         </div>
         <div class="ask"><b>{m.ask}</b><span class="typed">{m.typed}</span></div>
       </div>
-      <div class="main view" data-view="1" aria-hidden="true">
-        <h4>{m.tasks}</h4>
+      <div class="main view" data-view="1">
+        <div class="h4">{m.tasks}</div>
         <div class="kanban">
           {[[m.t2, m.t4], [m.t3], [m.t1]].map((col, i) => (
-            <div class="col"><h5>{["To do", "Doing", "Done"][i]}</h5>{col.map((x) => <div class="kcard"><span>{x}</span><i style={`width:${[30, 65, 100][i]}%`}></i></div>)}</div>
+            <div class="col"><div class="h5">{m.cols[i]}</div>{col.map((x) => <div class="kcard"><span>{x}</span><i style={`width:${[30, 65, 100][i]}%`}></i></div>)}</div>
           ))}
         </div>
       </div>
-      <div class="main view" data-view="2" aria-hidden="true">
-        <h4>{m.brain}<small>{m.graph}</small></h4>
+      <div class="main view" data-view="2">
+        <div class="h4">{m.brain}<small>{m.graph}</small></div>
         <svg class="graph" viewBox="0 0 300 210">
           {edges.map(([a, b]) => <line x1={nodes[a][0]} y1={nodes[a][1]} x2={nodes[b][0]} y2={nodes[b][1]} />)}
           {nodes.map(([x, y, a], i) => <circle cx={x} cy={y} r={i === 0 ? 9 : 5} style={`fill:var(--p-${a})`} />)}

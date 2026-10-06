@@ -10,6 +10,10 @@ description: Install claude-multi, sign in to each profile, and check the result
 
 ## Install
 
+:::note
+The repository is not public yet: these steps are how it installs once it is.
+:::
+
 ```bash
 git clone <the repository> ~/.local/src/claude-multi
 ~/.local/src/claude-multi/bin/claude-multi init ~/claude-multi-config --name Ann --language English

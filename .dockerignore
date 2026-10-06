@@ -1,0 +1,5 @@
+# the images build from the repository root (brain/Dockerfile): never the host's builds or modules
+**/node_modules
+site/dist
+site/.astro
+.git

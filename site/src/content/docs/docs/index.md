@@ -27,8 +27,8 @@ them allowed to touch the secrets.
 
 The repository is the source of truth; `~/.claude-multi/` is runtime materialised by
 `claude-multi install`. What is yours — profiles, accounts, rules, preferences — lives in a folder of
-yours, apart from the code. Configuration travels between machines over git, never over a file-sync
-tool, because the runtime directories hold credentials.
+yours, apart from the code, which you keep in step between machines with git or Syncthing. The code
+travels over git; the runtime directory never goes into a synced folder, because it holds credentials.
 
 :::note
 claude-multi is being prepared for a public release. Until then these pages describe it; the code

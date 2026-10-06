@@ -87,7 +87,8 @@ holds the brain.
 | `BRAIN_MASTER_KEY` | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost |
 | `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL` | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`) |
 | `BRAIN_DATA` | where `accounts.db` and `users/` live (`/data`) |
-| `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server in un datacenter europeo") |
+| `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server a Francoforte, in Germania") |
+| `BRAIN_SITE_URL` | the site's own address, another origin than the brain's (both domains on the `brain` service in Coolify); unset, the site is served on the brain's address |
 | `BRAIN_DEV=1` | local only: signing in without TOTP |
 
 **The first account** is made on the first start, when there is none: the administrator, with the
@@ -146,7 +147,16 @@ next one), and an edit made on a task someone changed meanwhile is refused rathe
 What anyone can open without an account (`public.ts`): claude-multi's site, the landing (`/`, `/it/`)
 and the docs (`/docs/`), built from `site/` (Astro and Starlight) into `site/dist` by the image's first
 stage; and `/privacy`, the privacy notice, for this service and for claude-multi's Google integration
-(its OAuth client points here). The site carries two placeholders the brain fills when it serves a
-page, `__CONTACT__` and `__OPERATOR__`; those, and where the server is, come from `BRAIN_CONTACT`,
-`BRAIN_OPERATOR` and `BRAIN_HOSTING`. A change of substance to the notice bumps `PRIVACY_UPDATED`.
-Locally, `pnpm build` in `site/` before starting the brain; `BRAIN_SITE` points elsewhere if needed.
+(its OAuth client points here).
+
+With `BRAIN_SITE_URL` the site lives on an address of its own, **another origin**: nothing it runs
+(its libraries, Pagefind, a compromised dependency) can act with a brain session. That address answers
+with the site and the notice only; on the brain's, a page of the site is a 301 to the same path there,
+`robots.txt` disallows everything and every page of the brain says `noindex`. The paths that are the
+brain's (`/mcp`, `/api`, `/tasks`, `/account`…) are never looked up in the site.
+
+The site is built with no instance in it: its address is `https://site.invalid`, and `__APP__` (the
+brain's address), `__CONTACT__` and `__OPERATOR__` are placeholders the brain fills when it serves a
+page, from `BRAIN_SITE_URL`, `BRAIN_URL`, `BRAIN_CONTACT` and `BRAIN_OPERATOR`. A change of substance
+to the notice bumps `PRIVACY_UPDATED`. Locally, `pnpm build` in `site/` before starting the brain;
+`BRAIN_SITE` points elsewhere if needed.

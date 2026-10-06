@@ -1,5 +1,7 @@
 // public.ts — what anyone can open without an account: claude-multi's site (the landing and the docs,
-// built from site/ into site/dist by the image) and `/privacy`, the privacy notice. The notice covers
+// built from site/ into site/dist by the image) and `/privacy`, the privacy notice. The site has an
+// address of its own when BRAIN_SITE_URL names one: a different origin from the brain's, so nothing
+// the site runs can act with a brain session; the brain's address then sends its visitors there. The notice covers
 // this service and claude-multi's Google integration, since its OAuth client points here (Google wants
 // a public notice for it). Who runs the instance, how to reach them and where it is hosted come from
 // the environment (BRAIN_OPERATOR, BRAIN_CONTACT, BRAIN_HOSTING): nothing about one person is written
@@ -8,12 +10,15 @@
 import { esc, page } from "./pages.ts";
 
 export interface Site {
+  /** the brain's address */
   url: string;
+  /** the site's address: the brain's own unless the site has one of its own */
+  siteUrl: string;
   /** who runs this instance: the data controller */
   operator: string;
   /** an address that reaches them; empty when not set */
   contact: string;
-  /** where the server is, in a sentence fragment ("un server in un datacenter europeo") */
+  /** where the server is, in a sentence fragment ("un server a Francoforte, in Germania") */
   hosting: string;
 }
 
@@ -28,12 +33,15 @@ const GOOGLE_SCOPES: [string, string][] = [
   ["drive.readonly", "cercare e leggere i file di Drive, senza modificarli"],
 ];
 
+/** Pure: the contact when it is a plain address, else empty (nothing else may reach a mailto: link). */
+export const contactOf = (s: Site) => /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(s.contact) ? s.contact : "";
+
 // email_off: Cloudflare's email obfuscation would swap the address for a script, which the CSP blocks
 const contactLine = (s: Site) =>
-  s.contact ? `<!--email_off--><a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a><!--/email_off-->` : "l'amministratore del servizio";
+  contactOf(s) ? `<!--email_off--><a href="mailto:${contactOf(s)}">${contactOf(s)}</a><!--/email_off-->` : "l'amministratore del servizio";
 
-const footer = `
-  <p class="foot"><a href="/">claude-multi</a> · <a href="/docs/">Docs</a> · <a href="/tasks">Entra</a></p>`;
+const footer = (s: Site) => `
+  <p class="foot"><a href="${esc(s.siteUrl)}/">claude-multi</a> · <a href="${esc(s.siteUrl)}/docs/">Docs</a> · <a href="${esc(s.url)}/tasks">Entra</a></p>`;
 
 export function privacyPage(s: Site) {
   const scopes = GOOGLE_SCOPES.map(([k, v]) => `<li><code>${k}</code>: ${v}</li>`).join("");
@@ -69,7 +77,7 @@ export function privacyPage(s: Site) {
 
   <h2>I tuoi diritti</h2>
   <p>Puoi chiedere di vedere, correggere, esportare o cancellare i tuoi dati, e opporti al trattamento, scrivendo a ${contactLine(s)}. Puoi anche rivolgerti all'autorità di controllo del tuo paese (in Italia, il <a href="https://www.garanteprivacy.it">Garante per la protezione dei dati personali</a>).</p>
-  ${footer}</article>`, true);
+  ${footer(s)}</article>`, true);
 }
 
 // ---------------------------------------------------------------- the site
@@ -82,38 +90,62 @@ const TYPES: Record<string, string> = {
 // Starlight's inline scripts and Pagefind's wasm need what the brain's own pages never allow
 const SITE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+// the paths that are the brain's on any address: never looked up in the site
+const RESERVED = /^\/(mcp|api|backup|tasks|account|invite|authorize|token|register|health|privacy|\.well-known)(\/|$)/;
+/** What the site was built with as its address (site/astro.config.mjs): replaced by the real one when served. */
+export const SITE_PLACEHOLDER = "https://site.invalid";
 
-/** Pure: the file of the built site a path asks for, or null for one that could leave it. */
+/** Pure: the file of the built site a path asks for, or null for one that could leave it or is the brain's. */
 export function sitePath(pathname: string): string | null {
   let p: string;
   try { p = decodeURIComponent(pathname); } catch { return null; }
-  if (!p.startsWith("/") || p.includes("\0") || p.split("/").some((s) => s === ".." || s === ".")) return null;
+  if (!p.startsWith("/") || p.includes("\0") || RESERVED.test(p) || p.split("/").some((s) => s === ".." || s === ".")) return null;
   if (p.endsWith("/")) return `${p.slice(1)}index.html`;
   return /\.[a-z0-9]+$/i.test(p) ? p.slice(1) : `${p.slice(1)}/index.html`;
 }
 
-/** Pure: a page of the site with this instance's particulars in place of its placeholders. The whole
+/** Pure: a page of the site with this instance's particulars in place of its placeholders. An HTML
  *  body is kept from Cloudflare's email obfuscation, whose decoding script the CSP would block. */
-export function fillSite(html: string, s: Site): string {
-  return html
-    .replaceAll("mailto:__CONTACT__", s.contact ? `mailto:${esc(s.contact)}` : "/privacy")
-    .replaceAll("__OPERATOR__", esc(s.operator))
-    .replace(/<body[^>]*>/, "$&<!--email_off-->")
-    .replace("</body>", "<!--/email_off--></body>");
+export function fillSite(text: string, s: Site, html = true): string {
+  const contact = contactOf(s);
+  const out = text
+    .replaceAll(SITE_PLACEHOLDER, () => s.siteUrl)
+    .replaceAll("__APP__", () => esc(s.url))
+    .replaceAll("mailto:__CONTACT__", () => contact ? `mailto:${contact}` : `${esc(s.url)}/privacy`)
+    .replaceAll("__OPERATOR__", () => esc(s.operator));
+  return html ? out.replace(/<body[^>]*>/, "$&<!--email_off-->").replace("</body>", "<!--/email_off--></body>") : out;
 }
 
-/** A file of the built site in `dir`, or null when there is none (the request goes on to the brain). */
+/** Pure: how long a file of the site may be kept. */
+export function siteCache(rel: string): string {
+  if (rel.startsWith("_astro/")) return "public, max-age=31536000, immutable"; // named by their hash
+  if (rel.endsWith(".html") || rel.endsWith(".xml") || rel.endsWith(".txt")) return "no-cache";
+  return "public, max-age=2592000";
+}
+
+/** A file of the built site in `dir`, or null when there is none. */
 export async function siteFile(dir: string, pathname: string, s: Site, status = 200): Promise<Response | null> {
   const rel = sitePath(pathname);
   if (rel === null) return null;
   const bytes = await Deno.readFile(`${dir}/${rel}`).catch(() => null);
   if (!bytes) return null;
   const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
-  const type = TYPES[ext] ?? "application/octet-stream";
   const headers: Record<string, string> = {
-    "content-type": type, "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin",
-    "cache-control": rel.startsWith("_astro/") ? "public, max-age=31536000, immutable" : ext === "html" ? "no-cache" : "public, max-age=86400",
+    "content-type": TYPES[ext] ?? "application/octet-stream", "cache-control": siteCache(rel),
+    "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin",
   };
+  if (ext === "svg") headers["content-security-policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+  if (ext === "xml" || ext === "txt") return new Response(fillSite(new TextDecoder().decode(bytes), s, false), { status, headers });
   if (ext !== "html") return new Response(bytes, { status, headers });
   return new Response(fillSite(new TextDecoder().decode(bytes), s), { status, headers: { ...headers, "content-security-policy": SITE_CSP, "x-frame-options": "DENY" } });
+}
+
+/** Where a request on the brain's address goes when the site has an address of its own: the same
+ *  path there when it is one of the site's, null when it is the brain's. */
+export async function siteMoved(dir: string, u: URL, s: Site): Promise<string | null> {
+  if (s.siteUrl === s.url) return null;
+  const rel = sitePath(u.pathname);
+  if (rel === null) return null;
+  const there = await Deno.stat(`${dir}/${rel}`).then((f) => f.isFile).catch(() => false);
+  return there ? `${s.siteUrl}${u.pathname}${u.search}` : null;
 }

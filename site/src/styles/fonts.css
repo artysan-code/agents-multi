@@ -1,4 +1,5 @@
-/* The console's two faces (SIL OFL, public/fonts): serif is the voice, sans the interface. */
-@font-face { font-family: "Source Serif 4"; src: url(/fonts/source-serif-4.woff2) format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
-@font-face { font-family: "Source Serif 4"; src: url(/fonts/source-serif-4-italic.woff2) format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
-@font-face { font-family: "DM Sans"; src: url(/fonts/dm-sans.woff2) format("woff2"); font-weight: 100 1000; font-style: normal; font-display: swap; }
+/* The console's two faces (SIL OFL, public/fonts): serif is the voice, sans the interface. Cut down
+   from cli/dashboard/fonts for the web: Latin only, weights 400–600, one optical size. */
+@font-face { font-family: "Source Serif 4"; src: url(/fonts/source-serif-4.woff2) format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Serif 4"; src: url(/fonts/source-serif-4-italic.woff2) format("woff2"); font-weight: 400 600; font-style: italic; font-display: swap; }
+@font-face { font-family: "DM Sans"; src: url(/fonts/dm-sans.woff2) format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }

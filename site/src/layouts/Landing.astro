@@ -14,6 +14,19 @@ interface Props { lang: Lang }
 const { lang } = Astro.props;
 const t = dict[lang];
 const home = lang === "en" ? "/" : "/it/";
+const origin = Astro.site!.origin;
+const url = origin + home;
+const ld = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "claude-multi",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Linux",
+  description: t.description,
+  inLanguage: lang,
+  url,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+};
 ---
 <!doctype html>
 <html lang={lang}>
@@ -22,12 +35,22 @@ const home = lang === "en" ? "/" : "/it/";
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{t.htmlTitle}</title>
     <meta name="description" content={t.description} />
-    <script is:inline>document.documentElement.classList.add("js")</script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="alternate" hreflang="en" href="/" />
-    <link rel="alternate" hreflang="it" href="/it/" />
+    <link rel="preload" href="/fonts/source-serif-4.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/dm-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="canonical" href={url} />
+    <link rel="alternate" hreflang="en" href={origin + "/"} />
+    <link rel="alternate" hreflang="it" href={origin + "/it/"} />
+    <link rel="alternate" hreflang="x-default" href={origin + "/"} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="claude-multi" />
+    <meta property="og:url" content={url} />
+    <meta property="og:locale" content={lang === "en" ? "en_US" : "it_IT"} />
+    <meta property="og:locale:alternate" content={lang === "en" ? "it_IT" : "en_US"} />
     <meta property="og:title" content={t.htmlTitle} />
     <meta property="og:description" content={t.description} />
+    <meta name="twitter:card" content="summary" />
+    <script type="application/ld+json" set:html={JSON.stringify(ld)} />
     <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#151515" media="(prefers-color-scheme: dark)" />
   </head>
@@ -42,8 +65,8 @@ const home = lang === "en" ? "/" : "/it/";
           <a href="/docs/">{t.nav.docs}</a>
         </nav>
         <div class="lang">
-          <a href="/" aria-current={lang === "en" ? "page" : undefined}>EN</a>
-          <a href="/it/" aria-current={lang === "it" ? "page" : undefined}>IT</a>
+          <a href="/" hreflang="en" lang="en" aria-current={lang === "en" ? "page" : undefined}>EN</a>
+          <a href="/it/" hreflang="it" lang="it" aria-current={lang === "it" ? "page" : undefined}>IT</a>
         </div>
       </div>
     </header>
@@ -69,6 +92,7 @@ const home = lang === "en" ? "/" : "/it/";
               <div class="dim">36 pass · 0 fail</div>
             </div>
           </div>
+          <p class="demo">{t.mock.demo}</p>
         </div>
       </section>
 
@@ -166,8 +190,8 @@ const home = lang === "en" ? "/" : "/it/";
         <span>{t.footer.made} __OPERATOR__</span>
         <nav>
           <a href="/docs/">{t.footer.docs}</a>
-          <a href="/privacy">{t.footer.privacy}</a>
-          <a href="/tasks">{t.footer.signin}</a>
+          <a href="__APP__/privacy">{t.footer.privacy}</a>
+          <a href="__APP__/tasks" rel="nofollow">{t.footer.signin}</a>
         </nav>
         <p class="legal">{t.footer.legal}</p>
       </div>

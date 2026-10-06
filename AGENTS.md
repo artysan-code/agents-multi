@@ -50,8 +50,9 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   their licence, never loaded from a CDN (the console works offline).
 - **The public site is the one place with a build step** (`site/`, Astro + Starlight, pnpm): the
   landing and the docs, built into `site/dist` by the brain's image and served by the brain
-  (`brain/public.ts`). Nothing personal in it: the contact and the operator are placeholders the brain
-  fills from its environment. Its facts come from the README — when one changes, change both. The
+  (`brain/public.ts`) on an address of its own, another origin than the brain's. Nothing of one
+  instance in it: its address, the contact and the operator are placeholders the brain fills from its
+  environment. Its facts come from the README — when one changes, change both. The
   console keeps its rule: no build, no framework.
 - **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `claude-multi vault`):
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.

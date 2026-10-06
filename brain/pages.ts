@@ -63,7 +63,7 @@ form.grid button{grid-column:1/-1;justify-self:start}
 article.doc>p{margin-top:10px}
 ul.list{padding-left:18px;margin-top:10px;display:flex;flex-direction:column;gap:6px;color:var(--dim);font-size:14px}
 ul.list b{color:var(--fg);font-weight:500}
-code{font:12.5px ui-monospace,monospace;padding:1px 5px;border-radius:5px;background:rgba(127,127,127,.12)}
+article.doc code{font:12.5px ui-monospace,monospace;padding:1px 5px;border-radius:5px;background:rgba(127,127,127,.12)}
 p.foot{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--faint)}
 `;
 
@@ -78,7 +78,7 @@ export function html(body: string, status = 200, extra: Record<string, string> =
     headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY",
       "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://claude.ai https://claude.com http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'",
-      "referrer-policy": "no-referrer", ...extra,
+      "referrer-policy": "no-referrer", "x-robots-tag": "noindex, nofollow", ...extra,
     },
   });
 }
