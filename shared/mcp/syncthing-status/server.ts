@@ -63,17 +63,24 @@ function configPath(): string {
 function apiKey(): string {
   const env = Deno.env.get("STGUI_APIKEY");
   if (env) return env;
-  const xml = Deno.readTextFileSync(configPath());
+  let xml: string;
+  try {
+    xml = Deno.readTextFileSync(configPath());
+  } catch {
+    throw new Error(`Syncthing is not set up here: no ${configPath()} and no STGUI_APIKEY env variable.`);
+  }
   const m = xml.match(/<apikey>([^<]+)<\/apikey>/);
   if (!m) throw new Error("Syncthing API key not found (config.xml or STGUI_APIKEY env variable).");
   return m[1].trim();
 }
 
-const KEY = apiKey();
+/** The API key, read on the first call: the server starts on a machine without Syncthing, and its
+ *  tools then answer with the reason instead of the server failing to start. */
+let KEY: string | null = null;
 
 /** GET `path` on the Syncthing REST API and return the parsed JSON, typed by the caller. Throws on a non-2xx status. */
 async function st<T = unknown>(path: string): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, { headers: { "X-API-Key": KEY } });
+  const r = await fetch(`${BASE}${path}`, { headers: { "X-API-Key": KEY ??= apiKey() } });
   if (!r.ok) throw new Error(`${path} -> HTTP ${r.status}`);
   return await r.json() as T;
 }

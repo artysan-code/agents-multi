@@ -26,6 +26,8 @@ export async function probe(name: string, timeoutMs = 20_000): Promise<{ tools: 
     stderr: "piped",
     env: { CLAUDE_MULTI_PROFILE: "probe" },
   }).spawn();
+  // read stderr alongside, so a server that exits early can say why
+  const stderr = new Response(child.stderr).text();
   const w = child.stdin.getWriter();
   await w.write(new TextEncoder().encode(
     frame(1, "initialize", {
@@ -54,8 +56,8 @@ export async function probe(name: string, timeoutMs = 20_000): Promise<{ tools: 
         if (msg.id === 1 && msg.error) return { error: `initialize: ${msg.error.message}` };
       }
     }
-    const err = new TextDecoder().decode((await child.output()).stderr).trim().split("\n").slice(-3).join(" | ");
-    return { error: err || "no answer" };
+    const err = (await stderr).trim().split("\n").slice(-3).join(" | ");
+    return { error: err || `exited with ${(await child.status).code} without answering` };
   } finally {
     clearTimeout(timer);
     await w.close().catch(() => {});
