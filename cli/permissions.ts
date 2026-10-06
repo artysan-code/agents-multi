@@ -12,7 +12,8 @@
 // launch (bin/lib/prelaunch.sh), so a change applies from the next session.
 
 import { profileNames, PROFILES, readJson } from "./lib.ts";
-import { type Obj, sharedLayer, writeSharedLayer } from "./settings.ts";
+import { sharedLayer, writeSharedLayer } from "./settings.ts";
+import type { Obj } from "./json-patch.ts";
 
 export const LISTS = ["allow", "ask", "deny"] as const;
 export type List = typeof LISTS[number];

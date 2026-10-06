@@ -15,14 +15,8 @@
 // to the page as `confirm`, and runs only when the person re-sends its sha256.
 
 import { BIN, listDir, lstat, type Profile, profileNames, readJson, RUNTIME, STATE } from "./lib.ts";
-import {
-  editSettingsSource,
-  expectedSettings,
-  type Obj,
-  runtimePath,
-  syncAllSettings,
-  syncSettings,
-} from "./settings.ts";
+import { editSettingsSource, expectedSettings, runtimePath, syncAllSettings, syncSettings } from "./settings.ts";
+import { isObj, type Obj } from "./json-patch.ts";
 
 const CLAUDE = `${BIN}/claude-bin`;
 // Every value reaches `claude plugin` as an argument: one starting with "-" would be read as an
@@ -30,7 +24,6 @@ const CLAUDE = `${BIN}/claude-bin`;
 export const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export const validSource = (s: string) => !!s && !s.startsWith("-") && !/\s/.test(s);
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** `claude plugin …` for one profile. cwd is the state dir so no project's .claude/ is read. */
 async function claude(p: Profile, args: string[], timeoutMs = 180_000) {

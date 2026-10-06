@@ -1,17 +1,8 @@
 // Tests for settings.ts: the merge patch algebra and adopting what Claude Code writes into a
 // generated settings.json.
 import { assertEquals } from "jsr:@std/assert@1";
-import {
-  adopt,
-  buildSettings,
-  diffPatch,
-  manifestPatch,
-  mergePatch,
-  type Obj,
-  paths,
-  registryPatch,
-  withoutRules,
-} from "../settings.ts";
+import { diffPatch, mergePatch, type Obj } from "../json-patch.ts";
+import { adopt, buildSettings, manifestPatch, paths, registryPatch, withoutRules } from "../settings.ts";
 
 Deno.test("mergePatch: RFC 7386 — objects merge, null deletes, arrays and scalars replace", () => {
   assertEquals(mergePatch({ a: "b", c: { d: "e", f: "g" } }, { a: "z", c: { f: null } }), { a: "z", c: { d: "e" } });

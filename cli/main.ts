@@ -24,7 +24,7 @@
 import { vaultCommand } from "./vault.ts";
 import { tasksCommand } from "./tasks.ts";
 import { googleCommand } from "./google.ts";
-import { ANSI, CACHE, printDoctor, readJson, REPO, run } from "./lib.ts";
+import { ANSI, CACHE, PORT, printDoctor, readJson, REPO, run } from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { notifyDoctor } from "./notify.ts";
 import { install } from "./install.ts";
@@ -33,7 +33,7 @@ import { syncAllSettings } from "./settings.ts";
 import { printStatus, status } from "./status.ts";
 import { apply, blockers, describe, health, plan } from "./mcp.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
-import { PORT, serve } from "./serve.ts";
+import { serve } from "./serve.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
 import { selfCheck, selfCheckRow, selfUpdate } from "./selfupdate.ts";

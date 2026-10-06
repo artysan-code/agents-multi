@@ -53,7 +53,7 @@ import {
   stat,
   STATE,
 } from "./lib.ts";
-import { diffPatch, mergePatch } from "./settings.ts";
+import { diffPatch, mergePatch } from "./json-patch.ts";
 
 export interface PerAccount {
   env?: Record<string, string>;

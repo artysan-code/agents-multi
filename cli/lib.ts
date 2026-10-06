@@ -14,6 +14,8 @@ export const LIB = `${HOME}/.local/lib`;
 export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/claude-multi`;
 export const STATE = `${Deno.env.get("XDG_STATE_HOME") ?? `${HOME}/.local/state`}/claude-multi`;
 export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
+/** The local console's port on 127.0.0.1 (`claude-multi serve`). */
+export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
 export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
 export const STIGNORE_GEN_TEMPLATE = `${REPO}/shared/tools/stignore-gen/git-template`;

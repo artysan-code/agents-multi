@@ -20,6 +20,7 @@ import {
   missingIgnores,
   mode,
   ownItems,
+  PORT,
   profileInfo,
   profileNames,
   PROFILES,
@@ -51,7 +52,6 @@ import { dayOf, hhmm, tasksRoot } from "../shared/mcp/lib/tasks.ts";
 import { lastBackup } from "./brain-backup.ts";
 import { getSecret, keyMatches, listSecrets, loadKey, vaultDir } from "../shared/mcp/lib/vault.ts";
 import { legacyFilesPresent, probeAccount } from "./vault.ts";
-import { PORT } from "./serve.ts";
 import { codeVersion } from "./codeversion.ts";
 import { loginFailures, probeLogin, recordLogin } from "./login.ts";
 

@@ -19,6 +19,7 @@ import {
   listDir,
   lstat,
   machine,
+  PORT,
   profileInfo,
   profileNames,
   PROFILES,
@@ -67,7 +68,6 @@ import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
 import { catalog, details, inventory, type PluginOp, pluginOp } from "./plugins.ts";
 
-export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 /** The code this console started with (codeversion.ts): set by serve(), told to every page. */
 let CODE = "";
 const DASH = `${REPO}/cli/dashboard`;
