@@ -8,14 +8,18 @@
 # (cli/doctor.ts checks this hook is registered, like it checks those rules).
 set -uo pipefail
 trap 'exit 0' EXIT
+# shellcheck source=lib/guard.sh
+source "$(dirname "$0")/lib/guard.sh"
 
-INPUT=$(cat 2>/dev/null) || exit 0
-[ "$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" = "Bash" ] || exit 0
-CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
+guard_read
+[ "$(guard_field .tool_name)" = "Bash" ] || exit 0
+CMD=$(guard_field .tool_input.command)
 [ -z "$CMD" ] && exit 0
 
-if printf '%s' "$CMD" | grep -qE "launch\.ts[\"']?[[:space:]]+[\"']?(headers|run)([\"'[:space:]]|$)"; then
-  jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",
-    permissionDecisionReason:"launch.ts hands out a vault secret (headers prints it, run puts it in a command'"'"'s environment): Claude Code runs it for the MCP servers, a session does not. To use a service'"'"'s CLI on the vault'"'"'s token: claude-multi vault run <service> -- <tool> …"}}'
+# The quote class also takes a backslash: without jq the command is matched inside its JSON
+# string, where a quote is written \".
+Q="[\\\\\"']*"
+if printf '%s' "$CMD" | grep -qE "launch\.ts${Q}[[:space:]]+${Q}(headers|run)([\\\\\"'[:space:]]|$)"; then
+  guard_decide deny "launch.ts hands out a vault secret (headers prints it, run puts it in a command's environment): Claude Code runs it for the MCP servers, a session does not. To use a service's CLI on the vault's token: claude-multi vault run <service> -- <tool> …"
 fi
 exit 0

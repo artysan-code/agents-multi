@@ -451,6 +451,17 @@ export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
       "ok",
       `launchers: ${(await launchers()).map((l) => `${l.command} (${l.profile})`).join(" · ")}`,
     );}
+  // The PreToolUse guards in shared/hooks read their payload with jq. Without it they fall back
+  // to a sed parser (shared/hooks/lib/guard.sh), which is coarser: jq is a requirement.
+  if (await has("jq")) add("bin.jq", "ok", "jq: the hooks parse their payload with it");
+  else {
+    add(
+      "bin.jq",
+      "fail",
+      "jq is not installed: the guard hooks (vault, destructive commands, memory) fall back to a coarse parser",
+      "install jq with the system package manager (pacman -S jq, apt install jq, dnf install jq)",
+    );
+  }
   if (await lstat(`${BIN}/claude-multi-finalize`)) {
     add(
       "bin.finalize",

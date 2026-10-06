@@ -1,45 +1,38 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) — commit-trailer-guard: BLOCCA i `git commit` il cui messaggio
-# contiene una firma/attribuzione dell'assistente.
+# PreToolUse(Bash) — commit-trailer-guard: blocks a `git commit` (also --amend, merge -m, tag -m,
+# revert) whose message carries an assistant attribution trailer.
 #
-# Per chi la sceglie: nessun trailer di attribuzione dell'assistente nei commit, in nessuna repo.
-# Il default di fabbrica dell'harness è di aggiungerli: questo hook è la garanzia
-# che non dipenda dal ricordarselo.
+# Opt-in, a preference of the person rather than of the setup. Their config/settings.json turns
+# it on with  "env": { "CLAUDE_MULTI_NO_ASSISTANT_TRAILER": "1" }. The harness adds those
+# trailers by default; this hook makes the preference independent of remembering it.
 #
-# BLOCCA (exit 2): lo stderr torna all'agente, che deve riscrivere il messaggio.
-# Copre `commit`, `commit --amend`, `merge -m`, `tag -m`, `revert`.
-# Policy-neutral (entrambi i profili). Parte dello standard repository
-# (wiki: skills/repo-standard).
+# Blocks with exit 2: stderr goes back to the agent, which rewrites the message.
 set -uo pipefail
 
-# Opt-in: a preference of the person, not of the setup. Their config/settings.json turns it on with
-#   "env": { "CLAUDE_MULTI_NO_ASSISTANT_TRAILER": "1" }
 [ "${CLAUDE_MULTI_NO_ASSISTANT_TRAILER:-}" = "1" ] || exit 0
 
-INPUT=$(cat 2>/dev/null) || exit 0
-[ "$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" = "Bash" ] || exit 0
-CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
+# shellcheck source=lib/guard.sh
+source "$(dirname "$0")/lib/guard.sh"
+guard_read
+[ "$(guard_field .tool_name)" = "Bash" ] || exit 0
+CMD=$(guard_field .tool_input.command)
 
-# interessa solo ciò che scrive un messaggio di commit
 printf '%s' "$CMD" | grep -qiE 'git[[:space:]]+([a-z-]+[[:space:]]+)*(commit|merge|revert|tag)\b' || exit 0
 
-# Firme note. `-i` perché la capitalizzazione del trailer varia.
+# Known signatures; -i because the trailer's capitalisation varies.
 PATTERN='co-authored-by:[[:space:]]*claude|generated[[:space:]]+with[[:space:]]+\[?claude[[:space:]]+code|noreply@anthropic\.com|🤖[[:space:]]*generated'
 
 if printf '%s' "$CMD" | grep -qiE "$PATTERN"; then
   cat >&2 <<'EOF'
-BLOCCATO — commit-trailer-guard.
+Blocked by commit-trailer-guard.
 
-Il messaggio di commit contiene una firma dell'assistente (Co-Authored-By: Claude,
-"Generated with Claude Code", noreply@anthropic.com o simili).
+The commit message carries an assistant signature (Co-Authored-By: Claude, "Generated with
+Claude Code", noreply@anthropic.com or similar). The owner's rule: those lines never enter a
+commit, in any repository.
 
-Regola esplicita del proprietario: quelle righe non entrano MAI nei commit, in nessuna repo.
-
-Riscrivi il messaggio senza il trailer e ripeti il comando. Non aggirare l'hook
-(niente file temporanei con -F, niente git -c core.hooksPath): la regola vale
-comunque, non è il meccanismo a essere in discussione.
+Rewrite the message without the trailer and run the command again. Do not work around the hook
+(a temporary file with -F, git -c core.hooksPath): the rule holds regardless of the mechanism.
 EOF
   exit 2
 fi
-
 exit 0

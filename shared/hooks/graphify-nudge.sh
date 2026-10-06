@@ -30,7 +30,7 @@ case "$TOOL" in
 try: d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))
 except: pass' 2>/dev/null || echo "")
     case "$CMD" in
-      *grep*|*" rg "*|*ripgrep*|*" find "*|*" fd "*|*" ack "*|*" ag "*) ;;
+      *grep*|*" rg "*|*" find "*|*" fd "*|*" ack "*|*" ag "*) ;;
       *) exit 0 ;;
     esac
     ;;

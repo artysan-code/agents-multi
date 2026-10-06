@@ -1,41 +1,19 @@
 #!/usr/bin/env bash
-# PreToolUse guard: l'auto-memory di Claude Code è CONGELATA.
-#
-# La memoria canonica è il brain (brain_*) — vedi
-# shared/rules/memory-brain.md. Questo hook intercetta i tentativi di
-# scrivere nuovi fatti nell'auto-memory legacy
-# (<config>/projects/<slug>/memory/...) e le BLOCCA (deny), spingendo a
-# scrivere nel brain. Per manutenzione legittima dei file legacy (es.
-# cancellarli) disabilita temporaneamente il matcher Write|Edit in
-# settings.json o commenta questo hook.
-#
-# Scatta su Write|Edit (matcher in settings.json). Scoping stretto: solo path
-# dentro una config Claude (.claude-multi/<profilo>/ o .claude/) sotto
-# projects/*/memory/ → NON tocca 'memory/' di repo utente arbitrari.
-#
-# Robustezza: exit 0 SEMPRE; su errore di parsing fall-through al flusso
-# permessi normale (nessuna decisione) invece di bloccare la sessione.
-
+# PreToolUse(Write|Edit) — memory-legacy-guard: Claude Code's auto-memory is frozen; memory is the
+# brain (brain_* tools, shared/rules/memory-brain.md). Denies writes under projects/*/memory/ of a
+# Claude configuration (.claude-multi/<profile>/ or .claude/) and nowhere else, so a `memory/`
+# folder in a user's repository is untouched. To maintain the legacy files, disable this hook's
+# Write|Edit matcher in shared/settings.json for the time it takes.
 set -uo pipefail
 trap 'exit 0' EXIT
+# shellcheck source=lib/guard.sh
+source "$(dirname "$0")/lib/guard.sh"
 
-INPUT=$(cat 2>/dev/null) || exit 0
-
-# file_path del target (Write/Edit lo espongono in tool_input.file_path)
-FP=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
+guard_read
+FP=$(guard_field .tool_input.file_path)
 [ -z "$FP" ] && exit 0
 
-# Solo auto-memory di una config Claude: .claude-multi/<profilo>/projects/*/memory/
-# oppure .claude/projects/*/memory/ (setup standard). Niente falsi positivi su repo utente.
 if printf '%s' "$FP" | grep -Eq '(\.claude-multi/[^/]+|\.claude)/projects/[^/]+/memory/'; then
-  jq -n '{
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: "Auto-memory CONGELATA/OFF (shared/rules/memory-brain.md): scrittura BLOCCATA. La memoria è il brain: scrivi il fatto lì con gli strumenti brain_* (diario, pagina del progetto, persone, note), rispettando il paletto NDA; un fatto di un solo repo va nel suo CLAUDE.md. Per manutenzione dei file legacy disabilita temporaneamente questo hook."
-    }
-  }' 2>/dev/null
-  exit 0
+  guard_decide deny "Auto-memory is frozen (shared/rules/memory-brain.md): write blocked. Memory is the brain: write the fact there with the brain_* tools (diary, the project's page, people, notes); a fact about one repository goes in its CLAUDE.md. To maintain the legacy files, disable this hook for the time it takes."
 fi
-
 exit 0
