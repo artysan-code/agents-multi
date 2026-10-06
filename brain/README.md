@@ -143,7 +143,10 @@ next one), and an edit made on a task someone changed meanwhile is refused rathe
 
 ## The public pages
 
-`/` says what the service is and where to sign in; `/privacy` is the privacy notice, for this
-service and for claude-multi's Google integration (its OAuth client points here). Both are open to
-anyone and read their particulars from `BRAIN_OPERATOR`, `BRAIN_CONTACT` and `BRAIN_HOSTING`
-(`public.ts`); a change of substance to the notice bumps `PRIVACY_UPDATED`.
+What anyone can open without an account (`public.ts`): claude-multi's site, the landing (`/`, `/it/`)
+and the docs (`/docs/`), built from `site/` (Astro and Starlight) into `site/dist` by the image's first
+stage; and `/privacy`, the privacy notice, for this service and for claude-multi's Google integration
+(its OAuth client points here). The site carries two placeholders the brain fills when it serves a
+page, `__CONTACT__` and `__OPERATOR__`; those, and where the server is, come from `BRAIN_CONTACT`,
+`BRAIN_OPERATOR` and `BRAIN_HOSTING`. A change of substance to the notice bumps `PRIVACY_UPDATED`.
+Locally, `pnpm build` in `site/` before starting the brain; `BRAIN_SITE` points elsewhere if needed.

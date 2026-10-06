@@ -1,0 +1,32 @@
+---
+// Every Claude around the brain: the surfaces on a slow orbit, the links flowing to the centre.
+import type { Dict } from "../i18n";
+interface Props { t: Dict }
+const { t } = Astro.props;
+const n = t.surfaces.length;
+const at = (i: number, r: number) => [250 + r * Math.cos((i / n) * 2 * Math.PI - Math.PI / 2), 250 + r * Math.sin((i / n) * 2 * Math.PI - Math.PI / 2)];
+---
+<div class="orbit reveal" aria-hidden="true">
+  <svg viewBox="0 0 500 500">
+    <circle class="ring" cx="250" cy="250" r="190" />
+    <circle class="ring" cx="250" cy="250" r="120" />
+    <g class="spin">
+      {t.surfaces.map((_, i) => { const [x, y] = at(i, 190); return <line class="spoke" x1="250" y1="250" x2={x} y2={y} />; })}
+      {t.surfaces.map((s, i) => {
+        const [x, y] = at(i, 190);
+        const w = s.length * 8.4 + 30;
+        return (
+          <g class="node" transform={`translate(${x} ${y})`}>
+            <g class="unspin">
+              <rect x={-w / 2} y="-18" width={w} height="36" rx="18" />
+              <text>{s}</text>
+            </g>
+          </g>
+        );
+      })}
+    </g>
+    <circle class="core-glow" cx="250" cy="250" r="78" />
+    <circle class="core" cx="250" cy="250" r="56" />
+    <text class="core-t" x="250" y="252">brain</text>
+  </svg>
+</div>

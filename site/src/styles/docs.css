@@ -1,0 +1,32 @@
+/* Starlight in the console's colours and faces: clay for the accent, warm greys for the rest. */
+:root {
+  --sl-font: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --sl-font-heading: "Source Serif 4", Georgia, serif;
+  --sl-color-accent-low: #3a1f15;
+  --sl-color-accent: #d97757;
+  --sl-color-accent-high: #f2c7b6;
+  --sl-color-white: #f0efec;
+  --sl-color-gray-1: #e4e3df;
+  --sl-color-gray-2: #c3c2b7;
+  --sl-color-gray-3: #929089;
+  --sl-color-gray-4: #5a5954;
+  --sl-color-gray-5: #2c2c2a;
+  --sl-color-gray-6: #1a1a19;
+  --sl-color-black: #151515;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #f8ebe5;
+  --sl-color-accent: #ad4e2c;
+  --sl-color-accent-high: #6e2f18;
+  --sl-color-white: #0b0b0b;
+  --sl-color-gray-1: #1f1f1e;
+  --sl-color-gray-2: #3d3c3a;
+  --sl-color-gray-3: #52514e;
+  --sl-color-gray-4: #75736d;
+  --sl-color-gray-5: #e4e3df;
+  --sl-color-gray-6: #f4f3ef;
+  --sl-color-gray-7: #f9f9f7;
+  --sl-color-black: #fcfcfb;
+}
+.sl-markdown-content h1, .sl-markdown-content h2, .sl-markdown-content h3, h1#_top { font-family: var(--sl-font-heading); font-weight: 500; letter-spacing: -.012em; }
+.site-title { font-family: var(--sl-font); font-weight: 600; letter-spacing: -.01em; }

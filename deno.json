@@ -9,7 +9,8 @@
   },
   "lint": {
     "exclude": [
-      "cli/dashboard/vendor/"
+      "cli/dashboard/vendor/",
+      "site/"
     ],
     "rules": {
       "exclude": [

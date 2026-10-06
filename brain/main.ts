@@ -15,7 +15,7 @@ import { fromFile, type TaskStore, useTaskStore } from "../shared/mcp/lib/tasks.
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";
 import { accountPage, type AdminView, authorizePage, html, invitedPage, invitePage, SIGNED_OUT_ERROR, signInPage } from "./pages.ts";
-import { landingPage, privacyPage, type Site } from "./public.ts";
+import { privacyPage, type Site, siteFile } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
 import { snapshot } from "./backup.ts";
@@ -122,6 +122,7 @@ const SITE: Site = {
   contact: env("BRAIN_CONTACT", "")!,
   hosting: env("BRAIN_HOSTING", "un server privato")!,
 };
+const SITE_DIR = env("BRAIN_SITE", new URL("../site/dist", import.meta.url).pathname)!;
 const otpauth = (id: string, secret: string) => `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 async function handle(req: Request): Promise<Response> {
@@ -221,8 +222,7 @@ async function handle(req: Request): Promise<Response> {
     return html(accountPage(me, auth.personalTokens(me.id), auth.connections(me.id), extra));
   }
 
-  // ---------------- the public pages: what this is, and the privacy notice
-  if (p === "/") return html(landingPage(SITE));
+  // ---------------- the privacy notice (the rest of what is public is the site, below)
   if (p === "/privacy") return html(privacyPage(SITE));
 
   // ---------------- the board: the tasks on the web, signed in like the account page
@@ -234,9 +234,18 @@ async function handle(req: Request): Promise<Response> {
     return await as(me, "web", () => boardRoute(req, u, me, html));
   }
 
+  // ---------------- claude-multi's site: the landing and the docs, built into site/dist
+  if (req.method === "GET" || req.method === "HEAD") {
+    const r = await siteFile(SITE_DIR, p, SITE);
+    if (r) return r;
+  }
+
   // ---------------- everything below needs a token, and runs as its account
   const who: Caller | null = await auth.caller(req);
-  if (!who) return p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup") ? withCors(auth.challenge()) : new Response("not found", { status: 404 });
+  if (!who) {
+    if (p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup")) return withCors(auth.challenge());
+    return await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
+  }
   const user = users.get(who.user)!;
   return await as(user, who.label, () => served(req, u, who));
 }

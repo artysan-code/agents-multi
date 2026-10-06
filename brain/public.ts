@@ -1,8 +1,9 @@
-// public.ts — the two pages anyone can open without an account: the landing on `/`, saying what the
-// service is and where to sign in, and `/privacy`, the privacy notice. The notice covers this service
-// and claude-multi's Google integration, since its OAuth client points here (Google wants a public
-// notice for it). Who runs the instance, how to reach them and where it is hosted come from the
-// environment (BRAIN_OPERATOR, BRAIN_CONTACT, BRAIN_HOSTING): nothing about one person is written here.
+// public.ts — what anyone can open without an account: claude-multi's site (the landing and the docs,
+// built from site/ into site/dist by the image) and `/privacy`, the privacy notice. The notice covers
+// this service and claude-multi's Google integration, since its OAuth client points here (Google wants
+// a public notice for it). Who runs the instance, how to reach them and where it is hosted come from
+// the environment (BRAIN_OPERATOR, BRAIN_CONTACT, BRAIN_HOSTING): nothing about one person is written
+// here or in the site, which carries placeholders the brain fills when it serves a page.
 
 import { esc, page } from "./pages.ts";
 
@@ -31,23 +32,8 @@ const GOOGLE_SCOPES: [string, string][] = [
 const contactLine = (s: Site) =>
   s.contact ? `<!--email_off--><a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a><!--/email_off-->` : "l'amministratore del servizio";
 
-const footer = (here: "home" | "privacy") => `
-  <p class="foot">${here === "home" ? `<a href="/privacy">Privacy</a>` : `<a href="/">Brain</a>`} · <a href="/tasks">Bacheca</a> · <a href="/account">Account</a></p>`;
-
-export function landingPage(s: Site) {
-  return page("Brain", `<article class="doc">
-  <h1>Brain</h1>
-  <p>La memoria e le task di chi lo usa, in un posto solo, raggiunte da ogni Claude: le app, claude.ai, Claude Code e Claude Desktop.</p>
-  <ul class="list">
-    <li><b>Memoria</b>: pagine in Markdown collegate tra loro, con la storia di ogni modifica.</li>
-    <li><b>Task</b>: una lista sola, con la bacheca anche dal telefono.</li>
-    <li><b>Ricerca</b>: per parole e per significato, calcolata su questo server.</li>
-    <li><b>Separato per persona</b>: ognuno ha il suo database e la sua chiave per le copie.</li>
-  </ul>
-  <p>È un servizio privato di ${esc(s.operator)}: gli account esistono solo su invito, e si entra con passphrase e codice dell'app di autenticazione.</p>
-  <div class="row cta"><a class="btn" href="/tasks">Entra</a><a class="btn ghost" href="/account">Il tuo account</a></div>
-  ${footer("home")}</article>`, true);
-}
+const footer = `
+  <p class="foot"><a href="/">claude-multi</a> · <a href="/docs/">Docs</a> · <a href="/tasks">Entra</a></p>`;
 
 export function privacyPage(s: Site) {
   const scopes = GOOGLE_SCOPES.map(([k, v]) => `<li><code>${k}</code>: ${v}</li>`).join("");
@@ -83,5 +69,51 @@ export function privacyPage(s: Site) {
 
   <h2>I tuoi diritti</h2>
   <p>Puoi chiedere di vedere, correggere, esportare o cancellare i tuoi dati, e opporti al trattamento, scrivendo a ${contactLine(s)}. Puoi anche rivolgerti all'autorità di controllo del tuo paese (in Italia, il <a href="https://www.garanteprivacy.it">Garante per la protezione dei dati personali</a>).</p>
-  ${footer("privacy")}</article>`, true);
+  ${footer}</article>`, true);
+}
+
+// ---------------------------------------------------------------- the site
+
+const TYPES: Record<string, string> = {
+  html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8",
+  mjs: "text/javascript; charset=utf-8", json: "application/json", xml: "application/xml", txt: "text/plain; charset=utf-8",
+  svg: "image/svg+xml", png: "image/png", webp: "image/webp", ico: "image/x-icon", woff2: "font/woff2", wasm: "application/wasm",
+};
+// Starlight's inline scripts and Pagefind's wasm need what the brain's own pages never allow
+const SITE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+
+/** Pure: the file of the built site a path asks for, or null for one that could leave it. */
+export function sitePath(pathname: string): string | null {
+  let p: string;
+  try { p = decodeURIComponent(pathname); } catch { return null; }
+  if (!p.startsWith("/") || p.includes("\0") || p.split("/").some((s) => s === ".." || s === ".")) return null;
+  if (p.endsWith("/")) return `${p.slice(1)}index.html`;
+  return /\.[a-z0-9]+$/i.test(p) ? p.slice(1) : `${p.slice(1)}/index.html`;
+}
+
+/** Pure: a page of the site with this instance's particulars in place of its placeholders. The whole
+ *  body is kept from Cloudflare's email obfuscation, whose decoding script the CSP would block. */
+export function fillSite(html: string, s: Site): string {
+  return html
+    .replaceAll("mailto:__CONTACT__", s.contact ? `mailto:${esc(s.contact)}` : "/privacy")
+    .replaceAll("__OPERATOR__", esc(s.operator))
+    .replace(/<body[^>]*>/, "$&<!--email_off-->")
+    .replace("</body>", "<!--/email_off--></body>");
+}
+
+/** A file of the built site in `dir`, or null when there is none (the request goes on to the brain). */
+export async function siteFile(dir: string, pathname: string, s: Site, status = 200): Promise<Response | null> {
+  const rel = sitePath(pathname);
+  if (rel === null) return null;
+  const bytes = await Deno.readFile(`${dir}/${rel}`).catch(() => null);
+  if (!bytes) return null;
+  const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
+  const type = TYPES[ext] ?? "application/octet-stream";
+  const headers: Record<string, string> = {
+    "content-type": type, "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin",
+    "cache-control": rel.startsWith("_astro/") ? "public, max-age=31536000, immutable" : ext === "html" ? "no-cache" : "public, max-age=86400",
+  };
+  if (ext !== "html") return new Response(bytes, { status, headers });
+  return new Response(fillSite(new TextDecoder().decode(bytes), s), { status, headers: { ...headers, "content-security-policy": SITE_CSP, "x-frame-options": "DENY" } });
 }

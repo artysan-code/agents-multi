@@ -1,0 +1,180 @@
+---
+// The landing, in either language. The brain fills two placeholders when it serves the page
+// (brain/public.ts): __CONTACT__ (BRAIN_CONTACT) and __OPERATOR__ (BRAIN_OPERATOR), so nothing about
+// one person is written in the repository.
+import "../styles/fonts.css";
+import "../styles/site.css";
+import mark from "../assets/mark.svg?raw";
+import ConsoleMock from "../components/ConsoleMock.astro";
+import Orbit from "../components/Orbit.astro";
+import Icon from "../components/Icon.astro";
+import { dict, type Lang } from "../i18n";
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const t = dict[lang];
+const home = lang === "en" ? "/" : "/it/";
+---
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{t.htmlTitle}</title>
+    <meta name="description" content={t.description} />
+    <script is:inline>document.documentElement.classList.add("js")</script>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate" hreflang="en" href="/" />
+    <link rel="alternate" hreflang="it" href="/it/" />
+    <meta property="og:title" content={t.htmlTitle} />
+    <meta property="og:description" content={t.description} />
+    <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151515" media="(prefers-color-scheme: dark)" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href={home}><span class="mark" set:html={mark} />claude-multi</a>
+        <nav class="links">
+          <a href="#features">{t.nav.features}</a>
+          <a href="#brain">{t.nav.brain}</a>
+          <a href="#how">{t.nav.how}</a>
+          <a href="/docs/">{t.nav.docs}</a>
+        </nav>
+        <div class="lang">
+          <a href="/" aria-current={lang === "en" ? "page" : undefined}>EN</a>
+          <a href="/it/" aria-current={lang === "it" ? "page" : undefined}>IT</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="wrap">
+          <span class="pill"><b>{t.pill[0]}</b>{t.pill[1]}</span>
+          <h1 set:html={t.h1} />
+          <p class="lead">{t.lead}</p>
+          <div class="ctas">
+            <a class="btn" href="mailto:__CONTACT__">{t.ctaContact}</a>
+            <a class="btn ghost" href="#how">{t.ctaHow} →</a>
+          </div>
+          <p class="meta">{t.meta}</p>
+          <div class="stage">
+            <ConsoleMock t={t} />
+            <div class="float term" aria-hidden="true">
+              <div><span class="pr">$</span> claude-multi {t.mock.doctor}</div>
+              <div><span class="ok">✓</span> console on 127.0.0.1:7331</div>
+              <div><span class="ok">✓</span> secret vault: every secret here</div>
+              <div><span class="ok">✓</span> brain takes this machine's token</div>
+              <div class="dim">36 pass · 0 fail</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="strip">
+        <div class="wrap">
+          <p>{t.strip}</p>
+          <ul>{t.surfaces.map((s) => <li>{s}</li>)}</ul>
+        </div>
+      </section>
+
+      <section class="block" id="features">
+        <div class="wrap">
+          <div class="kicker">{t.featuresKicker}</div>
+          <h2>{t.featuresTitle}</h2>
+          <p class="intro">{t.featuresIntro}</p>
+          <div class="grid">
+            {t.features.map(([icon, title, text]) => (
+              <article class="card reveal">
+                <div class="ic"><Icon name={icon} /></div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="block alt" id="brain">
+        <div class="wrap split">
+          <div>
+            <div class="kicker">{t.brainKicker}</div>
+            <h2>{t.brainTitle}</h2>
+            <p class="intro">{t.brainIntro}</p>
+            <ul class="points">
+              {t.brainPoints.map(([b, text]) => <li class="reveal"><span class="tick">✓</span><span><b>{b}</b>{text}</span></li>)}
+            </ul>
+          </div>
+          <Orbit t={t} />
+        </div>
+      </section>
+
+      <section class="block" id="how">
+        <div class="wrap">
+          <div class="kicker">{t.howKicker}</div>
+          <h2>{t.howTitle}</h2>
+          <div class="steps">
+            <ol>{t.steps.map(([b, text]) => <li class="reveal"><span><b>{b}</b><span set:html={text} /></span></li>)}</ol>
+            <div class="terminal reveal">
+              <div class="titlebar"><i></i><i></i><i></i><span>~</span></div>
+              <pre data-type><span class="c"># 1 · your configuration</span>
+<span class="pr">$</span> claude-multi init ~/claude-multi-config --name Ann
+<span class="c"># 2 · install: launchers, settings, console, tray</span>
+<span class="pr">$</span> claude-multi install
+<span class="c"># 3 · sign in to each profile, then check</span>
+<span class="pr">$</span> claude          <span class="c"># → /login</span>
+<span class="pr">$</span> claude-multi doctor
+  <span class="ok">✓</span> profiles: personal, work, research
+  <span class="ok">✓</span> console on http://127.0.0.1:7331
+  <span class="ok">✓</span> secret vault: 6 accounts, every secret here
+  <span class="w">!</span> MCP registry out of sync
+      fix: claude-multi mcp sync
+  <span class="ok">36 pass</span> · 1 warn · 0 fail</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="wrap">
+          <div class="kicker">{t.principlesKicker}</div>
+          <h2>{t.principlesTitle}</h2>
+          <div class="principles">
+            {t.principles.map(([h, p]) => <div class="reveal"><h3>{h}</h3><p>{p}</p></div>)}
+          </div>
+        </div>
+      </section>
+
+      <section class="call">
+        <div class="wrap">
+          <div class="box reveal">
+            <h2 set:html={t.callTitle} />
+            <p>{t.callText}</p>
+            <div class="ctas">
+              <a class="btn" href="mailto:__CONTACT__">{t.callContact}</a>
+              <a class="btn ghost" href="/docs/">{t.callDocs} →</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <a class="brand" href={home}><span class="mark" set:html={mark} />claude-multi</a>
+        <span>{t.footer.made} __OPERATOR__</span>
+        <nav>
+          <a href="/docs/">{t.footer.docs}</a>
+          <a href="/privacy">{t.footer.privacy}</a>
+          <a href="/tasks">{t.footer.signin}</a>
+        </nav>
+        <p class="legal">{t.footer.legal}</p>
+      </div>
+    </footer>
+
+    <script>
+      import "../scripts/landing.ts";
+    </script>
+  </body>
+</html>
