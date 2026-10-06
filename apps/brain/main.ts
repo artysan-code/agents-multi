@@ -12,7 +12,15 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { fromFileUrl } from "jsr:@std/path@1/from-file-url";
 import { DatabaseSync } from "node:sqlite";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/webStandardStreamableHttp.js";
-import { fromFile, type TaskStore, useTaskStore, useZone, validZone } from "../../shared/mcp/lib/tasks.ts";
+import {
+  fromFile,
+  StaleError,
+  type TaskStore,
+  toFile,
+  useTaskStore,
+  useZone,
+  validZone,
+} from "../../shared/mcp/lib/tasks.ts";
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";
 import {
@@ -88,7 +96,7 @@ useOwner(() => {
 const tasks: TaskStore = {
   list: () => here().tenant.tasks.list(),
   get: (id) => here().tenant.tasks.get(id),
-  write: (t) => here().tenant.tasks.write(t),
+  write: (t, base) => here().tenant.tasks.write(t, base),
 };
 useTaskStore(tasks);
 // a person's days are in their own zone (the account page sets it), or the service's: BRAIN_TIMEZONE,
@@ -451,7 +459,13 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
     if (fromFile(body)?.id !== one[1]) {
       return json({ error: "not a task file, or its id is not the one in the path" }, 400);
     }
-    await tenant.tasks.write(fromFile(body)!);
+    // If-Match: the `updated` of the version the machine changed; a change made since is not lost
+    try {
+      await tenant.tasks.write(fromFile(body)!, req.headers.get("if-match") ?? undefined);
+    } catch (e) {
+      if (!(e instanceof StaleError)) throw e;
+      return json({ error: "the task changed meanwhile", task: toFile(e.current) }, 409);
+    }
     return json({ written: one[1] });
   }
   // the memory read over HTTP, for the console's Brain page (apps/brain/api.ts): only reads

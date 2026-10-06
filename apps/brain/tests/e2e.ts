@@ -300,3 +300,84 @@ ok((await api("pages", "brain_wrong-token-wrong-token-wrong")).status === 401, "
 r = await fetch(`${B}/api/brain/pages`, { method: "POST", headers: { authorization: `Bearer ${pt}` } });
 ok(r.status === 404, "/api/brain only reads");
 await r.body?.cancel();
+
+// two people at once: a second account, then both write and read their tasks with the requests
+// interleaved; neither sees the other's, and two machines changing the same version lose nothing
+const { totp } = await import("../auth.ts");
+const { toFile } = await import("../../../shared/mcp/lib/tasks.ts");
+const inviteDone = await (await fetch(`${B}/account/admin/invite`, {
+  method: "POST",
+  headers: { cookie },
+  body: new URLSearchParams({ id: "bob", name: "Bob", language: "English" }),
+})).text();
+const link = inviteDone.match(/\/invite\?t=([\w-]+)/)?.[1] ?? "";
+const invite = await (await fetch(`${B}/invite?t=${link}`)).text();
+const secret = invite.match(/secret=([A-Z2-7]+)/)?.[1] ?? "";
+const BOB = "un'altra passphrase lunga";
+r = await fetch(`${B}/invite`, {
+  method: "POST",
+  body: new URLSearchParams({ t: link, passphrase: BOB, again: BOB, code: await totp(secret) }),
+});
+ok(r.status === 200 && !!secret, "a second account accepts its invitation");
+await r.body?.cancel();
+r = await fetch(`${B}/account/login`, {
+  method: "POST",
+  body: new URLSearchParams({ user: "bob", passphrase: BOB, code: await totp(secret) }),
+  redirect: "manual",
+});
+const bobCookie = (r.headers.get("set-cookie") ?? "").split(";")[0];
+const bobToken = (await (await fetch(`${B}/account/token`, {
+  method: "POST",
+  headers: { cookie: bobCookie },
+  body: new URLSearchParams({ name: "portatile" }),
+})).text()).match(/brain_[\w-]{20,}/)?.[0] ?? "";
+ok(!!bobToken, "the second account's token");
+
+const mine = (token: string, who: string, i: number) => ({
+  id: `t-20261006-${who === "a" ? "aa" : "bb"}${String(i).padStart(4, "0")}`,
+  title: `${who} ${i}`,
+  status: "todo" as const,
+  created: "2026-10-06T10:00:00.000Z",
+  updated: "2026-10-06T10:00:00.000Z",
+  token,
+});
+const N = 20;
+const puts = Array.from({ length: N }, (_, i) => [mine(pt!, "a", i), mine(bobToken, "b", i)]).flat().map((t) => {
+  const { token, ...task } = t;
+  return fetch(`${B}/api/tasks/${task.id}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${token}` },
+    body: toFile(task),
+  }).then((x) => x.status);
+});
+ok((await Promise.all(puts)).every((s) => s === 200), `${2 * N} task writes interleaved between two accounts`);
+const listOf = async (token: string) =>
+  ((await (await fetch(`${B}/api/tasks`, { headers: { authorization: `Bearer ${token}` } })).json()).tasks as string[])
+    .map((b) => b.match(/^title: "?(.*?)"?$/m)?.[1] ?? "");
+const [aList, bList] = await Promise.all([listOf(pt!), listOf(bobToken)]);
+ok(
+  aList.filter((x) => x.startsWith("a ")).length === N && !aList.some((x) => x.startsWith("b ")),
+  "the first account sees its own tasks, none of the other's",
+);
+ok(
+  bList.length === N && bList.every((x) => x.startsWith("b ")),
+  "the second account sees its own tasks, none of the other's",
+);
+r = await fetch(`${B}/api/tasks/${mine(pt!, "a", 0).id}`, { headers: { authorization: `Bearer ${bobToken}` } });
+ok(r.status === 404, "one account cannot read another's task by its id");
+await r.body?.cancel();
+
+// two machines change the same version of a task: one lands, the other is told and given the new one
+const { token: _t, ...base } = mine(pt!, "a", 0);
+const race = await Promise.all(["first", "second"].map((title) =>
+  fetch(`${B}/api/tasks/${base.id}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${pt}`, "if-match": base.updated },
+    body: toFile({ ...base, title, updated: new Date().toISOString() }),
+  }).then(async (x) => ({ status: x.status, body: await x.json() }))
+));
+ok(
+  race.map((x) => x.status).sort().join() === "200,409" &&
+    /^title: "?(first|second)"?$/m.test(race.find((x) => x.status === 409)!.body.task),
+  "two changes of the same version: one lands, the other gets 409 and the task as it is now",
+);

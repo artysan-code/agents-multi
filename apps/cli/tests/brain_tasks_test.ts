@@ -3,6 +3,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { brainAccount, brainStore, lazyStore, scoped } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { toPrune } from "../brain-backup.ts";
+import { StaleError, toFile } from "../../../shared/mcp/lib/tasks.ts";
 
 Deno.test("brainAccount: the brain account a profile sees, none without one", () => {
   const all = [
@@ -42,6 +43,26 @@ Deno.test("brainStore: a refused token and an absent brain say so, a missing tas
     "https://b/api/tasks/t-20260101-aaaaaa",
     "Bearer tok",
   ]);
+});
+
+Deno.test("brainStore: a change names the version it was made from; a 409 brings the task as it is now", async () => {
+  const t = { id: "t-20260101-aaaaaa", title: "x", status: "todo" as const, created: "c", updated: "u2" };
+  let ifMatch: string | null = null;
+  await brainStore("https://b", "tok", (input, init) => {
+    ifMatch = new Request(input, init).headers.get("if-match");
+    return Promise.resolve(new Response("{}"));
+  }).write(t, "u1");
+  assertEquals(ifMatch, "u1");
+  const now = { ...t, title: "changed elsewhere", updated: "u3" };
+  const e = await assertRejects(() =>
+    brainStore(
+      "https://b",
+      "tok",
+      () => Promise.resolve(Response.json({ error: "x", task: toFile(now) }, { status: 409 })),
+    ).write(t, "u1")
+  );
+  assert(e instanceof StaleError);
+  assertEquals((e as StaleError).current.title, "changed elsewhere");
 });
 
 Deno.test("scoped: a work profile sees and writes only the tasks of its projects", async () => {

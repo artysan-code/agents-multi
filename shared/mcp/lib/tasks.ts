@@ -248,7 +248,9 @@ export function newId(now = new Date()): string {
 export interface TaskStore {
   list(): Promise<Task[]>;
   get(id: string): Promise<Task | null>;
-  write(t: Task): Promise<void>;
+  /** `base` is the `updated` of the version the change was made from: a store several machines
+   *  write to refuses with StaleError when the task has changed since. */
+  write(t: Task, base?: string): Promise<void>;
 }
 
 const fileStore: TaskStore = {
@@ -274,8 +276,11 @@ const fileStore: TaskStore = {
   },
 };
 let store: TaskStore = fileStore;
-export function useTaskStore(s: TaskStore) {
+/** Where the tasks are kept from now on; returns where they were. */
+export function useTaskStore(s: TaskStore): TaskStore {
+  const before = store;
   store = s;
+  return before;
 }
 
 export function listTasks(): Promise<Task[]> {
@@ -287,7 +292,7 @@ export async function getTask(id: string): Promise<Task | null> {
   return await store.get(id);
 }
 
-const write = (t: Task) => store.write(t);
+const write = (t: Task, base?: string) => store.write(t, base);
 
 export async function loadSettings(): Promise<TaskSettings> {
   try {
@@ -447,7 +452,17 @@ export function updateTask(
   now = new Date(),
   base?: string,
 ): Promise<{ task: Task; next?: Task }> {
-  return serial(() => updateTaskNow(id, input, now, base));
+  return serial(async () => {
+    // a change made elsewhere between reading and writing (another machine, a chat on the brain)
+    // is read again and the change applied on top of it; an editor that named its `base` is told
+    for (let attempt = 1;; attempt++) {
+      try {
+        return await updateTaskNow(id, input, now, base);
+      } catch (e) {
+        if (!(e instanceof StaleError) || base || attempt === 3) throw e;
+      }
+    }
+  });
 }
 /** `input` may be a function of the task as it is now: the way to edit its notes without racing. */
 async function updateTaskNow(
@@ -462,7 +477,7 @@ async function updateTaskNow(
   if (base && cur.updated !== base) throw new StaleError(cur);
   const input = typeof change === "function" ? change(cur) : change;
   const t = applyInput(cur, input, now);
-  await write(t);
+  await write(t, cur.updated);
   let next: Task | undefined;
   if (input.status === "done" && cur.status !== "done" && t.repeat && t.due) {
     next = {

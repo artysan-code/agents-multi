@@ -6,7 +6,7 @@
 import { type EmbedConfig, indexer } from "./embed.ts";
 import { Store } from "./store.ts";
 import { USER_ID } from "./users.ts";
-import { fromFile, type Task, type TaskStore, toFile } from "../../shared/mcp/lib/tasks.ts";
+import { fromFile, StaleError, type Task, type TaskStore, toFile } from "../../shared/mcp/lib/tasks.ts";
 
 export interface Tenant {
   user: string;
@@ -43,7 +43,12 @@ export class Tenants {
             .map((r) => fromFile(r.body)).filter((t): t is Task => !!t),
         ),
       get: (id) => Promise.resolve(fromFile(store.get(`tasks/${id}.md`)?.body ?? "")),
-      write: (t) => {
+      // read, compared and written with no await in between: two requests cannot interleave here
+      write: (t, base) => {
+        if (base) {
+          const cur = fromFile(store.get(`tasks/${t.id}.md`)?.body ?? "");
+          if (cur && cur.updated !== base) return Promise.reject(new StaleError(cur));
+        }
         store.write(`tasks/${t.id}.md`, toFile(t), this.by());
         index.kick();
         return Promise.resolve();

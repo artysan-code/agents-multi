@@ -17,7 +17,9 @@ own; every request runs as the account its token or session belongs to.
   (`shared/mcp/lib/tasks.ts`, `shared/mcp/tasks/tools.ts`, shared code). Memory lists and searches
   leave them out unless asked. The owner's machines read and write them as files on `/api/tasks`
   (`shared/mcp/lib/brain-tasks.ts`): the console, the reminders and the local `tasks` tools all use
-  this one list.
+  this one list. A change says which version it was made from (`If-Match`, the task's `updated`);
+  when the task has changed since, the brain answers 409 with it as it is now, and the change is
+  applied again on top of that.
 - **Search**: full text (SQLite FTS5) and by meaning (chunks embedded by `bge-m3` behind Ollama),
   fused by reciprocal rank. The embeddings fill in the background after each write; when the model
   is down or slow (four seconds), search answers with words alone and says so. The indexers of all

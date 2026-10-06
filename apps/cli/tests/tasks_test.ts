@@ -326,3 +326,41 @@ Deno.test("dates: with a zone given, days and hours are that zone's, whatever th
     T.useZone(() => undefined);
   }
 });
+
+Deno.test("updateTask: a change made elsewhere meanwhile is read again and the change applied on top", async () => {
+  const mem = new Map<string, import("../../../shared/mcp/lib/tasks.ts").Task>();
+  let conflicts = 1;
+  const store = {
+    list: () => Promise.resolve([...mem.values()]),
+    get: (id: string) => Promise.resolve(mem.get(id) ?? null),
+    write: (t: import("../../../shared/mcp/lib/tasks.ts").Task, base?: string) => {
+      const cur = mem.get(t.id);
+      if (base && conflicts-- > 0) {
+        // another machine adds a step just before this write lands
+        const other = { ...cur!, notes: `${cur!.notes ?? ""}\n- [ ] da un'altra macchina`, updated: "elsewhere" };
+        mem.set(t.id, other);
+        return Promise.reject(new T.StaleError(other));
+      }
+      if (base && cur && cur.updated !== base) return Promise.reject(new T.StaleError(cur));
+      mem.set(t.id, t);
+      return Promise.resolve();
+    },
+  };
+  const before = T.useTaskStore(store);
+  try {
+    const t = await T.addTask({ title: "Una" }, at("2026-10-06T10:00:00"));
+    const { task } = await T.updateTask(
+      t.id,
+      (cur) => ({ notes: T.addStep(cur.notes ?? "", "da qui") }),
+      at("2026-10-06T10:01:00"),
+    );
+    assert(task.notes!.includes("da un'altra macchina") && task.notes!.includes("da qui"), task.notes);
+    // an editor that read the task at a version it names is told, not merged over
+    await T.updateTask(t.id, { title: "Due" }, at("2026-10-06T10:02:00"), "an old version").then(
+      () => assert(false, "should have been refused"),
+      (e) => assert(e instanceof T.StaleError),
+    );
+  } finally {
+    T.useTaskStore(before);
+  }
+});

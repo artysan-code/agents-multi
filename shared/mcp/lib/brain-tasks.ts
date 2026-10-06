@@ -7,7 +7,7 @@
 // the list in two again. The task rules stay in tasks.ts, on this side; the brain stores the files.
 
 import { type Account, loadAccounts, visibleAccounts } from "./accounts.ts";
-import { fromFile, type Task, type TaskStore, toFile, useTaskStore } from "./tasks.ts";
+import { fromFile, StaleError, type Task, type TaskStore, toFile, useTaskStore } from "./tasks.ts";
 import { getSecret } from "./vault.ts";
 
 /** The TaskStore on a brain at `url`, signed in with a personal token. */
@@ -28,6 +28,12 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
       await r.body?.cancel();
       return null;
     }
+    // the task changed on the brain since this machine read it: the brain sends it as it is now
+    if (r.status === 409) {
+      const cur = fromFile(String(((await r.json().catch(() => ({}))) as { task?: unknown }).task ?? ""));
+      if (cur) throw new StaleError(cur);
+      throw new Error(`the brain answered 409 on ${path}`);
+    }
     if (!r.ok) {
       await r.body?.cancel();
       throw new Error(
@@ -47,11 +53,11 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
       const d = await call(`/api/tasks/${id}`);
       return d ? fromFile(String(d.task)) : null;
     },
-    async write(t) {
+    async write(t, base) {
       await call(`/api/tasks/${t.id}`, {
         method: "PUT",
         body: toFile(t),
-        headers: { "content-type": "text/markdown" },
+        headers: { "content-type": "text/markdown", ...(base ? { "if-match": base } : {}) },
       });
     },
   };
@@ -69,8 +75,8 @@ export function scoped(store: TaskStore, prefixes: string[]): TaskStore {
       const t = await store.get(id);
       return inside(t) ? t : null;
     },
-    write: (t) =>
-      inside(t) ? store.write(t) : Promise.reject(
+    write: (t, base) =>
+      inside(t) ? store.write(t, base) : Promise.reject(
         new Error(
           `in this profile a task belongs to one of these projects: ${
             prefixes.join(", ")
