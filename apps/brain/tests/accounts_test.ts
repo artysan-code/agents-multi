@@ -100,6 +100,17 @@ Deno.test("sign in: five wrong attempts lock that account from that address only
   assertEquals(await auth.signIn(" BOB ", PASS, await totp(b), X), "ok");
 });
 
+Deno.test("accounts: each has its own time zone, the service's until chosen; an unknown one is refused", async () => {
+  const { users } = await fresh();
+  await ready(users, "ann");
+  assertEquals(users.get("ann")!.timezone, null);
+  users.setTimezone("ann", "America/New_York");
+  assertEquals(users.get("ann")!.timezone, "America/New_York");
+  assertThrows(() => users.setTimezone("ann", "Mars/Olympus"), Error, "fuso");
+  users.setTimezone("ann", null);
+  assertEquals(users.get("ann")!.timezone, null);
+});
+
 Deno.test("tokens: each belongs to its account; one account cannot revoke another's; disabled means no way in", async () => {
   const { users, auth } = await fresh();
   await ready(users, "ann");

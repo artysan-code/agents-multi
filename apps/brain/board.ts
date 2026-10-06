@@ -25,6 +25,7 @@ import {
   type Task,
   type TaskInput,
   updateTask,
+  zone,
 } from "../../shared/mcp/lib/tasks.ts";
 import { esc, page } from "./pages.ts";
 
@@ -276,7 +277,9 @@ export function taskPage(t: Task, all: Task[], now: Date, error = ""): string {
     }
     ${field("Dettaglio", `<input name="detail" value="${v("detail")}" maxlength="500">`)}
     <button>Salva</button></form>
-  <p class="sub">Creata ${esc(new Date(t.created).toLocaleDateString("it-IT"))} · ${esc(t.id)}</p>`,
+  <p class="sub">Creata ${esc(new Date(t.created).toLocaleDateString("it-IT", { timeZone: zone() }))} · ${
+      esc(t.id)
+    }</p>`,
     "wide",
   );
 }

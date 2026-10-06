@@ -137,10 +137,18 @@ export function signInPage(totp: boolean, error = "", next = "/account") {
 const SIGNED_OUT_ERROR = "Account, passphrase o codice sbagliati.";
 export { SIGNED_OUT_ERROR };
 
-const when = (s: string | null) =>
+const when = (s: string | null, timeZone: string) =>
   s
-    ? new Date(s).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    ? new Date(s).toLocaleString("it-IT", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone,
+    })
     : "mai";
+/** Every time zone this runtime knows, for the account page's choice. */
+const ZONES = Intl.supportedValuesOf("timeZone");
 
 export interface AdminView {
   users: User[];
@@ -153,9 +161,10 @@ export function accountPage(
   user: User,
   tokens: { name: string; created: string; used: string | null; hash: string }[],
   claude: { name: string; created: string; used: string | null }[],
-  extra: { fresh?: { name: string; token: string }; backupKey?: string; admin?: AdminView } = {},
+  extra: { fresh?: { name: string; token: string }; backupKey?: string; admin?: AdminView; zone: string },
 ) {
-  const { fresh, backupKey, admin } = extra;
+  const { fresh, backupKey, admin, zone } = extra;
+  const tz = user.timezone ?? zone;
   return page(
     "Il tuo cervello",
     `
@@ -176,7 +185,7 @@ export function accountPage(
   <h2>Token delle tue macchine</h2>
   <table>${
       tokens.map((t) =>
-        `<tr><td>${esc(t.name)}</td><td>usato ${esc(when(t.used))}</td><td class="r">
+        `<tr><td>${esc(t.name)}</td><td>usato ${esc(when(t.used, tz))}</td><td class="r">
     <form method="post" action="/account/revoke" style="margin:0"><input type="hidden" name="hash" value="${
           esc(t.hash)
         }"><button class="ghost">Revoca</button></form></td></tr>`
@@ -186,12 +195,17 @@ export function accountPage(
   <h2>Connessioni di Claude</h2>
   <table>${
       claude.map((c) =>
-        `<tr><td>${esc(c.name)}</td><td>dal ${esc(when(c.created))}</td><td class="r">usata ${
-          esc(when(c.used))
+        `<tr><td>${esc(c.name)}</td><td>dal ${esc(when(c.created, tz))}</td><td class="r">usata ${
+          esc(when(c.used, tz))
         }</td></tr>`
       ).join("") || `<tr><td>nessuna</td></tr>`
     }</table>
   <form method="post" action="/account/revoke-claude"><button class="ghost">Scollega tutte le connessioni di Claude</button></form>
+  <h2>Fuso orario</h2>
+  <p>Decide il giorno del diario, l'ora delle note e quando una task è in ritardo.</p>
+  <form method="post" action="/account/timezone" class="row"><select name="timezone">${
+      ZONES.map((z) => `<option${z === tz ? " selected" : ""}>${esc(z)}</option>`).join("")
+    }</select><button>Salva</button></form>
   <h2>Chiave delle copie</h2>
   <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Arriva da sola nel vault quando una macchina accede dalla console (Connessioni › Accedi, o <code>claude-multi brain-login</code>).</p>
   ${

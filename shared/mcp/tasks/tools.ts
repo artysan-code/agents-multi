@@ -27,13 +27,18 @@ import {
   type Task,
   type TaskInput,
   updateTask,
+  zone,
 } from "../lib/tasks.ts";
 import { owner } from "../lib/owner.ts";
 
 const text = (o: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(o, null, 2) }] });
 const clock = () => {
   const now = new Date();
-  return { today: dayOf(now), now: hhmm(now), weekday: now.toLocaleDateString("en-GB", { weekday: "long" }) };
+  return {
+    today: dayOf(now),
+    now: hhmm(now),
+    weekday: now.toLocaleDateString("en-GB", { weekday: "long", timeZone: zone() }),
+  };
 };
 /** A task as a line: easy to read back to the owner, the id kept for the next call. `all` (the
  *  whole list) lets it say when the task waits for another still open. */

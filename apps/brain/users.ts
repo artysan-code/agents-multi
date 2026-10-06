@@ -13,11 +13,12 @@
 
 import type { DatabaseSync } from "node:sqlite";
 import { base32Encode, randomToken, same, sha256, totpOk } from "./auth.ts";
+import { validZone } from "../../shared/mcp/lib/tasks.ts";
 
 const SCHEMA = `
 create table if not exists users (
   id text primary key, name text not null, language text not null, pass text, totp text, backup text not null,
-  admin integer not null default 0, disabled integer not null default 0, created text not null);
+  admin integer not null default 0, disabled integer not null default 0, created text not null, timezone text);
 create table if not exists invites (hash text primary key, user text not null, expires integer not null);
 `;
 
@@ -35,6 +36,8 @@ export interface User {
   disabled: boolean;
   ready: boolean;
   created: string;
+  /** The zone the person's days are in (an IANA name), or null for the service's own. */
+  timezone: string | null;
 }
 
 const enc = new TextEncoder(), dec = new TextDecoder();
@@ -88,6 +91,10 @@ export function accountError(id: string, name: string): string | null {
 export class Users {
   constructor(private db: DatabaseSync, private key: CryptoKey, private dev = false) {
     db.exec(SCHEMA);
+    // accounts from before each had a zone: the service's own, until the person chooses
+    if (!(db.prepare("pragma table_info(users)").all() as { name: string }[]).some((c) => c.name === "timezone")) {
+      db.exec("alter table users add column timezone text");
+    }
   }
 
   private row = (r: Record<string, unknown> | undefined): User | null =>
@@ -100,6 +107,7 @@ export class Users {
         disabled: !!r.disabled,
         ready: !!r.pass,
         created: String(r.created),
+        timezone: typeof r.timezone === "string" ? r.timezone : null,
       }
       : null;
 
@@ -221,6 +229,12 @@ export class Users {
     const r = this.db.prepare("select backup from users where id = ?").get(id) as { backup: string } | undefined;
     if (!r) throw new Error(`nessun account ${id}`);
     return await unwrap(this.key, r.backup);
+  }
+
+  /** The zone of a person's days: an IANA name (Europe/Rome), or null for the service's own. */
+  setTimezone(id: string, tz: string | null) {
+    if (tz !== null && !validZone(tz)) throw new Error(`fuso orario sconosciuto: ${tz}`);
+    this.db.prepare("update users set timezone = ? where id = ?").run(tz, id);
   }
 
   setDisabled(id: string, disabled: boolean) {

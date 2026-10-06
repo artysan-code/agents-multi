@@ -12,7 +12,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { fromFileUrl } from "jsr:@std/path@1/from-file-url";
 import { DatabaseSync } from "node:sqlite";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/webStandardStreamableHttp.js";
-import { fromFile, type TaskStore, useTaskStore } from "../../shared/mcp/lib/tasks.ts";
+import { fromFile, type TaskStore, useTaskStore, useZone, validZone } from "../../shared/mcp/lib/tasks.ts";
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";
 import {
@@ -91,6 +91,15 @@ const tasks: TaskStore = {
   write: (t) => here().tenant.tasks.write(t),
 };
 useTaskStore(tasks);
+// a person's days are in their own zone (the account page sets it), or the service's: BRAIN_TIMEZONE,
+// else the zone the process runs in (TZ)
+const ZONE = env("BRAIN_TIMEZONE") ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+if (!validZone(ZONE)) fail(`BRAIN_TIMEZONE: unknown time zone ${ZONE}`);
+const zoneOf = (u: User) => u.timezone ?? ZONE;
+useZone(() => {
+  const c = ctx.getStore();
+  return c ? zoneOf(c.user) : undefined;
+});
 /** Runs `fn` as an account: its database, its owner, its name on every revision. */
 const as = <T>(user: User, label: string, fn: () => T): T =>
   ctx.run({ user, label, tenant: tenants.open(user.id) }, fn);
@@ -331,6 +340,12 @@ async function handle(req: Request, ip: string): Promise<Response> {
       if (p === "/account/revoke" && f.get("hash")) auth.revoke(me.id, f.get("hash")!);
       if (p === "/account/revoke-claude") auth.revokeAllClaude(me.id);
       if (p === "/account/backup-key") extra.backupKey = await users.backupKey(me.id);
+      if (p === "/account/timezone") {
+        const tz = f.get("timezone") ?? "";
+        if (tz && !validZone(tz)) return new Response("fuso orario sconosciuto\n", { status: 400 });
+        users.setTimezone(me.id, tz === "" || tz === ZONE ? null : tz);
+        return new Response(null, { status: 303, headers: { location: "/account" } });
+      }
       if (p.startsWith("/account/admin/")) {
         if (!me.admin) return html(signInPage(TOTP, "Solo l'amministratore gestisce gli account."), 403);
         const target = (f.get("id") ?? "").trim().toLowerCase();
@@ -355,7 +370,9 @@ async function handle(req: Request, ip: string): Promise<Response> {
       }
     }
     if (me.admin) extra.admin = { ...adminView, users: users.list() };
-    return html(accountPage(me, auth.personalTokens(me.id), auth.connections(me.id), extra));
+    return html(
+      accountPage(users.get(me.id)!, auth.personalTokens(me.id), auth.connections(me.id), { ...extra, zone: ZONE }),
+    );
   }
 
   // ---------------- the privacy notice (the rest of what is public is the site, below)

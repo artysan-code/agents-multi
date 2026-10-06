@@ -299,3 +299,30 @@ Deno.test("references: by id or ref, the project first, ambiguity said; relation
   assert(T.wouldLoop(all, "t-4", "t-2"));
   assert(!T.wouldLoop(all, "t-2", "t-4"));
 });
+
+Deno.test("dates: with a zone given, days and hours are that zone's, whatever the machine's", () => {
+  try {
+    // 23:30 UTC on 31 March is already 1 April in Rome (summer time, +2) and still 31 March in New York
+    const instant = new Date("2026-03-31T23:30:00Z");
+    T.useZone(() => "Europe/Rome");
+    assertEquals([T.dayOf(instant), T.hhmm(instant), T.momentOf(instant)], ["2026-04-01", "01:30", "morning"]);
+    T.useZone(() => "America/New_York");
+    assertEquals([T.dayOf(instant), T.hhmm(instant), T.momentOf(instant)], ["2026-03-31", "19:30", "evening"]);
+    // a reminder at 10:00 Rome time is due at 08:00 UTC in summer, 09:00 UTC in winter
+    T.useZone(() => "Europe/Rome");
+    const t = task({ due: "2026-07-10", time: "10:00", remind: 0 });
+    assertEquals(T.dueReminders([t], new Date("2026-07-10T07:59:00Z"), new Set(), 0).length, 0);
+    assertEquals(T.dueReminders([t], new Date("2026-07-10T08:00:00Z"), new Set(), 0).length, 1);
+    const w = task({ due: "2026-01-10", time: "10:00", remind: 0 });
+    assertEquals(T.dueReminders([w], new Date("2026-01-10T08:30:00Z"), new Set(), 0).length, 0);
+    assertEquals(T.dueReminders([w], new Date("2026-01-10T09:00:00Z"), new Set(), 0).length, 1);
+    // the calendar does not depend on the zone: the day summer time starts still has its next day
+    assertEquals(T.addDays("2026-03-29", 1), "2026-03-30");
+    assertEquals(T.nextDue("2026-01-31", "monthly"), "2026-02-28");
+    assertEquals(T.nextDue("2026-10-09", "weekdays"), "2026-10-12");
+    assert(T.validDay("2024-02-29") && !T.validDay("2026-02-29"));
+    assert(T.validZone("Europe/Rome") && !T.validZone("Mars/Olympus"));
+  } finally {
+    T.useZone(() => undefined);
+  }
+});

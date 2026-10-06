@@ -22,7 +22,7 @@ import {
   relink,
   slugPath,
 } from "./rules.ts";
-import { dayOf, hhmm } from "../../shared/mcp/lib/tasks.ts";
+import { dayOf, hhmm, zone } from "../../shared/mcp/lib/tasks.ts";
 import { type Owner, owner } from "../../shared/mcp/lib/owner.ts";
 
 /** How the brain is used and written, for every Claude connected to it; then who its owner is
@@ -304,7 +304,13 @@ export function brainServer(ctx: ToolContext): McpServer {
     const head = where === "inbox"
       ? "# Inbox\n\nCose dette al volo, da sistemare nelle pagine giuste e poi togliere da qui.\n"
       : `# ${day}\n\nCosa è successo il ${
-        now.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+        now.toLocaleDateString("it-IT", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: zone(),
+        })
       }.\n`;
     const entry = line.trim().split("\n").map((l, i) =>
       i ? `  ${l.trim()}` : `- ${where === "inbox" ? day + " " : ""}${hhmm(now)} ${l.trim()}`
