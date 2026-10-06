@@ -20,7 +20,8 @@ own; every request runs as the account its token or session belongs to.
   this one list.
 - **Search**: full text (SQLite FTS5) and by meaning (chunks embedded by `bge-m3` behind Ollama),
   fused by reciprocal rank. The embeddings fill in the background after each write; when the model
-  is down, search answers with words alone and says so.
+  is down or slow (four seconds), search answers with words alone and says so. The indexers of all
+  accounts take turns at the model, one document at a time; searches do not queue behind them.
 
 Each person's brain is one SQLite file, `BRAIN_DATA/users/<account>/brain.db`, opened only from
 `tenants.ts` with the account a token or session gave. The accounts, their tokens and sessions are

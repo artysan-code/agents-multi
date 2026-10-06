@@ -9,9 +9,9 @@
   },
   "tasks": {
     "check": "bash scripts/check.sh",
-    "test": "CLAUDE_MULTI_CONFIG=apps/cli/tests/fixtures/config deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 apps/cli/tests apps/brain/tests/brain_test.ts apps/brain/tests/accounts_test.ts apps/brain/tests/board_test.ts apps/brain/tests/public_test.ts apps/brain/tests/guard_test.ts",
+    "test": "CLAUDE_MULTI_CONFIG=apps/cli/tests/fixtures/config deno test --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331,127.0.0.1:8789 apps/cli/tests apps/brain/tests/brain_test.ts apps/brain/tests/accounts_test.ts apps/brain/tests/board_test.ts apps/brain/tests/public_test.ts apps/brain/tests/guard_test.ts apps/brain/tests/embed_test.ts",
     "ci": "bash scripts/ci.sh",
-    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 apps/cli/main.ts doctor",
+    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331,127.0.0.1:8789 apps/cli/main.ts doctor",
     "release": "deno run --allow-read --allow-write --allow-run=git scripts/release.ts"
   },
   "fmt": {

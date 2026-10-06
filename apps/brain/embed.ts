@@ -5,8 +5,11 @@
 //
 // Writes clear a document's chunks (store.ts); the indexer here notices and fills them again in
 // the background, so a write never waits for the model and a model that is down only delays this.
+// The indexers of every account take turns at the model, one document at a time; a search goes
+// straight to it and waits at most a few seconds, then answers with words alone (tools.ts).
 
 import type { Store } from "./store.ts";
+import { Gate } from "./guard.ts";
 
 export interface EmbedConfig {
   url: string;
@@ -51,13 +54,21 @@ const toBlob = (v: number[]) => {
 };
 const fromBlob = (b: Uint8Array) => new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
 
-export async function embed(cfg: EmbedConfig, input: string[]): Promise<number[][]> {
+/** How long a search waits for the model before answering with words alone. */
+export const SEARCH_TIMEOUT_MS = 4_000;
+/** The indexers of every open brain, one document at a time: a brain being filled for the first
+ *  time does not keep the model from the others, nor from the searches, which skip this line. */
+const indexing = new Gate(1, Infinity);
+
+/** The vectors of `input`, all within `timeoutMs` however many requests it takes. */
+export async function embed(cfg: EmbedConfig, input: string[], timeoutMs = 120_000): Promise<number[][]> {
+  const signal = AbortSignal.timeout(timeoutMs);
   const post = (path: string, body: unknown) =>
     fetch(`${cfg.url}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120_000),
+      signal,
     });
   const r = await post("/api/embed", { model: cfg.model, input });
   if (r.status === 404) {
@@ -84,7 +95,7 @@ export async function indexPending(store: Store, cfg: EmbedConfig, max = 50): Pr
   ).all(cfg.model, max) as { path: string; body: string }[];
   for (const d of stale) {
     const pieces = chunk(d.body);
-    const vecs = pieces.length ? await embed(cfg, pieces) : [];
+    const vecs = pieces.length ? (await indexing.run(() => embed(cfg, pieces)))! : [];
     store.tx(() => {
       store.db.prepare("delete from chunks where path = ?").run(d.path);
       // an empty document still gets a marker row, or it would be picked up again forever
@@ -144,8 +155,15 @@ export function indexer(store: Store, cfg: EmbedConfig) {
 }
 
 /** By meaning: each document scored by its best chunk. */
-export async function searchMeaning(store: Store, cfg: EmbedConfig, q: string, limit = 20, tasks = false) {
-  const [qv] = await embed(cfg, [q]);
+export async function searchMeaning(
+  store: Store,
+  cfg: EmbedConfig,
+  q: string,
+  limit = 20,
+  tasks = false,
+  timeoutMs = SEARCH_TIMEOUT_MS,
+) {
+  const [qv] = await embed(cfg, [q], timeoutMs);
   const v = fromBlob(toBlob(qv));
   const best = new Map<string, { score: number; text: string }>();
   for (
