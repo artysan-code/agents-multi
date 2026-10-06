@@ -54,12 +54,21 @@ take_lock() {
   fi
 }
 
+# semver_dirs <dir>: the X.Y.Z entries of a directory, oldest first.
+semver_dirs() {
+  local d
+  for d in "$1"/*; do
+    d=${d##*/}
+    if [[ $d =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then printf '%s\n' "$d"; fi
+  done | sort -V
+}
+
 # Rollback: claude-bin torna alla versione precedente ancora in cache (il prune ne tiene una).
 do_rollback() (
   set -e
   local cur prev
   cur="$(basename "$(readlink -f "$BIN_DIR/claude-bin")")"
-  prev="$(ls -1v "$VERSIONS_DIR" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$cur" | tail -n1 || true)"
+  prev="$(semver_dirs "$VERSIONS_DIR" | grep -vx "$cur" | tail -n1 || true)"
   [[ -n "$prev" ]] || { echo "ERROR: nessuna versione precedente in $VERSIONS_DIR (il prune tiene solo N-1)" >&2; exit 1; }
   ln -sfn "$VERSIONS_DIR/$prev" "$BIN_DIR/claude-bin"
   cm_update_log cli rollback "$cur" "$prev" ""
@@ -84,7 +93,7 @@ do_cli() (
   # il binario DIRETTO strippando quel flag, così l'update esplicito gira sempre. Il binario
   # è condiviso: aggiornarlo una volta basta per tutti i profili.
   local cbin="$BIN_DIR/claude-bin"
-  [[ -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(ls -1v "$VERSIONS_DIR" | tail -n1)"
+  [[ -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(semver_dirs "$VERSIONS_DIR" | tail -n1)"
 
   # CLAUDE_CONFIG_DIR usa-e-getta: `update` scarica solo il binario, non ha bisogno dello
   # stato di un profilo — e scriverci dentro lo sporcherebbe. Puntava a
@@ -106,7 +115,7 @@ do_cli() (
   fi
 
   local latest
-  latest="$(ls -1v "$VERSIONS_DIR" | tail -n1)"
+  latest="$(semver_dirs "$VERSIONS_DIR" | tail -n1)"
   [[ -n "$latest" ]] || { note "nessuna versione in $VERSIONS_DIR"; exit 1; }
 
   ln -sfn "$VERSIONS_DIR/$latest" "$BIN_DIR/claude-bin"
@@ -121,7 +130,7 @@ do_cli() (
   # Cancellare l'ELF di una sessione in corso è innocuo: l'inode resta vivo fino all'exit.
   # Si tiene anche la penultima (N-1) per `claude-multi update --rollback`.
   local v bn prev pruned=()
-  prev="$(ls -1v "$VERSIONS_DIR" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$latest" | tail -n1 || true)"
+  prev="$(semver_dirs "$VERSIONS_DIR" | grep -vx "$latest" | tail -n1 || true)"
   for v in "$VERSIONS_DIR"/*; do
     [[ -e "$v" ]] || continue
     bn="$(basename "$v")"

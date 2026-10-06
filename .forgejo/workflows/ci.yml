@@ -1,32 +1,57 @@
-# CI di claude-multi su Forgejo Actions: type-check, sintassi bash, test, guard segreti.
-# Runner: "ark-docker" (label docker) su ark, dentro Coolify → risorsa «Forgejo Runner».
+# CI on Forgejo Actions: the same gate as the pre-push hook (scripts/ci.sh).
 #
-# Il job gira nell'immagine di default della label, node:22-bookworm, e NON in denoland/deno:
-# actions/checkout è una action JavaScript e ha bisogno di `node` dentro il container del job,
-# che l'immagine di Deno non ha (il primo run è fallito esattamente lì). Deno lo installa setup-deno.
+# The job runs in the runner's default image for the `docker` label (node:22-bookworm), not in
+# denoland/deno: actions/checkout is a JavaScript action and needs node inside the job container.
+# Deno comes from setup-deno; the linters the gate requires in CI come from apt and from a pinned,
+# checksummed gitleaks release.
 name: ci
 on:
   push:
-    branches: [release]
+    branches: [release, beta, dev]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  DENO_VERSION: v2.9.7
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
 jobs:
-  check:
+  gate:
     runs-on: docker
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+
       - uses: https://github.com/denoland/setup-deno@v2
         with:
-          deno-version: v2.9.6
-      - name: check (type-check CLI + bash -n script)
-        run: deno task check
-      - name: test
-        run: deno task test
-      - name: site (Astro build)
-        working-directory: site
-        run: corepack enable && pnpm install --frozen-lockfile && pnpm build
-        env:
-          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-      - name: guard segreti sull'intero albero
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: tools
         run: |
-          ! git grep -nE 'sk-ant-[A-Za-z0-9_-]{10,}|"(accessToken|refreshToken|oauthAccount)"\s*:' -- ':!cli/tests' ':!.githooks' ':!.forgejo'
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends jq shellcheck >/dev/null
+          curl -fsSL -o /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          corepack enable
+
+      - name: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.local/share/pnpm/store
+          key: ci-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'site/pnpm-lock.yaml') }}
+          restore-keys: ci-
+
+      - name: gate
+        run: bash scripts/ci.sh

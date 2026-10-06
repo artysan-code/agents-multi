@@ -1,0 +1,24 @@
+# gitleaks (v8.30) configuration: the default rules, Claude Code's credential fields, and the
+# public values that look like keys. Run by scripts/ci.sh: `gitleaks git --config .gitleaks.toml .`
+[extend]
+useDefault = true
+
+# A Claude Code credentials file or .claude.json committed by mistake.
+[[rules]]
+id = "claude-credentials"
+description = "Claude Code OAuth credentials or account record"
+regex = '''"(accessToken|refreshToken|oauthAccount)"\s*:'''
+keywords = ["accesstoken", "refreshtoken", "oauthaccount"]
+
+[[rules.allowlists]]
+description = "tests and the guards that look for these fields"
+paths = ['''^cli/tests/''', '''^\.githooks/''', '''^shared/hooks/''']
+
+[allowlist]
+description = "public values that look like keys"
+regexes = [
+  # fingerprint of Anthropic's apt signing key, pinned in bin/claude-desktop-update
+  '''31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE''',
+  # RFC 6238 test vector secret, brain/tests/brain_test.ts
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
+]

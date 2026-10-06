@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# pre-push — the same gate CI runs (scripts/ci.sh), so a push that would turn CI red stops here.
+# The site build (about 15 s) runs only when the pushed commits touch site/ or the brain that
+# serves it. Deliberate bypass: `git push --no-verify`.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+zero=0000000000000000000000000000000000000000
+site=0
+# stdin: one "<local ref> <local sha> <remote ref> <remote sha>" line per pushed ref
+while read -r _ local_sha _ remote_sha; do
+  [[ "$local_sha" == "$zero" ]] && continue # a branch deletion pushes no code
+  if [[ "$remote_sha" == "$zero" ]]; then
+    range="$local_sha" # a new branch: everything it carries
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  if git diff --name-only "$range" -- 2>/dev/null | grep -qE '^(site|brain)/' \
+    || ! git cat-file -e "$remote_sha" 2>/dev/null; then
+    site=1
+  fi
+done
+
+args=()
+((site)) || args+=(--no-site)
+bash scripts/ci.sh "${args[@]}" || {
+  echo "push blocked: scripts/ci.sh failed (bypass: git push --no-verify)" >&2
+  exit 1
+}

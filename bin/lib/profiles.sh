@@ -31,14 +31,16 @@ cm_has_profile() {
 
 # cm_field <profile> <key> — a string value from the manifest, empty when absent.
 cm_field() {
-  local f="$(cm_config)/profiles/$1/profile.json"
+  local f
+  f="$(cm_config)/profiles/$1/profile.json"
   [[ -f "$f" ]] || return 0
   sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$f" | head -n1
 }
 
 # cm_flag <profile> <key> — succeeds when the manifest sets this boolean key to true.
 cm_flag() {
-  local f="$(cm_config)/profiles/$1/profile.json"
+  local f
+  f="$(cm_config)/profiles/$1/profile.json"
   [[ -f "$f" ]] && grep -Eq "\"$2\"[[:space:]]*:[[:space:]]*true" "$f"
 }
 
