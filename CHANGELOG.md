@@ -5,6 +5,21 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.3.0] - 2026-10-06
+
+### Breaking changes
+
+- **brain**: /health only says the process answers; /ready, and a clean stop on SIGTERM (cfc5d03)
+
+### Added
+
+- **brain**: each account's days in its own time zone; the embedding model set once in compose (68c9d17)
+
+### Fixed
+
+- **tasks**: a task change names the version it was made from; the brain refuses a stale one (6deccc4)
+- **brain**: a search waits four seconds for the embedding model; indexers take turns at it (ec0df9f)
+
 ## [0.2.1] - 2026-10-06
 
 ### Fixed
