@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# commit-msg — the subject is a Conventional Commit, `<type>(<scope>)!: <description>`: the
+# CHANGELOG and the version bump are generated from it (scripts/release.ts). CI checks the same
+# rule on every commit since the last tag (scripts/release.ts --lint).
+set -uo pipefail
+
+subject=$(head -n1 "$1")
+deno run --quiet --allow-read "$(git rev-parse --show-toplevel)/scripts/release.ts" --lint-subject "$subject" && exit 0
+echo "commit blocked by the commit-msg hook (bypass: git commit --no-verify)" >&2
+exit 1

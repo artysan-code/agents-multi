@@ -14,6 +14,7 @@
 //   serve   [--no-open]     local console on http://127.0.0.1:7331 (today, connections, profiles, plugins, updates, health)
 //   tasks   [...]           the task list, its brief and the desktop reminders
 //   vault   [...]           the MCP servers' secrets: encrypted in ~/vault/claude-multi, key in the keyring
+//   version                 the version (deno.json), also --version / -V
 //
 // Principle: the repository is the source of truth, ~/.claude-multi is runtime materialised by
 // `install`. Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
@@ -37,6 +38,7 @@ import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
 import { selfCheck, selfCheckRow, selfUpdate } from "./selfupdate.ts";
 import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
+import manifest from "../deno.json" with { type: "json" };
 
 const [cmd = "help", ...rest] = Deno.args;
 const flag = (f: string) => rest.includes(f);
@@ -212,11 +214,16 @@ switch (cmd) {
   case "google":
     Deno.exit(await googleCommand(rest));
     break;
+  case "version":
+  case "--version":
+  case "-V":
+    console.log(manifest.version);
+    break;
   case "help":
   case "--help":
   case "-h":
   default:
-    console.log(`claude-multi — manage a multi-profile Claude setup (repository ${REPO})
+    console.log(`claude-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
 
   init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.claude-multi/config
   install [--dry-run]         materialise runtime, wrappers, units and desktop entries (idempotent)
@@ -236,6 +243,7 @@ switch (cmd) {
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
+  version                     the version of claude-multi (also --version, -V)
 
   The console runs as a systemd user unit after install, so it is always there:
   systemctl --user status claude-multi-console.service`);

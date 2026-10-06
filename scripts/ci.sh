@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ci.sh — the whole gate, in the order CI runs it; the pre-push hook runs the same script.
 #
-#   scripts/ci.sh             check, tests, secret scan of the history, site build
+#   scripts/ci.sh             check, commit subjects, tests, secret scan of the history, site build
 #   scripts/ci.sh --no-site   the same without the site build
 #
 # gitleaks is optional on a workstation (skipped with a warning) and required in CI (CI=true).
@@ -15,6 +15,9 @@ step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
 step check
 bash scripts/check.sh
+
+step commits
+deno run --quiet --allow-read --allow-run=git scripts/release.ts --lint
 
 step test
 deno task --quiet test
