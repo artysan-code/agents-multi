@@ -27,6 +27,6 @@ RUN mkdir -p /data && chown deno:deno /data
 USER deno
 VOLUME /data
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s CMD ["deno", "eval", "const r = await fetch('http://127.0.0.1:8080/health'); if (!r.ok) Deno.exit(1)"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=2s CMD ["deno", "eval", "const r = await fetch('http://127.0.0.1:8080/ready'); if (!r.ok) Deno.exit(1)"]
 # reads only its code, the site, its cache and its data
 CMD ["run", "--allow-net", "--allow-env", "--allow-read=/app,/data,/deno-dir", "--allow-write=/data", "apps/brain/main.ts"]

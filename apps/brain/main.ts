@@ -232,7 +232,19 @@ async function handle(req: Request, ip: string): Promise<Response> {
     });
   }
 
-  if (p === "/health") return json({ ok: true, accounts: users.count(), index: tenants.status() });
+  // liveness: the process answers. Readiness: its accounts database answers too. Neither says more,
+  // to anyone: what is wrong goes to the log. The embedding model is not part of it: without it,
+  // search answers with words alone, and taking the service out of the proxy would be worse.
+  if (p === "/health") return json({ ok: true });
+  if (p === "/ready") {
+    try {
+      accountsDb.prepare("select 1").get();
+      return json({ ok: true });
+    } catch (e) {
+      console.error("brain: not ready", e);
+      return json({ ok: false }, 503);
+    }
+  }
 
   // ---------------- discovery
   if (p === "/.well-known/oauth-protected-resource" || p === "/.well-known/oauth-protected-resource/mcp") {
@@ -457,18 +469,35 @@ const withCors = (r: Response) => {
   return new Response(r.body, { status: r.status, headers: h });
 };
 
-Deno.serve({ port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") }, async (req, info) => {
-  try {
-    const ip = clientIp(req.headers, (info.remoteAddr as Deno.NetAddr).hostname, IP_HEADER);
-    return hardened(await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip), HTTPS);
-  } catch (e) {
-    if (isTooLarge(e)) return hardened(json({ error: "request body too large" }, 413), HTTPS);
-    // what went wrong stays in the log: the answer carries only an id to find it there
-    const id = crypto.randomUUID().slice(0, 8);
-    console.error(`brain: error ${id}`, e);
-    return hardened(json({ error: "internal error", id }, 500), HTTPS);
-  }
-});
+const server = Deno.serve(
+  { port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") },
+  async (req, info) => {
+    try {
+      const ip = clientIp(req.headers, (info.remoteAddr as Deno.NetAddr).hostname, IP_HEADER);
+      return hardened(await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip), HTTPS);
+    } catch (e) {
+      if (isTooLarge(e)) return hardened(json({ error: "request body too large" }, 413), HTTPS);
+      // what went wrong stays in the log: the answer carries only an id to find it there
+      const id = crypto.randomUUID().slice(0, 8);
+      console.error(`brain: error ${id}`, e);
+      return hardened(json({ error: "internal error", id }, 500), HTTPS);
+    }
+  },
+);
+// stopping (a deploy sends SIGTERM): no new requests, the ones in flight finish, the indexers stop
+// and every database is closed, so nothing is cut halfway through a write. Ten seconds at most.
+let stopping = false;
+const stop = async (signal: string) => {
+  if (stopping) return;
+  stopping = true;
+  console.log(`brain: ${signal}, stopping`);
+  setTimeout(() => Deno.exit(1), 10_000);
+  await server.shutdown();
+  tenants.close();
+  accountsDb.close();
+  Deno.exit(0);
+};
+for (const s of ["SIGTERM", "SIGINT"] as const) Deno.addSignalListener(s, () => void stop(s));
 console.log(
   `brain on ${URL_} (data ${DATA}, ${users.count()} accounts, embeddings ${embedCfg.model} at ${embedCfg.url})`,
 );

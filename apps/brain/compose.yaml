@@ -35,12 +35,19 @@ services:
     volumes:
       - brain-data:/data
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
+    # the proxy sends traffic only to a healthy container: checked every two seconds while it starts,
+    # so a deploy is out of service for the seconds the new one takes to boot, not for half a minute
     healthcheck:
-      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/health'); if (!r.ok) Deno.exit(1)"]
+      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/ready'); if (!r.ok) Deno.exit(1)"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 60s
+      start_interval: 2s
+    # SIGTERM closes the databases (main.ts); past this, Docker kills
+    stop_grace_period: 15s
     restart: unless-stopped
 
   # bge-m3, pulled once into its volume; about 1.2 GB on disk and 2 GB of memory while it works.
@@ -60,6 +67,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 60s
+      start_interval: 2s
     restart: unless-stopped
 
 volumes:

@@ -62,15 +62,4 @@ export class Tenants {
     }
     this.open_.clear();
   }
-
-  /** How the indexing of every open brain is going, without saying whose: for /health. */
-  status(): { lastError: string; pending: number } {
-    let lastError = "", pending = 0;
-    for (const t of this.open_.values()) {
-      const s = t.index.status();
-      pending += s.pending;
-      lastError ||= s.lastError;
-    }
-    return { lastError, pending };
-  }
 }

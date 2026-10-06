@@ -113,12 +113,18 @@ ready account at once instead: a local run, the end-to-end test.) A service that
 brain (`/data/brain.db`) gives it to that first account: the file moves under `users/`, and the tokens
 of its Claude connections and machines are carried over.
 
-On Coolify: a Docker Compose application from this repository, base directory `/brain`, compose file
+On Coolify: a Docker Compose application from this repository, base directory `/apps/brain`, compose file
 `/compose.yaml` (the service and Ollama, which pulls `bge-m3` into its own volume on first start),
 the domain on `brain`, `BRAIN_MASTER_KEY` and `BRAIN_ADMIN_ID` in Coolify. The repository is cloned over SSH
 straight from the server's address (`git@<ip>:2222/…`): your Git host (`git.example.com`) may be behind Cloudflare,
 which does not carry SSH. The secrets are made and typed in by the owner, never passed
-through a chat.
+through a chat. Behind Cloudflare, set `BRAIN_CLIENT_IP_HEADER=cf-connecting-ip` too, and let only
+Cloudflare reach the server.
+
+`/health` says the process answers; `/ready` that its accounts database does too (the container's
+healthcheck, checked every two seconds while it starts, so the proxy sends traffic to a new
+container seconds after it boots). Neither says more, to anyone. On SIGTERM the service stops taking
+requests, lets the ones in flight finish, stops the indexers and closes every database.
 
 Locally, with any Ollama-compatible API:
 
