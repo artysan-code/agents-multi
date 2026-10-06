@@ -5,6 +5,36 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.2.0] - 2026-10-06
+
+### Breaking changes
+
+- apps/ for what is deployed or installed — cli, brain, site, tray (74569b3)
+- **mcp**: the coolify and syncthing servers in English (62c118c)
+- **vault**: remove vault import-legacy and its doctor check (9aa05e0)
+
+### Fixed
+
+- **release**: a stable version's changelog counts from the previous stable version (e5ed262)
+- **hooks**: graphify-nudge prints valid JSON; the remaining hooks in English (8d114a0)
+- **mcp**: syncthing-status starts without Syncthing; the probe reports servers that exit (646574c)
+- **tasks**: the terminal list compares owners with the configured owner, not a name (7209cb2)
+
+### Changed
+
+- **cli**: doctor, mcp and the console split into modules (83adbfd)
+- **cli**: lib.ts split by concern into apps/cli/lib/ (9e8a11b)
+- **cli**: no import cycles — the console port in lib.ts, merge patches in json-patch.ts (3054495)
+
+### Security
+
+- **cli**: look commands up on PATH without a shell (e834533)
+
+### Documentation
+
+- **adr**: repository layout, versions, branches and releases (d8410cc)
+- English comments and messages across the CLI, launchers, tests and the tray app (c697656)
+
 ## [0.2.0-beta.1] - 2026-10-06
 
 ### Breaking changes
