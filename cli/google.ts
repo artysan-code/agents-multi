@@ -22,7 +22,10 @@ export async function storeClient(json: string): Promise<string> {
  * Starts a connection: returns the consent page's address at once, and a promise that settles when
  * the browser comes back (or after five minutes). `onDone` is told how it ended either way.
  */
-export async function startConnect(account: string, onDone: (r: { ok: boolean; message: string }) => void): Promise<string> {
+export async function startConnect(
+  account: string,
+  onDone: (r: { ok: boolean; message: string }) => void,
+): Promise<string> {
   const accounts = (await readJson<{ accounts: Account[] }>(ACCOUNTS))?.accounts ?? [];
   const a = accounts.find((x) => x.service === "google" && x.name === account);
   if (!a) throw new Error(`no google account "${account}" in accounts.json: add it first`);
@@ -32,22 +35,50 @@ export async function startConnect(account: string, onDone: (r: { ok: boolean; m
   const ac = new AbortController();
   let port = 0;
   // onDone once the listener has closed: the page is out to the browser by then, and the CLI may exit
-  const finish = (r: { ok: boolean; message: string }) => { setTimeout(() => ac.abort(), 500); void srv.finished.then(() => onDone(r), () => onDone(r)); };
+  const finish = (r: { ok: boolean; message: string }) => {
+    setTimeout(() => ac.abort(), 500);
+    void srv.finished.then(() => onDone(r), () => onDone(r));
+  };
   const timer = setTimeout(() => finish({ ok: false, message: "no answer from the browser within 5 minutes" }), 300000);
-  const srv = Deno.serve({ hostname: "127.0.0.1", port: 0, signal: ac.signal, onListen: (addr) => { port = addr.port; } }, async (req) => {
+  const srv = Deno.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    signal: ac.signal,
+    onListen: (addr) => {
+      port = addr.port;
+    },
+  }, async (req) => {
     const u = new URL(req.url);
     if (u.pathname !== "/callback") return new Response("not found", { status: 404 });
     clearTimeout(timer);
-    const page = (msg: string) => new Response(`<!doctype html><meta charset="utf-8"><title>claude-multi</title><body style="font:16px system-ui;padding:40px">${msg}</body>`, { headers: { "content-type": "text/html; charset=utf-8" } });
-    if (u.searchParams.get("state") !== state) { finish({ ok: false, message: "the answer did not match this request" }); return page("This answer does not belong to the request: nothing was stored."); }
-    if (u.searchParams.get("error")) { finish({ ok: false, message: `Google: ${u.searchParams.get("error")}` }); return page("Access was not granted: nothing was stored."); }
+    const page = (msg: string) =>
+      new Response(
+        `<!doctype html><meta charset="utf-8"><title>claude-multi</title><body style="font:16px system-ui;padding:40px">${msg}</body>`,
+        { headers: { "content-type": "text/html; charset=utf-8" } },
+      );
+    if (u.searchParams.get("state") !== state) {
+      finish({ ok: false, message: "the answer did not match this request" });
+      return page("This answer does not belong to the request: nothing was stored.");
+    }
+    if (u.searchParams.get("error")) {
+      finish({ ok: false, message: `Google: ${u.searchParams.get("error")}` });
+      return page("Access was not granted: nothing was stored.");
+    }
     try {
-      const r = await exchangeCode(client, u.searchParams.get("code") ?? "", verifier, `http://127.0.0.1:${port}/callback`);
+      const r = await exchangeCode(
+        client,
+        u.searchParams.get("code") ?? "",
+        verifier,
+        `http://127.0.0.1:${port}/callback`,
+      );
       await setSecret("google", account, r.refresh);
       if (r.email) {
         const raw = await readJson<{ accounts: Account[] } & Record<string, unknown>>(ACCOUNTS);
         const hit = raw?.accounts.find((x) => x.service === "google" && x.name === account);
-        if (raw && hit && hit.email !== r.email) { hit.email = r.email; await Deno.writeTextFile(ACCOUNTS, JSON.stringify(raw, null, 2) + "\n"); }
+        if (raw && hit && hit.email !== r.email) {
+          hit.email = r.email;
+          await Deno.writeTextFile(ACCOUNTS, JSON.stringify(raw, null, 2) + "\n");
+        }
       }
       finish({ ok: true, message: `google/${account} connected${r.email ? ` as ${r.email}` : ""}` });
       return page(`Connected${r.email ? ` as <b>${r.email}</b>` : ""}. You can close this tab.`);
@@ -72,7 +103,9 @@ export async function googleCommand(args: string[]): Promise<number> {
     const done = Promise.withResolvers<{ ok: boolean; message: string }>();
     const url = await startConnect(arg, done.resolve);
     console.log(`Opening the consent page. If no browser opens, visit:\n\n  ${url}\n`);
-    try { new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn(); } catch { /* the link above */ }
+    try {
+      new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn();
+    } catch { /* the link above */ }
     const r = await done.promise;
     console.log(r.message);
     return r.ok ? 0 : 1;

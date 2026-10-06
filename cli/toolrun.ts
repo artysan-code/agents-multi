@@ -33,7 +33,9 @@ export function wranglerDestructive(args: string[], read: (path: string) => stri
   const words = args.filter((a) => !a.startsWith("-"));
   const [cmd, sub, third] = words;
   if (cmd === "delete") return "it deletes a Worker";
-  if (cmd === "rollback" || (cmd === "versions" && sub === "rollback") || (cmd === "deployments" && sub === "rollback")) return "it rolls a Worker back";
+  if (
+    cmd === "rollback" || (cmd === "versions" && sub === "rollback") || (cmd === "deployments" && sub === "rollback")
+  ) return "it rolls a Worker back";
   // `kv key delete`, `kv namespace delete`, `kv bulk delete`, `r2 bucket delete`, `r2 object delete`,
   // `d1 delete`, `queues delete`, `secret delete`, `pages project delete`…
   if (words.slice(0, 3).includes("delete")) return `it deletes (${words.slice(0, 3).join(" ")})`;
@@ -51,7 +53,12 @@ export function wranglerDestructive(args: string[], read: (path: string) => stri
 }
 
 export const RUNNERS: Record<string, Runner> = {
-  cloudflare: { tool: "wrangler", env: "CLOUDFLARE_API_TOKEN", destructive: wranglerDestructive, refused: ["login", "logout"] },
+  cloudflare: {
+    tool: "wrangler",
+    env: "CLOUDFLARE_API_TOKEN",
+    destructive: wranglerDestructive,
+    refused: ["login", "logout"],
+  },
 };
 
 /** Pure: the profile a command runs in — the one a server is given, else the Claude configuration
@@ -74,20 +81,32 @@ export function parseRun(argv: string[]): RunPlan {
   const dash = argv.indexOf("--");
   const head = dash < 0 ? [] : argv.slice(0, dash), cmd = dash < 0 ? [] : argv.slice(dash + 1);
   const [service, account, ...extra] = head;
-  const usage = `usage: claude-multi vault run <service> [account] -- <tool> [args…]   (services: ${Object.keys(RUNNERS).join(", ")})`;
+  const usage = `usage: claude-multi vault run <service> [account] -- <tool> [args…]   (services: ${
+    Object.keys(RUNNERS).join(", ")
+  })`;
   if (!service || extra.length || !cmd.length) throw new Error(usage);
   const runner = RUNNERS[service];
-  if (!runner) throw new Error(`no command-line tool for ${service}: ${Object.keys(RUNNERS).map((s) => `${s} → ${RUNNERS[s].tool}`).join(", ")}`);
-  if (cmd[0] !== runner.tool) throw new Error(`with ${service} the token goes only to ${runner.tool}: … -- ${runner.tool} ${cmd.slice(1).join(" ")}`.trim());
+  if (!runner) {
+    throw new Error(
+      `no command-line tool for ${service}: ${Object.keys(RUNNERS).map((s) => `${s} → ${RUNNERS[s].tool}`).join(", ")}`,
+    );
+  }
+  if (cmd[0] !== runner.tool) {
+    throw new Error(
+      `with ${service} the token goes only to ${runner.tool}: … -- ${runner.tool} ${cmd.slice(1).join(" ")}`.trim(),
+    );
+  }
   const args = cmd.slice(1);
   const sub = args.find((a) => !a.startsWith("-"));
-  if (sub && runner.refused.includes(sub)) throw new Error(`${runner.tool} ${sub}: not here, the token comes from the vault (claude-multi vault run)`);
+  if (sub && runner.refused.includes(sub)) {
+    throw new Error(`${runner.tool} ${sub}: not here, the token comes from the vault (claude-multi vault run)`);
+  }
   return { service, ...(account ? { account } : {}), runner, args };
 }
 
 /** The tool's executable: the project's own (node_modules/.bin, from here up), else on PATH. */
 export async function findTool(tool: string, from = Deno.cwd()): Promise<string | null> {
-  for (let dir = from; ; dir = dirname(dir)) {
+  for (let dir = from;; dir = dirname(dir)) {
     const p = join(dir, "node_modules", ".bin", tool);
     if (await Deno.stat(p).then((s) => s.isFile, () => false)) return p;
     if (dirname(dir) === dir) break;
@@ -130,20 +149,40 @@ function confirm(why: string, line: string): boolean {
 export async function runTool(plan: RunPlan, secret: string): Promise<number> {
   const { runner, args } = plan;
   const line = `${runner.tool} ${args.join(" ")}`;
-  const why = runner.destructive(args, (p) => { try { return Deno.readTextFileSync(p); } catch { return null; } });
+  const why = runner.destructive(args, (p) => {
+    try {
+      return Deno.readTextFileSync(p);
+    } catch {
+      return null;
+    }
+  });
   if (why && !confirm(why, line)) {
-    console.error(`refused: ${line} — ${why}. Run it yourself from a terminal: claude-multi vault run ${plan.service}${plan.account ? ` ${plan.account}` : ""} -- ${line}`);
+    console.error(
+      `refused: ${line} — ${why}. Run it yourself from a terminal: claude-multi vault run ${plan.service}${
+        plan.account ? ` ${plan.account}` : ""
+      } -- ${line}`,
+    );
     return 3;
   }
   const exe = await findTool(runner.tool);
   if (!exe) {
-    console.error(`${runner.tool} is not installed: add it to the project (pnpm add -D ${runner.tool}), then run this again`);
+    console.error(
+      `${runner.tool} is not installed: add it to the project (pnpm add -D ${runner.tool}), then run this again`,
+    );
     return 127;
   }
   const child = new Deno.Command(exe, {
-    args, env: { [runner.env]: secret }, stdin: "inherit", stdout: "piped", stderr: "piped",
+    args,
+    env: { [runner.env]: secret },
+    stdin: "inherit",
+    stdout: "piped",
+    stderr: "piped",
   }).spawn();
-  const forward = (sig: Deno.Signal) => () => { try { child.kill(sig); } catch { /* already gone */ } };
+  const forward = (sig: Deno.Signal) => () => {
+    try {
+      child.kill(sig);
+    } catch { /* already gone */ }
+  };
   const handlers = (["SIGINT", "SIGTERM"] as Deno.Signal[]).map((s) => [s, forward(s)] as const);
   for (const [s, h] of handlers) Deno.addSignalListener(s, h);
   try {

@@ -14,17 +14,29 @@ Deno.test("classify: any deletion is denied, whatever spelling or shape", () => 
   assertEquals(classify(call(`{ method: "DELETE", path: "/zones/z/dns_records/r" }`)).decision, "deny");
   assertEquals(classify(call(`{ method: "delete", path: "/x" }`)).decision, "deny");
   // the DNS batch endpoint deletes through a body key
-  assertEquals(classify(call(`{ method: "POST", path: "/zones/z/dns_records/batch", body: { deletes: [{ id: "r" }] } }`)).decision, "deny");
+  assertEquals(
+    classify(call(`{ method: "POST", path: "/zones/z/dns_records/batch", body: { deletes: [{ id: "r" }] } }`)).decision,
+    "deny",
+  );
 });
 
 Deno.test("classify: writes and methods it cannot read ask first", () => {
-  assertEquals(classify(call(`{ method: "POST", path: "/zones/z/purge_cache", body: { files: ["https://a"] } }`)).decision, "ask");
-  assertEquals(classify(call(`{ method: "PATCH", path: "/zones/z/dns_records/r", body: { proxied: true } }`)).decision, "ask");
+  assertEquals(
+    classify(call(`{ method: "POST", path: "/zones/z/purge_cache", body: { files: ["https://a"] } }`)).decision,
+    "ask",
+  );
+  assertEquals(
+    classify(call(`{ method: "PATCH", path: "/zones/z/dns_records/r", body: { proxied: true } }`)).decision,
+    "ask",
+  );
   // a computed method could be anything
   assertEquals(classify(`const m = pick(); ${call("{ method: m, path: '/x' }")}`).decision, "ask");
   assertEquals(classify(`const method = "PUT"; ${call("{ method, path: '/x' }")}`).decision, "ask");
   // one write among reads is still a write
-  assertEquals(classify(`${call(`{ method: "GET", path: "/a" }`)}; ${call(`{ method: "PUT", path: "/b" }`)}`).decision, "ask");
+  assertEquals(
+    classify(`${call(`{ method: "GET", path: "/a" }`)}; ${call(`{ method: "PUT", path: "/b" }`)}`).decision,
+    "ask",
+  );
 });
 
 Deno.test("classify: a call it cannot read is a question, even when it looks like a read", () => {
@@ -32,5 +44,8 @@ Deno.test("classify: a call it cannot read is a question, even when it looks lik
   assertEquals(classify(call(`{ path: "/x", ["meth" + "od"]: "PUT" }`)).decision, "ask");
   assertEquals(classify(call(`{ ...opts, path: "/x" }`)).decision, "ask");
   assertEquals(classify(`const o = { path: "/x" }; return cloudflare.request(o);`).decision, "ask");
-  assertEquals(classify(`return fetch("https://api.cloudflare.com/client/v4/zones", { method: "GET" });`).decision, "ask");
+  assertEquals(
+    classify(`return fetch("https://api.cloudflare.com/client/v4/zones", { method: "GET" });`).decision,
+    "ask",
+  );
 });

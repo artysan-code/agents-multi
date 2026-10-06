@@ -9,10 +9,15 @@
 import { BIN, HOME, readJson, STATE } from "./lib.ts";
 
 const FILE = `${STATE}/claude-login.json`;
-export interface LoginFailure { command: string; error: string; at: string }
+export interface LoginFailure {
+  command: string;
+  error: string;
+  at: string;
+}
 
 /** Pure: whether an error of `claude -p` means its login has to be done again. */
-export const isLoginError = (msg: string) => /authenticat|not logged in|please run \/login|oauth|invalid api key|credentials/i.test(msg);
+export const isLoginError = (msg: string) =>
+  /authenticat|not logged in|please run \/login|oauth|invalid api key|credentials/i.test(msg);
 
 /** The failures recorded by the console's requests, per profile. */
 export async function loginFailures(): Promise<Record<string, LoginFailure>> {
@@ -44,7 +49,11 @@ export async function probeLogin(command: string): Promise<{ ok: boolean; error?
   try {
     const out = await new Deno.Command(`${BIN}/${command}`, {
       args: ["-p", "ok", "--model", "haiku", "--output-format", "json", "--tools", "", "--max-turns", "1"],
-      cwd: HOME, stdin: "null", stdout: "piped", stderr: "piped", signal: AbortSignal.timeout(90_000),
+      cwd: HOME,
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+      signal: AbortSignal.timeout(90_000),
     }).output();
     const dec = new TextDecoder();
     return probeVerdict(out.code, dec.decode(out.stdout), dec.decode(out.stderr));

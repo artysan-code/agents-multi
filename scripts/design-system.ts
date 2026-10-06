@@ -40,15 +40,24 @@ export function bundleCss(css: string): string {
     ":root { --sans: var(--font-sans); --serif: var(--font-serif); --mono: var(--font-mono); }\n\n" + b;
 }
 
-interface ColourToken { name: string; value: { light: string; dark: string } | string; usage?: string }
+interface ColourToken {
+  name: string;
+  value: { light: string; dark: string } | string;
+  usage?: string;
+}
 
 /** Pure: tokens.json with its colours set to the console's; returns what changed. */
-export function syncColours(tokens: { color: { tokens: ColourToken[] } }, c: ReturnType<typeof consoleColours>): string[] {
+export function syncColours(
+  tokens: { color: { tokens: ColourToken[] } },
+  c: ReturnType<typeof consoleColours>,
+): string[] {
   const changed: string[] = [];
   for (const t of tokens.color.tokens) {
     const l = c.light[t.name], d = c.dark[t.name];
     if (!l || !d || typeof t.value === "string") continue;
-    if (t.value.light !== l || t.value.dark !== d) changed.push(`${t.name}: ${t.value.light}/${t.value.dark} → ${l}/${d}`);
+    if (t.value.light !== l || t.value.dark !== d) {
+      changed.push(`${t.name}: ${t.value.light}/${t.value.dark} → ${l}/${d}`);
+    }
     t.value = { light: l, dark: d };
   }
   return changed;
@@ -56,7 +65,10 @@ export function syncColours(tokens: { color: { tokens: ColourToken[] } }, c: Ret
 
 if (import.meta.main) {
   const dir = Deno.args[0];
-  if (!dir) { console.error("usage: design-system.ts <dir with project/tokens.json>"); Deno.exit(2); }
+  if (!dir) {
+    console.error("usage: design-system.ts <dir with project/tokens.json>");
+    Deno.exit(2);
+  }
   const css = await Deno.readTextFile(CSS);
   const path = `${dir}/project/tokens.json`;
   const tokens = JSON.parse(await Deno.readTextFile(path));

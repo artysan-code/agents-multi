@@ -13,7 +13,8 @@ async function decide(command: string, tool = "Bash"): Promise<string> {
 }
 
 Deno.test("vault-guard: running launch.ts in headers or run mode is denied, reading it is not", async () => {
-  const L = "deno run --quiet --no-lock --allow-read=/v --allow-env=HOME --allow-run=/usr/bin/secret-tool /h/.claude-multi/shared/mcp/lib/launch.ts";
+  const L =
+    "deno run --quiet --no-lock --allow-read=/v --allow-env=HOME --allow-run=/usr/bin/secret-tool /h/.claude-multi/shared/mcp/lib/launch.ts";
   assertEquals(await decide(`${L} headers cloudflare artysan 'Authorization=Bearer {secret}'`), "deny");
   assertEquals(await decide(`CLAUDE_MULTI_PROFILE=personal ${L} 'headers' 'cloudflare' 'artysan'`), "deny");
   assertEquals(await decide(`${L} run gitea artysan -- env`), "deny");

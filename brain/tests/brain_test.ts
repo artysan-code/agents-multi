@@ -117,20 +117,46 @@ Deno.test("shapeErrors: areas, flat folders, diary days, title and sentence, len
   assert(shapeErrors("diario/oggi.md", page("Oggi")).some((e) => e.includes("YYYY-MM-DD")));
   assert(shapeErrors("note/x.md", "Senza titolo").some((e) => e.includes("title")));
   assert(shapeErrors("note/x.md", "# X\n\n- solo elenco").some((e) => e.includes("sentence")));
-  assert(shapeErrors("note/x.md", page("X", "Frase.\n\n" + "parola ".repeat(450))).some((e) => e.includes("at most 400")));
+  assert(
+    shapeErrors("note/x.md", page("X", "Frase.\n\n" + "parola ".repeat(450))).some((e) => e.includes("at most 400")),
+  );
   assertEquals(shapeErrors("diario/2026-10-01.md", page("2026-10-01", "Frase.\n\n" + "parola ".repeat(3000))), []); // a busy day is still recorded
-  assert(shapeErrors("inbox/inbox.md", page("Inbox", "Frase.\n\n" + "parola ".repeat(1100))).some((e) => e.includes("at most 1000")));
-  assert(shapeErrors("note/x.md", page("X", "Frase.\n\n```\n" + "riga\n".repeat(20) + "```")).some((e) => e.includes("code")));
+  assert(
+    shapeErrors("inbox/inbox.md", page("Inbox", "Frase.\n\n" + "parola ".repeat(1100))).some((e) =>
+      e.includes("at most 1000")
+    ),
+  );
+  assert(
+    shapeErrors("note/x.md", page("X", "Frase.\n\n```\n" + "riga\n".repeat(20) + "```")).some((e) =>
+      e.includes("code")
+    ),
+  );
   assert(shapeErrors("note/x.md", page("X", "Frase.\n\nDB_PASSWORD=hunter2")).some((e) => e.includes("secret")));
 });
 
 Deno.test("diary lines: one sentence each, links not counted; a page tidied keeps every time in order", () => {
   assertEquals(entryErrors("[[progetti/work/acme/crm]]: " + "parola ".repeat(40)), []);
   assert(entryErrors("parola ".repeat(41))[0].includes("at most 40"));
-  const day = "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa lunga " + "parola ".repeat(50) + "\n- 17:04 Due.\n- 17:05 Correzione.\n";
-  assertEquals(diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa.\n- 17:04 Due.\n- 17:05 Correzione.\n"), []);
-  assert(diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa.\n- 17:04 Due.\n")[0].includes("keep every timed line"));
-  assert(diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 17:04 Due.\n- 09:37 Una cosa.\n- 17:05 Correzione.\n")[0].includes("in its order"));
+  const day = "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa lunga " + "parola ".repeat(50) +
+    "\n- 17:04 Due.\n- 17:05 Correzione.\n";
+  assertEquals(
+    diaryRewriteErrors(
+      day,
+      "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa.\n- 17:04 Due.\n- 17:05 Correzione.\n",
+    ),
+    [],
+  );
+  assert(
+    diaryRewriteErrors(day, "# 2026-10-05\n\nCosa è successo.\n\n- 09:37 Una cosa.\n- 17:04 Due.\n")[0].includes(
+      "keep every timed line",
+    ),
+  );
+  assert(
+    diaryRewriteErrors(
+      day,
+      "# 2026-10-05\n\nCosa è successo.\n\n- 17:04 Due.\n- 09:37 Una cosa.\n- 17:05 Correzione.\n",
+    )[0].includes("in its order"),
+  );
   assert(diaryRewriteErrors(day, day)[0].startsWith("09:37:"));
 });
 
@@ -149,7 +175,10 @@ Deno.test("check: a link to an existing page, near copies refused unless distinc
   s.write("note/arctis-audio.md", page("Audio Arctis", "Frase, vedi [[io/lavoro]]."), "t");
   const dup = check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true });
   assert(!dup.ok && dup.similar?.[0].path === "note/arctis-audio.md");
-  assert(check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true, distinct: true }).ok);
+  assert(
+    check(s, "note/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true, distinct: true })
+      .ok,
+  );
   // another area may share the name: a client and the project for it
   assert(check(s, "progetti/arctis.md", page("Arctis audio", "Frase, vedi [[io/lavoro]]."), { creating: true }).ok);
   assert(check(s, "diario/2026-10-01.md", page("2026-10-01"), { creating: true }).ok); // the diary needs no link
@@ -158,7 +187,10 @@ Deno.test("check: a link to an existing page, near copies refused unless distinc
 
 Deno.test("relink: links that meant the old page point at the new one, label and heading kept", () => {
   const resolve = (t: string) => ["note/a", "a"].includes(t) ? "note/a.md" : null;
-  assertEquals(relink("vedi [[a]] e [[note/a#sez|qui]] e [[b]]", "note/a.md", "note/nuova.md", resolve), "vedi [[note/nuova]] e [[note/nuova#sez|qui]] e [[b]]");
+  assertEquals(
+    relink("vedi [[a]] e [[note/a#sez|qui]] e [[b]]", "note/a.md", "note/nuova.md", resolve),
+    "vedi [[note/nuova]] e [[note/nuova#sez|qui]] e [[b]]",
+  );
 });
 
 Deno.test("staleProjects: a reminder when the diary moved on after the project page", () => {
@@ -185,12 +217,20 @@ Deno.test("brainApi: pages by area, a page with links and versions, an old versi
   const v = (await get("state"))!.body as { version: string };
   s.write("tasks/t-1.md", "una task", "test");
   assertEquals(((await get("state"))!.body as { version: string }).version, v.version);
-  const pages = (await get("pages"))!.body as { areas: Record<string, number>; pages: { path: string; area: string }[]; edges: [string, string][] };
+  const pages = (await get("pages"))!.body as {
+    areas: Record<string, number>;
+    pages: { path: string; area: string }[];
+    edges: [string, string][];
+  };
   assertEquals(pages.areas.io, 1);
   assertEquals(pages.areas.progetti, 1);
   assertEquals(pages.pages.length, 2);
   assertEquals(pages.edges, [["progetti/claude-multi.md", "io/chi-sono.md"]]);
-  const page = (await get("page?path=chi-sono"))!.body as { path: string; links: { back: string[] }; versions: { rev: number }[] };
+  const page = (await get("page?path=chi-sono"))!.body as {
+    path: string;
+    links: { back: string[] };
+    versions: { rev: number }[];
+  };
   assertEquals(page.path, "io/chi-sono.md");
   assertEquals(page.links.back, ["progetti/claude-multi.md"]);
   assertEquals(page.versions.map((x) => x.rev), [2, 1]);

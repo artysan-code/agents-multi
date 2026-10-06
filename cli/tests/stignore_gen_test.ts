@@ -2,16 +2,35 @@
 // of shared/mcp/syncthing-status/ignore.ts.
 import { assertEquals } from "jsr:@std/assert@1";
 import { compilePattern, isIgnored } from "../../shared/mcp/syncthing-status/ignore.ts";
-import { handManaged, MARK_BEGIN, MARK_END, plan, render, repoBlock, split } from "../../shared/tools/stignore-gen/stignore-gen.ts";
+import {
+  handManaged,
+  MARK_BEGIN,
+  MARK_END,
+  plan,
+  render,
+  repoBlock,
+  split,
+} from "../../shared/tools/stignore-gen/stignore-gen.ts";
 
 const compile = (text: string) => text.split("\n").map(compilePattern).filter((c) => c !== null);
 
 Deno.test("stignore-gen: a repository block lets only the files git ignores on purpose travel", () => {
   const c = compile(["**/.git", ...repoBlock("acme/app")].join("\n"));
-  for (const f of [".env", ".env.local", "apps/web/.env.local", "supabase/functions/.env", ".claude/settings.local.json"]) {
+  for (
+    const f of [".env", ".env.local", "apps/web/.env.local", "supabase/functions/.env", ".claude/settings.local.json"]
+  ) {
     assertEquals(isIgnored(`acme/app/${f}`, c), false, f);
   }
-  for (const f of [".git/HEAD", "src/main.ts", ".env.example", "apps/web/.env.example", ".claude/settings.json", ".claude/worktrees/x/.env"]) {
+  for (
+    const f of [
+      ".git/HEAD",
+      "src/main.ts",
+      ".env.example",
+      "apps/web/.env.example",
+      ".claude/settings.json",
+      ".claude/worktrees/x/.env",
+    ]
+  ) {
     assertEquals(isIgnored(`acme/app/${f}`, c), true, f);
   }
   assertEquals(isIgnored("acme/notes.md", c), false);
@@ -33,7 +52,11 @@ Deno.test("stignore-gen: the section only grows unless pruned", () => {
 });
 
 Deno.test("stignore-gen: a repository excluded by hand is not generated", () => {
-  assertEquals([...handManaged("/5etools/mcp\n(?d)/x/y/*\n!/z/.env\n// /w\n/v/**")].sort(), ["5etools/mcp", "v", "x/y"]);
+  assertEquals([...handManaged("/5etools/mcp\n(?d)/x/y/*\n!/z/.env\n// /w\n/v/**")].sort(), [
+    "5etools/mcp",
+    "v",
+    "x/y",
+  ]);
   assertEquals(plan("/5etools/mcp\n", ["5etools/mcp", "app"], false).repos, ["app"]);
 });
 

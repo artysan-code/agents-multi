@@ -8,13 +8,16 @@
 //   GET /api/brain/search?q=        words and meaning, as brain_search
 //   GET /api/brain/health           what brain_check finds
 
-import { AREAS, areaOf } from "./rules.ts";
+import { areaOf, AREAS } from "./rules.ts";
 import type { Store } from "./store.ts";
 import { health, search, type ToolContext } from "./tools.ts";
 
 /** What the memory is at, tasks left out: their writes do not change the pages. */
 export function memoryVersion(store: Store): string {
-  const r = store.db.prepare("select count(*) n, max(at) last from revisions where path not like 'tasks/%'").get() as { n: number; last: string | null };
+  const r = store.db.prepare("select count(*) n, max(at) last from revisions where path not like 'tasks/%'").get() as {
+    n: number;
+    last: string | null;
+  };
   return `${r.n}:${r.last ?? ""}`;
 }
 

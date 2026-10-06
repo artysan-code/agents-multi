@@ -6,7 +6,11 @@ import { HIDDEN } from "../../shared/mcp/lib/mask.ts";
 
 Deno.test("parseRun: only the service's own tool, never its login", () => {
   const p = parseRun(["cloudflare", "--", "wrangler", "deploy", "--env", "prod"]);
-  assertEquals([p.service, p.account, p.runner.tool, p.args], ["cloudflare", undefined, "wrangler", ["deploy", "--env", "prod"]]);
+  assertEquals([p.service, p.account, p.runner.tool, p.args], ["cloudflare", undefined, "wrangler", [
+    "deploy",
+    "--env",
+    "prod",
+  ]]);
   assertEquals(parseRun(["cloudflare", "artysan", "--", "wrangler", "tail"]).account, "artysan");
   assertThrows(() => parseRun(["cloudflare", "--", "env"]), Error, "only to wrangler");
   assertThrows(() => parseRun(["cloudflare", "--", "pnpm", "wrangler", "deploy"]), Error, "only to wrangler");
@@ -31,14 +35,29 @@ Deno.test("wranglerDestructive: deletions, rollbacks, remote migrations and dest
   assertEquals(typeof w("rollback"), "string");
   assertEquals(typeof w("versions rollback"), "string");
   assertEquals(typeof w("d1 migrations apply db --remote"), "string");
-  assertEquals(typeof wranglerDestructive(["d1", "execute", "db", "--remote", "--command", "DELETE FROM t"], none), "string");
-  assertEquals(typeof wranglerDestructive(["d1", "execute", "db", "--remote", "--command=drop table t"], none), "string");
-  assertEquals(typeof wranglerDestructive(["d1", "execute", "db", "--remote", "--file", "x.sql"], () => "ALTER TABLE t ADD c"), "string");
-  assertEquals(wranglerDestructive(["d1", "execute", "db", "--remote", "--file", "x.sql"], () => "insert into t values (1)"), null);
+  assertEquals(
+    typeof wranglerDestructive(["d1", "execute", "db", "--remote", "--command", "DELETE FROM t"], none),
+    "string",
+  );
+  assertEquals(
+    typeof wranglerDestructive(["d1", "execute", "db", "--remote", "--command=drop table t"], none),
+    "string",
+  );
+  assertEquals(
+    typeof wranglerDestructive(["d1", "execute", "db", "--remote", "--file", "x.sql"], () => "ALTER TABLE t ADD c"),
+    "string",
+  );
+  assertEquals(
+    wranglerDestructive(["d1", "execute", "db", "--remote", "--file", "x.sql"], () => "insert into t values (1)"),
+    null,
+  );
 });
 
 Deno.test("profileFrom: the server's profile, else the Claude configuration directory under the runtime", () => {
-  assertEquals(profileFrom({ profile: "acme", configDir: "/h/.claude-multi/personal" }, "/h/.claude-multi"), "acme");
+  assertEquals(
+    profileFrom({ profile: "acme", configDir: "/h/.claude-multi/personal" }, "/h/.claude-multi"),
+    "acme",
+  );
   assertEquals(profileFrom({ configDir: "/h/.claude-multi/personal/" }, "/h/.claude-multi"), "personal");
   assertEquals(profileFrom({ configDir: "/h/.claude" }, "/h/.claude-multi"), undefined);
   assertEquals(profileFrom({}, "/h/.claude-multi"), undefined);
@@ -48,7 +67,11 @@ Deno.test("hiding: the token is replaced even when split across chunks", async (
   const secret = "tok_ABCDEFGHIJ";
   const enc = new TextEncoder();
   const parts = ["Authorization: Bearer tok_ABC", "DEFGHIJ and again ", "tok_ABCDEFGHIJ", " end"];
-  const out = await new Response(ReadableStream.from(parts.map((p) => enc.encode(p))).pipeThrough(hiding(secret))).text();
+  const out = await new Response(ReadableStream.from(parts.map((p) => enc.encode(p))).pipeThrough(hiding(secret)))
+    .text();
   assertEquals(out, `Authorization: Bearer ${HIDDEN} and again ${HIDDEN} end`);
-  assertEquals(await new Response(ReadableStream.from([enc.encode("tok_")]).pipeThrough(hiding(secret))).text(), "tok_");
+  assertEquals(
+    await new Response(ReadableStream.from([enc.encode("tok_")]).pipeThrough(hiding(secret))).text(),
+    "tok_",
+  );
 });

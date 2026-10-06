@@ -50,7 +50,9 @@ export function resolveAccount(visible: Account[], requested: string | undefined
   if (requested) {
     const hit = visible.find((a) => a.name === requested);
     if (hit) return hit;
-    throw new Error(`no ${service} account "${requested}" for this profile${names.length ? ` (available: ${names.join(", ")})` : ""}`);
+    throw new Error(
+      `no ${service} account "${requested}" for this profile${names.length ? ` (available: ${names.join(", ")})` : ""}`,
+    );
   }
   if (visible.length === 1) return visible[0];
   if (!visible.length) throw new Error(`this profile has no ${service} account: add one in the console, Connections`);
@@ -62,7 +64,9 @@ export function accountHosts(accounts: Account[]): string[] {
   const hosts = new Set<string>();
   for (const a of accounts) {
     if (!a.url) continue;
-    try { hosts.add(new URL(a.url).host); } catch { /* an invalid address reaches nothing */ }
+    try {
+      hosts.add(new URL(a.url).host);
+    } catch { /* an invalid address reaches nothing */ }
   }
   return [...hosts].sort();
 }

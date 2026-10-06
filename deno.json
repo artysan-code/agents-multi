@@ -5,7 +5,15 @@
     "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331 cli/main.ts doctor"
   },
   "fmt": {
-    "lineWidth": 120
+    "lineWidth": 120,
+    "proseWrap": "preserve",
+    "exclude": [
+      "site/",
+      "cli/dashboard/vendor/",
+      "shared/skills/graphify/",
+      "desktop/icons/",
+      "**/*.svg"
+    ]
   },
   "lint": {
     "exclude": [

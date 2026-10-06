@@ -20,7 +20,12 @@ try {
   bMode = MODES.includes(localStorage.getItem("cm-bmode")) ? localStorage.getItem("cm-bmode") : "read";
   bOpen = new Set(JSON.parse(localStorage.getItem("cm-bopen2") ?? '["progetti"]'));
 } catch { /* storage blocked: defaults */ }
-const remember = () => { try { localStorage.setItem("cm-bopen2", JSON.stringify([...bOpen])); localStorage.setItem("cm-bmode", bMode); } catch { /* not remembered */ } };
+const remember = () => {
+  try {
+    localStorage.setItem("cm-bopen2", JSON.stringify([...bOpen]));
+    localStorage.setItem("cm-bmode", bMode);
+  } catch { /* not remembered */ }
+};
 const bare = (path) => String(path).replace(/\.md$/, "");
 
 async function loadBrain() {
@@ -30,7 +35,9 @@ async function loadBrain() {
   } catch (e) {
     BRAIN = null;
     $("#bn-tree").innerHTML = "";
-    $("#bn-page").innerHTML = `<div class="bn-body"><p class="sub">${esc(t("brain.away", { e: errText(e) }))}</p></div>`;
+    $("#bn-page").innerHTML = `<div class="bn-body"><p class="sub">${
+      esc(t("brain.away", { e: errText(e) }))
+    }</p></div>`;
     throw e;
   }
   BRAIN.byPath = new Map(BRAIN.pages.map((p) => [p.path, p]));
@@ -51,7 +58,11 @@ async function loadBrain() {
 /** The service's answer inside an error, without the status line. */
 const errText = (e) => {
   const m = String(e.message ?? e).match(/\{.*\}/s);
-  try { return m ? JSON.parse(m[0]).error ?? e.message : e.message; } catch { return e.message; }
+  try {
+    return m ? JSON.parse(m[0]).error ?? e.message : e.message;
+  } catch {
+    return e.message;
+  }
 };
 
 function renderBrainAll() {
@@ -61,11 +72,16 @@ function renderBrainAll() {
   $("#b-sum").textContent = t("brain.sum", { p: BRAIN.pages.length, l: BRAIN.edges.length });
   const issues = healthIssues();
   $("#bn-hn").textContent = issues || "";
-  if (bMode === "read") { renderTree(); showLocalGraph(); }
+  if (bMode === "read") {
+    renderTree();
+    showLocalGraph();
+  }
   if (bMode === "graph") showGlobalGraph();
   if (bMode === "diary") renderDiary();
   if (bMode === "health") renderBrainHealth();
-  if (bMode === "archive") (ARCH ? Promise.resolve(renderArchive()) : loadArchive()).catch((e) => toast(errText(e), true));
+  if (bMode === "archive") {
+    (ARCH ? Promise.resolve(renderArchive()) : loadArchive()).catch((e) => toast(errText(e), true));
+  }
 }
 
 /** Opens a page in the reader from elsewhere (a task's attachment, a link). */
@@ -110,7 +126,14 @@ const who = (by) => {
   if (kind === "token") return rest || t("brain.machine");
   return by || "—";
 };
-const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const when = (iso) =>
+  new Date(iso).toLocaleString(lang(), {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 /* ---------------- the tree ---------------- */
 /** Titles and paths matching what is typed, at once; the service's search follows on Enter. */
@@ -118,7 +141,7 @@ function matches() {
   const q = $("#b-q").value.trim().toLowerCase();
   if (!q) return null;
   const set = new Set(BRAIN.pages.filter((p) => `${p.title} ${p.path}`.toLowerCase().includes(q)).map((p) => p.path));
-  if (bFound?.q === $("#b-q").value.trim()) for (const r of bFound.results) set.add(r.path);
+  if (bFound?.q === $("#b-q").value.trim()) { for (const r of bFound.results) set.add(r.path); }
   return set;
 }
 
@@ -132,19 +155,26 @@ function renderTree() {
     if (!roots.has(parts[0])) roots.set(parts[0], { dirs: new Map(), pages: [], path: parts[0] });
     let node = roots.get(parts[0]);
     for (let i = 1; i < parts.length - 1; i++) {
-      if (!node.dirs.has(parts[i])) node.dirs.set(parts[i], { dirs: new Map(), pages: [], path: parts.slice(0, i + 1).join("/") });
+      if (!node.dirs.has(parts[i])) {
+        node.dirs.set(parts[i], { dirs: new Map(), pages: [], path: parts.slice(0, i + 1).join("/") });
+      }
       node = node.dirs.get(parts[i]);
     }
     node.pages.push(p);
   }
   const count = (n) => n.pages.length + [...n.dirs.values()].reduce((s, d) => s + count(d), 0);
   const pageBtn = (p, depth) =>
-    `<button class="bt-p${p.path === bSel ? " on" : ""}" data-page="${esc(p.path)}" style="--d:${depth}" title="${esc(bare(p.path))}">${esc(p.title)}</button>`;
+    `<button class="bt-p${p.path === bSel ? " on" : ""}" data-page="${esc(p.path)}" style="--d:${depth}" title="${
+      esc(bare(p.path))
+    }">${esc(p.title)}</button>`;
   const draw = (node, depth, area) => {
     const dirs = [...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b));
     // the diary reads newest first; elsewhere by title
-    const pages = [...node.pages].sort(area === "diario" ? (a, b) => b.path.localeCompare(a.path) : (a, b) => a.title.localeCompare(b.title));
-    return dirs.map(([name, d]) => folder(d, name, depth, area)).join("") + pages.map((p) => pageBtn(p, depth)).join("");
+    const pages = [...node.pages].sort(
+      area === "diario" ? (a, b) => b.path.localeCompare(a.path) : (a, b) => a.title.localeCompare(b.title),
+    );
+    return dirs.map(([name, d]) => folder(d, name, depth, area)).join("") +
+      pages.map((p) => pageBtn(p, depth)).join("");
   };
   const folder = (d, label, depth, area) => {
     const n = count(d);
@@ -182,8 +212,9 @@ async function searchBrain(q) {
 function renderResults() {
   const mark = (s) => esc(s).replace(/«/g, "<mark>").replace(/»/g, "</mark>");
   // an excerpt is raw Markdown: links read as their names, headings and emphasis without the marks
-  const plain = (s) => s.replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, tg, label) => label ?? tg.trim().split("/").pop())
-    .replace(/\[\[[^\]]*$/, "…").replace(/(^|\s)#{1,6}\s/g, "$1").replace(/\*\*|`/g, "").replace(/\s+/g, " ");
+  const plain = (s) =>
+    s.replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, tg, label) => label ?? tg.trim().split("/").pop())
+      .replace(/\[\[[^\]]*$/, "…").replace(/(^|\s)#{1,6}\s/g, "$1").replace(/\*\*|`/g, "").replace(/\s+/g, " ");
   const rows = bFound.results.map((r) => {
     const p = BRAIN.byPath.get(r.path);
     return `<button class="bt-r${r.path === bSel ? " on" : ""}" data-page="${esc(r.path)}">
@@ -194,7 +225,13 @@ function renderResults() {
   }).join("");
   $("#bn-tree").innerHTML = `<div class="bt-rh"><b>${esc(t("brain.results", { n: bFound.results.length }))}</b>
       <button class="btn sm" data-clear>${esc(t("brain.clear"))}</button></div>
-    ${bFound.note ? `<div class="sub bt-note">${esc(/words only|parole/.test(bFound.note) ? t("brain.wordsOnly") : bFound.note)}</div>` : ""}
+    ${
+    bFound.note
+      ? `<div class="sub bt-note">${
+        esc(/words only|parole/.test(bFound.note) ? t("brain.wordsOnly") : bFound.note)
+      }</div>`
+      : ""
+  }
     ${rows || `<div class="sub bt-note">${esc(t("cat.nothing"))}</div>`}`;
 }
 
@@ -233,7 +270,9 @@ function renderPage(top = true) {
     <div class="bn-crumb">${bare(p.path).split("/").map(esc).join(" <span>/</span> ")}</div>
     <h1 class="bn-title">${esc(p.title)}</h1>
     <div class="bn-meta">
-      <i class="gdot" style="background:var(--g-${areaOf(p.area)})"></i>${esc(AREAS.includes(p.area) ? t(`brain.g.${p.area}`) : p.area)}
+      <i class="gdot" style="background:var(--g-${areaOf(p.area)})"></i>${
+    esc(AREAS.includes(p.area) ? t(`brain.g.${p.area}`) : p.area)
+  }
       <span title="${esc(when(p.updated))}">${esc(t("brain.updatedBy", { d: ago(p.updated), w: who(p.by) }))}</span>
       <span class="chip">${esc(t("brain.rev", { n: p.rev }))}</span>
     </div>
@@ -245,19 +284,37 @@ function renderPage(top = true) {
 
 function renderSide() {
   const box = $("#bn-links");
-  if (!bPage || bPage.path !== bSel) { box.innerHTML = ""; return; }
+  if (!bPage || bPage.path !== bSel) {
+    box.innerHTML = "";
+    return;
+  }
   const area = (path) => areaOf(BRAIN.byPath.get(path)?.area);
   const row = (path, label) =>
-    `<button class="bl" data-page="${esc(path)}"><i class="gdot" style="background:var(--g-${area(path)})"></i><span>${esc(label)}</span></button>`;
-  const back = bPage.links.back.map((x) => BRAIN.byPath.get(x)).filter(Boolean).sort((a, b) => a.title.localeCompare(b.title));
-  const out = bPage.links.out.map((l) => l.path ? row(l.path, BRAIN.byPath.get(l.path)?.title ?? bare(l.path))
-    : `<span class="bl broken" title="${esc(t("brain.broken"))}"><i class="gdot"></i><span>${esc(l.target)}</span></span>`);
-  const versions = bPage.versions.map((x) => `<button class="bv${bVer?.rev === x.rev ? " on" : ""}${x.rev === bPage.rev ? " cur" : ""}" data-rev="${x.rev}">
-      <b>${esc(String(x.rev))}</b><span>${esc(ago(x.at))} · ${esc(who(x.by))}</span><em>${esc(t(`brain.op.${x.op}`))}</em>
-    </button>`).join("");
+    `<button class="bl" data-page="${esc(path)}"><i class="gdot" style="background:var(--g-${area(path)})"></i><span>${
+      esc(label)
+    }</span></button>`;
+  const back = bPage.links.back.map((x) => BRAIN.byPath.get(x)).filter(Boolean).sort((a, b) =>
+    a.title.localeCompare(b.title)
+  );
+  const out = bPage.links.out.map((l) =>
+    l.path
+      ? row(l.path, BRAIN.byPath.get(l.path)?.title ?? bare(l.path))
+      : `<span class="bl broken" title="${esc(t("brain.broken"))}"><i class="gdot"></i><span>${
+        esc(l.target)
+      }</span></span>`
+  );
+  const versions = bPage.versions.map((x) =>
+    `<button class="bv${bVer?.rev === x.rev ? " on" : ""}${x.rev === bPage.rev ? " cur" : ""}" data-rev="${x.rev}">
+      <b>${esc(String(x.rev))}</b><span>${esc(ago(x.at))} · ${esc(who(x.by))}</span><em>${
+      esc(t(`brain.op.${x.op}`))
+    }</em>
+    </button>`
+  ).join("");
   box.innerHTML = `
     <div class="panel-h"><h3>${esc(t("brain.backlinks"))}</h3><span class="r">${back.length}</span></div>
-    <div class="bl-list">${back.map((p) => row(p.path, p.title)).join("") || `<span class="sub">${esc(t("brain.none"))}</span>`}</div>
+    <div class="bl-list">${
+    back.map((p) => row(p.path, p.title)).join("") || `<span class="sub">${esc(t("brain.none"))}</span>`
+  }</div>
     <div class="panel-h"><h3>${esc(t("brain.outlinks"))}</h3><span class="r">${out.length}</span></div>
     <div class="bl-list">${out.join("") || `<span class="sub">${esc(t("brain.none"))}</span>`}</div>
     <div class="panel-h"><h3>${esc(t("brain.versions"))}</h3><span class="r">${bPage.versions.length}</span></div>
@@ -266,13 +323,20 @@ function renderSide() {
 
 async function showVersion(rev) {
   if (!bPage) return;
-  if (rev === bPage.rev) { bVer = null; renderPage(false); renderSide(); return; }
+  if (rev === bPage.rev) {
+    bVer = null;
+    renderPage(false);
+    renderSide();
+    return;
+  }
   try {
     const r = await api(`/api/brain/page?path=${encodeURIComponent(bPage.path)}&rev=${rev}`);
     bVer = { rev, body: r.body, at: r.at, by: r.by, diff: bVer?.diff ?? true };
     renderPage(false);
     renderSide();
-  } catch (e) { toast(errText(e), true); }
+  } catch (e) {
+    toast(errText(e), true);
+  }
 }
 
 /** Pure: the lines of two texts as kept, removed and added (a longest common subsequence: pages
@@ -280,12 +344,19 @@ async function showVersion(rev) {
 function lineDiff(a, b) {
   const x = a.split("\n"), y = b.split("\n"), n = x.length, m = y.length;
   const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    }
+  }
   const out = [];
   let i = 0, j = 0;
   while (i < n && j < m) {
-    if (x[i] === y[j]) { out.push([" ", x[i]]); i++; j++; }
-    else if (L[i + 1][j] >= L[i][j + 1]) out.push(["-", x[i++]]);
+    if (x[i] === y[j]) {
+      out.push([" ", x[i]]);
+      i++;
+      j++;
+    } else if (L[i + 1][j] >= L[i][j + 1]) out.push(["-", x[i++]]);
     else out.push(["+", y[j++]]);
   }
   while (i < n) out.push(["-", x[i++]]);
@@ -300,9 +371,15 @@ function diffHtml(old, cur) {
   if (!d.some(([op]) => op !== " ")) return `<p class="sub">${esc(t("brain.ver.same"))}</p>`;
   let gap = false;
   const rows = d.map(([op, line], k) => {
-    if (!near[k]) { const g = gap ? "" : `<div class="df-gap">⋯</div>`; gap = true; return g; }
+    if (!near[k]) {
+      const g = gap ? "" : `<div class="df-gap">⋯</div>`;
+      gap = true;
+      return g;
+    }
     gap = false;
-    return `<div class="df-l${op === "+" ? " add" : op === "-" ? " del" : ""}"><i>${op === " " ? "" : op}</i><span>${esc(line) || "&nbsp;"}</span></div>`;
+    return `<div class="df-l${op === "+" ? " add" : op === "-" ? " del" : ""}"><i>${op === " " ? "" : op}</i><span>${
+      esc(line) || "&nbsp;"
+    }</span></div>`;
   }).join("");
   return `<p class="sub bn-dlegend">${esc(t("brain.ver.legend"))}</p><div class="df">${rows}</div>`;
 }
@@ -322,7 +399,9 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
   const readColors = () => {
     const cs = getComputedStyle(document.documentElement);
     for (const g of [...AREAS, "other"]) colors[g] = cs.getPropertyValue(`--g-${g}`).trim() || "#888";
-    for (const k of ["line", "fg", "fg-dim", "fg-faint", "accent", "surface"]) colors[k] = cs.getPropertyValue(`--${k}`).trim();
+    for (const k of ["line", "fg", "fg-dim", "fg-faint", "accent", "surface"]) {
+      colors[k] = cs.getPropertyValue(`--${k}`).trim();
+    }
     colorsAt = Date.now();
   };
   const radius = (n) => 3.5 + Math.sqrt(n.deg) * 1.9;
@@ -332,7 +411,10 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
     let best = null, bd = Infinity;
     for (const n of nodes) {
       const d = Math.hypot(n.x - p.x, n.y - p.y);
-      if (d < radius(n) + 5 / tf.k && d < bd) { best = n; bd = d; }
+      if (d < radius(n) + 5 / tf.k && d < bd) {
+        best = n;
+        bd = d;
+      }
     }
     return best;
   };
@@ -340,7 +422,8 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
   function resize() {
     const r = canvas.getBoundingClientRect();
     dpr = window.devicePixelRatio || 1;
-    W = r.width; H = r.height;
+    W = r.width;
+    H = r.height;
     canvas.width = Math.max(1, Math.round(W * dpr));
     canvas.height = Math.max(1, Math.round(H * dpr));
     if (!moved) fit();
@@ -398,18 +481,25 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
       ctx.globalAlpha = hot ? .95 : dim ? .08 : .32;
       ctx.strokeStyle = hot ? colors.accent : colors["fg-faint"];
       ctx.lineWidth = (hot ? 1.8 : 1) / tf.k;
-      ctx.beginPath(); ctx.moveTo(l.s.x, l.s.y); ctx.lineTo(l.t.x, l.t.y); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(l.s.x, l.s.y);
+      ctx.lineTo(l.t.x, l.t.y);
+      ctx.stroke();
     }
     for (const n of nodes) {
       const r = radius(n);
       ctx.globalAlpha = lit(n) && inMatch(n) ? 1 : .18;
       ctx.fillStyle = colors[n.group] ?? colors.other;
-      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fill();
       if (n === selected) {
         ctx.globalAlpha = 1;
         ctx.strokeStyle = colors.fg;
         ctx.lineWidth = 2 / tf.k;
-        ctx.beginPath(); ctx.arc(n.x, n.y, r + 3 / tf.k, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 3 / tf.k, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
     // labels: what is in focus, what matches a search, the big hubs, and everything once zoomed in
@@ -443,7 +533,9 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
     draw();
     if (alpha() > .004 || drag) raf = requestAnimationFrame(frame);
   }
-  const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
+  const kick = () => {
+    if (!raf) raf = requestAnimationFrame(frame);
+  };
 
   // pointer: a node drags, the background pans; a press without a move is a click
   let down = null;
@@ -452,39 +544,53 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
     const n = nodeAt(sx, sy);
     down = { sx, sy, n, far: false };
     canvas.setPointerCapture(e.pointerId);
-    if (n) { drag = n; n.fx = n.x; n.fy = n.y; }
-    else pan = { x: tf.x, y: tf.y };
+    if (n) {
+      drag = n;
+      n.fx = n.x;
+      n.fy = n.y;
+    } else pan = { x: tf.x, y: tf.y };
   });
   canvas.addEventListener("pointermove", (e) => {
     const r = canvas.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
     if (down && Math.hypot(sx - down.sx, sy - down.sy) > 4) down.far = true;
     if (drag && down?.far) {
       const p = world(sx, sy);
-      drag.fx = p.x; drag.fy = p.y;
+      drag.fx = p.x;
+      drag.fy = p.y;
       sim.alpha(Math.max(alpha(), .25));
       kick();
       return;
     }
     if (pan && down?.far) {
-      tf.x = pan.x + sx - down.sx; tf.y = pan.y + sy - down.sy;
+      tf.x = pan.x + sx - down.sx;
+      tf.y = pan.y + sy - down.sy;
       moved = true;
       draw();
       return;
     }
     if (!down) {
       const n = nodeAt(sx, sy);
-      if (n !== hover) { hover = n; canvas.style.cursor = n ? "pointer" : "grab"; draw(); }
+      if (n !== hover) {
+        hover = n;
+        canvas.style.cursor = n ? "pointer" : "grab";
+        draw();
+      }
     }
   });
   const up = () => {
     if (!down) return;
-    if (drag) { drag.fx = drag.fy = null; }
+    if (drag) drag.fx = drag.fy = null;
     if (!down.far) onClick?.(down.n ? down.n.id : null);
     drag = pan = down = null;
   };
   canvas.addEventListener("pointerup", up);
   canvas.addEventListener("pointercancel", up);
-  canvas.addEventListener("pointerleave", () => { if (!down && hover) { hover = null; draw(); } });
+  canvas.addEventListener("pointerleave", () => {
+    if (!down && hover) {
+      hover = null;
+      draw();
+    }
+  });
   canvas.addEventListener("dblclick", (e) => {
     const r = canvas.getBoundingClientRect();
     const n = nodeAt(e.clientX - r.left, e.clientY - r.top);
@@ -494,7 +600,9 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
     e.preventDefault();
     const r = canvas.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
     const k = Math.min(6, Math.max(.15, tf.k * Math.exp(-e.deltaY * .0015)));
-    tf.x = sx - (sx - tf.x) * k / tf.k; tf.y = sy - (sy - tf.y) * k / tf.k; tf.k = k;
+    tf.x = sx - (sx - tf.x) * k / tf.k;
+    tf.y = sy - (sy - tf.y) * k / tf.k;
+    tf.k = k;
     moved = true;
     draw();
   }, { passive: false });
@@ -513,7 +621,10 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
       byId = new Map(nodes.map((n) => [n.id, n]));
       links = ls.map(([a, b]) => ({ s: byId.get(a), t: byId.get(b) })).filter((l) => l.s && l.t && l.s !== l.t);
       adj = new Map(nodes.map((n) => [n.id, new Set()]));
-      for (const l of links) { adj.get(l.s.id).add(l.t.id); adj.get(l.t.id).add(l.s.id); }
+      for (const l of links) {
+        adj.get(l.s.id).add(l.t.id);
+        adj.get(l.t.id).add(l.s.id);
+      }
       for (const n of nodes) n.deg = adj.get(n.id).size;
       top = new Set([...nodes].sort((a, b) => b.deg - a.deg).slice(0, 8).map((n) => n.id));
       // d3 reads the anchors, the degrees and the links when it is handed the nodes
@@ -534,9 +645,20 @@ function forceGraph(canvas, { onClick, onOpen, charge = 260, distance = 60, labe
       readColors();
       kick();
     },
-    select(id) { selected = id ? byId.get(id) ?? null : null; draw(); },
-    setMatch(set) { match = set; draw(); },
-    refit() { moved = false; fitted = false; fit(); draw(); },
+    select(id) {
+      selected = id ? byId.get(id) ?? null : null;
+      draw();
+    },
+    setMatch(set) {
+      match = set;
+      draw();
+    },
+    refit() {
+      moved = false;
+      fitted = false;
+      fit();
+      draw();
+    },
     resize,
   };
 }
@@ -560,24 +682,41 @@ let diarySeq = 0;
 async function renderDiary() {
   const box = $("#bn-diary"), seq = ++diarySeq;
   const days = BRAIN.pages.filter((p) => p.area === "diario").sort((a, b) => b.path.localeCompare(a.path));
-  if (!days.length) { box.innerHTML = `<p class="sub">${esc(t("brain.d.empty"))}</p>`; return; }
+  if (!days.length) {
+    box.innerHTML = `<p class="sub">${esc(t("brain.d.empty"))}</p>`;
+    return;
+  }
   const shown = days.slice(0, bDays);
-  await Promise.all(shown.filter((p) => dayCache.get(p.path)?.rev !== p.rev).map(async (p) => {
-    const d = await api(`/api/brain/page?path=${encodeURIComponent(p.path)}`).catch(() => null);
-    if (d) dayCache.set(p.path, { rev: d.rev, body: d.body });
-  }));
+  await Promise.all(
+    shown.filter((p) => dayCache.get(p.path)?.rev !== p.rev).map(async (p) => {
+      const d = await api(`/api/brain/page?path=${encodeURIComponent(p.path)}`).catch(() => null);
+      if (d) dayCache.set(p.path, { rev: d.rev, body: d.body });
+    }),
+  );
   if (seq !== diarySeq) return;
   const q = $("#b-q").value.trim().toLowerCase();
   const html = shown.map((p) => {
-    const entries = diaryEntries(dayCache.get(p.path)?.body ?? "").reverse().filter((e) => !q || e.text.toLowerCase().includes(q));
+    const entries = diaryEntries(dayCache.get(p.path)?.body ?? "").reverse().filter((e) =>
+      !q || e.text.toLowerCase().includes(q)
+    );
     if (q && !entries.length) return "";
     const day = bare(p.path).split("/").pop();
     const label = /^\d{4}-\d{2}-\d{2}$/.test(day)
-      ? new Date(`${day}T12:00`).toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      ? new Date(`${day}T12:00`).toLocaleDateString(lang(), {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
       : p.title;
     return `<section class="dy-day">
-      <div class="dy-h"><h3>${esc(label)}</h3><button class="btn sm" data-read="${esc(p.path)}">${esc(t("brain.d.open"))}</button></div>
-      ${entries.map((e) => `<div class="dy-e"><time>${esc(e.time)}</time><div class="md">${mdToHtml(e.text)}</div></div>`).join("")}
+      <div class="dy-h"><h3>${esc(label)}</h3><button class="btn sm" data-read="${esc(p.path)}">${
+      esc(t("brain.d.open"))
+    }</button></div>
+      ${
+      entries.map((e) => `<div class="dy-e"><time>${esc(e.time)}</time><div class="md">${mdToHtml(e.text)}</div></div>`)
+        .join("")
+    }
     </section>`;
   }).join("");
   box.innerHTML = (html || `<p class="sub">${esc(t("brain.d.none"))}</p>`) +
@@ -587,28 +726,47 @@ async function renderDiary() {
 /* ---------------- health ---------------- */
 const healthIssues = () => {
   const h = BRAIN?.health;
-  return h ? h.orphans.length + h.broken_links.length + h.too_long.length + h.inbox_older_than_a_week.length + h.outside_the_areas.length : 0;
+  return h
+    ? h.orphans.length + h.broken_links.length + h.too_long.length + h.inbox_older_than_a_week.length +
+      h.outside_the_areas.length
+    : 0;
 };
 
 function renderBrainHealth() {
   const box = $("#bn-health"), h = BRAIN.health;
-  if (!h) { box.innerHTML = `<p class="sub">${esc(t("brain.away", { e: "/api/brain/health" }))}</p>`; return; }
+  if (!h) {
+    box.innerHTML = `<p class="sub">${esc(t("brain.away", { e: "/api/brain/health" }))}</p>`;
+    return;
+  }
   const page = (path, extra = "") => {
     const p = BRAIN.byPath.get(path);
-    return `<button class="bl" data-page="${esc(path)}"><i class="gdot" style="background:var(--g-${areaOf(p?.area)})"></i><span>${esc(p?.title ?? bare(path))}</span>${extra}</button>`;
+    return `<button class="bl" data-page="${esc(path)}"><i class="gdot" style="background:var(--g-${
+      areaOf(p?.area)
+    })"></i><span>${esc(p?.title ?? bare(path))}</span>${extra}</button>`;
   };
-  const group = (key, rows) => rows.length
-    ? `<section class="panel hl-g"><div class="panel-h"><h3>${esc(t(`brain.h.${key}`))}</h3><span class="r">${rows.length}</span></div><div class="bl-list">${rows.join("")}</div></section>`
-    : "";
+  const group = (key, rows) =>
+    rows.length
+      ? `<section class="panel hl-g"><div class="panel-h"><h3>${
+        esc(t(`brain.h.${key}`))
+      }</h3><span class="r">${rows.length}</span></div><div class="bl-list">${rows.join("")}</div></section>`
+      : "";
   const groups = [
     group("orphans", h.orphans.map((x) => page(x))),
     group("broken", h.broken_links.map((b) => page(b.page, `<em class="hl-x">→ ${esc(b.link)}</em>`))),
-    group("long", h.too_long.map((x) => page(x.page, `<em class="hl-x">${esc(t("brain.h.words", { n: x.words }))}</em>`))),
-    group("inbox", h.inbox_older_than_a_week.map((l) => `<div class="hl-line">${mdToHtml(l.replace(/^- /, ""))}</div>`)),
+    group(
+      "long",
+      h.too_long.map((x) => page(x.page, `<em class="hl-x">${esc(t("brain.h.words", { n: x.words }))}</em>`)),
+    ),
+    group(
+      "inbox",
+      h.inbox_older_than_a_week.map((l) => `<div class="hl-line">${mdToHtml(l.replace(/^- /, ""))}</div>`),
+    ),
     group("outside", h.outside_the_areas.map((x) => page(x))),
   ].join("");
   box.innerHTML = groups
-    ? `<div class="hl-top"><span>${esc(t("brain.sum", { p: h.pages, l: BRAIN.edges.length }))}</span><button class="btn primary sm" data-fix>${esc(t("brain.h.fix"))}</button></div>${groups}`
+    ? `<div class="hl-top"><span>${
+      esc(t("brain.sum", { p: h.pages, l: BRAIN.edges.length }))
+    }</span><button class="btn primary sm" data-fix>${esc(t("brain.h.fix"))}</button></div>${groups}`
     : `<div class="status-card ok"><i></i><div>${esc(t("brain.h.ok"))}</div></div>`;
 }
 
@@ -631,7 +789,10 @@ async function loadArchive() {
 function renderArchive() {
   const box = $("#bn-archive");
   if (!box.firstElementChild) {
-    box.innerHTML = `<nav class="bn-tree" id="ba-tree"></nav><article class="panel bn-page" id="ba-page"><div class="bn-body"><p class="sub">${esc(t("brain.a.lede", { r: ARCH.root }))}</p></div></article>`;
+    box.innerHTML =
+      `<nav class="bn-tree" id="ba-tree"></nav><article class="panel bn-page" id="ba-page"><div class="bn-body"><p class="sub">${
+        esc(t("brain.a.lede", { r: ARCH.root }))
+      }</p></div></article>`;
   }
   const q = $("#b-q").value.trim().toLowerCase();
   const pages = ARCH.pages.filter((p) => !q || `${p.title} ${p.path} ${p.summary}`.toLowerCase().includes(q));
@@ -643,9 +804,20 @@ function renderArchive() {
   $("#ba-tree").innerHTML = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([g, ps]) => {
     const open = q || aOpen.has(g);
     return `<div class="bt-dir${open ? " open" : ""}">
-      <button class="bt-f" data-adir="${esc(g)}" style="--d:0"><svg viewBox="0 0 24 24" class="ico chev"><path d="M9 6l6 6-6 6"/></svg><span>${esc(g)}</span><em>${ps.length}</em></button>
-      ${open ? ps.sort((a, b) => a.title.localeCompare(b.title)).map((p) =>
-        `<button class="bt-p${p.path === aSel ? " on" : ""}" data-apage="${esc(p.path)}" style="--d:1" title="${esc(p.path)}">${esc(p.title)}</button>`).join("") : ""}
+      <button class="bt-f" data-adir="${
+      esc(g)
+    }" style="--d:0"><svg viewBox="0 0 24 24" class="ico chev"><path d="M9 6l6 6-6 6"/></svg><span>${
+      esc(g)
+    }</span><em>${ps.length}</em></button>
+      ${
+      open
+        ? ps.sort((a, b) => a.title.localeCompare(b.title)).map((p) =>
+          `<button class="bt-p${p.path === aSel ? " on" : ""}" data-apage="${esc(p.path)}" style="--d:1" title="${
+            esc(p.path)
+          }">${esc(p.title)}</button>`
+        ).join("")
+        : ""
+    }
     </div>`;
   }).join("") || `<div class="sub bt-note">${esc(t("cat.nothing"))}</div>`;
 }
@@ -670,7 +842,9 @@ async function readArchive(path) {
       <div class="md bn-md">${mdToHtml(aPage.body.replace(/^\s*#\s+.*\n/, ""))}</div>
     </div>`;
     el.scrollTop = 0;
-  } catch (e) { el.innerHTML = `<div class="bn-body"><p class="sub">${esc(errText(e))}</p></div>`; }
+  } catch (e) {
+    el.innerHTML = `<div class="bn-body"><p class="sub">${esc(errText(e))}</p></div>`;
+  }
 }
 
 /** The page on screen handed to Claude, who rewrites into the brain what still holds. */
@@ -687,7 +861,14 @@ const nodeOf = (p) => ({ id: p.path, title: p.title, group: areaOf(p.area) });
 
 function showLocalGraph() {
   if (!bSel) return;
-  gLocal ??= forceGraph($("#bn-local"), { onClick: (id) => id && id !== bSel && selectPage(id), onOpen: selectPage, charge: 180, distance: 55, labelRoom: 110, cluster: .02 });
+  gLocal ??= forceGraph($("#bn-local"), {
+    onClick: (id) => id && id !== bSel && selectPage(id),
+    onOpen: selectPage,
+    charge: 180,
+    distance: 55,
+    labelRoom: 110,
+    cluster: .02,
+  });
   const ids = new Set([bSel]);
   const grow = () => {
     for (const id of [...ids]) {
@@ -705,9 +886,18 @@ function showLocalGraph() {
 
 function showGlobalGraph() {
   gGlobal ??= forceGraph($("#bn-canvas"), {
-    charge: 420, distance: 80,
-    onClick: (id) => { bSel = id ?? bSel; gGlobal.select(id); renderCard(id); },
-    onOpen: (id) => { bMode = "read"; remember(); selectPage(id); },
+    charge: 420,
+    distance: 80,
+    onClick: (id) => {
+      bSel = id ?? bSel;
+      gGlobal.select(id);
+      renderCard(id);
+    },
+    onOpen: (id) => {
+      bMode = "read";
+      remember();
+      selectPage(id);
+    },
   });
   const pages = BRAIN.pages.filter((p) => !bOff.has(areaOf(p.area)));
   const ids = new Set(pages.map((p) => p.path));
@@ -717,7 +907,9 @@ function showGlobalGraph() {
   gGlobal.resize();
   const present = new Set(BRAIN.pages.map((p) => areaOf(p.area)));
   $("#bn-legend").innerHTML = [...AREAS, "other"].filter((g) => present.has(g)).map((g) =>
-    `<button class="lg${bOff.has(g) ? " off" : ""}" data-group="${g}"><i style="background:var(--g-${g})"></i>${esc(t(`brain.g.${g}`))}</button>`
+    `<button class="lg${bOff.has(g) ? " off" : ""}" data-group="${g}"><i style="background:var(--g-${g})"></i>${
+      esc(t(`brain.g.${g}`))
+    }</button>`
   ).join("");
   renderCard(ids.has(bSel) ? bSel : null);
 }
@@ -761,25 +953,50 @@ function renderCard(id) {
     }, 120);
   });
   $("#b-q").addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.target.value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
+    if (e.key === "Escape") {
+      e.target.value = "";
+      bFound = null;
+      renderTree();
+      gGlobal?.setMatch(null);
+      return;
+    }
     if (e.key !== "Enter" || !BRAIN || bMode === "diary" || bMode === "archive") return;
     const q = e.target.value.trim();
     if (!q) return;
     // a second Enter on the same results opens the first one
-    if (bFound?.q === q) { const first = bFound.results[0]; if (first) selectPage(first.path); return; }
+    if (bFound?.q === q) {
+      const first = bFound.results[0];
+      if (first) selectPage(first.path);
+      return;
+    }
     searchBrain(q);
   });
-  $("#bn-d2").addEventListener("change", (e) => { bDepth2 = e.target.checked; showLocalGraph(); });
+  $("#bn-d2").addEventListener("change", (e) => {
+    bDepth2 = e.target.checked;
+    showLocalGraph();
+  });
   $("#bn-fit").addEventListener("click", () => gGlobal?.refit());
   root.addEventListener("click", (e) => {
-    if (e.target.closest("[data-dmore]")) { bDays += 14; return renderDiary(); }
+    if (e.target.closest("[data-dmore]")) {
+      bDays += 14;
+      return renderDiary();
+    }
     if (e.target.closest("[data-fix]")) return fixWithClaude();
     const ap = e.target.closest("[data-apage]");
     if (ap) return void readArchive(ap.dataset.apage);
     const ad = e.target.closest("[data-adir]");
-    if (ad) { aOpen.has(ad.dataset.adir) ? aOpen.delete(ad.dataset.adir) : aOpen.add(ad.dataset.adir); return renderArchive(); }
+    if (ad) {
+      aOpen.has(ad.dataset.adir) ? aOpen.delete(ad.dataset.adir) : aOpen.add(ad.dataset.adir);
+      return renderArchive();
+    }
     if (e.target.closest("[data-bring]")) return bringOver();
-    if (e.target.closest("[data-clear]")) { $("#b-q").value = ""; bFound = null; renderTree(); gGlobal?.setMatch(null); return; }
+    if (e.target.closest("[data-clear]")) {
+      $("#b-q").value = "";
+      bFound = null;
+      renderTree();
+      gGlobal?.setMatch(null);
+      return;
+    }
     const d = e.target.closest("[data-dir]");
     if (d) {
       const k = d.dataset.dir;
@@ -790,18 +1007,32 @@ function renderCard(id) {
     const rv = e.target.closest("[data-rev]");
     if (rv) return void showVersion(Number(rv.dataset.rev));
     const vv = e.target.closest("[data-vview]");
-    if (vv && bVer) { bVer.diff = vv.dataset.vview === "diff"; return renderPage(false); }
-    if (e.target.closest("[data-vclose]")) { bVer = null; renderPage(false); return renderSide(); }
+    if (vv && bVer) {
+      bVer.diff = vv.dataset.vview === "diff";
+      return renderPage(false);
+    }
+    if (e.target.closest("[data-vclose]")) {
+      bVer = null;
+      renderPage(false);
+      return renderSide();
+    }
     const pg = e.target.closest("[data-page]");
     if (pg) {
       e.preventDefault();
       const path = resolvePage(pg.dataset.page);
       if (!path) return toast(t("brain.missing", { p: pg.dataset.page }), true);
-      if (bMode !== "read") { bMode = "read"; remember(); } // a page named in the diary or the health opens in the reader
+      if (bMode !== "read") {
+        bMode = "read";
+        remember();
+      } // a page named in the diary or the health opens in the reader
       return selectPage(path);
     }
     const rd = e.target.closest("[data-read]");
-    if (rd) { bMode = "read"; remember(); return selectPage(rd.dataset.read); }
+    if (rd) {
+      bMode = "read";
+      remember();
+      return selectPage(rd.dataset.read);
+    }
     const lg = e.target.closest("[data-group]");
     if (lg) {
       const g = lg.dataset.group;

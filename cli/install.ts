@@ -1,7 +1,45 @@
 // install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
 
-import { AGENTS_SKILLS, ANSI, BIN, CONFIG, PROFILES, stat, desktopDir, HOME, KINDS, launchers, shortHome, ZSH_BEGIN, ZSH_END, zshBlock, type Kind, LIB, listDir, loadManifest, lstat, machine, mode, ownItems, printDoctor, type Profile, profileNames, readText, readlink, REPO, run, RUNTIME, STAMP, has, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG, GIT_IGNORED, gitGlobalIgnore, missingIgnores } from "./lib.ts";
+import {
+  AGENTS_SKILLS,
+  ANSI,
+  BIN,
+  CONFIG,
+  desktopDir,
+  GIT_IGNORED,
+  gitGlobalIgnore,
+  has,
+  HOME,
+  type Kind,
+  KINDS,
+  launchers,
+  LIB,
+  listDir,
+  loadManifest,
+  lstat,
+  machine,
+  missingIgnores,
+  mode,
+  ownItems,
+  printDoctor,
+  type Profile,
+  profileNames,
+  PROFILES,
+  readlink,
+  readText,
+  REPO,
+  run,
+  RUNTIME,
+  shortHome,
+  STAMP,
+  stat,
+  STIGNORE_GEN_TEMPLATE,
+  SYNCTHING_CONFIG,
+  ZSH_BEGIN,
+  ZSH_END,
+  zshBlock,
+} from "./lib.ts";
 import { doctor } from "./doctor.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../shared/mcp/lib/accounts.ts";
@@ -9,7 +47,10 @@ import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 
 let DRY = false;
 const actions: string[] = [];
-function say(s: string) { actions.push(s); console.log(`  ${DRY ? `${ANSI.d}(dry)${ANSI.x} ` : ""}${s}`); }
+function say(s: string) {
+  actions.push(s);
+  console.log(`  ${DRY ? `${ANSI.d}(dry)${ANSI.x} ` : ""}${s}`);
+}
 
 async function backupAway(p: string) {
   const dest = `${p}.pre-repo-${STAMP}`;
@@ -31,7 +72,10 @@ async function writeDesktopEntries(apps: string) {
     const cur = await readText(`${apps}/${file}`);
     if (cur === text) continue;
     say(`${ANSI.g}+${ANSI.x} ${shortHome(`${apps}/${file}`)} (profile ${p})`);
-    if (!DRY) { await Deno.mkdir(apps, { recursive: true }); await Deno.writeTextFile(`${apps}/${file}`, text); }
+    if (!DRY) {
+      await Deno.mkdir(apps, { recursive: true });
+      await Deno.writeTextFile(`${apps}/${file}`, text);
+    }
   }
 }
 
@@ -43,13 +87,21 @@ export async function desktopEntry(p: Profile, template: string, defaultProfile?
   const title = p.charAt(0).toUpperCase() + p.slice(1);
   const text = template
     .replaceAll("@NAME@", variant ? `Claude ${title}` : "Claude")
-    .replaceAll("@COMMENT@", variant ? `Claude Desktop — ${title} profile (separate icon and app_id)` : "Desktop application for Claude.ai")
+    .replaceAll(
+      "@COMMENT@",
+      variant ? `Claude Desktop — ${title} profile (separate icon and app_id)` : "Desktop application for Claude.ai",
+    )
     .replaceAll("@LAUNCH@", `${BIN}/claude-launch`)
     .replaceAll("@PROFILE@", p)
     .replaceAll("@KEYWORD@", variant ? `${title};` : "")
     .replaceAll("@ICON@", variant ? `claude-desktop-${p}` : "claude-desktop")
     .replaceAll("@WMCLASS@", variant ? `claude-desktop-${p}` : "com.anthropic.Claude")
-    .replaceAll("@MIME@", p === defaultProfile ? "MimeType=x-scheme-handler/claude;" : "# no scheme handler: claude:// belongs to the default profile");
+    .replaceAll(
+      "@MIME@",
+      p === defaultProfile
+        ? "MimeType=x-scheme-handler/claude;"
+        : "# no scheme handler: claude:// belongs to the default profile",
+    );
   return { file: variant ? `claude-desktop-${p}.desktop` : "com.anthropic.Claude.desktop", text, variant };
 }
 
@@ -68,24 +120,31 @@ async function ensureDir(p: string, m?: number) {
   if (!DRY) await Deno.mkdir(p, { recursive: true, mode: m });
 }
 async function ensureCopy(src: string, dst: string) {
-  const a = await readText(src); const b = await readText(dst);
+  const a = await readText(src);
+  const b = await readText(dst);
   if (a !== null && a === b) return;
   say(`${ANSI.g}+${ANSI.x} copio ${dst}`);
-  if (!DRY) { await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true }); await Deno.copyFile(src, dst); }
+  if (!DRY) {
+    await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true });
+    await Deno.copyFile(src, dst);
+  }
 }
 /** A text file with @BIN@ filled in: a .desktop Exec= needs an absolute path, and the repository
  *  must not carry this machine's home directory. */
 async function ensureRendered(src: string, dst: string) {
-  const a = (await readText(src))?.replaceAll("@BIN@", BIN) ?? null; const b = await readText(dst);
+  const a = (await readText(src))?.replaceAll("@BIN@", BIN) ?? null;
+  const b = await readText(dst);
   if (a === null || a === b) return;
   say(`${ANSI.g}+${ANSI.x} writing ${dst}`);
-  if (!DRY) { await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true }); await Deno.writeTextFile(dst, a); }
+  if (!DRY) {
+    await Deno.mkdir(dst.slice(0, dst.lastIndexOf("/")), { recursive: true });
+    await Deno.writeTextFile(dst, a);
+  }
 }
 async function removeLink(p: string, why: string) {
   say(`${ANSI.y}−${ANSI.x} removing ${p} (${why})`);
   if (!DRY) await Deno.remove(p);
 }
-
 
 /** Materialise <profile>/<kind> as a real directory of selective symlinks: shared items relative,
  *  owned ones absolute into the repository.
@@ -103,23 +162,40 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   const dir = `${RUNTIME}/${p}/${kind}`;
   const own = await ownItems(p, kind);
   const st = await lstat(dir);
-  if (st?.isSymlink) { say(`${ANSI.y}→${ANSI.x} ${p}/${kind} was a symlink: becoming a real directory`); if (!DRY) await Deno.remove(dir); }
+  if (st?.isSymlink) {
+    say(`${ANSI.y}→${ANSI.x} ${p}/${kind} was a symlink: becoming a real directory`);
+    if (!DRY) await Deno.remove(dir);
+  }
   await ensureDir(dir);
   // "all" mounts what really is an item of that kind, exactly like sharedInventory() counts them:
   // a skill is a directory with a SKILL.md, an agent or a command is a .md file — and AGENTS.md is
   // the catalog of the directory, not an agent. Anything else (a sync bucket, a stray file) is left
   // alone. The doctor still reports it: not mounting it is not the same as condoning it.
   const sharedNames = spec === "all"
-    ? (await Promise.all((await listDir(`${REPO}/shared/${kind}`)).map(async (n) =>
-        (kind === "skills" ? !!(await lstat(`${REPO}/shared/${kind}/${n}/SKILL.md`)) : n.endsWith(".md") && n !== "AGENTS.md") ? n : null)))
+    ? (await Promise.all(
+      (await listDir(`${REPO}/shared/${kind}`)).map(async (n) =>
+        (kind === "skills"
+            ? !!(await lstat(`${REPO}/shared/${kind}/${n}/SKILL.md`))
+            : n.endsWith(".md") && n !== "AGENTS.md")
+          ? n
+          : null
+      ),
+    ))
       .filter((n): n is string => n !== null)
     : spec.map((n) => kind === "skills" || n.endsWith(".md") ? n : `${n}.md`);
   const expected = new Set<string>();
   for (const n of sharedNames) {
-    if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) { say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`); continue; }
-    expected.add(n); await ensureSymlink(`../../shared/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`);
+    if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) {
+      say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`);
+      continue;
+    }
+    expected.add(n);
+    await ensureSymlink(`../../shared/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`);
   }
-  for (const n of own) { expected.add(n); await ensureSymlink(`${PROFILES}/${p}/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`); }
+  for (const n of own) {
+    expected.add(n);
+    await ensureSymlink(`${PROFILES}/${p}/${kind}/${n}`, `${dir}/${n}`, `${p}/${kind}/${n}`);
+  }
   // links the manifest does not call for: removed only when they are symlinks. Real content stays
   // untouched — it is the profile's own runtime (skills/synced/, agents created in session).
   for (const n of await listDir(dir)) {
@@ -132,11 +208,19 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
 export async function install(dry: boolean) {
   DRY = dry;
   const m = await machine();
-  console.log(`${ANSI.b}claude-multi install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`);
+  console.log(
+    `${ANSI.b}claude-multi install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${
+      DRY ? ", dry-run" : ""
+    })\n`,
+  );
 
   // 0. the person's configuration: without it there is no profile to install
   if (!(await stat(`${CONFIG}/owner.json`))) {
-    console.log(`  ${ANSI.r}✗${ANSI.x} no configuration at ${shortHome(CONFIG)}: make one with  claude-multi init <folder>  (or link an existing one there)`);
+    console.log(
+      `  ${ANSI.r}✗${ANSI.x} no configuration at ${
+        shortHome(CONFIG)
+      }: make one with  claude-multi init <folder>  (or link an existing one there)`,
+    );
     return 1;
   }
 
@@ -154,16 +238,20 @@ export async function install(dry: boolean) {
   await ensureDir(AGENTS_SKILLS);
   for (const s of await listDir(AGENTS_SKILLS)) {
     if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
-    if (!(await lstat(`${REPO}/shared/skills/${s}`))) await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${REPO}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
+    if (!(await lstat(`${REPO}/shared/skills/${s}`))) {
+      await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${REPO}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
+    }
   }
   // broken links in shared/skills (old relative paths, uninstalled skills)
   for (const s of await listDir(`${REPO}/shared/skills`)) {
-    const p = `${REPO}/shared/skills/${s}`; const st = await lstat(p);
+    const p = `${REPO}/shared/skills/${s}`;
+    const st = await lstat(p);
     if (st?.isSymlink && !(await lstat(`${p}/SKILL.md`))) {
       const t = await readlink(p) ?? "";
       const name = t.split("/").pop() ?? s;
-      if (await lstat(`${AGENTS_SKILLS}/${name}/SKILL.md`)) await ensureSymlink(`${AGENTS_SKILLS}/${name}`, p, `shared/skills/${s} (ricreato)`);
-      else await removeLink(p, "broken link, skill no longer in ~/.agents");
+      if (await lstat(`${AGENTS_SKILLS}/${name}/SKILL.md`)) {
+        await ensureSymlink(`${AGENTS_SKILLS}/${name}`, p, `shared/skills/${s} (ricreato)`);
+      } else await removeLink(p, "broken link, skill no longer in ~/.agents");
     }
   }
 
@@ -177,8 +265,20 @@ export async function install(dry: boolean) {
     await ensureSymlink(`${PROFILES}/${p}/CLAUDE.md`, `${dir}/CLAUDE.md`, `${p}/CLAUDE.md`);
     // settings.json is generated (settings.ts): shared ⊕ the person's ⊕ the profile's patch ⊕ the manifest.
     const set = await syncSettings(p, { dry: DRY });
-    if (set.adopted.length) say(`${ANSI.y}→${ANSI.x} ${p}: adopting what Claude wrote into config/profiles/${p}/settings.json: ${set.adopted.join(", ")}`);
-    if (set.orphan) say(`${ANSI.r}!${ANSI.x} ${p}/settings.json was a file with no record of generating it: kept aside as ${shortHome(set.orphan)}`);
+    if (set.adopted.length) {
+      say(
+        `${ANSI.y}→${ANSI.x} ${p}: adopting what Claude wrote into config/profiles/${p}/settings.json: ${
+          set.adopted.join(", ")
+        }`,
+      );
+    }
+    if (set.orphan) {
+      say(
+        `${ANSI.r}!${ANSI.x} ${p}/settings.json was a file with no record of generating it: kept aside as ${
+          shortHome(set.orphan)
+        }`,
+      );
+    }
     if (set.migrated) say(`${ANSI.y}→${ANSI.x} ${p}/settings.json: from a link to shared/ to a generated file`);
     else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
     await ensureSymlink("../shared/hooks", `${dir}/hooks`, `${p}/hooks`);
@@ -187,7 +287,10 @@ export async function install(dry: boolean) {
     const manifest = await loadManifest(p);
     for (const k of KINDS) await materializeKind(p, k, manifest[k]);
     const creds = await lstat(`${dir}/.credentials.json`);
-    if (creds && mode(creds) !== "600") { say(`${ANSI.y}→${ANSI.x} chmod 600 ${p}/.credentials.json`); if (!DRY) await Deno.chmod(`${dir}/.credentials.json`, 0o600); }
+    if (creds && mode(creds) !== "600") {
+      say(`${ANSI.y}→${ANSI.x} chmod 600 ${p}/.credentials.json`);
+      if (!DRY) await Deno.chmod(`${dir}/.credentials.json`, 0o600);
+    }
   }
 
   // 5. ~/.local/bin e ~/.local/lib
@@ -201,25 +304,43 @@ export async function install(dry: boolean) {
   for (const l of await launchers()) {
     await ensureSymlink(`${REPO}/bin/claude`, `${BIN}/${l.command}`, `~/.local/bin/${l.command}`);
   }
-  await ensureSymlink(`${REPO}/shared/tools/stignore-gen/stignore-gen.ts`, `${BIN}/stignore-gen`, "~/.local/bin/stignore-gen");
-  if (await lstat(`${BIN}/claude-multi-finalize`)) await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
+  await ensureSymlink(
+    `${REPO}/shared/tools/stignore-gen/stignore-gen.ts`,
+    `${BIN}/stignore-gen`,
+    "~/.local/bin/stignore-gen",
+  );
+  if (await lstat(`${BIN}/claude-multi-finalize`)) {
+    await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
+  }
   // updates install themselves now: the notifier that offered to install them is gone
-  if ((await lstat(`${BIN}/claude-update-notify`))?.isSymlink) await removeLink(`${BIN}/claude-update-notify`, "updates install themselves");
+  if ((await lstat(`${BIN}/claude-update-notify`))?.isSymlink) {
+    await removeLink(`${BIN}/claude-update-notify`, "updates install themselves");
+  }
   // the wiki distiller is gone (2026-10-02): the memory is the brain now
-  if ((await lstat(`${BIN}/claude-distiller`))?.isSymlink) await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
+  if ((await lstat(`${BIN}/claude-distiller`))?.isSymlink) {
+    await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
+  }
   await ensureDir(LIB);
   // The update GUI became the desktop app (bin/claude-multi-app finds its code through the repo).
-  for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");
+  for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) {
+    if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");
+  }
 
   // 5b. the repository's git hooks (pre-commit: secret guard + type check)
   const hooks = (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out;
-  if (hooks !== ".githooks") { say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`); if (!DRY) await run("git", ["-C", REPO, "config", "core.hooksPath", ".githooks"]); }
+  if (hooks !== ".githooks") {
+    say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`);
+    if (!DRY) await run("git", ["-C", REPO, "config", "core.hooksPath", ".githooks"]);
+  }
 
   // 5c. stignore-gen's git template: a repository cloned inside a Syncthing folder gets its .stignore block
   // from the post-checkout hook before Syncthing picks its files up (the timer of step 8 is the safety net).
   if (await lstat(SYNCTHING_CONFIG)) {
     const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
-    if (tpl !== STIGNORE_GEN_TEMPLATE) { say(`${ANSI.g}+${ANSI.x} git init.templateDir → stignore-gen template${tpl ? ` (was ${tpl})` : ""}`); if (!DRY) await run("git", ["config", "--global", "init.templateDir", STIGNORE_GEN_TEMPLATE]); }
+    if (tpl !== STIGNORE_GEN_TEMPLATE) {
+      say(`${ANSI.g}+${ANSI.x} git init.templateDir → stignore-gen template${tpl ? ` (was ${tpl})` : ""}`);
+      if (!DRY) await run("git", ["config", "--global", "init.templateDir", STIGNORE_GEN_TEMPLATE]);
+    }
   }
 
   // 5d. git's global ignore: what a project keeps for claude-multi stays out of every repository
@@ -238,22 +359,37 @@ export async function install(dry: boolean) {
 
   // 6. stub ~/.claude (500: stat → ENOENT sui settings, nessun "Settings Error")
   const stub = await lstat(`${HOME}/.claude`);
-  if (!stub) { say(`${ANSI.g}+${ANSI.x} stub ~/.claude (500)`); if (!DRY) { await Deno.mkdir(`${HOME}/.claude`); await Deno.chmod(`${HOME}/.claude`, 0o500); } }
-  else if (stub.isDirectory && mode(stub) !== "500") { say(`${ANSI.y}→${ANSI.x} chmod 500 ~/.claude`); if (!DRY) await Deno.chmod(`${HOME}/.claude`, 0o500); }
+  if (!stub) {
+    say(`${ANSI.g}+${ANSI.x} stub ~/.claude (500)`);
+    if (!DRY) {
+      await Deno.mkdir(`${HOME}/.claude`);
+      await Deno.chmod(`${HOME}/.claude`, 0o500);
+    }
+  } else if (stub.isDirectory && mode(stub) !== "500") {
+    say(`${ANSI.y}→${ANSI.x} chmod 500 ~/.claude`);
+    if (!DRY) await Deno.chmod(`${HOME}/.claude`, 0o500);
+  }
 
   // 7. ~/.zshrc
-  const zp = `${HOME}/.zshrc`; const zsh = await readText(zp);
+  const zp = `${HOME}/.zshrc`;
+  const zsh = await readText(zp);
   if (zsh !== null) {
     const block = await zshBlock();
     const re = new RegExp(`${ZSH_BEGIN.replace(/[()]/g, "\\$&")}[\\s\\S]*?${ZSH_END}`);
     const next = re.test(zsh) ? zsh.replace(re, block) : `${zsh.trimEnd()}\n\n${block}\n`;
-    if (next !== zsh) { say(`${ANSI.y}→${ANSI.x} updating the claude-multi block in ~/.zshrc`); if (!DRY) await Deno.writeTextFile(zp, next); }
+    if (next !== zsh) {
+      say(`${ANSI.y}→${ANSI.x} updating the claude-multi block in ~/.zshrc`);
+      if (!DRY) await Deno.writeTextFile(zp, next);
+    }
   }
 
   // 8. systemd user units
   if (m.systemd) {
-    const ud = `${HOME}/.config/systemd/user`; await ensureDir(ud);
-    for (const u of await listDir(`${REPO}/systemd/user`)) await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
+    const ud = `${HOME}/.config/systemd/user`;
+    await ensureDir(ud);
+    for (const u of await listDir(`${REPO}/systemd/user`)) {
+      await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
+    }
     // a unit removed from the repository leaves its link behind: drop the ones pointing at nothing
     for (const u of await listDir(ud)) {
       const target = await readlink(`${ud}/${u}`);
@@ -282,36 +418,62 @@ export async function install(dry: boolean) {
       if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
       for (const u of wantEnabled) {
         const en = await run("systemctl", ["--user", "is-enabled", u]);
-        if (en.out !== "enabled") { say(`${ANSI.g}+${ANSI.x} enable --now ${u}`); await run("systemctl", ["--user", "enable", "--now", u]); }
+        if (en.out !== "enabled") {
+          say(`${ANSI.g}+${ANSI.x} enable --now ${u}`);
+          await run("systemctl", ["--user", "enable", "--now", u]);
+        }
       }
       // A unit whose file changed keeps running the old command until it is restarted.
-      const st = await run("systemctl", ["--user", "show", "-p", "NeedDaemonReload", "--value", "claude-multi-console.service"]);
-      if (st.out === "yes") { say(`${ANSI.y}\u2192${ANSI.x} restart claude-multi-console.service`); await run("systemctl", ["--user", "restart", "claude-multi-console.service"]); }
+      const st = await run("systemctl", [
+        "--user",
+        "show",
+        "-p",
+        "NeedDaemonReload",
+        "--value",
+        "claude-multi-console.service",
+      ]);
+      if (st.out === "yes") {
+        say(`${ANSI.y}\u2192${ANSI.x} restart claude-multi-console.service`);
+        await run("systemctl", ["--user", "restart", "claude-multi-console.service"]);
+      }
     }
   }
-
 
   // 9. Claude Desktop (only where it is installed)
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
-    for (const d of await listDir(`${REPO}/desktop`)) if (d.endsWith(".desktop")) await ensureRendered(`${REPO}/desktop/${d}`, `${apps}/${d}`);
+    for (const d of await listDir(`${REPO}/desktop`)) {
+      if (d.endsWith(".desktop")) await ensureRendered(`${REPO}/desktop/${d}`, `${apps}/${d}`);
+    }
     // a copy install wrote itself, of a file the repository no longer has
-    if (await lstat(`${apps}/claude-update-gui.desktop`)) await removeLink(`${apps}/claude-update-gui.desktop`, "replaced by claude-multi.desktop");
+    if (await lstat(`${apps}/claude-update-gui.desktop`)) {
+      await removeLink(`${apps}/claude-update-gui.desktop`, "replaced by claude-multi.desktop");
+    }
     await writeDesktopEntries(apps);
     // the icons of the person's Desktop profiles (config/icons/<size>/claude-desktop-<profile>.png)
     for (const root of [`${REPO}/desktop/icons`, `${CONFIG}/icons`]) {
       for (const s of await listDir(root)) {
-        for (const f of await listDir(`${root}/${s}`)) await ensureCopy(`${root}/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);
+        for (const f of await listDir(`${root}/${s}`)) {
+          await ensureCopy(`${root}/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);
+        }
       }
     }
-    const handlerP = `${apps}/claude-code-url-handler.desktop`; const handler = await readText(handlerP);
+    const handlerP = `${apps}/claude-code-url-handler.desktop`;
+    const handler = await readText(handlerP);
     if (handler && /Exec=.*\/claude"? --handle-uri/.test(handler) && !handler.includes("claude-bin")) {
       say(`${ANSI.y}→${ANSI.x} url-handler claude-cli:// → claude-bin`);
-      if (!DRY) await Deno.writeTextFile(handlerP, handler.replace(/^Exec=.*--handle-uri/m, `Exec="${BIN}/claude-bin" --handle-uri`));
+      if (!DRY) {
+        await Deno.writeTextFile(
+          handlerP,
+          handler.replace(/^Exec=.*--handle-uri/m, `Exec="${BIN}/claude-bin" --handle-uri`),
+        );
+      }
     }
     if (!DRY) {
       if (await has("update-desktop-database")) await run("update-desktop-database", [apps]);
-      if (await has("gtk-update-icon-cache")) await run("gtk-update-icon-cache", ["-q", `${HOME}/.local/share/icons/hicolor`]);
+      if (await has("gtk-update-icon-cache")) {
+        await run("gtk-update-icon-cache", ["-q", `${HOME}/.local/share/icons/hicolor`]);
+      }
       if (await has("kbuildsycoca6")) await run("kbuildsycoca6", ["--noincremental"]);
     }
   } else {
@@ -327,7 +489,9 @@ export async function install(dry: boolean) {
   // `claude-multi doctor` is the command whose exit code means "healthy".
   const failed = printDoctor(await doctor());
   if (failed) {
-    console.log(`  ${ANSI.d}install finished; the checks above are a diagnosis, not a failure of this command.${ANSI.x}`);
+    console.log(
+      `  ${ANSI.d}install finished; the checks above are a diagnosis, not a failure of this command.${ANSI.x}`,
+    );
     console.log(`  ${ANSI.d}Run their fixes, then \`claude-multi doctor\` to confirm.${ANSI.x}\n`);
   }
   return 0;

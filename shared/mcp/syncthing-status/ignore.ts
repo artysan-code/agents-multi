@@ -16,7 +16,10 @@ export function compilePattern(raw: string): Compiled | null {
   if (!s || s.startsWith("//") || s.startsWith("#")) return null;
   s = stripFlags(s);
   let negate = false;
-  if (s.startsWith("!")) { negate = true; s = s.slice(1); }
+  if (s.startsWith("!")) {
+    negate = true;
+    s = s.slice(1);
+  }
   s = stripFlags(s);
   if (!s) return null;
   const rooted = s.startsWith("/");
@@ -26,11 +29,14 @@ export function compilePattern(raw: string): Compiled | null {
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (c === "*") {
-      if (s[i + 1] === "*" && s[i + 2] === "/") { rx += "(?:.*/)?"; i += 2; }
-      else if (s[i + 1] === "*") { rx += ".*"; i++; }
-      else rx += "[^/]*";
-    }
-    else if (c === "?") rx += "[^/]";
+      if (s[i + 1] === "*" && s[i + 2] === "/") {
+        rx += "(?:.*/)?";
+        i += 2;
+      } else if (s[i + 1] === "*") {
+        rx += ".*";
+        i++;
+      } else rx += "[^/]*";
+    } else if (c === "?") rx += "[^/]";
     else rx += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
   }
   return { re: new RegExp((anchored ? "^" : "(^|.*/)") + rx + "(/|$)"), negate };

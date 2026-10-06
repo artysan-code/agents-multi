@@ -5,7 +5,13 @@ import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { contactOf, fillSite, privacyPage, siteCache, siteFile, siteMoved, sitePath } from "../public.ts";
 import { SCOPES } from "../../shared/mcp/lib/google.ts";
 
-const site = { url: "https://b.test", siteUrl: "https://s.test", operator: "Ann <x>", contact: "privacy@b.test", hosting: "un server a Parigi" };
+const site = {
+  url: "https://b.test",
+  siteUrl: "https://s.test",
+  operator: "Ann <x>",
+  contact: "privacy@b.test",
+  hosting: "un server a Parigi",
+};
 
 Deno.test("public: a path maps to a file of the site, never outside it nor onto the brain's", () => {
   assertEquals(sitePath("/"), "index.html");
@@ -15,12 +21,15 @@ Deno.test("public: a path maps to a file of the site, never outside it nor onto 
   assertEquals(sitePath("/%2e%2e/accounts.db"), null);
   assertEquals(sitePath("/docs/../../data"), null);
   assertEquals(sitePath("/%E0%A4%A"), null);
-  for (const p of ["/mcp", "/mcp/x", "/api/tasks", "/backup", "/tasks", "/account/login", "/privacy", "/.well-known/x"]) assertEquals(sitePath(p), null, p);
+  for (
+    const p of ["/mcp", "/mcp/x", "/api/tasks", "/backup", "/tasks", "/account/login", "/privacy", "/.well-known/x"]
+  ) assertEquals(sitePath(p), null, p);
   assertEquals(sitePath("/mcpx/"), "mcpx/index.html");
 });
 
 Deno.test("public: the site's placeholders take the instance's particulars, escaped, out of Cloudflare's obfuscation", () => {
-  const page = '<html><head><link rel="canonical" href="https://site.invalid/it/"></head><body class="x"><a href="mailto:__CONTACT__">Write</a> by __OPERATOR__ <a href="__APP__/tasks">in</a></body></html>';
+  const page =
+    '<html><head><link rel="canonical" href="https://site.invalid/it/"></head><body class="x"><a href="mailto:__CONTACT__">Write</a> by __OPERATOR__ <a href="__APP__/tasks">in</a></body></html>';
   const h = fillSite(page, site);
   assertStringIncludes(h, 'href="https://s.test/it/"');
   assertStringIncludes(h, 'href="mailto:privacy@b.test"');
@@ -30,7 +39,10 @@ Deno.test("public: the site's placeholders take the instance's particulars, esca
   assertStringIncludes(h, "<!--/email_off--></body>");
   assertStringIncludes(fillSite(page, { ...site, contact: "" }), 'href="https://b.test/privacy"');
   assertStringIncludes(fillSite(page, { ...site, operator: "$& $'" }), "by $&amp; $&#39;"); // no replacement patterns
-  assertEquals(fillSite("Sitemap: https://site.invalid/sitemap-index.xml", site, false), "Sitemap: https://s.test/sitemap-index.xml");
+  assertEquals(
+    fillSite("Sitemap: https://site.invalid/sitemap-index.xml", site, false),
+    "Sitemap: https://s.test/sitemap-index.xml",
+  );
 });
 
 Deno.test("public: only a plain address reaches a mailto link", () => {
@@ -88,7 +100,9 @@ Deno.test("public: the notice carries contact, hosting, Limited Use, and every G
   assertStringIncludes(h, "un server a Parigi");
   assertStringIncludes(h, "Limited Use");
   assertStringIncludes(h, "indirizzo email"); // openid + email
-  for (const s of SCOPES.filter((s) => s.startsWith("https://"))) assertStringIncludes(h, `<code>${s.replace("https://www.googleapis.com/auth/", "")}</code>`);
+  for (const s of SCOPES.filter((s) => s.startsWith("https://"))) {
+    assertStringIncludes(h, `<code>${s.replace("https://www.googleapis.com/auth/", "")}</code>`);
+  }
 });
 
 Deno.test("public: without a contact the notice points to the administrator, never an empty mailto", () => {

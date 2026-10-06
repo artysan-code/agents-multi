@@ -94,16 +94,19 @@ const I18N = {
     "brain.m.diary": "Diary",
     "brain.m.health": "Health",
     "brain.m.archive": "Archive",
-    "brain.a.lede": "The old wiki ({r}), read only since 2 October 2026. Pick a page: \"Bring into the brain\" asks Claude to rewrite what still holds into the right page.",
+    "brain.a.lede":
+      'The old wiki ({r}), read only since 2 October 2026. Pick a page: "Bring into the brain" asks Claude to rewrite what still holds into the right page.',
     "brain.a.chip": "old wiki",
     "brain.a.updated": "updated {d}",
     "brain.a.bring": "Bring into the brain",
-    "brain.a.prompt": "Bring into the brain the subject of this page of the old wiki: {f}. Read it, search the brain for where it belongs, and write there only what still holds, rewritten by the brain's rules (update an existing page rather than making a copy). If it is out of date or already in the brain, tell me instead of writing.",
+    "brain.a.prompt":
+      "Bring into the brain the subject of this page of the old wiki: {f}. Read it, search the brain for where it belongs, and write there only what still holds, rewritten by the brain's rules (update an existing page rather than making a copy). If it is out of date or already in the brain, tell me instead of writing.",
     "brain.d.open": "open the day",
     "brain.d.more": "Older days",
     "brain.d.empty": "Nothing in the diary yet.",
     "brain.d.none": "No line matches.",
-    "brain.h.ok": "All in order: every page is linked, no broken link, nothing too long, the inbox is not standing still.",
+    "brain.h.ok":
+      "All in order: every page is linked, no broken link, nothing too long, the inbox is not standing still.",
     "brain.h.fix": "Fix with Claude",
     "brain.h.orphans": "Pages nothing links to",
     "brain.h.broken": "Links to pages that do not exist",
@@ -111,11 +114,13 @@ const I18N = {
     "brain.h.inbox": "Inbox lines older than a week",
     "brain.h.outside": "Pages outside the seven areas",
     "brain.h.words": "{n} words",
-    "brain.h.prompt": "Fix what the brain's check finds (brain_check), one problem at a time, by its rules: link the orphan pages from the pages they belong to, fix or remove the broken links, split or tighten the pages that are too long, sort the old inbox lines into their pages. Ask me when a choice is not obvious.",
+    "brain.h.prompt":
+      "Fix what the brain's check finds (brain_check), one problem at a time, by its rules: link the orphan pages from the pages they belong to, fix or remove the broken links, split or tighten the pages that are too long, sort the old inbox lines into their pages. Ask me when a choice is not obvious.",
     "brain.near": "Around this page",
     "brain.depth2": "two steps",
     "brain.fit": "Fit",
-    "brain.help": "Drag a page to move it, the background to pan, the wheel to zoom. Click to pick, double-click to read.",
+    "brain.help":
+      "Drag a page to move it, the background to pan, the wheel to zoom. Click to pick, double-click to read.",
     "brain.backlinks": "Linked from",
     "brain.outlinks": "Links to",
     "brain.none": "none",
@@ -192,7 +197,8 @@ const I18N = {
     "run.terminal": "terminal",
     "run.desktopApp": "Desktop app",
 
-    "conn.lede": "The services Claude can work with, and the accounts each profile sees. Every account says in a word whether it is ready.",
+    "conn.lede":
+      "The services Claude can work with, and the accounts each profile sees. Every account says in a word whether it is ready.",
     "conn.profiles": "Profiles",
     "conn.show": "Show",
     "conn.all": "all",
@@ -230,7 +236,8 @@ const I18N = {
     "acc.name.hint": "short, lowercase: what a tool call names",
     "acc.url": "Address",
     "acc.secret": "Secret",
-    "acc.secret.hint": "checked against the service, then stored encrypted in the vault; it never comes back to this page",
+    "acc.secret.hint":
+      "checked against the service, then stored encrypted in the vault; it never comes back to this page",
     "acc.secret.ph": "API token or key",
     "acc.secret.keep": "leave empty to keep the current one",
     "acc.profiles.hint": "none selected = every profile",
@@ -241,7 +248,8 @@ const I18N = {
     "acc.none": "no accounts yet",
     "acc.confirmDelete": "Remove {a} and its secret?\n\nThe servers of this service stop seeing it on every machine.",
     "google.client": "Google: the OAuth client is missing",
-    "google.client.how": "From your Google Cloud project, download the OAuth client (type Desktop app) as JSON and import it here. It is stored in the vault; then delete the file.",
+    "google.client.how":
+      "From your Google Cloud project, download the OAuth client (type Desktop app) as JSON and import it here. It is stored in the vault; then delete the file.",
     "google.client.import": "Import the JSON",
     "google.connect": "Connect",
     "google.reconnect": "Reconnect",
@@ -250,7 +258,8 @@ const I18N = {
     "google.finish": "Finish in the browser: grant access, then come back here.",
     "brain.login": "Sign in",
     "brain.finish": "Sign in on the brain's page (account, passphrase, code), then come back here.",
-    "google.form.hint": "No secret to paste: save the account, then press Connect on its row and grant access in the browser.",
+    "google.form.hint":
+      "No secret to paste: save the account, then press Connect on its row and grant access in the browser.",
     "vault.title": "Secret vault",
     "vault.init": "No vault yet. In a terminal, run: claude-multi vault init — and keep the recovery code it prints.",
     "vault.pair": "This machine is not paired. In a terminal, run: claude-multi vault pair — with the recovery code.",
@@ -260,7 +269,8 @@ const I18N = {
     "sys.profiles": "Profiles",
     "sys.permissions": "Permissions",
     "sys.plugins": "Plugins & skills",
-    "perm.lede": "The rules every profile starts from. A change applies from the next session, when each profile's settings are regenerated.",
+    "perm.lede":
+      "The rules every profile starts from. A change applies from the next session, when each profile's settings are regenerated.",
     "perm.mode": "Default mode",
     "perm.m.default": "ask each time (default)",
     "perm.m.acceptEdits": "accept edits",
@@ -276,7 +286,8 @@ const I18N = {
     "perm.added": "adds",
     "perm.dropped": "leaves out",
     "perm.promote": "Move to every profile",
-    "perm.promote.confirm": "Move {p}'s own rules into the shared ones?\n\nEvery profile gets them, and {p} goes back to the shared lists (including any shared rule it left out).",
+    "perm.promote.confirm":
+      "Move {p}'s own rules into the shared ones?\n\nEvery profile gets them, and {p} goes back to the shared lists (including any shared rule it left out).",
     "sys.updates": "Updates",
     "sys.health": "Health",
     "sys.overview": "Overview",
@@ -298,7 +309,8 @@ const I18N = {
     "health.area.profiles": "Profiles and launchers",
     "health.area.setup": "claude-multi",
 
-    "profiles.note": "A profile is a directory under <code>profiles/</code> in the repository. Adding one writes its manifest, then <code>install</code> materialises the runtime and links the shared config.",
+    "profiles.note":
+      "A profile is a directory under <code>profiles/</code> in the repository. Adding one writes its manifest, then <code>install</code> materialises the runtime and links the shared config.",
     "profile.command": "Command",
     "profile.desktop": "Desktop",
     "profile.mountedVal": "{s} skills · {a} agents · {c} commands",
@@ -334,7 +346,8 @@ const I18N = {
     "pl.sumBroken": " · {b} broken",
     "pl.none": "no plugins",
     "pl.loading": "loading…",
-    "pl.foot": "A cell cycles <b>inherit → on → off</b>. <b>All</b> writes <code>shared/settings.json</code>, a profile cell writes <code>profiles/&lt;p&gt;/settings.json</code>. Claude installs what is on when a session starts; turning a plugin on here installs it right away. ● installed · ○ not installed · ⚠ installed but broken.",
+    "pl.foot":
+      "A cell cycles <b>inherit → on → off</b>. <b>All</b> writes <code>shared/settings.json</code>, a profile cell writes <code>profiles/&lt;p&gt;/settings.json</code>. Claude installs what is on when a session starts; turning a plugin on here installs it right away. ● installed · ○ not installed · ⚠ installed but broken.",
     "pl.details": "Details",
     "pl.update": "Update",
     "pl.remove": "Remove",
@@ -349,9 +362,11 @@ const I18N = {
     "pl.on": "on",
     "pl.off": "off",
     "pl.busy": "another plugin operation is still running",
-    "pl.confirmCmd": "{msg}\n\nThe marketplace declares this command, which would run on this machine:\n\n{cmd}\n\nRun it?",
+    "pl.confirmCmd":
+      "{msg}\n\nThe marketplace declares this command, which would run on this machine:\n\n{cmd}\n\nRun it?",
     "pl.notAccepted": "not installed: the command was not accepted",
-    "pl.confirmRemove": "Remove {id} from every profile?\n\nIt is uninstalled everywhere and taken out of shared and per-profile settings.",
+    "pl.confirmRemove":
+      "Remove {id} from every profile?\n\nIt is uninstalled everywhere and taken out of shared and per-profile settings.",
     "pl.opSet": "{id}: {state} for {t}",
     "pl.opInherit": "inherit",
     "pl.opOutOfShared": "out of shared",
@@ -386,7 +401,8 @@ const I18N = {
     "acct.plugins": "Plugins the organisation syncs",
     "acct.skills": "claude.ai skills synced into each profile",
     "acct.skillsN": "{n} skills",
-    "acct.note": "The organisation's plugins follow <b>Account MCP</b> (Profiles → Edit). Synced skills come with the claude.ai account and load into every session.",
+    "acct.note":
+      "The organisation's plugins follow <b>Account MCP</b> (Profiles → Edit). Synced skills come with the claude.ai account and load into every session.",
     "shared.title": "Shared",
     "shared.skills": "skills",
     "shared.agents": "agents",
@@ -394,7 +410,8 @@ const I18N = {
     "shared.hooks": "hooks",
     "shared.rules": "rules",
 
-    "up.lede": "Updates install themselves. Claude Code as soon as it is out; Claude Desktop is downloaded and verified in the background, and switches when no instance is open; claude-multi updates from its repository (fast-forward only, on a clean tree) and restarts what needs it. You are told only if a verification fails.",
+    "up.lede":
+      "Updates install themselves. Claude Code as soon as it is out; Claude Desktop is downloaded and verified in the background, and switches when no instance is open; claude-multi updates from its repository (fast-forward only, on a clean tree) and restarts what needs it. You are told only if a verification fails.",
     "up.log": "Log",
     "up.now": "Update now",
     "up.rollback": "Previous version",
@@ -564,7 +581,8 @@ const I18N = {
     "ts.desc": "Descrizione",
     "ts.edit": "Modifica",
     "ts.preview": "Leggi",
-    "ts.descPh": "Di cosa si tratta, cosa conta, dove sono le cose. Markdown; le [[pagine della wiki]] portano al brain.",
+    "ts.descPh":
+      "Di cosa si tratta, cosa conta, dove sono le cose. Markdown; le [[pagine della wiki]] portano al brain.",
     "ts.att": "Allegati",
     "ts.attPh": "un link, un percorso su questo computer (~/…) o una pagina della wiki ([[…]])",
     "ts.drop": "Trascina qui dei file per tenerne una copia con la task (sincronizzata), o clicca per sceglierli",
@@ -584,16 +602,19 @@ const I18N = {
     "brain.m.diary": "Diario",
     "brain.m.health": "Salute",
     "brain.m.archive": "Archivio",
-    "brain.a.lede": "La vecchia wiki ({r}), in sola lettura dal 2 ottobre 2026. Scegli una pagina: «Porta nel brain» chiede a Claude di riscrivere nella pagina giusta quello che vale ancora.",
+    "brain.a.lede":
+      "La vecchia wiki ({r}), in sola lettura dal 2 ottobre 2026. Scegli una pagina: «Porta nel brain» chiede a Claude di riscrivere nella pagina giusta quello che vale ancora.",
     "brain.a.chip": "vecchia wiki",
     "brain.a.updated": "aggiornata {d}",
     "brain.a.bring": "Porta nel brain",
-    "brain.a.prompt": "Porta nel brain l'argomento di questa pagina della vecchia wiki: {f}. Leggila, cerca nel brain dove va, e scrivi lì solo quello che vale ancora, riscritto secondo le regole del brain (aggiorna una pagina esistente invece di farne una copia). Se è superata o è già nel brain, dimmelo invece di scrivere.",
+    "brain.a.prompt":
+      "Porta nel brain l'argomento di questa pagina della vecchia wiki: {f}. Leggila, cerca nel brain dove va, e scrivi lì solo quello che vale ancora, riscritto secondo le regole del brain (aggiorna una pagina esistente invece di farne una copia). Se è superata o è già nel brain, dimmelo invece di scrivere.",
     "brain.d.open": "apri il giorno",
     "brain.d.more": "Giorni precedenti",
     "brain.d.empty": "Ancora niente nel diario.",
     "brain.d.none": "Nessuna riga corrisponde.",
-    "brain.h.ok": "Tutto in ordine: ogni pagina è collegata, nessun link rotto, niente di troppo lungo, l'inbox non è ferma.",
+    "brain.h.ok":
+      "Tutto in ordine: ogni pagina è collegata, nessun link rotto, niente di troppo lungo, l'inbox non è ferma.",
     "brain.h.fix": "Sistema con Claude",
     "brain.h.orphans": "Pagine che nessuno collega",
     "brain.h.broken": "Link a pagine che non esistono",
@@ -601,11 +622,13 @@ const I18N = {
     "brain.h.inbox": "Righe dell'inbox ferme da più di una settimana",
     "brain.h.outside": "Pagine fuori dalle sette aree",
     "brain.h.words": "{n} parole",
-    "brain.h.prompt": "Sistema quello che trova il controllo del brain (brain_check), un problema alla volta, secondo le sue regole: collega le pagine orfane dalle pagine a cui appartengono, correggi o togli i link rotti, dividi o asciuga le pagine troppo lunghe, smista le righe vecchie dell'inbox nelle loro pagine. Chiedimi quando una scelta non è ovvia.",
+    "brain.h.prompt":
+      "Sistema quello che trova il controllo del brain (brain_check), un problema alla volta, secondo le sue regole: collega le pagine orfane dalle pagine a cui appartengono, correggi o togli i link rotti, dividi o asciuga le pagine troppo lunghe, smista le righe vecchie dell'inbox nelle loro pagine. Chiedimi quando una scelta non è ovvia.",
     "brain.near": "Intorno a questa pagina",
     "brain.depth2": "due passi",
     "brain.fit": "Adatta",
-    "brain.help": "Trascina una pagina per spostarla, lo sfondo per muoverti, la rotella per lo zoom. Clic per sceglierla, doppio clic per leggerla.",
+    "brain.help":
+      "Trascina una pagina per spostarla, lo sfondo per muoverti, la rotella per lo zoom. Clic per sceglierla, doppio clic per leggerla.",
     "brain.backlinks": "Citata da",
     "brain.outlinks": "Collega a",
     "brain.none": "nessuna",
@@ -682,7 +705,8 @@ const I18N = {
     "run.terminal": "terminale",
     "run.desktopApp": "App Desktop",
 
-    "conn.lede": "I servizi con cui Claude può lavorare, e gli account che ogni profilo vede. Ogni account dice in una parola se è pronto.",
+    "conn.lede":
+      "I servizi con cui Claude può lavorare, e gli account che ogni profilo vede. Ogni account dice in una parola se è pronto.",
     "conn.profiles": "Profili",
     "conn.show": "Mostra",
     "conn.all": "tutti",
@@ -729,9 +753,11 @@ const I18N = {
     "acc.noSecret": "manca la chiave su questa macchina",
     "acc.oauth": "si accede da Claude, con /mcp",
     "acc.none": "ancora nessun account",
-    "acc.confirmDelete": "Rimuovere {a} e il suo secret?\n\nI server di questo servizio smettono di vederlo, su tutte le macchine.",
+    "acc.confirmDelete":
+      "Rimuovere {a} e il suo secret?\n\nI server di questo servizio smettono di vederlo, su tutte le macchine.",
     "google.client": "Google: manca il client OAuth",
-    "google.client.how": "Dal tuo progetto Google Cloud scarica il client OAuth (tipo Desktop app) come JSON e importalo qui. Finisce nell'archivio; poi cancella il file.",
+    "google.client.how":
+      "Dal tuo progetto Google Cloud scarica il client OAuth (tipo Desktop app) come JSON e importalo qui. Finisce nell'archivio; poi cancella il file.",
     "google.client.import": "Importa il JSON",
     "google.connect": "Collega",
     "google.reconnect": "Ricollega",
@@ -740,17 +766,22 @@ const I18N = {
     "google.finish": "Completa nel browser: concedi l'accesso, poi torna qui.",
     "brain.login": "Accedi",
     "brain.finish": "Accedi nella pagina del brain (account, passphrase, codice), poi torna qui.",
-    "google.form.hint": "Nessun secret da incollare: salva l'account, poi premi Collega sulla sua riga e concedi l'accesso nel browser.",
+    "google.form.hint":
+      "Nessun secret da incollare: salva l'account, poi premi Collega sulla sua riga e concedi l'accesso nel browser.",
     "vault.title": "Archivio dei secret",
-    "vault.init": "Non c'è ancora un archivio. In un terminale: claude-multi vault init — e conserva il codice di recupero che stampa.",
-    "vault.pair": "Questa macchina non è abbinata. In un terminale: claude-multi vault pair — con il codice di recupero.",
-    "vault.wrongKey": "La chiave di questa macchina non apre l'archivio: abbinala di nuovo con il codice di recupero giusto.",
+    "vault.init":
+      "Non c'è ancora un archivio. In un terminale: claude-multi vault init — e conserva il codice di recupero che stampa.",
+    "vault.pair":
+      "Questa macchina non è abbinata. In un terminale: claude-multi vault pair — con il codice di recupero.",
+    "vault.wrongKey":
+      "La chiave di questa macchina non apre l'archivio: abbinala di nuovo con il codice di recupero giusto.",
     "vault.conflicts": "{n} copie di conflitto di Syncthing nell'archivio: dillo a Claude, vanno guardate.",
 
     "sys.profiles": "Profili",
     "sys.permissions": "Permessi",
     "sys.plugins": "Plugin e skill",
-    "perm.lede": "Le regole da cui parte ogni profilo. Una modifica vale dalla sessione successiva, quando le impostazioni di ogni profilo vengono rigenerate.",
+    "perm.lede":
+      "Le regole da cui parte ogni profilo. Una modifica vale dalla sessione successiva, quando le impostazioni di ogni profilo vengono rigenerate.",
     "perm.mode": "Modalità di default",
     "perm.m.default": "chiedi ogni volta (default)",
     "perm.m.acceptEdits": "accetta le modifiche",
@@ -766,7 +797,8 @@ const I18N = {
     "perm.added": "aggiunge",
     "perm.dropped": "toglie",
     "perm.promote": "Porta a tutti i profili",
-    "perm.promote.confirm": "Portare le regole proprie di {p} in quelle condivise?\n\nTutti i profili le ricevono, e {p} torna alle liste condivise (comprese le regole condivise che aveva tolto).",
+    "perm.promote.confirm":
+      "Portare le regole proprie di {p} in quelle condivise?\n\nTutti i profili le ricevono, e {p} torna alle liste condivise (comprese le regole condivise che aveva tolto).",
     "sys.updates": "Aggiornamenti",
     "sys.health": "Salute",
     "sys.overview": "Panoramica",
@@ -788,7 +820,8 @@ const I18N = {
     "health.area.profiles": "Profili e launcher",
     "health.area.setup": "claude-multi",
 
-    "profiles.note": "Un profilo è una cartella sotto <code>profiles/</code> nel repository. Aggiungerne uno scrive il suo manifest, poi <code>install</code> crea il runtime e collega la configurazione condivisa.",
+    "profiles.note":
+      "Un profilo è una cartella sotto <code>profiles/</code> nel repository. Aggiungerne uno scrive il suo manifest, poi <code>install</code> crea il runtime e collega la configurazione condivisa.",
     "profile.command": "Comando",
     "profile.desktop": "Desktop",
     "profile.mountedVal": "{s} skill · {a} agenti · {c} comandi",
@@ -824,7 +857,8 @@ const I18N = {
     "pl.sumBroken": " · {b} rotti",
     "pl.none": "nessun plugin",
     "pl.loading": "caricamento…",
-    "pl.foot": "Una cella gira su <b>eredita → on → off</b>. <b>Tutti</b> scrive <code>shared/settings.json</code>, la cella di un profilo scrive <code>profiles/&lt;p&gt;/settings.json</code>. Claude installa ciò che è attivo all'avvio della sessione; attivare un plugin qui lo installa subito. ● installato · ○ non installato · ⚠ installato ma rotto.",
+    "pl.foot":
+      "Una cella gira su <b>eredita → on → off</b>. <b>Tutti</b> scrive <code>shared/settings.json</code>, la cella di un profilo scrive <code>profiles/&lt;p&gt;/settings.json</code>. Claude installa ciò che è attivo all'avvio della sessione; attivare un plugin qui lo installa subito. ● installato · ○ non installato · ⚠ installato ma rotto.",
     "pl.details": "Dettagli",
     "pl.update": "Aggiorna",
     "pl.remove": "Rimuovi",
@@ -839,9 +873,11 @@ const I18N = {
     "pl.on": "on",
     "pl.off": "off",
     "pl.busy": "c'è ancora un'altra operazione sui plugin in corso",
-    "pl.confirmCmd": "{msg}\n\nIl marketplace dichiara questo comando, che verrebbe eseguito su questa macchina:\n\n{cmd}\n\nLo eseguo?",
+    "pl.confirmCmd":
+      "{msg}\n\nIl marketplace dichiara questo comando, che verrebbe eseguito su questa macchina:\n\n{cmd}\n\nLo eseguo?",
     "pl.notAccepted": "non installato: il comando non è stato accettato",
-    "pl.confirmRemove": "Rimuovere {id} da tutti i profili?\n\nViene disinstallato ovunque e tolto dalle impostazioni condivise e da quelle dei profili.",
+    "pl.confirmRemove":
+      "Rimuovere {id} da tutti i profili?\n\nViene disinstallato ovunque e tolto dalle impostazioni condivise e da quelle dei profili.",
     "pl.opSet": "{id}: {state} per {t}",
     "pl.opInherit": "eredita",
     "pl.opOutOfShared": "fuori da shared",
@@ -876,7 +912,8 @@ const I18N = {
     "acct.plugins": "Plugin sincronizzati dall'organizzazione",
     "acct.skills": "Skill di claude.ai sincronizzate in ogni profilo",
     "acct.skillsN": "{n} skill",
-    "acct.note": "I plugin dell'organizzazione seguono <b>MCP dell'account</b> (Profili → Modifica). Le skill sincronizzate arrivano con l'account claude.ai e si caricano in ogni sessione.",
+    "acct.note":
+      "I plugin dell'organizzazione seguono <b>MCP dell'account</b> (Profili → Modifica). Le skill sincronizzate arrivano con l'account claude.ai e si caricano in ogni sessione.",
     "shared.title": "Condiviso",
     "shared.skills": "skill",
     "shared.agents": "agenti",
@@ -884,7 +921,8 @@ const I18N = {
     "shared.hooks": "hook",
     "shared.rules": "regole",
 
-    "up.lede": "Gli aggiornamenti si installano da soli. Claude Code appena esce; Claude Desktop viene scaricato e verificato in background ed entra in uso quando nessuna istanza è aperta; claude-multi si aggiorna dal suo repo (solo in avanti, a working tree pulito) e si riavvia dove serve. Ti avviso solo se una verifica fallisce.",
+    "up.lede":
+      "Gli aggiornamenti si installano da soli. Claude Code appena esce; Claude Desktop viene scaricato e verificato in background ed entra in uso quando nessuna istanza è aperta; claude-multi si aggiorna dal suo repo (solo in avanti, a working tree pulito) e si riavvia dove serve. Ti avviso solo se una verifica fallisce.",
     "up.log": "Registro",
     "up.now": "Aggiorna ora",
     "up.rollback": "Versione precedente",

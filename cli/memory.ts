@@ -20,7 +20,10 @@ export function upstream(base: string, u: URL): string | null {
   const to = ROUTES[u.pathname];
   if (!to) return null;
   const q = new URLSearchParams();
-  for (const k of PARAMS) { const v = u.searchParams.get(k); if (v !== null) q.set(k, v); }
+  for (const k of PARAMS) {
+    const v = u.searchParams.get(k);
+    if (v !== null) q.set(k, v);
+  }
   return `${base.replace(/\/+$/, "")}${to}${q.size ? `?${q}` : ""}`;
 }
 
@@ -29,7 +32,11 @@ async function target(): Promise<{ url: string; token: string } | { error: strin
   const account = brainAccount(undefined);
   if (!account?.url) return { error: "no brain account in accounts.json" };
   const token = await getSecret("brain", account.name).catch(() => null);
-  if (!token) return { error: `no token for the brain on this machine: make one on ${account.url}/account and put it in Connections` };
+  if (!token) {
+    return {
+      error: `no token for the brain on this machine: make one on ${account.url}/account and put it in Connections`,
+    };
+  }
   return { url: account.url, token };
 }
 
@@ -37,7 +44,9 @@ async function call(url: string, token: string, fetcher: typeof fetch): Promise<
   try {
     return await fetcher(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
   } catch (e) {
-    return new Response(JSON.stringify({ error: `the brain is not answering (${(e as Error).message})` }), { status: 502 });
+    return new Response(JSON.stringify({ error: `the brain is not answering (${(e as Error).message})` }), {
+      status: 502,
+    });
   }
 }
 
@@ -50,7 +59,13 @@ export async function memoryApi(u: URL, fetcher: typeof fetch = fetch): Promise<
   const r = await call(upstream(tg.url, u)!, tg.token, fetcher);
   if (r.status === 401) {
     await r.body?.cancel();
-    return new Response(JSON.stringify({ error: "the brain refused the token in the vault: make a new one on its /account page and put it in Connections" }), { status: 502, headers });
+    return new Response(
+      JSON.stringify({
+        error:
+          "the brain refused the token in the vault: make a new one on its /account page and put it in Connections",
+      }),
+      { status: 502, headers },
+    );
   }
   return new Response(r.body, { status: r.status, headers });
 }
@@ -60,6 +75,9 @@ export async function memoryVersion(fetcher: typeof fetch = fetch): Promise<stri
   const tg = await target();
   if ("error" in tg) return null;
   const r = await call(`${tg.url.replace(/\/+$/, "")}/api/brain/state`, tg.token, fetcher);
-  if (!r.ok) { await r.body?.cancel(); return null; }
+  if (!r.ok) {
+    await r.body?.cancel();
+    return null;
+  }
   return ((await r.json()) as { version?: string }).version ?? null;
 }

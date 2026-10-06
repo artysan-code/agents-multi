@@ -16,14 +16,25 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
   async function call(path: string, init: RequestInit = {}): Promise<Record<string, unknown> | null> {
     let r: Response;
     try {
-      r = await fetcher(`${base}${path}`, { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers }, signal: AbortSignal.timeout(10_000) });
+      r = await fetcher(`${base}${path}`, {
+        ...init,
+        headers: { authorization: `Bearer ${token}`, ...init.headers },
+        signal: AbortSignal.timeout(10_000),
+      });
     } catch (e) {
       throw new Error(`the brain at ${base} is not answering (${(e as Error).message}): the tasks are there`);
     }
-    if (r.status === 404 && !init.method) { await r.body?.cancel(); return null; }
+    if (r.status === 404 && !init.method) {
+      await r.body?.cancel();
+      return null;
+    }
     if (!r.ok) {
       await r.body?.cancel();
-      throw new Error(r.status === 401 ? "the brain refused the token in the vault: sign this machine in again (console › Connections › Sign in, or claude-multi brain-login)" : `the brain answered ${r.status} on ${path}`);
+      throw new Error(
+        r.status === 401
+          ? "the brain refused the token in the vault: sign this machine in again (console › Connections › Sign in, or claude-multi brain-login)"
+          : `the brain answered ${r.status} on ${path}`,
+      );
     }
     return await r.json();
   }
@@ -37,7 +48,11 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
       return d ? fromFile(String(d.task)) : null;
     },
     async write(t) {
-      await call(`/api/tasks/${t.id}`, { method: "PUT", body: toFile(t), headers: { "content-type": "text/markdown" } });
+      await call(`/api/tasks/${t.id}`, {
+        method: "PUT",
+        body: toFile(t),
+        headers: { "content-type": "text/markdown" },
+      });
     },
   };
 }
@@ -46,11 +61,22 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
  *  whose conversations belong to someone else's account. A task outside is invisible, and one
  *  cannot be written outside. */
 export function scoped(store: TaskStore, prefixes: string[]): TaskStore {
-  const inside = (t: Task | null): t is Task => !!t?.project && prefixes.some((p) => t.project === p || t.project!.startsWith(`${p}/`));
+  const inside = (t: Task | null): t is Task =>
+    !!t?.project && prefixes.some((p) => t.project === p || t.project!.startsWith(`${p}/`));
   return {
     list: async () => (await store.list()).filter(inside),
-    get: async (id) => { const t = await store.get(id); return inside(t) ? t : null; },
-    write: (t) => inside(t) ? store.write(t) : Promise.reject(new Error(`in this profile a task belongs to one of these projects: ${prefixes.join(", ")} — give it one (folder under ~)`)),
+    get: async (id) => {
+      const t = await store.get(id);
+      return inside(t) ? t : null;
+    },
+    write: (t) =>
+      inside(t) ? store.write(t) : Promise.reject(
+        new Error(
+          `in this profile a task belongs to one of these projects: ${
+            prefixes.join(", ")
+          } — give it one (folder under ~)`,
+        ),
+      ),
   };
 }
 
@@ -62,7 +88,11 @@ export function lazyStore(account: Account, token: () => Promise<string | null>,
   const ready = async () => {
     if (store) return store;
     const t = await token().catch(() => null);
-    if (!t) throw new Error(`no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`);
+    if (!t) {
+      throw new Error(
+        `no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`,
+      );
+    }
     return store = make(account.url!, t);
   };
   return {
@@ -73,7 +103,10 @@ export function lazyStore(account: Account, token: () => Promise<string | null>,
 }
 
 /** The brain account a profile sees, if there is one. */
-export function brainAccount(profile = Deno.env.get("CLAUDE_MULTI_PROFILE") || undefined, all: Account[] = loadAccounts()): Account | null {
+export function brainAccount(
+  profile = Deno.env.get("CLAUDE_MULTI_PROFILE") || undefined,
+  all: Account[] = loadAccounts(),
+): Account | null {
   return visibleAccounts(all, "brain", profile).find((a) => !!a.url) ?? null;
 }
 
@@ -82,7 +115,9 @@ export function connectTasks(): "brain" | "files" {
   const account = brainAccount();
   if (!account) return "files";
   const store = lazyStore(account, () => getSecret("brain", account.name));
-  const scope = (Deno.env.get("CLAUDE_MULTI_BRAIN_SCOPE") ?? "").split(",").map((s) => s.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean);
+  const scope = (Deno.env.get("CLAUDE_MULTI_BRAIN_SCOPE") ?? "").split(",").map((s) =>
+    s.trim().replace(/^\/+|\/+$/g, "")
+  ).filter(Boolean);
   useTaskStore(scope.length ? scoped(store, scope) : store);
   return "brain";
 }

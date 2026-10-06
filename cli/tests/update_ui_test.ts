@@ -4,7 +4,12 @@ import { assertEquals } from "jsr:@std/assert@1";
 
 const REPO = new URL("../..", import.meta.url).pathname;
 async function sh(script: string, env: Record<string, string> = {}) {
-  const r = await new Deno.Command("bash", { args: ["-c", `source "${REPO}/bin/lib/ui.sh"; ${script}`], env: { PATH: Deno.env.get("PATH")!, NO_COLOR: "1", ...env }, clearEnv: true, stdout: "piped" }).output();
+  const r = await new Deno.Command("bash", {
+    args: ["-c", `source "${REPO}/bin/lib/ui.sh"; ${script}`],
+    env: { PATH: Deno.env.get("PATH")!, NO_COLOR: "1", ...env },
+    clearEnv: true,
+    stdout: "piped",
+  }).output();
   return new TextDecoder().decode(r.stdout);
 }
 

@@ -11,7 +11,17 @@ import { ANSI, readJson, STATE, uiLanguage } from "./lib.ts";
 import { desktopNotify } from "./notify.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import {
-  addTask, brief, dayOf, dueBriefs, dueReminders, fromFile, listTasks, loadSettings, type Task, tasksRoot, updateTask,
+  addTask,
+  brief,
+  dayOf,
+  dueBriefs,
+  dueReminders,
+  fromFile,
+  listTasks,
+  loadSettings,
+  type Task,
+  tasksRoot,
+  updateTask,
 } from "../shared/mcp/lib/tasks.ts";
 import { brainAccount, brainStore, connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
 import { getSecret } from "../shared/mcp/lib/vault.ts";
@@ -22,12 +32,36 @@ const it = uiLanguage(Deno.env.toObject()) === "it";
 const line = (t: Task) => [t.time, t.title, t.project ? `[${t.project}]` : null].filter(Boolean).join(" ");
 
 /** Pure: the brief as a notification body, a few lines at most. */
-export function briefText(b: ReturnType<typeof brief>, lang: "it" | "en"): { title: string; body: string; empty: boolean } {
+export function briefText(
+  b: ReturnType<typeof brief>,
+  lang: "it" | "en",
+): { title: string; body: string; empty: boolean } {
   const L = lang === "it"
-    ? { morning: "Buongiorno", afternoon: "Pomeriggio", evening: "Stasera", nothing: "niente in agenda", overdue: "in ritardo", missed: "saltate", later: "da fare", tomorrow: "domani", waiting: "in attesa di altri" }
-    : { morning: "Good morning", afternoon: "This afternoon", evening: "This evening", nothing: "nothing planned", overdue: "overdue", missed: "missed", later: "to do", tomorrow: "tomorrow", waiting: "waiting on others" };
+    ? {
+      morning: "Buongiorno",
+      afternoon: "Pomeriggio",
+      evening: "Stasera",
+      nothing: "niente in agenda",
+      overdue: "in ritardo",
+      missed: "saltate",
+      later: "da fare",
+      tomorrow: "domani",
+      waiting: "in attesa di altri",
+    }
+    : {
+      morning: "Good morning",
+      afternoon: "This afternoon",
+      evening: "This evening",
+      nothing: "nothing planned",
+      overdue: "overdue",
+      missed: "missed",
+      later: "to do",
+      tomorrow: "tomorrow",
+      waiting: "waiting on others",
+    };
   const parts: string[] = [];
-  const list = (xs: Task[], n = 4) => xs.slice(0, n).map(line).join(" · ") + (xs.length > n ? ` · +${xs.length - n}` : "");
+  const list = (xs: Task[], n = 4) =>
+    xs.slice(0, n).map(line).join(" · ") + (xs.length > n ? ` · +${xs.length - n}` : "");
   if (b.overdue.length) parts.push(`${L.overdue}: ${list(b.overdue, 2)}`);
   if (b.missed.length) parts.push(`${L.missed}: ${list(b.missed, 2)}`);
   const ahead = b.moment === "evening" ? b.tomorrow : b.today;
@@ -52,7 +86,15 @@ async function remind(dry: boolean): Promise<number> {
     n++;
   }
   for (const r of dueReminders(tasks, now, sent, settings.remind)) {
-    await desktopNotify(`${r.task.time} · ${r.task.title}`, [r.task.source === "calendar" ? (it ? "calendario" : "calendar") : null, r.task.project, it ? "tra poco" : "coming up"].filter(Boolean).join(" · "), { dryRun: dry });
+    await desktopNotify(
+      `${r.task.time} · ${r.task.title}`,
+      [
+        r.task.source === "calendar" ? (it ? "calendario" : "calendar") : null,
+        r.task.project,
+        it ? "tra poco" : "coming up",
+      ].filter(Boolean).join(" · "),
+      { dryRun: dry },
+    );
     sent.add(r.key);
     n++;
   }
@@ -69,7 +111,15 @@ async function remind(dry: boolean): Promise<number> {
 function print(title: string, xs: Task[]) {
   if (!xs.length) return;
   console.log(`\n  ${ANSI.b}${title}${ANSI.x}`);
-  for (const t of xs) console.log(`    ${t.due && t.due !== dayOf(new Date()) ? `${ANSI.d}${t.due}${ANSI.x} ` : ""}${t.time ? `${ANSI.c}${t.time}${ANSI.x} ` : ""}${t.title}${t.project ? ` ${ANSI.d}[${t.project}]${ANSI.x}` : ""}${t.owner && t.owner !== "samuel" ? ` ${ANSI.y}(${t.owner})${ANSI.x}` : ""}  ${ANSI.d}#${t.id}${ANSI.x}`);
+  for (const t of xs) {
+    console.log(
+      `    ${t.due && t.due !== dayOf(new Date()) ? `${ANSI.d}${t.due}${ANSI.x} ` : ""}${
+        t.time ? `${ANSI.c}${t.time}${ANSI.x} ` : ""
+      }${t.title}${t.project ? ` ${ANSI.d}[${t.project}]${ANSI.x}` : ""}${
+        t.owner && t.owner !== "samuel" ? ` ${ANSI.y}(${t.owner})${ANSI.x}` : ""
+      }  ${ANSI.d}#${t.id}${ANSI.x}`,
+    );
+  }
 }
 
 /** The task files of ~/brains/tasks/items copied into the brain, once: those it already has are
@@ -78,7 +128,11 @@ async function migrate(dry: boolean): Promise<number> {
   const account = brainAccount();
   const token = account && await getSecret("brain", account.name).catch(() => null);
   if (!account || !token) {
-    console.error(account ? `no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections` : "no brain account in shared/mcp/accounts.json");
+    console.error(
+      account
+        ? `no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`
+        : "no brain account in shared/mcp/accounts.json",
+    );
     return 1;
   }
   const items = `${tasksRoot()}/items`;
@@ -114,7 +168,10 @@ async function migrate(dry: boolean): Promise<number> {
 export async function tasksCommand(args: string[]): Promise<number> {
   connectTasks();
   const [sub = "brief", ...rest] = args;
-  const opt = (name: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : undefined; };
+  const opt = (name: string) => {
+    const i = rest.indexOf(name);
+    return i >= 0 ? rest[i + 1] : undefined;
+  };
   switch (sub) {
     case "brief": {
       const b = brief([...await listTasks(), ...(await calendarAsTasks()).tasks], new Date());
@@ -130,20 +187,33 @@ export async function tasksCommand(args: string[]): Promise<number> {
     }
     case "add": {
       const title = rest.filter((x, i) => !x.startsWith("--") && !rest[i - 1]?.startsWith("--")).join(" ");
-      const t = await addTask({ title, due: opt("--due"), time: opt("--time"), project: opt("--project"), owner: opt("--owner") });
+      const t = await addTask({
+        title,
+        due: opt("--due"),
+        time: opt("--time"),
+        project: opt("--project"),
+        owner: opt("--owner"),
+      });
       console.log(`added #${t.id}`);
       return 0;
     }
     case "done": {
-      if (!rest[0]) { console.error("usage: claude-multi tasks done <id>"); return 2; }
+      if (!rest[0]) {
+        console.error("usage: claude-multi tasks done <id>");
+        return 2;
+      }
       const r = await updateTask(rest[0].replace(/^#/, ""), { status: "done" });
       console.log(`done: ${r.task.title}${r.next ? ` — next on ${r.next.due}` : ""}`);
       return 0;
     }
-    case "remind": return await remind(rest.includes("--dry-run"));
-    case "migrate": return await migrate(rest.includes("--dry-run"));
+    case "remind":
+      return await remind(rest.includes("--dry-run"));
+    case "migrate":
+      return await migrate(rest.includes("--dry-run"));
     default:
-      console.error("usage: claude-multi tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]|migrate [--dry-run]]");
+      console.error(
+        "usage: claude-multi tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]|migrate [--dry-run]]",
+      );
       return 2;
   }
 }

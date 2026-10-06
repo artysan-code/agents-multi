@@ -1,9 +1,10 @@
 # AGENTS.md — claude-multi
 
 ## Repo profile
-- visibility: agents           # me-only | agents | co-author | client | public
+
+- visibility: agents # me-only | agents | co-author | client | public
 - stable branch: release
-- language: English            # code, commits, docs; the console UI is English + Italian (cli/dashboard/i18n.js)
+- language: English # code, commits, docs; the console UI is English + Italian (cli/dashboard/i18n.js)
 - MCP layer: code
 
 ## What this is

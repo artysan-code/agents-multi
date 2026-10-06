@@ -32,11 +32,11 @@ For pure `.ts`/`.js` changes with no React imports, use `/code-review`.
 
 ## Scope vs gli altri strumenti
 
-| Tool | Scope |
-|---|---|
-| `/react-review` (questo) | Hooks rules, JSX, RSC, a11y, React-specific security, render perf |
-| `/code-review` (plugin) | TS/JS generico — `any` abuse, async correctness, Node security; review PR o diff |
-| `/security-review` (built-in) | Audit di sicurezza sulle modifiche correnti |
+| Tool                          | Scope                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `/react-review` (questo)      | Hooks rules, JSX, RSC, a11y, React-specific security, render perf                |
+| `/code-review` (plugin)       | TS/JS generico — `any` abuse, async correctness, Node security; review PR o diff |
+| `/security-review` (built-in) | Audit di sicurezza sulle modifiche correnti                                      |
 
 Su una PR TSX/JSX conviene passare entrambi `/react-review` e `/code-review`: le
 lane sono disgiunte per costruzione.
@@ -152,11 +152,11 @@ Recommendation: FAIL: Block merge until CRITICAL issue is fixed
 
 ## Approval Criteria
 
-| Status | Condition |
-|---|---|
-| PASS: Approve | No CRITICAL or HIGH issues |
+| Status           | Condition                               |
+| ---------------- | --------------------------------------- |
+| PASS: Approve    | No CRITICAL or HIGH issues              |
 | WARNING: Warning | Only MEDIUM issues (merge with caution) |
-| FAIL: Block | CRITICAL or HIGH issues found |
+| FAIL: Block      | CRITICAL or HIGH issues found           |
 
 ## Integration with Other Commands
 

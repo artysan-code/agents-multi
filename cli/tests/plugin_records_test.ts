@@ -6,7 +6,11 @@ Deno.test("pluginRecordState: a missing cache is broken, a missing project is st
   const present = new Set(["/cache/ok", "/proj/here"]);
   const r = pluginRecordState({
     "ok@m": [{ scope: "user", installPath: "/cache/ok" }],
-    "gone@m": [{ scope: "user", installPath: "/cache/gone" }, { scope: "local", projectPath: "/proj/here", installPath: "/cache/gone" }],
+    "gone@m": [{ scope: "user", installPath: "/cache/gone" }, {
+      scope: "local",
+      projectPath: "/proj/here",
+      installPath: "/cache/gone",
+    }],
     "moved@m": [{ scope: "project", projectPath: "/proj/moved", installPath: "/cache/gone" }],
     "nopath@m": [{ scope: "user" }],
     "odd@m": "not a list",
@@ -16,6 +20,9 @@ Deno.test("pluginRecordState: a missing cache is broken, a missing project is st
 });
 
 Deno.test("pluginRecordState: a user record never goes stale, whatever projectPath says", () => {
-  const r = pluginRecordState({ "u@m": [{ scope: "user", projectPath: "/proj/gone", installPath: "/cache/ok" }] }, (p) => p === "/cache/ok");
+  const r = pluginRecordState(
+    { "u@m": [{ scope: "user", projectPath: "/proj/gone", installPath: "/cache/ok" }] },
+    (p) => p === "/cache/ok",
+  );
   assertEquals(r, { broken: [], stale: [] });
 });

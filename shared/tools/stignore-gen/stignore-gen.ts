@@ -47,7 +47,11 @@ export type Split = { before: string; section: string | null; after: string };
 export function split(text: string): Split {
   const a = text.indexOf(MARK_BEGIN), b = text.indexOf(MARK_END);
   if (a < 0 || b < a) return { before: text, section: null, after: "" };
-  return { before: text.slice(0, a), section: text.slice(a + MARK_BEGIN.length, b), after: text.slice(b + MARK_END.length) };
+  return {
+    before: text.slice(0, a),
+    section: text.slice(a + MARK_BEGIN.length, b),
+    after: text.slice(b + MARK_END.length),
+  };
 }
 
 export function listedRepos(section: string | null): string[] {
@@ -94,7 +98,12 @@ type Folder = { id: string; label: string; path: string; type: string };
 function folders(xml: string): Folder[] {
   return [...xml.matchAll(/<folder\b([^>]*)>/g)].map((m) => {
     const at = (k: string) => m[1].match(new RegExp(`\\b${k}="([^"]*)"`))?.[1] ?? "";
-    return { id: at("id"), label: at("label"), path: at("path").replace(/^~/, HOME), type: at("type") || "sendreceive" };
+    return {
+      id: at("id"),
+      label: at("label"),
+      path: at("path").replace(/^~/, HOME),
+      type: at("type") || "sendreceive",
+    };
   }).filter((f) => f.path && f.type === "sendreceive");
 }
 
@@ -103,8 +112,15 @@ export function findRepos(root: string): string[] {
   const out: string[] = [];
   const walk = (dir: string, depth: number) => {
     let entries: Deno.DirEntry[];
-    try { entries = [...Deno.readDirSync(dir)]; } catch { return; }
-    if (dir !== root && entries.some((e) => e.name === ".git")) { out.push(dir.slice(root.length + 1)); return; }
+    try {
+      entries = [...Deno.readDirSync(dir)];
+    } catch {
+      return;
+    }
+    if (dir !== root && entries.some((e) => e.name === ".git")) {
+      out.push(dir.slice(root.length + 1));
+      return;
+    }
     if (depth >= 7) return;
     for (const e of entries) if (e.isDirectory && !SKIP_DIRS.has(e.name)) walk(`${dir}/${e.name}`, depth + 1);
   };
@@ -117,42 +133,65 @@ async function rescan(xml: string, folder: string) {
   const addr = xml.match(/<gui\b[^>]*>[\s\S]*?<address>([^<]+)<\/address>/)?.[1] ?? "127.0.0.1:8384";
   if (!key) return;
   const url = `http://${addr}/rest/db/scan?folder=${encodeURIComponent(folder)}&sub=.stignore-common`;
-  try { await fetch(url, { method: "POST", headers: { "X-API-Key": key }, signal: AbortSignal.timeout(5000) }); }
-  catch { /* Syncthing down: the next scan loads the rules anyway */ }
+  try {
+    await fetch(url, { method: "POST", headers: { "X-API-Key": key }, signal: AbortSignal.timeout(5000) });
+  } catch { /* Syncthing down: the next scan loads the rules anyway */ }
 }
 
 async function notify(body: string) {
-  try { await new Deno.Command("notify-send", { args: ["-a", "Syncthing", "Syncthing: repository excluded", body] }).output(); }
-  catch { /* no desktop session */ }
+  try {
+    await new Deno.Command("notify-send", { args: ["-a", "Syncthing", "Syncthing: repository excluded", body] })
+      .output();
+  } catch { /* no desktop session */ }
 }
 
 async function main() {
   const args = Deno.args;
   const APPLY = args.includes("--apply"), QUIET = args.includes("--quiet"), PRUNE = args.includes("--prune");
   const only = args.includes("--folder") ? args[args.indexOf("--folder") + 1] : null;
-  const log = (s: string) => { if (!QUIET) console.log(s); };
+  const log = (s: string) => {
+    if (!QUIET) console.log(s);
+  };
   let xml: string;
-  try { xml = await Deno.readTextFile(CONFIG); } catch { log(`no Syncthing config at ${CONFIG}`); return; }
+  try {
+    xml = await Deno.readTextFile(CONFIG);
+  } catch {
+    log(`no Syncthing config at ${CONFIG}`);
+    return;
+  }
 
   for (const f of folders(xml)) {
     if (only && ![f.id, f.label, f.path].includes(only)) continue;
     const file = `${f.path}/.stignore-common`;
     let text: string;
-    try { text = await Deno.readTextFile(file); } catch { continue; } // folder without shared rules: not ours
+    try {
+      text = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    } // folder without shared rules: not ours
     const found = findRepos(f.path);
     if (!found.length && split(text).section === null) continue;
     const { repos, added } = plan(text, found, PRUNE);
     const next = render(text, repos);
-    if (next === text) { log(`${f.label}: up to date (${repos.length} repositories)`); }
+    if (next === text) log(`${f.label}: up to date (${repos.length} repositories)`);
     else {
       const dropped = listedRepos(split(text).section).filter((r) => !repos.includes(r));
-      log(`${f.label}: ${added.map((r) => `+ ${r}`).concat(dropped.map((r) => `- ${r}`)).join("  ") || "section rewritten"}`);
+      log(
+        `${f.label}: ${
+          added.map((r) => `+ ${r}`).concat(dropped.map((r) => `- ${r}`)).join("  ") || "section rewritten"
+        }`,
+      );
       if (APPLY) {
         const bak = `${HOME}/.local/state/stignore-gen`;
         await Deno.mkdir(bak, { recursive: true });
-        await Deno.writeTextFile(`${bak}/${f.id}.${new Date().toISOString().replace(/[:.]/g, "-")}.stignore-common`, text);
+        await Deno.writeTextFile(
+          `${bak}/${f.id}.${new Date().toISOString().replace(/[:.]/g, "-")}.stignore-common`,
+          text,
+        );
         await Deno.writeTextFile(file, next);
-        if (QUIET) for (const r of added) await notify(`${f.label}/${r}: git carries it, Syncthing only its .env files`);
+        if (QUIET) {
+          for (const r of added) await notify(`${f.label}/${r}: git carries it, Syncthing only its .env files`);
+        }
       }
     }
     if (APPLY) await rescan(xml, f.id);

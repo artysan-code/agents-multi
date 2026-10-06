@@ -20,7 +20,14 @@ export interface Doc {
   updated: string;
   by: string;
 }
-export interface Revision { path: string; rev: number; at: string; by: string; op: "write" | "delete" | "restore"; body: string }
+export interface Revision {
+  path: string;
+  rev: number;
+  at: string;
+  by: string;
+  op: "write" | "delete" | "restore";
+  body: string;
+}
 
 const SCHEMA = `
 create table if not exists docs (
@@ -42,7 +49,10 @@ export function cleanPath(p: string): string {
   const s = String(p ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/{2,}/g, "/");
   const withExt = /\.md$/i.test(s) ? s : `${s}.md`;
   const control = [...withExt].some((c) => c.charCodeAt(0) < 32);
-  if (!s || withExt.length > 300 || withExt.split("/").some((seg) => !seg || seg === "." || seg === "..") || control || /[<>:"|?*]/.test(withExt)) {
+  if (
+    !s || withExt.length > 300 || withExt.split("/").some((seg) => !seg || seg === "." || seg === "..") || control ||
+    /[<>:"|?*]/.test(withExt)
+  ) {
     throw new Error(`not a document path: ${p}`);
   }
   return withExt;
@@ -60,7 +70,9 @@ export function titleOf(path: string, body: string): string {
 /** Pure: the targets a document links to, as written ([[a/b|label]] → "a/b"), without headings. */
 export function linksIn(body: string): string[] {
   const out = new Set<string>();
-  for (const m of body.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) out.add(m[1].trim().replace(/\.md$/i, ""));
+  for (const m of body.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
+    out.add(m[1].trim().replace(/\.md$/i, ""));
+  }
   return [...out];
 }
 
@@ -74,14 +86,18 @@ export class Store {
   }
 
   get(path: string): Doc | null {
-    const r = this.db.prepare("select path, title, body, rev, created, updated, by from docs where path = ? and deleted = 0").get(cleanPath(path));
+    const r = this.db.prepare(
+      "select path, title, body, rev, created, updated, by from docs where path = ? and deleted = 0",
+    ).get(cleanPath(path));
     return (r as unknown as Doc) ?? null;
   }
 
   /** The documents under a folder (all of them for ""), newest first; tasks only when asked. */
   list(prefix = "", opts: { tasks?: boolean; limit?: number } = {}): Omit<Doc, "body">[] {
     const rows = this.db.prepare(
-      `select path, title, rev, created, updated, by from docs where deleted = 0 and path like ? escape '\\' ${opts.tasks ? "" : "and path not like 'tasks/%'"}
+      `select path, title, rev, created, updated, by from docs where deleted = 0 and path like ? escape '\\' ${
+        opts.tasks ? "" : "and path not like 'tasks/%'"
+      }
        order by updated desc limit ?`,
     ).all(`${prefix.replace(/[\\%_]/g, "\\$&")}%`, opts.limit ?? 1000);
     return rows as unknown as Omit<Doc, "body">[];
@@ -91,15 +107,30 @@ export class Store {
   write(path: string, body: string, by: string, base?: number, op: "write" | "restore" = "write"): Doc {
     const p = cleanPath(path);
     const now = new Date().toISOString();
-    const cur = this.db.prepare("select rev, created, deleted from docs where path = ?").get(p) as { rev: number; created: string; deleted: number } | undefined;
-    if (base !== undefined && (cur?.deleted ? 0 : cur?.rev ?? 0) !== base) throw new Error(`${p} changed meanwhile (now rev ${cur?.rev ?? 0}): read it again`);
+    const cur = this.db.prepare("select rev, created, deleted from docs where path = ?").get(p) as {
+      rev: number;
+      created: string;
+      deleted: number;
+    } | undefined;
+    if (base !== undefined && (cur?.deleted ? 0 : cur?.rev ?? 0) !== base) {
+      throw new Error(`${p} changed meanwhile (now rev ${cur?.rev ?? 0}): read it again`);
+    }
     const rev = (cur?.rev ?? 0) + 1;
     const title = titleOf(p, body);
     this.tx(() => {
-      this.db.prepare(`insert into docs (path, title, body, rev, created, updated, by, deleted) values (?, ?, ?, ?, ?, ?, ?, 0)
-        on conflict (path) do update set title = excluded.title, body = excluded.body, rev = excluded.rev, updated = excluded.updated, by = excluded.by, deleted = 0`)
+      this.db.prepare(
+        `insert into docs (path, title, body, rev, created, updated, by, deleted) values (?, ?, ?, ?, ?, ?, ?, 0)
+        on conflict (path) do update set title = excluded.title, body = excluded.body, rev = excluded.rev, updated = excluded.updated, by = excluded.by, deleted = 0`,
+      )
         .run(p, title, body, rev, cur?.created ?? now, now, by);
-      this.db.prepare("insert into revisions (path, rev, at, by, op, body) values (?, ?, ?, ?, ?, ?)").run(p, rev, now, by, op, body);
+      this.db.prepare("insert into revisions (path, rev, at, by, op, body) values (?, ?, ?, ?, ?, ?)").run(
+        p,
+        rev,
+        now,
+        by,
+        op,
+        body,
+      );
       this.db.prepare("delete from links where src = ?").run(p);
       for (const d of linksIn(body)) this.db.prepare("insert or ignore into links (src, dst) values (?, ?)").run(p, d);
       this.db.prepare("delete from docs_fts where path = ?").run(p);
@@ -116,8 +147,18 @@ export class Store {
     if (!cur) throw new Error(`no document ${p}`);
     const now = new Date().toISOString();
     this.tx(() => {
-      this.db.prepare("update docs set deleted = 1, rev = ?, updated = ?, by = ? where path = ?").run(cur.rev + 1, now, by, p);
-      this.db.prepare("insert into revisions (path, rev, at, by, op, body) values (?, ?, ?, ?, 'delete', '')").run(p, cur.rev + 1, now, by);
+      this.db.prepare("update docs set deleted = 1, rev = ?, updated = ?, by = ? where path = ?").run(
+        cur.rev + 1,
+        now,
+        by,
+        p,
+      );
+      this.db.prepare("insert into revisions (path, rev, at, by, op, body) values (?, ?, ?, ?, 'delete', '')").run(
+        p,
+        cur.rev + 1,
+        now,
+        by,
+      );
       this.db.prepare("delete from links where src = ?").run(p);
       this.db.prepare("delete from docs_fts where path = ?").run(p);
       this.db.prepare("delete from chunks where path = ?").run(p);
@@ -125,11 +166,16 @@ export class Store {
   }
 
   history(path: string): Omit<Revision, "body">[] {
-    return this.db.prepare("select path, rev, at, by, op from revisions where path = ? order by rev desc").all(cleanPath(path)) as unknown as Omit<Revision, "body">[];
+    return this.db.prepare("select path, rev, at, by, op from revisions where path = ? order by rev desc").all(
+      cleanPath(path),
+    ) as unknown as Omit<Revision, "body">[];
   }
 
   revision(path: string, rev: number): Revision | null {
-    return (this.db.prepare("select * from revisions where path = ? and rev = ?").get(cleanPath(path), rev) as unknown as Revision) ?? null;
+    return (this.db.prepare("select * from revisions where path = ? and rev = ?").get(
+      cleanPath(path),
+      rev,
+    ) as unknown as Revision) ?? null;
   }
 
   /** Puts an older version back, as a new revision on top. */
@@ -142,18 +188,26 @@ export class Store {
   /** Where a [[target]] points: the exact path, else the shallowest document with that name. */
   resolve(target: string): string | null {
     const t = target.replace(/\.md$/i, "");
-    const exact = this.db.prepare("select path from docs where deleted = 0 and path = ?").get(`${t}.md`) as { path: string } | undefined;
+    const exact = this.db.prepare("select path from docs where deleted = 0 and path = ?").get(`${t}.md`) as {
+      path: string;
+    } | undefined;
     if (exact) return exact.path;
     const name = t.split("/").pop()!.toLowerCase();
-    const rows = this.db.prepare("select path from docs where deleted = 0 and (lower(path) = ? or lower(path) like ? escape '\\')")
+    const rows = this.db.prepare(
+      "select path from docs where deleted = 0 and (lower(path) = ? or lower(path) like ? escape '\\')",
+    )
       .all(`${name}.md`, `%/${name.replace(/[\\%_]/g, "\\$&")}.md`) as { path: string }[];
-    return rows.map((r) => r.path).sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b))[0] ?? null;
+    return rows.map((r) => r.path).sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b))[0] ??
+      null;
   }
 
   /** A document's links both ways, resolved to paths where they exist. */
   links(path: string): { out: { target: string; path: string | null }[]; back: string[] } {
     const p = cleanPath(path);
-    const out = (this.db.prepare("select dst from links where src = ?").all(p) as { dst: string }[]).map((r) => ({ target: r.dst, path: this.resolve(r.dst) }));
+    const out = (this.db.prepare("select dst from links where src = ?").all(p) as { dst: string }[]).map((r) => ({
+      target: r.dst,
+      path: this.resolve(r.dst),
+    }));
     // a link reaches this document when it names it (by path or by name) and resolves to it
     const name = p.replace(/\.md$/, "").split("/").pop()!.toLowerCase();
     const cands = this.db.prepare("select src, dst from links where lower(dst) = ? or lower(dst) like ? escape '\\'")
@@ -164,9 +218,15 @@ export class Store {
 
   /** Every document and every resolved link, for the graph. */
   graph(): { nodes: { path: string; title: string }[]; edges: [string, string][] } {
-    const nodes = this.db.prepare("select path, title from docs where deleted = 0 and path not like 'tasks/%'").all() as { path: string; title: string }[];
+    const nodes = this.db.prepare("select path, title from docs where deleted = 0 and path not like 'tasks/%'")
+      .all() as { path: string; title: string }[];
     const edges: [string, string][] = [];
-    for (const l of this.db.prepare("select src, dst from links where src not like 'tasks/%'").all() as { src: string; dst: string }[]) {
+    for (
+      const l of this.db.prepare("select src, dst from links where src not like 'tasks/%'").all() as {
+        src: string;
+        dst: string;
+      }[]
+    ) {
       const d = this.resolve(l.dst);
       if (d && d !== l.src) edges.push([l.src, d]);
     }
@@ -196,5 +256,7 @@ export class Store {
     }
   }
 
-  close() { this.db.close(); }
+  close() {
+    this.db.close();
+  }
 }

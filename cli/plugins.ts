@@ -15,7 +15,14 @@
 // to the page as `confirm`, and runs only when the person re-sends its sha256.
 
 import { BIN, listDir, lstat, type Profile, profileNames, readJson, RUNTIME, STATE } from "./lib.ts";
-import { editSettingsSource, expectedSettings, type Obj, runtimePath, syncAllSettings, syncSettings } from "./settings.ts";
+import {
+  editSettingsSource,
+  expectedSettings,
+  type Obj,
+  runtimePath,
+  syncAllSettings,
+  syncSettings,
+} from "./settings.ts";
 
 const CLAUDE = `${BIN}/claude-bin`;
 // Every value reaches `claude plugin` as an argument: one starting with "-" would be read as an
@@ -29,11 +36,20 @@ const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !
 async function claude(p: Profile, args: string[], timeoutMs = 180_000) {
   await Deno.mkdir(STATE, { recursive: true });
   const child = new Deno.Command(CLAUDE, {
-    args, cwd: STATE, stdin: "null", stdout: "piped", stderr: "piped",
+    args,
+    cwd: STATE,
+    stdin: "null",
+    stdout: "piped",
+    stderr: "piped",
     env: { CLAUDE_CONFIG_DIR: `${RUNTIME}/${p}`, DISABLE_AUTOUPDATER: "1", NO_COLOR: "1" },
   }).spawn();
-  const timer = setTimeout(() => { try { child.kill("SIGTERM"); } catch { /* gone */ } }, timeoutMs);
-  const r = await child.output(); clearTimeout(timer);
+  const timer = setTimeout(() => {
+    try {
+      child.kill("SIGTERM");
+    } catch { /* gone */ }
+  }, timeoutMs);
+  const r = await child.output();
+  clearTimeout(timer);
   const dec = new TextDecoder();
   const out = dec.decode(r.stdout).trim(), err = dec.decode(r.stderr).trim();
   return { code: r.code, out, err, json: parseJson(out) };
@@ -42,7 +58,9 @@ async function claude(p: Profile, args: string[], timeoutMs = 180_000) {
 /** Whole stdout as JSON, else its last line (`--json` prints one result line after any notice). */
 export function parseJson(out: string): unknown {
   for (const s of [out, out.split("\n").filter(Boolean).pop() ?? ""]) {
-    try { return JSON.parse(s); } catch { /* next */ }
+    try {
+      return JSON.parse(s);
+    } catch { /* next */ }
   }
   return null;
 }
@@ -64,7 +82,13 @@ function serial<T>(f: () => Promise<T>): Promise<T> {
 }
 
 // ---------------------------------------------------------------- inventory
-interface Installed { id: string; version?: string; scope?: string; enabled?: boolean; installPath?: string }
+interface Installed {
+  id: string;
+  version?: string;
+  scope?: string;
+  enabled?: boolean;
+  installPath?: string;
+}
 
 export interface PluginCell {
   /** this profile's own entry in profiles/<p>/settings.json: true/false, null = removed, undefined = inherits */
@@ -77,17 +101,28 @@ export interface PluginCell {
   broken?: boolean;
 }
 export interface PluginRow {
-  id: string; name: string; marketplace: string;
+  id: string;
+  name: string;
+  marketplace: string;
   /** synced into the account by the organisation: Account MCP governs it, not this page */
   synced: boolean;
   /** the entry in shared/settings.json, undefined when there is none */
   shared?: boolean;
   profiles: Record<Profile, PluginCell>;
 }
-export interface MarketplaceRow { name: string; source: string; declared: boolean; known: Profile[] }
+export interface MarketplaceRow {
+  name: string;
+  source: string;
+  declared: boolean;
+  known: Profile[];
+}
 
 /** The table the page shows: every plugin the repository mentions or a profile has installed. */
-export function plugTable(profiles: Profile[], shared: Obj, perProfile: Record<Profile, { patch: Obj; built: Obj; installed: Installed[] }>): PluginRow[] {
+export function plugTable(
+  profiles: Profile[],
+  shared: Obj,
+  perProfile: Record<Profile, { patch: Obj; built: Obj; installed: Installed[] }>,
+): PluginRow[] {
   const ep = (o: Obj) => isObj(o.enabledPlugins) ? o.enabledPlugins as Obj : {};
   const ids = new Set<string>(Object.keys(ep(shared)));
   for (const p of profiles) {
@@ -97,7 +132,14 @@ export function plugTable(profiles: Profile[], shared: Obj, perProfile: Record<P
   return [...ids].sort().map((id) => {
     const [name, marketplace = ""] = id.split("@");
     const sv = ep(shared)[id];
-    const row: PluginRow = { id, name, marketplace, synced: marketplace === "synced", shared: typeof sv === "boolean" ? sv : undefined, profiles: {} };
+    const row: PluginRow = {
+      id,
+      name,
+      marketplace,
+      synced: marketplace === "synced",
+      shared: typeof sv === "boolean" ? sv : undefined,
+      profiles: {},
+    };
     for (const p of profiles) {
       const { patch, built, installed } = perProfile[p];
       const inst = installed.find((i) => i.id === id);
@@ -144,7 +186,12 @@ export async function inventory() {
   const marketplaces: MarketplaceRow[] = [...names].sort().map((name) => {
     const d = declared[name];
     const src = isObj(d) && isObj(d.source) ? d.source as Record<string, string> : null;
-    return { name, source: src ? src.repo ?? src.url ?? src.path ?? "" : known[name]?.source ?? "", declared: !!d, known: known[name]?.profiles ?? [] };
+    return {
+      name,
+      source: src ? src.repo ?? src.url ?? src.path ?? "" : known[name]?.source ?? "",
+      declared: !!d,
+      known: known[name]?.profiles ?? [],
+    };
   });
   return { profiles, plugins, marketplaces, syncedSkills };
 }
@@ -153,13 +200,21 @@ export async function inventory() {
 async function syncedSkillNames(dir: string) {
   const out = new Set<string>();
   for (const b of await listDir(`${dir}/skills/synced`)) {
-    for (const s of await listDir(`${dir}/skills/synced/${b}`)) if (await lstat(`${dir}/skills/synced/${b}/${s}/SKILL.md`)) out.add(s);
+    for (const s of await listDir(`${dir}/skills/synced/${b}`)) {
+      if (await lstat(`${dir}/skills/synced/${b}/${s}/SKILL.md`)) out.add(s);
+    }
   }
   return [...out].sort();
 }
 
 // ---------------------------------------------------------------- catalog and details
-export interface CatalogEntry { id: string; name: string; marketplace: string; description: string; installs: number }
+export interface CatalogEntry {
+  id: string;
+  name: string;
+  marketplace: string;
+  description: string;
+  installs: number;
+}
 let catalogCache: { at: number; entries: CatalogEntry[] } | null = null;
 
 /** Everything the known marketplaces offer, across profiles (each knows its own marketplaces). */
@@ -172,7 +227,13 @@ export async function catalog(fresh = false): Promise<CatalogEntry[]> {
     for (const a of avail) {
       const id = String(a.pluginId ?? "");
       if (!id || byId.has(id)) continue;
-      byId.set(id, { id, name: String(a.name ?? id), marketplace: String(a.marketplaceName ?? ""), description: String(a.description ?? ""), installs: Number(a.installCount ?? 0) });
+      byId.set(id, {
+        id,
+        name: String(a.name ?? id),
+        marketplace: String(a.marketplaceName ?? ""),
+        description: String(a.description ?? ""),
+        installs: Number(a.installCount ?? 0),
+      });
     }
   }
   catalogCache = { at: Date.now(), entries: [...byId.values()].sort((a, b) => b.installs - a.installs) };
@@ -186,7 +247,10 @@ export async function details(id: string) {
   let where = profiles[0];
   for (const p of profiles) {
     const l = await claude(p, ["plugin", "list", "--json"], 60_000);
-    if (Array.isArray(l.json) && (l.json as Installed[]).some((i) => i.id === id)) { where = p; break; }
+    if (Array.isArray(l.json) && (l.json as Installed[]).some((i) => i.id === id)) {
+      where = p;
+      break;
+    }
   }
   const r = await claude(where, ["plugin", "details", id], 60_000);
   return r.out || r.err;
@@ -201,11 +265,17 @@ export type PluginOp =
   | { op: "marketplace-add"; source: string }
   | { op: "marketplace-remove"; name: string }
   | { op: "marketplace-update"; name?: string };
-export interface OpResult { ok: boolean; message: string; log: string[]; confirm?: { command: string; sha256: string } }
+export interface OpResult {
+  ok: boolean;
+  message: string;
+  log: string[];
+  confirm?: { command: string; sha256: string };
+}
 
 function setEnabled(o: Obj, id: string, value: boolean | null | undefined) {
   const ep = isObj(o.enabledPlugins) ? o.enabledPlugins as Obj : (o.enabledPlugins = {}) as Obj;
-  if (value === undefined) delete ep[id]; else ep[id] = value;
+  if (value === undefined) delete ep[id];
+  else ep[id] = value;
   if (!Object.keys(ep).length) delete o.enabledPlugins;
 }
 
@@ -215,12 +285,18 @@ export function pendingCommand(json: unknown): OpResult["confirm"] | undefined {
   const sc = json.shownCommand;
   if (!isObj(sc) || typeof sc.sha256 !== "string") return undefined;
   if (json.outcome === "ok") return undefined;
-  const cmd = typeof sc.command === "string" ? sc.command : Array.isArray(sc.argv) ? (sc.argv as string[]).join(" ") : JSON.stringify(sc);
+  const cmd = typeof sc.command === "string"
+    ? sc.command
+    : Array.isArray(sc.argv)
+    ? (sc.argv as string[]).join(" ")
+    : JSON.stringify(sc);
   return { command: cmd, sha256: sc.sha256 };
 }
 
 const said = (r: { out: string; err: string; json: unknown }) =>
-  isObj(r.json) && typeof r.json.message === "string" ? r.json.message : (r.err || r.out).split("\n").slice(-3).join(" ");
+  isObj(r.json) && typeof r.json.message === "string"
+    ? r.json.message
+    : (r.err || r.out).split("\n").slice(-3).join(" ");
 
 async function targets(spec: Profile[] | "all") {
   const living = await livingProfiles();
@@ -264,14 +340,22 @@ async function runOp(op: PluginOp): Promise<OpResult> {
   const log: string[] = [];
   const fail = (message: string, extra: Partial<OpResult> = {}): OpResult => ({ ok: false, message, log, ...extra });
   if ("id" in op && !ID_RE.test(op.id)) return fail("invalid plugin id (name@marketplace)");
-  if ("accept" in op && op.accept !== undefined && !/^[0-9a-f]{64}$/i.test(op.accept)) return fail("invalid command hash");
+  if ("accept" in op && op.accept !== undefined && !/^[0-9a-f]{64}$/i.test(op.accept)) {
+    return fail("invalid command hash");
+  }
   // (1) whatever sessions wrote so far becomes the repository's before anything else moves
-  for (const r of await syncAllSettings()) if (r.adopted.length) log.push(`${r.profile}: adopted ${r.adopted.join(", ")}`);
-  const regenerate = async () => { for (const p of await livingProfiles()) await syncSettings(p, { adopt: false }); };
+  for (const r of await syncAllSettings()) {
+    if (r.adopted.length) log.push(`${r.profile}: adopted ${r.adopted.join(", ")}`);
+  }
+  const regenerate = async () => {
+    for (const p of await livingProfiles()) await syncSettings(p, { adopt: false });
+  };
 
   switch (op.op) {
     case "set": {
-      if (op.target !== "shared" && !(await livingProfiles()).includes(op.target)) return fail(`unknown profile: ${op.target}`);
+      if (op.target !== "shared" && !(await livingProfiles()).includes(op.target)) {
+        return fail(`unknown profile: ${op.target}`);
+      }
       await editSettingsSource(op.target, (o) => setEnabled(o, op.id, op.value === null ? undefined : op.value));
       await syncAllSettings();
       // on now and not installed: install it right away instead of at the next session start —
@@ -284,21 +368,40 @@ async function runOp(op: PluginOp): Promise<OpResult> {
           const r = await claude(p, ["plugin", "install", op.id, "--json"]);
           log.push(`${p}: install → ${said(r)}`);
           const c = pendingCommand(r.json);
-          if (c) { await regenerate(); return fail(`${op.id} needs a command accepted before it installs`, { confirm: c }); }
+          if (c) {
+            await regenerate();
+            return fail(`${op.id} needs a command accepted before it installs`, { confirm: c });
+          }
         }
       }
       await regenerate();
-      return { ok: true, message: `${op.id}: ${op.value === null ? "inherits shared" : op.value ? "on" : "off"} for ${op.target}`, log };
+      return {
+        ok: true,
+        message: `${op.id}: ${op.value === null ? "inherits shared" : op.value ? "on" : "off"} for ${op.target}`,
+        log,
+      };
     }
     case "install": {
       const ps = await targets(op.profiles);
       for (const p of ps) {
         await ensureMarketplace(p, op.id, log);
-        const r = await claude(p, ["plugin", "install", op.id, "--json", ...(op.accept ? ["--accept-command", op.accept] : [])]);
+        const r = await claude(p, [
+          "plugin",
+          "install",
+          op.id,
+          "--json",
+          ...(op.accept ? ["--accept-command", op.accept] : []),
+        ]);
         log.push(`${p}: ${said(r)}`);
         const c = pendingCommand(r.json);
-        if (c) { await regenerate(); return fail(`${op.id} declares a command to run: accept it to install`, { confirm: c }); }
-        if (r.code !== 0) { await regenerate(); return fail(`install failed on ${p}: ${said(r)}`); }
+        if (c) {
+          await regenerate();
+          return fail(`${op.id} declares a command to run: accept it to install`, { confirm: c });
+        }
+        if (r.code !== 0) {
+          await regenerate();
+          return fail(`install failed on ${p}: ${said(r)}`);
+        }
       }
       if (op.profiles === "all") {
         await editSettingsSource("shared", (o) => setEnabled(o, op.id, true));
@@ -331,33 +434,55 @@ async function runOp(op: PluginOp): Promise<OpResult> {
     case "update": {
       for (const p of await livingProfiles()) {
         if (!(await installedIn(p, op.id))) continue;
-        const r = await claude(p, ["plugin", "update", op.id, "--json", ...(op.accept ? ["--accept-command", op.accept] : [])]);
+        const r = await claude(p, [
+          "plugin",
+          "update",
+          op.id,
+          "--json",
+          ...(op.accept ? ["--accept-command", op.accept] : []),
+        ]);
         log.push(`${p}: ${said(r)}`);
         const c = pendingCommand(r.json);
-        if (c) { await regenerate(); return fail(`the update of ${op.id} declares a command to run: accept it to go on`, { confirm: c }); }
+        if (c) {
+          await regenerate();
+          return fail(`the update of ${op.id} declares a command to run: accept it to go on`, { confirm: c });
+        }
       }
       await regenerate();
       return { ok: true, message: `${op.id} updated (restart the sessions to load it)`, log };
     }
     case "marketplace-add": {
       const source = op.source.trim();
-      if (!validSource(source)) return fail("a marketplace source is one URL, path or owner/repo, and does not start with -");
+      if (!validSource(source)) {
+        return fail("a marketplace source is one URL, path or owner/repo, and does not start with -");
+      }
       const ps = await livingProfiles();
-      const knownNames = async (p: Profile) => Object.keys(await readJson<Obj>(`${RUNTIME}/${p}/plugins/known_marketplaces.json`) ?? {});
+      const knownNames = async (p: Profile) =>
+        Object.keys(await readJson<Obj>(`${RUNTIME}/${p}/plugins/known_marketplaces.json`) ?? {});
       const before = new Set(await knownNames(ps[0]));
       const r = await claude(ps[0], ["plugin", "marketplace", "add", source]);
       log.push(`${ps[0]}: ${said(r)}`);
       const added = (await knownNames(ps[0])).filter((n) => !before.has(n));
-      if (r.code !== 0 || added.length !== 1) { await regenerate(); return fail(r.code !== 0 ? `marketplace add failed: ${said(r)}` : "no new marketplace appeared (already known?)"); }
+      if (r.code !== 0 || added.length !== 1) {
+        await regenerate();
+        return fail(
+          r.code !== 0 ? `marketplace add failed: ${said(r)}` : "no new marketplace appeared (already known?)",
+        );
+      }
       const name = added[0];
       // the declaration the CLI wrote into this profile's settings goes to shared, for every profile
       const written = await readJson<Obj>(runtimePath(ps[0]));
       const ekm = isObj(written?.extraKnownMarketplaces) ? (written!.extraKnownMarketplaces as Obj)[name] : undefined;
       const known = (await readJson<Obj>(`${RUNTIME}/${ps[0]}/plugins/known_marketplaces.json`))?.[name];
       const decl = isObj(ekm) ? ekm : isObj(known) && isObj(known.source) ? { source: known.source } : null;
-      if (!decl) { await regenerate(); return fail(`added ${name}, but its source could not be read back`); }
+      if (!decl) {
+        await regenerate();
+        return fail(`added ${name}, but its source could not be read back`);
+      }
       await editSettingsSource("shared", (o) => {
-        const m = isObj(o.extraKnownMarketplaces) ? o.extraKnownMarketplaces as Obj : (o.extraKnownMarketplaces = {}) as Obj;
+        const m = isObj(o.extraKnownMarketplaces)
+          ? o.extraKnownMarketplaces as Obj
+          : (o.extraKnownMarketplaces = {}) as Obj;
         m[name] = decl;
       });
       for (const p of ps.slice(1)) {
@@ -372,8 +497,15 @@ async function runOp(op: PluginOp): Promise<OpResult> {
       if (!NAME_RE.test(op.name)) return fail("invalid marketplace name");
       const ps = await livingProfiles();
       const dropFrom = (o: Obj) => {
-        if (isObj(o.extraKnownMarketplaces)) { delete (o.extraKnownMarketplaces as Obj)[op.name]; if (!Object.keys(o.extraKnownMarketplaces).length) delete o.extraKnownMarketplaces; }
-        if (isObj(o.enabledPlugins)) for (const id of Object.keys(o.enabledPlugins)) if (id.endsWith(`@${op.name}`)) setEnabled(o, id, undefined);
+        if (isObj(o.extraKnownMarketplaces)) {
+          delete (o.extraKnownMarketplaces as Obj)[op.name];
+          if (!Object.keys(o.extraKnownMarketplaces).length) delete o.extraKnownMarketplaces;
+        }
+        if (isObj(o.enabledPlugins)) {
+          for (const id of Object.keys(o.enabledPlugins)) {
+            if (id.endsWith(`@${op.name}`)) setEnabled(o, id, undefined);
+          }
+        }
       };
       await editSettingsSource("shared", dropFrom);
       for (const p of ps) await editSettingsSource(p, dropFrom);

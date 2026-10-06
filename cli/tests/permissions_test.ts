@@ -3,7 +3,9 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { ruleDiff, validRule } from "../permissions.ts";
 
 Deno.test("validRule: tool names with or without a specifier", () => {
-  for (const r of ["Bash(git:*)", "Read(~/.aws/**)", "mcp__n8n__n8n_workflows", "WebFetch(domain:example.com)", "Edit"]) assertEquals(validRule(r), true, r);
+  for (
+    const r of ["Bash(git:*)", "Read(~/.aws/**)", "mcp__n8n__n8n_workflows", "WebFetch(domain:example.com)", "Edit"]
+  ) assertEquals(validRule(r), true, r);
   for (const r of ["", "git status", "(foo)", "Bash(", "rm -rf /"]) assertEquals(validRule(r), false, r);
 });
 

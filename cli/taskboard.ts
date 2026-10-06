@@ -7,12 +7,33 @@
 import { HOME } from "./lib.ts";
 import { projectTree, resolveProject } from "./projects.ts";
 import {
-  addAttachment, addDays, addNote, addStep, addTask, attachments, dayOf, getTask, listTasks, notesOf, progress, relations, removeAttachment, resolveRefs,
-  setStep, StaleError, steps, storeFile, type Task, type TaskInput, tasksRoot, updateTask,
+  addAttachment,
+  addDays,
+  addNote,
+  addStep,
+  addTask,
+  attachments,
+  dayOf,
+  getTask,
+  listTasks,
+  notesOf,
+  progress,
+  relations,
+  removeAttachment,
+  resolveRefs,
+  setStep,
+  StaleError,
+  steps,
+  storeFile,
+  type Task,
+  type TaskInput,
+  tasksRoot,
+  updateTask,
 } from "../shared/mcp/lib/tasks.ts";
 
 export const TASK_FILE_MAX = 50 * 1024 * 1024;
-const OPENABLE = /\.(pdf|txt|md|csv|json|odt|ods|odp|docx?|xlsx?|pptx?|rtf|epub|png|jpe?g|gif|webp|svg|heic|avif|bmp|tiff?|mp3|wav|ogg|opus|flac|m4a|mp4|mkv|webm|mov|avi|zip|7z|tar|gz)$/i;
+const OPENABLE =
+  /\.(pdf|txt|md|csv|json|odt|ods|odp|docx?|xlsx?|pptx?|rtf|epub|png|jpe?g|gif|webp|svg|heic|avif|bmp|tiff?|mp3|wav|ogg|opus|flac|m4a|mp4|mkv|webm|mov|avi|zip|7z|tar|gz)$/i;
 
 /** A request body read up to `max` bytes; null past it, whatever the Content-Length claimed. */
 async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
@@ -25,7 +46,10 @@ async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
   }
   const out = new Uint8Array(size);
   let at = 0;
-  for (const p of parts) { out.set(p, at); at += p.length; }
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
   return out;
 }
 type Json = (o: unknown, status?: number) => Response;
@@ -37,8 +61,12 @@ function card(t: Task, all: Task[], tree: Awaited<ReturnType<typeof projectTree>
   const { notes: _notes, ...rest } = t;
   const r = relations(all, t);
   return {
-    ...rest, folder: resolveProject(t.project, tree), progress: progress(t.notes), attachments: attachments(t.notes).length,
-    ...(r.waiting_for.length ? { blocked: true } : {}), ...(r.parts.length ? { parts: { done: r.parts_done, total: r.parts.length } } : {}),
+    ...rest,
+    folder: resolveProject(t.project, tree),
+    progress: progress(t.notes),
+    attachments: attachments(t.notes).length,
+    ...(r.waiting_for.length ? { blocked: true } : {}),
+    ...(r.parts.length ? { parts: { done: r.parts_done, total: r.parts.length } } : {}),
   };
 }
 
@@ -49,8 +77,12 @@ function full(t: Task, all: Task[]) {
   const r = relations(all, t);
   const byId = new Map(all.map((x) => [x.id, x]));
   return {
-    task: t, steps: steps(t.notes), progress: progress(t.notes), attachments: attachments(t.notes),
-    log: notesOf(t.notes, "log"), decisions: notesOf(t.notes, "decisions"),
+    task: t,
+    steps: steps(t.notes),
+    progress: progress(t.notes),
+    attachments: attachments(t.notes),
+    log: notesOf(t.notes, "log"),
+    decisions: notesOf(t.notes, "decisions"),
     links: {
       parent: r.parent ? brief(r.parent) : null,
       parts: r.parts.map(brief),
@@ -66,11 +98,21 @@ const page = async (t: Task) => full(t, (await listTasks()).map((x) => x.id === 
  *  Null for anything else, so the console never opens a path it was not meant to. */
 async function localPath(target: string): Promise<string | null> {
   const root = tasksRoot();
-  const abs = target.startsWith("files/") ? `${root}/${target}` : target.startsWith("~/") ? `${HOME}/${target.slice(2)}` : target;
+  const abs = target.startsWith("files/")
+    ? `${root}/${target}`
+    : target.startsWith("~/")
+    ? `${HOME}/${target.slice(2)}`
+    : target;
   if (!abs.startsWith("/")) return null;
   let real: string;
-  try { real = await Deno.realPath(abs); } catch { return null; }
-  const inside = target.startsWith("files/") ? real.startsWith(`${await Deno.realPath(root)}/files/`) : real.startsWith(`${HOME}/`);
+  try {
+    real = await Deno.realPath(abs);
+  } catch {
+    return null;
+  }
+  const inside = target.startsWith("files/")
+    ? real.startsWith(`${await Deno.realPath(root)}/files/`)
+    : real.startsWith(`${HOME}/`);
   if (!inside) return null;
   const st = await Deno.stat(real);
   if (st.isDirectory) return real;
@@ -102,7 +144,15 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
 
   if (p === "/api/tasks/op" && write) {
     const b = await req.json().catch(() => ({})) as TaskInput & {
-      op?: string; id?: string; base?: string; index?: number; done?: boolean; text?: string; target?: string; label?: string; section?: string;
+      op?: string;
+      id?: string;
+      base?: string;
+      index?: number;
+      done?: boolean;
+      text?: string;
+      target?: string;
+      label?: string;
+      section?: string;
     };
     const { op, id = "", base, index, done, text, target, label, section, ...input } = b;
     try {
@@ -112,33 +162,40 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
         const all = await listTasks();
         const cur = all.find((x) => x.id === id);
         r = await updateTask(id, cur ? resolveRefs(all, input, cur) : input, new Date(), base);
-      }
-      else if (op === "note") {
-        if (section !== "log" && section !== "decisions") return json({ ok: false, message: "a note goes in the log or in the decisions" });
-        r = await updateTask(id, (t) => ({ notes: addNote(t.notes ?? "", section, String(text ?? ""), dayOf(new Date())) }));
-      }
-      else if (op === "step") {
+      } else if (op === "note") {
+        if (section !== "log" && section !== "decisions") {
+          return json({ ok: false, message: "a note goes in the log or in the decisions" });
+        }
+        r = await updateTask(
+          id,
+          (t) => ({ notes: addNote(t.notes ?? "", section, String(text ?? ""), dayOf(new Date())) }),
+        );
+      } else if (op === "step") {
         if (!Number.isInteger(index)) return json({ ok: false, message: "a step is chosen by its index" });
         r = await updateTask(id, (t) => ({ notes: setStep(t.notes ?? "", index!, done) }));
-      }
-      else if (op === "addstep") r = await updateTask(id, (t) => ({ notes: addStep(t.notes ?? "", String(text ?? "")) }));
-      else if (op === "attach") r = await updateTask(id, (t) => ({ notes: addAttachment(t.notes ?? "", String(target ?? ""), label) }));
-      else if (op === "detach") {
+      } else if (op === "addstep") {
+        r = await updateTask(id, (t) => ({ notes: addStep(t.notes ?? "", String(text ?? "")) }));
+      } else if (op === "attach") {
+        r = await updateTask(id, (t) => ({ notes: addAttachment(t.notes ?? "", String(target ?? ""), label) }));
+      } else if (op === "detach") {
         if (!Number.isInteger(index)) return json({ ok: false, message: "an attachment is chosen by its index" });
         r = await updateTask(id, (t) => ({ notes: removeAttachment(t.notes ?? "", index!) }));
-      }
-      else return json({ ok: false, message: "unknown operation" });
+      } else return json({ ok: false, message: "unknown operation" });
       changed();
       return json({ ok: true, ...(await page(r.task)) });
     } catch (e) {
-      if (e instanceof StaleError) return json({ ok: false, stale: true, message: e.message, ...(await page(e.current)) });
+      if (e instanceof StaleError) {
+        return json({ ok: false, stale: true, message: e.message, ...(await page(e.current)) });
+      }
       return json({ ok: false, message: (e as Error).message });
     }
   }
 
   if (p === "/api/tasks/file" && write) {
     const id = req.headers.get("x-task-id") ?? "", name = decodeURIComponent(req.headers.get("x-filename") ?? "");
-    if (Number(req.headers.get("content-length") ?? 0) > TASK_FILE_MAX) return json({ ok: false, message: "over 50 MB" });
+    if (Number(req.headers.get("content-length") ?? 0) > TASK_FILE_MAX) {
+      return json({ ok: false, message: "over 50 MB" });
+    }
     try {
       if (!(await getTask(id))) return json({ ok: false, message: "no such task" });
       const bytes = await bodyUpTo(req, TASK_FILE_MAX);

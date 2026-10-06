@@ -1,6 +1,6 @@
 // Tests for cli/ask.ts: what the console asks `claude -p`, and how its stream becomes the page's.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { ancestry, askArgs, AskStream, asArg, promptFor, sessionEnv, toolKind, TOOLS } from "../ask.ts";
+import { ancestry, asArg, askArgs, AskStream, promptFor, sessionEnv, toolKind, TOOLS } from "../ask.ts";
 
 Deno.test("askArgs: the tools are a fixed list per kind, and anything else is refused", () => {
   const a = askArgs("ask", "cosa ho domani?", "now");
@@ -38,8 +38,18 @@ Deno.test("AskStream: deltas when streamed, the message otherwise, the result as
   const out = [
     ...s.line(JSON.stringify({ type: "system", session_id: "abc" })),
     ...s.line(JSON.stringify({ type: "stream_event", event: { delta: { type: "text_delta", text: "Domani " } } })),
-    ...s.line(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "mcp__tasks__tasks_brief" }] } })),
-    ...s.line(JSON.stringify({ type: "stream_event", event: { delta: { type: "text_delta", text: "niente.\n[[code:~/work/x]]" } } })),
+    ...s.line(
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "mcp__tasks__tasks_brief" }] },
+      }),
+    ),
+    ...s.line(
+      JSON.stringify({
+        type: "stream_event",
+        event: { delta: { type: "text_delta", text: "niente.\n[[code:~/work/x]]" } },
+      }),
+    ),
     ...s.line("not json"),
   ];
   assertEquals(out[0], { t: "session", id: "abc" });
@@ -52,16 +62,38 @@ Deno.test("AskStream: deltas when streamed, the message otherwise, the result as
 
   // an error the CLI reports as its result (and exit 0) is an error, not the answer
   const e = new AskStream();
-  e.line(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: "Failed to authenticate: OAuth session expired" }));
-  assertEquals(e.end(0, ""), { t: "done", text: "", code: null, error: "Failed to authenticate: OAuth session expired" });
+  e.line(
+    JSON.stringify({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result: "Failed to authenticate: OAuth session expired",
+    }),
+  );
+  assertEquals(e.end(0, ""), {
+    t: "done",
+    text: "",
+    code: null,
+    error: "Failed to authenticate: OAuth session expired",
+  });
   // …also when it came first as an assistant message
   const e2 = new AskStream();
-  e2.line(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Failed to authenticate: OAuth session expired" }] } }));
+  e2.line(
+    JSON.stringify({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Failed to authenticate: OAuth session expired" }] },
+    }),
+  );
   e2.line(JSON.stringify({ type: "result", is_error: true, result: "Failed to authenticate: OAuth session expired" }));
   assertEquals(e2.end(0, "").error, "Failed to authenticate: OAuth session expired");
 
   const f = new AskStream();
-  assertEquals(f.end(1, "warning\nError: not logged in\n"), { t: "done", text: "", code: null, error: "Error: not logged in" });
+  assertEquals(f.end(1, "warning\nError: not logged in\n"), {
+    t: "done",
+    text: "",
+    code: null,
+    error: "Error: not logged in",
+  });
 });
 
 Deno.test("toolKind: a tool's name to what the page says Claude is doing", () => {
@@ -87,7 +119,12 @@ Deno.test("sessionEnv: the graphical session's variables, unquoted; everything e
     "PATH=/usr/bin",
     "",
   ].join("\n");
-  assertEquals(sessionEnv(text), { DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0", XDG_CURRENT_DESKTOP: "KDE", XAUTHORITY: "/run/user/1000/xauth_ab cd" });
+  assertEquals(sessionEnv(text), {
+    DISPLAY: ":0",
+    WAYLAND_DISPLAY: "wayland-0",
+    XDG_CURRENT_DESKTOP: "KDE",
+    XAUTHORITY: "/run/user/1000/xauth_ab cd",
+  });
   assertEquals(sessionEnv(""), {});
 });
 

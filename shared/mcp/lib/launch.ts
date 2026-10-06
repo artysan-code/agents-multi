@@ -54,7 +54,9 @@ export function parseLaunchArgs(argv: string[]): LaunchArgs {
   }
   let i = 0;
   for (; i < rest.length && rest[i] !== "--"; i++) {
-    if ((rest[i] !== "--env" && rest[i] !== "--bind") || i + 1 >= rest.length) throw new Error(`launch.ts: unexpected "${rest[i]}" before --`);
+    if ((rest[i] !== "--env" && rest[i] !== "--bind") || i + 1 >= rest.length) {
+      throw new Error(`launch.ts: unexpected "${rest[i]}" before --`);
+    }
     pair(rest[i] === "--env" ? vars : binds)(rest[++i]);
   }
   const [command, ...args] = rest.slice(i + 1);
@@ -80,8 +82,13 @@ export function bindArgs(binding: unknown, service: string, binds: Record<string
   for (const [key, tpl] of Object.entries(binds)) {
     const v = (mine as Record<string, unknown>)[key];
     if (v === undefined || v === null || v === false) continue;
-    if (v === true) { out.push(tpl); continue; }
-    if (typeof v !== "string" || !/^[\w.-]+$/.test(v)) throw new Error(`${BINDING_FILE}: ${service}.${key} must be a plain word, or true/false`);
+    if (v === true) {
+      out.push(tpl);
+      continue;
+    }
+    if (typeof v !== "string" || !/^[\w.-]+$/.test(v)) {
+      throw new Error(`${BINDING_FILE}: ${service}.${key} must be a plain word, or true/false`);
+    }
     out.push(tpl.replaceAll("{value}", v));
   }
   return out;
@@ -102,8 +109,17 @@ export function findBinding(dir: string, home: string): { path: string; binding:
   for (const d of bindingDirs(dir, home)) {
     const p = `${d}/${BINDING_FILE}`;
     let text: string;
-    try { text = Deno.readTextFileSync(p); } catch (e) { if (e instanceof Deno.errors.NotFound) continue; throw e; }
-    try { return { path: p, binding: JSON.parse(text) }; } catch { throw new Error(`${p}: not valid JSON`); }
+    try {
+      text = Deno.readTextFileSync(p);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) continue;
+      throw e;
+    }
+    try {
+      return { path: p, binding: JSON.parse(text) };
+    } catch {
+      throw new Error(`${p}: not valid JSON`);
+    }
   }
   return null;
 }
@@ -117,7 +133,11 @@ async function main() {
   let vars = a.vars;
   if (needsSecret(vars)) {
     const secret = await getSecret(a.service, account.name);
-    if (!secret) throw new Error(`no secret for ${a.service}/${account.name} on this machine: console › Connections, or claude-multi vault set ${a.service} ${account.name}`);
+    if (!secret) {
+      throw new Error(
+        `no secret for ${a.service}/${account.name} on this machine: console › Connections, or claude-multi vault set ${a.service} ${account.name}`,
+      );
+    }
     vars = fill(vars, secret);
   }
   if (a.mode === "headers") {
@@ -129,14 +149,26 @@ async function main() {
     const found = findBinding(Deno.cwd(), Deno.env.get("HOME") ?? "/nonexistent");
     const extra = found ? bindArgs(found.binding, a.service, a.binds) : [];
     // stderr is the server's log in the client: what it is tied to, or that it is not
-    console.error(extra.length
-      ? `${a.service}-${account.name}: ${extra.join(" ")} (${found!.path})`
-      : `${a.service}-${account.name}: not bound to a project (no "${a.service}" in a ${BINDING_FILE} from ${Deno.cwd()} up)`);
+    console.error(
+      extra.length
+        ? `${a.service}-${account.name}: ${extra.join(" ")} (${found!.path})`
+        : `${a.service}-${account.name}: not bound to a project (no "${a.service}" in a ${BINDING_FILE} from ${Deno.cwd()} up)`,
+    );
     args = [...args, ...extra];
   }
-  const child = new Deno.Command(a.command!, { args, env: vars, stdin: "inherit", stdout: "inherit", stderr: "inherit" }).spawn();
+  const child = new Deno.Command(a.command!, {
+    args,
+    env: vars,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  }).spawn();
   for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
-    Deno.addSignalListener(sig, () => { try { child.kill(sig); } catch { /* already gone */ } });
+    Deno.addSignalListener(sig, () => {
+      try {
+        child.kill(sig);
+      } catch { /* already gone */ }
+    });
   }
   Deno.exit((await child.status).code);
 }

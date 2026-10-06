@@ -177,24 +177,24 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `claude` | Claude Code on the default profile |
-| `claude-agency`, `claude-acme` | Claude Code on that profile (each profile declares its own `command`) |
-| `claude-multi install [--dry-run]` | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent |
-| `claude-multi settings [--dry-run]` | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it |
-| `claude-multi doctor [--json\|--notify]` | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a *new* failure appears, or when everything clears |
-| `claude-multi status [--json]` | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
-| `claude-multi sync [--fetch]` | align the repository from the remote (fetch when stale, ff-only pull on a clean tree) |
-| `claude-multi mcp check\|sync\|health` | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server |
-| `claude-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and claude-multi itself |
-| `claude-multi usage [--by …] [--since …]` | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite) |
-| `claude-multi serve [--no-open]` | the console on `http://127.0.0.1:7331` (normally already running as a unit) |
-| `claude-multi vault status\|init\|pair\|set\|delete\|import-legacy` | the secret vault the MCP servers read their credentials from (below) |
-| `claude-multi tasks brief\|add\|done\|remind\|migrate` | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain |
-| `claude-multi google client <file.json>\|connect <account>` | the Google OAuth client, and connecting an account |
-| `claude-launch <profile>` | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app |
-| `claude-multi-app [--tray\|--hey\|--pick]` | the desktop app: console window, tray icon, Hey Claude, the profile picker (below) |
+| Command                                                               | What it does                                                                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `claude`                                                              | Claude Code on the default profile                                                                                                                           |
+| `claude-agency`, `claude-acme`                                      | Claude Code on that profile (each profile declares its own `command`)                                                                                        |
+| `claude-multi install [--dry-run]`                                    | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent                                                              |
+| `claude-multi settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                       |
+| `claude-multi doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears          |
+| `claude-multi status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
+| `claude-multi sync [--fetch]`                                         | align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                        |
+| `claude-multi mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                 |
+| `claude-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and claude-multi itself                                                                                                   |
+| `claude-multi usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                       |
+| `claude-multi serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally already running as a unit)                                                                                  |
+| `claude-multi vault status\|init\|pair\|set\|delete\|import-legacy`   | the secret vault the MCP servers read their credentials from (below)                                                                                         |
+| `claude-multi tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                               |
+| `claude-multi google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                           |
+| `claude-launch <profile>`                                             | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                   |
+| `claude-multi-app [--tray\|--hey\|--pick]`                            | the desktop app: console window, tray icon, Hey Claude, the profile picker (below)                                                                           |
 
 `claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -273,7 +273,7 @@ tunnel still reaches it.
   `--tray`. One instance per session: a second start hands its request to the first over
   `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
 
-- **Claude in the menu** — one entry, *Claude*, for every profile: it runs `claude-multi-app --pick`,
+- **Claude in the menu** — one entry, _Claude_, for every profile: it runs `claude-multi-app --pick`,
   a small window that lists the profiles (with the account each is signed in to, and which Desktop
   is already open) and opens the chosen one through `claude-launch` — or brings it forward when it
   is open. ↑ ↓ or 1–9, Enter, Esc. The per-profile entries are still installed, hidden from the menu
@@ -393,8 +393,8 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
 
 The `google` server works on every Google account in `accounts.json` (service `google`: personal,
 acme…), each profile seeing its own. One OAuth client serves them all: create it once in a Google
-Cloud project (APIs: Gmail, Calendar, Drive; consent screen *External* and **published** — in
-*Testing* refresh tokens expire after seven days; client type *Desktop app*), download its JSON and
+Cloud project (APIs: Gmail, Calendar, Drive; consent screen _External_ and **published** — in
+_Testing_ refresh tokens expire after seven days; client type _Desktop app_), download its JSON and
 import it (console › Connections, or `claude-multi google client <file.json>`). Then each account:
 add it, press **Connect**, grant access in the browser (loopback redirect with PKCE); the refresh
 token goes to the vault and the address next to the account's name.
@@ -542,8 +542,8 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   wrapper, prunes old versions (keeping N-1) and fixes the `claude-cli://` handler. Open sessions
   keep running on the version they started with.
 - **Claude Desktop** lives in user space, `~/.local/lib/claude-desktop/versions/<ver>` with
-  `current` pointing at the one in use — no root at any step. `claude-desktop-update` *stages* a
-  new version (download, verify, extract) at any time, and *applies* it (flip `current`, rebuild
+  `current` pointing at the one in use — no root at any step. `claude-desktop-update` _stages_ a
+  new version (download, verify, extract) at any time, and _applies_ it (flip `current`, rebuild
   each profile's variant, install the icons) only when no Claude Desktop runs: replacing files
   under a running Electron app crashes it. `claude-launch` applies a staged version right before it
   starts the app, so in practice an update lands at the next launch. The previous version is kept.

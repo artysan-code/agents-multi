@@ -3,7 +3,7 @@
 // request reaches a database through `open(user)`, with the account the token or the session gave,
 // never with a path built anywhere else. A person's data and another's never share a file.
 
-import { indexer, type EmbedConfig } from "./embed.ts";
+import { type EmbedConfig, indexer } from "./embed.ts";
 import { Store } from "./store.ts";
 import { USER_ID } from "./users.ts";
 import { fromFile, type Task, type TaskStore, toFile } from "../shared/mcp/lib/tasks.ts";
@@ -35,12 +35,19 @@ export class Tenants {
     const index = indexer(store, this.embed);
     // tasks live here as documents under tasks/, with the rules of shared/mcp/lib/tasks.ts on top
     const tasks: TaskStore = {
-      list: () => Promise.resolve(
-        (store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as { body: string }[])
-          .map((r) => fromFile(r.body)).filter((t): t is Task => !!t),
-      ),
+      list: () =>
+        Promise.resolve(
+          (store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as {
+            body: string;
+          }[])
+            .map((r) => fromFile(r.body)).filter((t): t is Task => !!t),
+        ),
       get: (id) => Promise.resolve(fromFile(store.get(`tasks/${id}.md`)?.body ?? "")),
-      write: (t) => { store.write(`tasks/${t.id}.md`, toFile(t), this.by()); index.kick(); return Promise.resolve(); },
+      write: (t) => {
+        store.write(`tasks/${t.id}.md`, toFile(t), this.by());
+        index.kick();
+        return Promise.resolve();
+      },
     };
     const t: Tenant = { user, file, store, index, tasks };
     this.open_.set(user, t);
@@ -49,7 +56,10 @@ export class Tenants {
 
   /** Every open brain closed: its indexer stopped, its file released. */
   close() {
-    for (const t of this.open_.values()) { t.index.stop(); t.store.db.close(); }
+    for (const t of this.open_.values()) {
+      t.index.stop();
+      t.store.db.close();
+    }
     this.open_.clear();
   }
 

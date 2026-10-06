@@ -10,7 +10,12 @@
 import { loadSettings } from "../shared/mcp/lib/tasks.ts";
 import { HOME } from "./lib.ts";
 
-export interface ProjectNode { path: string; name: string; depth: number; repo: boolean }
+export interface ProjectNode {
+  path: string;
+  name: string;
+  depth: number;
+  repo: boolean;
+}
 const DEFAULT_ROOTS = ["personal", "work", "university"];
 const SKIP = /^(\.|_|node_modules$|archive$|archivio$|backups?$)/i;
 const MAX_DEPTH = 3, MAX_NODES = 600;
@@ -24,7 +29,9 @@ export async function projectTree(): Promise<ProjectNode[]> {
     const kids: string[] = [];
     try {
       for await (const e of Deno.readDir(`${HOME}/${rel}`)) if (e.isDirectory && !SKIP.test(e.name)) kids.push(e.name);
-    } catch { return; }
+    } catch {
+      return;
+    }
     for (const name of kids.sort((a, b) => a.localeCompare(b))) {
       const path = `${rel}/${name}`;
       const repo = await Deno.stat(`${HOME}/${path}/.git`).then(() => true, () => false);
@@ -47,6 +54,8 @@ export function resolveProject(value: string | undefined, tree: ProjectNode[]): 
   const v = value.trim().replace(/^~\//, "").replace(/\/+$/, "");
   if (tree.some((n) => n.path === v)) return v;
   const low = v.toLowerCase();
-  const hits = tree.filter((n) => n.name.toLowerCase() === low).sort((a, b) => a.depth - b.depth || a.path.localeCompare(b.path));
+  const hits = tree.filter((n) => n.name.toLowerCase() === low).sort((a, b) =>
+    a.depth - b.depth || a.path.localeCompare(b.path)
+  );
   return hits[0]?.path ?? null;
 }

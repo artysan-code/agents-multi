@@ -27,7 +27,15 @@ export const MIN_PASSPHRASE = 12;
 const INVITE_DAYS = 7;
 const PBKDF2_ITERATIONS = 310_000;
 
-export interface User { id: string; name: string; language: string; admin: boolean; disabled: boolean; ready: boolean; created: string }
+export interface User {
+  id: string;
+  name: string;
+  language: string;
+  admin: boolean;
+  disabled: boolean;
+  ready: boolean;
+  created: string;
+}
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
@@ -41,7 +49,9 @@ export async function masterKey(b64key: string): Promise<CryptoKey> {
 }
 async function wrap(key: CryptoKey, plain: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  return `${b64(iv)}.${b64(new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plain))))}`;
+  return `${b64(iv)}.${
+    b64(new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plain))))
+  }`;
 }
 async function unwrap(key: CryptoKey, sealed: string): Promise<string> {
   const [iv, ct] = sealed.split(".");
@@ -49,9 +59,15 @@ async function unwrap(key: CryptoKey, sealed: string): Promise<string> {
 }
 
 /** A passphrase as its PBKDF2-SHA256 hash: `pbkdf2$<iterations>$<salt>$<hash>`. */
-export async function hashPassphrase(pass: string, salt = crypto.getRandomValues(new Uint8Array(16)), iterations = PBKDF2_ITERATIONS): Promise<string> {
+export async function hashPassphrase(
+  pass: string,
+  salt = crypto.getRandomValues(new Uint8Array(16)),
+  iterations = PBKDF2_ITERATIONS,
+): Promise<string> {
   const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveBits"]);
-  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base, 256));
+  const bits = new Uint8Array(
+    await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base, 256),
+  );
   return `pbkdf2$${iterations}$${b64(salt)}$${b64(bits)}`;
 }
 export async function passphraseOk(pass: string, stored: string): Promise<boolean> {
@@ -62,7 +78,9 @@ export async function passphraseOk(pass: string, stored: string): Promise<boolea
 
 /** Pure: what is wrong with a new account's id and name, or null. */
 export function accountError(id: string, name: string): string | null {
-  if (!USER_ID.test(id)) return "l'id è fatto di lettere minuscole, cifre, - o _, comincia con una lettera, da 2 a 31 caratteri";
+  if (!USER_ID.test(id)) {
+    return "l'id è fatto di lettere minuscole, cifre, - o _, comincia con una lettera, da 2 a 31 caratteri";
+  }
   if (!name.trim() || name.length > 60) return "serve un nome, al massimo 60 caratteri";
   return null;
 }
@@ -72,15 +90,26 @@ export class Users {
     db.exec(SCHEMA);
   }
 
-  private row = (r: Record<string, unknown> | undefined): User | null => r
-    ? { id: String(r.id), name: String(r.name), language: String(r.language), admin: !!r.admin, disabled: !!r.disabled, ready: !!r.pass, created: String(r.created) }
-    : null;
+  private row = (r: Record<string, unknown> | undefined): User | null =>
+    r
+      ? {
+        id: String(r.id),
+        name: String(r.name),
+        language: String(r.language),
+        admin: !!r.admin,
+        disabled: !!r.disabled,
+        ready: !!r.pass,
+        created: String(r.created),
+      }
+      : null;
 
   get(id: string): User | null {
     return this.row(this.db.prepare("select * from users where id = ?").get(id) as Record<string, unknown> | undefined);
   }
   list(): User[] {
-    return (this.db.prepare("select * from users order by created").all() as Record<string, unknown>[]).map((r) => this.row(r)!);
+    return (this.db.prepare("select * from users order by created").all() as Record<string, unknown>[]).map((r) =>
+      this.row(r)!
+    );
   }
   count(): number {
     return (this.db.prepare("select count(*) n from users").get() as { n: number }).n;
@@ -88,13 +117,29 @@ export class Users {
 
   /** The first account, the administrator, from the credentials the service ran with before it
    *  served several people: their passphrase, TOTP secret and backup key carry over unchanged. */
-  async bootstrap(a: { id: string; name: string; language: string; passphrase: string; totpSecret: string | null; backupKey?: string }) {
+  async bootstrap(
+    a: {
+      id: string;
+      name: string;
+      language: string;
+      passphrase: string;
+      totpSecret: string | null;
+      backupKey?: string;
+    },
+  ) {
     if (this.count()) return;
     const err = accountError(a.id, a.name);
     if (err) throw new Error(`BRAIN_ADMIN_ID: ${err}`);
-    this.db.prepare("insert into users (id, name, language, pass, totp, backup, admin, created) values (?, ?, ?, ?, ?, ?, 1, ?)").run(
-      a.id, a.name, a.language, await hashPassphrase(a.passphrase), a.totpSecret ? await wrap(this.key, a.totpSecret) : null,
-      await wrap(this.key, a.backupKey ?? b64(crypto.getRandomValues(new Uint8Array(32)))), new Date().toISOString(),
+    this.db.prepare(
+      "insert into users (id, name, language, pass, totp, backup, admin, created) values (?, ?, ?, ?, ?, ?, 1, ?)",
+    ).run(
+      a.id,
+      a.name,
+      a.language,
+      await hashPassphrase(a.passphrase),
+      a.totpSecret ? await wrap(this.key, a.totpSecret) : null,
+      await wrap(this.key, a.backupKey ?? b64(crypto.getRandomValues(new Uint8Array(32)))),
+      new Date().toISOString(),
     );
   }
 
@@ -105,7 +150,12 @@ export class Users {
     if (err) throw new Error(err);
     if (this.get(id)) throw new Error(`l'account ${id} esiste già`);
     this.db.prepare("insert into users (id, name, language, backup, admin, created) values (?, ?, ?, ?, ?, ?)").run(
-      id, name.trim(), language.trim() || "Italian", await wrap(this.key, b64(crypto.getRandomValues(new Uint8Array(32)))), admin ? 1 : 0, new Date().toISOString(),
+      id,
+      name.trim(),
+      language.trim() || "Italian",
+      await wrap(this.key, b64(crypto.getRandomValues(new Uint8Array(32)))),
+      admin ? 1 : 0,
+      new Date().toISOString(),
     );
     return await this.reinvite(id);
   }
@@ -115,15 +165,25 @@ export class Users {
   async reinvite(id: string): Promise<string> {
     if (!this.get(id)) throw new Error(`nessun account ${id}`);
     const t = randomToken();
-    this.db.prepare("update users set pass = null, totp = ? where id = ?").run(await wrap(this.key, base32Encode(crypto.getRandomValues(new Uint8Array(20)))), id);
+    this.db.prepare("update users set pass = null, totp = ? where id = ?").run(
+      await wrap(this.key, base32Encode(crypto.getRandomValues(new Uint8Array(20)))),
+      id,
+    );
     this.db.prepare("delete from invites where user = ? or expires < ?").run(id, Date.now());
-    this.db.prepare("insert into invites (hash, user, expires) values (?, ?, ?)").run(await sha256(t), id, Date.now() + INVITE_DAYS * 86400_000);
+    this.db.prepare("insert into invites (hash, user, expires) values (?, ?, ?)").run(
+      await sha256(t),
+      id,
+      Date.now() + INVITE_DAYS * 86400_000,
+    );
     return t;
   }
 
   /** The account an invitation opens and the TOTP secret to show, or null when it is not valid. */
   async invitation(token: string): Promise<{ user: User; totpSecret: string } | null> {
-    const r = this.db.prepare("select user, expires from invites where hash = ?").get(await sha256(token)) as { user: string; expires: number } | undefined;
+    const r = this.db.prepare("select user, expires from invites where hash = ?").get(await sha256(token)) as {
+      user: string;
+      expires: number;
+    } | undefined;
     if (!r || r.expires < Date.now()) return null;
     const user = this.get(r.user);
     const t = this.db.prepare("select totp from users where id = ?").get(r.user) as { totp: string | null } | undefined;
@@ -143,7 +203,11 @@ export class Users {
 
   /** Whether these are the person's passphrase and current TOTP code (an active, ready account). */
   async verify(id: string, passphrase: string, code: string): Promise<boolean> {
-    const r = this.db.prepare("select pass, totp, disabled from users where id = ?").get(id) as { pass: string | null; totp: string | null; disabled: number } | undefined;
+    const r = this.db.prepare("select pass, totp, disabled from users where id = ?").get(id) as {
+      pass: string | null;
+      totp: string | null;
+      disabled: number;
+    } | undefined;
     if (!r?.pass || r.disabled) {
       await hashPassphrase(passphrase); // the same time as a real check: no telling which ids exist
       return false;

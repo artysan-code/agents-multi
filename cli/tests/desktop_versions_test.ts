@@ -10,7 +10,11 @@ Deno.test("cmpVersion: numeric, not lexical", () => {
 });
 
 Deno.test("desktopVersions: in use, staged above it, previous below it", () => {
-  assertEquals(desktopVersions(["2.9.0", "2.10.0", "2.8.1"], "2.9.0"), { current: "2.9.0", staged: "2.10.0", previous: "2.8.1" });
+  assertEquals(desktopVersions(["2.9.0", "2.10.0", "2.8.1"], "2.9.0"), {
+    current: "2.9.0",
+    staged: "2.10.0",
+    previous: "2.8.1",
+  });
   assertEquals(desktopVersions(["2.9.0", "2.8.1"], "2.9.0"), { current: "2.9.0", staged: null, previous: "2.8.1" });
 });
 

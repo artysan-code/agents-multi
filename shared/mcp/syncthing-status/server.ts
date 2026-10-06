@@ -13,7 +13,10 @@ function configPath(): string {
   const env = Deno.env.get("ST_CONFIG");
   if (env) return env;
   for (const p of [`${HOME}/.local/state/syncthing/config.xml`, `${HOME}/.config/syncthing/config.xml`]) {
-    try { Deno.statSync(p); return p; } catch { /* next */ }
+    try {
+      Deno.statSync(p);
+      return p;
+    } catch { /* next */ }
   }
   return `${HOME}/.local/state/syncthing/config.xml`;
 }
@@ -34,12 +37,24 @@ async function st(path: string): Promise<any> {
   if (!r.ok) throw new Error(`${path} -> HTTP ${r.status}`);
   return await r.json();
 }
-const txt = (o: unknown) => ({ content: [{ type: "text" as const, text: typeof o === "string" ? o : JSON.stringify(o, null, 2) }] });
+const txt = (o: unknown) => ({
+  content: [{ type: "text" as const, text: typeof o === "string" ? o : JSON.stringify(o, null, 2) }],
+});
 
-async function* walk(root: string, pick: (e: Deno.DirEntry) => boolean, prune: (n: string) => boolean, max = 8, d = 0): AsyncGenerator<string> {
+async function* walk(
+  root: string,
+  pick: (e: Deno.DirEntry) => boolean,
+  prune: (n: string) => boolean,
+  max = 8,
+  d = 0,
+): AsyncGenerator<string> {
   if (d > max) return;
   let entries: Deno.DirEntry[];
-  try { entries = [...Deno.readDirSync(root)]; } catch { return; }
+  try {
+    entries = [...Deno.readDirSync(root)];
+  } catch {
+    return;
+  }
   for (const e of entries) {
     const p = `${root}/${e.name}`;
     if (pick(e)) yield p;
@@ -50,16 +65,21 @@ async function* walk(root: string, pick: (e: Deno.DirEntry) => boolean, prune: (
 const server = new McpServer({ name: "syncthing-status", version: "0.1.0" });
 
 server.registerTool("syncthing_status", {
-  description: "Stato generale di Syncthing locale: versione, device, uptime, n. folder/device, connessioni attive, errori di sistema.",
+  description:
+    "Stato generale di Syncthing locale: versione, device, uptime, n. folder/device, connessioni attive, errori di sistema.",
   inputSchema: {},
 }, async () => {
   const [ver, sys, cfg, conns, errs] = await Promise.all([
-    st("/rest/system/version"), st("/rest/system/status"), st("/rest/config"),
-    st("/rest/system/connections"), st("/rest/system/error"),
+    st("/rest/system/version"),
+    st("/rest/system/status"),
+    st("/rest/config"),
+    st("/rest/system/connections"),
+    st("/rest/system/error"),
   ]);
   const connected = Object.values(conns.connections ?? {}).filter((c: any) => c.connected).length;
   return txt({
-    version: ver.version, os: `${ver.os}/${ver.arch}`,
+    version: ver.version,
+    os: `${ver.os}/${ver.arch}`,
     myID: String(sys.myID ?? "").slice(0, 7),
     uptime_h: Math.round((sys.uptime ?? 0) / 360) / 10,
     folders: (cfg.folders ?? []).length,
@@ -70,31 +90,48 @@ server.registerTool("syncthing_status", {
 });
 
 server.registerTool("syncthing_folders", {
-  description: "Stato per-folder: label, path, tipo (sendreceive/receiveencrypted), stato, file da sincronizzare, errori.",
+  description:
+    "Stato per-folder: label, path, tipo (sendreceive/receiveencrypted), stato, file da sincronizzare, errori.",
   inputSchema: {},
 }, async () => {
   const cfg = await st("/rest/config");
   const rows = [];
   for (const f of cfg.folders ?? []) {
     let s: any = {};
-    try { s = await st(`/rest/db/status?folder=${encodeURIComponent(f.id)}`); } catch { /* */ }
+    try {
+      s = await st(`/rest/db/status?folder=${encodeURIComponent(f.id)}`);
+    } catch { /* */ }
     rows.push({
-      label: f.label || f.id, id: f.id, path: f.path, type: f.type, paused: !!f.paused,
-      state: s.state ?? "?", needFiles: s.needFiles ?? 0, needDeletes: s.needDeletes ?? 0,
-      pullErrors: s.pullErrors ?? s.errors ?? 0, globalFiles: s.globalFiles ?? 0,
+      label: f.label || f.id,
+      id: f.id,
+      path: f.path,
+      type: f.type,
+      paused: !!f.paused,
+      state: s.state ?? "?",
+      needFiles: s.needFiles ?? 0,
+      needDeletes: s.needDeletes ?? 0,
+      pullErrors: s.pullErrors ?? s.errors ?? 0,
+      globalFiles: s.globalFiles ?? 0,
     });
   }
   return txt(rows);
 });
 
 server.registerTool("syncthing_conflicts", {
-  description: "Cerca file di conflitto Syncthing (*.sync-conflict-*) nelle cartelle sincronizzate. Vanno risolti/rimossi.",
+  description:
+    "Cerca file di conflitto Syncthing (*.sync-conflict-*) nelle cartelle sincronizzate. Vanno risolti/rimossi.",
   inputSchema: {},
 }, async () => {
   const cfg = await st("/rest/config");
   const found: string[] = [];
   for (const f of cfg.folders ?? []) {
-    for await (const e of walk(f.path, (e) => e.isFile && e.name.includes(".sync-conflict-"), (n) => n === "node_modules" || n === ".stversions")) found.push(e);
+    for await (
+      const e of walk(
+        f.path,
+        (e) => e.isFile && e.name.includes(".sync-conflict-"),
+        (n) => n === "node_modules" || n === ".stversions",
+      )
+    ) found.push(e);
   }
   return txt(found.length ? { count: found.length, files: found } : "Nessun file *.sync-conflict-* trovato. ✓");
 });
@@ -106,11 +143,14 @@ async function gitTracked(repoAbs: string): Promise<string[]> {
     const { code, stdout } = await cmd.output();
     if (code !== 0) return [];
     return new TextDecoder().decode(stdout).split("\0").filter(Boolean);
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 server.registerTool("syncthing_git_guard", {
-  description: "REGOLA CRITICA (v2): per ogni repo git dentro un folder 'sendreceive' verifica cosa Syncthing sincronizza DAVVERO. Domanda giusta: '.git e i file tracciati vengono sincronizzati?' (non 'la cartella-repo è esclusa?'). .git sincronizzato => corruzione del repo (CRITICAL). File tracciati sincronizzati => drift del working-tree (WARN). Solo gitignorato-prezioso sincronizzato => partizione corretta (OK).",
+  description:
+    "REGOLA CRITICA (v2): per ogni repo git dentro un folder 'sendreceive' verifica cosa Syncthing sincronizza DAVVERO. Domanda giusta: '.git e i file tracciati vengono sincronizzati?' (non 'la cartella-repo è esclusa?'). .git sincronizzato => corruzione del repo (CRITICAL). File tracciati sincronizzati => drift del working-tree (WARN). Solo gitignorato-prezioso sincronizzato => partizione corretta (OK).",
   inputSchema: {},
 }, async () => {
   const cfg = await st("/rest/config");
@@ -120,9 +160,17 @@ server.registerTool("syncthing_git_guard", {
     if (f.type !== "sendreceive") continue;
     let pats: string[] = [];
     // .expanded, non .ignore: le righe grezze sono solo `#include .stignore-common` (vedi ignore.ts)
-    try { pats = (await st(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).expanded ?? []; } catch { /* */ }
+    try {
+      pats = (await st(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).expanded ?? [];
+    } catch { /* */ }
     const compiled = pats.map(compilePattern).filter((c): c is Compiled => c !== null);
-    for await (const g of walk(f.path, (e) => e.isDirectory && e.name === ".git", (n) => n === "node_modules" || n === ".git" || n === ".stversions")) {
+    for await (
+      const g of walk(
+        f.path,
+        (e) => e.isDirectory && e.name === ".git",
+        (n) => n === "node_modules" || n === ".git" || n === ".stversions",
+      )
+    ) {
       const repoAbs = g.replace(/\/?\.git$/, "");
       const base = repoAbs.slice(f.path.length).replace(/^\/+/, "");
       const join = (sub: string) => (base ? `${base}/${sub}` : sub);
@@ -136,11 +184,16 @@ server.registerTool("syncthing_git_guard", {
       const risk = gitDirSynced
         ? "🔴 CRITICAL — .git sincronizzato (rischio corruzione repo)"
         : exposed > 0
-          ? `🟡 WARN — ${exposed}${truncated ? "+" : ""}/${tracked.length} file tracciati sincronizzati (drift working-tree)`
-          : "🟢 OK — partizione corretta (solo gitignorato-prezioso sincronizzato)";
+        ? `🟡 WARN — ${exposed}${
+          truncated ? "+" : ""
+        }/${tracked.length} file tracciati sincronizzati (drift working-tree)`
+        : "🟢 OK — partizione corretta (solo gitignorato-prezioso sincronizzato)";
       report.push({
-        folder: f.label || f.id, repo: base || "(root)",
-        gitDirSynced, trackedExposed: exposed, trackedTotal: tracked.length,
+        folder: f.label || f.id,
+        repo: base || "(root)",
+        gitDirSynced,
+        trackedExposed: exposed,
+        trackedTotal: tracked.length,
         ...(truncated ? { note: `ispezionati i primi ${CAP} file tracciati` } : {}),
         risk,
       });
@@ -149,7 +202,10 @@ server.registerTool("syncthing_git_guard", {
   const critical = report.filter((r) => r.gitDirSynced).length;
   const warn = report.filter((r) => !r.gitDirSynced && r.trackedExposed > 0).length;
   return txt({
-    checked: report.length, critical, warn, ok: report.length - critical - warn,
+    checked: report.length,
+    critical,
+    warn,
+    ok: report.length - critical - warn,
     repos: report.length ? report : "Nessuna repo git dentro folder sendreceive.",
   });
 });

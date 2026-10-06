@@ -11,7 +11,11 @@ const SKIP = /\/(tests|node_modules)(\/|$)/;
 
 async function files(dir: string, out: string[]) {
   let entries: Deno.DirEntry[];
-  try { entries = [...Deno.readDirSync(`${REPO}/${dir}`)]; } catch { return; }
+  try {
+    entries = [...Deno.readDirSync(`${REPO}/${dir}`)];
+  } catch {
+    return;
+  }
   for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const rel = `${dir}/${e.name}`;
     if (SKIP.test(`/${rel}`)) continue;
@@ -33,7 +37,10 @@ export async function codeVersion(): Promise<string> {
   }
   const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let o = 0;
-  for (const p of parts) { all.set(p, o); o += p.length; }
+  for (const p of parts) {
+    all.set(p, o);
+    o += p.length;
+  }
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", all));
   return [...h.slice(0, 6)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

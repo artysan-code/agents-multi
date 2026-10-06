@@ -40,50 +40,90 @@ import { brainAccount } from "../shared/mcp/lib/brain-tasks.ts";
 
 const [cmd = "help", ...rest] = Deno.args;
 const flag = (f: string) => rest.includes(f);
-const opt = (name: string, def?: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : def; };
+const opt = (name: string, def?: string) => {
+  const i = rest.indexOf(name);
+  return i >= 0 ? rest[i + 1] : def;
+};
 
 switch (cmd) {
-  case "init": Deno.exit(await init(rest)); break;
-  case "install": Deno.exit(await install(flag("--dry-run"))); break;
+  case "init":
+    Deno.exit(await init(rest));
+    break;
+  case "install":
+    Deno.exit(await install(flag("--dry-run")));
+    break;
   case "settings": {
     const dry = flag("--dry-run");
     for (const r of await syncAllSettings({ dry })) {
       const pre = dry ? `${ANSI.d}(dry)${ANSI.x} ` : "";
-      if (r.adopted.length) console.log(`  ${pre}${r.profile}: adopted into profiles/${r.profile}/settings.json: ${r.adopted.join(", ")}`);
-      if (r.orphan) console.log(`  ${pre}${r.profile}: settings.json had no record of being generated, kept aside as ${r.orphan}`);
-      if (r.wrote && !flag("--quiet")) console.log(`  ${pre}${r.profile}/settings.json ${r.migrated ? "generated (was a link to shared/)" : "regenerated"}`);
+      if (r.adopted.length) {
+        console.log(`  ${pre}${r.profile}: adopted into profiles/${r.profile}/settings.json: ${r.adopted.join(", ")}`);
+      }
+      if (r.orphan) {
+        console.log(`  ${pre}${r.profile}: settings.json had no record of being generated, kept aside as ${r.orphan}`);
+      }
+      if (r.wrote && !flag("--quiet")) {
+        console.log(
+          `  ${pre}${r.profile}/settings.json ${r.migrated ? "generated (was a link to shared/)" : "regenerated"}`,
+        );
+      }
     }
     break;
   }
   case "doctor": {
     const c = await doctor({ probe: flag("--probe") });
-    if (flag("--notify")) { const sent = await notifyDoctor(c, { dryRun: flag("--dry-run") }); console.log(sent ? "notification sent" : "nothing new, no notification"); break; }
-    if (flag("--json")) console.log(JSON.stringify(c, null, 2)); else Deno.exit(printDoctor(c));
+    if (flag("--notify")) {
+      const sent = await notifyDoctor(c, { dryRun: flag("--dry-run") });
+      console.log(sent ? "notification sent" : "nothing new, no notification");
+      break;
+    }
+    if (flag("--json")) console.log(JSON.stringify(c, null, 2));
+    else Deno.exit(printDoctor(c));
     break;
   }
   case "status": {
     const s = await status();
-    if (flag("--json")) console.log(JSON.stringify(s, null, 2)); else { printStatus(s); printDoctor(s.doctor); }
+    if (flag("--json")) console.log(JSON.stringify(s, null, 2));
+    else {
+      printStatus(s);
+      printDoctor(s.doctor);
+    }
     break;
   }
   case "sync": {
-    const env: Record<string, string> = flag("--fetch") ? { CLAUDE_MULTI_FETCH_TTL: "0", CLAUDE_MULTI_FETCH_TIMEOUT: "15" } : {};
+    const env: Record<string, string> = flag("--fetch")
+      ? { CLAUDE_MULTI_FETCH_TTL: "0", CLAUDE_MULTI_FETCH_TIMEOUT: "15" }
+      : {};
     const r = await run("bash", [`${REPO}/bin/lib/prelaunch.sh`], { env });
     if (r.err) console.error(r.err);
     const st = await readJson(`${CACHE}/sync.json`) as Record<string, unknown> | null;
-    if (st) console.log(`repo ${st.upstream ? "" : "(no upstream) "}↓${st.behind} ↑${st.ahead} ✎${st.dirty}${st.pulled ? `  pulled +${st.pulled}` : ""}${st.fetch_ok ? "" : "  (fetch failed: offline?)"}`);
-    else console.log("no sync state (repository without .git?)");
+    if (st) {
+      console.log(
+        `repo ${st.upstream ? "" : "(no upstream) "}↓${st.behind} ↑${st.ahead} ✎${st.dirty}${
+          st.pulled ? `  pulled +${st.pulled}` : ""
+        }${st.fetch_ok ? "" : "  (fetch failed: offline?)"}`,
+      );
+    } else console.log("no sync state (repository without .git?)");
     break;
   }
   case "mcp": {
     const sub = rest[0] ?? "check";
-    if (sub === "health") { Deno.exit(printDoctor(await health({ live: flag("--probe") }))); }
+    if (sub === "health") Deno.exit(printDoctor(await health({ live: flag("--probe") })));
     const { changes, skipped } = await plan();
     for (const t of skipped) console.log(`  ${ANSI.d}skipping ${t.managedKey}: ${t.path} is missing${ANSI.x}`);
-    if (!changes.length) { console.log("MCP registry already applied on every surface"); break; }
+    if (!changes.length) {
+      console.log("MCP registry already applied on every surface");
+      break;
+    }
     for (const c of changes) console.log(`  ${describe(c)}`);
-    if (sub === "check" || flag("--dry-run")) { console.log(`\n${changes.length} pending changes → claude-multi mcp sync (with Claude closed)`); Deno.exit(1); }
-    if (sub !== "sync") { console.error(`mcp: unknown subcommand "${sub}" (check|sync|health)`); Deno.exit(2); }
+    if (sub === "check" || flag("--dry-run")) {
+      console.log(`\n${changes.length} pending changes → claude-multi mcp sync (with Claude closed)`);
+      Deno.exit(1);
+    }
+    if (sub !== "sync") {
+      console.error(`mcp: unknown subcommand "${sub}" (check|sync|health)`);
+      Deno.exit(2);
+    }
     try {
       await apply({ force: flag("--force") });
       // the registry's _deny/_ask live in each profile's generated settings.json
@@ -91,13 +131,19 @@ switch (cmd) {
       console.log(`\n${changes.length} changes applied. Restart the affected Claude instances to load them.`);
     } catch (e) {
       console.error(`\n! ${(e as Error).message}`);
-      const b = await blockers(); if (Object.keys(b).length) console.error(`  running: ${JSON.stringify(b)}`);
+      const b = await blockers();
+      if (Object.keys(b).length) console.error(`  running: ${JSON.stringify(b)}`);
       Deno.exit(2);
     }
     break;
   }
   case "update": {
-    const p = new Deno.Command(`${REPO}/bin/claude-update`, { args: rest, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+    const p = new Deno.Command(`${REPO}/bin/claude-update`, {
+      args: rest,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
     Deno.exit((await p.output()).code);
     break;
   }
@@ -106,22 +152,49 @@ switch (cmd) {
     if (rest[0] === "ingest" || !flag("--no-ingest")) {
       const t0 = Date.now();
       const r = await ingest(db, { full: flag("--full") });
-      if (rest[0] === "ingest" || r.files) console.error(`ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged (${((Date.now() - t0) / 1000).toFixed(1)}s) → ${DB_PATH}`);
+      if (rest[0] === "ingest" || r.files) {
+        console.error(
+          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged (${
+            ((Date.now() - t0) / 1000).toFixed(1)
+          }s) → ${DB_PATH}`,
+        );
+      }
       if (rest[0] === "ingest") break;
     }
-    const rep = report(db, { by: opt("--by", "profile") as GroupBy, since: opt("--since", "30d"), profile: opt("--profile"), limit: Number(opt("--limit", "40")) });
-    if (flag("--json")) console.log(JSON.stringify(rep, null, 2)); else printReport(rep);
+    const rep = report(db, {
+      by: opt("--by", "profile") as GroupBy,
+      since: opt("--since", "30d"),
+      profile: opt("--profile"),
+      limit: Number(opt("--limit", "40")),
+    });
+    if (flag("--json")) console.log(JSON.stringify(rep, null, 2));
+    else printReport(rep);
     break;
   }
-  case "serve": await serve({ open: !flag("--no-open") }); break;
-  case "vault": Deno.exit(await vaultCommand(rest)); break;
-  case "tasks": Deno.exit(await tasksCommand(rest)); break;
-  case "brain-backup": Deno.exit(await brainBackup(flag("--force"))); break;
+  case "serve":
+    await serve({ open: !flag("--no-open") });
+    break;
+  case "vault":
+    Deno.exit(await vaultCommand(rest));
+    break;
+  case "tasks":
+    Deno.exit(await tasksCommand(rest));
+    break;
+  case "brain-backup":
+    Deno.exit(await brainBackup(flag("--force")));
+    break;
   case "self-update": {
     if (flag("--check") && !flag("--json")) Deno.exit(await selfCheckRow());
     if (flag("--check")) {
       const c = await selfCheck();
-      console.log(JSON.stringify({ current: c.current, behind: c.behind, outdated: c.plan.do === "pull", blocked: c.plan.do === "skip" ? c.plan.why : null }));
+      console.log(
+        JSON.stringify({
+          current: c.current,
+          behind: c.behind,
+          outdated: c.plan.do === "pull",
+          blocked: c.plan.do === "skip" ? c.plan.why : null,
+        }),
+      );
       Deno.exit(c.plan.do === "pull" ? 10 : 0);
     }
     Deno.exit(await selfUpdate({ quiet: flag("--quiet") }));
@@ -129,12 +202,19 @@ switch (cmd) {
   }
   case "brain-login": {
     const account = rest[0] ?? brainAccount()?.name;
-    if (!account) { console.error("no brain account in accounts.json: add one (service brain, with its address) first"); Deno.exit(1); }
+    if (!account) {
+      console.error("no brain account in accounts.json: add one (service brain, with its address) first");
+      Deno.exit(1);
+    }
     Deno.exit(await brainLoginCommand(account));
     break;
   }
-  case "google": Deno.exit(await googleCommand(rest)); break;
-  case "help": case "--help": case "-h":
+  case "google":
+    Deno.exit(await googleCommand(rest));
+    break;
+  case "help":
+  case "--help":
+  case "-h":
   default:
     console.log(`claude-multi — manage a multi-profile Claude setup (repository ${REPO})
 

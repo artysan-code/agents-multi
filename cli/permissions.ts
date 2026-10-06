@@ -11,7 +11,7 @@
 // Writes go to the person's configuration; each profile's settings.json is regenerated from it on the next
 // launch (bin/lib/prelaunch.sh), so a change applies from the next session.
 
-import { PROFILES, profileNames, readJson } from "./lib.ts";
+import { profileNames, PROFILES, readJson } from "./lib.ts";
 import { type Obj, sharedLayer, writeSharedLayer } from "./settings.ts";
 
 export const LISTS = ["allow", "ask", "deny"] as const;
@@ -38,7 +38,10 @@ export async function permissionsView() {
   const shared = await sharedLayer() as Settings;
   const sp = shared.permissions ?? {};
   const rules = Object.fromEntries(LISTS.map((l) => [l, sp[l] ?? []])) as Rules;
-  const profiles: Record<string, { mode?: string; lists: Partial<Record<List, { added: string[]; dropped: string[] }>> }> = {};
+  const profiles: Record<
+    string,
+    { mode?: string; lists: Partial<Record<List, { added: string[]; dropped: string[] }>> }
+  > = {};
   for (const p of await profileNames()) {
     const pp = (await readJson<Settings>(patchOf(p)))?.permissions ?? {};
     const lists: Partial<Record<List, { added: string[]; dropped: string[] }>> = {};
@@ -64,7 +67,9 @@ export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: 
   const shared = await sharedLayer() as Settings;
   const perms = shared.permissions ??= {};
   if (b.op === "mode") {
-    if (!["default", "acceptEdits", "plan", "auto"].includes(b.mode)) return { ok: false, message: `unknown mode ${b.mode}` };
+    if (!["default", "acceptEdits", "plan", "auto"].includes(b.mode)) {
+      return { ok: false, message: `unknown mode ${b.mode}` };
+    }
     perms.defaultMode = b.mode;
     await writeSharedLayer(shared as Obj);
     return { ok: true, message: `default mode: ${b.mode}` };
@@ -76,7 +81,9 @@ export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: 
     if (b.op === "add") {
       if (!validRule(rule)) return { ok: false, message: `not a rule Claude Code reads: ${rule}` };
       // one rule lives in one list: the same rule in allow and deny would depend on precedence
-      for (const l of LISTS) if (l !== b.list && perms[l]?.includes(rule)) return { ok: false, message: `${rule} is already in ${l}` };
+      for (const l of LISTS) {
+        if (l !== b.list && perms[l]?.includes(rule)) return { ok: false, message: `${rule} is already in ${l}` };
+      }
       if (!list.includes(rule)) list.push(rule);
     } else {
       const i = list.indexOf(rule);
@@ -95,7 +102,12 @@ export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: 
     for (const l of LISTS) {
       if (!pp[l]) continue;
       const list = perms[l] ??= [];
-      for (const r of pp[l]!) if (!list.includes(r) && !LISTS.some((o) => o !== l && perms[o]?.includes(r))) { list.push(r); moved++; }
+      for (const r of pp[l]!) {
+        if (!list.includes(r) && !LISTS.some((o) => o !== l && perms[o]?.includes(r))) {
+          list.push(r);
+          moved++;
+        }
+      }
       delete pp[l];
     }
     if (!Object.keys(pp).length) delete patch.permissions;

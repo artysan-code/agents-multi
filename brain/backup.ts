@@ -17,7 +17,9 @@ async function keyOf(b64: string, use: KeyUsage) {
 
 export async function seal(plain: Uint8Array<ArrayBuffer>, b64key: string): Promise<Uint8Array<ArrayBuffer>> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await keyOf(b64key, "encrypt"), plain));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await keyOf(b64key, "encrypt"), plain),
+  );
   const out = new Uint8Array(4 + 12 + ct.length);
   out.set(MAGIC, 0);
   out.set(iv, 4);
@@ -26,8 +28,16 @@ export async function seal(plain: Uint8Array<ArrayBuffer>, b64key: string): Prom
 }
 
 export async function open(sealed: Uint8Array<ArrayBuffer>, b64key: string): Promise<Uint8Array<ArrayBuffer>> {
-  if (sealed.length < 17 || new TextDecoder().decode(sealed.subarray(0, 4)) !== "BRN1") throw new Error("not a brain backup");
-  return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: sealed.slice(4, 16) }, await keyOf(b64key, "decrypt"), sealed.slice(16)));
+  if (sealed.length < 17 || new TextDecoder().decode(sealed.subarray(0, 4)) !== "BRN1") {
+    throw new Error("not a brain backup");
+  }
+  return new Uint8Array(
+    await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: sealed.slice(4, 16) },
+      await keyOf(b64key, "decrypt"),
+      sealed.slice(16),
+    ),
+  );
 }
 
 /** The database as one sealed file. VACUUM INTO would be the obvious copy, but it needs ATTACH,

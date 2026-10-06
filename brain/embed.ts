@@ -8,7 +8,10 @@
 
 import type { Store } from "./store.ts";
 
-export interface EmbedConfig { url: string; model: string }
+export interface EmbedConfig {
+  url: string;
+  model: string;
+}
 
 /** Pure: a document cut where its structure allows — headings, then paragraphs — into pieces of
  *  about `size` characters, each carrying its heading so a chunk read alone still says what it is. */
@@ -17,10 +20,16 @@ export function chunk(body: string, size = 1200): string[] {
   if (!text) return [];
   const out: string[] = [];
   let heading = "", cur = "";
-  const flush = () => { if (cur.trim()) out.push((heading && !cur.startsWith(heading) ? `${heading}\n` : "") + cur.trim()); cur = ""; };
+  const flush = () => {
+    if (cur.trim()) out.push((heading && !cur.startsWith(heading) ? `${heading}\n` : "") + cur.trim());
+    cur = "";
+  };
   for (const para of text.split(/\n{2,}/)) {
     const h = para.match(/^#{1,6}\s+(.+)$/m);
-    if (h && para.trim().startsWith("#")) { flush(); heading = h[0]; }
+    if (h && para.trim().startsWith("#")) {
+      flush();
+      heading = h[0];
+    }
     if (cur.length + para.length > size) flush();
     if (para.length > size) {
       for (let i = 0; i < para.length; i += size) out.push((heading ? `${heading}\n` : "") + para.slice(i, i + size));
@@ -43,9 +52,13 @@ const toBlob = (v: number[]) => {
 const fromBlob = (b: Uint8Array) => new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
 
 export async function embed(cfg: EmbedConfig, input: string[]): Promise<number[][]> {
-  const post = (path: string, body: unknown) => fetch(`${cfg.url}${path}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(120_000),
-  });
+  const post = (path: string, body: unknown) =>
+    fetch(`${cfg.url}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000),
+    });
   const r = await post("/api/embed", { model: cfg.model, input });
   if (r.status === 404) {
     // an older Ollama-compatible API: one text per request
@@ -75,8 +88,21 @@ export async function indexPending(store: Store, cfg: EmbedConfig, max = 50): Pr
     store.tx(() => {
       store.db.prepare("delete from chunks where path = ?").run(d.path);
       // an empty document still gets a marker row, or it would be picked up again forever
-      if (!pieces.length) store.db.prepare("insert into chunks (path, ord, text, vec, model) values (?, 0, '', null, ?)").run(d.path, cfg.model);
-      pieces.forEach((p, i) => store.db.prepare("insert into chunks (path, ord, text, vec, model) values (?, ?, ?, ?, ?)").run(d.path, i, p, toBlob(vecs[i]), cfg.model));
+      if (!pieces.length) {
+        store.db.prepare("insert into chunks (path, ord, text, vec, model) values (?, 0, '', null, ?)").run(
+          d.path,
+          cfg.model,
+        );
+      }
+      pieces.forEach((p, i) =>
+        store.db.prepare("insert into chunks (path, ord, text, vec, model) values (?, ?, ?, ?, ?)").run(
+          d.path,
+          i,
+          p,
+          toBlob(vecs[i]),
+          cfg.model,
+        )
+      );
     });
   }
   return stale.length;
@@ -86,20 +112,35 @@ export async function indexPending(store: Store, cfg: EmbedConfig, max = 50): Pr
 export function indexer(store: Store, cfg: EmbedConfig) {
   let running = false, again = false, lastError = "";
   const run = async () => {
-    if (running) { again = true; return; }
+    if (running) {
+      again = true;
+      return;
+    }
     running = true;
     try {
-      do { again = false; while (await indexPending(store, cfg) > 0) { /* next batch */ } } while (again);
+      do {
+        again = false;
+        while (await indexPending(store, cfg) > 0) { /* next batch */ }
+      } while (again);
       lastError = "";
     } catch (e) {
       lastError = (e as Error).message; // the model is down: try again on the next write or tick
-    } finally { running = false; }
+    } finally {
+      running = false;
+    }
   };
   const timer = setInterval(run, 60_000);
   void run();
-  return { kick: () => void run(), stop: () => clearInterval(timer), status: () => ({ lastError, pending: (store.db.prepare(
-    "select count(*) n from docs d where d.deleted = 0 and not exists (select 1 from chunks c where c.path = d.path and c.model = ?)",
-  ).get(cfg.model) as { n: number }).n }) };
+  return {
+    kick: () => void run(),
+    stop: () => clearInterval(timer),
+    status: () => ({
+      lastError,
+      pending: (store.db.prepare(
+        "select count(*) n from docs d where d.deleted = 0 and not exists (select 1 from chunks c where c.path = d.path and c.model = ?)",
+      ).get(cfg.model) as { n: number }).n,
+    }),
+  };
 }
 
 /** By meaning: each document scored by its best chunk. */
@@ -107,14 +148,24 @@ export async function searchMeaning(store: Store, cfg: EmbedConfig, q: string, l
   const [qv] = await embed(cfg, [q]);
   const v = fromBlob(toBlob(qv));
   const best = new Map<string, { score: number; text: string }>();
-  for (const r of store.db.prepare(`select path, text, vec from chunks where vec is not null and model = ? ${tasks ? "" : "and path not like 'tasks/%'"}`).iterate(cfg.model) as Iterable<{ path: string; text: string; vec: Uint8Array }>) {
+  for (
+    const r of store.db.prepare(
+      `select path, text, vec from chunks where vec is not null and model = ? ${
+        tasks ? "" : "and path not like 'tasks/%'"
+      }`,
+    ).iterate(cfg.model) as Iterable<{ path: string; text: string; vec: Uint8Array }>
+  ) {
     const c = fromBlob(r.vec);
     let s = 0;
     for (let i = 0; i < c.length; i++) s += c[i] * v[i];
     const cur = best.get(r.path);
     if (!cur || s > cur.score) best.set(r.path, { score: s, text: r.text });
   }
-  return [...best].sort((a, b) => b[1].score - a[1].score).slice(0, limit).map(([path, x]) => ({ path, score: x.score, text: x.text }));
+  return [...best].sort((a, b) => b[1].score - a[1].score).slice(0, limit).map(([path, x]) => ({
+    path,
+    score: x.score,
+    text: x.text,
+  }));
 }
 
 /** Pure: two rankings fused by reciprocal rank (k = 60): no scores to calibrate against each other. */

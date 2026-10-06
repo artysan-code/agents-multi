@@ -8,11 +8,25 @@ Deno.env.set("CLAUDE_MULTI_OWNER_ID", "samuel"); // whose tasks these are (owner
 const T = await import("../../shared/mcp/lib/tasks.ts");
 
 const at = (s: string) => new Date(s); // local time, no Z
-const task = (over: Partial<import("../../shared/mcp/lib/tasks.ts").Task>) =>
-  ({ id: "t-x", title: "x", status: "todo" as const, created: "2026-09-29T08:00:00.000Z", updated: "2026-09-29T08:00:00.000Z", owner: "samuel", ...over });
+const task = (over: Partial<import("../../shared/mcp/lib/tasks.ts").Task>) => ({
+  id: "t-x",
+  title: "x",
+  status: "todo" as const,
+  created: "2026-09-29T08:00:00.000Z",
+  updated: "2026-09-29T08:00:00.000Z",
+  owner: "samuel",
+  ...over,
+});
 
 Deno.test("file format: round trip, quoting, notes after the title", () => {
-  const t = task({ id: "t-20260930-abcdef", title: 'Chiamare "Mario": fattura', due: "2026-10-01", time: "10:30", priority: 1, notes: "riga uno\n\nriga due" });
+  const t = task({
+    id: "t-20260930-abcdef",
+    title: 'Chiamare "Mario": fattura',
+    due: "2026-10-01",
+    time: "10:30",
+    priority: 1,
+    notes: "riga uno\n\nriga due",
+  });
   const back = T.fromFile(T.toFile(t));
   assertEquals(back, t);
   assertEquals(T.fromFile("not a task"), null);
@@ -88,7 +102,10 @@ Deno.test("store: add, complete a repeating task and get the next one, drop inst
 
 Deno.test("briefText: evening looks at tomorrow; nothing to say is marked empty", async () => {
   const { briefText } = await import("../tasks.ts");
-  const evening = T.brief([task({ id: "e", title: "Dentista", due: "2026-10-01", time: "09:00" })], at("2026-09-30T19:00:00"));
+  const evening = T.brief(
+    [task({ id: "e", title: "Dentista", due: "2026-10-01", time: "09:00" })],
+    at("2026-09-30T19:00:00"),
+  );
   const t = briefText(evening, "it");
   assertEquals(t.title, "claude-multi — Stasera");
   assertEquals(t.body, "domani: 09:00 Dentista");
@@ -102,7 +119,13 @@ Deno.test("eventAsTask: timed and all-day events; cancelled and declined ones ar
   assert(/^\d\d:\d\d$/.test(timed.time!));
   assertEquals(eventAsTask({ id: "e2", summary: "Ferie", start: { date: "2026-10-02" } }, "personal")!.time, undefined);
   assertEquals(eventAsTask({ id: "e3", status: "cancelled", start: { date: "2026-10-02" } }, "p"), null);
-  assertEquals(eventAsTask({ id: "e4", start: { date: "2026-10-02" }, attendees: [{ self: true, responseStatus: "declined" }] }, "p"), null);
+  assertEquals(
+    eventAsTask(
+      { id: "e4", start: { date: "2026-10-02" }, attendees: [{ self: true, responseStatus: "declined" }] },
+      "p",
+    ),
+    null,
+  );
   // a past appointment is not "missed": it is just past
   const past = { ...timed, due: "2026-09-30", time: "09:00" };
   assertEquals(T.brief([past], at("2026-09-30T11:00:00")).missed.length, 0);
@@ -110,7 +133,10 @@ Deno.test("eventAsTask: timed and all-day events; cancelled and declined ones ar
 
 Deno.test("steps: read anywhere in the notes, progress, tick by index", () => {
   const notes = "Descrizione.\n\n## Steps\n\n- [ ] uno\n- [x] due\n* [X] tre\n\nfine\n- [ ] quattro";
-  assertEquals(T.steps(notes).map((s) => [s.text, s.done]), [["uno", false], ["due", true], ["tre", true], ["quattro", false]]);
+  assertEquals(T.steps(notes).map((s) => [s.text, s.done]), [["uno", false], ["due", true], ["tre", true], [
+    "quattro",
+    false,
+  ]]);
   assertEquals(T.progress(notes), { done: 2, total: 4, pct: 50 });
   assertEquals(T.progress("niente"), null);
   const ticked = T.setStep(notes, 3);
@@ -145,14 +171,21 @@ Deno.test("attachments: urls, local paths, stored files, wiki pages; add and rem
   ]);
   const less = T.removeAttachment(n, 1);
   assertEquals(T.attachments(less).map((a) => a.label), ["Specifiche", "foto.png", "visione-assistente"]);
-  assertEquals(T.attachments("## Allegati\n\n- ~/doc.txt\n\n## Altro\n- non un allegato").map((a) => [a.target, a.kind]), [["~/doc.txt", "path"]]);
+  assertEquals(
+    T.attachments("## Allegati\n\n- ~/doc.txt\n\n## Altro\n- non un allegato").map((a) => [a.target, a.kind]),
+    [["~/doc.txt", "path"]],
+  );
 });
 
 Deno.test("updateTask: an editor holding an older version is refused, not overwritten", async () => {
   const t = await T.addTask({ title: "concorrenza" }, at("2026-09-30T09:00:00"));
   await T.updateTask(t.id, { notes: "dalla chat" }, at("2026-09-30T09:05:00"));
   let err: unknown;
-  try { await T.updateTask(t.id, { notes: "dalla console" }, at("2026-09-30T09:06:00"), t.updated); } catch (e) { err = e; }
+  try {
+    await T.updateTask(t.id, { notes: "dalla console" }, at("2026-09-30T09:06:00"), t.updated);
+  } catch (e) {
+    err = e;
+  }
   assert(err instanceof T.StaleError);
   assertEquals((await T.getTask(t.id))?.notes, "dalla chat");
 });
@@ -171,14 +204,19 @@ Deno.test("updateTask: concurrent changes to the notes in one process are all ke
 
 Deno.test("attachments: names with parentheses and spaces survive a round trip; line breaks are refused", () => {
   const n = T.addAttachment("", "files/t-1/Screenshot (1).png");
-  assertEquals(T.attachments(n), [{ label: "Screenshot (1).png", target: "files/t-1/Screenshot (1).png", kind: "file" }]);
+  assertEquals(T.attachments(n), [{
+    label: "Screenshot (1).png",
+    target: "files/t-1/Screenshot (1).png",
+    kind: "file",
+  }]);
   assertEquals(T.attachments(T.addAttachment("", "report(1).pdf"))[0].target, "report(1).pdf");
   assertThrows(() => T.addAttachment("", "a\nb"));
   assertThrows(() => T.addAttachment("", "a<b>"));
 });
 
 Deno.test("fromFile: CRLF files keep their steps; unknown frontmatter keys are written back", () => {
-  const crlf = '---\r\nid: "t-1"\r\ntitle: "x"\r\nstatus: "todo"\r\ntags: ["a","b"]\r\ncreated: "c"\r\nupdated: "u"\r\n---\r\n\r\n# x\r\n\r\n- [ ] uno\r\n- [x] due\r\n';
+  const crlf =
+    '---\r\nid: "t-1"\r\ntitle: "x"\r\nstatus: "todo"\r\ntags: ["a","b"]\r\ncreated: "c"\r\nupdated: "u"\r\n---\r\n\r\n# x\r\n\r\n- [ ] uno\r\n- [x] due\r\n';
   const t = T.fromFile(crlf)!;
   assertEquals(T.progress(t.notes), { done: 1, total: 2, pct: 50 });
   assert(T.toFile(t).includes('tags: ["a","b"]'));
@@ -193,13 +231,29 @@ Deno.test("applyInput: null clears project, owner and notes", () => {
 Deno.test("project fields: ref, stage, parent, blocked_by, labels, detail checked, cleaned and kept in the file", () => {
   const now = at("2026-10-05T10:00:00");
   const t = T.applyInput(task({ id: "t-20261005-aaaaaa" }), {
-    ref: " TASK-495 ", stage: "Release  Pending", parent: "#t-20261005-bbbbbb", blocked_by: ["t-20261005-cccccc", "#t-20261005-cccccc"],
-    labels: ["Permessi", "permessi", " BE "], detail: "TASKS.md#task-495",
+    ref: " TASK-495 ",
+    stage: "Release  Pending",
+    parent: "#t-20261005-bbbbbb",
+    blocked_by: ["t-20261005-cccccc", "#t-20261005-cccccc"],
+    labels: ["Permessi", "permessi", " BE "],
+    detail: "TASKS.md#task-495",
   }, now);
-  assertEquals([t.ref, t.stage, t.parent, t.blocked_by, t.labels, t.detail], ["TASK-495", "release pending", "t-20261005-bbbbbb", ["t-20261005-cccccc"], ["permessi", "be"], "TASKS.md#task-495"]);
+  assertEquals([t.ref, t.stage, t.parent, t.blocked_by, t.labels, t.detail], [
+    "TASK-495",
+    "release pending",
+    "t-20261005-bbbbbb",
+    ["t-20261005-cccccc"],
+    ["permessi", "be"],
+    "TASKS.md#task-495",
+  ]);
   assertEquals(T.fromFile(T.toFile(t)), t);
   const cleared = T.applyInput(t, { ref: null, blocked_by: [], labels: null, parent: null }, now);
-  assertEquals([cleared.ref, cleared.blocked_by, cleared.labels, cleared.parent], [undefined, undefined, undefined, undefined]);
+  assertEquals([cleared.ref, cleared.blocked_by, cleared.labels, cleared.parent], [
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ]);
   assert(!T.toFile(cleared).includes("blocked_by"));
   assertThrows(() => T.applyInput(t, { parent: "TASK-1" }, now), Error, "task id");
   assertThrows(() => T.applyInput(t, { parent: t.id }, now), Error, "itself");
@@ -213,7 +267,10 @@ Deno.test("addNote / notesOf: dated lines in Log and Decisions, before the attac
   n = T.addNote(n, "decisions", "opzione C (Samuel)", "2026-10-05");
   n = T.addNote(n, "log", "in prod", "2026-10-06");
   assert(n.indexOf("## Log") < n.indexOf("## Attachments") && n.indexOf("## Decisions") < n.indexOf("## Attachments"));
-  assertEquals(T.notesOf(n, "log"), [{ day: "2026-10-05", text: "su dev con la CI verde" }, { day: "2026-10-06", text: "in prod" }]);
+  assertEquals(T.notesOf(n, "log"), [{ day: "2026-10-05", text: "su dev con la CI verde" }, {
+    day: "2026-10-06",
+    text: "in prod",
+  }]);
   assertEquals(T.notesOf(n, "decisions"), [{ day: "2026-10-05", text: "opzione C (Samuel)" }]);
   assertEquals(T.attachments(n).length, 1);
   assertEquals(T.editNotes("a b a", "b", "c"), "a c a");

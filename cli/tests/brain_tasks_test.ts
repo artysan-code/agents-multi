@@ -18,20 +18,57 @@ Deno.test("brainAccount: the brain account a profile sees, none without one", ()
 Deno.test("brainStore: a refused token and an absent brain say so, a missing task is null", async () => {
   const answer = (status: number, body = "{}") => () => Promise.resolve(new Response(body, { status }));
   await assertRejects(() => brainStore("https://b", "t", answer(401)).list(), Error, "refused the token");
-  await assertRejects(() => brainStore("https://b", "t", () => Promise.reject(new TypeError("dns"))).list(), Error, "not answering");
+  await assertRejects(
+    () => brainStore("https://b", "t", () => Promise.reject(new TypeError("dns"))).list(),
+    Error,
+    "not answering",
+  );
   assertEquals(await brainStore("https://b", "t", answer(404)).get("t-20260101-aaaaaa"), null);
   let seen: Request | null = null;
-  const capture = (input: RequestInfo | URL, init?: RequestInit) => { seen = new Request(input, init); return Promise.resolve(new Response("{}")); };
-  await brainStore("https://b/", "tok", capture).write({ id: "t-20260101-aaaaaa", title: "x", status: "todo", created: "c", updated: "u" });
+  const capture = (input: RequestInfo | URL, init?: RequestInit) => {
+    seen = new Request(input, init);
+    return Promise.resolve(new Response("{}"));
+  };
+  await brainStore("https://b/", "tok", capture).write({
+    id: "t-20260101-aaaaaa",
+    title: "x",
+    status: "todo",
+    created: "c",
+    updated: "u",
+  });
   assert(seen !== null);
-  assertEquals([(seen as Request).method, (seen as Request).url, (seen as Request).headers.get("authorization")], ["PUT", "https://b/api/tasks/t-20260101-aaaaaa", "Bearer tok"]);
+  assertEquals([(seen as Request).method, (seen as Request).url, (seen as Request).headers.get("authorization")], [
+    "PUT",
+    "https://b/api/tasks/t-20260101-aaaaaa",
+    "Bearer tok",
+  ]);
 });
 
 Deno.test("scoped: a work profile sees and writes only the tasks of its projects", async () => {
-  const mk = (id: string, project?: string) => ({ id, title: id, status: "todo" as const, created: "c", updated: "u", ...(project ? { project } : {}) });
-  const all = [mk("t-1", "work/acme/site"), mk("t-2", "work/acme"), mk("t-3", "work"), mk("t-4", "work/acmex"), mk("t-5")];
+  const mk = (id: string, project?: string) => ({
+    id,
+    title: id,
+    status: "todo" as const,
+    created: "c",
+    updated: "u",
+    ...(project ? { project } : {}),
+  });
+  const all = [
+    mk("t-1", "work/acme/site"),
+    mk("t-2", "work/acme"),
+    mk("t-3", "work"),
+    mk("t-4", "work/acmex"),
+    mk("t-5"),
+  ];
   const written: string[] = [];
-  const base = { list: () => Promise.resolve(all), get: (id: string) => Promise.resolve(all.find((t) => t.id === id) ?? null), write: (t: { id: string }) => { written.push(t.id); return Promise.resolve(); } };
+  const base = {
+    list: () => Promise.resolve(all),
+    get: (id: string) => Promise.resolve(all.find((t) => t.id === id) ?? null),
+    write: (t: { id: string }) => {
+      written.push(t.id);
+      return Promise.resolve();
+    },
+  };
   const s = scoped(base, ["work/acme"]);
   assertEquals((await s.list()).map((t) => t.id), ["t-1", "t-2"]);
   assertEquals(await s.get("t-3"), null);
@@ -45,7 +82,10 @@ Deno.test("lazyStore: a token missing at start is read again later, then kept", 
   const account = { service: "brain", name: "brain", url: "https://b" };
   let token: string | null = null, reads = 0;
   const made: string[] = [];
-  const s = lazyStore(account, () => { reads++; return Promise.resolve(token); }, (url, tok) => {
+  const s = lazyStore(account, () => {
+    reads++;
+    return Promise.resolve(token);
+  }, (url, tok) => {
     made.push(`${url} ${tok}`);
     return { list: () => Promise.resolve([]), get: () => Promise.resolve(null), write: () => Promise.resolve() };
   });
@@ -57,7 +97,13 @@ Deno.test("lazyStore: a token missing at start is read again later, then kept", 
 });
 
 Deno.test("toPrune: the oldest brain copies beyond the ones to keep, nothing else", () => {
-  const names = ["brain-2026-10-01T09-00.brn", "brain-2026-10-02T09-00.brn", "brain-2026-09-30T09-00.brn", "notes.txt", ".brain-x.brn.tmp"];
+  const names = [
+    "brain-2026-10-01T09-00.brn",
+    "brain-2026-10-02T09-00.brn",
+    "brain-2026-09-30T09-00.brn",
+    "notes.txt",
+    ".brain-x.brn.tmp",
+  ];
   assertEquals(toPrune(names, 2), ["brain-2026-09-30T09-00.brn"]);
   assertEquals(toPrune(names, 5), []);
 });

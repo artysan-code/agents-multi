@@ -6,7 +6,12 @@
 import { type Check, has, run, STATE } from "./lib.ts";
 
 const STATE_FILE = `${STATE}/doctor-last.json`;
-export interface DoctorDiff { newFails: Check[]; gone: string[]; stillFails: Check[]; recovered: boolean }
+export interface DoctorDiff {
+  newFails: Check[];
+  gone: string[];
+  stillFails: Check[];
+  recovered: boolean;
+}
 
 /** Pure: compare previous failure ids with the current ones. `recovered` = there were failures, now none. */
 export function diffDoctor(prevFailIds: string[], current: Check[]): DoctorDiff {
@@ -26,18 +31,32 @@ export function notifyText(d: DoctorDiff): { title: string; body: string } | nul
     const lines = d.newFails.slice(0, 3).map((c) => `• ${c.msg}${c.fix ? `\n   → ${c.fix}` : ""}`);
     const more = d.newFails.length > 3 ? `\n… and ${d.newFails.length - 3} more` : "";
     const still = d.stillFails.length ? `\n(${d.stillFails.length} already known)` : "";
-    return { title: `claude-multi: ${d.newFails.length} new problem${d.newFails.length === 1 ? "" : "s"}`, body: lines.join("\n") + more + still };
+    return {
+      title: `claude-multi: ${d.newFails.length} new problem${d.newFails.length === 1 ? "" : "s"}`,
+      body: lines.join("\n") + more + still,
+    };
   }
   if (d.recovered) return { title: "claude-multi: all clear", body: `Resolved: ${d.gone.join(", ")}` };
   return null;
 }
 
 export async function loadLast(): Promise<string[]> {
-  try { return JSON.parse(await Deno.readTextFile(STATE_FILE)).fails ?? []; } catch { return []; }
+  try {
+    return JSON.parse(await Deno.readTextFile(STATE_FILE)).fails ?? [];
+  } catch {
+    return [];
+  }
 }
 export async function saveLast(current: Check[]) {
   await Deno.mkdir(STATE, { recursive: true });
-  await Deno.writeTextFile(STATE_FILE, JSON.stringify({ at: new Date().toISOString(), fails: current.filter((c) => c.status === "fail").map((c) => c.id) }, null, 2) + "\n");
+  await Deno.writeTextFile(
+    STATE_FILE,
+    JSON.stringify(
+      { at: new Date().toISOString(), fails: current.filter((c) => c.status === "fail").map((c) => c.id) },
+      null,
+      2,
+    ) + "\n",
+  );
 }
 
 /** Send the notification when there is something to say. dryRun only prints. True if it notified. */
@@ -56,7 +75,20 @@ export async function notifyDoctor(current: Check[], opts: { dryRun?: boolean } 
  * whatever the reader needs to act. True if something was shown (or printed).
  */
 export async function desktopNotify(title: string, body: string, opts: { dryRun?: boolean } = {}) {
-  if (opts.dryRun || !(await has("notify-send"))) { console.log(`[notification${opts.dryRun ? " dry-run" : " (notify-send missing)"}] ${title}\n${body}`); return true; }
-  await run("notify-send", ["-a", "claude-multi", "-i", "claude-desktop", "-u", "normal", "--expire-time=8000", title, body]);
+  if (opts.dryRun || !(await has("notify-send"))) {
+    console.log(`[notification${opts.dryRun ? " dry-run" : " (notify-send missing)"}] ${title}\n${body}`);
+    return true;
+  }
+  await run("notify-send", [
+    "-a",
+    "claude-multi",
+    "-i",
+    "claude-desktop",
+    "-u",
+    "normal",
+    "--expire-time=8000",
+    title,
+    body,
+  ]);
   return true;
 }

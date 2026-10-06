@@ -26,7 +26,8 @@ export const DUPLICATE = 0.6; // title similarity from which a new page is taken
 export function slugPath(p: string): string {
   const s = String(p ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/\.md$/i, "");
   const slug = s.split("/").map((seg) =>
-    seg.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "")
+    seg.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-{2,}/g, "-")
+      .replace(/^-|-$/g, "")
   ).filter(Boolean).join("/");
   return `${slug}.md`;
 }
@@ -34,7 +35,8 @@ export function slugPath(p: string): string {
 /** The diary is a record: a busy day may be long, but nothing is refused for the size of the page. */
 export const maxWords = (area: Area) => area === "diario" ? Infinity : area === "inbox" ? MAX_WORDS_LOG : MAX_WORDS;
 const words = (s: string) => (s.replace(/^---\n[\s\S]*?\n---\n?/, "").match(/[\p{L}\p{N}]+/gu) ?? []).length;
-const titleWords = (s: string) => new Set((s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2));
+const titleWords = (s: string) =>
+  new Set((s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2));
 
 /** Pure: how alike two titles are, by their words (Jaccard), 1 when one contains the other. */
 export function similarity(a: string, b: string): number {
@@ -53,7 +55,9 @@ export const entryWords = (s: string) => words(s.replace(/\[\[[^\]]*\]\]/g, ""))
 /** Pure: a diary entry too long to be one line of the record. */
 export function entryErrors(text: string): string[] {
   const n = entryWords(text);
-  return n > MAX_ENTRY_WORDS ? [`${n} words: a diary line says what changed in at most ${MAX_ENTRY_WORDS}; the detail goes on the project page`] : [];
+  return n > MAX_ENTRY_WORDS
+    ? [`${n} words: a diary line says what changed in at most ${MAX_ENTRY_WORDS}; the detail goes on the project page`]
+    : [];
 }
 
 /** Pure: whether a diary page may be rewritten as `next` — tidied, never edited away: every timed
@@ -61,7 +65,11 @@ export function entryErrors(text: string): string[] {
 export function diaryRewriteErrors(cur: string, next: string): string[] {
   const entries = (b: string) => b.split("\n").filter((l) => /^- \d{2}:\d{2} /.test(l));
   const was = entries(cur).map((l) => l.slice(2, 7)), now = entries(next);
-  if (now.map((l) => l.slice(2, 7)).join() !== was.join()) return [`a diary page is tidied, not edited: keep every timed line, at its time and in its order (${was.join(", ")})`];
+  if (now.map((l) => l.slice(2, 7)).join() !== was.join()) {
+    return [
+      `a diary page is tidied, not edited: keep every timed line, at its time and in its order (${was.join(", ")})`,
+    ];
+  }
   return now.flatMap((l) => entryErrors(l.slice(8)).map((e) => `${l.slice(2, 7)}: ${e}`));
 }
 
@@ -72,48 +80,87 @@ export function shapeErrors(path: string, body: string): string[] {
   const area = parts[0] as Area;
   if (!AREAS.includes(area)) return [`a page lives in one of: ${AREAS.join(", ")} (not "${parts[0]}")`];
   if (parts.length < 2) err.push(`${area}/ needs a name: ${area}/<name>.md`);
-  if (["io", "clienti", "persone", "note", "inbox"].includes(area) && parts.length > 2) err.push(`${area}/ is flat: ${area}/<name>.md, no subfolders`);
-  if (area === "diario" && !/^diario\/\d{4}-\d{2}-\d{2}$/.test(parts.join("/"))) err.push("a diary page is diario/YYYY-MM-DD.md, one a day");
+  if (["io", "clienti", "persone", "note", "inbox"].includes(area) && parts.length > 2) {
+    err.push(`${area}/ is flat: ${area}/<name>.md, no subfolders`);
+  }
+  if (area === "diario" && !/^diario\/\d{4}-\d{2}-\d{2}$/.test(parts.join("/"))) {
+    err.push("a diary page is diario/YYYY-MM-DD.md, one a day");
+  }
 
   const text = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
   const lines = text.split("\n");
-  if (!/^# \S/.test(lines[0] ?? "")) err.push("the page starts with its title: \"# Title\"");
+  if (!/^# \S/.test(lines[0] ?? "")) err.push('the page starts with its title: "# Title"');
   const first = lines.slice(1).find((l) => l.trim());
-  if (!first || /^\s*([#>|-]|\*|\d+\.|```)/.test(first)) err.push("under the title, one plain sentence saying what the page is");
+  if (!first || /^\s*([#>|-]|\*|\d+\.|```)/.test(first)) {
+    err.push("under the title, one plain sentence saying what the page is");
+  }
 
   const n = words(body), max = maxWords(area);
   if (n > max) err.push(`${n} words: at most ${max}. Split it into smaller pages linked to each other`);
   let code = 0, inCode = false;
   for (const l of lines) {
-    if (/^\s*```/.test(l)) { inCode = !inCode; continue; }
+    if (/^\s*```/.test(l)) {
+      inCode = !inCode;
+      continue;
+    }
     if (inCode) code++;
   }
-  if (code > MAX_CODE_LINES) err.push(`${code} lines of code: at most ${MAX_CODE_LINES}. Code lives in its repository; here, where to find it`);
-  if (maskText(body) !== body) err.push("it contains what looks like a secret (a password, a token, credentials in an address): never in the brain");
+  if (code > MAX_CODE_LINES) {
+    err.push(`${code} lines of code: at most ${MAX_CODE_LINES}. Code lives in its repository; here, where to find it`);
+  }
+  if (maskText(body) !== body) {
+    err.push(
+      "it contains what looks like a secret (a password, a token, credentials in an address): never in the brain",
+    );
+  }
   return err;
 }
 
-export interface Verdict { ok: boolean; errors: string[]; similar?: { path: string; title: string }[] }
+export interface Verdict {
+  ok: boolean;
+  errors: string[];
+  similar?: { path: string; title: string }[];
+}
 
 /** A write checked against the rules and against what the brain already holds. */
-export function check(store: Store, path: string, body: string, opts: { creating: boolean; distinct?: boolean }): Verdict {
+export function check(
+  store: Store,
+  path: string,
+  body: string,
+  opts: { creating: boolean; distinct?: boolean },
+): Verdict {
   const errors = shapeErrors(path, body);
   const area = areaOf(path);
   if (!LOGS.includes(area)) {
     // a living page links to at least one page that exists — unless there is none yet to link to
-    const others = store.db.prepare("select count(*) n from docs where deleted = 0 and path not like 'tasks/%' and path not like 'diario/%' and path not like 'inbox/%' and path <> ?")
+    const others = store.db.prepare(
+      "select count(*) n from docs where deleted = 0 and path not like 'tasks/%' and path not like 'diario/%' and path not like 'inbox/%' and path <> ?",
+    )
       .get(path) as { n: number };
     const live = linksIn(body).map((t) => store.resolve(t)).filter((p) => p && p !== path);
-    if (others.n > 0 && !live.length) errors.push("link at least one existing page with [[path]]: the project, person or note this belongs to");
+    if (others.n > 0 && !live.length) {
+      errors.push("link at least one existing page with [[path]]: the project, person or note this belongs to");
+    }
   }
   let similar: Verdict["similar"];
   if (opts.creating && !opts.distinct && !LOGS.includes(area)) {
     const title = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trim().match(/^# (.+)$/m)?.[1] ?? path;
     const name = path.split("/").pop()!.replace(/\.md$/, "").replace(/-/g, " ");
     // only within the area: a client and its project, or a person and the client they work for, share a name by nature
-    const rows = store.db.prepare("select path, title from docs where deleted = 0 and path like ?").all(`${area}/%`) as { path: string; title: string }[];
-    similar = rows.filter((r) => Math.max(similarity(title, r.title), similarity(name, r.path.split("/").pop()!.replace(/\.md$/, "").replace(/-/g, " "))) >= DUPLICATE).slice(0, 5);
-    if (similar.length) errors.push("pages with a very similar title exist: update one of them, or pass distinct: true if this really is another subject");
+    const rows = store.db.prepare("select path, title from docs where deleted = 0 and path like ?").all(
+      `${area}/%`,
+    ) as { path: string; title: string }[];
+    similar = rows.filter((r) =>
+      Math.max(
+        similarity(title, r.title),
+        similarity(name, r.path.split("/").pop()!.replace(/\.md$/, "").replace(/-/g, " ")),
+      ) >= DUPLICATE
+    ).slice(0, 5);
+    if (similar.length) {
+      errors.push(
+        "pages with a very similar title exist: update one of them, or pass distinct: true if this really is another subject",
+      );
+    }
   }
   return { ok: !errors.length, errors, ...(similar?.length ? { similar } : {}) };
 }
@@ -121,6 +168,8 @@ export function check(store: Store, path: string, body: string, opts: { creating
 /** Pure: a document's text with every link that meant `from` pointing at `to` instead. */
 export function relink(body: string, from: string, to: string, resolve: (t: string) => string | null): string {
   const target = to.replace(/\.md$/, "");
-  return body.replace(/\[\[([^\]|#]+)((?:#[^\]|]*)?)((?:\|[^\]]*)?)\]\]/g, (m, t: string, h: string, label: string) =>
-    resolve(t.trim()) === from ? `[[${target}${h}${label}]]` : m);
+  return body.replace(
+    /\[\[([^\]|#]+)((?:#[^\]|]*)?)((?:\|[^\]]*)?)\]\]/g,
+    (m, t: string, h: string, label: string) => resolve(t.trim()) === from ? `[[${target}${h}${label}]]` : m,
+  );
 }

@@ -17,7 +17,13 @@ export const BACKUPS = `${DATA}/brain-backups`;
 const LAST = `${STATE}/brain-backup.json`;
 const KEEP = 14;
 
-export interface BackupState { version: string; file: string; at: string; verified: boolean; checked: string }
+export interface BackupState {
+  version: string;
+  file: string;
+  at: string;
+  verified: boolean;
+  checked: string;
+}
 
 export function lastBackup(): Promise<BackupState | null> {
   return readJson<BackupState>(LAST);
@@ -33,16 +39,25 @@ export async function brainBackup(force = false): Promise<number> {
   const account = brainAccount();
   const token = account && await getSecret("brain", account.name).catch(() => null);
   if (!account?.url || !token) {
-    console.error(account ? "no token for the brain on this machine (console, Connections)" : "no brain account in shared/mcp/accounts.json");
+    console.error(
+      account
+        ? "no token for the brain on this machine (console, Connections)"
+        : "no brain account in shared/mcp/accounts.json",
+    );
     return 1;
   }
   const base = account.url.replace(/\/+$/, "");
-  const get = (path: string) => fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
+  const get = (path: string) =>
+    fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
   const last = await lastBackup();
   const now = new Date().toISOString();
 
   const st = await get("/backup/state");
-  if (!st.ok) { console.error(`the brain answered ${st.status} on /backup/state`); await st.body?.cancel(); return 1; }
+  if (!st.ok) {
+    console.error(`the brain answered ${st.status} on /backup/state`);
+    await st.body?.cancel();
+    return 1;
+  }
   const { version } = await st.json() as { version: string };
   if (!force && last?.version === version) {
     await Deno.writeTextFile(LAST, JSON.stringify({ ...last, checked: now }, null, 2) + "\n");
@@ -51,16 +66,26 @@ export async function brainBackup(force = false): Promise<number> {
   }
 
   const r = await get("/backup");
-  if (!r.ok) { console.error(`the brain answered ${r.status} on /backup`); await r.body?.cancel(); return 1; }
+  if (!r.ok) {
+    console.error(`the brain answered ${r.status} on /backup`);
+    await r.body?.cancel();
+    return 1;
+  }
   const sealed = new Uint8Array(await r.arrayBuffer());
-  if (new TextDecoder().decode(sealed.subarray(0, 4)) !== "BRN1") { console.error("the brain sent something that is not a backup"); return 1; }
+  if (new TextDecoder().decode(sealed.subarray(0, 4)) !== "BRN1") {
+    console.error("the brain sent something that is not a backup");
+    return 1;
+  }
 
   // opened with the key when there is one: a copy nobody can open is not a backup
   const key = await getSecret("brain", account.name, "backup-key").catch(() => null);
   let verified = false;
   if (key) {
     const plain = await open(sealed, key);
-    if (new TextDecoder().decode(plain.subarray(0, 15)) !== "SQLite format 3") { console.error("the backup opens, but is not a database"); return 1; }
+    if (new TextDecoder().decode(plain.subarray(0, 15)) !== "SQLite format 3") {
+      console.error("the backup opens, but is not a database");
+      return 1;
+    }
     verified = true;
   }
 
@@ -74,7 +99,14 @@ export async function brainBackup(force = false): Promise<number> {
   for (const old of toPrune(names)) await Deno.remove(`${BACKUPS}/${old}`).catch(() => {});
 
   await Deno.mkdir(STATE, { recursive: true });
-  await Deno.writeTextFile(LAST, JSON.stringify({ version, file, at: now, verified, checked: now } satisfies BackupState, null, 2) + "\n");
-  console.log(`brain: new copy ${file} (${(sealed.length / 1024).toFixed(0)} KB${verified ? ", opens with the key" : ", not checked: no backup-key in the vault"})`);
+  await Deno.writeTextFile(
+    LAST,
+    JSON.stringify({ version, file, at: now, verified, checked: now } satisfies BackupState, null, 2) + "\n",
+  );
+  console.log(
+    `brain: new copy ${file} (${(sealed.length / 1024).toFixed(0)} KB${
+      verified ? ", opens with the key" : ", not checked: no backup-key in the vault"
+    })`,
+  );
   return 0;
 }

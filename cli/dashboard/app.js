@@ -80,7 +80,8 @@ let es = null, lastEvent = 0, esRetry = 0, liveState = "busy", bootCode = "";
 /** A reload, but not under someone's fingers: while a field has focus, or a drawer with a form is
     open, it waits and asks again. */
 function reloadWhenIdle() {
-  const busy = document.activeElement?.matches?.("input, textarea, select, [contenteditable]") || document.querySelector(".drawer form, dialog[open]");
+  const busy = document.activeElement?.matches?.("input, textarea, select, [contenteditable]") ||
+    document.querySelector(".drawer form, dialog[open]");
   if (busy) return setTimeout(reloadWhenIdle, 5000);
   location.reload();
 }
@@ -101,7 +102,9 @@ function connect() {
   // the code serving this page: another one after a restart means this page is old, and it reloads
   es.addEventListener("hello", (e) => {
     let code = "";
-    try { code = JSON.parse(e.data).code ?? ""; } catch { /* an old console says nothing */ }
+    try {
+      code = JSON.parse(e.data).code ?? "";
+    } catch { /* an old console says nothing */ }
     if (!bootCode) bootCode = code;
     else if (code && code !== bootCode) reloadWhenIdle();
   });
@@ -119,7 +122,10 @@ function connect() {
     if (view === "tasks") loadBoard().catch(() => {});
     // the open task follows a chat's changes, unless its description is being written
     if (sheet && !sheet.host.contains(document.activeElement)) {
-      api(`/api/tasks/item?id=${encodeURIComponent(sheet.id)}`).then((d) => sheet && d.task.updated !== sheet.data.task.updated && renderSheet(d), () => {});
+      api(`/api/tasks/item?id=${encodeURIComponent(sheet.id)}`).then(
+        (d) => sheet && d.task.updated !== sheet.data.task.updated && renderSheet(d),
+        () => {},
+      );
     }
   });
   es.addEventListener("brain", () => {
@@ -215,9 +221,13 @@ function renderToday() {
       SUM.fails.map((f) => `<li>${esc(f)}</li>`).join("")
     }</ul>${extra}</div><a class="btn" href="#system/health">${esc(t("status.open"))}</a>`;
   } else {
-    box.innerHTML = `<i></i><div><b>${esc(t("status.ok"))}</b><div class="sub">${esc(t("status.ok.sub"))}</div>${extra}</div>`;
+    box.innerHTML = `<i></i><div><b>${esc(t("status.ok"))}</b><div class="sub">${
+      esc(t("status.ok.sub"))
+    }</div>${extra}</div>`;
   }
-  $("#day-h").textContent = cap(new Date().toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long" }));
+  $("#day-h").textContent = cap(
+    new Date().toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long" }),
+  );
   if (S) renderRunning();
   loadResume();
   loadTasks().catch(() => {});
@@ -250,15 +260,26 @@ function renderTasks() {
   const row = (x, when = x.time ?? "", cls = "") => {
     const ev = x.source === "calendar";
     const p = ev ? null : notesProgress(x.notes);
-    const sub = ev ? t("day.calendar", { a: x.project ?? "" }) : [x.project, x.owner && x.owner !== OWNER.id ? x.owner : null].filter(Boolean).join("  ");
-    return `<div class="it${ev ? " event" : ""}${x.priority === 1 ? " hi" : ""}${cls ? ` ${cls}` : ""}"${ev ? "" : ` data-tk-open="${esc(x.id)}"`}>
+    const sub = ev
+      ? t("day.calendar", { a: x.project ?? "" })
+      : [x.project, x.owner && x.owner !== OWNER.id ? x.owner : null].filter(Boolean).join("  ");
+    return `<div class="it${ev ? " event" : ""}${x.priority === 1 ? " hi" : ""}${cls ? ` ${cls}` : ""}"${
+      ev ? "" : ` data-tk-open="${esc(x.id)}"`
+    }>
       <span class="tm">${esc(when)}</span>
-      ${ev ? `<span class="ev"><i></i></span>` : `<button class="ck" data-tk-done="${esc(x.id)}" title="${esc(t("ts.done"))}" aria-label="${esc(t("ts.done"))}"></button>`}
+      ${
+      ev
+        ? `<span class="ev"><i></i></span>`
+        : `<button class="ck" data-tk-done="${esc(x.id)}" title="${esc(t("ts.done"))}" aria-label="${
+          esc(t("ts.done"))
+        }"></button>`
+    }
       <span class="tt"><span>${esc(x.title)}</span>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
       <span class="rt">${p ? `${bar(p)}` : cls === "late" ? esc(t("day.late")) : ""}</span>
     </div>`;
   };
-  const allday = (xs) => xs.length ? `<div class="allday">${xs.map((x) => `<span><i></i>${esc(x.title)}</span>`).join("")}</div>` : "";
+  const allday = (xs) =>
+    xs.length ? `<div class="allday">${xs.map((x) => `<span><i></i>${esc(x.title)}</span>`).join("")}</div>` : "";
 
   // today: what is late first, then one line of time with a mark for now
   const todayAll = [...(TK.earlier ?? []), ...TK.today];
@@ -266,10 +287,14 @@ function renderTasks() {
   const timed = todayAll.filter((x) => x.time).sort((a, b) => a.time.localeCompare(b.time));
   const loose = todayAll.filter((x) => x.source !== "calendar" && !x.time);
   let html = allday(untimedEv);
-  html += TK.overdue.map((x) => row(x, shortDay(x.due), "late")).join("") + TK.missed.map((x) => row(x, x.time, "late")).join("");
+  html += TK.overdue.map((x) => row(x, shortDay(x.due), "late")).join("") +
+    TK.missed.map((x) => row(x, x.time, "late")).join("");
   let marked = false;
   for (const x of timed) {
-    if (!marked && x.time > now) { html += `<div class="now"><span>${now}</span></div>`; marked = true; }
+    if (!marked && x.time > now) {
+      html += `<div class="now"><span>${now}</span></div>`;
+      marked = true;
+    }
     html += row(x, x.time, x.time < now ? "past" : "");
   }
   if (!marked) html += `<div class="now"><span>${now}</span></div>`;
@@ -278,8 +303,11 @@ function renderTasks() {
     html += `<div class="pane-empty">${esc(t("day.free"))}</div>`;
   }
 
-  const later = (key, xs, when) => xs.length ? `<div class="dhead">${esc(t(key))}</div>` + allday(xs.filter((x) => x.source === "calendar" && !x.time)) +
-    xs.filter((x) => x.source !== "calendar" || x.time).map((x) => row(x, when(x))).join("") : "";
+  const later = (key, xs, when) =>
+    xs.length
+      ? `<div class="dhead">${esc(t(key))}</div>` + allday(xs.filter((x) => x.source === "calendar" && !x.time)) +
+        xs.filter((x) => x.source !== "calendar" || x.time).map((x) => row(x, when(x))).join("")
+      : "";
   html += later("day.tomorrow", TK.tomorrow, (x) => x.time ?? "");
   if (TK.moment !== "evening") html += later("day.next", TK.upcoming, (x) => shortDay(x.due));
   html += later("day.waiting", TK.waiting, (x) => x.due ? shortDay(x.due) : "");
@@ -291,8 +319,14 @@ $("#day").addEventListener("click", async (e) => {
   if (done) {
     e.stopPropagation();
     done.disabled = true;
-    const r = await post("/api/tasks", { op: "update", id: done.dataset.tkDone, status: "done" }).catch((err) => ({ ok: false, message: err.message }));
-    if (!r.ok) { done.disabled = false; return toast(r.message, true); }
+    const r = await post("/api/tasks", { op: "update", id: done.dataset.tkDone, status: "done" }).catch((err) => ({
+      ok: false,
+      message: err.message,
+    }));
+    if (!r.ok) {
+      done.disabled = false;
+      return toast(r.message, true);
+    }
     toast(t("tasks.done", { t: r.task.title }));
     return loadTasks();
   }
@@ -300,7 +334,9 @@ $("#day").addEventListener("click", async (e) => {
   if (o) openTask(o.dataset.tkOpen);
 });
 // the line for now moves with the clock
-setInterval(() => { if (view === "today" && TK) renderTasks(); }, 60000);
+setInterval(() => {
+  if (view === "today" && TK) renderTasks();
+}, 60000);
 
 /* ---------------- the morning debrief ---------------- */
 // Written by Claude once a day, at the first look at Today after five in the morning; kept by the server.
@@ -317,17 +353,28 @@ async function loadDebrief(again = false) {
   el.innerHTML = `<div class="debrief-f">${sparkHtml(true)}<span>${esc(t("debrief.writing"))}</span></div>`;
   let text = "";
   await askStream("/api/debrief", {}, {
-    text: (d) => { text += d; showDebrief(text, true); },
+    text: (d) => {
+      text += d;
+      showDebrief(text, true);
+    },
     done: (o) => o.error ? (el.hidden = true) : showDebrief(o.text),
-  }).catch(() => { el.hidden = true; });
+  }).catch(() => {
+    el.hidden = true;
+  });
 }
 function showDebrief(text, writing = false) {
   const el = $("#debrief");
   el.hidden = !text.trim();
   el.innerHTML = text.trim().split(/\n+/).map((l) => `<p>${esc(l)}</p>`).join("") +
-    (writing ? "" : `<div class="debrief-f"><span>${esc(t("debrief.by"))}</span><button data-debrief-again>${esc(t("debrief.again"))}</button></div>`);
+    (writing
+      ? ""
+      : `<div class="debrief-f"><span>${esc(t("debrief.by"))}</span><button data-debrief-again>${
+        esc(t("debrief.again"))
+      }</button></div>`);
 }
-$("#debrief").addEventListener("click", (e) => { if (e.target.closest("[data-debrief-again]")) loadDebrief(true); });
+$("#debrief").addEventListener("click", (e) => {
+  if (e.target.closest("[data-debrief-again]")) loadDebrief(true);
+});
 
 /* ---------------- sessions ---------------- */
 /** Sessions seen writing recently. A row stays "working" for a few seconds after its last write,
@@ -363,20 +410,28 @@ function renderRunning() {
   }
   // busy first, then the most recent
   const rows = cli.map((c) => ({ c, busy: isWorking(c.session, c.lastActivity) }))
-    .sort((a, b) => Number(b.busy) - Number(a.busy) || String(b.c.lastActivity ?? "").localeCompare(String(a.c.lastActivity ?? "")));
+    .sort((a, b) =>
+      Number(b.busy) - Number(a.busy) || String(b.c.lastActivity ?? "").localeCompare(String(a.c.lastActivity ?? ""))
+    );
   el.innerHTML = rows.map(({ c, busy }) =>
     `<button class="ses" data-focus="${c.pid}" title="${esc(c.cwd ?? "")}">
       <span class="mark">${busy ? sparkHtml(true) : `<i class="idle"></i>`}</span>
       <span class="nm">${esc(c.cwd ? c.cwd.split("/").filter(Boolean).pop() : "—")}</span>
-      <span class="when${busy ? " on" : ""}">${esc(busy ? t("run.working") : c.lastActivity ? t("run.idle", { d: dur(c.lastActivity) }) : "")}</span>
-      <span class="sub">${pf(c.profile ?? "?")}<span>${esc(t(c.embedded ? "run.desktop" : "run.terminal"))}</span>${c.model ? `<span>${esc(modelShort(c.model))}</span>` : ""}</span>
+      <span class="when${busy ? " on" : ""}">${
+      esc(busy ? t("run.working") : c.lastActivity ? t("run.idle", { d: dur(c.lastActivity) }) : "")
+    }</span>
+      <span class="sub">${pf(c.profile ?? "?")}<span>${esc(t(c.embedded ? "run.desktop" : "run.terminal"))}</span>${
+      c.model ? `<span>${esc(modelShort(c.model))}</span>` : ""
+    }</span>
     </button>`
   ).join("") + desk.map((d) =>
     `<button class="ses" data-focus="${d.pid}">
       <span class="mark"><i class="idle"></i></span>
       <span class="nm">${esc(t("run.desktopApp"))}</span>
       <span class="when"></span>
-      <span class="sub">${pf(d.variant)}<span>${esc(t("run.window", { n: cli.filter((c) => c.embedded && c.profile === d.variant).length }))}</span></span>
+      <span class="sub">${pf(d.variant)}<span>${
+      esc(t("run.window", { n: cli.filter((c) => c.embedded && c.profile === d.variant).length }))
+    }</span></span>
     </button>`
   ).join("");
 }
@@ -384,7 +439,10 @@ function renderRunning() {
 $("#running").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-focus]");
   if (!b) return;
-  const r = await post("/api/focus", { pid: Number(b.dataset.focus) }).catch((err) => ({ ok: false, message: err.message }));
+  const r = await post("/api/focus", { pid: Number(b.dataset.focus) }).catch((err) => ({
+    ok: false,
+    message: err.message,
+  }));
   if (!r.ok) toast(r.message ?? t("run.noFocus"), true);
 });
 
@@ -422,7 +480,10 @@ $("#resume").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-resume]");
   if (!b) return;
   const r = RESUME[+b.dataset.resume];
-  const res = await post("/api/terminal", { cwd: r.cwd, profile: r.profile, resume: r.session_id }).catch((err) => ({ ok: false, message: err.message }));
+  const res = await post("/api/terminal", { cwd: r.cwd, profile: r.profile, resume: r.session_id }).catch((err) => ({
+    ok: false,
+    message: err.message,
+  }));
   if (!res.ok) toast(res.message, true);
 });
 
@@ -433,7 +494,8 @@ $("#resume").addEventListener("click", async (e) => {
 // Claude Desktop's own, when it is installed (cli/claude-assets.ts): the spark, the frames it
 // moves through while Claude works, and the icon font. Without it a plain star stands still.
 let CLAUDE = { spark: null, strips: {}, icons: {}, iconFont: false };
-const SPARK_STILL = `<svg viewBox="0 0 24 24"><path d="M12 2.5l1.6 6.2 5.6-3.2-3.2 5.6 6.2 1.6-6.2 1.6 3.2 5.6-5.6-3.2L12 22.9l-1.6-6.2-5.6 3.2 3.2-5.6L1.8 12.7 8 11.1 4.8 5.5l5.6 3.2z"/></svg>`;
+const SPARK_STILL =
+  `<svg viewBox="0 0 24 24"><path d="M12 2.5l1.6 6.2 5.6-3.2-3.2 5.6 6.2 1.6-6.2 1.6 3.2 5.6-5.6-3.2L12 22.9l-1.6-6.2-5.6 3.2 3.2-5.6L1.8 12.7 8 11.1 4.8 5.5l5.6 3.2z"/></svg>`;
 const sparkStill = () => CLAUDE.spark ?? SPARK_STILL;
 
 /** A spark: still, or moving through one of Claude's animations ("thinking", "writing"…). */
@@ -451,7 +513,9 @@ function setSpark(el, mode) {
   const n = strip.frameCount;
   el.innerHTML = `<span class="strip" style="height:${n * 100}%">${strip.svg}</span>`;
   el.firstElementChild.animate(Array.from({ length: n }, (_, i) => ({ transform: `translateY(-${(100 / n) * i}%)` })), {
-    duration: strip.speed * n, iterations: Infinity, easing: `steps(${n}, jump-none)`,
+    duration: strip.speed * n,
+    iterations: Infinity,
+    easing: `steps(${n}, jump-none)`,
   });
 }
 // every spark drawn anywhere on the page gets its content, without each renderer having to ask
@@ -462,15 +526,23 @@ new MutationObserver(() => {
 }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-spark"] });
 
 /** An Anthropicons glyph by name, or "" when the font is not here (the caller keeps its own). */
-const aicon = (name) => CLAUDE.iconFont && CLAUDE.icons[name] ? `<i class="ai" aria-hidden="true">&#${CLAUDE.icons[name]};</i>` : "";
+const aicon = (name) =>
+  CLAUDE.iconFont && CLAUDE.icons[name] ? `<i class="ai" aria-hidden="true">&#${CLAUDE.icons[name]};</i>` : "";
 const NAV_ICONS = { today: "Sun", tasks: "Tasks", brain: "Memory", connections: "Connectors", system: "Settings" };
 
 async function loadClaude() {
   try {
     const a = await api("/claude/assets.json");
     if (!a.found) return;
-    CLAUDE = { spark: a.spark?.replace(/fill="#[0-9a-fA-F]{3,8}"/g, 'fill="currentColor"') ?? null, strips: a.strips, icons: a.icons, iconFont: a.iconFont };
-  } catch { return; }
+    CLAUDE = {
+      spark: a.spark?.replace(/fill="#[0-9a-fA-F]{3,8}"/g, 'fill="currentColor"') ?? null,
+      strips: a.strips,
+      icons: a.icons,
+      iconFont: a.iconFont,
+    };
+  } catch {
+    return;
+  }
   for (const el of document.querySelectorAll(".spark")) setSpark(el, el.dataset.spark);
   for (const a of $$("#nav a")) {
     const g = aicon(NAV_ICONS[a.dataset.v]);
@@ -480,7 +552,12 @@ async function loadClaude() {
 
 /** POST and read the NDJSON answer line by line. */
 async function askStream(path, body, on, signal) {
-  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-claude-multi": "1" }, body: JSON.stringify(body), signal });
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-claude-multi": "1" },
+    body: JSON.stringify(body),
+    signal,
+  });
   if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let rest = "";
@@ -509,10 +586,17 @@ function askContext(kind, project = null) {
   // a change to the brain: on the page on screen, or (null) on the brain as a whole
   $("span", ctx).textContent = kind === "brain"
     ? (project ? t("ask.ctx.brain", { p: BRAIN?.byPath.get(project)?.title ?? project }) : t("ask.ctx.brainAll"))
-    : kind !== "newtask" ? "" : project === null ? t("tb.new") : t("ask.ctx.newtask", { p: project === "~none" ? t("tb.noProject") : project.split("/").pop() });
+    : kind !== "newtask"
+    ? ""
+    : project === null
+    ? t("tb.new")
+    : t("ask.ctx.newtask", { p: project === "~none" ? t("tb.noProject") : project.split("/").pop() });
   $("#ask-text").placeholder = t(kind === "newtask" ? "ask.ph.newtask" : kind === "brain" ? "ask.ph.brain" : "ask.ph");
 }
-$("#ask-ctx button").addEventListener("click", () => { askContext("ask"); $("#ask-text").focus(); });
+$("#ask-ctx button").addEventListener("click", () => {
+  askContext("ask");
+  $("#ask-text").focus();
+});
 
 function closeAnswer() {
   ASK.busy?.abort();
@@ -543,13 +627,19 @@ $("#composer").addEventListener("submit", async (e) => {
   status.innerHTML = `${sparkHtml(true)}<span class="ask-state">${esc(t("ask.thinking"))}</span>`;
   $("#ask-spark").dataset.spark = "thinking";
   let acc = "", frame = 0;
-  const paint = () => { frame = 0; body.innerHTML = mdToHtml(acc.replace(/\[\[code:[^\]]*\]\]/g, "")); body.scrollTop = body.scrollHeight; };
+  const paint = () => {
+    frame = 0;
+    body.innerHTML = mdToHtml(acc.replace(/\[\[code:[^\]]*\]\]/g, ""));
+    body.scrollTop = body.scrollHeight;
+  };
   ASK.busy = new AbortController();
   const kind = ASK.kind;
   try {
     const where = ASK.project === "~none" ? { noProject: true } : { project: ASK.project };
     await askStream("/api/ask", { text, kind, ...where, session: ASK.session }, {
-      session: (o) => { ASK.session = o.id; },
+      session: (o) => {
+        ASK.session = o.id;
+      },
       text: (d) => {
         acc += d;
         if (!frame) frame = requestAnimationFrame(paint);
@@ -564,8 +654,11 @@ $("#composer").addEventListener("submit", async (e) => {
         if (sp) sp.dataset.spark = "thinking";
       },
       done: (o) => {
-        if (o.error) { body.innerHTML = `<p class="err">${esc(t("ask.failed", { e: o.error }))}</p>`; }
-        else { acc = o.text; paint(); }
+        if (o.error) body.innerHTML = `<p class="err">${esc(t("ask.failed", { e: o.error }))}</p>`;
+        else {
+          acc = o.text;
+          paint();
+        }
         ASK.code = o.code;
       },
     }, ASK.busy.signal);
@@ -583,7 +676,10 @@ $("#composer").addEventListener("submit", async (e) => {
   }
   // a new task is one thing: the next request is a plain one again
   if (kind === "newtask") askContext("ask");
-  if (ASK.tools) { loadTasks().catch(() => {}); if (view === "tasks") loadBoard().catch(() => {}); }
+  if (ASK.tools) {
+    loadTasks().catch(() => {});
+    if (view === "tasks") loadBoard().catch(() => {});
+  }
   // what Claude changed in the brain shows at once, not at the next half-minute check
   if (kind === "brain" && ASK.tools && view === "brain") loadBrain().catch(() => {});
   ta.focus();
@@ -594,7 +690,10 @@ $("#answer-term").addEventListener("click", async () => {
   if (!r.ok) toast(r.message, true);
 });
 $("#answer-code").addEventListener("click", async () => {
-  const r = await post("/api/terminal", { cwd: ASK.code, ask: ASK.last }).catch((err) => ({ ok: false, message: err.message }));
+  const r = await post("/api/terminal", { cwd: ASK.code, ask: ASK.last }).catch((err) => ({
+    ok: false,
+    message: err.message,
+  }));
   if (!r.ok) toast(r.message, true);
 });
 
@@ -606,11 +705,19 @@ async function loadAskModel() {
     sel.innerHTML = r.models.map((m) => `<option value="${esc(m)}">${esc(t(`ask.model.${m}`))}</option>`).join("");
     sel.value = r.model;
     sel.hidden = false;
-  } catch { sel.hidden = true; }
+  } catch {
+    sel.hidden = true;
+  }
 }
 $("#ask-model").addEventListener("change", async (e) => {
-  const r = await post("/api/ask/model", { model: e.target.value }).catch((err) => ({ ok: false, message: err.message }));
-  if (!r.ok) { toast(r.message, true); loadAskModel(); }
+  const r = await post("/api/ask/model", { model: e.target.value }).catch((err) => ({
+    ok: false,
+    message: err.message,
+  }));
+  if (!r.ok) {
+    toast(r.message, true);
+    loadAskModel();
+  }
   $("#ask-text").focus();
 });
 loadAskModel();
@@ -622,8 +729,14 @@ function autosize() {
 }
 $("#ask-text").addEventListener("input", autosize);
 $("#ask-text").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#composer").requestSubmit(); }
-  if (e.key === "Escape") { if (!$("#answer").hidden) closeAnswer(); else e.target.blur(); }
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    $("#composer").requestSubmit();
+  }
+  if (e.key === "Escape") {
+    if (!$("#answer").hidden) closeAnswer();
+    else e.target.blur();
+  }
 });
 // "/" anywhere outside a field puts the cursor in the field, as in most chat apps
 addEventListener("keydown", (e) => {
@@ -645,9 +758,18 @@ function mdToHtml(src) {
     const park = (html) => `\u0000${toks.push(html) - 1}\u0000`;
     let x = esc(String(s).replace(/\u0000/g, ""));
     x = x.replace(/`([^`]+)`/g, (_, c) => park(`<code>${c}</code>`));
-    x = x.replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, target, label) => park(`<a data-page="${target.trim()}">${label ?? target.trim().split("/").pop()}</a>`));
-    x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => park(`<a href="${url}" target="_blank" rel="noopener">${label}</a>`));
-    x = x.replace(/\[([^\]]+)\]\((?:&lt;(.+?)&gt;|([^)\s]+))\)/g, (_, label, a, b) => park(`<span class="lnk" title="${a ?? b}">${label}</span>`));
+    x = x.replace(
+      /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g,
+      (_, target, label) => park(`<a data-page="${target.trim()}">${label ?? target.trim().split("/").pop()}</a>`),
+    );
+    x = x.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+      (_, label, url) => park(`<a href="${url}" target="_blank" rel="noopener">${label}</a>`),
+    );
+    x = x.replace(
+      /\[([^\]]+)\]\((?:&lt;(.+?)&gt;|([^)\s]+))\)/g,
+      (_, label, a, b) => park(`<span class="lnk" title="${a ?? b}">${label}</span>`),
+    );
     x = x
       .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
       .replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, "$1<i>$2</i>")
@@ -657,32 +779,67 @@ function mdToHtml(src) {
   const out = [];
   let list = null, code = null, table = null;
   const flush = () => {
-    if (list) { out.push(`</${list}>`); list = null; }
-    if (table) { out.push(`<table>${table.join("")}</table>`); table = null; }
+    if (list) {
+      out.push(`</${list}>`);
+      list = null;
+    }
+    if (table) {
+      out.push(`<table>${table.join("")}</table>`);
+      table = null;
+    }
   };
   for (const line of src.split("\n")) {
     if (code !== null) {
-      if (line.startsWith("```")) { out.push(`<pre>${esc(code.join("\n"))}</pre>`); code = null; } else code.push(line);
+      if (line.startsWith("```")) {
+        out.push(`<pre>${esc(code.join("\n"))}</pre>`);
+        code = null;
+      } else code.push(line);
       continue;
     }
-    if (line.startsWith("```")) { flush(); code = []; continue; }
+    if (line.startsWith("```")) {
+      flush();
+      code = [];
+      continue;
+    }
     const h = line.match(/^(#{1,6})\s+(.*)/);
-    if (h) { flush(); const n = Math.min(h[1].length, 4); out.push(`<h${n}>${inline(h[2])}</h${n}>`); continue; }
-    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flush(); out.push("<hr>"); continue; }
+    if (h) {
+      flush();
+      const n = Math.min(h[1].length, 4);
+      out.push(`<h${n}>${inline(h[2])}</h${n}>`);
+      continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
+      flush();
+      out.push("<hr>");
+      continue;
+    }
     const li = line.match(/^\s*(?:([-*+])|(\d+)[.)])\s+(.*)/);
     if (li) {
       const kind = li[2] ? "ol" : "ul";
-      if (list !== kind) { flush(); out.push(`<${kind}>`); list = kind; }
+      if (list !== kind) {
+        flush();
+        out.push(`<${kind}>`);
+        list = kind;
+      }
       const box = li[3].match(/^\[([ xX])\]\s+(.*)/);
       // a nested item keeps its depth (two spaces a level), without building nested lists
       const depth = Math.min(Math.floor(line.match(/^\s*/)[0].replace(/\t/g, "  ").length / 2), 4);
       const lvl = depth ? ` style="--lv:${depth}"` : "";
-      out.push(box ? `<li class="task${box[1] !== " " ? " done" : ""}"${lvl}><span class="cb">${box[1] !== " " ? "✓" : ""}</span>${inline(box[2])}</li>` : `<li${lvl}>${inline(li[3])}</li>`);
+      out.push(
+        box
+          ? `<li class="task${box[1] !== " " ? " done" : ""}"${lvl}><span class="cb">${
+            box[1] !== " " ? "✓" : ""
+          }</span>${inline(box[2])}</li>`
+          : `<li${lvl}>${inline(li[3])}</li>`,
+      );
       continue;
     }
     if (/^\|.*\|\s*$/.test(line)) {
       if (/^\|[\s:|-]+\|\s*$/.test(line)) continue;
-      if (!table) { flush(); table = []; }
+      if (!table) {
+        flush();
+        table = [];
+      }
       table.push(`<tr>${line.trim().slice(1, -1).split("|").map((c) => `<td>${inline(c.trim())}</td>`).join("")}</tr>`);
       continue;
     }
@@ -706,16 +863,19 @@ function renderAccounts() {
   if (!ACC) return;
   const v = ACC.vault, box = $("#vault");
   // the vault only speaks up when something is to be done on this machine
-  const msg = v.state === "wrong-key" ? ["fail", t("vault.wrongKey")]
-    : v.state === "no-key" ? ["update", t(v.initialised ? "vault.pair" : "vault.init")]
-    : v.conflicts ? ["update", t("vault.conflicts", { n: v.conflicts })]
+  const msg = v.state === "wrong-key"
+    ? ["fail", t("vault.wrongKey")]
+    : v.state === "no-key"
+    ? ["update", t(v.initialised ? "vault.pair" : "vault.init")]
+    : v.conflicts
+    ? ["update", t("vault.conflicts", { n: v.conflicts })]
     : null;
   box.hidden = !msg;
   if (msg) {
     box.className = "status-card " + msg[0];
-    box.innerHTML = `<i></i><div><b>${esc(t("vault.title"))}</b><div class="sub">${esc(msg[1])}</div><div class="sub"><code>${
-      esc(v.dir)
-    }</code></div></div>`;
+    box.innerHTML = `<i></i><div><b>${esc(t("vault.title"))}</b><div class="sub">${
+      esc(msg[1])
+    }</div><div class="sub"><code>${esc(v.dir)}</code></div></div>`;
   }
   // Google: the OAuth client is imported once, before any account can connect
   const g = $("#gclient");
@@ -723,8 +883,12 @@ function renderAccounts() {
   g.hidden = !wantsGoogle || ACC.google.client;
   if (!g.hidden) {
     g.className = "status-card update";
-    g.innerHTML = `<i></i><div><b>${esc(t("google.client"))}</b><div class="sub">${esc(t("google.client.how"))}</div></div>
-      <label class="btn">${esc(t("google.client.import"))}<input type="file" accept=".json,application/json" id="gclient-file" hidden></label>`;
+    g.innerHTML = `<i></i><div><b>${esc(t("google.client"))}</b><div class="sub">${
+      esc(t("google.client.how"))
+    }</div></div>
+      <label class="btn">${
+      esc(t("google.client.import"))
+    }<input type="file" accept=".json,application/json" id="gclient-file" hidden></label>`;
   }
   const last = ACC.google.last;
   if (last && last.at !== seenConnect) {
@@ -737,11 +901,22 @@ function renderAccounts() {
 /* One block per service, its accounts inside, each with one state in plain words and one action;
    brain and tasks — claude-multi's own — apart at the bottom. */
 const SVC_NAMES = {
-  n8n: "n8n", google: "Google", cloudflare: "Cloudflare", supabase: "Supabase", lovable: "Lovable", railway: "Railway",
-  zapier: "Zapier", gitea: "Gitea · Forgejo", coolify: "Coolify", "syncthing-status": "Syncthing", brain: "Brain",
+  n8n: "n8n",
+  google: "Google",
+  cloudflare: "Cloudflare",
+  supabase: "Supabase",
+  lovable: "Lovable",
+  railway: "Railway",
+  zapier: "Zapier",
+  gitea: "Gitea · Forgejo",
+  coolify: "Coolify",
+  "syncthing-status": "Syncthing",
+  brain: "Brain",
 };
 let connFilter = "";
-try { connFilter = localStorage.getItem("conn.filter") ?? ""; } catch { /* storage off */ }
+try {
+  connFilter = localStorage.getItem("conn.filter") ?? "";
+} catch { /* storage off */ }
 
 function logo(service) {
   const d = LOGOS[service];
@@ -749,7 +924,10 @@ function logo(service) {
     ? `<span class="svc-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg></span>`
     : `<span class="svc-logo">${esc((SVC_NAMES[service] ?? service).slice(0, 1).toUpperCase())}</span>`;
 }
-const profileChips = (ps) => ps ? ps.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ") : `<span class="sub">${esc(t("acc.allProfiles"))}</span>`;
+const profileChips = (ps) =>
+  ps
+    ? ps.map((p) => `<span class="chip on">${esc(p)}</span>`).join(" ")
+    : `<span class="sub">${esc(t("acc.allProfiles"))}</span>`;
 
 /** The one state of an account, most urgent first: [class, text, sub-line or ""]. */
 function accState(a) {
@@ -761,7 +939,9 @@ function accState(a) {
   }
   if (a.service === "google" && !a.hasSecret) return ["warn-t", t("google.notConnected"), ""];
   if (a.service === "brain" && !a.hasSecret) return ["warn-t", t("conn.brainOff"), ""];
-  if (a.auth !== "oauth" && a.service !== "google" && a.service !== "brain" && !a.hasSecret) return ["warn-t", t("acc.noSecret"), ""];
+  if (a.auth !== "oauth" && a.service !== "google" && a.service !== "brain" && !a.hasSecret) {
+    return ["warn-t", t("acc.noSecret"), ""];
+  }
   if (r.pending.length) return ["warn-t", t("conn.pending", { p: r.pending.join(", ") }), desk];
   if (!r.profiles.length) return ["sub", t("conn.unused"), ""];
   if (a.auth === "oauth") return ["sub", t("acc.oauth"), desk];
@@ -773,16 +953,26 @@ function accState(a) {
 function accRow(a) {
   const i = ACC.accounts.indexOf(a);
   const [cls, text, sub] = accState(a);
-  const who = a.service === "google" && a.email ? a.email : a.url ? a.url.replace(/^https?:\/\//, "").replace(/\/$/, "") : "";
+  const who = a.service === "google" && a.email
+    ? a.email
+    : a.url
+    ? a.url.replace(/^https?:\/\//, "").replace(/\/$/, "")
+    : "";
   const act = a.service === "google" && ACC.google.client
-    ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))}</button>`
+    ? `<button class="btn sm" data-g-connect="${esc(a.name)}">${
+      esc(t(a.hasSecret ? "google.reconnect" : "google.connect"))
+    }</button>`
     : a.service === "brain" && a.url && ACC.vault.state === "ok"
     ? `<button class="btn sm" data-b-login="${esc(a.name)}">${esc(t("brain.login"))}</button>`
     : "";
   return `<div class="acc-row">
-    <div class="acc-who"${a.note ? ` title="${esc(a.note)}"` : ""}><b>${esc(a.name)}</b>${who ? `<small>${esc(who)}</small>` : ""}</div>
+    <div class="acc-who"${a.note ? ` title="${esc(a.note)}"` : ""}><b>${esc(a.name)}</b>${
+    who ? `<small>${esc(who)}</small>` : ""
+  }</div>
     <div class="chips">${profileChips(a.profiles)}</div>
-    <div class="acc-state"><span class="${cls}">${esc(text)}</span>${sub ? `<small>${sub.startsWith("<code>") ? sub : esc(sub)}</small>` : ""}</div>
+    <div class="acc-state"><span class="${cls}">${esc(text)}</span>${
+    sub ? `<small>${sub.startsWith("<code>") ? sub : esc(sub)}</small>` : ""
+  }</div>
     <div class="acts">${act}<button class="btn ghost sm" data-acc-edit="${i}">${esc(t("profile.edit"))}</button></div>
   </div>`;
 }
@@ -790,7 +980,9 @@ function accRow(a) {
 /** A server that needs no account: on for some profiles, nothing to sign in to. */
 function serverRow(sv) {
   const desk = sv.noDesktop.length ? t("conn.noDesktop", { p: sv.noDesktop.join(", ") }) : "";
-  const [cls, text] = sv.pending.length ? ["warn-t", t("conn.pending", { p: sv.pending.join(", ") })] : ["ok-t", t("conn.ready")];
+  const [cls, text] = sv.pending.length
+    ? ["warn-t", t("conn.pending", { p: sv.pending.join(", ") })]
+    : ["ok-t", t("conn.ready")];
   return `<div class="acc-row">
     <div class="acc-who"><span class="sub">${esc(t("conn.noAccount"))}</span></div>
     <div class="chips">${profileChips(sv.profiles)}</div>
@@ -802,7 +994,9 @@ function serverRow(sv) {
 function svcBlock(service, rows) {
   const desc = t(`svc.${service}`);
   return `<div class="svc">
-    <div class="svc-h">${logo(service)}<b>${esc(SVC_NAMES[service] ?? service)}</b>${desc !== `svc.${service}` ? `<span class="sub">${esc(desc)}</span>` : ""}</div>
+    <div class="svc-h">${logo(service)}<b>${esc(SVC_NAMES[service] ?? service)}</b>${
+    desc !== `svc.${service}` ? `<span class="sub">${esc(desc)}</span>` : ""
+  }</div>
     ${rows}
   </div>`;
 }
@@ -812,7 +1006,9 @@ function renderConnList() {
   const accs = ACC.accounts.filter((a) => sees(a.profiles));
   const servers = (ACC.servers ?? []).filter((sv) => sees(sv.profiles));
   $("#conn-filter").innerHTML = ["", ...ACC.profiles].map((p) =>
-    `<button class="chip pick${p === connFilter ? " on" : ""}" data-conn-filter="${esc(p)}">${esc(p || t("conn.all"))}</button>`
+    `<button class="chip pick${p === connFilter ? " on" : ""}" data-conn-filter="${esc(p)}">${
+      esc(p || t("conn.all"))
+    }</button>`
   ).join("");
   $("#acc-sum").textContent = t("acc.sum", { n: accs.length });
 
@@ -821,7 +1017,9 @@ function renderConnList() {
   const pc = $("#conn-pending");
   pc.hidden = !pending;
   if (pending) {
-    pc.innerHTML = `<i></i><div><b>${esc(t("conn.apply.title", { n: pending }))}</b><div class="sub">${esc(t("conn.apply.how"))}</div></div>
+    pc.innerHTML = `<i></i><div><b>${esc(t("conn.apply.title", { n: pending }))}</b><div class="sub">${
+      esc(t("conn.apply.how"))
+    }</div></div>
       <button class="btn" data-action="mcp-sync">${esc(t("conn.apply"))}</button>`;
   }
 
@@ -836,7 +1034,9 @@ function renderConnList() {
   const brain = accs.filter((a) => a.service === "brain");
   $("#conn-ours").innerHTML = brain.length
     ? `<div class="svc">
-        <div class="svc-h">${logo("brain")}<b>${esc(t("conn.brain"))}</b><span class="sub">${esc(t("svc.brain"))}</span></div>
+        <div class="svc-h">${logo("brain")}<b>${esc(t("conn.brain"))}</b><span class="sub">${
+      esc(t("svc.brain"))
+    }</span></div>
         ${brain.map(accRow).join("")}
       </div>`
     : `<p class="sub">${esc(t("conn.noBrain"))}</p>`;
@@ -845,7 +1045,9 @@ document.addEventListener("click", (e) => {
   const f = e.target.closest("[data-conn-filter]");
   if (!f) return;
   connFilter = f.dataset.connFilter;
-  try { localStorage.setItem("conn.filter", connFilter); } catch { /* storage off */ }
+  try {
+    localStorage.setItem("conn.filter", connFilter);
+  } catch { /* storage off */ }
   if (ACC) renderConnList();
 });
 
@@ -853,23 +1055,47 @@ document.addEventListener("click", (e) => {
     the page never receives a secret, it only sends one. */
 function openAccountForm(i) {
   const a = i == null ? null : ACC.accounts[i];
-  const field = (label, input, hint = "") => `<label class="fld">${esc(label)}${hint ? ` <small>${esc(hint)}</small>` : ""}${input}</label>`;
+  const field = (label, input, hint = "") =>
+    `<label class="fld">${esc(label)}${hint ? ` <small>${esc(hint)}</small>` : ""}${input}</label>`;
   const host = drawer(
     a ? `${a.service}/${a.name}` : t("acc.new"),
     `<form class="pform" id="aform">
       ${
-      field(t("acc.service"), a
-        ? `<input name="service" value="${esc(a.service)}" readonly>`
-        : `<select name="service" class="sel" style="font-size:14px;padding:8px">${ACC.services.map((sv) => `<option>${esc(sv)}</option>`).join("")}</select>`)
+      field(
+        t("acc.service"),
+        a
+          ? `<input name="service" value="${esc(a.service)}" readonly>`
+          : `<select name="service" class="sel" style="font-size:14px;padding:8px">${
+            ACC.services.map((sv) => `<option>${esc(sv)}</option>`).join("")
+          }</select>`,
+      )
     }
-      ${field(t("acc.name"), `<input name="name" required pattern="[a-z][a-z0-9_-]{0,30}" value="${esc(a?.name ?? "")}" ${a ? "readonly" : ""} placeholder="ark">`, t("acc.name.hint"))}
+      ${
+      field(
+        t("acc.name"),
+        `<input name="name" required pattern="[a-z][a-z0-9_-]{0,30}" value="${esc(a?.name ?? "")}" ${
+          a ? "readonly" : ""
+        } placeholder="ark">`,
+        t("acc.name.hint"),
+      )
+    }
       ${field(t("acc.url"), `<input name="url" value="${esc(a?.url ?? "")}" placeholder="https://…">`)}
       <div class="fld">${esc(t("conn.profiles"))} <small>${esc(t("acc.profiles.hint"))}</small><div class="chips">${
       ACC.profiles.map((p) =>
-        `<button type="button" class="chip pick${a?.profiles?.includes(p) ? " on" : ""}" data-pick="${esc(p)}" aria-pressed="${!!a?.profiles?.includes(p)}">${esc(p)}</button>`
+        `<button type="button" class="chip pick${a?.profiles?.includes(p) ? " on" : ""}" data-pick="${
+          esc(p)
+        }" aria-pressed="${!!a?.profiles?.includes(p)}">${esc(p)}</button>`
       ).join("")
     }</div></div>
-      <div class="acc-secret">${field(t("acc.secret"), `<input name="secret" type="password" autocomplete="off" placeholder="${esc(t(a ? "acc.secret.keep" : "acc.secret.ph"))}">`, t("acc.secret.hint"))}</div>
+      <div class="acc-secret">${
+      field(
+        t("acc.secret"),
+        `<input name="secret" type="password" autocomplete="off" placeholder="${
+          esc(t(a ? "acc.secret.keep" : "acc.secret.ph"))
+        }">`,
+        t("acc.secret.hint"),
+      )
+    }</div>
       <p class="sub acc-google" hidden>${esc(t("google.form.hint"))}</p>
       <div class="pform-foot">
         <button class="btn primary" type="submit">${esc(t("profile.save"))}</button>
@@ -918,7 +1144,10 @@ $("#acc-add").addEventListener("click", () => ACC && openAccountForm(null));
 document.addEventListener("click", async (e) => {
   const c = e.target.closest("[data-g-connect]");
   if (!c) return;
-  const r = await post("/api/google/connect", { account: c.dataset.gConnect }).catch((err) => ({ ok: false, message: err.message }));
+  const r = await post("/api/google/connect", { account: c.dataset.gConnect }).catch((err) => ({
+    ok: false,
+    message: err.message,
+  }));
   if (!r.ok) return toast(r.message, true);
   window.open(r.url, "_blank", "noopener");
   toast(t("google.finish"));
@@ -926,14 +1155,21 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("click", async (e) => {
   const c = e.target.closest("[data-b-login]");
   if (!c) return;
-  const r = await post("/api/brain/login", { account: c.dataset.bLogin }).catch((err) => ({ ok: false, message: err.message }));
+  const r = await post("/api/brain/login", { account: c.dataset.bLogin }).catch((err) => ({
+    ok: false,
+    message: err.message,
+  }));
   if (!r.ok) return toast(r.message, true);
   window.open(r.url, "_blank", "noopener");
   toast(t("brain.finish"));
 });
 document.addEventListener("change", async (e) => {
   if (e.target.id !== "gclient-file" || !e.target.files[0]) return;
-  const r = await api("/api/google/client", { method: "POST", headers: { "x-claude-multi": "1" }, body: await e.target.files[0].text() })
+  const r = await api("/api/google/client", {
+    method: "POST",
+    headers: { "x-claude-multi": "1" },
+    body: await e.target.files[0].text(),
+  })
     .catch((err) => ({ ok: false, message: err.message }));
   toast(r.message, !r.ok);
   if (r.ok) loadAccounts();
@@ -972,7 +1208,9 @@ function renderProfiles() {
       }))
     }<small>${esc(t(p.manifest.disableAccountMcp ? "profile.accountMcpOff" : "profile.accountMcpOn"))}</small></div>
       <div class="pcell chips">${
-      p.mcp.length ? p.mcp.map((m) => `<span class="chip on">${esc(m)}</span>`).join("") : `<small>${esc(t("profile.noMcp"))}</small>`
+      p.mcp.length
+        ? p.mcp.map((m) => `<span class="chip on">${esc(m)}</span>`).join("")
+        : `<small>${esc(t("profile.noMcp"))}</small>`
     }</div>
       <button class="btn" data-edit="${esc(n)}">${esc(t("profile.edit"))}</button>
     </div>`;
@@ -992,20 +1230,49 @@ function openProfileForm(name) {
     isNew ? t("profile.new") : name,
     `<form class="pform" id="pform" data-name="${esc(name ?? "")}">
       ${
-      isNew ? field(t("profile.name"), `<input name="name" required pattern="[a-z][a-z0-9_-]{1,30}" placeholder="research" autofocus>`) : ""
+      isNew
+        ? field(
+          t("profile.name"),
+          `<input name="name" required pattern="[a-z][a-z0-9_-]{1,30}" placeholder="research" autofocus>`,
+        )
+        : ""
     }
-      ${field(t("profile.description"), `<input name="description" value="${esc(m.description ?? "")}" placeholder="${esc(t("profile.description.ph"))}">`)}
-      ${field(t("profile.command"), `<input name="command" value="${esc(m.command ?? "")}" placeholder="claude-${esc(name || "research")}">`)}
-      ${field(t("profile.alias"), `<input name="alias" value="${esc(m.alias ?? "")}" pattern="[a-zA-Z_][a-zA-Z0-9_-]*" placeholder="cr">`)}
-      ${field(t("profile.desktop"), `<input name="desktopDir" value="${esc(m.desktopDir ?? "")}" placeholder="~/.config/Claude-Research">`)}
+      ${
+      field(
+        t("profile.description"),
+        `<input name="description" value="${esc(m.description ?? "")}" placeholder="${
+          esc(t("profile.description.ph"))
+        }">`,
+      )
+    }
+      ${
+      field(
+        t("profile.command"),
+        `<input name="command" value="${esc(m.command ?? "")}" placeholder="claude-${esc(name || "research")}">`,
+      )
+    }
+      ${
+      field(
+        t("profile.alias"),
+        `<input name="alias" value="${esc(m.alias ?? "")}" pattern="[a-zA-Z_][a-zA-Z0-9_-]*" placeholder="cr">`,
+      )
+    }
+      ${
+      field(
+        t("profile.desktop"),
+        `<input name="desktopDir" value="${esc(m.desktopDir ?? "")}" placeholder="~/.config/Claude-Research">`,
+      )
+    }
       <div class="fld">MCP<div class="chips">${
       Object.keys(reg).map((s) =>
-        `<button type="button" class="chip pick${picked.has(s) ? " on" : ""}" data-pick="${esc(s)}" aria-pressed="${picked.has(s)}">${esc(s)}</button>`
+        `<button type="button" class="chip pick${picked.has(s) ? " on" : ""}" data-pick="${esc(s)}" aria-pressed="${
+          picked.has(s)
+        }">${esc(s)}</button>`
       ).join("") || `<small>${esc(t("profile.registryEmpty"))}</small>`
     }</div></div>
-      <label class="fld check"><input type="checkbox" name="disableAccountMcp"${m.disableAccountMcp ? " checked" : ""}> ${
-      esc(t("profile.disableAccountMcp"))
-    }</label>
+      <label class="fld check"><input type="checkbox" name="disableAccountMcp"${
+      m.disableAccountMcp ? " checked" : ""
+    }> ${esc(t("profile.disableAccountMcp"))}</label>
       <div class="pform-foot">
         <button class="btn primary" type="submit">${esc(t(isNew ? "profile.create" : "profile.save"))}</button>
         <button class="btn ghost" type="button" data-close>${esc(t("profile.cancel"))}</button>
@@ -1075,7 +1342,13 @@ function renderPermissions() {
       <div class="panel-h"><h3>${esc(t(`perm.${l}`))}</h3><span class="r">${PERM.rules[l].length}</span></div>
       <div class="panel-b">
         <span class="sub">${esc(t(`perm.${l}.what`))}</span>
-        ${PERM.rules[l].map((r) => `<div class="perm-rule"><code>${esc(r)}</code><button data-perm-rm="${esc(l)}" data-rule="${esc(r)}" aria-label="${esc(t("pl.remove"))}">×</button></div>`).join("") || `<span class="sub">—</span>`}
+        ${
+      PERM.rules[l].map((r) =>
+        `<div class="perm-rule"><code>${esc(r)}</code><button data-perm-rm="${esc(l)}" data-rule="${
+          esc(r)
+        }" aria-label="${esc(t("pl.remove"))}">×</button></div>`
+      ).join("") || `<span class="sub">—</span>`
+    }
       </div>
       <form class="perm-add" data-perm-add="${esc(l)}">
         <input name="rule" class="search" placeholder="Bash(npm test:*)" required autocomplete="off">
@@ -1087,13 +1360,33 @@ function renderPermissions() {
   $("#perm-profiles").innerHTML = profs.map(([p, v]) =>
     `<section class="panel perm-prof">
       <div class="panel-h"><h3>${esc(p)}</h3><span class="r">${esc(t("perm.own"))}</span>
-        ${Object.keys(v.lists).length ? `<button class="btn sm" data-perm-promote="${esc(p)}">${esc(t("perm.promote"))}</button>` : ""}</div>
+        ${
+      Object.keys(v.lists).length
+        ? `<button class="btn sm" data-perm-promote="${esc(p)}">${esc(t("perm.promote"))}</button>`
+        : ""
+    }</div>
       <div class="panel-b">
         ${v.mode ? `<div>${esc(t("perm.mode"))}: <code>${esc(v.mode)}</code></div>` : ""}
-        ${Object.entries(v.lists).map(([l, d]) => `<div><b>${esc(t(`perm.${l}`))}</b>
-          ${d.added.length ? `<div class="sub">${esc(t("perm.added"))}: ${d.added.map((r) => `<code>${esc(r)}</code>`).join(" · ")}</div>` : ""}
-          ${d.dropped.length ? `<div class="sub">${esc(t("perm.dropped"))}: ${d.dropped.map((r) => `<code>${esc(r)}</code>`).join(" · ")}</div>` : ""}
-        </div>`).join("")}
+        ${
+      Object.entries(v.lists).map(([l, d]) =>
+        `<div><b>${esc(t(`perm.${l}`))}</b>
+          ${
+          d.added.length
+            ? `<div class="sub">${esc(t("perm.added"))}: ${
+              d.added.map((r) => `<code>${esc(r)}</code>`).join(" · ")
+            }</div>`
+            : ""
+        }
+          ${
+          d.dropped.length
+            ? `<div class="sub">${esc(t("perm.dropped"))}: ${
+              d.dropped.map((r) => `<code>${esc(r)}</code>`).join(" · ")
+            }</div>`
+            : ""
+        }
+        </div>`
+      ).join("")
+    }
       </div>
     </section>`
   ).join("");
@@ -1115,7 +1408,9 @@ document.addEventListener("click", (e) => {
   const rm = e.target.closest("[data-perm-rm]");
   if (rm) return permOp({ op: "remove", list: rm.dataset.permRm, rule: rm.dataset.rule });
   const pr = e.target.closest("[data-perm-promote]");
-  if (pr && confirm(t("perm.promote.confirm", { p: pr.dataset.permPromote }))) permOp({ op: "promote", profile: pr.dataset.permPromote });
+  if (pr && confirm(t("perm.promote.confirm", { p: pr.dataset.permPromote }))) {
+    permOp({ op: "promote", profile: pr.dataset.permPromote });
+  }
 });
 
 /* ---------------- updates ---------------- */
@@ -1124,10 +1419,14 @@ const COMPONENTS = { cli: "Claude Code", desktop: "Claude Desktop", "claude-mult
 function selfCard(card) {
   const r = S.repo ?? {};
   if (!r.isRepo) return "";
-  const state = !r.upstream ? t("up.self.noUpstream", { b: r.branch })
-    : r.behind && r.ahead ? t("up.self.diverged", { n: r.behind, m: r.ahead })
-    : r.behind && r.dirty ? t("up.self.dirty", { n: r.behind, d: r.dirty })
-    : r.behind ? t("up.self.behind", { n: r.behind })
+  const state = !r.upstream
+    ? t("up.self.noUpstream", { b: r.branch })
+    : r.behind && r.ahead
+    ? t("up.self.diverged", { n: r.behind, m: r.ahead })
+    : r.behind && r.dirty
+    ? t("up.self.dirty", { n: r.behind, d: r.dirty })
+    : r.behind
+    ? t("up.self.behind", { n: r.behind })
     : t("up.uptodate");
   return card("claude-multi", (r.head ?? "").split(" ")[0], [state, S.selfInstall ? t("up.self.install") : null], null);
 }
@@ -1160,7 +1459,8 @@ function renderUpdates() {
   ) + selfCard(card);
   $("#embedded").textContent = Object.entries(m.embeddedCode ?? {})
     .map(([v, vs]) => t("up.embedded", { v, vs: vs.join(", ") })).join(" · ");
-  const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const when = (iso) =>
+    new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   $("#uplog").innerHTML = (S.updateLog ?? []).map((e) => {
     const bad = e.event === "failed" || e.event === "verify-failed";
     return `<div class="log-row${bad ? " bad" : ""}">
@@ -1178,7 +1478,9 @@ function drawer(title, inner) {
   const host = document.createElement("div");
   host.innerHTML = `<div class="scrim" data-close></div>
     <aside class="drawer" role="dialog" aria-label="${esc(title)}">
-      <div class="dh"><h3>${esc(title)}</h3><button class="x" data-close aria-label="${esc(t("close"))}">×</button></div>
+      <div class="dh"><h3>${esc(title)}</h3><button class="x" data-close aria-label="${
+    esc(t("close"))
+  }">×</button></div>
       <div class="dbody">${inner}</div>
     </aside>`;
   document.body.appendChild(host);
@@ -1222,14 +1524,17 @@ const chkRow = (c) =>
 function renderHealth(checks) {
   const order = { fail: 0, warn: 1, run: 2, ok: 3 };
   const todo = [...checks].filter((c) => c.status !== "ok").sort((a, b) => order[a.status] - order[b.status]);
-  $("#checks").innerHTML = todo.map(chkRow).join("") || `<div class="chk-none">${esc(t("health.allGood", { n: checks.length }))}</div>`;
+  $("#checks").innerHTML = todo.map(chkRow).join("") ||
+    `<div class="chk-none">${esc(t("health.allGood", { n: checks.length }))}</div>`;
   const ok = checks.filter((c) => c.status === "ok");
   $("#checks-ok").innerHTML = CHK_AREAS.map(([a]) => {
     const list = ok.filter((c) => chkAreaOf(c.id) === a);
     return list.length
-      ? `<details class="panel chk-area"><summary><span class="ic ok">✓</span><b>${esc(t(`health.area.${a}`))}</b><span class="sub">${
-        esc(t("health.areaOk", { n: list.length }))
-      }</span></summary><div class="checks">${list.map(chkRow).join("")}</div></details>`
+      ? `<details class="panel chk-area"><summary><span class="ic ok">✓</span><b>${
+        esc(t(`health.area.${a}`))
+      }</b><span class="sub">${esc(t("health.areaOk", { n: list.length }))}</span></summary><div class="checks">${
+        list.map(chkRow).join("")
+      }</div></details>`
       : "";
   }).join("");
   const n = (s) => checks.filter((c) => c.status === s).length;
@@ -1241,14 +1546,18 @@ function renderHealth(checks) {
     and a link to the tab with the detail. */
 function renderOverview() {
   const card = (title, href, body, cls = "") =>
-    `<section class="ov-card ${cls}"><div class="ov-h"><h3>${esc(title)}</h3><a class="pane-link" href="${href}">${esc(t("ov.open"))}</a></div>${body}</section>`;
+    `<section class="ov-card ${cls}"><div class="ov-h"><h3>${esc(title)}</h3><a class="pane-link" href="${href}">${
+      esc(t("ov.open"))
+    }</a></div>${body}</section>`;
   const line = (status, text, extra = "") =>
     `<div class="ov-line"><span class="ic ${status}">${CHK_SYM[status]}</span><div>${text}</div>${extra}</div>`;
   const checks = S.doctor ?? [];
   const byId = (id) => checks.find((c) => c.id === id);
 
   // health: the problems themselves, the passing count in one line
-  const todo = checks.filter((c) => c.status !== "ok").sort((a, b) => (a.status === "fail" ? -1 : 0) - (b.status === "fail" ? -1 : 0));
+  const todo = checks.filter((c) => c.status !== "ok").sort((a, b) =>
+    (a.status === "fail" ? -1 : 0) - (b.status === "fail" ? -1 : 0)
+  );
   const health = todo.length
     ? todo.slice(0, 5).map((c) => line(c.status, esc(c.msg), c.fix ? actionButton(c.fix) : "")).join("") +
       (todo.length > 5 ? `<div class="sub">${esc(t("ov.more", { n: todo.length - 5 }))}</div>` : "")
@@ -1256,34 +1565,70 @@ function renderOverview() {
 
   // updates: one line per component, the same words as the Updates tab
   const m = S.machine, u = S.update ?? {}, r = S.repo ?? {};
-  const upLine = (name, v, pending) => line(pending ? "warn" : "ok", `<b>${esc(name)}</b> <code>${esc(v ?? "—")}</code> <span class="sub">${esc(pending ?? t("up.uptodate"))}</span>`);
-  const updates = upLine("Claude Code", m.cliVersion, u.cli?.latest && u.cli.latest !== m.cliVersion ? t("up.next", { v: u.cli.latest }) : null) +
-    (m.desktopVersion ? upLine("Claude Desktop", m.desktopVersion, m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : null) : "") +
-    (r.isRepo ? upLine("claude-multi", (r.head ?? "").split(" ")[0], r.behind ? t("up.self.behind", { n: r.behind }) : null) : "") +
+  const upLine = (name, v, pending) =>
+    line(
+      pending ? "warn" : "ok",
+      `<b>${esc(name)}</b> <code>${esc(v ?? "—")}</code> <span class="sub">${esc(pending ?? t("up.uptodate"))}</span>`,
+    );
+  const updates = upLine(
+    "Claude Code",
+    m.cliVersion,
+    u.cli?.latest && u.cli.latest !== m.cliVersion ? t("up.next", { v: u.cli.latest }) : null,
+  ) +
+    (m.desktopVersion
+      ? upLine("Claude Desktop", m.desktopVersion, m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : null)
+      : "") +
+    (r.isRepo
+      ? upLine("claude-multi", (r.head ?? "").split(" ")[0], r.behind ? t("up.self.behind", { n: r.behind }) : null)
+      : "") +
     `<div class="ov-acts"><button class="btn sm" data-action="update-now">${esc(t("up.now"))}</button></div>`;
 
   // brain: whether this machine reaches it, and the last copy kept here
   const b = S.brain, tok = byId("brain.token");
-  const when = (iso) => new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  const brain = !b ? `<p class="sub">${esc(t("conn.noBrain"))}</p>`
-    : line(tok?.status ?? "warn", tok?.status === "ok" ? esc(t("ov.brain.on", { u: b.url.replace(/^https?:\/\//, "") })) : esc(tok?.msg ?? t("conn.brainOff")), tok?.fix ? actionButton(tok.fix) : "") +
-      line(byId("tasks.store")?.status ?? "warn", esc(t(byId("tasks.store")?.status === "ok" ? "ov.tasks.on" : "ov.tasks.off"))) +
-      (b.lastCopy
-        ? line(b.lastCopy.verified ? "ok" : "warn", esc(t(b.lastCopy.verified ? "ov.copy" : "ov.copyUnchecked", { d: when(b.lastCopy.checked) })))
-        : line("warn", esc(t("ov.noCopy"))));
+  const when = (iso) =>
+    new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const brain = !b ? `<p class="sub">${esc(t("conn.noBrain"))}</p>` : line(
+    tok?.status ?? "warn",
+    tok?.status === "ok"
+      ? esc(t("ov.brain.on", { u: b.url.replace(/^https?:\/\//, "") }))
+      : esc(tok?.msg ?? t("conn.brainOff")),
+    tok?.fix ? actionButton(tok.fix) : "",
+  ) +
+    line(
+      byId("tasks.store")?.status ?? "warn",
+      esc(t(byId("tasks.store")?.status === "ok" ? "ov.tasks.on" : "ov.tasks.off")),
+    ) +
+    (b.lastCopy
+      ? line(
+        b.lastCopy.verified ? "ok" : "warn",
+        esc(t(b.lastCopy.verified ? "ov.copy" : "ov.copyUnchecked", { d: when(b.lastCopy.checked) })),
+      )
+      : line("warn", esc(t("ov.noCopy"))));
 
   // profiles: who each one is and what is open now
   const live = new Set(S.running.cli.map((c) => c.profile));
   const deskOpen = new Set(S.running.desktop.map((d) => d.variant));
   const profiles = Object.entries(S.profiles).map(([n, p]) =>
-    `<div class="ov-prof"><span class="dot${live.has(n) || deskOpen.has(n) ? " active" : ""}"></span><b>${esc(n)}</b><span class="sub">${
-      esc(p.account ?? t("profile.notSignedIn"))
-    }</span><code>${esc(p.manifest.command ?? `claude-${n}`)}</code><span class="sub">${
-      esc([live.has(n) ? t("ov.cliOpen", { n: S.running.cli.filter((c) => c.profile === n).length }) : null, deskOpen.has(n) ? t("ov.deskOpen") : null].filter(Boolean).join(" · "))
+    `<div class="ov-prof"><span class="dot${live.has(n) || deskOpen.has(n) ? " active" : ""}"></span><b>${
+      esc(n)
+    }</b><span class="sub">${esc(p.account ?? t("profile.notSignedIn"))}</span><code>${
+      esc(p.manifest.command ?? `claude-${n}`)
+    }</code><span class="sub">${
+      esc(
+        [
+          live.has(n) ? t("ov.cliOpen", { n: S.running.cli.filter((c) => c.profile === n).length }) : null,
+          deskOpen.has(n) ? t("ov.deskOpen") : null,
+        ].filter(Boolean).join(" · "),
+      )
     }</span></div>`
   ).join("");
 
-  $("#ov").innerHTML = card(t("sys.health"), "#system/health", health, todo.some((c) => c.status === "fail") ? "fail" : todo.length ? "warn" : "") +
+  $("#ov").innerHTML = card(
+    t("sys.health"),
+    "#system/health",
+    health,
+    todo.some((c) => c.status === "fail") ? "fail" : todo.length ? "warn" : "",
+  ) +
     card(t("sys.updates"), "#system/updates", updates) +
     card(t("conn.brain"), "#connections", brain) +
     card(t("sys.profiles"), "#system/profiles", profiles);
@@ -1404,7 +1749,8 @@ function renderPlugins() {
   const rows = PL.plugins.filter((r) => !r.synced);
   const inst = rows.filter((r) => profs.some((p) => r.profiles[p].installed)).length;
   const broken = rows.filter((r) => profs.some((p) => r.profiles[p].broken)).length;
-  $("#pl-sum").textContent = t("pl.sum", { n: rows.length, i: inst }) + (broken ? t("pl.sumBroken", { b: broken }) : "");
+  $("#pl-sum").textContent = t("pl.sum", { n: rows.length, i: inst }) +
+    (broken ? t("pl.sumBroken", { b: broken }) : "");
   $("#pl-head").innerHTML = `<th>${esc(t("pl.plugin"))}</th><th>${esc(t("pl.all"))}</th>${
     profs.map((p) => `<th>${esc(p)}</th>`).join("")
   }<th></th>`;
@@ -1478,30 +1824,37 @@ function renderCatalog() {
   const profs = PL?.profiles ?? [];
   const where = (id) => profs.filter((p) => PL?.plugins.find((r) => r.id === id)?.profiles[p]?.installed);
   $("#cat-rows").innerHTML = page.map((c) => {
-    const w = where(c.id);
-    return `<tr>
+        const w = where(c.id);
+        return `<tr>
       <td class="cdesc"><span class="pname">${esc(c.name)}</span> <span class="dim">${esc(c.marketplace)}${
-      c.installs ? ` · ${esc(t("cat.installs", { n: fmt(c.installs) }))}` : ""
-    }</span>
+          c.installs ? ` · ${esc(t("cat.installs", { n: fmt(c.installs) }))}` : ""
+        }</span>
         <div class="desc">${esc(short(c.description, 220))}</div></td>
       <td>${
-      w.length
-        ? `<span class="chip on" title="${esc(t("cat.installedOn", { p: w.join(", ") }))}">${w.length}/${profs.length}</span>`
-        : ""
-    }</td>
+          w.length
+            ? `<span class="chip on" title="${
+              esc(t("cat.installedOn", { p: w.join(", ") }))
+            }">${w.length}/${profs.length}</span>`
+            : ""
+        }</td>
       <td class="acts">
-        ${w.length ? `<button class="btn ghost sm" data-pl-details="${esc(c.id)}">${esc(t("pl.details"))}</button>` : ""}
+        ${
+          w.length
+            ? `<button class="btn ghost sm" data-pl-details="${esc(c.id)}">${esc(t("pl.details"))}</button>`
+            : ""
+        }
         <select class="sel" data-cat-scope="${esc(c.id)}"><option value="all">${esc(t("cat.allProfiles"))}</option>${
-      profs.map((p) => `<option>${esc(p)}</option>`).join("")
-    }</select>
+          profs.map((p) => `<option>${esc(p)}</option>`).join("")
+        }</select>
         <button class="btn sm" data-cat-install="${esc(c.id)}">${esc(t("pl.install"))}</button>
       </td>
     </tr>`;
-  }).join("") + (hits.length > page.length
-    ? `<tr><td class="empty" colspan="3"><button class="btn ghost sm" data-cat-more>${
-      esc(t("cat.more", { n: Math.min(CAT_PAGE, hits.length - page.length) }))
-    }</button></td></tr>`
-    : "") || `<tr><td class="empty">${esc(t("cat.nothing"))}</td></tr>`;
+      }).join("") +
+      (hits.length > page.length
+        ? `<tr><td class="empty" colspan="3"><button class="btn ghost sm" data-cat-more>${
+          esc(t("cat.more", { n: Math.min(CAT_PAGE, hits.length - page.length) }))
+        }</button></td></tr>`
+        : "") || `<tr><td class="empty">${esc(t("cat.nothing"))}</td></tr>`;
 }
 
 /** Run one operation. A marketplace-declared command comes back as `confirm`: it is shown, and
@@ -1516,7 +1869,12 @@ async function plOp(body, label) {
     if (r.confirm) {
       if (!confirm(t("pl.confirmCmd", { msg: r.message, cmd: r.confirm.command }))) return toast(t("pl.notAccepted"));
       const retry = body.op === "set"
-        ? { op: "install", id: body.id, profiles: body.target === "shared" ? "all" : [body.target], accept: r.confirm.sha256 }
+        ? {
+          op: "install",
+          id: body.id,
+          profiles: body.target === "shared" ? "all" : [body.target],
+          accept: r.confirm.sha256,
+        }
         : { ...body, accept: r.confirm.sha256 };
       r = await post("/api/plugins", retry);
     }
@@ -1572,7 +1930,10 @@ document.addEventListener("click", async (e) => {
   }
   const mu = e.target.closest("[data-mk-update]");
   if (mu) {
-    return plOp({ op: "marketplace-update", name: mu.dataset.mkUpdate }, t("pl.opUpdating", { id: mu.dataset.mkUpdate }))
+    return plOp(
+      { op: "marketplace-update", name: mu.dataset.mkUpdate },
+      t("pl.opUpdating", { id: mu.dataset.mkUpdate }),
+    )
       .then(() => loadCatalog(true));
   }
   const mr = e.target.closest("[data-mk-remove]");
@@ -1599,7 +1960,10 @@ $("#mk-add").addEventListener("submit", (e) => {
   });
 });
 let catTimer = null;
-const catFilter = () => { catShown = CAT_PAGE; renderCatalog(); };
+const catFilter = () => {
+  catShown = CAT_PAGE;
+  renderCatalog();
+};
 $("#cat-q").addEventListener("input", () => {
   clearTimeout(catTimer);
   catTimer = setTimeout(catFilter, 120);
@@ -1645,7 +2009,9 @@ function go(hash) {
 function renderTitle() {
   // Today greets, as Claude does; the date heads the day below
   const h = new Date().getHours();
-  $("#title").textContent = view === "today" ? t(`greet.${h < 5 ? "night" : h < 13 ? "morning" : h < 18 ? "afternoon" : "evening"}`) : t(`title.${view}`);
+  $("#title").textContent = view === "today"
+    ? t(`greet.${h < 5 ? "night" : h < 13 ? "morning" : h < 18 ? "afternoon" : "evening"}`)
+    : t(`title.${view}`);
   $("#eyebrow").textContent = view === "today" ? "" : S?.machine.hostname ?? "";
   $("#eyebrow").hidden = view === "today";
 }
@@ -1673,7 +2039,9 @@ $("#theme-btn").addEventListener("click", () => {
 /** Re-render every string: the static markup through data-i18n, the rest by drawing again. */
 function applyLang() {
   applyI18n();
-  $("#lang-lbl").textContent = langPref === "auto" ? `${t("lang.auto")} · ${lang().toUpperCase()}` : langPref.toUpperCase();
+  $("#lang-lbl").textContent = langPref === "auto"
+    ? `${t("lang.auto")} · ${lang().toUpperCase()}`
+    : langPref.toUpperCase();
   $("#theme-lbl").textContent = t(`theme.${theme}`);
   setLive(liveState);
   if (CAT) renderCatalogSelect();
@@ -1700,11 +2068,32 @@ $("#lang-btn").addEventListener("click", () => {
 const CMDS = () => [
   { s: "pal.goto", n: t("nav.today"), d: "today", f: () => go("today") },
   { s: "pal.goto", n: t("nav.tasks"), d: "tasks", f: () => go("tasks") },
-  { s: "pal.do", n: t("tb.new"), d: "task", f: () => { go("tasks"); $("#tb-new").click(); } },
+  {
+    s: "pal.do",
+    n: t("tb.new"),
+    d: "task",
+    f: () => {
+      go("tasks");
+      $("#tb-new").click();
+    },
+  },
   { s: "pal.goto", n: t("nav.brain"), d: "brain", f: () => go("brain") },
   { s: "pal.goto", n: t("nav.connections"), d: "connections", f: () => go("connections") },
-  ...TABS.map((x) => ({ s: "pal.goto", n: `${t("nav.system")} · ${t(`sys.${x}`)}`, d: `system/${x}`, f: () => go(`system/${x}`) })),
-  { s: "pal.run", n: t("cmd.health"), d: "doctor", f: () => { go("system/health"); $("#rerun").click(); } },
+  ...TABS.map((x) => ({
+    s: "pal.goto",
+    n: `${t("nav.system")} · ${t(`sys.${x}`)}`,
+    d: `system/${x}`,
+    f: () => go(`system/${x}`),
+  })),
+  {
+    s: "pal.run",
+    n: t("cmd.health"),
+    d: "doctor",
+    f: () => {
+      go("system/health");
+      $("#rerun").click();
+    },
+  },
   { s: "pal.run", n: t("cmd.mcpSync"), d: "mcp sync", f: () => runAction("mcp-sync") },
   { s: "pal.run", n: t("cmd.mcpCheck"), d: "mcp check", f: () => runAction("mcp-check") },
   { s: "pal.run", n: t("cmd.fetch"), d: "sync --fetch", f: () => runAction("sync-fetch") },
@@ -1712,7 +2101,15 @@ const CMDS = () => [
   { s: "pal.run", n: t("cmd.install"), d: "install", f: () => runAction("install") },
   { s: "pal.run", n: t("cmd.updateCheck"), d: "update --check", f: () => runAction("update-check") },
   { s: "pal.run", n: t("cmd.updateNow"), d: "update --auto", f: () => runAction("update-now") },
-  { s: "pal.do", n: t("cmd.addProfile"), d: "new", f: () => { go("system/profiles"); openProfileForm(null); } },
+  {
+    s: "pal.do",
+    n: t("cmd.addProfile"),
+    d: "new",
+    f: () => {
+      go("system/profiles");
+      openProfileForm(null);
+    },
+  },
   { s: "pal.do", n: t("cmd.theme"), d: "theme", f: () => $("#theme-btn").click() },
   { s: "pal.do", n: t("cmd.lang"), d: "language", f: () => $("#lang-btn").click() },
 ];

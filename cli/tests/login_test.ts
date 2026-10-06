@@ -12,7 +12,10 @@ Deno.test("isLoginError: an expired or missing login, not any error", () => {
 
 Deno.test("probeVerdict: the result's is_error decides; without JSON, the exit code and stderr", () => {
   assertEquals(probeVerdict(0, JSON.stringify({ type: "result", is_error: false, result: "ok" }), ""), { ok: true });
-  assertEquals(probeVerdict(0, JSON.stringify({ type: "result", is_error: true, result: "Failed to authenticate" }), ""), { ok: false, error: "Failed to authenticate" });
+  assertEquals(
+    probeVerdict(0, JSON.stringify({ type: "result", is_error: true, result: "Failed to authenticate" }), ""),
+    { ok: false, error: "Failed to authenticate" },
+  );
   assertEquals(probeVerdict(1, "", "warning\nError: not logged in\n"), { ok: false, error: "Error: not logged in" });
   assertEquals(probeVerdict(0, "", ""), { ok: true });
 });

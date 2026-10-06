@@ -18,7 +18,21 @@
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
 import { loadRegistry, permissionRules, type RegistryRules } from "./mcp.ts";
-import { CONFIG, loadManifest, lstat, type Manifest, PROFILES, type Profile, profileNames, readJson, REPO, RUNTIME, STAMP, STATE, syncedPlugins } from "./lib.ts";
+import {
+  CONFIG,
+  loadManifest,
+  lstat,
+  type Manifest,
+  type Profile,
+  profileNames,
+  PROFILES,
+  readJson,
+  REPO,
+  RUNTIME,
+  STAMP,
+  STATE,
+  syncedPlugins,
+} from "./lib.ts";
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 export type Obj = { [k: string]: Json };
@@ -26,7 +40,11 @@ export type Obj = { [k: string]: Json };
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 /** Key order is not meaning: Claude Code may rewrite the file with its keys in another order. */
 const canon = (v: unknown): unknown =>
-  Array.isArray(v) ? v.map(canon) : isObj(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v;
+  Array.isArray(v)
+    ? v.map(canon)
+    : isObj(v)
+    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])]))
+    : v;
 const same = (a: unknown, b: unknown) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
 /** RFC 7386: apply a merge patch. Never mutates its inputs. */
@@ -78,7 +96,9 @@ export function registryPatch(base: Obj, rules: Rules): Obj {
   if (Object.keys(permissions).length) out.permissions = permissions;
   if (rules.hooks.length) {
     const have = isObj(base.hooks) && Array.isArray(base.hooks.PreToolUse) ? base.hooks.PreToolUse : [];
-    out.hooks = { PreToolUse: [...have, ...rules.hooks.filter((h) => !have.some((x) => same(x, h))) as unknown as Json[]] };
+    out.hooks = {
+      PreToolUse: [...have, ...rules.hooks.filter((h) => !have.some((x) => same(x, h))) as unknown as Json[]],
+    };
   }
   return out;
 }
@@ -89,9 +109,13 @@ export function withoutRules(shared: Obj, patch: Obj, rules: Rules): Obj {
   const p: Obj = structuredClone(patch);
   if (isObj(p.permissions)) {
     const pp = p.permissions;
-    for (const k of ["deny", "ask"] as const) if (Array.isArray(pp[k])) pp[k] = (pp[k] as Json[]).filter((r) => !rules[k].includes(r as string));
+    for (const k of ["deny", "ask"] as const) {
+      if (Array.isArray(pp[k])) pp[k] = (pp[k] as Json[]).filter((r) => !rules[k].includes(r as string));
+    }
   }
-  if (isObj(p.hooks) && Array.isArray(p.hooks.PreToolUse)) p.hooks.PreToolUse = p.hooks.PreToolUse.filter((h) => !isGenerated(rules, h));
+  if (isObj(p.hooks) && Array.isArray(p.hooks.PreToolUse)) {
+    p.hooks.PreToolUse = p.hooks.PreToolUse.filter((h) => !isGenerated(rules, h));
+  }
   return diffPatch(shared, mergePatch(shared, p) as Obj);
 }
 
@@ -117,7 +141,9 @@ export function adopt(shared: Obj, patch: Obj, lastBuilt: Obj, current: Obj): { 
 
 /** Dotted leaf paths of a patch, for reporting ("enabledPlugins.context7@claude-plugins-official"). */
 export function paths(p: Obj, prefix = ""): string[] {
-  return Object.entries(p).flatMap(([k, v]) => isObj(v) && Object.keys(v).length ? paths(v, `${prefix}${k}.`) : [`${prefix}${k}`]);
+  return Object.entries(p).flatMap(([k, v]) =>
+    isObj(v) && Object.keys(v).length ? paths(v, `${prefix}${k}.`) : [`${prefix}${k}`]
+  );
 }
 
 // ---------------------------------------------------------------- files
@@ -175,7 +201,11 @@ function derive(fromManifest: Obj, shared: Obj, patch: Obj, rules: Rules): Obj {
 }
 
 async function registryRules(p: Profile): Promise<Rules> {
-  try { return permissionRules(await loadRegistry(), p); } catch { return { deny: [], ask: [], hooks: [] }; } // no registry: the doctor says so
+  try {
+    return permissionRules(await loadRegistry(), p);
+  } catch {
+    return { deny: [], ask: [], hooks: [] };
+  } // no registry: the doctor says so
 }
 
 /**
@@ -231,13 +261,17 @@ export async function syncAllSettings(opts: { adopt?: boolean; dry?: boolean } =
 
 /** State of one profile's file, for the doctor: generated and current, Claude wrote into it since,
  *  or the inputs moved on and it has not been regenerated. */
-export async function settingsState(p: Profile): Promise<{ kind: "symlink" | "missing" | "ok" | "local-writes" | "stale"; changed: string[] }> {
+export async function settingsState(
+  p: Profile,
+): Promise<{ kind: "symlink" | "missing" | "ok" | "local-writes" | "stale"; changed: string[] }> {
   const st = await lstat(runtimePath(p));
   if (!st) return { kind: "missing", changed: [] };
   if (st.isSymlink) return { kind: "symlink", changed: [] };
   const current = await readObj(runtimePath(p)) ?? {};
   const lastBuilt = await readObj(builtPath(p));
-  if (lastBuilt && !same(current, lastBuilt)) return { kind: "local-writes", changed: paths(diffPatch(lastBuilt, current)) };
+  if (lastBuilt && !same(current, lastBuilt)) {
+    return { kind: "local-writes", changed: paths(diffPatch(lastBuilt, current)) };
+  }
   const { built } = await expectedSettings(p);
   if (!same(current, built)) return { kind: "stale", changed: paths(diffPatch(current, built)) };
   return { kind: "ok", changed: [] };
@@ -259,7 +293,10 @@ export async function editSettingsSource(target: "shared" | Profile, edit: (o: O
   const before = JSON.stringify(o);
   edit(o);
   if (JSON.stringify(o) === before) return false;
-  if (target !== "shared" && !Object.keys(o).length) { if (await lstat(path)) await Deno.remove(path); return true; }
+  if (target !== "shared" && !Object.keys(o).length) {
+    if (await lstat(path)) await Deno.remove(path);
+    return true;
+  }
   await writeJson(path, o); // 2-space JSON, as Claude Code itself writes it
   return true;
 }

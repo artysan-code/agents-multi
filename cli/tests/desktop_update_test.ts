@@ -18,14 +18,22 @@ async function setup(versions: string[], current: string | null) {
 async function run(root: string, args: string[], running = false) {
   const out = await new Deno.Command("bash", {
     args: [SCRIPT, ...args],
-    env: { CLAUDE_DESKTOP_ROOT: root, CM_DESKTOP_RUNNING: running ? "1" : "0", CLAUDE_DESKTOP_VARIANTS: "", CM_UPDATE_LOG: `${root}/log.jsonl`, QUIET: "1" },
-    stdout: "piped", stderr: "piped",
+    env: {
+      CLAUDE_DESKTOP_ROOT: root,
+      CM_DESKTOP_RUNNING: running ? "1" : "0",
+      CLAUDE_DESKTOP_VARIANTS: "",
+      CM_UPDATE_LOG: `${root}/log.jsonl`,
+      QUIET: "1",
+    },
+    stdout: "piped",
+    stderr: "piped",
   }).output();
   return { code: out.code, out: new TextDecoder().decode(out.stdout).trim() };
 }
 const current = async (root: string) => (await Deno.realPath(`${root}/current`)).split("/").pop();
 const versions = (root: string) => [...Deno.readDirSync(`${root}/versions`)].map((e) => e.name).sort();
-const log = async (root: string) => (await Deno.readTextFile(`${root}/log.jsonl`)).trim().split("\n").map((l) => JSON.parse(l));
+const log = async (root: string) =>
+  (await Deno.readTextFile(`${root}/log.jsonl`)).trim().split("\n").map((l) => JSON.parse(l));
 
 Deno.test("claude-desktop-update: a staged version waits while Desktop runs, then switches", async () => {
   const root = await setup(["1.0.0", "1.1.0"], "1.0.0");

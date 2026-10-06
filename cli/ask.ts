@@ -19,14 +19,30 @@ type Json = (v: unknown, code?: number) => Response;
 export type AskKind = "ask" | "newtask" | "debrief" | "brain";
 
 // The owner's brain, read only: the claude.ai connector "Brain" of the personal profile, as the CLI names it
-const BRAIN_READ = ["mcp__claude_ai_Brain__brain_search", "mcp__claude_ai_Brain__brain_read", "mcp__claude_ai_Brain__brain_list"];
+const BRAIN_READ = [
+  "mcp__claude_ai_Brain__brain_search",
+  "mcp__claude_ai_Brain__brain_read",
+  "mcp__claude_ai_Brain__brain_list",
+];
 // what a change to the brain may use: its writing tools, never deletion (brain_delete stays out)
-const BRAIN_WRITE = ["brain_write", "brain_edit", "brain_append", "brain_move", "brain_inbox_clear", "brain_check", "brain_history", "brain_restore"]
+const BRAIN_WRITE = [
+  "brain_write",
+  "brain_edit",
+  "brain_append",
+  "brain_move",
+  "brain_inbox_clear",
+  "brain_check",
+  "brain_history",
+  "brain_restore",
+]
   .map((t) => `mcp__claude_ai_Brain__${t}`);
 const READ = [
-  "mcp__google__calendar_list", "mcp__google__calendar_events",
-  "mcp__google__gmail_search", "mcp__google__gmail_thread",
-  "mcp__google__drive_search", "mcp__google__drive_read",
+  "mcp__google__calendar_list",
+  "mcp__google__calendar_events",
+  "mcp__google__gmail_search",
+  "mcp__google__gmail_thread",
+  "mcp__google__drive_search",
+  "mcp__google__drive_read",
   ...BRAIN_READ,
 ];
 export const TOOLS: Record<AskKind, string[]> = {
@@ -47,9 +63,17 @@ const BASE = (now: string, o = owner()) =>
 export function promptFor(kind: AskKind, now: string, project?: string | null, noProject = false, o = owner()): string {
   const base = BASE(now, o), who = o.name;
   if (kind === "newtask") {
-    const where = project ? `the project "${project}"` : noProject ? `no project (a simple thing to do)` : `a project you work out from what they say`;
-    const set = project ? `project "${project}"` : noProject ? "no project" : `project: the folder under ~ it belongs to (work/acme/site, ` +
-      `personal/blog: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
+    const where = project
+      ? `the project "${project}"`
+      : noProject
+      ? `no project (a simple thing to do)`
+      : `a project you work out from what they say`;
+    const set = project
+      ? `project "${project}"`
+      : noProject
+      ? "no project"
+      : `project: the folder under ~ it belongs to (work/acme/site, ` +
+        `personal/blog: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
     return `${base}\n${who} is describing a new task for ${where}. Create it with tasks_add: a short, clear title in their ` +
       `words, ${set}, a day and time only if they gave them (resolve "tomorrow", "Friday" ` +
       `from today), and in notes what they explained, as a short description. If it takes more than one action, add the steps ` +
@@ -57,7 +81,9 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
       `vague to be a task, ask one short question instead of creating it.`;
   }
   if (kind === "brain") {
-    const on = project ? `They are looking at the page ${project}: "this page" means it; read it first (brain_read).` : "They are looking at the brain as a whole.";
+    const on = project
+      ? `They are looking at the page ${project}: "this page" means it; read it first (brain_read).`
+      : "They are looking at the brain as a whole.";
     return `${base}\n${who} asks for a change to their brain, from its page in the console. ${on} Make the change with the ` +
       `brain tools, by the brain's rules (they refuse what breaks them: fix and try again). You can only write in the brain, ` +
       `nothing else. Prefer brain_edit to rewriting a page; read before changing; never invent facts they did not give or ` +
@@ -99,11 +125,27 @@ async function setAskModel(model: AskModel) {
 }
 
 /** Pure: the arguments of `claude -p` for one request. */
-export function askArgs(kind: AskKind, text: string, now: string, opts: { session?: string | null; project?: string | null; noProject?: boolean; model?: AskModel } = {}) {
+export function askArgs(
+  kind: AskKind,
+  text: string,
+  now: string,
+  opts: { session?: string | null; project?: string | null; noProject?: boolean; model?: AskModel } = {},
+) {
   const args = [
-    "-p", asArg(text), "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-    "--tools", BUILTIN[kind], "--permission-mode", "dontAsk", "--allowedTools", ...TOOLS[kind],
-    "--append-system-prompt", promptFor(kind, now, opts.project, opts.noProject),
+    "-p",
+    asArg(text),
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--tools",
+    BUILTIN[kind],
+    "--permission-mode",
+    "dontAsk",
+    "--allowedTools",
+    ...TOOLS[kind],
+    "--append-system-prompt",
+    promptFor(kind, now, opts.project, opts.noProject),
   ];
   if (opts.session) args.push("--resume", opts.session);
   if (opts.model && kind !== "debrief") args.push("--model", opts.model);
@@ -118,8 +160,17 @@ export type Out =
   | { t: "done"; text: string; code: string | null; error?: string };
 
 export const toolKind = (name: string): Extract<Out, { t: "tool" }>["k"] =>
-  /tasks/.test(name) ? "tasks" : /calendar/.test(name) ? "calendar" : /gmail/.test(name) ? "mail"
-  : /drive/.test(name) ? "drive" : /brain_/.test(name) ? "brain" : "work";
+  /tasks/.test(name)
+    ? "tasks"
+    : /calendar/.test(name)
+    ? "calendar"
+    : /gmail/.test(name)
+    ? "mail"
+    : /drive/.test(name)
+    ? "drive"
+    : /brain_/.test(name)
+    ? "brain"
+    : "work";
 
 const CODE = /\[\[code:([^\]]+)\]\]/;
 
@@ -134,16 +185,28 @@ export class AskStream {
 
   line(raw: string): Out[] {
     let ev: Record<string, unknown>;
-    try { ev = JSON.parse(raw); } catch { return []; }
+    try {
+      ev = JSON.parse(raw);
+    } catch {
+      return [];
+    }
     const out: Out[] = [];
     if (typeof ev.session_id === "string" && ev.session_id !== this.session) {
       this.session = ev.session_id;
       out.push({ t: "session", id: this.session });
     }
-    const add = (d: string) => { if (d) { this.text += d; out.push({ t: "text", d }); } };
+    const add = (d: string) => {
+      if (d) {
+        this.text += d;
+        out.push({ t: "text", d });
+      }
+    };
     if (ev.type === "stream_event") {
       const d = (ev.event as { delta?: { type?: string; text?: string } } | undefined)?.delta;
-      if (d?.type === "text_delta") { this.streamed = true; add(d.text ?? ""); }
+      if (d?.type === "text_delta") {
+        this.streamed = true;
+        add(d.text ?? "");
+      }
     } else if (ev.type === "assistant") {
       const blocks = ((ev.message as { content?: { type: string; name?: string; text?: string }[] })?.content) ?? [];
       for (const b of blocks) {
@@ -185,24 +248,47 @@ export async function cachedDebrief(): Promise<{ day: string; text: string } | n
   return d && d.day === dayOf(new Date()) ? d : null;
 }
 
-function ask(kind: AskKind, text: string, opts: { session?: string | null; project?: string | null; noProject?: boolean }) {
+function ask(
+  kind: AskKind,
+  text: string,
+  opts: { session?: string | null; project?: string | null; noProject?: boolean },
+) {
   const enc = new TextEncoder();
   // the page going away cancels the response's stream: that, and nothing else, stops claude -p
   // (Deno.serve's request.signal also fires once a response has been delivered, and is changing)
   const stop = new AbortController();
   const signal = stop.signal;
-  const now = new Date().toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const now = new Date().toLocaleString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return new ReadableStream<Uint8Array>({
     async start(ctl) {
-      const send = (o: Out) => { try { ctl.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { /* the page went away */ } };
+      const send = (o: Out) => {
+        try {
+          ctl.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+        } catch { /* the page went away */ }
+      };
       const launcher = await defaultLauncher();
-      if (!launcher) { send({ t: "done", text: "", code: null, error: "no profile" }); return ctl.close(); }
+      if (!launcher) {
+        send({ t: "done", text: "", code: null, error: "no profile" });
+        return ctl.close();
+      }
       let child: Deno.ChildProcess;
       try {
         child = new Deno.Command(`${BIN}/${launcher.command}`, {
           // a change to the brain runs in the old wiki: Claude Code lets a session read its own folder
           // whatever the rules, so that folder must be the only one it may read
-          args: askArgs(kind, text, now, { ...opts, model: await askModel() }), cwd: kind === "brain" ? WIKI : HOME, stdin: "null", stdout: "piped", stderr: "piped", signal,
+          args: askArgs(kind, text, now, { ...opts, model: await askModel() }),
+          cwd: kind === "brain" ? WIKI : HOME,
+          stdin: "null",
+          stdout: "piped",
+          stderr: "piped",
+          signal,
         }).spawn();
       } catch (e) {
         send({ t: "done", text: "", code: null, error: (e as Error).message });
@@ -228,13 +314,17 @@ function ask(kind: AskKind, text: string, opts: { session?: string | null; proje
       send(done);
       ctl.close();
     },
-    cancel() { stop.abort(); },
+    cancel() {
+      stop.abort();
+    },
   });
 }
 
 /** A terminal running argv in workdir: Konsole on this setup, the usual others as fallbacks. */
 async function terminalArgv(workdir: string, argv: string[]): Promise<string[] | null> {
-  const which = async (c: string) => (await new Deno.Command("sh", { args: ["-c", `command -v ${c}`], stdout: "null", stderr: "null" }).output()).success;
+  const which = async (c: string) =>
+    (await new Deno.Command("sh", { args: ["-c", `command -v ${c}`], stdout: "null", stderr: "null" }).output())
+      .success;
   if (await which("konsole")) return ["konsole", "--workdir", workdir, "-e", ...argv];
   for (const [t, flag] of [["kitty", "--directory"], ["alacritty", "--working-directory"]]) {
     if (await which(t)) return [t, flag, workdir, "-e", ...argv];
@@ -249,14 +339,20 @@ async function terminalArgv(workdir: string, argv: string[]): Promise<string[] |
 export function sessionEnv(text: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const l of text.split("\n")) {
-    const m = l.match(/^(DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|DBUS_SESSION_BUS_ADDRESS)=(.*)$/);
+    const m = l.match(
+      /^(DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|DBUS_SESSION_BUS_ADDRESS)=(.*)$/,
+    );
     if (m) env[m[1]] = m[2].replace(/^\$?'(.*)'$/, "$1");
   }
   return env;
 }
 
 async function graphicalEnv(): Promise<Record<string, string>> {
-  const out = await new Deno.Command("systemctl", { args: ["--user", "show-environment"], stdout: "piped", stderr: "null" }).output().catch(() => null);
+  const out = await new Deno.Command("systemctl", {
+    args: ["--user", "show-environment"],
+    stdout: "piped",
+    stderr: "null",
+  }).output().catch(() => null);
   return out?.success ? sessionEnv(new TextDecoder().decode(out.stdout)) : {};
 }
 
@@ -275,7 +371,9 @@ const parentOf = (pid: number): number | null => {
     // the command name is in parentheses and may contain spaces: the fields start after the last ")"
     const ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
     return Number.isFinite(ppid) ? ppid : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 };
 
 /** Bring forward the window that holds a process: on KWin, a one-shot script that activates the
@@ -284,24 +382,35 @@ async function focusWindow(pid: number): Promise<boolean> {
   const pids = ancestry(pid, parentOf);
   const file = await Deno.makeTempFile({ prefix: "claude-multi-focus-", suffix: ".js" });
   const name = `claude-multi-focus-${pid}`;
-  await Deno.writeTextFile(file, `const pids = ${JSON.stringify(pids)};
+  await Deno.writeTextFile(
+    file,
+    `const pids = ${JSON.stringify(pids)};
 const ws = workspace.windowList();
-for (const p of pids) { const w = ws.find((x) => x.pid === p && x.normalWindow); if (w) { if (w.minimized) w.minimized = false; workspace.activeWindow = w; break; } }`);
-  const q = (...a: string[]) => new Deno.Command("qdbus6", { args: ["org.kde.KWin", ...a], stdout: "piped", stderr: "null" }).output();
+for (const p of pids) { const w = ws.find((x) => x.pid === p && x.normalWindow); if (w) { if (w.minimized) w.minimized = false; workspace.activeWindow = w; break; } }`,
+  );
+  const q = (...a: string[]) =>
+    new Deno.Command("qdbus6", { args: ["org.kde.KWin", ...a], stdout: "piped", stderr: "null" }).output();
   try {
     await q("/Scripting", "org.kde.kwin.Scripting.unloadScript", name);
-    const id = new TextDecoder().decode((await q("/Scripting", "org.kde.kwin.Scripting.loadScript", file, name)).stdout).trim();
+    const id = new TextDecoder().decode((await q("/Scripting", "org.kde.kwin.Scripting.loadScript", file, name)).stdout)
+      .trim();
     if (!/^\d+$/.test(id) || id === "-1") return false;
     await q(`/Scripting/Script${id}`, "org.kde.kwin.Script.run");
     await q("/Scripting", "org.kde.kwin.Scripting.unloadScript", name);
     return true;
-  } catch { return false; } finally { await Deno.remove(file).catch(() => {}); }
+  } catch {
+    return false;
+  } finally {
+    await Deno.remove(file).catch(() => {});
+  }
 }
 
 export async function askApi(req: Request, u: URL, json: Json): Promise<Response | null> {
   const p = u.pathname;
   if (!["/api/ask", "/api/ask/model", "/api/debrief", "/api/terminal", "/api/focus"].includes(p)) return null;
-  if (p === "/api/debrief" && req.method === "GET") return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
+  if (p === "/api/debrief" && req.method === "GET") {
+    return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
+  }
   if (p === "/api/ask/model" && req.method === "GET") return json({ model: await askModel(), models: ASK_MODELS });
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
@@ -314,11 +423,19 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
   }
 
   if (p === "/api/ask" || p === "/api/debrief") {
-    const kind: AskKind = p === "/api/debrief" ? "debrief" : b.kind === "newtask" ? "newtask" : b.kind === "brain" ? "brain" : "ask";
+    const kind: AskKind = p === "/api/debrief"
+      ? "debrief"
+      : b.kind === "newtask"
+      ? "newtask"
+      : b.kind === "brain"
+      ? "brain"
+      : "ask";
     const text = kind === "debrief" ? "debrief" : String(b.text ?? "").trim().slice(0, 4000);
     if (!text) return json({ error: "empty" }, 400);
     const session = typeof b.session === "string" && SESSION_ID.test(b.session) ? b.session : null;
-    const project = typeof b.project === "string" && /^[\w./ -]{1,200}$/.test(b.project) && !b.project.includes("..") ? b.project : null;
+    const project = typeof b.project === "string" && /^[\w./ -]{1,200}$/.test(b.project) && !b.project.includes("..")
+      ? b.project
+      : null;
     return new Response(ask(kind, text, { session, project, noProject: b.noProject === true }), {
       headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
     });
@@ -331,7 +448,11 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
     if (!launcher) return json({ ok: false, message: "no profile" });
     const cwd = expandHome(String(b.cwd ?? "~").replace(/^~$/, "~/"));
     let real: string;
-    try { real = await Deno.realPath(cwd); } catch { return json({ ok: false, message: `no such folder: ${cwd}` }); }
+    try {
+      real = await Deno.realPath(cwd);
+    } catch {
+      return json({ ok: false, message: `no such folder: ${cwd}` });
+    }
     if (real !== HOME && !real.startsWith(`${HOME}/`)) return json({ ok: false, message: "outside home" }, 403);
     if (!(await Deno.stat(real)).isDirectory) return json({ ok: false, message: "not a folder" });
     const argv = [`${BIN}/${launcher.command}`];
@@ -342,8 +463,17 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
     const cmd = await terminalArgv(real, argv);
     if (!cmd) return json({ ok: false, message: "no terminal found (konsole, kitty, alacritty, wezterm)" });
     const env = await graphicalEnv();
-    if (!env.WAYLAND_DISPLAY && !env.DISPLAY) return json({ ok: false, message: "no graphical session to open a terminal in" });
-    const child = new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: real, env, stdin: "null", stdout: "null", stderr: "null" }).spawn();
+    if (!env.WAYLAND_DISPLAY && !env.DISPLAY) {
+      return json({ ok: false, message: "no graphical session to open a terminal in" });
+    }
+    const child = new Deno.Command(cmd[0], {
+      args: cmd.slice(1),
+      cwd: real,
+      env,
+      stdin: "null",
+      stdout: "null",
+      stderr: "null",
+    }).spawn();
     // a terminal that cannot open its window exits at once: say so, instead of a button that does nothing
     const early = await Promise.race([child.status, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
     if (early && !early.success) return json({ ok: false, message: `${cmd[0]} did not start (exit ${early.code})` });

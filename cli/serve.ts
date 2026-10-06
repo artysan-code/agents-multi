@@ -12,10 +12,43 @@
 // `x-claude-multi` anti-CSRF header. Updating needs no privilege any more (Claude Desktop lives in
 // user space), so it is an action like the others.
 
-import { ANSI, CONFIG, HOME, listDir, lstat, machine, profileInfo, PROFILES, profileNames, readJson, readText, REPO, RUNTIME, STATE } from "./lib.ts";
-import { ACCOUNTS, loadRegistry, missingPrograms, type Mounted, placements, rawRegistry, reach, selectServers, writePersonRegistry } from "./mcp.ts";
+import {
+  ANSI,
+  CONFIG,
+  HOME,
+  listDir,
+  lstat,
+  machine,
+  profileInfo,
+  profileNames,
+  PROFILES,
+  readJson,
+  readText,
+  REPO,
+  RUNTIME,
+  STATE,
+} from "./lib.ts";
+import {
+  ACCOUNTS,
+  loadRegistry,
+  missingPrograms,
+  type Mounted,
+  placements,
+  rawRegistry,
+  reach,
+  selectServers,
+  writePersonRegistry,
+} from "./mcp.ts";
 import { type Account, loadAccounts } from "../shared/mcp/lib/accounts.ts";
-import { deleteSecret, getSecret, keyMatches, listSecrets, loadKey, setSecret, vaultDir } from "../shared/mcp/lib/vault.ts";
+import {
+  deleteSecret,
+  getSecret,
+  keyMatches,
+  listSecrets,
+  loadKey,
+  setSecret,
+  vaultDir,
+} from "../shared/mcp/lib/vault.ts";
 import { startConnect, storeClient } from "./google.ts";
 import { startBrainLogin } from "./brain-login.ts";
 import { codeVersion } from "./codeversion.ts";
@@ -27,18 +60,24 @@ import { probeAccount } from "./vault.ts";
 import { brainGraph, brainPage } from "./brain.ts";
 import { memoryApi, memoryVersion } from "./memory.ts";
 import { owner } from "../shared/mcp/lib/owner.ts";
-import { type PermOp, permissionsOp, permissionsView } from "./permissions.ts";
-import { addTask, brief, listTasks, tasksRoot, type TaskInput, updateTask } from "../shared/mcp/lib/tasks.ts";
+import { permissionsOp, permissionsView, type PermOp } from "./permissions.ts";
+import { addTask, brief, listTasks, type TaskInput, tasksRoot, updateTask } from "../shared/mcp/lib/tasks.ts";
 import { connectTasks } from "../shared/mcp/lib/brain-tasks.ts";
 import { status, summarize } from "./status.ts";
 import { ingest, openDb, sessions } from "./usage.ts";
-import { catalog, details, inventory, pluginOp, type PluginOp } from "./plugins.ts";
+import { catalog, details, inventory, type PluginOp, pluginOp } from "./plugins.ts";
 
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 /** The code this console started with (codeversion.ts): set by serve(), told to every page. */
 let CODE = "";
 const DASH = `${REPO}/cli/dashboard`;
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8" };
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+};
 
 /** Allowed actions to CLI arguments. `opts` accepted per action (anything else is ignored). */
 const ACTIONS: Record<string, { args: string[]; opts?: Record<string, string[]>; timeoutMs?: number }> = {
@@ -60,14 +99,26 @@ async function runAction(name: string, opts: string[]) {
   if (!a) return { code: 2, output: `unknown action: ${name}`, ms: 0 };
   const extra = (opts ?? []).flatMap((o) => a.opts?.[o] ?? []);
   const t0 = Date.now();
-  const cmd = new Deno.Command(`${REPO}/bin/claude-multi`, { args: [...a.args, ...extra], cwd: REPO, stdout: "piped", stderr: "piped", env: { NO_COLOR: "1" } });
+  const cmd = new Deno.Command(`${REPO}/bin/claude-multi`, {
+    args: [...a.args, ...extra],
+    cwd: REPO,
+    stdout: "piped",
+    stderr: "piped",
+    env: { NO_COLOR: "1" },
+  });
   const child = cmd.spawn();
-  const timer = setTimeout(() => { try { child.kill("SIGTERM"); } catch { /* already gone */ } }, a.timeoutMs ?? 60000);
-  const r = await child.output(); clearTimeout(timer);
+  const timer = setTimeout(() => {
+    try {
+      child.kill("SIGTERM");
+    } catch { /* already gone */ }
+  }, a.timeoutMs ?? 60000);
+  const r = await child.output();
+  clearTimeout(timer);
   const dec = new TextDecoder();
   // deno-lint-ignore no-control-regex
   const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
-  let output = strip(dec.decode(r.stdout)); const err = strip(dec.decode(r.stderr)).trim();
+  let output = strip(dec.decode(r.stdout));
+  const err = strip(dec.decode(r.stderr)).trim();
   if (err) output += (output ? "\n" : "") + err;
   // update --check exits 10 when an update exists: not an error (the check writes its own cache)
   if (name === "update-check") return { code: r.code === 10 ? 0 : r.code, output, ms: Date.now() - t0 };
@@ -75,7 +126,15 @@ async function runAction(name: string, opts: string[]) {
 }
 
 // ---------------------------------------------------------------- profiles
-interface ProfileBody { name?: string; description?: string; command?: string; alias?: string; desktopDir?: string; mcp?: string[]; disableAccountMcp?: boolean }
+interface ProfileBody {
+  name?: string;
+  description?: string;
+  command?: string;
+  alias?: string;
+  desktopDir?: string;
+  mcp?: string[];
+  disableAccountMcp?: boolean;
+}
 
 /** Profile names become directory names and are interpolated into paths, so the shape is fixed
  *  here rather than sanitised later: lowercase, starts with a letter, no separators. */
@@ -88,7 +147,9 @@ const NAME_RE = /^[a-z][a-z0-9_-]{1,30}$/;
  */
 async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: string; output?: string }> {
   const name = String(b.name ?? "").trim();
-  if (!NAME_RE.test(name)) return { error: "name must be lowercase, start with a letter, and use only letters, digits, - or _" };
+  if (!NAME_RE.test(name)) {
+    return { error: "name must be lowercase, start with a letter, and use only letters, digits, - or _" };
+  }
 
   const dir = `${PROFILES}/${name}`;
   const manifestPath = `${dir}/profile.json`;
@@ -99,19 +160,28 @@ async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: 
     ...(existing ?? { skills: "all", agents: "all", commands: "all" }),
     description: b.description?.trim() || existing?.description || `Profile ${name}.`,
   };
-  if (b.command?.trim()) manifest.command = b.command.trim(); else delete manifest.command;
-  if (b.alias?.trim()) manifest.alias = b.alias.trim(); else delete manifest.alias;
-  if (b.desktopDir?.trim()) manifest.desktopDir = b.desktopDir.trim(); else delete manifest.desktopDir;
+  if (b.command?.trim()) manifest.command = b.command.trim();
+  else delete manifest.command;
+  if (b.alias?.trim()) manifest.alias = b.alias.trim();
+  else delete manifest.alias;
+  if (b.desktopDir?.trim()) manifest.desktopDir = b.desktopDir.trim();
+  else delete manifest.desktopDir;
   if (b.disableAccountMcp !== undefined) {
-    if (b.disableAccountMcp) manifest.disableAccountMcp = true; else delete manifest.disableAccountMcp;
+    if (b.disableAccountMcp) manifest.disableAccountMcp = true;
+    else delete manifest.disableAccountMcp;
   }
 
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   if (isNew && !(await readText(`${dir}/CLAUDE.md`))) {
     // the person's rules, all of them, as the other profiles import them
-    const rules = (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) => `@~/.claude-multi/config/rules/${f}`).join("\n");
-    await Deno.writeTextFile(`${dir}/CLAUDE.md`, `# CLAUDE.md — ${name} profile\n\n${manifest.description}\n${rules ? `\n## Rules\n\n${rules}\n` : ""}`);
+    const rules = (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) =>
+      `@~/.claude-multi/config/rules/${f}`
+    ).join("\n");
+    await Deno.writeTextFile(
+      `${dir}/CLAUDE.md`,
+      `# CLAUDE.md — ${name} profile\n\n${manifest.description}\n${rules ? `\n## Rules\n\n${rules}\n` : ""}`,
+    );
   }
 
   if (Array.isArray(b.mcp)) await applyRegistrySelection(name, b.mcp);
@@ -139,19 +209,24 @@ async function applyRegistrySelection(name: string, picked: string[]) {
  *  state. Never a secret value. */
 async function accountsView() {
   const reg = await loadRegistry();
-  const services = [...new Set(Object.values(reg.servers).map((c) => c._service).filter((x): x is string => !!x))].sort();
+  const services = [...new Set(Object.values(reg.servers).map((c) => c._service).filter((x): x is string => !!x))]
+    .sort();
   const accounts = loadAccounts(ACCOUNTS);
   let state = "ok", detail = "", conflicts = 0, unreadable = 0;
   let have = new Set<string>();
   try {
     const key = await loadKey();
-    if (!(await keyMatches(key))) { state = "wrong-key"; }
+    if (!(await keyMatches(key))) state = "wrong-key";
     else {
       const l = await listSecrets(key);
       have = new Set(l.entries.map((e) => `${e.service}/${e.account}`));
-      conflicts = l.conflicts; unreadable = l.unreadable;
+      conflicts = l.conflicts;
+      unreadable = l.unreadable;
     }
-  } catch (e) { state = "no-key"; detail = (e as Error).message; }
+  } catch (e) {
+    state = "no-key";
+    detail = (e as Error).message;
+  }
   const initialised = !!(await readText(`${vaultDir()}/key-check.json`));
   const googleClient = state === "ok" && !!(await getSecret("google-oauth", "client", "id").catch(() => null));
   const missing = new Map<string, Awaited<ReturnType<typeof missingPrograms>>>();
@@ -171,10 +246,16 @@ async function accountsView() {
     services,
     profiles,
     accounts: accounts.map((a) => ({
-      ...a, hasSecret: have.has(`${a.service}/${a.name}`), missing: missing.get(a.service) ?? [], reach: where[`${a.service}/${a.name}`] ?? none,
+      ...a,
+      hasSecret: have.has(`${a.service}/${a.name}`),
+      missing: missing.get(a.service) ?? [],
+      reach: where[`${a.service}/${a.name}`] ?? none,
     })),
     // the servers that need no account (the registry's own entries, turned on by profile)
-    servers: Object.entries(where).filter(([k]) => k.startsWith("server/")).map(([k, r]) => ({ name: k.slice(7), ...r })),
+    servers: Object.entries(where).filter(([k]) => k.startsWith("server/")).map(([k, r]) => ({
+      name: k.slice(7),
+      ...r,
+    })),
   };
 }
 
@@ -184,9 +265,13 @@ let lastConnect: { account: string; ok: boolean; message: string; at: string } |
 
 /** Add or change an account (and its secret), or remove one. The secret, when given, is checked
  *  against the service first: a wrong one is refused rather than stored. */
-async function accountOp(b: { op?: string; service?: string; name?: string; url?: string; profiles?: string[] | null; secret?: string }) {
+async function accountOp(
+  b: { op?: string; service?: string; name?: string; url?: string; profiles?: string[] | null; secret?: string },
+) {
   const service = String(b.service ?? ""), name = String(b.name ?? "").trim();
-  if (!service || !ACCOUNT_NAME.test(name)) return { ok: false, message: "the name is lowercase letters, digits, - or _, starting with a letter" };
+  if (!service || !ACCOUNT_NAME.test(name)) {
+    return { ok: false, message: "the name is lowercase letters, digits, - or _, starting with a letter" };
+  }
   const raw = await readJson<{ accounts: Account[] } & Record<string, unknown>>(ACCOUNTS) ?? { accounts: [] };
   const i = raw.accounts.findIndex((a) => a.service === service && a.name === name);
   if (b.op === "delete") {
@@ -197,22 +282,40 @@ async function accountOp(b: { op?: string; service?: string; name?: string; url?
   }
   let url: string | undefined;
   if (b.url?.trim()) {
-    try { url = new URL(b.url.trim()).origin; } catch { return { ok: false, message: "the address is not a valid URL" }; }
+    try {
+      url = new URL(b.url.trim()).origin;
+    } catch {
+      return { ok: false, message: "the address is not a valid URL" };
+    }
   }
-  const account: Account = { service, name, ...(url ? { url } : {}), ...(b.profiles?.length ? { profiles: [...b.profiles].sort() } : {}) };
+  const account: Account = {
+    service,
+    name,
+    ...(url ? { url } : {}),
+    ...(b.profiles?.length ? { profiles: [...b.profiles].sort() } : {}),
+  };
   if (b.secret) {
     const probe = await probeAccount(account, b.secret);
-    if (!probe.ok) return { ok: false, message: `the secret does not open ${service}/${name} (${probe.detail}): not stored` };
+    if (!probe.ok) {
+      return { ok: false, message: `the secret does not open ${service}/${name} (${probe.detail}): not stored` };
+    }
     await setSecret(service, name, b.secret);
   }
-  if (i >= 0) raw.accounts[i] = { ...raw.accounts[i], ...account, ...(b.profiles?.length ? {} : { profiles: undefined }) };
-  else raw.accounts.push(account);
+  if (i >= 0) {
+    raw.accounts[i] = { ...raw.accounts[i], ...account, ...(b.profiles?.length ? {} : { profiles: undefined }) };
+  } else raw.accounts.push(account);
   raw.accounts = raw.accounts.map((a) => JSON.parse(JSON.stringify(a))); // drop undefined keys
   await Deno.writeTextFile(ACCOUNTS, JSON.stringify(raw, null, 2) + "\n");
   // saved either way (the program can be installed afterwards), but said now: its server will not start until then
   const missing = await missingPrograms(service);
-  const warn = missing.map((m) => `the ${m.server} server will not start: ${m.problem}${m.install ? ` — install it with: ${m.install}` : ""}`).join("; ");
-  return { ok: true, message: `${service}/${name} saved${b.secret ? ", secret checked and stored" : ""}${warn ? `. But ${warn}` : ""}`, ...(missing.length ? { missing } : {}) };
+  const warn = missing.map((m) =>
+    `the ${m.server} server will not start: ${m.problem}${m.install ? ` — install it with: ${m.install}` : ""}`
+  ).join("; ");
+  return {
+    ok: true,
+    message: `${service}/${name} saved${b.secret ? ", secret checked and stored" : ""}${warn ? `. But ${warn}` : ""}`,
+    ...(missing.length ? { missing } : {}),
+  };
 }
 
 // ---------------------------------------------------------------- live updates
@@ -222,7 +325,11 @@ type Topic = "usage" | "state" | "brain" | "tasks";
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
 
 function broadcast(topic: Topic, sessions: string[] = []) {
-  for (const send of clients) { try { send(topic, sessions); } catch { /* client gone, the reader removes it */ } }
+  for (const send of clients) {
+    try {
+      send(topic, sessions);
+    } catch { /* client gone, the reader removes it */ }
+  }
 }
 
 /**
@@ -243,8 +350,16 @@ async function watchTree(signal: AbortSignal) {
   // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
   for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), tasksRoot()]) if (await lstat(d)) paths.push(d);
   let watcher: Deno.FsWatcher;
-  try { watcher = Deno.watchFs(paths, { recursive: true }); } catch { return; }
-  signal.addEventListener("abort", () => { try { watcher.close(); } catch { /* already closed */ } });
+  try {
+    watcher = Deno.watchFs(paths, { recursive: true });
+  } catch {
+    return;
+  }
+  signal.addEventListener("abort", () => {
+    try {
+      watcher.close();
+    } catch { /* already closed */ }
+  });
   const pending = new Set<Topic>();
   const sessions = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -252,14 +367,18 @@ async function watchTree(signal: AbortSignal) {
     timer = null;
     const ids = [...sessions];
     for (const t of pending) broadcast(t, t === "usage" ? ids : []);
-    pending.clear(); sessions.clear();
+    pending.clear();
+    sessions.clear();
   };
   try {
     for await (const e of watcher) {
       if (e.kind === "access") continue;
       for (const p of e.paths) {
         if (p.endsWith(".tmp") || p.includes("/.git/") || p.includes("/.obsidian/")) continue;
-        if (p.startsWith(`${tasksRoot()}/`)) { pending.add("tasks"); continue; }
+        if (p.startsWith(`${tasksRoot()}/`)) {
+          pending.add("tasks");
+          continue;
+        }
         const transcript = p.includes("/projects/") && p.endsWith(".jsonl");
         pending.add(transcript ? "usage" : "state");
         // the file is named after the session, which is what the page needs to mark it as working
@@ -277,19 +396,30 @@ function eventStream(): Response {
   let send: ((topic: Topic, sessions?: string[]) => void) | null = null;
   let ping: ReturnType<typeof setInterval> | null = null;
   const close = () => {
-    if (ping != null) { clearInterval(ping); ping = null; }
-    if (send) { clients.delete(send); send = null; }
+    if (ping != null) {
+      clearInterval(ping);
+      ping = null;
+    }
+    if (send) {
+      clients.delete(send);
+      send = null;
+    }
   };
   const body = new ReadableStream({
     start(controller) {
       const enc = new TextEncoder();
       const write = (s: string) => {
-        try { controller.enqueue(enc.encode(s)); } catch { close(); }
+        try {
+          controller.enqueue(enc.encode(s));
+        } catch {
+          close();
+        }
       };
       write("retry: 2000\n\n");
       // first, which code is serving: a page loaded from an older console reloads itself
       write(`event: hello\ndata: ${JSON.stringify({ code: CODE })}\n\n`);
-      send = (topic, ids = []) => write(`event: ${topic}\ndata: ${JSON.stringify({ at: Date.now(), sessions: ids })}\n\n`);
+      send = (topic, ids = []) =>
+        write(`event: ${topic}\ndata: ${JSON.stringify({ at: Date.now(), sessions: ids })}\n\n`);
       clients.add(send);
       // A proxy or a sleeping laptop can drop a silent connection: a comment every 25s keeps it
       // alive and gives the page a heartbeat to time its "last update" indicator against.
@@ -333,14 +463,19 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   let cache: { at: number; gen: number; body: string; report: Awaited<ReturnType<typeof status>> } | null = null;
   // `gen` counts changes: a report computed before the last one is not served where freshness matters
   let gen = 0, inflight: Promise<void> | null = null;
-  const refreshStatus = () => inflight ??= (async () => {
-    const g = gen;
-    try {
-      const report = await status();
-      cache = { at: Date.now(), gen: g, body: JSON.stringify(report), report };
-    } finally { inflight = null; }
-  })();
-  const invalidate = () => { gen++; };
+  const refreshStatus = () =>
+    inflight ??= (async () => {
+      const g = gen;
+      try {
+        const report = await status();
+        cache = { at: Date.now(), gen: g, body: JSON.stringify(report), report };
+      } finally {
+        inflight = null;
+      }
+    })();
+  const invalidate = () => {
+    gen++;
+  };
   const statusCache = async (fresh: boolean) => {
     if (fresh) invalidate();
     while (!cache || cache.gen !== gen) await refreshStatus();
@@ -348,11 +483,17 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   };
   let plugins: { at: number; body: string } | null = null;
   const ac = new AbortController();
-  const json = (v: unknown, code = 200) => new Response(JSON.stringify(v), { status: code, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  const json = (v: unknown, code = 200) =>
+    new Response(JSON.stringify(v), {
+      status: code,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
 
   // a state change invalidates the cached snapshots, so the next request after an event is fresh
   // lazily: state events can be frequent while sessions run, and only a page asking needs the report
-  clients.add((topic) => { if (topic === "state") invalidate(); });
+  clients.add((topic) => {
+    if (topic === "state") invalidate();
+  });
   void refreshStatus().catch(() => {}); // warm: the first page after a start is not the one to wait
   void claudeAssets(); // the scan of Desktop's bundle, done before the first page asks for it
 
@@ -369,7 +510,9 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
 
       if (u.pathname === "/api/status") {
         await statusCache(u.searchParams.has("fresh"));
-        return new Response(cache!.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+        return new Response(cache!.body, {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
       }
       // the tray's view of the same report: one level and the lines behind it
       if (u.pathname === "/api/summary") {
@@ -377,8 +520,13 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         return json(summarize(cache!.report));
       }
       if (u.pathname === "/api/sessions") {
-        const db = openDb(); await ingest(db, { quiet: true });
-        const r = sessions(db, { since: u.searchParams.get("since") ?? "7d", profile: u.searchParams.get("profile") || undefined, limit: Number(u.searchParams.get("limit") ?? 60) });
+        const db = openDb();
+        await ingest(db, { quiet: true });
+        const r = sessions(db, {
+          since: u.searchParams.get("since") ?? "7d",
+          profile: u.searchParams.get("profile") || undefined,
+          limit: Number(u.searchParams.get("limit") ?? 60),
+        });
         db.close();
         return json(r);
       }
@@ -480,12 +628,17 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
         if (req.method === "POST") {
           if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
           const r = await pluginOp(await req.json().catch(() => ({})) as PluginOp);
-          plugins = null; invalidate();
+          plugins = null;
+          invalidate();
           broadcast("state");
           return json(r); // a refused operation is a result (ok: false, message), not an HTTP error
         }
-        if (!plugins || u.searchParams.has("fresh") || Date.now() - plugins.at > 15000) plugins = { at: Date.now(), body: JSON.stringify(await inventory()) };
-        return new Response(plugins.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+        if (!plugins || u.searchParams.has("fresh") || Date.now() - plugins.at > 15000) {
+          plugins = { at: Date.now(), body: JSON.stringify(await inventory()) };
+        }
+        return new Response(plugins.body, {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
       }
       if (u.pathname === "/api/plugins/catalog") return json(await catalog(u.searchParams.has("fresh")));
       if (u.pathname === "/api/plugins/details") return json({ text: await details(u.searchParams.get("id") ?? "") });
@@ -503,7 +656,9 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
       if (font) {
         const bytes = await Deno.readFile(`${DASH}/fonts/${font[1]}`).catch(() => null);
         if (!bytes) return new Response("not found", { status: 404 });
-        return new Response(bytes, { headers: { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" } });
+        return new Response(bytes, {
+          headers: { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" },
+        });
       }
       const path = u.pathname === "/" ? "/index.html" : u.pathname;
       // the page's files, and the libraries it carries in vendor/ (no CDN: the console works offline)
@@ -521,6 +676,10 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   void watchTree(ac.signal);
   void watchBrain(ac.signal, connectTasks() === "brain");
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
-  if (opts.open) { try { new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref(); } catch { /* no browser */ } }
+  if (opts.open) {
+    try {
+      new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref();
+    } catch { /* no browser */ }
+  }
   await srv.finished;
 }

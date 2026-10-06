@@ -15,7 +15,16 @@ import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextproto
 import { fromFile, type TaskStore, useTaskStore } from "../shared/mcp/lib/tasks.ts";
 import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
 import { boardRoute } from "./board.ts";
-import { accountPage, type AdminView, authorizePage, html, invitedPage, invitePage, SIGNED_OUT_ERROR, signInPage } from "./pages.ts";
+import {
+  accountPage,
+  type AdminView,
+  authorizePage,
+  html,
+  invitedPage,
+  invitePage,
+  SIGNED_OUT_ERROR,
+  signInPage,
+} from "./pages.ts";
 import { privacyPage, type Site, siteFile, siteMoved } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
@@ -27,16 +36,25 @@ import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
 if (Deno.args[0] === "totp") {
   const secret = base32Encode(crypto.getRandomValues(new Uint8Array(20)));
   console.log(`BRAIN_TOTP_SECRET=${secret}`);
-  console.log(`otpauth://totp/Brain:${encodeURIComponent(owner().id)}?secret=${secret}&issuer=Brain&digits=6&period=30`);
+  console.log(
+    `otpauth://totp/Brain:${encodeURIComponent(owner().id)}?secret=${secret}&issuer=Brain&digits=6&period=30`,
+  );
   Deno.exit(0);
 }
 
 const env = (k: string, d?: string) => Deno.env.get(k) || d;
 const URL_ = (env("BRAIN_URL") ?? "").replace(/\/+$/, "");
 const DEV = env("BRAIN_DEV") === "1";
-const fail = (m: string) => { console.error(`brain: ${m}`); Deno.exit(2); };
+const fail = (m: string) => {
+  console.error(`brain: ${m}`);
+  Deno.exit(2);
+};
 if (!URL_) fail("BRAIN_URL is required");
-if (!env("BRAIN_MASTER_KEY")) fail("BRAIN_MASTER_KEY (32 random bytes, base64) is required: it encrypts every account's TOTP secret and backup key");
+if (!env("BRAIN_MASTER_KEY")) {
+  fail(
+    "BRAIN_MASTER_KEY (32 random bytes, base64) is required: it encrypts every account's TOTP secret and backup key",
+  );
+}
 const DATA = env("BRAIN_DATA", "/data")!;
 await Deno.mkdir(DATA, { recursive: true });
 
@@ -48,7 +66,11 @@ const embedCfg = { url: env("BRAIN_EMBED_URL", "http://ollama:11434")!, model: e
 
 // whose request this is and how it came in: set per request, read by the stores, the task rules
 // (useTaskStore) and the owner of the prompts (useOwner)
-interface Ctx { user: User; label: string; tenant: Tenant }
+interface Ctx {
+  user: User;
+  label: string;
+  tenant: Tenant;
+}
 const ctx = new AsyncLocalStorage<Ctx>();
 const by = () => ctx.getStore()?.label ?? "brain";
 const tenants = new Tenants(DATA, embedCfg, by);
@@ -58,7 +80,10 @@ const here = (): Ctx => {
   return c;
 };
 const ownerOf = (u: User): Owner => ownerFrom({ id: u.id, name: u.name, language: u.language });
-useOwner(() => { const c = ctx.getStore(); return c ? ownerOf(c.user) : null; });
+useOwner(() => {
+  const c = ctx.getStore();
+  return c ? ownerOf(c.user) : null;
+});
 const tasks: TaskStore = {
   list: () => here().tenant.tasks.list(),
   get: (id) => here().tenant.tasks.get(id),
@@ -66,7 +91,8 @@ const tasks: TaskStore = {
 };
 useTaskStore(tasks);
 /** Runs `fn` as an account: its database, its owner, its name on every revision. */
-const as = <T>(user: User, label: string, fn: () => T): T => ctx.run({ user, label, tenant: tenants.open(user.id) }, fn);
+const as = <T>(user: User, label: string, fn: () => T): T =>
+  ctx.run({ user, label, tenant: tenants.open(user.id) }, fn);
 
 // ---------------------------------------------------------------- the first account
 // A new service makes its administrator as an invitation, like everyone else: the link goes to the
@@ -82,10 +108,21 @@ if (!users.count()) {
   const id = env("BRAIN_ADMIN_ID", o.id)!.toLowerCase();
   const pass = env("BRAIN_PASSPHRASE"), totp = env("BRAIN_TOTP_SECRET") ?? null;
   if (pass) {
-    if (pass.length < 12 || (!totp && !DEV)) fail("BRAIN_PASSPHRASE needs 12+ characters and BRAIN_TOTP_SECRET (BRAIN_DEV=1 allows no TOTP)");
-    await users.bootstrap({ id, name: o.name, language: o.language, passphrase: pass, totpSecret: totp, backupKey: env("BRAIN_BACKUP_KEY") });
+    if (pass.length < 12 || (!totp && !DEV)) {
+      fail("BRAIN_PASSPHRASE needs 12+ characters and BRAIN_TOTP_SECRET (BRAIN_DEV=1 allows no TOTP)");
+    }
+    await users.bootstrap({
+      id,
+      name: o.name,
+      language: o.language,
+      passphrase: pass,
+      totpSecret: totp,
+      backupKey: env("BRAIN_BACKUP_KEY"),
+    });
   } else {
-    await users.invite(id, o.name === "the user" ? id : o.name, o.language, true).catch((e) => fail(`BRAIN_ADMIN_ID: ${(e as Error).message}`));
+    await users.invite(id, o.name === "the user" ? id : o.name, o.language, true).catch((e) =>
+      fail(`BRAIN_ADMIN_ID: ${(e as Error).message}`)
+    );
   }
   const old = `${DATA}/brain.db`, dest = tenantFile(DATA, id);
   if ((await Deno.stat(old).catch(() => null)) && !(await Deno.stat(dest).catch(() => null))) {
@@ -93,7 +130,9 @@ if (!users.count()) {
     const carried = auth.adopt(db, id);
     db.exec("pragma wal_checkpoint(truncate)");
     // the tokens now live in accounts.db: the person's database keeps only their brain
-    for (const t of ["oauth_clients", "oauth_codes", "tokens", "sessions", "login_failures"]) db.exec(`drop table if exists ${t}`);
+    for (const t of ["oauth_clients", "oauth_codes", "tokens", "sessions", "login_failures"]) {
+      db.exec(`drop table if exists ${t}`);
+    }
     db.close();
     await Deno.mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
     for (const s of ["", "-wal", "-shm"]) await Deno.rename(`${old}${s}`, `${dest}${s}`).catch(() => {});
@@ -102,17 +141,30 @@ if (!users.count()) {
   console.log(`brain: first account ${id}, administrator`);
 }
 const admin = users.list().find((u) => u.admin);
-if (admin && !admin.ready) console.log(`brain: the administrator ${admin.id} has not signed up yet — their invitation (one use, 7 days): ${URL_}/invite?t=${await users.reinvite(admin.id)}`);
+if (admin && !admin.ready) {
+  console.log(
+    `brain: the administrator ${admin.id} has not signed up yet — their invitation (one use, 7 days): ${URL_}/invite?t=${await users
+      .reinvite(admin.id)}`,
+  );
+}
 // every ready account's brain is opened now, so its indexer runs from the start
 for (const u of users.list()) if (u.ready && !u.disabled) tenants.open(u.id);
 
 const json = (v: unknown, status = 200, headers: Record<string, string> = {}) =>
-  new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
-const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, mcp-protocol-version, mcp-session-id", "access-control-expose-headers": "www-authenticate, mcp-session-id" };
+  new Response(JSON.stringify(v), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...headers },
+  });
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization, content-type, mcp-protocol-version, mcp-session-id",
+  "access-control-expose-headers": "www-authenticate, mcp-session-id",
+};
 const SECURE = URL_.startsWith("https:") ? "; Secure" : "";
 // Lax, not Strict: a link to the board from elsewhere (a notification, the console) arrives signed in;
 // a form posted from another site still carries no cookie
-const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) => `brain_session=${s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${SECURE}`;
+const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) =>
+  `brain_session=${s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${SECURE}`;
 /** Pure: a page of this service to go back to after signing in, or the account page. */
 const nextPage = (n: string | null) => n && /^\/(account|tasks)(\/[\w-]*)*(\?[^\s]*)?$/.test(n) ? n : "/account";
 const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
@@ -127,7 +179,8 @@ const SITE: Site = {
 const SITE_DIR = env("BRAIN_SITE", fromFileUrl(new URL("../site/dist", import.meta.url)))!;
 // the site on an address of its own answers with the site and the privacy notice, nothing of the brain
 const SITE_HOST = SITE.siteUrl !== URL_ ? new URL(SITE.siteUrl).host : null;
-const otpauth = (id: string, secret: string) => `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
+const otpauth = (id: string, secret: string) =>
+  `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 async function handle(req: Request): Promise<Response> {
   const u = new URL(req.url);
@@ -137,13 +190,22 @@ async function handle(req: Request): Promise<Response> {
     const r = req.method === "GET" || req.method === "HEAD" ? await siteFile(SITE_DIR, p, SITE) : null;
     return r ?? await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
   }
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...CORS, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } });
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: { ...CORS, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" },
+    });
+  }
 
   if (p === "/health") return json({ ok: true, accounts: users.count(), index: tenants.status() });
 
   // ---------------- discovery
-  if (p === "/.well-known/oauth-protected-resource" || p === "/.well-known/oauth-protected-resource/mcp") return json(auth.resourceMeta, 200, CORS);
-  if (p === "/.well-known/oauth-authorization-server" || p === "/.well-known/openid-configuration") return json(auth.serverMeta, 200, CORS);
+  if (p === "/.well-known/oauth-protected-resource" || p === "/.well-known/oauth-protected-resource/mcp") {
+    return json(auth.resourceMeta, 200, CORS);
+  }
+  if (p === "/.well-known/oauth-authorization-server" || p === "/.well-known/openid-configuration") {
+    return json(auth.serverMeta, 200, CORS);
+  }
 
   // ---------------- OAuth
   if (p === "/register" && req.method === "POST") {
@@ -158,8 +220,16 @@ async function handle(req: Request): Promise<Response> {
     if (req.method === "GET") return html(authorizePage(check.client.name, oauth, TOTP, "", check.machine));
     const who = (params.get("user") ?? "").trim().toLowerCase();
     const r = await auth.signIn(who, params.get("passphrase") ?? "", params.get("code") ?? "");
-    if (r !== "ok") return html(authorizePage(check.client.name, oauth, TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, check.machine), 401);
-    return new Response(null, { status: 302, headers: { location: await auth.issueCode(oauth, who), "cache-control": "no-store" } });
+    if (r !== "ok") {
+      return html(
+        authorizePage(check.client.name, oauth, TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, check.machine),
+        401,
+      );
+    }
+    return new Response(null, {
+      status: 302,
+      headers: { location: await auth.issueCode(oauth, who), "cache-control": "no-store" },
+    });
   }
   if (p === "/token" && req.method === "POST") {
     const r = await auth.token(new URLSearchParams(await req.text()));
@@ -172,7 +242,11 @@ async function handle(req: Request): Promise<Response> {
     const t = f.get("t") ?? "";
     const inv = await users.invitation(t);
     if (!inv) return html(invitedPage("", "Questo invito è scaduto o è già stato usato: chiedine uno nuovo."), 410);
-    const show = (error = "") => html(invitePage(inv.user.name, t, inv.totpSecret, otpauth(inv.user.id, inv.totpSecret), error), error ? 400 : 200);
+    const show = (error = "") =>
+      html(
+        invitePage(inv.user.name, t, inv.totpSecret, otpauth(inv.user.id, inv.totpSecret), error),
+        error ? 400 : 200,
+      );
     if (req.method !== "POST") return show();
     if ((f.get("passphrase") ?? "") !== (f.get("again") ?? "")) return show("Le due passphrase sono diverse.");
     const r = await users.accept(t, f.get("passphrase") ?? "", f.get("code") ?? "");
@@ -189,14 +263,20 @@ async function handle(req: Request): Promise<Response> {
       const r = await auth.signIn(who, f.get("passphrase") ?? "", f.get("code") ?? "");
       const next = nextPage(f.get("next"));
       if (r !== "ok") return html(signInPage(TOTP, r === "locked" ? LOCKED : SIGNED_OUT_ERROR, next), 401);
-      return new Response(null, { status: 303, headers: { location: next, "set-cookie": SESSION_COOKIE(await auth.newSession(who)) } });
+      return new Response(null, {
+        status: 303,
+        headers: { location: next, "set-cookie": SESSION_COOKIE(await auth.newSession(who)) },
+      });
     }
     const id = await auth.session(req);
     const me = id ? users.get(id) : null;
     if (!me) return html(signInPage(TOTP));
     if (p === "/account/logout" && req.method === "POST") {
       await auth.endSession(req);
-      return new Response(null, { status: 303, headers: { location: "/account", "set-cookie": SESSION_COOKIE("", 0) } });
+      return new Response(null, {
+        status: 303,
+        headers: { location: "/account", "set-cookie": SESSION_COOKIE("", 0) },
+      });
     }
     const extra: { fresh?: { name: string; token: string }; backupKey?: string; admin?: AdminView } = {};
     const adminView: AdminView = { users: [] };
@@ -212,7 +292,10 @@ async function handle(req: Request): Promise<Response> {
         const target = (f.get("id") ?? "").trim().toLowerCase();
         try {
           if (p === "/account/admin/invite") {
-            adminView.link = { id: target, url: `${URL_}/invite?t=${await users.invite(target, name, f.get("language") ?? "Italian")}` };
+            adminView.link = {
+              id: target,
+              url: `${URL_}/invite?t=${await users.invite(target, name, f.get("language") ?? "Italian")}`,
+            };
           } else if (p === "/account/admin/reinvite") {
             if (users.get(target)?.admin) throw new Error("l'amministratore non si reinvita");
             const link = await users.reinvite(target);
@@ -239,14 +322,21 @@ async function handle(req: Request): Promise<Response> {
     const id = await auth.session(req);
     const me = id ? users.get(id) : null;
     // a change sent after the session ended comes back to its page, not to the form's address
-    if (!me) return html(signInPage(TOTP, "", req.method === "GET" ? `${p}${u.search}` : p.match(/^\/tasks\/t-[\w-]+/)?.[0] ?? "/tasks"), req.method === "GET" ? 200 : 401);
+    if (!me) {
+      return html(
+        signInPage(TOTP, "", req.method === "GET" ? `${p}${u.search}` : p.match(/^\/tasks\/t-[\w-]+/)?.[0] ?? "/tasks"),
+        req.method === "GET" ? 200 : 401,
+      );
+    }
     return await as(me, "web", () => boardRoute(req, u, me, html));
   }
 
   // ---------------- claude-multi's site: the landing and the docs, built into site/dist
   // (on the brain's address when the site has none of its own; otherwise a visitor is sent there)
   if (req.method === "GET" || req.method === "HEAD") {
-    if (SITE_HOST && p === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
+    if (SITE_HOST && p === "/robots.txt") {
+      return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
+    }
     const moved = await siteMoved(SITE_DIR, u, SITE);
     if (moved) return new Response(null, { status: 301, headers: { location: moved } });
     const r = SITE_HOST ? null : await siteFile(SITE_DIR, p, SITE);
@@ -257,7 +347,9 @@ async function handle(req: Request): Promise<Response> {
   const who: Caller | null = await auth.caller(req);
   if (!who) {
     if (p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup")) return withCors(auth.challenge());
-    return SITE_HOST ? new Response("not found", { status: 404 }) : await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
+    return SITE_HOST
+      ? new Response("not found", { status: 404 })
+      : await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
   }
   const user = users.get(who.user)!;
   return await as(user, who.label, () => served(req, u, who));
@@ -273,14 +365,19 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   if (p === "/mcp") {
     // stateless: a server and a transport per request, nothing kept between them
     const server = brainServer(toolCtx);
-    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
     await server.connect(transport);
     return withCors(await transport.handleRequest(req));
   }
   // the tasks as files, for the person's machines (the console, the reminders, the local tasks
   // tools): the TaskStore of shared/mcp/lib/brain-tasks.ts on the other side; the rules run there
   if (p === "/api/tasks" && req.method === "GET") {
-    const rows = store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as { body: string }[];
+    const rows = store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as {
+      body: string;
+    }[];
     return json({ tasks: rows.map((r) => r.body) });
   }
   const one = p.match(/^\/api\/tasks\/(t-[\w-]+)$/);
@@ -290,7 +387,9 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   }
   if (one && req.method === "PUT") {
     const body = await req.text();
-    if (fromFile(body)?.id !== one[1]) return json({ error: "not a task file, or its id is not the one in the path" }, 400);
+    if (fromFile(body)?.id !== one[1]) {
+      return json({ error: "not a task file, or its id is not the one in the path" }, 400);
+    }
     await tenant.tasks.write(fromFile(body)!);
     return json({ written: one[1] });
   }
@@ -301,13 +400,20 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   }
   // what the machines compare before fetching a backup: it changes with every write, never otherwise
   if (p === "/backup/state" && who.label.startsWith("token:")) {
-    const r = store.db.prepare("select count(*) n, max(at) last from revisions").get() as { n: number; last: string | null };
+    const r = store.db.prepare("select count(*) n, max(at) last from revisions").get() as {
+      n: number;
+      last: string | null;
+    };
     return json({ version: `${r.n}:${r.last ?? ""}`, revisions: r.n, last: r.last });
   }
   // the person's brain, sealed with their own backup key: nobody else's copy opens with it
   if (p === "/backup" && who.label.startsWith("token:")) {
     return new Response(await snapshot(store, tenant.file, await users.backupKey(who.user)), {
-      headers: { "content-type": "application/octet-stream", "content-disposition": `attachment; filename="brain-${new Date().toISOString().slice(0, 10)}.brn"`, "cache-control": "no-store" },
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-disposition": `attachment; filename="brain-${new Date().toISOString().slice(0, 10)}.brn"`,
+        "cache-control": "no-store",
+      },
     });
   }
   return json({ error: "not found" }, 404);
@@ -327,4 +433,6 @@ Deno.serve({ port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0")
     return json({ error: (e as Error).message }, 500);
   }
 });
-console.log(`brain on ${URL_} (data ${DATA}, ${users.count()} accounts, embeddings ${embedCfg.model} at ${embedCfg.url})`);
+console.log(
+  `brain on ${URL_} (data ${DATA}, ${users.count()} accounts, embeddings ${embedCfg.model} at ${embedCfg.url})`,
+);

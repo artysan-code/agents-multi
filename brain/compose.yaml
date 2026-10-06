@@ -43,7 +43,11 @@ services:
   # bge-m3, pulled once into its volume; about 1.2 GB on disk and 2 GB of memory while it works.
   ollama:
     image: ollama/ollama:0.35.0
-    entrypoint: ["/bin/sh", "-c", "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull bge-m3; wait"]
+    entrypoint: [
+      "/bin/sh",
+      "-c",
+      "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull bge-m3; wait",
+    ]
     environment:
       - OLLAMA_KEEP_ALIVE=10m
     volumes:

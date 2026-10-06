@@ -9,7 +9,19 @@ import { z } from "npm:zod@^3.23";
 import { registerTaskTools } from "../shared/mcp/tasks/tools.ts";
 import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";
-import { AREAS, areaOf, check, diaryRewriteErrors, entryErrors, LOGS, MAX_ENTRY_WORDS, MAX_WORDS, maxWords, relink, slugPath } from "./rules.ts";
+import {
+  areaOf,
+  AREAS,
+  check,
+  diaryRewriteErrors,
+  entryErrors,
+  LOGS,
+  MAX_ENTRY_WORDS,
+  MAX_WORDS,
+  maxWords,
+  relink,
+  slugPath,
+} from "./rules.ts";
 import { dayOf, hhmm } from "../shared/mcp/lib/tasks.ts";
 import { type Owner, owner } from "../shared/mcp/lib/owner.ts";
 
@@ -32,12 +44,16 @@ export function instructions(store: Store, o: Owner = owner()): string {
     `what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words (the detail goes on the project page); ` +
     `when the state of a project changes, update its page. Change io/ only when ${who} says something about themselves, never by inference. ` +
     `Write in ${o.language}. Say in one line what you wrote.`;
-  const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like 'io/%' order by path").all() as { path: string; title: string; body: string }[];
+  const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like 'io/%' order by path")
+    .all() as { path: string; title: string; body: string }[];
   if (!io.length) return rules;
   // each io page by its title and what stands above its first "## ": the part meant for every
   // conversation; the sections below (a contract, details) are a brain_read away
   const portrait = io.map((d) => {
-    const top = d.body.replace(/^---\n[\s\S]*?\n---\n?/, "").replace(/^# .*\n+/, "").split(/\n## /)[0].replace(/\s+/g, " ").trim();
+    const top = d.body.replace(/^---\n[\s\S]*?\n---\n?/, "").replace(/^# .*\n+/, "").split(/\n## /)[0].replace(
+      /\s+/g,
+      " ",
+    ).trim();
     return `${d.title} (${d.path}): ${top.slice(0, 900)}`;
   }).join("\n").slice(0, 4000);
   return `${rules}\n\nWho ${who} is (from io/, read the pages for more):\n${portrait}`;
@@ -59,39 +75,70 @@ export function staleProjects(store: Store, diary: string, line: string, now: Da
     if (!updated) continue;
     const name = proj.replace(/\.md$/, "");
     // the earlier lines of today's page that link this project, by the time they carry
-    const earlier = diary.split("\n").filter((l) => /^- \d{2}:\d{2} /.test(l) && l.includes(`[[${name}`) && !l.includes(line.trim().split("\n")[0]));
+    const earlier = diary.split("\n").filter((l) =>
+      /^- \d{2}:\d{2} /.test(l) && l.includes(`[[${name}`) && !l.includes(line.trim().split("\n")[0])
+    );
     const after = earlier.some((l) => new Date(`${day}T${l.slice(2, 7)}:00`) > new Date(updated));
     if (after) stale.push(proj);
   }
-  return stale.length ? { reminder: `${stale.join(", ")}: the diary has moved on since the page was last updated. If the state changed, update the page (brain_edit).` } : {};
+  return stale.length
+    ? {
+      reminder: `${
+        stale.join(", ")
+      }: the diary has moved on since the page was last updated. If the state changed, update the page (brain_edit).`,
+    }
+    : {};
 }
 
 /** The brain's health against its rules: what brain_check answers and the console shows. */
 export function health(store: Store) {
   const pages = store.list("", { limit: 100000 });
-  const linked = new Set<string>(), broken: { page: string; link: string }[] = [], long: { page: string; words: number }[] = [];
+  const linked = new Set<string>(),
+    broken: { page: string; link: string }[] = [],
+    long: { page: string; words: number }[] = [];
   for (const p of pages) {
     const body = store.get(p.path)!.body;
     for (const l of store.links(p.path).out) {
-      if (l.path) linked.add(l.path); else broken.push({ page: p.path, link: l.target });
+      if (l.path) linked.add(l.path);
+      else broken.push({ page: p.path, link: l.target });
     }
     const n = (body.match(/[\p{L}\p{N}]+/gu) ?? []).length;
     if (n > maxWords(areaOf(p.path))) long.push({ page: p.path, words: n });
   }
-  const orphans = pages.filter((p) => !linked.has(p.path) && !["io", "diario", "inbox"].includes(areaOf(p.path))).map((p) => p.path);
+  const orphans = pages.filter((p) => !linked.has(p.path) && !["io", "diario", "inbox"].includes(areaOf(p.path))).map((
+    p,
+  ) => p.path);
   const weekAgo = dayOf(new Date(Date.now() - 7 * 86400_000));
-  const stale = (store.get("inbox/inbox.md")?.body.split("\n") ?? []).filter((l) => /^- \d{4}-\d{2}-\d{2}/.test(l) && l.slice(2, 12) < weekAgo);
+  const stale = (store.get("inbox/inbox.md")?.body.split("\n") ?? []).filter((l) =>
+    /^- \d{4}-\d{2}-\d{2}/.test(l) && l.slice(2, 12) < weekAgo
+  );
   const outside = pages.filter((p) => !AREAS.includes(areaOf(p.path))).map((p) => p.path);
-  return { pages: pages.length, orphans, broken_links: broken, too_long: long, inbox_older_than_a_week: stale, outside_the_areas: outside };
+  return {
+    pages: pages.length,
+    orphans,
+    broken_links: broken,
+    too_long: long,
+    inbox_older_than_a_week: stale,
+    outside_the_areas: outside,
+  };
 }
 
-export interface ToolContext { store: Store; embed: EmbedConfig; by: () => string; changed: () => void }
+export interface ToolContext {
+  store: Store;
+  embed: EmbedConfig;
+  by: () => string;
+  changed: () => void;
+}
 
 /** Words and meaning together; when the model is unreachable, words alone, and the answer says so. */
 export async function search(ctx: ToolContext, query: string, limit = 10, tasks = false) {
   const words = ctx.store.searchWords(query, 30, tasks);
   let meaning: Awaited<ReturnType<typeof searchMeaning>> = [], note: string | undefined;
-  try { meaning = await searchMeaning(ctx.store, ctx.embed, query, 30, tasks); } catch (e) { note = `meaning search unavailable (${(e as Error).message}): words only`; }
+  try {
+    meaning = await searchMeaning(ctx.store, ctx.embed, query, 30, tasks);
+  } catch (e) {
+    note = `meaning search unavailable (${(e as Error).message}): words only`;
+  }
   const order = fuse([words.map((w) => w.path), meaning.map((m) => m.path)]).slice(0, limit);
   const results = order.map((path) => {
     const w = words.find((x) => x.path === path), m = meaning.find((x) => x.path === path);
@@ -107,14 +154,25 @@ export function brainServer(ctx: ToolContext): McpServer {
   /** A write the rules refuse comes back as the reasons, for the writer to fix. */
   const refuse = (errors: string[], extra: Record<string, unknown> = {}) => text({ refused: true, errors, ...extra });
 
-  server.registerTool("brain_search", {
-    description: "Search the owner's memory by words and by meaning. Returns paths, titles and an excerpt: read the documents that matter with brain_read.",
-    inputSchema: { query: z.string(), limit: z.number().int().min(1).max(50).optional(), include_tasks: z.boolean().optional() },
-    annotations: READ,
-  }, async ({ query, limit, include_tasks }: { query: string; limit?: number; include_tasks?: boolean }) => text(await search(ctx, query, limit, include_tasks)));
+  server.registerTool(
+    "brain_search",
+    {
+      description:
+        "Search the owner's memory by words and by meaning. Returns paths, titles and an excerpt: read the documents that matter with brain_read.",
+      inputSchema: {
+        query: z.string(),
+        limit: z.number().int().min(1).max(50).optional(),
+        include_tasks: z.boolean().optional(),
+      },
+      annotations: READ,
+    },
+    async ({ query, limit, include_tasks }: { query: string; limit?: number; include_tasks?: boolean }) =>
+      text(await search(ctx, query, limit, include_tasks)),
+  );
 
   server.registerTool("brain_read", {
-    description: "A document in full: its Markdown, its revision number (pass it as base_rev when you change it), and its links both ways. With rev, how it was then.",
+    description:
+      "A document in full: its Markdown, its revision number (pass it as base_rev when you change it), and its links both ways. With rev, how it was then.",
     inputSchema: { path: z.string(), rev: z.number().int().min(1).optional() },
     annotations: READ,
   }, ({ path, rev }: { path: string; rev?: number }) => {
@@ -129,7 +187,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_list", {
-    description: "The documents under a folder (everything when no folder), newest first: path, title, revision, when and by whom.",
+    description:
+      "The documents under a folder (everything when no folder), newest first: path, title, revision, when and by whom.",
     inputSchema: { folder: z.string().optional(), limit: z.number().int().min(1).max(1000).optional() },
     annotations: READ,
   }, ({ folder, limit }: { folder?: string; limit?: number }) => {
@@ -138,14 +197,21 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_write", {
-    description: "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the seven areas. " +
+    description:
+      "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the seven areas. " +
       "To replace, read it first and pass its rev as base_rev. The rules are checked: a refusal lists what to fix. The previous version is kept (brain_history). " +
       "Diary and inbox are added to with brain_append. A diary page may be replaced only to tidy it: every timed line kept, at its time and in its order.",
     inputSchema: {
-      path: z.string().describe(`${AREAS.join("|")}/name.md (progetti/ follows the folder: progetti/work/acme/site.md)`),
-      body: z.string().describe("the whole Markdown: '# Title', one sentence saying what it is, then the content with [[links]]"),
+      path: z.string().describe(
+        `${AREAS.join("|")}/name.md (progetti/ follows the folder: progetti/work/acme/site.md)`,
+      ),
+      body: z.string().describe(
+        "the whole Markdown: '# Title', one sentence saying what it is, then the content with [[links]]",
+      ),
       base_rev: z.number().int().min(0).optional().describe("the rev you read; 0 to create only if it does not exist"),
-      distinct: z.boolean().optional().describe("true when a page with a similar title exists and this really is another subject"),
+      distinct: z.boolean().optional().describe(
+        "true when a page with a similar title exists and this really is another subject",
+      ),
     },
     annotations: CHANGE,
   }, ({ path, body, base_rev, distinct }: { path: string; body: string; base_rev?: number; distinct?: boolean }) => {
@@ -164,15 +230,25 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_edit", {
-    description: "Change part of a document: replace one exact passage with another (it must occur exactly once). Cheaper and safer than rewriting the whole document.",
-    inputSchema: { path: z.string(), find: z.string().min(1), replace: z.string(), base_rev: z.number().int().min(1).optional() },
+    description:
+      "Change part of a document: replace one exact passage with another (it must occur exactly once). Cheaper and safer than rewriting the whole document.",
+    inputSchema: {
+      path: z.string(),
+      find: z.string().min(1),
+      replace: z.string(),
+      base_rev: z.number().int().min(1).optional(),
+    },
     annotations: CHANGE,
   }, ({ path, find, replace, base_rev }: { path: string; find: string; replace: string; base_rev?: number }) => {
     const d = store.get(path) ?? store.get(slugPath(path));
     if (!d) throw new Error(`no document ${path}`);
     if (LOGS.includes(areaOf(d.path))) return refuse([`${d.path} is only added to: use brain_append`]);
     const n = d.body.split(find).length - 1;
-    if (n !== 1) throw new Error(n ? `the passage occurs ${n} times: include more context` : "the passage is not in the document: read it again");
+    if (n !== 1) {
+      throw new Error(
+        n ? `the passage occurs ${n} times: include more context` : "the passage is not in the document: read it again",
+      );
+    }
     const next = d.body.replace(find, () => replace);
     const v = check(store, d.path, next, { creating: false });
     if (!v.ok) return refuse(v.errors);
@@ -192,7 +268,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_history", {
-    description: "The versions of a document: revision, when, by whom (the owner, or Claude from which client), and what happened.",
+    description:
+      "The versions of a document: revision, when, by whom (the owner, or Claude from which client), and what happened.",
     inputSchema: { path: z.string() },
     annotations: READ,
   }, ({ path }: { path: string }) => text({ path, versions: store.history(path) }));
@@ -208,7 +285,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_append", {
-    description: `Add a line to today's diary (what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words: link the project with [[progetti/…]]), or to the inbox ` +
+    description:
+      `Add a line to today's diary (what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words: link the project with [[progetti/…]]), or to the inbox ` +
       "(something said in passing, to sort later). The page is created when it does not exist; lines are timed and never rewritten.",
     inputSchema: {
       where: z.enum(["diario", "inbox"]).optional().describe("default diario"),
@@ -223,9 +301,14 @@ export function brainServer(ctx: ToolContext): McpServer {
     }
     const p = where === "inbox" ? "inbox/inbox.md" : `diario/${day}.md`;
     const cur = store.get(p);
-    const head = where === "inbox" ? "# Inbox\n\nCose dette al volo, da sistemare nelle pagine giuste e poi togliere da qui.\n"
-      : `# ${day}\n\nCosa è successo il ${now.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.\n`;
-    const entry = line.trim().split("\n").map((l, i) => i ? `  ${l.trim()}` : `- ${where === "inbox" ? day + " " : ""}${hhmm(now)} ${l.trim()}`).join("\n");
+    const head = where === "inbox"
+      ? "# Inbox\n\nCose dette al volo, da sistemare nelle pagine giuste e poi togliere da qui.\n"
+      : `# ${day}\n\nCosa è successo il ${
+        now.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      }.\n`;
+    const entry = line.trim().split("\n").map((l, i) =>
+      i ? `  ${l.trim()}` : `- ${where === "inbox" ? day + " " : ""}${hhmm(now)} ${l.trim()}`
+    ).join("\n");
     const body = `${(cur?.body ?? head).replace(/\s+$/, "")}\n${cur ? "" : "\n"}${entry}\n`;
     const v = check(store, p, body, { creating: !cur });
     if (!v.ok) return refuse(v.errors);
@@ -235,7 +318,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_inbox_clear", {
-    description: "Take lines out of the inbox once they have found their place in a page (give the exact lines, or a part that identifies each).",
+    description:
+      "Take lines out of the inbox once they have found their place in a page (give the exact lines, or a part that identifies each).",
     inputSchema: { lines: z.array(z.string().min(3)).min(1) },
     annotations: CHANGE,
   }, ({ lines }: { lines: string[] }) => {
@@ -250,7 +334,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_move", {
-    description: "Move or rename a page; every link that pointed at it is updated to the new path (each changed page gets a new version).",
+    description:
+      "Move or rename a page; every link that pointed at it is updated to the new path (each changed page gets a new version).",
     inputSchema: { from: z.string(), to: z.string() },
     annotations: CHANGE,
   }, ({ from, to }: { from: string; to: string }) => {
@@ -275,7 +360,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   });
 
   server.registerTool("brain_check", {
-    description: "The brain's health against its rules: pages nothing links to, links to pages that do not exist, pages over the length limit, " +
+    description:
+      "The brain's health against its rules: pages nothing links to, links to pages that do not exist, pages over the length limit, " +
       "inbox lines older than a week. Run it now and then and fix what it finds.",
     inputSchema: {},
     annotations: READ,

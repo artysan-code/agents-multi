@@ -11,8 +11,16 @@ Deno.test("parseJson: whole output, else the last line after a notice, else null
 
 Deno.test("plugTable: shared, a profile's override, what is built and what is installed", () => {
   const rows = plugTable(["a", "b"], { enabledPlugins: { "x@m": true, "old@synced": false } }, {
-    a: { patch: { enabledPlugins: { "x@m": false } }, built: { enabledPlugins: { "x@m": false, "old@synced": false } }, installed: [{ id: "x@m", version: "1" }] },
-    b: { patch: { enabledPlugins: { "only-b@m": true } }, built: { enabledPlugins: { "x@m": true, "only-b@m": true } }, installed: [{ id: "only-b@m" }] },
+    a: {
+      patch: { enabledPlugins: { "x@m": false } },
+      built: { enabledPlugins: { "x@m": false, "old@synced": false } },
+      installed: [{ id: "x@m", version: "1" }],
+    },
+    b: {
+      patch: { enabledPlugins: { "only-b@m": true } },
+      built: { enabledPlugins: { "x@m": true, "only-b@m": true } },
+      installed: [{ id: "only-b@m" }],
+    },
   });
   assertEquals(rows.map((r) => r.id), ["old@synced", "only-b@m", "x@m"]);
   const x = rows.find((r) => r.id === "x@m")!;
@@ -26,8 +34,14 @@ Deno.test("plugTable: shared, a profile's override, what is built and what is in
 
 Deno.test("pendingCommand: only an unaccepted marketplace command asks for confirmation", () => {
   assertEquals(pendingCommand({ outcome: "ok", shownCommand: { command: "x", sha256: "s" } }), undefined);
-  assertEquals(pendingCommand({ outcome: "needs-confirmation", shownCommand: { command: "npx build", sha256: "abc" } }), { command: "npx build", sha256: "abc" });
-  assertEquals(pendingCommand({ outcome: "refused", shownCommand: { argv: ["sh", "-c", "make"], sha256: "d" } }), { command: "sh -c make", sha256: "d" });
+  assertEquals(
+    pendingCommand({ outcome: "needs-confirmation", shownCommand: { command: "npx build", sha256: "abc" } }),
+    { command: "npx build", sha256: "abc" },
+  );
+  assertEquals(pendingCommand({ outcome: "refused", shownCommand: { argv: ["sh", "-c", "make"], sha256: "d" } }), {
+    command: "sh -c make",
+    sha256: "d",
+  });
   assertEquals(pendingCommand({ outcome: "error", message: "boom" }), undefined);
   assertEquals(pendingCommand(null), undefined);
 });
@@ -45,5 +59,7 @@ Deno.test("argument injection: nothing that reaches the CLI can start with a das
   assertEquals(ID_RE.test("code-review@claude-plugins-official"), true);
   for (const n of ["-x", "--claudeai", ""]) assertEquals(NAME_RE.test(n), false, n);
   for (const s of ["--claudeai", "-x", "a b", ""]) assertEquals(validSource(s), false, s);
-  for (const s of ["anthropics/claude-code", "https://example.com/m.git", "/srv/m"]) assertEquals(validSource(s), true, s);
+  for (const s of ["anthropics/claude-code", "https://example.com/m.git", "/srv/m"]) {
+    assertEquals(validSource(s), true, s);
+  }
 });

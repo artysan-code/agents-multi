@@ -14,7 +14,11 @@ Deno.test("init: copies the example, sets the owner, links it; a second time onl
   const { init } = await import("../init.ts");
   const CONFIG = `${root}/runtime/config`;
   assertEquals(await init([`${root}/cfg`, "--name", "Ann", "--language", "Italian"], CONFIG), 0);
-  assertEquals(JSON.parse(await Deno.readTextFile(`${root}/cfg/owner.json`)), { id: "ann", name: "Ann", language: "Italian" });
+  assertEquals(JSON.parse(await Deno.readTextFile(`${root}/cfg/owner.json`)), {
+    id: "ann",
+    name: "Ann",
+    language: "Italian",
+  });
   assert(await Deno.stat(`${root}/cfg/profiles/personal/profile.json`));
   assertEquals(await Deno.readLink(CONFIG), `${root}/cfg`);
   assertEquals(await init([`${root}/cfg`], CONFIG), 0);

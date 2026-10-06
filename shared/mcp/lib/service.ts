@@ -13,15 +13,23 @@ export function service(name: string) {
 
   /** The `account` argument: optional when this profile has one account, required otherwise. */
   const accountArg = visible.length > 1
-    ? z.enum(visible.map((a) => a.name) as [string, ...string[]]).describe(`which ${name} account: ${visible.map((a) => a.name).join(", ")}`)
-    : z.string().optional().describe(visible.length ? `${name} account (only one: ${visible[0].name})` : `${name} account (none configured for this profile)`);
+    ? z.enum(visible.map((a) => a.name) as [string, ...string[]]).describe(
+      `which ${name} account: ${visible.map((a) => a.name).join(", ")}`,
+    )
+    : z.string().optional().describe(
+      visible.length
+        ? `${name} account (only one: ${visible[0].name})`
+        : `${name} account (none configured for this profile)`,
+    );
 
   async function use(requested?: string): Promise<{ account: Account; secret: string }> {
     const account = resolveAccount(visible, requested, name);
     let secret = secrets.get(account.name);
     if (!secret) {
       const s = await getSecret(name, account.name);
-      if (!s) throw new Error(`no secret for ${name}/${account.name} on this machine: add it in the console, Connections`);
+      if (!s) {
+        throw new Error(`no secret for ${name}/${account.name} on this machine: add it in the console, Connections`);
+      }
       secret = s;
       secrets.set(account.name, s);
     }

@@ -29,7 +29,7 @@ in `BRAIN_DATA/accounts.db`.
 ## How it is written
 
 Seven areas, named the way Samuel thinks: `io/` (who he is, how he works — of each page, what stands
-above its first `## ` goes into the instructions every connected Claude receives), `progetti/` (one page
+above its first `##` goes into the instructions every connected Claude receives), `progetti/` (one page
 per project, the same path as his folder: `progetti/work/acme/site.md`), `clienti/` (who he works for, directly or through another
 client: the relationship and the people, linking the projects), `persone/` (people only), `note/` (how
 things are done), `diario/` (one page a day, added to a line at a time and only ever tidied) and `inbox/` (said in passing, to sort).
@@ -81,15 +81,15 @@ holds the brain.
 
 ## Running it
 
-| Variable | |
-|---|---|
-| `BRAIN_URL` | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain |
-| `BRAIN_MASTER_KEY` | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost |
-| `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL` | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`) |
-| `BRAIN_DATA` | where `accounts.db` and `users/` live (`/data`) |
+| Variable                                           |                                                                                                                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BRAIN_URL`                                        | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain                                                                      |
+| `BRAIN_MASTER_KEY`                                 | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost                                      |
+| `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL`             | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`)                                                                                                              |
+| `BRAIN_DATA`                                       | where `accounts.db` and `users/` live (`/data`)                                                                                                                                   |
 | `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server a Francoforte, in Germania") |
-| `BRAIN_SITE_URL` | the site's own address, another origin than the brain's (both domains on the `brain` service in Coolify); unset, the site is served on the brain's address |
-| `BRAIN_DEV=1` | local only: signing in without TOTP |
+| `BRAIN_SITE_URL`                                   | the site's own address, another origin than the brain's (both domains on the `brain` service in Coolify); unset, the site is served on the brain's address                        |
+| `BRAIN_DEV=1`                                      | local only: signing in without TOTP                                                                                                                                               |
 
 **The first account** is made on the first start, when there is none: the administrator, with the
 id `BRAIN_ADMIN_ID` (or `CLAUDE_MULTI_OWNER_ID`) and the name and language of `CLAUDE_MULTI_OWNER_NAME`

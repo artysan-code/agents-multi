@@ -12,7 +12,9 @@ Deno.test("ownerFrom: what is given, trimmed, the id in lower case; the rest fro
 Deno.test("owner: the variables win over the file, the file over the defaults", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify({ id: "ann", name: "Ann", language: "Italian" }));
-  const keep = ["CLAUDE_MULTI_CONFIG", "CLAUDE_MULTI_OWNER_ID", "CLAUDE_MULTI_OWNER_NAME", "CLAUDE_MULTI_LANGUAGE"].map((k) => [k, Deno.env.get(k)] as const);
+  const keep = ["CLAUDE_MULTI_CONFIG", "CLAUDE_MULTI_OWNER_ID", "CLAUDE_MULTI_OWNER_NAME", "CLAUDE_MULTI_LANGUAGE"].map(
+    (k) => [k, Deno.env.get(k)] as const,
+  );
   try {
     for (const [k] of keep) Deno.env.delete(k);
     Deno.env.set("CLAUDE_MULTI_CONFIG", dir);
@@ -29,5 +31,9 @@ Deno.test("owner: the variables win over the file, the file over the defaults", 
 
 Deno.test("promptFor: the owner's name and language, nobody else's", () => {
   const p = promptFor("ask", "now", null, false, { id: "ann", name: "Ann", language: "German" });
-  assertEquals([p.includes("Ann's console"), p.includes("Answer in German"), p.includes("Samuel")], [true, true, false]);
+  assertEquals([p.includes("Ann's console"), p.includes("Answer in German"), p.includes("Samuel")], [
+    true,
+    true,
+    false,
+  ]);
 });

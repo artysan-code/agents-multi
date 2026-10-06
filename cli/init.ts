@@ -21,7 +21,10 @@ async function copyTree(from: string, to: string) {
 }
 
 export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<number> {
-  const opt = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
+  const opt = (k: string) => {
+    const i = args.indexOf(k);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
   const folder = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
   if (!folder) {
     console.error("usage: claude-multi init <folder> [--name N] [--language L] [--id I]");
@@ -34,7 +37,9 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
   const cur = await lstat(CONFIG);
   const linked = !!cur?.isSymlink && await readlink(CONFIG) === abs;
   if (cur && !linked) {
-    console.error(`${ANSI.r}✗${ANSI.x} ${shortHome(CONFIG)} exists and is not a link to ${shortHome(abs)}: move it away first`);
+    console.error(
+      `${ANSI.r}✗${ANSI.x} ${shortHome(CONFIG)} exists and is not a link to ${shortHome(abs)}: move it away first`,
+    );
     return 1;
   }
 
@@ -46,7 +51,11 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
     if (opt("--language")) owner.language = opt("--language");
     owner.id = opt("--id") ?? (opt("--name") ? idFrom(opt("--name")!) : owner.id);
     await Deno.writeTextFile(`${abs}/owner.json`, JSON.stringify(owner, null, 2) + "\n");
-    console.log(`${ANSI.g}+${ANSI.x} configuration made in ${shortHome(abs)} (owner ${owner.id}): edit owner.json and profiles/ as you like`);
+    console.log(
+      `${ANSI.g}+${ANSI.x} configuration made in ${
+        shortHome(abs)
+      } (owner ${owner.id}): edit owner.json and profiles/ as you like`,
+    );
   } else console.log(`${ANSI.d}${shortHome(abs)} already holds a configuration: only linking it${ANSI.x}`);
 
   // ~/.claude-multi/config → the folder; never over something else
@@ -56,6 +65,8 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
     await Deno.symlink(abs, CONFIG);
     console.log(`${ANSI.g}+${ANSI.x} ${shortHome(CONFIG)} → ${shortHome(abs)}`);
   }
-  console.log(`\nNext: claude-multi install, then claude-multi vault init, then claude in each profile to sign in (README › First run).`);
+  console.log(
+    `\nNext: claude-multi install, then claude-multi vault init, then claude in each profile to sign in (README › First run).`,
+  );
   return 0;
 }

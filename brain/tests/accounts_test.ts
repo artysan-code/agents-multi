@@ -72,7 +72,14 @@ Deno.test("accounts: a new invitation clears the way in but keeps the backup key
 Deno.test("bootstrap: the first account is the administrator with the credentials it had; only once", async () => {
   const { users } = await fresh();
   const secret = base32Encode(crypto.getRandomValues(new Uint8Array(20)));
-  await users.bootstrap({ id: "samuel", name: "Samuel", language: "Italian", passphrase: PASS, totpSecret: secret, backupKey: KEY });
+  await users.bootstrap({
+    id: "samuel",
+    name: "Samuel",
+    language: "Italian",
+    passphrase: PASS,
+    totpSecret: secret,
+    backupKey: KEY,
+  });
   await users.bootstrap({ id: "other", name: "Other", language: "Italian", passphrase: PASS, totpSecret: secret });
   assertEquals(users.list().map((u) => [u.id, u.admin, u.ready]), [["samuel", true, true]]);
   assertEquals(await users.backupKey("samuel"), KEY);
@@ -111,19 +118,39 @@ Deno.test("tokens: each belongs to its account; one account cannot revoke anothe
 Deno.test("OAuth: the code carries the account that signed in to the tokens", async () => {
   const { users, auth } = await fresh();
   await ready(users, "ann");
-  const reg = auth.register({ redirect_uris: ["http://127.0.0.1/cb"], client_name: "Claude Code" }).json as { client_id: string };
+  const reg = auth.register({ redirect_uris: ["http://127.0.0.1/cb"], client_name: "Claude Code" }).json as {
+    client_id: string;
+  };
   const verifier = "v".repeat(43);
   const enc = new TextEncoder();
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(verifier))))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const q = new URLSearchParams({ client_id: reg.client_id, redirect_uri: "http://127.0.0.1:5000/cb", code_challenge: challenge, response_type: "code", code_challenge_method: "S256" });
+  const challenge = btoa(
+    String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(verifier)))),
+  ).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const q = new URLSearchParams({
+    client_id: reg.client_id,
+    redirect_uri: "http://127.0.0.1:5000/cb",
+    code_challenge: challenge,
+    response_type: "code",
+    code_challenge_method: "S256",
+  });
   const code = new URL(await auth.issueCode(q, "ann")).searchParams.get("code")!;
-  const r = await auth.token(new URLSearchParams({ grant_type: "authorization_code", code, client_id: reg.client_id, redirect_uri: "http://127.0.0.1:5000/cb", code_verifier: verifier }));
+  const r = await auth.token(
+    new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      client_id: reg.client_id,
+      redirect_uri: "http://127.0.0.1:5000/cb",
+      code_verifier: verifier,
+    }),
+  );
   const tok = r.json as { access_token: string; refresh_token: string };
   assertEquals(await auth.caller(bearer(tok.access_token)), { user: "ann", label: "claude:Claude Code" });
   assertEquals(auth.connections("ann").length, 1);
   assertEquals(auth.connections("bob").length, 0);
   users.setDisabled("ann", true);
-  const again = await auth.token(new URLSearchParams({ grant_type: "refresh_token", refresh_token: tok.refresh_token }));
+  const again = await auth.token(
+    new URLSearchParams({ grant_type: "refresh_token", refresh_token: tok.refresh_token }),
+  );
   assertEquals(again.status, 400);
 });
 
@@ -135,8 +162,12 @@ Deno.test("adopt: the live tokens of a one-person brain become the first account
     create table tokens (hash text primary key, kind text not null, client text, name text, family text, expires integer, created text not null, used text, revoked integer not null default 0);`);
   old.prepare("insert into oauth_clients values ('c1', 'Claude', '[]', 'x')").run();
   const live = "brain_live", gone = "brain_gone";
-  old.prepare("insert into tokens (hash, kind, name, created, revoked) values (?, 'personal', 'fisso', 'x', 0)").run(await sha256(live));
-  old.prepare("insert into tokens (hash, kind, name, created, revoked) values (?, 'personal', 'vecchio', 'x', 1)").run(await sha256(gone));
+  old.prepare("insert into tokens (hash, kind, name, created, revoked) values (?, 'personal', 'fisso', 'x', 0)").run(
+    await sha256(live),
+  );
+  old.prepare("insert into tokens (hash, kind, name, created, revoked) values (?, 'personal', 'vecchio', 'x', 1)").run(
+    await sha256(gone),
+  );
   assertEquals(auth.adopt(old, "samuel"), 1);
   assertEquals(await auth.caller(bearer(live)), { user: "samuel", label: "token:fisso" });
   assertEquals(await auth.caller(bearer(gone)), null);
@@ -145,7 +176,9 @@ Deno.test("adopt: the live tokens of a one-person brain become the first account
 
 Deno.test("tenants: one file per account, ids that are not accounts refused, nothing shared", async () => {
   assertEquals(tenantFile("/data/", "ann"), "/data/users/ann/brain.db");
-  for (const bad of ["../ann", "Ann", "a/b", "", "ann\0"]) assertThrows(() => tenantFile("/data", bad), Error, "not an account id");
+  for (const bad of ["../ann", "Ann", "a/b", "", "ann\0"]) {
+    assertThrows(() => tenantFile("/data", bad), Error, "not an account id");
+  }
   const dir = await Deno.makeTempDir();
   const t = new Tenants(dir, { url: "http://127.0.0.1:1", model: "none" }, () => "test");
   const a = t.open("ann"), b = t.open("bob");
@@ -172,29 +205,63 @@ Deno.test("invite: the first account of a new service is the administrator, invi
 Deno.test("OAuth scope machine: a personal token named after the client and the backup key, only to a loopback redirect", async () => {
   const { users, auth } = await fresh();
   await ready(users, "ann");
-  const reg = auth.register({ redirect_uris: ["http://127.0.0.1/callback"], client_name: "claude-multi su fisso" }).json as { client_id: string };
+  const reg = auth.register({ redirect_uris: ["http://127.0.0.1/callback"], client_name: "claude-multi su fisso" })
+    .json as { client_id: string };
   const verifier = "w".repeat(43);
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const q = new URLSearchParams({ client_id: reg.client_id, redirect_uri: "http://127.0.0.1:4000/callback", code_challenge: challenge, response_type: "code", code_challenge_method: "S256", scope: "machine" });
+  const challenge = btoa(
+    String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)))),
+  ).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const q = new URLSearchParams({
+    client_id: reg.client_id,
+    redirect_uri: "http://127.0.0.1:4000/callback",
+    code_challenge: challenge,
+    response_type: "code",
+    code_challenge_method: "S256",
+    scope: "machine",
+  });
   const check = auth.checkAuthorize(q);
   assert(check.ok && check.machine);
-  assertEquals(auth.checkAuthorize(new URLSearchParams({ ...Object.fromEntries(q), scope: "everything" })), { ok: false, message: "unknown scope" });
+  assertEquals(auth.checkAuthorize(new URLSearchParams({ ...Object.fromEntries(q), scope: "everything" })), {
+    ok: false,
+    message: "unknown scope",
+  });
   const code = new URL(await auth.issueCode(q, "ann")).searchParams.get("code")!;
-  const r = await auth.token(new URLSearchParams({ grant_type: "authorization_code", code, client_id: reg.client_id, redirect_uri: "http://127.0.0.1:4000/callback", code_verifier: verifier }));
+  const r = await auth.token(
+    new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      client_id: reg.client_id,
+      redirect_uri: "http://127.0.0.1:4000/callback",
+      code_verifier: verifier,
+    }),
+  );
   const tok = r.json as { access_token: string; refresh_token?: string; backup_key: string; account: string };
   assertEquals([r.status, tok.account, tok.refresh_token], [200, "ann", undefined]);
   assertEquals(tok.backup_key, await users.backupKey("ann"));
   assertEquals(await auth.caller(bearer(tok.access_token)), { user: "ann", label: "token:claude-multi su fisso" });
   assertEquals(auth.personalTokens("ann").map((t) => t.name), ["claude-multi su fisso"]);
   // Claude's own callback never gets a token that does not expire
-  const claude = auth.register({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }).json as { client_id: string };
-  const viaClaude = auth.checkAuthorize(new URLSearchParams({ client_id: claude.client_id, redirect_uri: "https://claude.ai/api/mcp/auth_callback", code_challenge: challenge, response_type: "code", code_challenge_method: "S256", scope: "machine" }));
+  const claude = auth.register({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }).json as {
+    client_id: string;
+  };
+  const viaClaude = auth.checkAuthorize(
+    new URLSearchParams({
+      client_id: claude.client_id,
+      redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+      code_challenge: challenge,
+      response_type: "code",
+      code_challenge_method: "S256",
+      scope: "machine",
+    }),
+  );
   assertEquals(viaClaude, { ok: false, message: "scope machine is for a loopback redirect" });
 });
 
 Deno.test("auth: a database made before codes kept their scope gets the column", async () => {
   const db = new DatabaseSync(":memory:");
-  db.exec("create table oauth_codes (hash text primary key, user text not null, client text not null, redirect text not null, challenge text not null, resource text, expires integer not null)");
+  db.exec(
+    "create table oauth_codes (hash text primary key, user text not null, client text not null, redirect text not null, challenge text not null, resource text, expires integer not null)",
+  );
   new Auth(db, new Users(db, await masterKey(KEY)), { url: "https://b.test" });
   assert((db.prepare("pragma table_info(oauth_codes)").all() as { name: string }[]).some((c) => c.name === "scope"));
 });

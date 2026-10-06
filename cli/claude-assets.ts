@@ -10,7 +10,11 @@
 
 import { LIB } from "./lib.ts";
 
-export interface Strip { svg: string; frameCount: number; speed: number }
+export interface Strip {
+  svg: string;
+  frameCount: number;
+  speed: number;
+}
 export interface ClaudeAssets {
   dist: string;
   faces: { family: string; style: string; file: string }[];
@@ -74,7 +78,9 @@ async function head(path: string, n: number): Promise<string> {
     const buf = new Uint8Array(n);
     const r = await f.read(buf);
     return new TextDecoder().decode(buf.subarray(0, r ?? 0));
-  } finally { f.close(); }
+  } finally {
+    f.close();
+  }
 }
 
 async function resolve(): Promise<ClaudeAssets | null> {
@@ -88,7 +94,9 @@ async function resolve(): Promise<ClaudeAssets | null> {
     const base = href.slice(0, href.lastIndexOf("/") + 1);
     for (const f of facesIn(css)) {
       const rel = f.url.startsWith("/") ? f.url.slice(1) : `${base}${f.url}`;
-      if (!faces.some((x) => x.family === f.family && x.style === f.style)) faces.push({ family: f.family, style: f.style, file: `${dist}/${rel}` });
+      if (!faces.some((x) => x.family === f.family && x.style === f.style)) {
+        faces.push({ family: f.family, style: f.style, file: `${dist}/${rel}` });
+      }
     }
   }
   const icon = /<link[^>]*rel="icon"[^>]*href="([^"]+)"/.exec(html)?.[1];
@@ -101,7 +109,9 @@ async function resolve(): Promise<ClaudeAssets | null> {
     if (!Object.keys(strips).length && (await head(`${v1}/${e.name}`, 24)).startsWith("var e={thinking:{svg:")) {
       strips = stripsIn(await Deno.readTextFile(`${v1}/${e.name}`));
     }
-    if (!Object.keys(icons).length && e.name.startsWith("shared-frame-")) icons = iconsIn(await Deno.readTextFile(`${v1}/${e.name}`));
+    if (!Object.keys(icons).length && e.name.startsWith("shared-frame-")) {
+      icons = iconsIn(await Deno.readTextFile(`${v1}/${e.name}`));
+    }
   }
   return { dist, faces, spark: spark && /^<svg[\s>]/.test(spark.trim()) ? spark.trim() : null, strips, icons };
 }
@@ -138,13 +148,16 @@ export async function assetsApi(u: URL): Promise<Response | null> {
     return new Response(bytes, { headers: { "content-type": "font/woff2", "cache-control": "max-age=86400" } });
   }
   if (p === "/claude/assets.json") {
-    return new Response(JSON.stringify({
-      found: !!a,
-      spark: a?.spark ?? null,
-      strips: a?.strips ?? {},
-      icons: a?.icons ?? {},
-      iconFont: !!a?.faces.some((f) => f.family === "Anthropicons-Variable"),
-    }), { headers: { "content-type": "application/json", "cache-control": "no-cache" } });
+    return new Response(
+      JSON.stringify({
+        found: !!a,
+        spark: a?.spark ?? null,
+        strips: a?.strips ?? {},
+        icons: a?.icons ?? {},
+        iconFont: !!a?.faces.some((f) => f.family === "Anthropicons-Variable"),
+      }),
+      { headers: { "content-type": "application/json", "cache-control": "no-cache" } },
+    );
   }
   return new Response("not found", { status: 404 });
 }

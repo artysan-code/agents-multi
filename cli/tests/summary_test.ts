@@ -4,7 +4,16 @@ import { summarize } from "../status.ts";
 import type { Check, CliProc } from "../lib.ts";
 
 const check = (id: string, status: Check["status"]): Check => ({ id, status, msg: `msg ${id}` });
-const proc = (embedded: boolean): CliProc => ({ pid: 1, profile: "p", cwd: null, embedded, version: null, session: null, model: null, lastActivity: null });
+const proc = (embedded: boolean): CliProc => ({
+  pid: 1,
+  profile: "p",
+  cwd: null,
+  embedded,
+  version: null,
+  session: null,
+  model: null,
+  lastActivity: null,
+});
 const base = {
   generatedAt: "2026-09-24T00:00:00.000Z",
   doctor: [] as Check[],
@@ -36,6 +45,9 @@ Deno.test("summarize: a failure turns it red", () => {
 });
 
 Deno.test("summarize: sessions embedded in Desktop count as Desktop, not as CLI", () => {
-  const s = summarize({ ...base, running: { cli: [proc(false), proc(true), proc(false)], desktop: [{ pid: 2, variant: "p" }] } });
+  const s = summarize({
+    ...base,
+    running: { cli: [proc(false), proc(true), proc(false)], desktop: [{ pid: 2, variant: "p" }] },
+  });
   assertEquals(s.running, { cli: 2, desktop: 1 });
 });

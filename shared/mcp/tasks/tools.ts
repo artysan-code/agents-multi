@@ -4,8 +4,29 @@
 import type { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { z } from "npm:zod@^3.23";
 import {
-  addAttachment, addNote, addStep, addTask, attachments, brief, dayOf, editNotes, getTask, hhmm, isBlocked, listTasks, progress, relations, REPEATS,
-  resolveRefs, resolveTask, setStep, STATUSES, steps, type Task, type TaskInput, updateTask,
+  addAttachment,
+  addNote,
+  addStep,
+  addTask,
+  attachments,
+  brief,
+  dayOf,
+  editNotes,
+  getTask,
+  hhmm,
+  isBlocked,
+  listTasks,
+  progress,
+  relations,
+  REPEATS,
+  resolveRefs,
+  resolveTask,
+  setStep,
+  STATUSES,
+  steps,
+  type Task,
+  type TaskInput,
+  updateTask,
 } from "../lib/tasks.ts";
 import { owner } from "../lib/owner.ts";
 
@@ -18,27 +39,55 @@ const clock = () => {
  *  whole list) lets it say when the task waits for another still open. */
 const line = (t: Task, all?: Task[]) => {
   const p = progress(t.notes);
-  return [t.due && t.due !== dayOf(new Date()) ? t.due : null, t.time, t.ref, t.title, t.project ? `[${t.project}]` : null, t.owner && t.owner !== owner().id ? `(${t.owner})` : null,
-    t.status === "doing" ? "in progress" : null, t.stage, all && isBlocked(all, t) ? "blocked" : null, p ? `${p.done}/${p.total}` : null, t.priority === 1 ? "!" : null, `#${t.id}`]
+  return [
+    t.due && t.due !== dayOf(new Date()) ? t.due : null,
+    t.time,
+    t.ref,
+    t.title,
+    t.project ? `[${t.project}]` : null,
+    t.owner && t.owner !== owner().id ? `(${t.owner})` : null,
+    t.status === "doing" ? "in progress" : null,
+    t.stage,
+    all && isBlocked(all, t) ? "blocked" : null,
+    p ? `${p.done}/${p.total}` : null,
+    t.priority === 1 ? "!" : null,
+    `#${t.id}`,
+  ]
     .filter(Boolean).join(" · ");
 };
 
 const key = z.string().describe("the task: its id (t-…) or its ref in its project (TASK-495)");
 /** The fields of a task as tools take them; built per server, so `owner` names the person it serves. */
 const taskFields = () => ({
-  due: z.string().nullable().optional().describe("day, YYYY-MM-DD (resolve relative days from `today` in any answer); null clears"),
+  due: z.string().nullable().optional().describe(
+    "day, YYYY-MM-DD (resolve relative days from `today` in any answer); null clears",
+  ),
   time: z.string().nullable().optional().describe("hour of that day, HH:MM, 24h; null clears"),
   remind: z.number().int().nullable().optional().describe("minutes of warning before `time` (default 15)"),
-  owner: z.string().nullable().optional().describe(`who has to move: ${owner().id} (default: the owner), claude, or someone's name — then it is waiting on them`),
-  project: z.string().nullable().optional().describe("the project's folder under $HOME when there is one (work/acme/site, personal/blog), otherwise a short name (claude-multi)"),
-  priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional().describe("1 high, 2 normal, 3 low"),
+  owner: z.string().nullable().optional().describe(
+    `who has to move: ${owner().id} (default: the owner), claude, or someone's name — then it is waiting on them`,
+  ),
+  project: z.string().nullable().optional().describe(
+    "the project's folder under $HOME when there is one (work/acme/site, personal/blog), otherwise a short name (claude-multi)",
+  ),
+  priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional().describe(
+    "1 high, 2 normal, 3 low",
+  ),
   repeat: z.enum(REPEATS as [string, ...string[]]).nullable().optional().describe("completing it creates the next one"),
-  ref: z.string().nullable().optional().describe("the project's own name for the task (TASK-495, P2-45): one open task per ref in a project"),
-  stage: z.string().nullable().optional().describe("where it is in the project's own flow (spec, discovery, release pending…); the board column stays `status`"),
+  ref: z.string().nullable().optional().describe(
+    "the project's own name for the task (TASK-495, P2-45): one open task per ref in a project",
+  ),
+  stage: z.string().nullable().optional().describe(
+    "where it is in the project's own flow (spec, discovery, release pending…); the board column stays `status`",
+  ),
   parent: z.string().nullable().optional().describe("the task this is a part of (a phase of a larger task): id or ref"),
-  blocked_by: z.array(z.string()).nullable().optional().describe("the tasks that have to be done first: ids or refs; the whole list, [] or null clears"),
+  blocked_by: z.array(z.string()).nullable().optional().describe(
+    "the tasks that have to be done first: ids or refs; the whole list, [] or null clears",
+  ),
   labels: z.array(z.string()).nullable().optional().describe("free labels, the whole list"),
-  detail: z.string().nullable().optional().describe("where the full detail lives when the project keeps it elsewhere: a path in the repository (TASKS.md#task-495), a URL, a [[page]]"),
+  detail: z.string().nullable().optional().describe(
+    "where the full detail lives when the project keeps it elsewhere: a path in the repository (TASKS.md#task-495), a URL, a [[page]]",
+  ),
   notes: z.string().nullable().optional().describe(
     "the whole Markdown body: description, `- [ ]` steps, `## Log`, `## Decisions`, `## Attachments`. It replaces what is there: to change a part use tasks_edit, to add use tasks_note / tasks_steps / tasks_attach",
   ),
@@ -102,14 +151,25 @@ export function registerTaskTools(server: McpServer) {
       limit: z.number().int().min(1).max(500).optional(),
     },
   }, async (q: {
-    status?: string; project?: string; owner?: string; from?: string; to?: string; ref?: string; stage?: string; label?: string; parent?: string;
-    text?: string; full?: boolean; limit?: number;
+    status?: string;
+    project?: string;
+    owner?: string;
+    from?: string;
+    to?: string;
+    ref?: string;
+    stage?: string;
+    label?: string;
+    parent?: string;
+    text?: string;
+    full?: boolean;
+    limit?: number;
   }) => {
     const all = await listTasks();
     const words = q.text?.toLowerCase();
     const parent = q.parent ? resolveTask(all, q.parent, q.project).id : undefined;
     const hits = all.filter((t) =>
-      (q.status === "all" || (q.status ? t.status === q.status : t.status === "todo" || t.status === "doing" || t.status === "waiting")) &&
+      (q.status === "all" ||
+        (q.status ? t.status === q.status : t.status === "todo" || t.status === "doing" || t.status === "waiting")) &&
       (!q.project || t.project === q.project || !!t.project?.startsWith(`${q.project}/`)) &&
       (!q.owner || (t.owner ?? owner().id) === q.owner.toLowerCase()) &&
       (!q.from || (t.due ?? "") >= q.from) && (!q.to || (!!t.due && t.due <= q.to)) &&
@@ -118,21 +178,25 @@ export function registerTaskTools(server: McpServer) {
       (!q.label || !!t.labels?.includes(q.label.toLowerCase())) &&
       (!parent || t.parent === parent) &&
       (!words || `${t.ref ?? ""} ${t.title} ${t.notes ?? ""}`.toLowerCase().includes(words))
-    ).sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || (a.time ?? "99").localeCompare(b.time ?? "99"));
+    ).sort((a, b) =>
+      (a.due ?? "9999").localeCompare(b.due ?? "9999") || (a.time ?? "99").localeCompare(b.time ?? "99")
+    );
     return text({
       ...clock(),
       count: hits.length,
       tasks: hits.slice(0, q.limit ?? 50).map((t) => ({
         ...t,
         ...(isBlocked(all, t) ? { blocked: true } : {}),
-        ...(t.notes && !q.full && t.notes.length > 300 ? { notes: `${t.notes.slice(0, 300)}… (cut: tasks_get, or full: true)` } : {}),
+        ...(t.notes && !q.full && t.notes.length > 300
+          ? { notes: `${t.notes.slice(0, 300)}… (cut: tasks_get, or full: true)` }
+          : {}),
       })),
     });
   });
 
   server.registerTool("tasks_add", {
     description:
-      "Add a task. Use it whenever the owner says there is something to do (\"devo…\", \"ricordami…\", \"entro venerdì…\"), in any conversation, " +
+      'Add a task. Use it whenever the owner says there is something to do ("devo…", "ricordami…", "entro venerdì…"), in any conversation, ' +
       "and say in one line what you added. Put a time only when they gave one. A task of a project that names its tasks gets their `ref`, " +
       "and `detail` when the full story lives in the project (its TASKS.md, a decision file).",
     inputSchema: { title: z.string(), ...fields },
@@ -145,7 +209,12 @@ export function registerTaskTools(server: McpServer) {
     description:
       "Change a task: its day, time, owner, project, priority, ref, stage, parent, blocked_by, labels, detail, notes, or status (todo, doing, waiting, done, dropped) — " +
       "the status is its column on the owner's board: set `doing` when work on it starts. Dropped instead of deleting.",
-    inputSchema: { id: key, title: z.string().optional(), status: z.enum(STATUSES as [string, ...string[]]).optional(), ...fields },
+    inputSchema: {
+      id: key,
+      title: z.string().optional(),
+      status: z.enum(STATUSES as [string, ...string[]]).optional(),
+      ...fields,
+    },
   }, async ({ id, ...input }: TaskInput & { id: string }) => {
     const all = await listTasks();
     const cur = resolveTask(all, id);
@@ -169,65 +238,117 @@ export function registerTaskTools(server: McpServer) {
       progress: progress(t.notes),
       attachments: attachments(t.notes),
       ...(r.parent ? { part_of: line(r.parent, all) } : {}),
-      ...(r.parts.length ? { parts: r.parts.map((x) => `${x.status} · ${line(x, all)}`), parts_done: `${r.parts_done}/${r.parts.length}` } : {}),
+      ...(r.parts.length
+        ? {
+          parts: r.parts.map((x) => `${x.status} · ${line(x, all)}`),
+          parts_done: `${r.parts_done}/${r.parts.length}`,
+        }
+        : {}),
       ...(r.waiting_for.length ? { waiting_for: r.waiting_for.map((x) => line(x, all)) } : {}),
       ...(r.blocking.length ? { blocking: r.blocking.map((x) => line(x, all)) } : {}),
     });
   });
 
-  server.registerTool("tasks_note", {
-    description:
-      "Add a dated line to a task, without rewriting its notes: to its `log` (what happened: released, tried, found) or its `decisions` " +
-      "(what was decided, and by whom). A line or two: the story in full belongs where the project keeps it (`detail`).",
-    inputSchema: {
-      id: key,
-      project: z.string().optional().describe("where to look for a ref"),
-      section: z.enum(["log", "decisions"]),
-      text: z.string().min(1).max(2000),
+  server.registerTool(
+    "tasks_note",
+    {
+      description:
+        "Add a dated line to a task, without rewriting its notes: to its `log` (what happened: released, tried, found) or its `decisions` " +
+        "(what was decided, and by whom). A line or two: the story in full belongs where the project keeps it (`detail`).",
+      inputSchema: {
+        id: key,
+        project: z.string().optional().describe("where to look for a ref"),
+        section: z.enum(["log", "decisions"]),
+        text: z.string().min(1).max(2000),
+      },
     },
-  }, async ({ id, project, section, text: note }: { id: string; project?: string; section: "log" | "decisions"; text: string }) => {
-    const t = await find(id, project);
-    const r = await updateTask(t.id, (cur) => ({ notes: addNote(cur.notes ?? "", section, note, dayOf(new Date())) }));
-    return text({ ...clock(), updated: line(r.task) });
-  });
-
-  server.registerTool("tasks_edit", {
-    description: "Change part of a task's notes: replace one exact passage with another (it must occur exactly once). Safer than rewriting the notes with tasks_update.",
-    inputSchema: { id: key, project: z.string().optional().describe("where to look for a ref"), find: z.string().min(1), replace: z.string() },
-  }, async ({ id, project, find: passage, replace }: { id: string; project?: string; find: string; replace: string }) => {
-    const t = await find(id, project);
-    const r = await updateTask(t.id, (cur) => ({ notes: editNotes(cur.notes ?? "", passage, replace) || null }));
-    return text({ ...clock(), updated: line(r.task) });
-  });
-
-  server.registerTool("tasks_steps", {
-    description:
-      "The steps of a task (its checklist, which gives the progress the owner sees on the board): add steps, and tick or untick them by index (from tasks_get). " +
-      "Use it to break a task down, and to tick what is done as you work — in any chat.",
-    inputSchema: {
-      id: key,
-      project: z.string().optional().describe("where to look for a ref"),
-      add: z.array(z.string()).optional().describe("steps to append, in order"),
-      check: z.array(z.number().int().min(0)).optional().describe("indexes to tick"),
-      uncheck: z.array(z.number().int().min(0)).optional().describe("indexes to untick"),
+    async (
+      { id, project, section, text: note }: {
+        id: string;
+        project?: string;
+        section: "log" | "decisions";
+        text: string;
+      },
+    ) => {
+      const t = await find(id, project);
+      const r = await updateTask(
+        t.id,
+        (cur) => ({ notes: addNote(cur.notes ?? "", section, note, dayOf(new Date())) }),
+      );
+      return text({ ...clock(), updated: line(r.task) });
     },
-  }, async ({ id, project, add, check, uncheck }: { id: string; project?: string; add?: string[]; check?: number[]; uncheck?: number[] }) => {
-    const t = await find(id, project);
-    const r = await updateTask(t.id, (cur) => {
-      let notes = cur.notes ?? "";
-      for (const i of check ?? []) notes = setStep(notes, i, true);
-      for (const i of uncheck ?? []) notes = setStep(notes, i, false);
-      for (const s of add ?? []) notes = addStep(notes, s);
-      return { notes };
-    });
-    return text({ ...clock(), updated: line(r.task), steps: steps(r.task.notes).map((s, i) => ({ index: i, ...s })) });
-  });
+  );
+
+  server.registerTool(
+    "tasks_edit",
+    {
+      description:
+        "Change part of a task's notes: replace one exact passage with another (it must occur exactly once). Safer than rewriting the notes with tasks_update.",
+      inputSchema: {
+        id: key,
+        project: z.string().optional().describe("where to look for a ref"),
+        find: z.string().min(1),
+        replace: z.string(),
+      },
+    },
+    async (
+      { id, project, find: passage, replace }: { id: string; project?: string; find: string; replace: string },
+    ) => {
+      const t = await find(id, project);
+      const r = await updateTask(t.id, (cur) => ({ notes: editNotes(cur.notes ?? "", passage, replace) || null }));
+      return text({ ...clock(), updated: line(r.task) });
+    },
+  );
+
+  server.registerTool(
+    "tasks_steps",
+    {
+      description:
+        "The steps of a task (its checklist, which gives the progress the owner sees on the board): add steps, and tick or untick them by index (from tasks_get). " +
+        "Use it to break a task down, and to tick what is done as you work — in any chat.",
+      inputSchema: {
+        id: key,
+        project: z.string().optional().describe("where to look for a ref"),
+        add: z.array(z.string()).optional().describe("steps to append, in order"),
+        check: z.array(z.number().int().min(0)).optional().describe("indexes to tick"),
+        uncheck: z.array(z.number().int().min(0)).optional().describe("indexes to untick"),
+      },
+    },
+    async (
+      { id, project, add, check, uncheck }: {
+        id: string;
+        project?: string;
+        add?: string[];
+        check?: number[];
+        uncheck?: number[];
+      },
+    ) => {
+      const t = await find(id, project);
+      const r = await updateTask(t.id, (cur) => {
+        let notes = cur.notes ?? "";
+        for (const i of check ?? []) notes = setStep(notes, i, true);
+        for (const i of uncheck ?? []) notes = setStep(notes, i, false);
+        for (const s of add ?? []) notes = addStep(notes, s);
+        return { notes };
+      });
+      return text({
+        ...clock(),
+        updated: line(r.task),
+        steps: steps(r.task.notes).map((s, i) => ({ index: i, ...s })),
+      });
+    },
+  );
 
   server.registerTool("tasks_attach", {
     description:
       "Attach something to a task: a link (https://…), a file or folder on this computer (absolute path or ~/…), or a brain page ([[progetti/x/y]]). " +
       "Links only: to copy a file into the task, the owner drops it on the task in the console.",
-    inputSchema: { id: key, project: z.string().optional().describe("where to look for a ref"), target: z.string(), label: z.string().optional() },
+    inputSchema: {
+      id: key,
+      project: z.string().optional().describe("where to look for a ref"),
+      target: z.string(),
+      label: z.string().optional(),
+    },
   }, async ({ id, project, target, label }: { id: string; project?: string; target: string; label?: string }) => {
     const t = await find(id, project);
     const r = await updateTask(t.id, (cur) => ({ notes: addAttachment(cur.notes ?? "", target, label) }));

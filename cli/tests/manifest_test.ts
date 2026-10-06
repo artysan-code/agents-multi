@@ -3,7 +3,18 @@
 // (every selected entry has to exist). Written against whatever profiles the repository declares,
 // so adding or removing one does not break the suite.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { BIN, commandOf, KINDS, launchers, loadManifest, ownItems, profileNames, REPO, RUNTIME, zshBlock } from "../lib.ts";
+import {
+  BIN,
+  commandOf,
+  KINDS,
+  launchers,
+  loadManifest,
+  ownItems,
+  profileNames,
+  REPO,
+  RUNTIME,
+  zshBlock,
+} from "../lib.ts";
 import { desktopEntry } from "../install.ts";
 
 Deno.test("manifest: every profile has a valid profile.json and its selections exist in shared/", async () => {
@@ -18,7 +29,11 @@ Deno.test("manifest: every profile has a valid profile.json and its selections e
         for (const n of spec) {
           const name = k === "skills" || n.endsWith(".md") ? n : `${n}.md`;
           let ok = true;
-          try { await Deno.lstat(`${REPO}/shared/${k}/${name}`); } catch { ok = false; }
+          try {
+            await Deno.lstat(`${REPO}/shared/${k}/${name}`);
+          } catch {
+            ok = false;
+          }
           assert(ok, `${p}.${k}: "${n}" does not exist in shared/${k}`);
         }
       }
@@ -44,7 +59,10 @@ Deno.test("manifest: desktopDir, when set, is a path and not a bare name", async
   for (const p of await profileNames()) {
     const m = await loadManifest(p);
     if (!m.desktopDir) continue;
-    assert(m.desktopDir.startsWith("~/") || m.desktopDir.startsWith("/"), `${p}: desktopDir must be absolute or ~-relative, got "${m.desktopDir}"`);
+    assert(
+      m.desktopDir.startsWith("~/") || m.desktopDir.startsWith("/"),
+      `${p}: desktopDir must be absolute or ~-relative, got "${m.desktopDir}"`,
+    );
   }
 });
 
@@ -88,7 +106,10 @@ Deno.test("zshBlock: one alias line per declared alias, default profile exported
     assert(block.includes(l.command), `${l.command} not mentioned in the block`);
   }
   const def = ls.find((l) => l.command === "claude") ?? ls[0];
-  assert(block.includes(`CLAUDE_CONFIG_DIR:-${RUNTIME}/${def.profile}}`), "the default profile is not the exported CLAUDE_CONFIG_DIR");
+  assert(
+    block.includes(`CLAUDE_CONFIG_DIR:-${RUNTIME}/${def.profile}}`),
+    "the default profile is not the exported CLAUDE_CONFIG_DIR",
+  );
   // No profile name may be hardcoded: the block must be shorter than the sum of its parts.
   assertEquals(block.split("\n").filter((x) => x.startsWith("alias ")).length, ls.filter((l) => l.alias).length);
 });
@@ -111,6 +132,8 @@ Deno.test("desktopEntry: one hidden entry per profile, scheme handler only on th
     // Out of the menu: the single «Claude» entry (claude-multi-launcher.desktop) asks which profile.
     assert(e.text.includes("\nNoDisplay=true\n"), `${profile}: still listed in the menu`);
     // A variant needs its own app_id, or KDE groups it with the system build.
-    if (e.variant) assert(e.text.includes(`StartupWMClass=claude-desktop-${profile}`), `${profile}: no distinct app_id`);
+    if (e.variant) {
+      assert(e.text.includes(`StartupWMClass=claude-desktop-${profile}`), `${profile}: no distinct app_id`);
+    }
   }
 });

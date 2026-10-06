@@ -25,14 +25,27 @@ export function classify(code: string): Decision {
   // out, no spread, no computed key, no way around request() — anything else is a question
   const calls = (code.match(/\brequest\s*\(/g) ?? []).length;
   const readable = (code.match(/\brequest\s*\(\s*\{/g) ?? []).length;
-  if (calls > readable || /\.\.\.|\]\s*:|\bfetch\s*\(|Object\.assign|Reflect\.|\beval\s*\(|\bFunction\s*\(|globalThis/.test(code)) {
-    return { decision: "ask", reason: "Cloudflare: this call is built in a way the guard cannot read: check it before it runs." };
+  if (
+    calls > readable ||
+    /\.\.\.|\]\s*:|\bfetch\s*\(|Object\.assign|Reflect\.|\beval\s*\(|\bFunction\s*\(|globalThis/.test(code)
+  ) {
+    return {
+      decision: "ask",
+      reason: "Cloudflare: this call is built in a way the guard cannot read: check it before it runs.",
+    };
   }
   const literal = [...code.matchAll(/\bmethod\s*:\s*(["'`])([A-Za-z]+)\1/g)].map((m) => m[2].toUpperCase());
   const mentions = (code.match(/\bmethod\b/g) ?? []).length;
-  if (mentions > literal.length) return { decision: "ask", reason: "Cloudflare: the HTTP method is computed, not written out: check what this call does." };
+  if (mentions > literal.length) {
+    return {
+      decision: "ask",
+      reason: "Cloudflare: the HTTP method is computed, not written out: check what this call does.",
+    };
+  }
   const writes = [...new Set(literal.filter((m) => !READS.has(m)))];
-  if (writes.length) return { decision: "ask", reason: `Cloudflare: this call writes (${writes.join(", ")}): check it before it runs.` };
+  if (writes.length) {
+    return { decision: "ask", reason: `Cloudflare: this call writes (${writes.join(", ")}): check it before it runs.` };
+  }
   return { decision: "allow", reason: "Cloudflare: reads only." };
 }
 
@@ -41,9 +54,19 @@ if (import.meta.main) {
   try {
     const input = JSON.parse(await new Response(Deno.stdin.readable).text());
     const code = input?.tool_input?.code;
-    d = typeof code === "string" ? classify(code) : { decision: "ask", reason: "Cloudflare: no code to read in this call." };
+    d = typeof code === "string"
+      ? classify(code)
+      : { decision: "ask", reason: "Cloudflare: no code to read in this call." };
   } catch {
     d = { decision: "ask", reason: "Cloudflare: the guard could not read this call." };
   }
-  console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: d.decision, permissionDecisionReason: d.reason } }));
+  console.log(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: d.decision,
+        permissionDecisionReason: d.reason,
+      },
+    }),
+  );
 }

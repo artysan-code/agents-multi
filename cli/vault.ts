@@ -9,7 +9,17 @@ import { parseRun, profileFrom, runTool } from "./toolrun.ts";
 import { ACCOUNTS } from "./mcp.ts";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "../shared/mcp/lib/accounts.ts";
 import {
-  currentRecoveryCode, deleteSecret, getSecret, initVault, keyMatches, listSecrets, loadKey, pairVault, setSecret, vaultDir, VaultError,
+  currentRecoveryCode,
+  deleteSecret,
+  getSecret,
+  initVault,
+  keyMatches,
+  listSecrets,
+  loadKey,
+  pairVault,
+  setSecret,
+  vaultDir,
+  VaultError,
 } from "../shared/mcp/lib/vault.ts";
 
 async function readStdin(prompt: string): Promise<string> {
@@ -32,7 +42,10 @@ async function readStdin(prompt: string): Promise<string> {
 /** Pure: the one request that says whether a secret opens an account — where, and the header that
  *  carries it — or null for a service with no such check. A path is on the account's address; a
  *  full URL is the service's own API (Supabase: a personal access token is not tied to an address). */
-export function probeRequest(a: Pick<Account, "service" | "url">, secret: string): { url: string; header: string } | null {
+export function probeRequest(
+  a: Pick<Account, "service" | "url">,
+  secret: string,
+): { url: string; header: string } | null {
   const probes: Record<string, { path: string; header: string }> = {
     coolify: { path: "/api/v1/version", header: `Authorization: Bearer ${secret}` },
     n8n: { path: "/api/v1/workflows?limit=1", header: `X-N8N-API-KEY: ${secret}` },
@@ -48,12 +61,17 @@ export function probeRequest(a: Pick<Account, "service" | "url">, secret: string
 
 /** Does this secret open this account? One authenticated request, the secret passed to curl as a
  *  header file on stdin, never on its command line. `checked` false: nothing to try it against. */
-export async function probeAccount(a: Account, secret: string): Promise<{ ok: boolean; detail: string; checked?: boolean }> {
+export async function probeAccount(
+  a: Account,
+  secret: string,
+): Promise<{ ok: boolean; detail: string; checked?: boolean }> {
   const p = probeRequest(a, secret);
   if (!p) return { ok: true, detail: "no check for this service", checked: false };
   const child = new Deno.Command("curl", {
     args: ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "15", "-H", "@-", p.url],
-    stdin: "piped", stdout: "piped", stderr: "null",
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "null",
   }).spawn();
   const w = child.stdin.getWriter();
   await w.write(new TextEncoder().encode(p.header + "\n"));
@@ -64,8 +82,18 @@ export async function probeAccount(a: Account, secret: string): Promise<{ ok: bo
 
 /** The secrets claude-multi used before the vault, where they were. */
 const LEGACY: { service: string; account: string; file: string; read: (text: string) => string | null }[] = [
-  { service: "coolify", account: "ark", file: `${HOME}/.config/secrets/coolify-ark.token`, read: (t) => t.trim() || null },
-  { service: "n8n", account: "ark", file: `${HOME}/.config/n8n-ark/.env`, read: (t) => t.match(/^N8N_API_KEY=["']?([^"'\n]+)/m)?.[1] ?? null },
+  {
+    service: "coolify",
+    account: "ark",
+    file: `${HOME}/.config/secrets/coolify-ark.token`,
+    read: (t) => t.trim() || null,
+  },
+  {
+    service: "n8n",
+    account: "ark",
+    file: `${HOME}/.config/n8n-ark/.env`,
+    read: (t) => t.match(/^N8N_API_KEY=["']?([^"'\n]+)/m)?.[1] ?? null,
+  },
 ];
 
 /** Which of them are still there: presence only, their content is not read. */
@@ -98,41 +126,85 @@ export async function vaultCommand(args: string[]): Promise<number> {
       case "status": {
         const key = await loadKey().catch((e) => e as Error);
         console.log(`${ANSI.b}claude-multi vault${ANSI.x} — ${vaultDir()}`);
-        if (key instanceof Error) { console.log(`  ${ANSI.y}!${ANSI.x} ${key.message}`); return 1; }
-        if (!(await keyMatches(key))) { console.log(`  ${ANSI.r}✗${ANSI.x} this machine's key does not open this vault`); return 1; }
+        if (key instanceof Error) {
+          console.log(`  ${ANSI.y}!${ANSI.x} ${key.message}`);
+          return 1;
+        }
+        if (!(await keyMatches(key))) {
+          console.log(`  ${ANSI.r}✗${ANSI.x} this machine's key does not open this vault`);
+          return 1;
+        }
         const l = await listSecrets(key);
         const accounts = loadAccounts(ACCOUNTS);
         for (const a of accounts) {
-          if (a.auth === "oauth") { console.log(`  ${ANSI.d}· ${a.service}/${a.name} (signs in by itself, /mcp)${ANSI.x}`); continue; }
+          if (a.auth === "oauth") {
+            console.log(`  ${ANSI.d}· ${a.service}/${a.name} (signs in by itself, /mcp)${ANSI.x}`);
+            continue;
+          }
           const has = l.entries.some((e) => e.service === a.service && e.account === a.name);
-          console.log(`  ${has ? `${ANSI.g}✓${ANSI.x}` : `${ANSI.y}!${ANSI.x}`} ${a.service}/${a.name}${has ? "" : "  no secret"}`);
+          console.log(
+            `  ${has ? `${ANSI.g}✓${ANSI.x}` : `${ANSI.y}!${ANSI.x}`} ${a.service}/${a.name}${
+              has ? "" : "  no secret"
+            }`,
+          );
         }
         const orphans = l.entries.filter((e) => !accounts.some((a) => a.service === e.service && a.name === e.account));
-        for (const e of orphans) console.log(`  ${ANSI.d}· ${e.service}/${e.account} (secret with no account)${ANSI.x}`);
+        for (const e of orphans) {
+          console.log(`  ${ANSI.d}· ${e.service}/${e.account} (secret with no account)${ANSI.x}`);
+        }
         if (l.unreadable) console.log(`  ${ANSI.r}✗${ANSI.x} ${l.unreadable} entries this key cannot open`);
-        if (l.conflicts) console.log(`  ${ANSI.y}!${ANSI.x} ${l.conflicts} Syncthing conflict copies in ${vaultDir()}/secrets`);
+        if (l.conflicts) {
+          console.log(`  ${ANSI.y}!${ANSI.x} ${l.conflicts} Syncthing conflict copies in ${vaultDir()}/secrets`);
+        }
         return 0;
       }
       case "set": {
         const [service, account, field = "token"] = rest;
-        if (!service || !account) { console.error("usage: claude-multi vault set <service> <account> [field]   (the secret from stdin; field defaults to token)"); return 2; }
-        await setSecret(service, account, await readStdin(`secret for ${service}/${account}${field === "token" ? "" : ` (${field})`}: `), field);
+        if (!service || !account) {
+          console.error(
+            "usage: claude-multi vault set <service> <account> [field]   (the secret from stdin; field defaults to token)",
+          );
+          return 2;
+        }
+        await setSecret(
+          service,
+          account,
+          await readStdin(`secret for ${service}/${account}${field === "token" ? "" : ` (${field})`}: `),
+          field,
+        );
         console.log(`stored ${service}/${account}${field === "token" ? "" : ` ${field}`}`);
         return 0;
       }
       case "delete": {
         const [service, account] = rest;
-        if (!service || !account) { console.error("usage: claude-multi vault delete <service> <account>"); return 2; }
-        console.log(await deleteSecret(service, account) ? `deleted ${service}/${account}` : `no secret ${service}/${account}`);
+        if (!service || !account) {
+          console.error("usage: claude-multi vault delete <service> <account>");
+          return 2;
+        }
+        console.log(
+          await deleteSecret(service, account) ? `deleted ${service}/${account}` : `no secret ${service}/${account}`,
+        );
         return 0;
       }
       case "run": {
         // a service's command-line tool with the account's token in its environment (toolrun.ts)
         const plan = parseRun(rest);
-        const profile = profileFrom({ profile: Deno.env.get("CLAUDE_MULTI_PROFILE"), configDir: Deno.env.get("CLAUDE_CONFIG_DIR") }, RUNTIME);
-        const account = resolveAccount(visibleAccounts(loadAccounts(ACCOUNTS), plan.service, profile), plan.account, plan.service);
+        const profile = profileFrom({
+          profile: Deno.env.get("CLAUDE_MULTI_PROFILE"),
+          configDir: Deno.env.get("CLAUDE_CONFIG_DIR"),
+        }, RUNTIME);
+        const account = resolveAccount(
+          visibleAccounts(loadAccounts(ACCOUNTS), plan.service, profile),
+          plan.account,
+          plan.service,
+        );
         const secret = await getSecret(plan.service, account.name);
-        if (!secret) { console.error(`no secret for ${plan.service}/${account.name} on this machine: console › Connections, or claude-multi vault set ${plan.service} ${account.name}`); return 1; }
+        if (!secret) {
+          console.error(
+            `no secret for ${plan.service}/${account.name} on this machine: console › Connections, or claude-multi vault set ${plan.service} ${account.name}`,
+          );
+          return 1;
+        }
         return await runTool({ ...plan, account: account.name }, secret);
       }
       case "import-legacy": {
@@ -141,26 +213,51 @@ export async function vaultCommand(args: string[]): Promise<number> {
         let failed = 0;
         for (const l of LEGACY) {
           const text = await readText(l.file);
-          if (text === null) { console.log(`  ${ANSI.d}· ${l.file}: not here${ANSI.x}`); continue; }
+          if (text === null) {
+            console.log(`  ${ANSI.d}· ${l.file}: not here${ANSI.x}`);
+            continue;
+          }
           const secret = l.read(text);
           const account = accounts.find((a) => a.service === l.service && a.name === l.account);
-          if (!secret || !account) { console.log(`  ${ANSI.r}✗${ANSI.x} ${l.file}: nothing to import`); failed++; continue; }
+          if (!secret || !account) {
+            console.log(`  ${ANSI.r}✗${ANSI.x} ${l.file}: nothing to import`);
+            failed++;
+            continue;
+          }
           const probe = await probeAccount(account, secret);
-          if (!probe.ok) { console.log(`  ${ANSI.r}✗${ANSI.x} ${l.service}/${l.account}: the old secret does not work (${probe.detail}); file kept`); failed++; continue; }
+          if (!probe.ok) {
+            console.log(
+              `  ${ANSI.r}✗${ANSI.x} ${l.service}/${l.account}: the old secret does not work (${probe.detail}); file kept`,
+            );
+            failed++;
+            continue;
+          }
           await setSecret(l.service, l.account, secret);
-          if ((await getSecret(l.service, l.account)) !== secret) { console.log(`  ${ANSI.r}✗${ANSI.x} ${l.service}/${l.account}: read-back mismatch; file kept`); failed++; continue; }
+          if ((await getSecret(l.service, l.account)) !== secret) {
+            console.log(`  ${ANSI.r}✗${ANSI.x} ${l.service}/${l.account}: read-back mismatch; file kept`);
+            failed++;
+            continue;
+          }
           await Deno.remove(l.file);
           console.log(`  ${ANSI.g}✓${ANSI.x} ${l.service}/${l.account} imported (${probe.detail}), ${l.file} removed`);
         }
         return failed ? 1 : 0;
       }
       default:
-        console.error("usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …|import-legacy]");
+        console.error(
+          "usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …|import-legacy]",
+        );
         return 2;
     }
   } catch (e) {
-    if (e instanceof VaultError) { console.error(`vault: ${e.message}`); return 1; }
-    if (sub === "run" && e instanceof Error) { console.error(e.message); return 2; }
+    if (e instanceof VaultError) {
+      console.error(`vault: ${e.message}`);
+      return 1;
+    }
+    if (sub === "run" && e instanceof Error) {
+      console.error(e.message);
+      return 2;
+    }
     throw e;
   }
 }

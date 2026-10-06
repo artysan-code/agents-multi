@@ -28,10 +28,13 @@ Deno.test("resolveAccount: one is implicit, several must be named, never a silen
 });
 
 Deno.test("accountHosts: host with port, deduplicated, invalid addresses skipped", () => {
-  assertEquals(accountHosts([
-    { service: "s", name: "a", url: "https://h.example:8443/x" },
-    { service: "s", name: "b", url: "https://h.example:8443/y" },
-    { service: "s", name: "c", url: "not a url" },
-    { service: "s", name: "d" },
-  ]), ["h.example:8443"]);
+  assertEquals(
+    accountHosts([
+      { service: "s", name: "a", url: "https://h.example:8443/x" },
+      { service: "s", name: "b", url: "https://h.example:8443/y" },
+      { service: "s", name: "c", url: "not a url" },
+      { service: "s", name: "d" },
+    ]),
+    ["h.example:8443"],
+  );
 });

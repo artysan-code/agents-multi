@@ -22,7 +22,8 @@ export const STIGNORE_GEN_TEMPLATE = `${REPO}/shared/tools/stignore-gen/git-temp
 export const GIT_IGNORED = ["**/.claude/claude-multi.json"];
 
 /** Pure: the patterns of `want` that an ignore file's text does not list yet. */
-export const missingIgnores = (text: string, want: string[]) => want.filter((p) => !text.split("\n").some((l) => l.trim() === p));
+export const missingIgnores = (text: string, want: string[]) =>
+  want.filter((p) => !text.split("\n").some((l) => l.trim() === p));
 
 /** git's global ignore file: core.excludesFile, else the XDG default git reads without it. */
 export async function gitGlobalIgnore(): Promise<string> {
@@ -38,10 +39,27 @@ export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "c
 
 export type Profile = string;
 export type Status = "ok" | "warn" | "fail";
-export interface Check { id: string; status: Status; msg: string; fix?: string }
+export interface Check {
+  id: string;
+  status: Status;
+  msg: string;
+  fix?: string;
+}
 
-export const ANSI = { g: "\x1b[32m", y: "\x1b[33m", r: "\x1b[31m", d: "\x1b[2m", b: "\x1b[1m", c: "\x1b[36m", x: "\x1b[0m" };
-export const icon: Record<Status, string> = { ok: `${ANSI.g}✓${ANSI.x}`, warn: `${ANSI.y}!${ANSI.x}`, fail: `${ANSI.r}✗${ANSI.x}` };
+export const ANSI = {
+  g: "\x1b[32m",
+  y: "\x1b[33m",
+  r: "\x1b[31m",
+  d: "\x1b[2m",
+  b: "\x1b[1m",
+  c: "\x1b[36m",
+  x: "\x1b[0m",
+};
+export const icon: Record<Status, string> = {
+  ok: `${ANSI.g}✓${ANSI.x}`,
+  warn: `${ANSI.y}!${ANSI.x}`,
+  fail: `${ANSI.r}✗${ANSI.x}`,
+};
 
 // ---------------------------------------------------------------- helpers
 export async function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string> } = {}) {
@@ -54,22 +72,62 @@ export async function run(cmd: string, args: string[], opts: { cwd?: string; env
     return { code: 127, out: "", err: `${cmd}: not found` };
   }
 }
-export async function has(cmd: string) { return (await run("sh", ["-c", `command -v ${cmd}`])).code === 0; }
-export async function lstat(p: string) { try { return await Deno.lstat(p); } catch { return null; } }
-export async function stat(p: string) { try { return await Deno.stat(p); } catch { return null; } }
-export async function readlink(p: string) { try { return await Deno.readLink(p); } catch { return null; } }
-export async function readText(p: string) { try { return await Deno.readTextFile(p); } catch { return null; } }
+export async function has(cmd: string) {
+  return (await run("sh", ["-c", `command -v ${cmd}`])).code === 0;
+}
+export async function lstat(p: string) {
+  try {
+    return await Deno.lstat(p);
+  } catch {
+    return null;
+  }
+}
+export async function stat(p: string) {
+  try {
+    return await Deno.stat(p);
+  } catch {
+    return null;
+  }
+}
+export async function readlink(p: string) {
+  try {
+    return await Deno.readLink(p);
+  } catch {
+    return null;
+  }
+}
+export async function readText(p: string) {
+  try {
+    return await Deno.readTextFile(p);
+  } catch {
+    return null;
+  }
+}
 export async function readJson<T = Record<string, unknown>>(p: string): Promise<T | null> {
-  const t = await readText(p); if (t === null) return null;
-  try { return JSON.parse(t) as T; } catch { return null; }
+  const t = await readText(p);
+  if (t === null) return null;
+  try {
+    return JSON.parse(t) as T;
+  } catch {
+    return null;
+  }
 }
 export async function listDir(p: string) {
-  const out: string[] = []; try { for await (const e of Deno.readDir(p)) out.push(e.name); } catch { /* missing */ }
+  const out: string[] = [];
+  try {
+    for await (const e of Deno.readDir(p)) out.push(e.name);
+  } catch { /* missing */ }
   return out.sort();
 }
-export function mode(st: Deno.FileInfo | null) { return st?.mode == null ? null : (st.mode & 0o777).toString(8); }
-export function expandHome(p: string) { return p.startsWith("~/") ? `${HOME}/${p.slice(2)}` : p; }
-export function shortHome(p: string) { return p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p; }
+export function mode(st: Deno.FileInfo | null) {
+  return st?.mode == null ? null : (st.mode & 0o777).toString(8);
+}
+export function expandHome(p: string) {
+  return p.startsWith("~/") ? `${HOME}/${p.slice(2)}` : p;
+}
+export function shortHome(p: string) {
+  return p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p;
+}
 
 // ---------------------------------------------------------------- profile manifest
 export interface Manifest {
@@ -172,7 +230,9 @@ export async function desktopDir(p: Profile, manifest?: Manifest): Promise<strin
 export const KINDS = ["skills", "agents", "commands"] as const;
 export type Kind = typeof KINDS[number];
 /** Items the profile owns for a kind (profiles/<p>/<kind>/*), always mounted. */
-export async function ownItems(p: Profile, kind: Kind) { return await listDir(`${PROFILES}/${p}/${kind}`); }
+export async function ownItems(p: Profile, kind: Kind) {
+  return await listDir(`${PROFILES}/${p}/${kind}`);
+}
 
 // ---------------------------------------------------------------- git / repo
 export async function repoState() {
@@ -185,14 +245,28 @@ export async function repoState() {
   let ahead = 0, behind = 0;
   if (upstream) {
     const c = (await g("rev-list", "--left-right", "--count", "@{u}...HEAD")).out.split(/\s+/);
-    behind = Number(c[0] ?? 0); ahead = Number(c[1] ?? 0);
+    behind = Number(c[0] ?? 0);
+    ahead = Number(c[1] ?? 0);
   }
   const dirtyFiles = (await g("status", "--porcelain")).out.split("\n").filter(Boolean);
   const head = (await g("log", "-1", "--format=%h %s")).out;
   const headDate = (await g("log", "-1", "--format=%cI")).out;
   const fetchStamp = await lstat(`${CACHE}/fetch.stamp`);
   const fetchedAt = fetchStamp?.mtime ? fetchStamp.mtime.toISOString() : null;
-  return { path: REPO, isRepo: true as const, branch, upstream, remote, ahead, behind, dirty: dirtyFiles.length, dirtyFiles, head, headDate, fetchedAt };
+  return {
+    path: REPO,
+    isRepo: true as const,
+    branch,
+    upstream,
+    remote,
+    ahead,
+    behind,
+    dirty: dirtyFiles.length,
+    dirtyFiles,
+    head,
+    headDate,
+    fetchedAt,
+  };
 }
 
 // ---------------------------------------------------------------- machine
@@ -240,10 +314,16 @@ export function desktopVersions(dirs: string[], current: string | null) {
 }
 
 /** The last update results (bin/lib/updates.sh writes them), newest first. */
-export async function updateLog(limit = 20): Promise<{ at: string; component: string; event: string; from: string; to: string; detail: string }[]> {
+export async function updateLog(
+  limit = 20,
+): Promise<{ at: string; component: string; event: string; from: string; to: string; detail: string }[]> {
   const text = await readText(`${STATE}/updates.jsonl`) ?? "";
   return text.split("\n").filter(Boolean).slice(-limit).reverse().flatMap((l) => {
-    try { return [JSON.parse(l)]; } catch { return []; }
+    try {
+      return [JSON.parse(l)];
+    } catch {
+      return [];
+    }
   });
 }
 
@@ -251,13 +331,17 @@ export async function machine() {
   // Over ssh the session variables are absent: without this check install would think it is on a
   // headless box and silently skip systemd units and menu entries.
   const rt = Deno.env.get("XDG_RUNTIME_DIR");
-  const graphical = !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY") || Deno.env.get("XDG_CURRENT_DESKTOP")) ||
+  const graphical =
+    !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY") || Deno.env.get("XDG_CURRENT_DESKTOP")) ||
     !!(rt && await lstat(`${rt}/wayland-0`)) || !!(await lstat("/tmp/.X11-unix/X0"));
   // Claude Desktop lives in user space (bin/claude-desktop-update); the system package is what a
   // machine had before the migration, and what the doctor asks to remove.
   const droot = `${LIB}/claude-desktop`;
   const cur = await run("readlink", ["-f", `${droot}/current`]);
-  const desktop = desktopVersions(await listDir(`${droot}/versions`), cur.code === 0 ? cur.out.split("/").pop() ?? null : null);
+  const desktop = desktopVersions(
+    await listDir(`${droot}/versions`),
+    cur.code === 0 ? cur.out.split("/").pop() ?? null : null,
+  );
   const desktopPkg = await run("pacman", ["-Q", "claude-desktop"]);
   const desktopSystem = desktopPkg.code === 0 ? desktopPkg.out.split(/\s+/)[1]?.split("-")[0] ?? null : null;
   const desktopVersion = desktop.current ?? desktopSystem;
@@ -272,9 +356,18 @@ export async function machine() {
     if (v.length) embedded[p] = v;
   }
   return {
-    hostname: Deno.hostname(), graphical, kde, systemd, desktopVersion,
-    desktopStaged: desktop.staged, desktopPrevious: desktop.previous, desktopSystem,
-    embeddedCode: embedded, cliVersion, cliVersions, deno: Deno.version.deno,
+    hostname: Deno.hostname(),
+    graphical,
+    kde,
+    systemd,
+    desktopVersion,
+    desktopStaged: desktop.staged,
+    desktopPrevious: desktop.previous,
+    desktopSystem,
+    embeddedCode: embedded,
+    cliVersion,
+    cliVersions,
+    deno: Deno.version.deno,
   };
 }
 
@@ -291,10 +384,15 @@ async function procInfo(pid: number) {
   return { exe, cwd, profile };
 }
 export interface CliProc {
-  pid: number; profile: string | null; cwd: string | null; embedded: boolean; version: string | null;
+  pid: number;
+  profile: string | null;
+  cwd: string | null;
+  embedded: boolean;
+  version: string | null;
   /** Session id and model, parsed off the command line. Several sessions of the same profile look
    *  identical without them — which is exactly what Desktop does when you open a few tabs. */
-  session: string | null; model: string | null;
+  session: string | null;
+  model: string | null;
   /** When the session's transcript was last written: a running process is not a working one. */
   lastActivity: string | null;
 }
@@ -321,9 +419,14 @@ export async function running() {
   // so the profile is read back off the executable path rather than a fixed table.
   // the launcher runs the native build through ~/.local/bin/claude-bin, a symlink: its command line
   // names the link, not claude/versions/ (the exe check below is what decides)
-  const pg = await run("pgrep", ["-af", "claude/versions/|/claude-bin( |$)|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/(versions/[0-9.]+/)?claude-desktop"]);
+  const pg = await run("pgrep", [
+    "-af",
+    "claude/versions/|/claude-bin( |$)|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/(versions/[0-9.]+/)?claude-desktop",
+  ]);
   for (const line of pg.out.split("\n").filter(Boolean)) {
-    const [pidS, ...rest] = line.split(" "); const pid = Number(pidS); const cmd = rest.join(" ");
+    const [pidS, ...rest] = line.split(" ");
+    const pid = Number(pidS);
+    const cmd = rest.join(" ");
     if (cmd.includes("--type=")) continue; // Electron child processes
     const { exe, cwd, profile } = await procInfo(pid);
     if (!exe) continue;
@@ -332,11 +435,18 @@ export async function running() {
     if (embedded || native) {
       // a new session has no --resume: Claude Code records it in <config>/sessions/<pid>.json
       const session = cmd.match(/--resume[= ]([0-9a-f-]{36})/)?.[1] ??
-        (profile ? (await readJson<{ sessionId?: string }>(`${RUNTIME}/${profile}/sessions/${pid}.json`))?.sessionId ?? null : null);
+        (profile
+          ? (await readJson<{ sessionId?: string }>(`${RUNTIME}/${profile}/sessions/${pid}.json`))?.sessionId ?? null
+          : null);
       const tp = profile ? transcriptPath(profile, cwd, session) : null;
       const st = tp ? await stat(tp) : null;
       cli.push({
-        pid, profile, cwd, embedded: !!embedded, version: (embedded ?? native)![1], session,
+        pid,
+        profile,
+        cwd,
+        embedded: !!embedded,
+        version: (embedded ?? native)![1],
+        session,
         model: cmd.match(/--model[= ]([\w.-]+)/)?.[1] ?? null,
         lastActivity: st?.mtime?.toISOString() ?? null,
       });
@@ -353,7 +463,9 @@ export async function running() {
 export function syncedPluginNames(manifest: unknown): string[] {
   const plugins = (manifest as { plugins?: unknown } | null)?.plugins;
   if (!Array.isArray(plugins)) return [];
-  return plugins.map((p) => (p as { name?: unknown })?.name).filter((n): n is string => typeof n === "string" && n.length > 0);
+  return plugins.map((p) => (p as { name?: unknown })?.name).filter((n): n is string =>
+    typeof n === "string" && n.length > 0
+  );
 }
 
 /** Plugins the organisation syncs into a profile, as `<name>@synced` — the ids enabledPlugins takes.
@@ -361,13 +473,19 @@ export function syncedPluginNames(manifest: unknown): string[] {
 export async function syncedPlugins(dir: string): Promise<string[]> {
   const names = new Set<string>();
   for (const bucket of await listDir(`${dir}/plugins/synced`)) {
-    for (const n of syncedPluginNames(await readJson(`${dir}/plugins/synced/${bucket}/manifest.json`))) names.add(`${n}@synced`);
+    for (const n of syncedPluginNames(await readJson(`${dir}/plugins/synced/${bucket}/manifest.json`))) {
+      names.add(`${n}@synced`);
+    }
   }
   return [...names].sort();
 }
 
 /** One record of installed_plugins.json, as far as the checks read it. */
-export interface PluginRecord { scope?: string; installPath?: string; projectPath?: string }
+export interface PluginRecord {
+  scope?: string;
+  installPath?: string;
+  projectPath?: string;
+}
 
 /** The two ways an install record goes wrong. `exists` answers for the paths the records name.
  *  - broken: its cache directory is gone, so Claude lists the plugin as "failed to load". It happens
@@ -380,8 +498,9 @@ export function pluginRecordState(plugins: Record<string, unknown>, exists: (pat
   const stale: { id: string; scope: string; project: string }[] = [];
   for (const [id, recs] of Object.entries(plugins)) {
     for (const r of Array.isArray(recs) ? recs as PluginRecord[] : []) {
-      if ((r.scope === "project" || r.scope === "local") && r.projectPath && !exists(r.projectPath)) stale.push({ id, scope: r.scope, project: r.projectPath });
-      else if (r.installPath && !exists(r.installPath) && !broken.includes(id)) broken.push(id);
+      if ((r.scope === "project" || r.scope === "local") && r.projectPath && !exists(r.projectPath)) {
+        stale.push({ id, scope: r.scope, project: r.projectPath });
+      } else if (r.installPath && !exists(r.installPath) && !broken.includes(id)) broken.push(id);
     }
   }
   return { broken, stale };
@@ -390,7 +509,9 @@ export function pluginRecordState(plugins: Record<string, unknown>, exists: (pat
 export async function profileInfo(p: Profile) {
   const dir = `${RUNTIME}/${p}`;
   const link = async (name: string) => await readlink(`${dir}/${name}`);
-  const conf = await readJson<{ mcpServers?: Record<string, unknown>; oauthAccount?: { emailAddress?: string } }>(`${dir}/.claude.json`);
+  const conf = await readJson<{ mcpServers?: Record<string, unknown>; oauthAccount?: { emailAddress?: string } }>(
+    `${dir}/.claude.json`,
+  );
   const plugins = await readJson<{ plugins?: Record<string, unknown> }>(`${dir}/plugins/installed_plugins.json`);
   const present = new Set<string>();
   for (const recs of Object.values(plugins?.plugins ?? {})) {
@@ -398,10 +519,17 @@ export async function profileInfo(p: Profile) {
       for (const path of [r.installPath, r.projectPath]) if (path && await lstat(path)) present.add(path);
     }
   }
-  const { broken: brokenPlugins, stale: stalePlugins } = pluginRecordState(plugins?.plugins ?? {}, (path) => present.has(path));
+  const { broken: brokenPlugins, stale: stalePlugins } = pluginRecordState(
+    plugins?.plugins ?? {},
+    (path) => present.has(path),
+  );
   const creds = await lstat(`${dir}/.credentials.json`);
   const manifest = await loadManifest(p);
-  const mounted: Record<Kind, Record<string, { link: string | null; broken: boolean }>> = { skills: {}, agents: {}, commands: {} };
+  const mounted: Record<Kind, Record<string, { link: string | null; broken: boolean }>> = {
+    skills: {},
+    agents: {},
+    commands: {},
+  };
   const kindLinks: Record<Kind, string | null> = { skills: null, agents: null, commands: null };
   for (const k of KINDS) {
     kindLinks[k] = await link(k);
@@ -413,16 +541,24 @@ export async function profileInfo(p: Profile) {
       // content: the manifest does not claim it and the checks must not read it as a stray mount.
       const link = await readlink(path);
       if (link === null) continue;
-      mounted[k][k === "skills" ? n : n.slice(0, -3)] = { link, broken: !(await stat(k === "skills" ? `${path}/SKILL.md` : path)) };
+      mounted[k][k === "skills" ? n : n.slice(0, -3)] = {
+        link,
+        broken: !(await stat(k === "skills" ? `${path}/SKILL.md` : path)),
+      };
     }
   }
   const deskDir = await desktopDir(p, manifest);
   const desktopConf = await readJson<{ mcpServers?: Record<string, unknown> }>(`${deskDir}/claude_desktop_config.json`);
   return {
-    dir, exists: !!(await lstat(dir)), desktopDir: deskDir,
+    dir,
+    exists: !!(await lstat(dir)),
+    desktopDir: deskDir,
     manifest,
-    claudeMd: await link("CLAUDE.md"), settings: await link("settings.json"), hooks: await link("hooks"),
-    kindLinks, mounted,
+    claudeMd: await link("CLAUDE.md"),
+    settings: await link("settings.json"),
+    hooks: await link("hooks"),
+    kindLinks,
+    mounted,
     credentials: creds ? { present: true, mode: mode(creds) } : { present: false, mode: null },
     account: conf?.oauthAccount?.emailAddress ?? null,
     mcp: Object.keys(conf?.mcpServers ?? {}),
@@ -443,12 +579,17 @@ export async function sharedInventory() {
     for (const n of await listDir(`${REPO}/shared/${kind}`)) {
       if (kind !== "skills" && (!n.endsWith(".md") || n === "AGENTS.md")) continue;
       const path = `${REPO}/shared/${kind}/${n}`;
-      out[kind === "skills" ? n : n.slice(0, -3)] = { link: await readlink(path), broken: !(await stat(kind === "skills" ? `${path}/SKILL.md` : path)) };
+      out[kind === "skills" ? n : n.slice(0, -3)] = {
+        link: await readlink(path),
+        broken: !(await stat(kind === "skills" ? `${path}/SKILL.md` : path)),
+      };
     }
     return out;
   };
   return {
-    skills: await items("skills"), agents: await items("agents"), commands: await items("commands"),
+    skills: await items("skills"),
+    agents: await items("agents"),
+    commands: await items("commands"),
     hooks: (await listDir(`${REPO}/shared/hooks`)).filter((f) => /\.(sh|js|py)$/.test(f)),
     rules: (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, "")),
     agentsSkills: await listDir(AGENTS_SKILLS),
@@ -460,7 +601,11 @@ export function printDoctor(checks: Check[]) {
   const order: Status[] = ["fail", "warn", "ok"];
   const sorted = [...checks].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
   console.log(`${ANSI.b}claude-multi doctor${ANSI.x}`);
-  for (const c of sorted) console.log(`  ${icon[c.status]} ${c.msg}${c.fix && c.status !== "ok" ? `\n      ${ANSI.d}fix:${ANSI.x} ${c.fix}` : ""}`);
+  for (const c of sorted) {
+    console.log(
+      `  ${icon[c.status]} ${c.msg}${c.fix && c.status !== "ok" ? `\n      ${ANSI.d}fix:${ANSI.x} ${c.fix}` : ""}`,
+    );
+  }
   const n = (s: Status) => checks.filter((c) => c.status === s).length;
   console.log(`\n  ${n("ok")} pass · ${ANSI.y}${n("warn")} warn${ANSI.x} · ${ANSI.r}${n("fail")} fail${ANSI.x}`);
   return n("fail") ? 1 : 0;

@@ -22,8 +22,16 @@ export function eventAsTask(e: Doc, account: string): Task | null {
   const due = start ? dayOf(start) : e.start?.date;
   if (!due) return null;
   return {
-    id: `ev-${account}-${e.id}`, title: e.summary ?? "(no title)", status: "todo", due, ...(start ? { time: hhmm(start) } : {}),
-    project: account, owner: owner().id, source: "calendar", created: e.created ?? "", updated: e.updated ?? "",
+    id: `ev-${account}-${e.id}`,
+    title: e.summary ?? "(no title)",
+    status: "todo",
+    due,
+    ...(start ? { time: hhmm(start) } : {}),
+    project: account,
+    owner: owner().id,
+    source: "calendar",
+    created: e.created ?? "",
+    updated: e.updated ?? "",
   };
 }
 
@@ -36,7 +44,9 @@ export function calendarAsTasks(): Promise<{ tasks: Task[]; errors: string[] }> 
   if (hit && Date.now() - hit.at < 120000) return hit.value;
   const value = fetchCalendar(days);
   memo.set(key, { at: Date.now(), value });
-  value.then((r) => { if (r.errors.length) memo.delete(key); }, () => memo.delete(key)); // failures are not kept
+  value.then((r) => {
+    if (r.errors.length) memo.delete(key);
+  }, () => memo.delete(key)); // failures are not kept
   return value;
 }
 
@@ -45,7 +55,11 @@ async function fetchCalendar(days: number): Promise<{ tasks: Task[]; errors: str
   if (!google.length) return { tasks: [], errors: [] };
   const tasks: Task[] = [], errors: string[] = [];
   let client;
-  try { client = await loadClient(); } catch { return { tasks, errors }; } // not set up yet: nothing to say
+  try {
+    client = await loadClient();
+  } catch {
+    return { tasks, errors };
+  } // not set up yet: nothing to say
   const today = dayOf(new Date());
   const [y, m, d] = today.split("-").map(Number);
   const from = new Date(y, m - 1, d).toISOString();
@@ -56,9 +70,20 @@ async function fetchCalendar(days: number): Promise<{ tasks: Task[]; errors: str
       const refresh = await getSecret("google", a.name);
       if (!refresh) continue; // not connected on this machine yet
       const token = await accessToken(client, refresh);
-      const q = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
-      const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) { errors.push(`${a.name}: HTTP ${r.status}`); continue; }
+      const q = new URLSearchParams({
+        timeMin: from,
+        timeMax: to,
+        singleEvents: "true",
+        orderBy: "startTime",
+        maxResults: "250",
+      });
+      const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        errors.push(`${a.name}: HTTP ${r.status}`);
+        continue;
+      }
       for (const e of (await r.json()).items ?? []) {
         const t = eventAsTask(e, a.name);
         if (t) tasks.push(t);

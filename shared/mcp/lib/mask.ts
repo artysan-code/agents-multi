@@ -28,7 +28,11 @@ export function maskDeep(v: unknown, name = ""): unknown {
     const o = v as Record<string, unknown>;
     // name/value pairs (HTTP headers, query parameters): the secret is in `value`, its name in `name`
     if (typeof o.name === "string" && "value" in o && SECRET_NAME.test(o.name)) return { ...o, value: HIDDEN };
-    return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, typeof x === "object" ? maskDeep(x, k) : mask(k, x)]));
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map((
+        [k, x],
+      ) => [k, typeof x === "object" ? maskDeep(x, k) : mask(k, x)]),
+    );
   }
   return mask(name, v);
 }
@@ -37,7 +41,9 @@ export function maskDeep(v: unknown, name = ""): unknown {
  *  lose their value, and addresses lose their credentials. Line by line, the rest untouched. */
 export function maskText(s: string): string {
   return s
-    .replace(/(\b[\w.-]*(?:password|passwd|passphrase|secret|token|apikey|api_key|private_key|credential|totp|_pin)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi, (_, k: string, v: string) =>
-      /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`) // a ${VARIABLE} reference is not the secret
+    .replace(
+      /(\b[\w.-]*(?:password|passwd|passphrase|secret|token|apikey|api_key|private_key|credential|totp|_pin)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,
+      (_, k: string, v: string) => /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`,
+    ) // a ${VARIABLE} reference is not the secret
     .replace(new RegExp(CREDENTIALS_IN_URL.source, "g"), "://‹user›:‹password›@");
 }

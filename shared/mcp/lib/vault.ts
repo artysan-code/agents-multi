@@ -37,18 +37,35 @@ export function vaultDir(): string {
   return Deno.env.get("CLAUDE_MULTI_VAULT") ?? `${HOME}/vault/claude-multi`;
 }
 
-export interface Entry { service: string; account: string; field: string; value: string; updatedAt: string; deleted?: boolean }
+export interface Entry {
+  service: string;
+  account: string;
+  field: string;
+  value: string;
+  updatedAt: string;
+  deleted?: boolean;
+}
 export type EntryMeta = Omit<Entry, "value" | "deleted">;
 
 // ---------------------------------------------------------------- key material
-export interface VaultKey { aes: CryptoKey; hmac: CryptoKey; raw: Uint8Array }
+export interface VaultKey {
+  aes: CryptoKey;
+  hmac: CryptoKey;
+  raw: Uint8Array;
+}
 
 export async function importKey(raw: Uint8Array): Promise<VaultKey> {
   if (raw.length !== 32) throw new Error("a vault key is 32 bytes");
   // two keys derived from one secret: the same bytes are never used for two algorithms
   const base = await crypto.subtle.importKey("raw", raw as BufferSource, "HKDF", false, ["deriveKey"]);
   const derive = (info: string, alg: AesKeyGenParams | HmacKeyGenParams, usages: KeyUsage[]) =>
-    crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: enc.encode(info) }, base, alg, false, usages);
+    crypto.subtle.deriveKey(
+      { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: enc.encode(info) },
+      base,
+      alg,
+      false,
+      usages,
+    );
   return {
     aes: await derive("claude-multi/entries", { name: "AES-GCM", length: 256 }, ["encrypt", "decrypt"]),
     hmac: await derive("claude-multi/names", { name: "HMAC", hash: "SHA-256", length: 256 }, ["sign"]),
@@ -70,8 +87,12 @@ const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export function recoveryCode(raw: Uint8Array): string {
   let bits = 0, acc = 0, out = "";
   for (const byte of raw) {
-    acc = (acc << 8) | byte; bits += 8;
-    while (bits >= 5) { out += B32[(acc >> (bits - 5)) & 31]; bits -= 5; }
+    acc = (acc << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(acc >> (bits - 5)) & 31];
+      bits -= 5;
+    }
   }
   if (bits) out += B32[(acc << (5 - bits)) & 31];
   return out.match(/.{1,4}/g)!.join("-");
@@ -85,8 +106,12 @@ export function parseRecoveryCode(code: string): Uint8Array {
   for (const ch of clean) {
     const v = B32.indexOf(ch);
     if (v < 0) throw new Error(`not a recovery code character: ${ch}`);
-    acc = (acc << 5) | v; bits += 5;
-    if (bits >= 8) { out.push((acc >> (bits - 8)) & 255); bits -= 8; }
+    acc = (acc << 5) | v;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((acc >> (bits - 8)) & 255);
+      bits -= 8;
+    }
   }
   if (out.length !== 32) throw new Error("a recovery code holds exactly 32 bytes: check it was copied whole");
   return new Uint8Array(out);
@@ -94,24 +119,37 @@ export function parseRecoveryCode(code: string): Uint8Array {
 
 // ---------------------------------------------------------------- entries (pure given a key)
 export async function entryId(key: VaultKey, service: string, account: string, field: string): Promise<string> {
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key.hmac, enc.encode(`${service}\n${account}\n${field}`)));
+  const mac = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key.hmac, enc.encode(`${service}\n${account}\n${field}`)),
+  );
   return [...mac.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function seal(key: VaultKey, id: string, plain: string): Promise<{ v: 1; iv: string; ct: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(id) }, key.aes, enc.encode(plain)));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(id) }, key.aes, enc.encode(plain)),
+  );
   return { v: 1, iv: b64(iv), ct: b64(ct) };
 }
 
 export async function open(key: VaultKey, id: string, box: { iv: string; ct: string }): Promise<string> {
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(box.iv) as BufferSource, additionalData: enc.encode(id) }, key.aes, unb64(box.ct) as BufferSource);
+  const pt = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: unb64(box.iv) as BufferSource, additionalData: enc.encode(id) },
+    key.aes,
+    unb64(box.ct) as BufferSource,
+  );
   return dec.decode(pt);
 }
 
 // ---------------------------------------------------------------- the keyring
 async function secretTool(args: string[], stdin?: string): Promise<{ code: number; out: string }> {
-  const p = new Deno.Command(SECRET_TOOL, { args, stdin: stdin === undefined ? "null" : "piped", stdout: "piped", stderr: "null" }).spawn();
+  const p = new Deno.Command(SECRET_TOOL, {
+    args,
+    stdin: stdin === undefined ? "null" : "piped",
+    stdout: "piped",
+    stderr: "null",
+  }).spawn();
   if (stdin !== undefined) {
     const w = p.stdin.getWriter();
     await w.write(enc.encode(stdin));
@@ -126,10 +164,16 @@ export class VaultError extends Error {}
 /** This machine's vault key, from the keyring. */
 export async function loadKey(): Promise<VaultKey> {
   let r: { code: number; out: string };
-  try { r = await secretTool(["lookup", ...KEY_ATTRS]); } catch {
+  try {
+    r = await secretTool(["lookup", ...KEY_ATTRS]);
+  } catch {
     throw new VaultError("the keyring cannot be reached (secret-tool missing, or no desktop session)");
   }
-  if (r.code !== 0 || !r.out) throw new VaultError("this machine has no vault key: `claude-multi vault pair` (or `vault init` on the first machine)");
+  if (r.code !== 0 || !r.out) {
+    throw new VaultError(
+      "this machine has no vault key: `claude-multi vault pair` (or `vault init` on the first machine)",
+    );
+  }
   return await importKey(unb64(r.out));
 }
 
@@ -143,7 +187,11 @@ const entriesDir = () => `${vaultDir()}/secrets`;
 const checkFile = () => `${vaultDir()}/key-check.json`;
 
 async function readJsonFile<T>(p: string): Promise<T | null> {
-  try { return JSON.parse(await Deno.readTextFile(p)) as T; } catch { return null; }
+  try {
+    return JSON.parse(await Deno.readTextFile(p)) as T;
+  } catch {
+    return null;
+  }
 }
 
 /** Write via a temporary file and a rename: Syncthing never ships half an entry. */
@@ -157,12 +205,18 @@ async function writeAtomic(p: string, text: string) {
 export async function keyMatches(key: VaultKey): Promise<boolean> {
   const box = await readJsonFile<{ iv: string; ct: string }>(checkFile());
   if (!box) return true;
-  try { return (await open(key, "key-check", box)) === CHECK_TEXT; } catch { return false; }
+  try {
+    return (await open(key, "key-check", box)) === CHECK_TEXT;
+  } catch {
+    return false;
+  }
 }
 
 /** First machine: a new key, in the keyring, and the check next to the entries. */
 export async function initVault(): Promise<string> {
-  if (await readJsonFile(checkFile())) throw new VaultError(`a vault already exists in ${vaultDir()}: pair this machine with its recovery code instead`);
+  if (await readJsonFile(checkFile())) {
+    throw new VaultError(`a vault already exists in ${vaultDir()}: pair this machine with its recovery code instead`);
+  }
   const raw = newKeyBytes();
   const key = await importKey(raw);
   await Deno.mkdir(entriesDir(), { recursive: true, mode: 0o700 });
@@ -175,12 +229,21 @@ export async function initVault(): Promise<string> {
 export async function pairVault(code: string) {
   const raw = parseRecoveryCode(code);
   const key = await importKey(raw);
-  if (!(await readJsonFile(checkFile()))) throw new VaultError(`no vault in ${vaultDir()} yet: wait for Syncthing, or run \`vault init\` if this is the first machine`);
+  if (!(await readJsonFile(checkFile()))) {
+    throw new VaultError(
+      `no vault in ${vaultDir()} yet: wait for Syncthing, or run \`vault init\` if this is the first machine`,
+    );
+  }
   if (!(await keyMatches(key))) throw new VaultError("this recovery code does not open the vault");
   await storeKey(raw);
 }
 
-export async function getSecret(service: string, account: string, field = "token", key?: VaultKey): Promise<string | null> {
+export async function getSecret(
+  service: string,
+  account: string,
+  field = "token",
+  key?: VaultKey,
+): Promise<string | null> {
   const k = key ?? await loadKey();
   const id = await entryId(k, service, account, field);
   const box = await readJsonFile<{ iv: string; ct: string }>(`${entriesDir()}/${id}.json`);
@@ -200,7 +263,12 @@ export async function setSecret(service: string, account: string, value: string,
 }
 
 /** Deletes by writing a tombstone (see the top of the file): true if there was a secret to delete. */
-export async function deleteSecret(service: string, account: string, field = "token", key?: VaultKey): Promise<boolean> {
+export async function deleteSecret(
+  service: string,
+  account: string,
+  field = "token",
+  key?: VaultKey,
+): Promise<boolean> {
   const k = key ?? await loadKey();
   if ((await getSecret(service, account, field, k)) === null) return false;
   const id = await entryId(k, service, account, field);
@@ -211,23 +279,36 @@ export async function deleteSecret(service: string, account: string, field = "to
 
 /** What the vault holds, without the values. Entries this key cannot open are counted, not hidden;
  *  Syncthing conflict copies are counted too, for the doctor to raise. */
-export async function listSecrets(key?: VaultKey): Promise<{ entries: EntryMeta[]; unreadable: number; conflicts: number }> {
+export async function listSecrets(
+  key?: VaultKey,
+): Promise<{ entries: EntryMeta[]; unreadable: number; conflicts: number }> {
   const k = key ?? await loadKey();
   const entries: EntryMeta[] = [];
   let unreadable = 0, conflicts = 0;
   let files: Deno.DirEntry[] = [];
-  try { files = [...Deno.readDirSync(entriesDir())]; } catch { /* empty vault */ }
+  try {
+    files = [...Deno.readDirSync(entriesDir())];
+  } catch { /* empty vault */ }
   for (const f of files) {
-    if (f.name.includes(".sync-conflict-")) { conflicts++; continue; }
+    if (f.name.includes(".sync-conflict-")) {
+      conflicts++;
+      continue;
+    }
     if (!/^[0-9a-f]{32}\.json$/.test(f.name)) continue; // temporaries
     const id = f.name.slice(0, -5);
     try {
       const box = await readJsonFile<{ iv: string; ct: string }>(`${entriesDir()}/${f.name}`);
       const { value: _v, deleted, ...meta } = JSON.parse(await open(k, id, box!)) as Entry;
       if (!deleted) entries.push(meta);
-    } catch { unreadable++; }
+    } catch {
+      unreadable++;
+    }
   }
-  return { entries: entries.sort((a, b) => `${a.service}/${a.account}`.localeCompare(`${b.service}/${b.account}`)), unreadable, conflicts };
+  return {
+    entries: entries.sort((a, b) => `${a.service}/${a.account}`.localeCompare(`${b.service}/${b.account}`)),
+    unreadable,
+    conflicts,
+  };
 }
 
 /** For `vault recovery-code`: this machine's key, as the code another machine pairs with. */
