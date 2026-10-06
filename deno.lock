@@ -6,6 +6,7 @@
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
     "npm:@modelcontextprotocol/sdk@^1.18.0": "1.30.0_zod@3.25.76",
+    "npm:unpdf@1.8.1": "1.8.1",
     "npm:zod@^3.23.0": "3.25.76"
   },
   "jsr": {
@@ -519,6 +520,9 @@
         "media-typer",
         "mime-types"
       ]
+    },
+    "unpdf@1.8.1": {
+      "integrity": "sha512-xkURhy2SoGpOIH0a1gLHNkASPIQYonadDJs2AQwPEfUakafeD9EA1WTWWsaR++gfTCXJpV27W7tU1nXuk82UKQ=="
     },
     "unpipe@1.0.0": {
       "integrity": "sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ=="
