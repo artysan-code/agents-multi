@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
   "imports": {
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@1.32.1",
     "zod": "npm:zod@4.6.5",
