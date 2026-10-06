@@ -3,7 +3,7 @@
 // account is reachable from another.
 import { assert, assertEquals, assertNotEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import { DatabaseSync } from "node:sqlite";
-import { Auth, base32Encode, sha256, totp } from "../auth.ts";
+import { Auth, base32Encode, MAX_CLIENTS, sha256, totp } from "../auth.ts";
 import { accountError, hashPassphrase, masterKey, passphraseOk, Users } from "../users.ts";
 import { tenantFile, Tenants } from "../tenants.ts";
 
@@ -155,6 +155,32 @@ Deno.test("OAuth: the code carries the account that signed in to the tokens", as
     new URLSearchParams({ grant_type: "refresh_token", refresh_token: tok.refresh_token }),
   );
   assertEquals(again.status, 400);
+});
+
+Deno.test("OAuth: unused clients go, ones in use stay, and registration stops at the cap", async () => {
+  const { db, auth } = await fresh();
+  const reg = (now?: number) =>
+    (auth.register({ redirect_uris: ["http://127.0.0.1/cb"] }, now).json as { client_id: string }).client_id;
+  const day = 86_400_000, t0 = Date.parse("2026-01-01T00:00:00Z");
+  const idle = reg(t0), used = reg(t0), stale = reg(t0);
+  db.prepare(
+    "insert into tokens (hash, user, kind, client, expires, created) values ('h1', 'ann', 'refresh', ?, ?, 'x')",
+  )
+    .run(used, t0 + 365 * day);
+  db.prepare(
+    "insert into tokens (hash, user, kind, client, expires, created) values ('h2', 'ann', 'access', ?, ?, 'x')",
+  )
+    .run(stale, t0 + 3600_000);
+  const ids = () => (db.prepare("select id from oauth_clients").all() as { id: string }[]).map((r) => r.id);
+  reg(t0 + 2 * day);
+  assert(!ids().includes(idle), "never used after a day: gone");
+  assert(ids().includes(stale) && ids().includes(used));
+  reg(t0 + 91 * day);
+  assert(!ids().includes(stale), "no live token after ninety days: gone");
+  assert(ids().includes(used), "a live refresh token keeps its client");
+  const now = t0 + 91 * day;
+  for (let i = ids().length; i < MAX_CLIENTS; i++) reg(now);
+  assertEquals(auth.register({ redirect_uris: ["http://127.0.0.1/cb"] }, now).status, 503);
 });
 
 Deno.test("adopt: the live tokens of a one-person brain become the first account's", async () => {

@@ -171,9 +171,10 @@ const nextPage = (n: string | null) => n && /^\/(account|tasks)(\/[\w-]*)*(\?[^\
 const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
 const BUSY = "Troppi accessi in corso: riprova tra qualche secondo.";
 const refused = (r: "wrong" | "locked" | "busy") => r === "locked" ? LOCKED : r === "busy" ? BUSY : SIGNED_OUT_ERROR;
-// per address: the forms a person signs in with (ten, then one every six seconds), and the OAuth
-// endpoints Claude's clients call (thirty, then one every two seconds)
-const FORMS = new Buckets(10, 6_000), OAUTH = new Buckets(30, 2_000);
+// per address: the forms a person signs in with (ten, then one every six seconds), the token
+// endpoint Claude's clients call (thirty, then one every two seconds), and registering a client
+// (ten, then one a minute). Claude's servers call from a few shared addresses: generous on purpose.
+const FORMS = new Buckets(10, 6_000), OAUTH = new Buckets(30, 2_000), REGISTER = new Buckets(10, 60_000);
 const IP_HEADER = env("BRAIN_CLIENT_IP_HEADER")?.toLowerCase();
 /** Pure: which bucket a request draws from, if any. */
 const bucketOf = (method: string, p: string) =>
@@ -181,8 +182,10 @@ const bucketOf = (method: string, p: string) =>
     ? null
     : p === "/account/login" || p === "/authorize" || p === "/invite"
     ? FORMS
-    : p === "/token" || p === "/register"
+    : p === "/token"
     ? OAUTH
+    : p === "/register"
+    ? REGISTER
     : null;
 const TOTP = !DEV;
 const SITE: Site = {

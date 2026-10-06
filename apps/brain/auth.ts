@@ -33,6 +33,8 @@ create table if not exists login_failures (user text not null, ip text not null,
 export interface AuthConfig {
   url: string;
 }
+/** Registered OAuth clients kept at most: a client is one Claude connection, a few per person. */
+export const MAX_CLIENTS = 1000;
 const SESSION_IDLE = 3600_000, SESSION_MAX = 12 * 3600_000;
 /** How long the browser keeps the session cookie: the server ends it sooner when it is not used. */
 export const SESSION_SECONDS = SESSION_MAX / 1000;
@@ -261,7 +263,32 @@ export class Auth {
   }
 
   // ------------------------------------------------------------ OAuth
-  register(body: { redirect_uris?: unknown; client_name?: unknown }): { status: number; json: unknown } {
+  /** Anyone may register a client (RFC 7591: that is how Claude connects), so the ones nobody uses
+   *  go: a client that never got a code or a token after a day, and one with no live token after
+   *  ninety days. Past MAX_CLIENTS still in use, registration waits. */
+  private pruneClients(now: number) {
+    const day = new Date(now - 86_400_000).toISOString(), quarter = new Date(now - 90 * 86_400_000).toISOString();
+    this.db.prepare(
+      `delete from oauth_clients where created < ? and not exists (select 1 from tokens t where t.client = oauth_clients.id)
+        and not exists (select 1 from oauth_codes c where c.client = oauth_clients.id)`,
+    ).run(day);
+    this.db.prepare(
+      `delete from oauth_clients where created < ? and not exists (select 1 from tokens t where t.client = oauth_clients.id
+        and t.revoked = 0 and (t.expires is null or t.expires > ?))`,
+    ).run(quarter, now);
+  }
+
+  register(
+    body: { redirect_uris?: unknown; client_name?: unknown },
+    now = Date.now(),
+  ): { status: number; json: unknown } {
+    this.pruneClients(now);
+    if ((this.db.prepare("select count(*) n from oauth_clients").get() as { n: number }).n >= MAX_CLIENTS) {
+      return {
+        status: 503,
+        json: { error: "temporarily_unavailable", error_description: "too many registered clients" },
+      };
+    }
     const uris = Array.isArray(body.redirect_uris) ? body.redirect_uris.map(String) : [];
     if (!uris.length || !uris.every(redirectAllowed)) {
       return {
@@ -274,7 +301,7 @@ export class Auth {
       id,
       name,
       JSON.stringify(uris),
-      new Date().toISOString(),
+      new Date(now).toISOString(),
     );
     return {
       status: 201,

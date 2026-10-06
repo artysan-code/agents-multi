@@ -56,7 +56,8 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
   metadata; Claude registers itself (only Claude's callback or a loopback address are accepted),
   sends the person to `/authorize`, and gets a code bound to a PKCE S256 challenge and to the
   account that signed in. Access tokens last an hour; refresh tokens rotate, and one used twice
-  revokes its whole family.
+  revokes its whole family. Since anyone may register, a client that got nothing after a day, or has
+  had no live token for ninety days, is removed; past a thousand clients in use, registration waits.
 - **Signing in** takes the account, its passphrase and the current TOTP code. Five wrong attempts
   from one address close that account to that address for fifteen minutes, so nobody can lock its
   owner out from elsewhere; an id that does not exist answers the same way. Each address has a rate
