@@ -4,16 +4,15 @@
 // Where things are:
 //   the entries   ~/vault/claude-multi/secrets/<id>.json (CLAUDE_MULTI_VAULT overrides the directory).
 //                 ~/vault is a Syncthing folder: the entries travel between machines already
-//                 encrypted, and ark relays them without being able to read them.
+//                 encrypted, and a relay device in between cannot read them.
 //   the key       one per vault, 256 bits, in each machine's keyring through the Secret Service API
 //                 (KWallet / ksecretd here, unlocked at login): no password to type, and never on disk
 //                 next to the entries.
 //
 // Each entry is its own file, so two machines only collide when they change the same secret at the
 // same moment. A deletion is a tombstone (the entry rewritten as deleted), never a removed file:
-// with ark relaying encrypted data, a removal can lose against a concurrent "modification" of the
-// same file and come back (the zombie files of 2026-09-24/29, wiki: references/syncthing-operative-rules),
-// while a write always goes through. Never restore this directory from a backup onto a reinstalled
+// with a relay holding encrypted data, a removal can lose against a concurrent "modification" of the
+// same file and come back, while a write always goes through. Never restore this directory from a backup onto a reinstalled
 // machine: pair it with the recovery code and let Syncthing bring the entries, with clean history. Its name is an HMAC of service/account/field under the vault key: a lookup needs no
 // scan, and the file names say nothing about what is inside. The content is AES-GCM (WebCrypto,
 // built into Deno) with a fresh IV per write and the entry id as associated data, so an entry cannot

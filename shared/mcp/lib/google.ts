@@ -3,7 +3,7 @@
 // mail format.
 //
 // Secrets, all in the vault (vault.ts):
-//   google-oauth/client  fields id, secret — the OAuth client of Samuel's Google Cloud project, one
+//   google-oauth/client  fields id, secret — the OAuth client of the owner's Google Cloud project, one
 //                        for every account (a "Desktop app" client: its secret is not a real secret
 //                        by Google's own definition, but it stays in the vault like the rest)
 //   google/<account>     field token — that account's refresh token

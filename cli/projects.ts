@@ -1,4 +1,4 @@
-// projects.ts — the projects a task can belong to: Samuel's own folders (~/work/acme/site,
+// projects.ts — the projects a task can belong to: the owner's own folders (~/work/acme/site,
 // ~/personal/dnd/dragons-lair…), so the task board groups work the way the disk does.
 //
 // The roots are top-level folders of $HOME, from the tasks settings (`projectRoots`; by default

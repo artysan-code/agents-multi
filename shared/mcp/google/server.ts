@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-net --allow-read --allow-env --allow-run=/usr/bin/secret-tool
 // google — MCP server on the owner's Google accounts (accounts.json, service "google"): Gmail,
-// Calendar, Drive. Several accounts per profile (personal, acme…): each tool takes `account`.
+// Calendar, Drive. Several accounts per profile (personal, work…): each tool takes `account`.
 //
 // Mail goes out in two steps, and the second one always asks: gmail_draft writes a draft the owner
 // can read, gmail_send sends an existing draft — and mcp__google__gmail_send is in the shared `ask`

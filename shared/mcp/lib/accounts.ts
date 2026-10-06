@@ -6,7 +6,7 @@
 //
 // A server learns its profile from CLAUDE_MULTI_PROFILE, which `claude-multi mcp sync` writes into
 // each profile's configuration, and sees only that profile's accounts: the personal Google account
-// does not exist for agency. A profile can hold several accounts of one service; a tool call then
+// does not exist for that profile. A profile can hold several accounts of one service; a tool call then
 // names the one it means, and with a single one the name can be left out. Never a silent default
 // among several.
 

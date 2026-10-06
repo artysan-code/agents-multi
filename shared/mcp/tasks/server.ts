@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env
-// tasks — MCP server on Samuel's tasks (shared/mcp/lib/tasks.ts): the same list from every
+// tasks — MCP server on the owner's tasks (shared/mcp/lib/tasks.ts): the same list from every
 // profile, every surface, every machine. Registered everywhere, so any chat can read the day and
 // keep it current: a thing to do said in passing becomes a task, a thing done is marked done.
 //

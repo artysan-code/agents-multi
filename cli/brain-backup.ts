@@ -1,4 +1,4 @@
-// brain-backup.ts — `claude-multi brain-backup`: a copy of Samuel's brain on this machine, fetched
+// brain-backup.ts — `claude-multi brain-backup`: a copy of the owner's brain on this machine, fetched
 // only when the brain changed since the last one.
 //
 // claude-brain-backup.timer runs it every half hour while the machine is on (never a job at night:
@@ -90,7 +90,7 @@ export async function brainBackup(force = false): Promise<number> {
   }
 
   await Deno.mkdir(BACKUPS, { recursive: true });
-  const d = new Date(now), file = `brain-${dayOf(d)}T${hhmm(d).replace(":", "-")}.brn`; // local time, as Samuel reads it
+  const d = new Date(now), file = `brain-${dayOf(d)}T${hhmm(d).replace(":", "-")}.brn`; // local time, as the owner reads it
   const tmp = `${BACKUPS}/.${file}.tmp`;
   await Deno.writeFile(tmp, sealed);
   await Deno.rename(tmp, `${BACKUPS}/${file}`);

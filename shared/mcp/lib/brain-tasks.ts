@@ -1,4 +1,4 @@
-// brain-tasks.ts — Samuel's tasks kept in his brain (brain/main.ts, /api/tasks) instead of the files
+// brain-tasks.ts — the owner's tasks kept in their brain (brain/main.ts, /api/tasks) instead of the files
 // under ~/brains/tasks: the same TaskStore, over HTTP, with a personal token from the vault.
 //
 // A process switches to it when accounts.json has a `brain` account its profile sees. From then on

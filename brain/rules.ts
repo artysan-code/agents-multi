@@ -1,9 +1,9 @@
 // rules.ts — how the brain is written. Claude writes without asking, so the rules are enforced
 // here rather than recommended: a write that breaks one is refused with the reason, and the writer
-// fixes it. Agreed with Samuel on 2026-10-01 and meant to be tuned while using it: the numbers are
+// fixes it. Agreed with the owner on 2026-10-01 and meant to be tuned while using it: the numbers are
 // the constants below.
 //
-// Seven areas, named the way Samuel thinks: io (who he is), progetti (his folders), clienti (who
+// Seven areas, named the way the owner thinks: io (who they are), progetti (their folders), clienti (who
 // he works for, directly or through someone: the relationship, not the work), persone, note
 // (what he knows how to do), diario (what happened, one page a day, only added to), inbox (said in
 // passing, to sort later). Pages are small and linked: one subject each, a title and a sentence
