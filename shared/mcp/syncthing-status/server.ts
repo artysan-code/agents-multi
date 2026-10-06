@@ -1,14 +1,52 @@
 #!/usr/bin/env -S deno run --allow-net=127.0.0.1:8384 --allow-read --allow-env --allow-run=git
-// syncthing-status — MCP server (read-only) sullo stato di Syncthing locale.
-// Archetipo 3 (CLI & MCP). Scritto a mano; parla SOLO con la REST localhost di Syncthing.
-// API key letta a runtime dal config.xml (o env STGUI_APIKEY): non viene mai persistita altrove.
+// syncthing-status — read-only MCP server for the status of the local Syncthing instance.
+// Talks only to Syncthing's REST API on localhost (ST_URL, default http://127.0.0.1:8384).
+// The API key is read at runtime from Syncthing's config.xml (or the STGUI_APIKEY env variable)
+// and is never persisted anywhere else.
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
 import { type Compiled, compilePattern, isIgnored } from "./ignore.ts";
 
+/** Subset of Syncthing's REST objects that this server reads. */
+interface StFolder {
+  id: string;
+  label?: string;
+  path: string;
+  type: string;
+  paused?: boolean;
+}
+interface StConfig {
+  folders?: StFolder[];
+  devices?: unknown[];
+}
+interface StDbStatus {
+  state?: string;
+  needFiles?: number;
+  needDeletes?: number;
+  pullErrors?: number;
+  errors?: number;
+  globalFiles?: number;
+}
+interface StConnections {
+  connections?: Record<string, { connected?: boolean }>;
+}
+interface StErrors {
+  errors?: ({ message?: string } | string)[];
+}
+interface GitReportRow {
+  folder: string;
+  repo: string;
+  gitDirSynced: boolean;
+  trackedExposed: number;
+  trackedTotal: number;
+  note?: string;
+  risk: string;
+}
+
 const BASE = Deno.env.get("ST_URL") ?? "http://127.0.0.1:8384";
 const HOME = Deno.env.get("HOME") ?? "";
 
+/** Path of Syncthing's config.xml: ST_CONFIG, else the first existing default location. */
 function configPath(): string {
   const env = Deno.env.get("ST_CONFIG");
   if (env) return env;
@@ -21,21 +59,23 @@ function configPath(): string {
   return `${HOME}/.local/state/syncthing/config.xml`;
 }
 
+/** Syncthing API key from STGUI_APIKEY or config.xml. Throws when neither provides one. */
 function apiKey(): string {
   const env = Deno.env.get("STGUI_APIKEY");
   if (env) return env;
   const xml = Deno.readTextFileSync(configPath());
   const m = xml.match(/<apikey>([^<]+)<\/apikey>/);
-  if (!m) throw new Error("API key Syncthing non trovata (config.xml o env STGUI_APIKEY).");
+  if (!m) throw new Error("Syncthing API key not found (config.xml or STGUI_APIKEY env variable).");
   return m[1].trim();
 }
 
 const KEY = apiKey();
 
-async function st(path: string): Promise<any> {
+/** GET `path` on the Syncthing REST API and return the parsed JSON, typed by the caller. Throws on a non-2xx status. */
+async function st<T = unknown>(path: string): Promise<T> {
   const r = await fetch(`${BASE}${path}`, { headers: { "X-API-Key": KEY } });
   if (!r.ok) throw new Error(`${path} -> HTTP ${r.status}`);
-  return await r.json();
+  return await r.json() as T;
 }
 const txt = (o: unknown) => ({
   content: [{ type: "text" as const, text: typeof o === "string" ? o : JSON.stringify(o, null, 2) }],
@@ -66,17 +106,17 @@ const server = new McpServer({ name: "syncthing-status", version: "0.1.0" });
 
 server.registerTool("syncthing_status", {
   description:
-    "Stato generale di Syncthing locale: versione, device, uptime, n. folder/device, connessioni attive, errori di sistema.",
+    "Overall status of the local Syncthing: version, OS, uptime, number of folders and devices, active connections, system errors.",
   inputSchema: {},
 }, async () => {
   const [ver, sys, cfg, conns, errs] = await Promise.all([
-    st("/rest/system/version"),
-    st("/rest/system/status"),
-    st("/rest/config"),
-    st("/rest/system/connections"),
-    st("/rest/system/error"),
+    st<{ version?: string; os?: string; arch?: string }>("/rest/system/version"),
+    st<{ myID?: string; uptime?: number }>("/rest/system/status"),
+    st<StConfig>("/rest/config"),
+    st<StConnections>("/rest/system/connections"),
+    st<StErrors>("/rest/system/error"),
   ]);
-  const connected = Object.values(conns.connections ?? {}).filter((c: any) => c.connected).length;
+  const connected = Object.values(conns.connections ?? {}).filter((c) => c.connected).length;
   return txt({
     version: ver.version,
     os: `${ver.os}/${ver.arch}`,
@@ -85,21 +125,21 @@ server.registerTool("syncthing_status", {
     folders: (cfg.folders ?? []).length,
     devices_total: (cfg.devices ?? []).length,
     devices_connected: connected,
-    system_errors: (errs.errors ?? []).map((e: any) => e.message ?? e),
+    system_errors: (errs.errors ?? []).map((e) => typeof e === "string" ? e : e.message ?? e),
   });
 });
 
 server.registerTool("syncthing_folders", {
   description:
-    "Stato per-folder: label, path, tipo (sendreceive/receiveencrypted), stato, file da sincronizzare, errori.",
+    "Per-folder status: label, path, type (sendreceive/receiveencrypted), paused flag, state, files and deletes still to sync, pull errors.",
   inputSchema: {},
 }, async () => {
-  const cfg = await st("/rest/config");
+  const cfg = await st<StConfig>("/rest/config");
   const rows = [];
   for (const f of cfg.folders ?? []) {
-    let s: any = {};
+    let s: StDbStatus = {};
     try {
-      s = await st(`/rest/db/status?folder=${encodeURIComponent(f.id)}`);
+      s = await st<StDbStatus>(`/rest/db/status?folder=${encodeURIComponent(f.id)}`);
     } catch { /* */ }
     rows.push({
       label: f.label || f.id,
@@ -119,10 +159,10 @@ server.registerTool("syncthing_folders", {
 
 server.registerTool("syncthing_conflicts", {
   description:
-    "Cerca file di conflitto Syncthing (*.sync-conflict-*) nelle cartelle sincronizzate. Vanno risolti/rimossi.",
+    "Finds Syncthing conflict files (*.sync-conflict-*) in the synced folders; each one needs to be resolved or removed.",
   inputSchema: {},
 }, async () => {
-  const cfg = await st("/rest/config");
+  const cfg = await st<StConfig>("/rest/config");
   const found: string[] = [];
   for (const f of cfg.folders ?? []) {
     for await (
@@ -133,10 +173,10 @@ server.registerTool("syncthing_conflicts", {
       )
     ) found.push(e);
   }
-  return txt(found.length ? { count: found.length, files: found } : "Nessun file *.sync-conflict-* trovato. ✓");
+  return txt(found.length ? { count: found.length, files: found } : "No *.sync-conflict-* files found. ✓");
 });
 
-// Enumera i file tracciati da git (read-only). Vuoto se non-repo o errore.
+/** Files tracked by git in `repoAbs` (read-only `git ls-files`). Empty when it is not a repository or git fails. */
 async function gitTracked(repoAbs: string): Promise<string[]> {
   try {
     const cmd = new Deno.Command("git", { args: ["-C", repoAbs, "ls-files", "-z"], stdout: "piped", stderr: "null" });
@@ -150,18 +190,18 @@ async function gitTracked(repoAbs: string): Promise<string[]> {
 
 server.registerTool("syncthing_git_guard", {
   description:
-    "REGOLA CRITICA (v2): per ogni repo git dentro un folder 'sendreceive' verifica cosa Syncthing sincronizza DAVVERO. Domanda giusta: '.git e i file tracciati vengono sincronizzati?' (non 'la cartella-repo è esclusa?'). .git sincronizzato => corruzione del repo (CRITICAL). File tracciati sincronizzati => drift del working-tree (WARN). Solo gitignorato-prezioso sincronizzato => partizione corretta (OK).",
+    "For every git repository inside a 'sendreceive' folder, checks what Syncthing actually syncs, using the folder's expanded ignore patterns: whether .git and the git-tracked files are synced, not merely whether the repository folder is excluded. A synced .git is CRITICAL (repository corruption risk); synced tracked files are WARN (working-tree drift); only valuable gitignored files synced is OK (correct partition).",
   inputSchema: {},
 }, async () => {
-  const cfg = await st("/rest/config");
-  const report: any[] = [];
-  const CAP = 5000; // tetto di file tracciati ispezionati per repo
+  const cfg = await st<StConfig>("/rest/config");
+  const report: GitReportRow[] = [];
+  const CAP = 5000; // cap on tracked files inspected per repository
   for (const f of cfg.folders ?? []) {
     if (f.type !== "sendreceive") continue;
     let pats: string[] = [];
-    // .expanded, non .ignore: le righe grezze sono solo `#include .stignore-common` (vedi ignore.ts)
+    // Use `.expanded`, not `.ignore`: the raw lines are only `#include .stignore-common` (see ignore.ts).
     try {
-      pats = (await st(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).expanded ?? [];
+      pats = (await st<{ expanded?: string[] }>(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).expanded ?? [];
     } catch { /* */ }
     const compiled = pats.map(compilePattern).filter((c): c is Compiled => c !== null);
     for await (
@@ -175,26 +215,24 @@ server.registerTool("syncthing_git_guard", {
       const base = repoAbs.slice(f.path.length).replace(/^\/+/, "");
       const join = (sub: string) => (base ? `${base}/${sub}` : sub);
       const gitDirSynced = !isIgnored(join(".git"), compiled);
-      // se .git è già esposto è già CRITICAL: niente enumerazione tracciati
+      // A synced .git is already CRITICAL: skip enumerating tracked files.
       const tracked = gitDirSynced ? [] : await gitTracked(repoAbs);
       const sample = tracked.slice(0, CAP);
       let exposed = 0;
       for (const t of sample) if (!isIgnored(join(t), compiled)) exposed++;
       const truncated = tracked.length > CAP;
       const risk = gitDirSynced
-        ? "🔴 CRITICAL — .git sincronizzato (rischio corruzione repo)"
+        ? "🔴 CRITICAL — .git synced (repository corruption risk)"
         : exposed > 0
-        ? `🟡 WARN — ${exposed}${
-          truncated ? "+" : ""
-        }/${tracked.length} file tracciati sincronizzati (drift working-tree)`
-        : "🟢 OK — partizione corretta (solo gitignorato-prezioso sincronizzato)";
+        ? `🟡 WARN — ${exposed}${truncated ? "+" : ""}/${tracked.length} tracked files synced (working-tree drift)`
+        : "🟢 OK — correct partition (only valuable gitignored files synced)";
       report.push({
         folder: f.label || f.id,
         repo: base || "(root)",
         gitDirSynced,
         trackedExposed: exposed,
         trackedTotal: tracked.length,
-        ...(truncated ? { note: `ispezionati i primi ${CAP} file tracciati` } : {}),
+        ...(truncated ? { note: `inspected the first ${CAP} tracked files` } : {}),
         risk,
       });
     }
@@ -206,7 +244,7 @@ server.registerTool("syncthing_git_guard", {
     critical,
     warn,
     ok: report.length - critical - warn,
-    repos: report.length ? report : "Nessuna repo git dentro folder sendreceive.",
+    repos: report.length ? report : "No git repository inside a sendreceive folder.",
   });
 });
 

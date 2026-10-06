@@ -1,22 +1,22 @@
 #!/usr/bin/env -S deno run --allow-net --allow-read --allow-env --allow-run=/usr/bin/secret-tool
-// coolify — MCP server sulle istanze Coolify (accounts.json, servizio "coolify"; oggi: ark, ovh).
+// coolify — MCP server for Coolify instances (accounts.json, service "coolify").
 //
-// Copre il ciclo di vita intero di quello che gira su Coolify: vedere (risorse, dettagli, log,
-// storico dei deploy, variabili, backup), creare (progetti, ambienti, applicazioni da git o da
-// immagine, service da compose, database), cambiare (configurazione, domini, variabili), far
-// girare (deploy, avvio, stop, riavvio, task programmati) e tenere in ordine (backup dei
-// database, pulizia di Docker sul server). Le chiamate seguono l'OpenAPI di Coolify 4.
+// Covers the whole lifecycle of what runs on Coolify: inspect (resources, details, logs, deploy
+// history, environment variables, backups), create (projects, environments, applications from git
+// or from an image, compose services, databases), change (configuration, domains, variables), run
+// (deploy, start, stop, restart, scheduled tasks) and maintain (database backups, Docker cleanup
+// on the server). Calls follow the Coolify 4 OpenAPI.
 //
-// **Non espone nessuna cancellazione, ed è una scelta.** Un `DELETE` via API costa un tool call.
-// Distruggere risorse resta un gesto da fare a mano, guardando cosa si sta facendo.
+// No deletion is exposed, on purpose: destroying a resource is left to a manual action taken in
+// Coolify itself.
 //
-// **Nessun segreto passa di qui, in nessuna direzione.** Le risposte sono mascherate (lib/mask.ts:
-// campi, log, compose); una variabile dal nome riservato o un indirizzo con credenziali vengono
-// rifiutati in scrittura; un database creato restituisce solo il suo uuid (Coolify risponde con la
-// password in chiaro); delle chiavi SSH si vede il nome, mai il contenuto.
+// No secret travels through this server, in either direction. Responses are masked (lib/mask.ts:
+// fields, logs, compose files); a variable with a reserved name or an address with embedded
+// credentials is rejected on write; a created database returns only its uuid (Coolify answers with
+// the clear-text password); for SSH keys only the name is shown, never the content.
 //
-// Account e token: shared/mcp/lib (accounts.json + vault). Ogni tool prende `account`,
-// obbligatorio solo quando il profilo ne vede più d'uno. Il token non passa mai da un tool.
+// Accounts and tokens: shared/mcp/lib (accounts.json + vault). Every tool takes `account`, required
+// only when the profile sees more than one instance. The token never goes through a tool.
 import { McpServer } from "npm:@modelcontextprotocol/sdk@^1.18/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.18/server/stdio.js";
 import { z } from "npm:zod@^3.23";
@@ -25,6 +25,11 @@ import { service, text as txt } from "../lib/service.ts";
 
 const coolify = service("coolify");
 
+/**
+ * Calls the Coolify REST API (`/api/v1` + `path`) with the account's token.
+ * Returns the parsed JSON body, or the raw text when the body is not JSON.
+ * Throws on a non-2xx status, with the path (query stripped) and the masked start of the body.
+ */
 async function api(account: string | undefined, path: string, init?: RequestInit): Promise<unknown> {
   const { account: a, secret } = await coolify.use(account);
   const r = await fetch(`${a.url}/api/v1${path}`, {
@@ -34,12 +39,12 @@ async function api(account: string | undefined, path: string, init?: RequestInit
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
     },
   });
-  const testo = await r.text();
-  if (!r.ok) throw new Error(`${path.split("?")[0]} → HTTP ${r.status}: ${maskText(testo.slice(0, 400))}`);
+  const body = await r.text();
+  if (!r.ok) throw new Error(`${path.split("?")[0]} → HTTP ${r.status}: ${maskText(body.slice(0, 400))}`);
   try {
-    return JSON.parse(testo);
+    return JSON.parse(body);
   } catch {
-    return testo;
+    return body;
   }
 }
 const post = (account: string | undefined, path: string, body?: unknown) =>
@@ -47,132 +52,140 @@ const post = (account: string | undefined, path: string, body?: unknown) =>
 const patch = (account: string | undefined, path: string, body: unknown) =>
   api(account, path, { method: "PATCH", body: JSON.stringify(body) });
 
-// deno-lint-ignore no-explicit-any -- le risposte di Coolify non hanno uno schema stabile tra versioni
-type Qualunque = any;
-type Tipo = "applicazione" | "service" | "database";
-const PERCORSO: Record<Tipo, string> = { applicazione: "/applications", service: "/services", database: "/databases" };
+// deno-lint-ignore no-explicit-any -- Coolify responses have no schema that is stable across versions
+type Loose = any;
+type Kind = "application" | "service" | "database";
+const API_PATH: Record<Kind, string> = { application: "/applications", service: "/services", database: "/databases" };
 
-/** Risolve una risorsa da uuid o da nome, perché a memoria si tiene il nome. */
-async function trova(account: string | undefined, percorso: string, cosa: string, rif: string): Promise<Qualunque> {
-  const tutte = await api(account, percorso) as Qualunque[];
-  const per = tutte.find((a) => a.uuid === rif) ??
-    tutte.find((a) => String(a.name ?? "").toLowerCase() === rif.toLowerCase()) ??
-    tutte.find((a) => String(a.name ?? "").toLowerCase().includes(rif.toLowerCase()));
-  if (!per) {
-    const nomi = tutte.map((a) => `${a.name} (${a.uuid})`).join(", ") || "nessuna";
-    throw new Error(`nessun ${cosa} per "${rif}". Ci sono: ${nomi}`);
+/**
+ * Resolves a resource in the list at `listPath` by uuid, then exact name, then name substring
+ * (case-insensitive). `what` names the resource type in the error, which lists the candidates.
+ */
+async function find(account: string | undefined, listPath: string, what: string, ref: string): Promise<Loose> {
+  const all = await api(account, listPath) as Loose[];
+  const match = all.find((a) => a.uuid === ref) ??
+    all.find((a) => String(a.name ?? "").toLowerCase() === ref.toLowerCase()) ??
+    all.find((a) => String(a.name ?? "").toLowerCase().includes(ref.toLowerCase()));
+  if (!match) {
+    const names = all.map((a) => `${a.name} (${a.uuid})`).join(", ") || "none";
+    throw new Error(`no ${what} matches "${ref}". Available: ${names}`);
   }
-  return per;
+  return match;
 }
-const trovaApp = (account: string | undefined, rif: string) => trova(account, "/applications", "applicazione", rif);
-const trovaDi = (account: string | undefined, tipo: Tipo, rif: string) => trova(account, PERCORSO[tipo], tipo, rif);
+const findApp = (account: string | undefined, ref: string) => find(account, "/applications", "application", ref);
+const findOfKind = (account: string | undefined, kind: Kind, ref: string) => find(account, API_PATH[kind], kind, ref);
 
-/** Il server dove creare: l'unico dell'istanza, finché ce n'è uno solo. */
-async function unicoServer(account: string | undefined): Promise<Qualunque> {
-  const servers = await api(account, "/servers") as Qualunque[];
-  if (servers.length !== 1) throw new Error(`il server va scelto: ce ne sono ${servers.length}`);
+/** The server to create resources on: the instance's only one. Throws when there is not exactly one. */
+async function soleServer(account: string | undefined): Promise<Loose> {
+  const servers = await api(account, "/servers") as Loose[];
+  if (servers.length !== 1) throw new Error(`the server must be chosen: the instance has ${servers.length}`);
   return servers[0];
 }
 
-/** Progetto e ambiente per nome o uuid, con l'uuid dell'ambiente che le creazioni vogliono. */
-async function dove(account: string | undefined, progetto: string, ambiente = "production") {
-  const p = await trova(account, "/projects", "progetto", progetto);
-  const envs = await api(account, `/projects/${p.uuid}/environments`) as Qualunque[];
-  const e = envs.find((x) => x.uuid === ambiente || String(x.name).toLowerCase() === ambiente.toLowerCase());
-  if (!e) throw new Error(`nessun ambiente "${ambiente}" in ${p.name}. Ci sono: ${envs.map((x) => x.name).join(", ")}`);
-  return { project_uuid: p.uuid, environment_name: e.name, environment_uuid: e.uuid, progetto: p.name };
+/**
+ * Resolves a project and one of its environments (by name or uuid) to the identifiers that the
+ * create endpoints require.
+ */
+async function locate(account: string | undefined, project: string, environment = "production") {
+  const p = await find(account, "/projects", "project", project);
+  const envs = await api(account, `/projects/${p.uuid}/environments`) as Loose[];
+  const e = envs.find((x) => x.uuid === environment || String(x.name).toLowerCase() === environment.toLowerCase());
+  if (!e) {
+    throw new Error(`no environment "${environment}" in ${p.name}. Available: ${envs.map((x) => x.name).join(", ")}`);
+  }
+  return { project_uuid: p.uuid, environment_name: e.name, environment_uuid: e.uuid, project: p.name };
 }
 
-/** Un valore da scrivere che non deve essere un segreto. */
-function nonSegreto(chiave: string, valore: string) {
-  if (SECRET_NAME.test(chiave) || CREDENTIALS_IN_URL.test(valore)) {
+/** Throws when a key/value pair to be written looks like a secret (reserved name or credentials in a URL). */
+function assertNotSecret(key: string, value: string) {
+  if (SECRET_NAME.test(key) || CREDENTIALS_IN_URL.test(value)) {
     throw new Error(
-      `"${chiave}" sembra un segreto: mettilo dal pannello di Coolify. Un valore riservato passato di qui finisce nel contesto della conversazione.`,
+      `"${key}" looks like a secret: set it from the Coolify panel. A secret passed through here ends up in the conversation context.`,
     );
   }
 }
 
 const server = new McpServer({ name: "coolify", version: "0.4.0" });
 const account = coolify.accountArg;
-const tipo = z.enum(["applicazione", "service", "database"]);
-const LEGGE = { readOnlyHint: true, openWorldHint: true };
-const CAMBIA = { readOnlyHint: false, destructiveHint: false, openWorldHint: true };
+const kindArg = z.enum(["application", "service", "database"]);
+const READS = { readOnlyHint: true, openWorldHint: true };
+const CHANGES = { readOnlyHint: false, destructiveHint: false, openWorldHint: true };
 
-// ============================================================ vedere
+// ============================================================ inspect
 
-server.registerTool("coolify_risorse", {
+server.registerTool("coolify_resources", {
   description:
-    "Panoramica di cosa gira su Coolify: server, progetti, applicazioni (con dominio e stato), service (i compose a più container: Forgejo, n8n, Foundry…) e database gestiti. Il primo tool da chiamare quando non si sa cosa c'è.",
+    "Overview of what runs on Coolify: servers, projects, applications (with domain and status), services (multi-container compose stacks) and managed databases. The starting point when the contents of an instance are unknown.",
   inputSchema: { account },
-  annotations: LEGGE,
+  annotations: READS,
 }, async ({ account }: { account?: string }) => {
-  const [servers, progetti, apps, services, db] = await Promise.all([
+  const [servers, projects, apps, services, db] = await Promise.all([
     api(account, "/servers"),
     api(account, "/projects"),
     api(account, "/applications"),
     api(account, "/services"),
     api(account, "/databases"),
-  ]) as Qualunque[][];
+  ]) as Loose[][];
   return txt({
-    server: servers.map((s) => ({ uuid: s.uuid, nome: s.name, ip: s.ip, raggiungibile: s.is_reachable })),
-    progetti: progetti.map((p) => ({ uuid: p.uuid, nome: p.name })),
-    applicazioni: apps.map((a) => ({
+    servers: servers.map((s) => ({ uuid: s.uuid, name: s.name, ip: s.ip, reachable: s.is_reachable })),
+    projects: projects.map((p) => ({ uuid: p.uuid, name: p.name })),
+    applications: apps.map((a) => ({
       uuid: a.uuid,
-      nome: a.name,
-      dominio: a.fqdn ?? null,
-      stato: a.status,
-      ramo: a.git_branch,
-      tipo: a.build_pack,
+      name: a.name,
+      domain: a.fqdn ?? null,
+      status: a.status,
+      branch: a.git_branch,
+      build_pack: a.build_pack,
     })),
-    service: services.map((v) => ({ uuid: v.uuid, nome: v.name, stato: v.status })),
-    database: db.map((d) => ({ uuid: d.uuid, nome: d.name, tipo: d.database_type, stato: d.status })),
+    services: services.map((v) => ({ uuid: v.uuid, name: v.name, status: v.status })),
+    databases: db.map((d) => ({ uuid: d.uuid, name: d.name, engine: d.database_type, status: d.status })),
   });
 });
 
-server.registerTool("coolify_versione", {
-  description: "Versione dell'istanza Coolify e se risponde: utile prima di usare funzioni recenti.",
+server.registerTool("coolify_version", {
+  description: "Returns the Coolify instance version and its health-check response.",
   inputSchema: { account },
-  annotations: LEGGE,
+  annotations: READS,
 }, async ({ account }: { account?: string }) => {
-  const [versione, salute] = await Promise.all([
+  const [version, health] = await Promise.all([
     api(account, "/version"),
     api(account, "/health").catch((e) => (e as Error).message),
   ]);
-  return txt({ versione, salute });
+  return txt({ version, health });
 });
 
-server.registerTool("coolify_dettaglio", {
+server.registerTool("coolify_detail", {
   description:
-    "Dettaglio di una risorsa per uuid o nome: applicazione (sorgente git, build, domini, salute, limiti), service (compose, container, domini), " +
-    "database (immagine, porte, backup), server (risorse che ci girano, domini), progetto (ambienti e cosa contiene ciascuno). I valori riservati sono mascherati.",
+    "Returns the detail of one resource, by uuid or name: application (git source, build, domains, health check, limits), service (compose, containers, domains), " +
+    "database (image, ports, backups), server (resources running on it, domains) or project (environments and their contents). Secret values are masked.",
   inputSchema: {
     account,
-    tipo: z.enum(["applicazione", "service", "database", "server", "progetto"]),
-    rif: z.string().describe("uuid o nome"),
+    kind: z.enum(["application", "service", "database", "server", "project"]),
+    ref: z.string().describe("uuid or name"),
   },
-  annotations: LEGGE,
-}, async ({ account, tipo, rif }: { account?: string; tipo: Tipo | "server" | "progetto"; rif: string }) => {
-  if (tipo === "applicazione") {
-    const a = await api(account, `/applications/${(await trovaApp(account, rif)).uuid}`) as Qualunque;
+  annotations: READS,
+}, async ({ account, kind, ref }: { account?: string; kind: Kind | "server" | "project"; ref: string }) => {
+  if (kind === "application") {
+    const a = await api(account, `/applications/${(await findApp(account, ref)).uuid}`) as Loose;
     return txt(maskDeep({
       uuid: a.uuid,
-      nome: a.name,
-      descrizione: a.description,
-      stato: a.status,
-      dominio: a.fqdn,
-      domini_compose: a.docker_compose_domains,
+      name: a.name,
+      description: a.description,
+      status: a.status,
+      domain: a.fqdn,
+      compose_domains: a.docker_compose_domains,
       git: {
         repository: a.git_repository,
-        ramo: a.git_branch,
+        branch: a.git_branch,
         commit: a.git_commit_sha,
         auto_deploy: a.is_auto_deploy_enabled,
       },
       build: {
-        tipo: a.build_pack,
+        build_pack: a.build_pack,
         base_directory: a.base_directory,
         dockerfile: a.dockerfile_location,
         compose: a.docker_compose_location,
-        immagine: a.docker_registry_image_name
+        image: a.docker_registry_image_name
           ? `${a.docker_registry_image_name}:${a.docker_registry_image_tag ?? "latest"}`
           : null,
         install: a.install_command,
@@ -180,472 +193,480 @@ server.registerTool("coolify_dettaglio", {
         start: a.start_command,
         watch_paths: a.watch_paths,
       },
-      porte: { esposte: a.ports_exposes, mappate: a.ports_mappings },
-      salute: { attiva: a.health_check_enabled, percorso: a.health_check_path, porta: a.health_check_port },
-      limiti: { memoria: a.limits_memory, cpu: a.limits_cpus },
-      // I secret dei webhook esistono sempre: dire che ci sono basta, mostrarli no.
-      webhook_configurati: Object.keys(a).filter((k) => k.startsWith("manual_webhook_secret_") && a[k]),
+      ports: { exposed: a.ports_exposes, mapped: a.ports_mappings },
+      health: { enabled: a.health_check_enabled, path: a.health_check_path, port: a.health_check_port },
+      limits: { memory: a.limits_memory, cpu: a.limits_cpus },
+      // Webhook secrets are always present: only the fact that they are configured is reported.
+      webhooks_configured: Object.keys(a).filter((k) => k.startsWith("manual_webhook_secret_") && a[k]),
     }));
   }
-  if (tipo === "service") {
-    const s = await api(account, `/services/${(await trovaDi(account, "service", rif)).uuid}`) as Qualunque;
+  if (kind === "service") {
+    const s = await api(account, `/services/${(await findOfKind(account, "service", ref)).uuid}`) as Loose;
     return txt({
       uuid: s.uuid,
-      nome: s.name,
-      descrizione: s.description,
-      stato: s.status,
-      container: [...(s.applications ?? []), ...(s.databases ?? [])].map((c: Qualunque) => ({
+      name: s.name,
+      description: s.description,
+      status: s.status,
+      containers: [...(s.applications ?? []), ...(s.databases ?? [])].map((c: Loose) => ({
         uuid: c.uuid,
-        nome: c.name,
-        stato: c.status,
-        dominio: c.fqdn ?? null,
-        immagine: c.image,
+        name: c.name,
+        status: c.status,
+        domain: c.fqdn ?? null,
+        image: c.image,
       })),
       compose: s.docker_compose_raw ? maskText(s.docker_compose_raw) : null,
     });
   }
-  if (tipo === "database") {
-    const d = await api(account, `/databases/${(await trovaDi(account, "database", rif)).uuid}`) as Qualunque;
-    const backup = await api(account, `/databases/${d.uuid}/backups`).catch(() => []) as Qualunque[];
+  if (kind === "database") {
+    const d = await api(account, `/databases/${(await findOfKind(account, "database", ref)).uuid}`) as Loose;
+    const backups = await api(account, `/databases/${d.uuid}/backups`).catch(() => []) as Loose[];
     return txt(maskDeep({
       uuid: d.uuid,
-      nome: d.name,
-      tipo: d.database_type,
-      stato: d.status,
-      immagine: d.image,
-      pubblico: d.is_public,
-      porta_pubblica: d.public_port,
-      limiti: { memoria: d.limits_memory, cpu: d.limits_cpus },
-      indirizzo_interno: d.internal_db_url ? maskText(d.internal_db_url) : null,
-      backup: backup.map((b) => ({ uuid: b.uuid, frequenza: b.frequency, attivo: b.enabled, s3: b.save_s3 })),
+      name: d.name,
+      engine: d.database_type,
+      status: d.status,
+      image: d.image,
+      public: d.is_public,
+      public_port: d.public_port,
+      limits: { memory: d.limits_memory, cpu: d.limits_cpus },
+      internal_url: d.internal_db_url ? maskText(d.internal_db_url) : null,
+      backups: backups.map((b) => ({ uuid: b.uuid, schedule: b.frequency, enabled: b.enabled, s3: b.save_s3 })),
     }));
   }
-  if (tipo === "server") {
-    const s = await trova(account, "/servers", "server", rif);
-    const [risorse, domini] = await Promise.all([
+  if (kind === "server") {
+    const s = await find(account, "/servers", "server", ref);
+    const [resources, domains] = await Promise.all([
       api(account, `/servers/${s.uuid}/resources`).catch(() => []),
       api(account, `/servers/${s.uuid}/domains`).catch(() => []),
-    ]) as Qualunque[][];
+    ]) as Loose[][];
     return txt({
       uuid: s.uuid,
-      nome: s.name,
+      name: s.name,
       ip: s.ip,
-      raggiungibile: s.is_reachable,
-      utilizzabile: s.is_usable,
+      reachable: s.is_reachable,
+      usable: s.is_usable,
       proxy: s.proxy?.type ?? s.proxy_type,
-      risorse: risorse.map((r) => ({ uuid: r.uuid, nome: r.name, tipo: r.type, stato: r.status })),
-      domini,
+      resources: resources.map((r) => ({ uuid: r.uuid, name: r.name, type: r.type, status: r.status })),
+      domains,
     });
   }
-  const p = await trova(account, "/projects", "progetto", rif);
-  const envs = await api(account, `/projects/${p.uuid}/environments`) as Qualunque[];
-  const dentro = await Promise.all(envs.map(async (e) => {
-    const x = await api(account, `/projects/${p.uuid}/${e.uuid}`).catch(() => ({})) as Qualunque;
-    const nomi = (k: string) => (x[k] ?? []).map((r: Qualunque) => r.name);
+  const p = await find(account, "/projects", "project", ref);
+  const envs = await api(account, `/projects/${p.uuid}/environments`) as Loose[];
+  const contents = await Promise.all(envs.map(async (e) => {
+    const x = await api(account, `/projects/${p.uuid}/${e.uuid}`).catch(() => ({})) as Loose;
+    const names = (k: string) => (x[k] ?? []).map((r: Loose) => r.name);
     return {
-      ambiente: e.name,
+      environment: e.name,
       uuid: e.uuid,
-      applicazioni: nomi("applications"),
-      service: nomi("services"),
-      database: [...nomi("postgresqls"), ...nomi("redis"), ...nomi("mysqls"), ...nomi("mariadbs"), ...nomi("mongodbs")],
+      applications: names("applications"),
+      services: names("services"),
+      databases: [
+        ...names("postgresqls"),
+        ...names("redis"),
+        ...names("mysqls"),
+        ...names("mariadbs"),
+        ...names("mongodbs"),
+      ],
     };
   }));
-  return txt({ uuid: p.uuid, nome: p.name, descrizione: p.description, ambienti: dentro });
+  return txt({ uuid: p.uuid, name: p.name, description: p.description, environments: contents });
 });
 
 server.registerTool(
-  "coolify_log",
+  "coolify_logs",
   {
     description:
-      "Le ultime righe di log dei container: di un'applicazione, di un service (tutti i container, o uno con `container`) o di un database. " +
-      "Il posto dove guardare quando qualcosa gira ma non funziona. I valori riservati nelle righe sono mascherati.",
+      "Returns the last log lines of an application, a service (all containers, or one given by `container`) or a database. " +
+      "Secret values in the lines are masked.",
     inputSchema: {
       account,
-      tipo,
-      rif: z.string().describe("uuid o nome"),
-      righe: z.number().int().min(1).max(1000).optional().describe("default 100"),
-      container: z.string().optional().describe("per un service: il nome del servizio nel compose"),
+      kind: kindArg,
+      ref: z.string().describe("uuid or name"),
+      lines: z.number().int().min(1).max(1000).optional().describe("default 100"),
+      container: z.string().optional().describe("for a service: the service name in the compose file"),
     },
-    annotations: LEGGE,
+    annotations: READS,
   },
   async (
-    { account, tipo, rif, righe, container }: {
+    { account, kind, ref, lines, container }: {
       account?: string;
-      tipo: Tipo;
-      rif: string;
-      righe?: number;
+      kind: Kind;
+      ref: string;
+      lines?: number;
       container?: string;
     },
   ) => {
-    const r = await trovaDi(account, tipo, rif);
-    const n = righe ?? 100;
-    const leggi = async (sotto?: string) => {
+    const r = await findOfKind(account, kind, ref);
+    const n = lines ?? 100;
+    const read = async (sub?: string) => {
       const q = new URLSearchParams({ lines: String(n) });
-      if (sotto) q.set("sub_service_name", sotto);
-      const l = await api(account, `${PERCORSO[tipo]}/${r.uuid}/logs?${q}`) as Qualunque;
+      if (sub) q.set("sub_service_name", sub);
+      const l = await api(account, `${API_PATH[kind]}/${r.uuid}/logs?${q}`) as Loose;
       return maskText(String(typeof l === "string" ? l : l?.logs ?? JSON.stringify(l))).split("\n").slice(-n);
     };
-    if (tipo !== "service" || container) {
+    if (kind !== "service" || container) {
       return txt({
-        risorsa: r.name,
+        resource: r.name,
         ...(container ? { container } : {}),
-        log: await leggi(container),
+        logs: await read(container),
       });
     }
-    // Coolify vuole il container: senza, si leggono tutti quelli del service, ognuno col suo nome
-    const s = await api(account, `/services/${r.uuid}`) as Qualunque;
-    const nomi = [...(s.applications ?? []), ...(s.databases ?? [])].map((c: Qualunque) => c.name as string);
-    const log = Object.fromEntries(
-      await Promise.all(nomi.map(async (c) => [c, await leggi(c).catch((e) => [(e as Error).message])])),
+    // Coolify requires a container name: without one, every container of the service is read, keyed by name.
+    const s = await api(account, `/services/${r.uuid}`) as Loose;
+    const names = [...(s.applications ?? []), ...(s.databases ?? [])].map((c: Loose) => c.name as string);
+    const logs = Object.fromEntries(
+      await Promise.all(names.map(async (c) => [c, await read(c).catch((e) => [(e as Error).message])])),
     );
-    return txt({ risorsa: r.name, log });
+    return txt({ resource: r.name, logs });
   },
 );
 
-server.registerTool("coolify_variabili", {
+server.registerTool("coolify_env_vars", {
   description:
-    "Variabili d'ambiente di un'applicazione, un service o un database. I valori che sembrano riservati sono mascherati.",
+    "Lists the environment variables of an application, a service or a database. Values that look secret are masked.",
   inputSchema: {
     account,
-    tipo: tipo.optional().describe("default applicazione"),
-    rif: z.string().describe("uuid o nome"),
+    kind: kindArg.optional().describe("default application"),
+    ref: z.string().describe("uuid or name"),
   },
-  annotations: LEGGE,
-}, async ({ account, tipo, rif }: { account?: string; tipo?: Tipo; rif: string }) => {
-  const t = tipo ?? "applicazione";
-  const r = await trovaDi(account, t, rif);
-  const envs = await api(account, `${PERCORSO[t]}/${r.uuid}/envs`) as Qualunque[];
+  annotations: READS,
+}, async ({ account, kind, ref }: { account?: string; kind?: Kind; ref: string }) => {
+  const k = kind ?? "application";
+  const r = await findOfKind(account, k, ref);
+  const envs = await api(account, `${API_PATH[k]}/${r.uuid}/envs`) as Loose[];
   return txt(
     envs
-      .filter((e) => !e.is_preview) // le copie di anteprima le crea Coolify da sé: rumore
+      .filter((e) => !e.is_preview) // preview copies are generated by Coolify itself: noise
       .map((e) => ({
-        chiave: e.key,
-        valore: e.is_shown_once ? HIDDEN : mask(e.key, e.value),
+        key: e.key,
+        value: e.is_shown_once ? HIDDEN : mask(e.key, e.value),
         ...(e.is_build_time ? { build: true } : {}),
       })),
   );
 });
 
-server.registerTool("coolify_deploy_storico", {
+server.registerTool("coolify_deploy_history", {
   description:
-    "Gli ultimi deploy di un'applicazione: quando, con che commit, com'è finito. Per i log di uno, coolify_deploy_stato.",
+    "Lists the latest deployments of an application: time, commit and outcome. For the logs of one deployment, use coolify_deploy_status.",
   inputSchema: {
     account,
-    applicazione: z.string().describe("uuid o nome"),
-    quanti: z.number().int().min(1).max(50).optional(),
+    application: z.string().describe("uuid or name"),
+    limit: z.number().int().min(1).max(50).optional().describe("default 10"),
   },
-  annotations: LEGGE,
-}, async ({ account, applicazione, quanti }: { account?: string; applicazione: string; quanti?: number }) => {
-  const a = await trovaApp(account, applicazione);
-  const r = await api(account, `/deployments/applications/${a.uuid}?take=${quanti ?? 10}`) as Qualunque;
-  const lista = (Array.isArray(r) ? r : r?.deployments ?? []) as Qualunque[];
+  annotations: READS,
+}, async ({ account, application, limit }: { account?: string; application: string; limit?: number }) => {
+  const a = await findApp(account, application);
+  const r = await api(account, `/deployments/applications/${a.uuid}?take=${limit ?? 10}`) as Loose;
+  const list = (Array.isArray(r) ? r : r?.deployments ?? []) as Loose[];
   return txt(
-    lista.map((d) => ({
+    list.map((d) => ({
       deployment: d.deployment_uuid,
-      stato: d.status,
+      status: d.status,
       commit: d.commit?.slice?.(0, 10) ?? null,
-      messaggio: d.commit_message ?? null,
-      inizio: d.created_at,
-      fine: d.updated_at,
+      message: d.commit_message ?? null,
+      started: d.created_at,
+      finished: d.updated_at,
     })),
   );
 });
 
-server.registerTool("coolify_deploy_stato", {
+server.registerTool("coolify_deploy_status", {
   description:
-    "Stato di un deploy. A deploy fallito restituisce la coda dei log, che è dove sta il motivo vero — Coolify li annida in JSON dentro JSON.",
+    "Returns the status of a deployment. When the deployment has finished, also returns the tail of its logs (Coolify nests them as JSON inside JSON), which is where a failure reason is found.",
   inputSchema: {
     account,
-    deployment: z.string().describe("identificativo restituito da coolify_deploy"),
-    righe: z.number().optional().describe("quante righe di log (default 25, solo se finito)"),
+    deployment: z.string().describe("identifier returned by coolify_deploy"),
+    lines: z.number().optional().describe("number of log lines (default 25, only once finished)"),
   },
-  annotations: LEGGE,
-}, async ({ account, deployment, righe }: { account?: string; deployment: string; righe?: number }) => {
-  const d = await api(account, `/deployments/${deployment}`) as Qualunque;
-  const stato = d?.status;
-  const risultato: Record<string, unknown> = { stato, applicazione: d?.application_name };
-  if (stato !== "in_progress" && stato !== "queued") {
+  annotations: READS,
+}, async ({ account, deployment, lines }: { account?: string; deployment: string; lines?: number }) => {
+  const d = await api(account, `/deployments/${deployment}`) as Loose;
+  const status = d?.status;
+  const result: Record<string, unknown> = { status, application: d?.application_name };
+  if (status !== "in_progress" && status !== "queued") {
     try {
-      const voci = JSON.parse(d?.logs ?? "[]") as Qualunque[];
-      risultato.log = voci.map((v) => v.output).filter(Boolean).slice(-(righe ?? 25)).map((l: string) => maskText(l));
+      const entries = JSON.parse(d?.logs ?? "[]") as Loose[];
+      result.logs = entries.map((v) => v.output).filter(Boolean).slice(-(lines ?? 25)).map((l: string) => maskText(l));
     } catch {
-      risultato.log = "log non leggibili";
+      result.logs = "logs not readable";
     }
   }
-  return txt(risultato);
+  return txt(result);
 });
 
-server.registerTool("coolify_chiavi", {
+server.registerTool("coolify_keys", {
   description:
-    "Le chiavi SSH private salvate in Coolify, per nome e uuid (mai il contenuto): servono per creare un'applicazione da un repository privato con deploy key.",
+    "Lists the private SSH keys stored in Coolify, by name and uuid (never the content). Used to create an application from a private repository with a deploy key.",
   inputSchema: { account },
-  annotations: LEGGE,
+  annotations: READS,
 }, async ({ account }: { account?: string }) => {
-  const k = await api(account, "/security/keys") as Qualunque[];
+  const k = await api(account, "/security/keys") as Loose[];
   return txt(
-    k.map((x) => ({ uuid: x.uuid, nome: x.name, descrizione: x.description ?? null, git: x.is_git_related ?? null })),
+    k.map((x) => ({ uuid: x.uuid, name: x.name, description: x.description ?? null, git: x.is_git_related ?? null })),
   );
 });
 
-// ============================================================ creare
+// ============================================================ create
 
-server.registerTool("coolify_crea_progetto", {
+server.registerTool("coolify_create_project", {
   description:
-    "Crea un progetto. Coolify gli crea da sé l'ambiente «production». Se un progetto con lo stesso nome c'è già, restituisce quello invece di farne un doppione.",
-  inputSchema: { account, nome: z.string(), descrizione: z.string().optional() },
-  annotations: CAMBIA,
-}, async ({ account, nome, descrizione }: { account?: string; nome: string; descrizione?: string }) => {
-  const progetti = await api(account, "/projects") as Qualunque[];
-  const gia = progetti.find((p) => String(p.name).toLowerCase() === nome.toLowerCase());
-  if (gia) return txt({ progetto: gia.uuid, nome: gia.name, creato: false });
+    'Creates a project; Coolify creates its "production" environment itself. When a project with the same name already exists, returns it instead of creating a duplicate.',
+  inputSchema: { account, name: z.string(), description: z.string().optional() },
+  annotations: CHANGES,
+}, async ({ account, name, description }: { account?: string; name: string; description?: string }) => {
+  const projects = await api(account, "/projects") as Loose[];
+  const existing = projects.find((p) => String(p.name).toLowerCase() === name.toLowerCase());
+  if (existing) return txt({ project: existing.uuid, name: existing.name, created: false });
   const r = await post(account, "/projects", {
-    name: nome,
-    ...(descrizione ? { description: descrizione } : {}),
-  }) as Qualunque;
-  return txt({ progetto: r.uuid, nome, creato: true, ambiente: "production" });
+    name,
+    ...(description ? { description } : {}),
+  }) as Loose;
+  return txt({ project: r.uuid, name, created: true, environment: "production" });
 });
 
-server.registerTool("coolify_crea_ambiente", {
-  description: "Aggiunge un ambiente (staging, test…) a un progetto. Se c'è già, lo restituisce.",
-  inputSchema: { account, progetto: z.string().describe("uuid o nome"), nome: z.string() },
-  annotations: CAMBIA,
-}, async ({ account, progetto, nome }: { account?: string; progetto: string; nome: string }) => {
-  const p = await trova(account, "/projects", "progetto", progetto);
-  const envs = await api(account, `/projects/${p.uuid}/environments`) as Qualunque[];
-  const gia = envs.find((e) => String(e.name).toLowerCase() === nome.toLowerCase());
-  if (gia) return txt({ ambiente: gia.uuid, nome: gia.name, creato: false });
-  const r = await post(account, `/projects/${p.uuid}/environments`, { name: nome }) as Qualunque;
-  return txt({ ambiente: r.uuid, nome, progetto: p.name, creato: true });
+server.registerTool("coolify_create_environment", {
+  description: "Adds an environment (staging, test, ...) to a project. When it already exists, returns it.",
+  inputSchema: { account, project: z.string().describe("uuid or name"), name: z.string() },
+  annotations: CHANGES,
+}, async ({ account, project, name }: { account?: string; project: string; name: string }) => {
+  const p = await find(account, "/projects", "project", project);
+  const envs = await api(account, `/projects/${p.uuid}/environments`) as Loose[];
+  const existing = envs.find((e) => String(e.name).toLowerCase() === name.toLowerCase());
+  if (existing) return txt({ environment: existing.uuid, name: existing.name, created: false });
+  const r = await post(account, `/projects/${p.uuid}/environments`, { name }) as Loose;
+  return txt({ environment: r.uuid, name, project: p.name, created: true });
 });
 
-server.registerTool("coolify_crea_applicazione", {
+server.registerTool("coolify_create_application", {
   description:
-    "Crea un'applicazione: da un repository git pubblico, da uno privato con una deploy key salvata in Coolify (coolify_chiavi), o da un'immagine Docker. " +
-    "Il build può essere nixpacks, dockerfile, dockercompose o static. Di default non la avvia: controlla la configurazione, poi coolify_deploy.",
+    "Creates an application from a public git repository, from a private one with a deploy key stored in Coolify (see coolify_keys), or from a Docker image. " +
+    "The build can be nixpacks, railpack, dockerfile, dockercompose or static. It is not started by default: review the configuration, then run coolify_deploy.",
   inputSchema: {
     account,
-    progetto: z.string().describe("uuid o nome"),
-    ambiente: z.string().optional().describe("default production"),
-    nome: z.string(),
-    descrizione: z.string().optional(),
-    sorgente: z.enum(["git_pubblico", "git_chiave", "immagine"]),
+    project: z.string().describe("uuid or name"),
+    environment: z.string().optional().describe("default production"),
+    name: z.string(),
+    description: z.string().optional(),
+    source: z.enum(["git_public", "git_key", "image"]),
     repository: z.string().optional().describe(
-      "per git: https://… (pubblico) o git@host:owner/repo.git / ssh://git@host:porta/owner/repo.git (con chiave)",
+      "for git: https://... (public) or git@host:owner/repo.git / ssh://git@host:port/owner/repo.git (with key)",
     ),
-    ramo: z.string().optional().describe("per git, default main"),
-    chiave: z.string().optional().describe("per git_chiave: uuid o nome della chiave in Coolify"),
+    branch: z.string().optional().describe("for git, default main"),
+    key: z.string().optional().describe("for git_key: uuid or name of the key in Coolify"),
     build: z.enum(["nixpacks", "railpack", "dockerfile", "dockercompose", "static"]).optional().describe(
-      "per git, default nixpacks",
+      "for git, default nixpacks",
     ),
     base_directory: z.string().optional().describe("default /"),
-    dockerfile: z.string().optional().describe("percorso del Dockerfile, default /Dockerfile"),
+    dockerfile: z.string().optional().describe("path of the Dockerfile, default /Dockerfile"),
     compose: z.string().optional().describe(
-      "percorso del compose per build dockercompose, default /docker-compose.yaml",
+      "path of the compose file for a dockercompose build, default /docker-compose.yaml",
     ),
-    immagine: z.string().optional().describe("per immagine: nome, es. ghcr.io/owner/app"),
-    tag: z.string().optional().describe("per immagine, default latest"),
-    porte: z.string().optional().describe("porte esposte dal container, es. 8080"),
-    dominio: z.string().optional().describe("https://… (più domini separati da virgola); non per dockercompose"),
-    domini_compose: z.array(z.object({ servizio: z.string(), dominio: z.string() })).optional().describe(
-      "per dockercompose: dominio di ogni servizio del compose",
+    image: z.string().optional().describe("for image: the image name, e.g. ghcr.io/owner/app"),
+    tag: z.string().optional().describe("for image, default latest"),
+    ports: z.string().optional().describe("ports exposed by the container, e.g. 8080"),
+    domain: z.string().optional().describe(
+      "https://... (several domains separated by commas); not for dockercompose",
     ),
-    avvia: z.boolean().optional(),
+    compose_domains: z.array(z.object({ service: z.string(), domain: z.string() })).optional().describe(
+      "for dockercompose: the domain of each service in the compose file",
+    ),
+    start: z.boolean().optional().describe("deploy right after creation (default no)"),
   },
-  annotations: CAMBIA,
+  annotations: CHANGES,
 }, async (a: {
   account?: string;
-  progetto: string;
-  ambiente?: string;
-  nome: string;
-  descrizione?: string;
-  sorgente: "git_pubblico" | "git_chiave" | "immagine";
+  project: string;
+  environment?: string;
+  name: string;
+  description?: string;
+  source: "git_public" | "git_key" | "image";
   repository?: string;
-  ramo?: string;
-  chiave?: string;
+  branch?: string;
+  key?: string;
   build?: string;
   base_directory?: string;
   dockerfile?: string;
   compose?: string;
-  immagine?: string;
+  image?: string;
   tag?: string;
-  porte?: string;
-  dominio?: string;
-  domini_compose?: { servizio: string; dominio: string }[];
-  avvia?: boolean;
+  ports?: string;
+  domain?: string;
+  compose_domains?: { service: string; domain: string }[];
+  start?: boolean;
 }) => {
   if (a.repository && CREDENTIALS_IN_URL.test(a.repository)) {
-    throw new Error("il repository contiene credenziali: usa una deploy key (sorgente git_chiave)");
+    throw new Error("the repository URL contains credentials: use a deploy key (source git_key)");
   }
-  const w = await dove(a.account, a.progetto, a.ambiente);
-  const s = await unicoServer(a.account);
-  const corpo: Record<string, unknown> = {
+  const w = await locate(a.account, a.project, a.environment);
+  const s = await soleServer(a.account);
+  const body: Record<string, unknown> = {
     project_uuid: w.project_uuid,
     environment_name: w.environment_name,
     environment_uuid: w.environment_uuid,
     server_uuid: s.uuid,
-    name: a.nome,
-    ...(a.descrizione ? { description: a.descrizione } : {}),
-    ...(a.porte ? { ports_exposes: a.porte } : {}),
-    ...(a.dominio ? { domains: a.dominio } : {}),
-    instant_deploy: a.avvia ?? false,
+    name: a.name,
+    ...(a.description ? { description: a.description } : {}),
+    ...(a.ports ? { ports_exposes: a.ports } : {}),
+    ...(a.domain ? { domains: a.domain } : {}),
+    instant_deploy: a.start ?? false,
   };
-  let percorso: string;
-  if (a.sorgente === "immagine") {
-    if (!a.immagine) throw new Error("serve `immagine`");
-    percorso = "/applications/dockerimage";
-    Object.assign(corpo, { docker_registry_image_name: a.immagine, docker_registry_image_tag: a.tag ?? "latest" });
+  let path: string;
+  if (a.source === "image") {
+    if (!a.image) throw new Error("`image` is required");
+    path = "/applications/dockerimage";
+    Object.assign(body, { docker_registry_image_name: a.image, docker_registry_image_tag: a.tag ?? "latest" });
   } else {
-    if (!a.repository) throw new Error("serve `repository`");
-    Object.assign(corpo, {
+    if (!a.repository) throw new Error("`repository` is required");
+    Object.assign(body, {
       git_repository: a.repository,
-      git_branch: a.ramo ?? "main",
+      git_branch: a.branch ?? "main",
       build_pack: a.build ?? "nixpacks",
       ...(a.base_directory ? { base_directory: a.base_directory } : {}),
       ...(a.dockerfile ? { dockerfile_location: a.dockerfile } : {}),
       ...(a.compose ? { docker_compose_location: a.compose } : {}),
-      ...(a.domini_compose?.length
-        ? { docker_compose_domains: a.domini_compose.map((d) => ({ name: d.servizio, domain: d.dominio })) }
+      ...(a.compose_domains?.length
+        ? { docker_compose_domains: a.compose_domains.map((d) => ({ name: d.service, domain: d.domain })) }
         : {}),
     });
-    if (a.sorgente === "git_chiave") {
-      if (!a.chiave) throw new Error("serve `chiave` (coolify_chiavi le elenca)");
-      corpo.private_key_uuid = (await trova(a.account, "/security/keys", "chiave", a.chiave)).uuid;
-      percorso = "/applications/private-deploy-key";
-    } else percorso = "/applications/public";
+    if (a.source === "git_key") {
+      if (!a.key) throw new Error("`key` is required (coolify_keys lists them)");
+      body.private_key_uuid = (await find(a.account, "/security/keys", "key", a.key)).uuid;
+      path = "/applications/private-deploy-key";
+    } else path = "/applications/public";
   }
-  const r = await post(a.account, percorso, corpo) as Qualunque;
+  const r = await post(a.account, path, body) as Loose;
   return txt({
-    applicazione: r.uuid,
-    nome: a.nome,
-    progetto: w.progetto,
-    ambiente: w.environment_name,
-    domini: r.domains ?? a.dominio ?? null,
-    avviata: corpo.instant_deploy,
+    application: r.uuid,
+    name: a.name,
+    project: w.project,
+    environment: w.environment_name,
+    domains: r.domains ?? a.domain ?? null,
+    started: body.instant_deploy,
   });
 });
 
-server.registerTool("coolify_crea_service", {
+server.registerTool("coolify_create_service", {
   description:
-    "Crea un service da un docker compose dentro progetto e ambiente. Di default non lo avvia. I segreti non vanno scritti nel compose: si usano le variabili magiche di Coolify ($SERVICE_PASSWORD_<NOME>, $SERVICE_USER_<NOME>), che le genera lui e non passano di qui.",
+    "Creates a service from a docker compose file inside a project and environment. It is not started by default. Secrets must not be written in the compose file: use Coolify's magic variables ($SERVICE_PASSWORD_<NAME>, $SERVICE_USER_<NAME>), which Coolify generates and which never pass through this server.",
   inputSchema: {
     account,
-    progetto: z.string().describe("uuid o nome del progetto"),
-    ambiente: z.string().optional().describe("nome dell'ambiente (default production)"),
-    nome: z.string(),
-    descrizione: z.string().optional(),
-    compose: z.string().describe("il docker-compose in YAML, in chiaro: la codifica base64 la fa il tool"),
-    domini: z.array(z.object({
-      container: z.string().describe("nome del servizio nel compose"),
-      url: z.string().describe("es. https://git.example.com"),
+    project: z.string().describe("uuid or name of the project"),
+    environment: z.string().optional().describe("environment name (default production)"),
+    name: z.string(),
+    description: z.string().optional(),
+    compose: z.string().describe("the docker-compose file as plain YAML; the tool does the base64 encoding"),
+    domains: z.array(z.object({
+      container: z.string().describe("service name in the compose file"),
+      url: z.string().describe("e.g. https://git.example.com"),
     })).optional(),
-    avvia: z.boolean().optional().describe("avvia subito dopo la creazione (default no)"),
+    start: z.boolean().optional().describe("start right after creation (default no)"),
   },
-  annotations: CAMBIA,
+  annotations: CHANGES,
 }, async (
-  { account, progetto, ambiente, nome, descrizione, compose, domini, avvia }: {
+  { account, project, environment, name, description, compose, domains, start }: {
     account?: string;
-    progetto: string;
-    ambiente?: string;
-    nome: string;
-    descrizione?: string;
+    project: string;
+    environment?: string;
+    name: string;
+    description?: string;
     compose: string;
-    domini?: { container: string; url: string }[];
-    avvia?: boolean;
+    domains?: { container: string; url: string }[];
+    start?: boolean;
   },
 ) => {
   if (CREDENTIALS_IN_URL.test(compose)) {
     throw new Error(
-      "il compose contiene credenziali in un indirizzo: usa le variabili $SERVICE_USER_* / $SERVICE_PASSWORD_*",
+      "the compose file contains credentials in a URL: use the $SERVICE_USER_* / $SERVICE_PASSWORD_* variables",
     );
   }
-  const w = await dove(account, progetto, ambiente);
-  const s = await unicoServer(account);
-  const corpo = {
-    name: nome,
-    ...(descrizione ? { description: descrizione } : {}),
+  const w = await locate(account, project, environment);
+  const s = await soleServer(account);
+  const body = {
+    name,
+    ...(description ? { description } : {}),
     project_uuid: w.project_uuid,
     environment_name: w.environment_name,
     environment_uuid: w.environment_uuid,
     server_uuid: s.uuid,
     docker_compose_raw: btoa(String.fromCodePoint(...new TextEncoder().encode(compose))),
-    ...(domini?.length ? { urls: domini.map((d) => ({ name: d.container, url: d.url })) } : {}),
-    instant_deploy: avvia ?? false,
+    ...(domains?.length ? { urls: domains.map((d) => ({ name: d.container, url: d.url })) } : {}),
+    instant_deploy: start ?? false,
   };
-  // Della risposta si tiene uuid e domini: nient'altro, nel caso un giorno ci finisca una password.
-  const r = await post(account, "/services", corpo) as Qualunque;
+  // Only the uuid and the domains are kept from the response, in case a password is ever added to it.
+  const r = await post(account, "/services", body) as Loose;
   return txt({
     service: r.uuid,
-    progetto: w.progetto,
-    ambiente: w.environment_name,
-    domini: r.domains,
-    avviato: corpo.instant_deploy,
+    project: w.project,
+    environment: w.environment_name,
+    domains: r.domains,
+    started: body.instant_deploy,
   });
 });
 
 server.registerTool(
-  "coolify_crea_database",
+  "coolify_create_database",
   {
     description:
-      "Crea un database gestito (PostgreSQL, Redis, MariaDB, MySQL, MongoDB, KeyDB, DragonFly, ClickHouse). Le credenziali le genera Coolify e restano nel suo pannello: " +
-      "qui torna solo l'uuid. Non è esposto su internet, salvo chiederlo.",
+      "Creates a managed database (PostgreSQL, Redis, MariaDB, MySQL, MongoDB, KeyDB, DragonFly, ClickHouse). Coolify generates the credentials and keeps them in its panel: " +
+      "only the uuid is returned. The database is not exposed publicly unless `public` is set.",
     inputSchema: {
       account,
-      motore: z.enum(["postgresql", "redis", "mariadb", "mysql", "mongodb", "keydb", "dragonfly", "clickhouse"]),
-      progetto: z.string().describe("uuid o nome"),
-      ambiente: z.string().optional(),
-      nome: z.string(),
-      immagine: z.string().optional().describe("es. postgres:17-alpine; default quella di Coolify"),
-      memoria: z.string().optional().describe("limite di memoria, es. 512m"),
-      pubblico: z.boolean().optional().describe("esposto su una porta pubblica (default no)"),
-      porta_pubblica: z.number().int().optional(),
-      avvia: z.boolean().optional(),
+      engine: z.enum(["postgresql", "redis", "mariadb", "mysql", "mongodb", "keydb", "dragonfly", "clickhouse"]),
+      project: z.string().describe("uuid or name"),
+      environment: z.string().optional(),
+      name: z.string(),
+      image: z.string().optional().describe("e.g. postgres:17-alpine; default is Coolify's"),
+      memory: z.string().optional().describe("memory limit, e.g. 512m"),
+      public: z.boolean().optional().describe("expose on a public port (default no)"),
+      public_port: z.number().int().optional(),
+      start: z.boolean().optional().describe("start right after creation (default no)"),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
     a: {
       account?: string;
-      motore: string;
-      progetto: string;
-      ambiente?: string;
-      nome: string;
-      immagine?: string;
-      memoria?: string;
-      pubblico?: boolean;
-      porta_pubblica?: number;
-      avvia?: boolean;
+      engine: string;
+      project: string;
+      environment?: string;
+      name: string;
+      image?: string;
+      memory?: string;
+      public?: boolean;
+      public_port?: number;
+      start?: boolean;
     },
   ) => {
-    const w = await dove(a.account, a.progetto, a.ambiente);
-    const s = await unicoServer(a.account);
-    const r = await post(a.account, `/databases/${a.motore}`, {
+    const w = await locate(a.account, a.project, a.environment);
+    const s = await soleServer(a.account);
+    const r = await post(a.account, `/databases/${a.engine}`, {
       server_uuid: s.uuid,
       project_uuid: w.project_uuid,
       environment_name: w.environment_name,
       environment_uuid: w.environment_uuid,
-      name: a.nome,
-      ...(a.immagine ? { image: a.immagine } : {}),
-      ...(a.memoria ? { limits_memory: a.memoria } : {}),
-      is_public: a.pubblico ?? false,
-      ...(a.porta_pubblica ? { public_port: a.porta_pubblica } : {}),
-      instant_deploy: a.avvia ?? false,
-    }) as Qualunque;
-    // Coolify risponde con la password e l'indirizzo completo: si tiene l'uuid e basta.
+      name: a.name,
+      ...(a.image ? { image: a.image } : {}),
+      ...(a.memory ? { limits_memory: a.memory } : {}),
+      is_public: a.public ?? false,
+      ...(a.public_port ? { public_port: a.public_port } : {}),
+      instant_deploy: a.start ?? false,
+    }) as Loose;
+    // Coolify answers with the password and the full connection URL: only the uuid is kept.
     return txt({
       database: r.uuid,
-      motore: a.motore,
-      nome: a.nome,
-      progetto: w.progetto,
-      avviato: a.avvia ?? false,
-      credenziali: "nel pannello di Coolify",
+      engine: a.engine,
+      name: a.name,
+      project: w.project,
+      started: a.start ?? false,
+      credentials: "in the Coolify panel",
     });
   },
 );
 
-// ============================================================ cambiare
+// ============================================================ change
 
-/** I campi di un'applicazione che si cambiano di qui: niente segreti (basic auth, webhook). */
-const CAMPI_APP = [
+/** Application fields that can be changed through this server; secrets (basic auth, webhooks) are excluded. */
+const APP_FIELDS = [
   "name",
   "description",
   "domains",
@@ -691,357 +712,359 @@ const CAMPI_APP = [
 ];
 
 server.registerTool(
-  "coolify_aggiorna_applicazione",
+  "coolify_update_application",
   {
     description:
-      "Cambia la configurazione di un'applicazione: domini, ramo, percorsi di Dockerfile o compose, porte, comandi, controllo di salute, limiti, auto deploy… " +
-      `I campi sono quelli dell'API di Coolify (${CAMPI_APP.join(", ")}). Serve un deploy perché abbia effetto.`,
+      "Changes an application's configuration: domains, branch, Dockerfile or compose paths, ports, commands, health check, limits, auto deploy, etc. " +
+      `Fields use the Coolify API names (${
+        APP_FIELDS.join(", ")
+      }). A deploy is required for the change to take effect.`,
     inputSchema: {
       account,
-      applicazione: z.string().describe("uuid o nome"),
-      campi: z.record(z.unknown()).describe('es. { "domains": "https://brain.example.com", "git_branch": "release" }'),
+      application: z.string().describe("uuid or name"),
+      fields: z.record(z.unknown()).describe('e.g. { "domains": "https://app.example.com", "git_branch": "release" }'),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
-    { account, applicazione, campi }: { account?: string; applicazione: string; campi: Record<string, unknown> },
+    { account, application, fields }: { account?: string; application: string; fields: Record<string, unknown> },
   ) => {
-    const fuori = Object.keys(campi).filter((k) => !CAMPI_APP.includes(k));
-    if (fuori.length) throw new Error(`campi non ammessi qui: ${fuori.join(", ")}. Ammessi: ${CAMPI_APP.join(", ")}`);
-    for (const [k, v] of Object.entries(campi)) if (typeof v === "string") nonSegreto(k, v);
-    const a = await trovaApp(account, applicazione);
-    await patch(account, `/applications/${a.uuid}`, campi);
-    return txt(`aggiornati ${Object.keys(campi).join(", ")} su ${a.name} — serve un deploy`);
+    const rejected = Object.keys(fields).filter((k) => !APP_FIELDS.includes(k));
+    if (rejected.length) {
+      throw new Error(`fields not allowed here: ${rejected.join(", ")}. Allowed: ${APP_FIELDS.join(", ")}`);
+    }
+    for (const [k, v] of Object.entries(fields)) if (typeof v === "string") assertNotSecret(k, v);
+    const a = await findApp(account, application);
+    await patch(account, `/applications/${a.uuid}`, fields);
+    return txt(`updated ${Object.keys(fields).join(", ")} on ${a.name} — a deploy is required`);
   },
 );
 
 server.registerTool(
-  "coolify_aggiorna_service",
+  "coolify_update_service",
   {
     description:
-      "Cambia un service: il compose (intero, in chiaro), i domini dei container, nome e descrizione. Serve un riavvio perché abbia effetto.",
+      "Changes a service: the whole compose file (as plain YAML), the container domains, the name and the description. A restart is required for the change to take effect.",
     inputSchema: {
       account,
-      service: z.string().describe("uuid o nome"),
+      service: z.string().describe("uuid or name"),
       compose: z.string().optional(),
-      domini: z.array(z.object({ container: z.string(), url: z.string() })).optional(),
-      nome: z.string().optional(),
-      descrizione: z.string().optional(),
+      domains: z.array(z.object({ container: z.string(), url: z.string() })).optional(),
+      name: z.string().optional(),
+      description: z.string().optional(),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
-    { account, service, compose, domini, nome, descrizione }: {
+    { account, service, compose, domains, name, description }: {
       account?: string;
       service: string;
       compose?: string;
-      domini?: { container: string; url: string }[];
-      nome?: string;
-      descrizione?: string;
+      domains?: { container: string; url: string }[];
+      name?: string;
+      description?: string;
     },
   ) => {
     if (compose && CREDENTIALS_IN_URL.test(compose)) {
       throw new Error(
-        "il compose contiene credenziali in un indirizzo: usa le variabili $SERVICE_*",
+        "the compose file contains credentials in a URL: use the $SERVICE_* variables",
       );
     }
     if (compose?.includes(HIDDEN)) {
       throw new Error(
-        "il compose contiene valori mascherati: riscrivilo senza, o cambia solo quello che serve dal pannello",
+        "the compose file contains masked values: rewrite it without them, or change only what is needed from the panel",
       );
     }
-    const s = await trovaDi(account, "service", service);
+    const s = await findOfKind(account, "service", service);
     await patch(account, `/services/${s.uuid}`, {
       ...(compose ? { docker_compose_raw: btoa(String.fromCodePoint(...new TextEncoder().encode(compose))) } : {}),
-      ...(domini?.length ? { urls: domini.map((d) => ({ name: d.container, url: d.url })) } : {}),
-      ...(nome ? { name: nome } : {}),
-      ...(descrizione ? { description: descrizione } : {}),
+      ...(domains?.length ? { urls: domains.map((d) => ({ name: d.container, url: d.url })) } : {}),
+      ...(name ? { name } : {}),
+      ...(description ? { description } : {}),
     });
-    return txt(`aggiornato ${s.name} — serve un riavvio`);
+    return txt(`updated ${s.name} — a restart is required`);
   },
 );
 
 server.registerTool(
-  "coolify_imposta_variabile",
+  "coolify_set_env_var",
   {
     description:
-      "Crea o aggiorna una variabile d'ambiente di un'applicazione, un service o un database. Serve un redeploy o un riavvio perché abbia effetto. Non per segreti: quelli si mettono dal pannello.",
+      "Creates or updates an environment variable of an application, a service or a database. A redeploy or restart is required for it to take effect. Not for secrets: those are set from the Coolify panel.",
     inputSchema: {
       account,
-      tipo: tipo.optional().describe("default applicazione"),
-      rif: z.string().describe("uuid o nome della risorsa"),
-      chiave: z.string(),
-      valore: z.string(),
-      letterale: z.boolean().optional().describe("non interpretare $VARIABILI dentro il valore"),
-      multilinea: z.boolean().optional(),
+      kind: kindArg.optional().describe("default application"),
+      ref: z.string().describe("uuid or name of the resource"),
+      key: z.string(),
+      value: z.string(),
+      literal: z.boolean().optional().describe("do not interpolate $VARIABLES inside the value"),
+      multiline: z.boolean().optional(),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
-    { account, tipo, rif, chiave, valore, letterale, multilinea }: {
+    { account, kind, ref, key, value, literal, multiline }: {
       account?: string;
-      tipo?: Tipo;
-      rif: string;
-      chiave: string;
-      valore: string;
-      letterale?: boolean;
-      multilinea?: boolean;
+      kind?: Kind;
+      ref: string;
+      key: string;
+      value: string;
+      literal?: boolean;
+      multiline?: boolean;
     },
   ) => {
-    nonSegreto(chiave, valore);
-    const t = tipo ?? "applicazione";
-    const r = await trovaDi(account, t, rif);
-    const base = `${PERCORSO[t]}/${r.uuid}/envs`;
-    const esistenti = await api(account, base) as Qualunque[];
-    const gia = esistenti.find((e) => e.key === chiave && !e.is_preview);
-    const corpo = {
-      key: chiave,
-      value: valore,
+    assertNotSecret(key, value);
+    const k = kind ?? "application";
+    const r = await findOfKind(account, k, ref);
+    const base = `${API_PATH[k]}/${r.uuid}/envs`;
+    const current = await api(account, base) as Loose[];
+    const existing = current.find((e) => e.key === key && !e.is_preview);
+    const body = {
+      key,
+      value,
       is_preview: false,
-      ...(letterale !== undefined ? { is_literal: letterale } : {}),
-      ...(multilinea !== undefined ? { is_multiline: multilinea } : {}),
+      ...(literal !== undefined ? { is_literal: literal } : {}),
+      ...(multiline !== undefined ? { is_multiline: multiline } : {}),
     };
-    await api(account, base, { method: gia ? "PATCH" : "POST", body: JSON.stringify(corpo) });
+    await api(account, base, { method: existing ? "PATCH" : "POST", body: JSON.stringify(body) });
     return txt(
-      `${gia ? "aggiornata" : "creata"} ${chiave} su ${r.name} — serve un ${
-        t === "applicazione" ? "redeploy" : "riavvio"
-      }`,
+      `${existing ? "updated" : "created"} ${key} on ${r.name} — a ${
+        k === "application" ? "redeploy" : "restart"
+      } is required`,
     );
   },
 );
 
-// ============================================================ far girare
+// ============================================================ run
 
 server.registerTool("coolify_deploy", {
   description:
-    "Lancia un deploy dell'applicazione e restituisce l'identificativo con cui seguirlo. Non aspetta la fine: usa coolify_deploy_stato.",
+    "Starts a deployment of an application and returns the identifier to follow it with. Does not wait for completion: use coolify_deploy_status.",
   inputSchema: {
     account,
-    applicazione: z.string().describe("uuid o nome dell'applicazione"),
-    forza: z.boolean().optional().describe("ricostruisce senza usare la cache"),
+    application: z.string().describe("uuid or name of the application"),
+    force: z.boolean().optional().describe("rebuild without using the cache"),
   },
-  annotations: CAMBIA,
-}, async ({ account, applicazione, forza }: { account?: string; applicazione: string; forza?: boolean }) => {
-  const a = await trovaApp(account, applicazione);
-  // Da Coolify 4.3 le azioni sono POST: il GET risponde 405 «endpoint has changed to a POST request».
-  const r = await post(account, `/deploy?uuid=${a.uuid}${forza ? "&force=true" : ""}`) as Qualunque;
+  annotations: CHANGES,
+}, async ({ account, application, force }: { account?: string; application: string; force?: boolean }) => {
+  const a = await findApp(account, application);
+  // Since Coolify 4.3 actions are POST: a GET answers 405 "endpoint has changed to a POST request".
+  const r = await post(account, `/deploy?uuid=${a.uuid}${force ? "&force=true" : ""}`) as Loose;
   const d = r?.deployments?.[0];
-  return txt({ applicazione: a.name, deployment: d?.deployment_uuid, messaggio: d?.message });
+  return txt({ application: a.name, deployment: d?.deployment_uuid, message: d?.message });
 });
 
-server.registerTool("coolify_annulla_deploy", {
-  description: "Ferma un deploy in coda o in corso.",
+server.registerTool("coolify_cancel_deploy", {
+  description: "Cancels a queued or running deployment.",
   inputSchema: { account, deployment: z.string() },
-  annotations: CAMBIA,
+  annotations: CHANGES,
 }, async ({ account, deployment }: { account?: string; deployment: string }) => {
-  const r = await post(account, `/deployments/${deployment}/cancel`) as Qualunque;
-  return txt({ deployment, messaggio: r?.message ?? r });
+  const r = await post(account, `/deployments/${deployment}/cancel`) as Loose;
+  return txt({ deployment, message: r?.message ?? r });
 });
 
 server.registerTool(
-  "coolify_azione",
+  "coolify_action",
   {
     description:
-      "Avvia, ferma o riavvia un'applicazione, un service o un database, senza ricostruire. Per ricostruire un'applicazione, coolify_deploy.",
+      "Starts, stops or restarts an application, a service or a database, without rebuilding. To rebuild an application, use coolify_deploy.",
     inputSchema: {
       account,
-      tipo,
-      rif: z.string().describe("uuid o nome"),
-      azione: z.enum(["avvia", "ferma", "riavvia"]),
+      kind: kindArg,
+      ref: z.string().describe("uuid or name"),
+      action: z.enum(["start", "stop", "restart"]),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
-    { account, tipo, rif, azione }: {
+    { account, kind, ref, action }: {
       account?: string;
-      tipo: Tipo;
-      rif: string;
-      azione: "avvia" | "ferma" | "riavvia";
+      kind: Kind;
+      ref: string;
+      action: "start" | "stop" | "restart";
     },
   ) => {
-    const r = await trovaDi(account, tipo, rif);
-    const verbo = { avvia: "start", ferma: "stop", riavvia: "restart" }[azione];
-    const x = await post(account, `${PERCORSO[tipo]}/${r.uuid}/${verbo}`) as Qualunque;
-    return txt({ risorsa: r.name, azione, messaggio: x?.message ?? x });
+    const r = await findOfKind(account, kind, ref);
+    const x = await post(account, `${API_PATH[kind]}/${r.uuid}/${action}`) as Loose;
+    return txt({ resource: r.name, action, message: x?.message ?? x });
   },
 );
 
 server.registerTool(
-  "coolify_task_programmati",
+  "coolify_scheduled_tasks",
   {
     description:
-      "I comandi pianificati dentro un'applicazione o un service (cron di Coolify): elencarli, crearne uno, lanciarne uno adesso, vedere le ultime esecuzioni.",
+      "Manages the scheduled commands (Coolify cron) of an application or a service: list them, create one, run one now, or list its latest executions.",
     inputSchema: {
       account,
-      tipo: z.enum(["applicazione", "service"]),
-      rif: z.string().describe("uuid o nome"),
-      azione: z.enum(["elenca", "crea", "esegui", "esecuzioni"]),
-      task: z.string().optional().describe("per esegui/esecuzioni: uuid o nome del task"),
-      nome: z.string().optional(),
-      comando: z.string().optional(),
-      frequenza: z.string().optional().describe("cron, es. 0 3 * * *, o @daily"),
-      container: z.string().optional().describe("per un service: il container dove gira"),
+      kind: z.enum(["application", "service"]),
+      ref: z.string().describe("uuid or name"),
+      action: z.enum(["list", "create", "run", "executions"]),
+      task: z.string().optional().describe("for run/executions: uuid or name of the task"),
+      name: z.string().optional(),
+      command: z.string().optional(),
+      schedule: z.string().optional().describe("cron expression, e.g. 0 3 * * *, or @daily"),
+      container: z.string().optional().describe("for a service: the container the task runs in"),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
     a: {
       account?: string;
-      tipo: "applicazione" | "service";
-      rif: string;
-      azione: string;
+      kind: "application" | "service";
+      ref: string;
+      action: string;
       task?: string;
-      nome?: string;
-      comando?: string;
-      frequenza?: string;
+      name?: string;
+      command?: string;
+      schedule?: string;
       container?: string;
     },
   ) => {
-    const r = await trovaDi(a.account, a.tipo, a.rif);
-    const base = `${PERCORSO[a.tipo]}/${r.uuid}/scheduled-tasks`;
-    if (a.azione === "elenca") {
-      const l = await api(a.account, base) as Qualunque[];
+    const r = await findOfKind(a.account, a.kind, a.ref);
+    const base = `${API_PATH[a.kind]}/${r.uuid}/scheduled-tasks`;
+    if (a.action === "list") {
+      const l = await api(a.account, base) as Loose[];
       return txt(
         l.map((x) => ({
           uuid: x.uuid,
-          nome: x.name,
-          comando: maskText(String(x.command ?? "")),
-          frequenza: x.frequency,
-          attivo: x.enabled,
+          name: x.name,
+          command: maskText(String(x.command ?? "")),
+          schedule: x.frequency,
+          enabled: x.enabled,
           container: x.container,
         })),
       );
     }
-    if (a.azione === "crea") {
-      if (!a.nome || !a.comando || !a.frequenza) throw new Error("servono nome, comando e frequenza");
-      if (CREDENTIALS_IN_URL.test(a.comando) || maskText(a.comando) !== a.comando) {
+    if (a.action === "create") {
+      if (!a.name || !a.command || !a.schedule) throw new Error("name, command and schedule are required");
+      if (CREDENTIALS_IN_URL.test(a.command) || maskText(a.command) !== a.command) {
         throw new Error(
-          "il comando contiene un segreto: mettilo in una variabile dal pannello",
+          "the command contains a secret: put it in a variable from the panel",
         );
       }
       const x = await post(a.account, base, {
-        name: a.nome,
-        command: a.comando,
-        frequency: a.frequenza,
+        name: a.name,
+        command: a.command,
+        frequency: a.schedule,
         ...(a.container ? { container: a.container } : {}),
         enabled: true,
-      }) as Qualunque;
-      return txt({ task: x.uuid, nome: a.nome, frequenza: a.frequenza });
+      }) as Loose;
+      return txt({ task: x.uuid, name: a.name, schedule: a.schedule });
     }
-    if (!a.task) throw new Error("serve `task`");
-    const t = await trova(a.account, base, "task", a.task);
-    if (a.azione === "esegui") {
+    if (!a.task) throw new Error("`task` is required");
+    const t = await find(a.account, base, "task", a.task);
+    if (a.action === "run") {
       return txt({
         task: t.name,
-        messaggio: (await post(a.account, `${base}/${t.uuid}/execute`) as Qualunque)?.message ?? "lanciato",
+        message: (await post(a.account, `${base}/${t.uuid}/execute`) as Loose)?.message ?? "started",
       });
     }
-    const ex = await api(a.account, `${base}/${t.uuid}/executions`) as Qualunque[];
+    const ex = await api(a.account, `${base}/${t.uuid}/executions`) as Loose[];
     return txt(
       ex.slice(0, 10).map((e) => ({
-        stato: e.status,
-        inizio: e.created_at,
-        fine: e.finished_at ?? e.updated_at,
+        status: e.status,
+        started: e.created_at,
+        finished: e.finished_at ?? e.updated_at,
         output: maskText(String(e.message ?? "")).slice(-500),
       })),
     );
   },
 );
 
-// ============================================================ tenere in ordine
+// ============================================================ maintain
 
 server.registerTool(
   "coolify_backup_database",
   {
     description:
-      "I backup di un database gestito: vedere quelli programmati e le ultime esecuzioni, o programmarne uno (frequenza cron, quanti tenerne, " +
-      "su S3 se c'è uno storage configurato in Coolify), lanciandolo anche subito.",
+      "Manages the backups of a managed database: list the scheduled ones with their latest executions, or schedule one (cron schedule, number to keep, " +
+      "S3 when a storage is configured in Coolify), optionally running it immediately.",
     inputSchema: {
       account,
-      database: z.string().describe("uuid o nome"),
-      azione: z.enum(["elenca", "programma"]),
-      frequenza: z.string().optional().describe("cron o @daily/@weekly; per programma"),
-      tenere: z.number().int().min(1).optional().describe("quanti backup tenere sul server (default 7)"),
-      s3: z.string().optional().describe("uuid o nome dello storage S3 di Coolify"),
-      subito: z.boolean().optional().describe("ne fa uno adesso"),
+      database: z.string().describe("uuid or name"),
+      action: z.enum(["list", "schedule"]),
+      schedule: z.string().optional().describe("cron expression or @daily/@weekly; for schedule"),
+      keep: z.number().int().min(1).optional().describe("number of backups to keep on the server (default 7)"),
+      s3: z.string().optional().describe("uuid or name of a Coolify S3 storage"),
+      now: z.boolean().optional().describe("also run a backup immediately"),
     },
-    annotations: CAMBIA,
+    annotations: CHANGES,
   },
   async (
     a: {
       account?: string;
       database: string;
-      azione: "elenca" | "programma";
-      frequenza?: string;
-      tenere?: number;
+      action: "list" | "schedule";
+      schedule?: string;
+      keep?: number;
       s3?: string;
-      subito?: boolean;
+      now?: boolean;
     },
   ) => {
-    const d = await trovaDi(a.account, "database", a.database);
-    if (a.azione === "elenca") {
-      const b = await api(a.account, `/databases/${d.uuid}/backups`) as Qualunque[];
-      const conEsecuzioni = await Promise.all(b.map(async (x) => ({
+    const d = await findOfKind(a.account, "database", a.database);
+    if (a.action === "list") {
+      const b = await api(a.account, `/databases/${d.uuid}/backups`) as Loose[];
+      const withExecutions = await Promise.all(b.map(async (x) => ({
         uuid: x.uuid,
-        frequenza: x.frequency,
-        attivo: x.enabled,
+        schedule: x.frequency,
+        enabled: x.enabled,
         s3: x.save_s3,
-        ultime:
-          ((await api(a.account, `/databases/${d.uuid}/backups/${x.uuid}/executions`).catch(() => [])) as Qualunque[])
-            .slice(0, 5).map((e) => ({ stato: e.status, quando: e.created_at, dimensione: e.size ?? null })),
+        latest: ((await api(a.account, `/databases/${d.uuid}/backups/${x.uuid}/executions`).catch(() => [])) as Loose[])
+          .slice(0, 5).map((e) => ({ status: e.status, at: e.created_at, size: e.size ?? null })),
       })));
-      return txt({ database: d.name, backup: conEsecuzioni });
+      return txt({ database: d.name, backups: withExecutions });
     }
-    if (!a.frequenza) throw new Error("serve `frequenza`");
-    const s3 = a.s3 ? await trova(a.account, "/s3-storages", "storage S3", a.s3) : null;
+    if (!a.schedule) throw new Error("`schedule` is required");
+    const s3 = a.s3 ? await find(a.account, "/s3-storages", "S3 storage", a.s3) : null;
     const r = await post(a.account, `/databases/${d.uuid}/backups`, {
-      frequency: a.frequenza,
+      frequency: a.schedule,
       enabled: true,
-      database_backup_retention_amount_locally: a.tenere ?? 7,
+      database_backup_retention_amount_locally: a.keep ?? 7,
       save_s3: !!s3,
       ...(s3 ? { s3_storage_uuid: s3.uuid } : {}),
-      backup_now: a.subito ?? false,
-    }) as Qualunque;
+      backup_now: a.now ?? false,
+    }) as Loose;
     return txt({
       database: d.name,
       backup: r?.uuid ?? r,
-      frequenza: a.frequenza,
+      schedule: a.schedule,
       s3: s3?.name ?? null,
-      subito: a.subito ?? false,
+      now: a.now ?? false,
     });
   },
 );
 
 server.registerTool(
-  "coolify_pulizia_docker",
+  "coolify_docker_cleanup",
   {
     description:
-      "Libera disco sul server: immagini, container fermi e cache di build che Docker non usa più. Con volumi=true anche i volumi non collegati a nulla " +
-      "(attenzione: un volume di un'app ferma è «non usato»). Senza argomenti mostra prima le impostazioni e le ultime pulizie.",
+      "Frees disk space on the server by removing images, stopped containers and build cache that Docker no longer uses. With volumes=true it also removes volumes attached to nothing " +
+      "(note: a volume of a stopped application counts as unused). Without `run` it only returns the cleanup settings and the latest cleanups.",
     inputSchema: {
       account,
-      esegui: z.boolean().optional().describe("true per lanciarla; altrimenti solo lo stato"),
-      volumi: z.boolean().optional(),
-      reti: z.boolean().optional(),
+      run: z.boolean().optional().describe("true to run the cleanup; otherwise only the status is returned"),
+      volumes: z.boolean().optional(),
+      networks: z.boolean().optional(),
     },
-    annotations: { ...CAMBIA, destructiveHint: true },
+    annotations: { ...CHANGES, destructiveHint: true },
   },
   async (
-    { account, esegui, volumi, reti }: { account?: string; esegui?: boolean; volumi?: boolean; reti?: boolean },
+    { account, run, volumes, networks }: { account?: string; run?: boolean; volumes?: boolean; networks?: boolean },
   ) => {
-    const s = await unicoServer(account);
-    if (!esegui) {
-      const [impostazioni, ultime] = await Promise.all([
+    const s = await soleServer(account);
+    if (!run) {
+      const [settings, latest] = await Promise.all([
         api(account, `/servers/${s.uuid}/docker-cleanup`).catch((e) => (e as Error).message),
         api(account, `/servers/${s.uuid}/docker-cleanup/executions`).catch(() => []),
       ]);
-      return txt({ server: s.name, impostazioni, ultime: (ultime as Qualunque[]).slice?.(0, 5) ?? ultime });
+      return txt({ server: s.name, settings, latest: (latest as Loose[]).slice?.(0, 5) ?? latest });
     }
     const r = await post(account, `/servers/${s.uuid}/docker-cleanup/run`, {
-      delete_unused_volumes: volumi ?? false,
-      delete_unused_networks: reti ?? false,
-    }) as Qualunque;
-    return txt({ server: s.name, messaggio: r?.message ?? r });
+      delete_unused_volumes: volumes ?? false,
+      delete_unused_networks: networks ?? false,
+    }) as Loose;
+    return txt({ server: s.name, message: r?.message ?? r });
   },
 );
 
