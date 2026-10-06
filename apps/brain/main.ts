@@ -28,7 +28,7 @@ import {
 import { privacyPage, type Site, siteFile, siteMoved } from "./public.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
-import { bodyLimit, Buckets, capped, clientIp, isTooLarge } from "./guard.ts";
+import { bodyLimit, Buckets, capped, clientIp, fromOwnPages, hardened, isTooLarge } from "./guard.ts";
 import { snapshot } from "./backup.ts";
 import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/owner.ts";
 import { masterKey, type User, Users } from "./users.ts";
@@ -161,9 +161,11 @@ const CORS = {
   "access-control-allow-headers": "authorization, content-type, mcp-protocol-version, mcp-session-id",
   "access-control-expose-headers": "www-authenticate, mcp-session-id",
 };
-const SECURE = URL_.startsWith("https:") ? "; Secure" : "";
+const HTTPS = URL_.startsWith("https:");
+const SECURE = HTTPS ? "; Secure" : "";
 // Lax, not Strict: a link to the board from elsewhere (a notification, the console) arrives signed in;
-// a form posted from another site still carries no cookie
+// a form posted from another site still carries no cookie, and one from a sibling subdomain (the same
+// site) is refused by the origin check in handle()
 const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) =>
   `brain_session=${s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${SECURE}`;
 /** Pure: a page of this service to go back to after signing in, or the account page. */
@@ -204,6 +206,13 @@ const otpauth = (id: string, secret: string) =>
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
   const p = u.pathname;
+  // the forms of the account page, the board and the sign-in act for whoever is signed in: only
+  // from this service's own pages
+  if (
+    req.method === "POST" && !(SITE_HOST && u.host === SITE_HOST) &&
+    (p.startsWith("/account") || p.startsWith("/tasks") || p === "/authorize" || p === "/invite") &&
+    !fromOwnPages(req.headers, URL_)
+  ) return new Response("cross-origin form refused\n", { status: 403, headers: { "content-type": "text/plain" } });
   const wait = bucketOf(req.method, p)?.take(ip) ?? 0;
   if (wait) {
     return new Response("too many requests\n", {
@@ -451,13 +460,13 @@ const withCors = (r: Response) => {
 Deno.serve({ port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") }, async (req, info) => {
   try {
     const ip = clientIp(req.headers, (info.remoteAddr as Deno.NetAddr).hostname, IP_HEADER);
-    return await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip);
+    return hardened(await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip), HTTPS);
   } catch (e) {
-    if (isTooLarge(e)) return json({ error: "request body too large" }, 413);
+    if (isTooLarge(e)) return hardened(json({ error: "request body too large" }, 413), HTTPS);
     // what went wrong stays in the log: the answer carries only an id to find it there
     const id = crypto.randomUUID().slice(0, 8);
     console.error(`brain: error ${id}`, e);
-    return json({ error: "internal error", id }, 500);
+    return hardened(json({ error: "internal error", id }, 500), HTTPS);
   }
 });
 console.log(

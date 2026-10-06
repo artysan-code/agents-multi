@@ -67,6 +67,10 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
   service cannot be reached around that proxy.
 - **Every request body is capped** by its path (64 KB for the sign-in and OAuth endpoints, 1 MB for
   the rest: 413), and an error answers 500 with an id to find it in the log, never its message.
+- **The forms act only from the brain's own pages**: a POST to the account page, the board, the
+  sign-in or an invitation is refused (403) when the browser says it came from elsewhere
+  (`Sec-Fetch-Site`, or the `Origin`) — the session cookie is `SameSite=Lax`, which a sibling
+  subdomain would still get. Every answer carries `nosniff`, and HSTS on https.
 - **Machines** use personal tokens. claude-multi gets one by signing in (console › Connections ›
   Sign in, or `claude-multi brain-login`): the brain's OAuth with scope `machine`, only to a loopback
   redirect, answers with a token named after the machine and the account's backup key, and both go

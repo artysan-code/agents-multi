@@ -103,3 +103,23 @@ export class Gate {
     }
   }
 }
+
+/** Pure: whether a browser's POST comes from this service's own pages. The session cookie is
+ *  SameSite=Lax, which a sibling subdomain still satisfies (it is the same site, not the same origin),
+ *  so the forms that act with the cookie also check where they were sent from: Sec-Fetch-Site when the
+ *  browser says it, the Origin otherwise. A request with neither is not from a browser that would
+ *  carry the cookie on its own. */
+export function fromOwnPages(headers: Headers, origin: string): boolean {
+  const site = headers.get("sec-fetch-site");
+  if (site) return site === "same-origin" || site === "none";
+  const o = headers.get("origin");
+  return o === null || o === origin;
+}
+
+/** The headers every answer carries: no type sniffing, and, on https, HTTPS only from now on. */
+export function hardened(r: Response, https: boolean): Response {
+  const h = new Headers(r.headers);
+  if (!h.has("x-content-type-options")) h.set("x-content-type-options", "nosniff");
+  if (https && !h.has("strict-transport-security")) h.set("strict-transport-security", "max-age=31536000");
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+}

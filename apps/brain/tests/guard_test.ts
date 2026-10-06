@@ -1,7 +1,8 @@
 // Tests for what the service refuses in front of the handlers (guard.ts): bodies over their path's
-// limit, declared or streamed; the client's address; the rate limit per address; the gate.
+// limit, declared or streamed; the client's address; the rate limit per address; the gate; forms
+// only from the service's own pages; the headers every answer carries.
 import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
-import { bodyLimit, Buckets, capped, clientIp, Gate, isTooLarge, TooLarge } from "../guard.ts";
+import { bodyLimit, Buckets, capped, clientIp, fromOwnPages, Gate, hardened, isTooLarge, TooLarge } from "../guard.ts";
 
 const post = (body: BodyInit, headers: Record<string, string> = {}) =>
   new Request("http://b.test/token", { method: "POST", body, headers });
@@ -73,4 +74,26 @@ Deno.test("guard: a gate runs `size` jobs at once, queues `queue` more, refuses 
   assertEquals(await Promise.all([first, second]), ["done", "done"]);
   assertEquals(most, 1);
   assertEquals(await g.run(() => Promise.resolve(1)), 1, "free again once the line is empty");
+});
+
+Deno.test("guard: a form acts only when sent from the service's own pages", () => {
+  const own = "https://brain.example.com";
+  const h = (x: Record<string, string>) => new Headers(x);
+  assert(fromOwnPages(h({ "sec-fetch-site": "same-origin" }), own));
+  assert(!fromOwnPages(h({ "sec-fetch-site": "same-site", origin: own }), own), "a sibling subdomain");
+  assert(!fromOwnPages(h({ "sec-fetch-site": "cross-site" }), own));
+  assert(fromOwnPages(h({ origin: own }), own));
+  assert(!fromOwnPages(h({ origin: "https://evil.example.com" }), own));
+  assert(!fromOwnPages(h({ origin: "null" }), own));
+  assert(fromOwnPages(h({}), own), "not a browser: no cookie of its own to abuse");
+});
+
+Deno.test("guard: every answer says nosniff, and HSTS on https, keeping what it already set", async () => {
+  const r = hardened(new Response("x", { status: 201, headers: { "x-a": "1" } }), true);
+  assertEquals(r.status, 201);
+  assertEquals(await r.text(), "x");
+  assertEquals(r.headers.get("x-a"), "1");
+  assertEquals(r.headers.get("x-content-type-options"), "nosniff");
+  assertEquals(r.headers.get("strict-transport-security"), "max-age=31536000");
+  assertEquals(hardened(new Response(null), false).headers.get("strict-transport-security"), null);
 });
