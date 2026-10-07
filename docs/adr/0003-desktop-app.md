@@ -15,8 +15,8 @@ shell's.
 
 ## Decision
 
-- **The window loads the console by URL** (`http://127.0.0.1:<port>/`); the app does not bundle
-  `apps/ui`. The console is same-origin by construction — relative URLs, server-sent events on
+- **The window loads the console by URL** (`http://127.0.0.1:<port>/`), never a copy of `apps/ui`
+  of its own (the package carries the page for the backend to serve). The console is same-origin by construction — relative URLs, server-sent events on
   `/api/events`, its cookies and CSRF header — and served from `tauri://localhost` it would be
   another origin, needing CORS on every route and a second build of the page. Loaded by URL, the
   window is one more browser on the console, and the page is the same in both.
@@ -27,46 +27,66 @@ shell's.
   `?port=`), says clearly when nothing answers, retries by itself and on a button, and navigates to
   the console once it answers. The request is `no-cors`: an opaque answer is enough to know the
   console is up, so the console needs no CORS headers for it.
-- **The backend is a sidecar** (phase 5, piece 2): the CLI compiled with `deno compile`
-  (`apps/desktop/scripts/sidecar.sh`, into `src-tauri/binaries/agents-multi-backend-<target triple>`,
-  gitignored), started and stopped by the app (`src-tauri/src/backend.rs`), in place of the systemd
-  unit. `tauri build` bundles it through `bundle.externalBin`, which only
-  `src-tauri/tauri.sidecar.conf.json` declares (`pnpm build` passes it): `cargo build` and
-  `tauri dev` never need it.
-  - **The repository is passed in**: a compiled binary's modules live in a virtual file system, so
-    `REPO` (`apps/cli/lib/paths.ts`, the only use of `import.meta.url` for a path in the CLI's graph)
-    is `AGENTS_MULTI_REPO` when set — the name `bin/lib/prelaunch.sh` already reads — else today's
-    checkout; a compiled binary without it stops with a clear error. (`AGENTS_MULTI_ROOT` was taken:
-    it names the runtime.) The app finds the repository (`src-tauri/src/repo.rs`): the variable when
-    set, the checkout it was built from in a debug build, else the target of the runtime's `shared`
-    link (`~/.agents-multi/shared` → `<repo>/shared`, made by `agents install` on every machine),
-    checked by `apps/cli/main.ts` being there. With no repository found, nothing is started and the
-    log says why.
+- **The backend is the package's Deno running the package's source** (phase 5, piece 2; the model
+  is the next section's): started, supervised and stopped by the app (`src-tauri/src/backend.rs`) in
+  place of the systemd unit. `apps/desktop/scripts/bundle.sh` (`pnpm bundle`; `pnpm build` runs it)
+  prepares, gitignored under `src-tauri/`: the host's `deno` as the external binary
+  `binaries/agents-multi-deno-<target triple>`, checked against the version pinned in that script;
+  `bundle/repo/`, the source; `bundle/deno-dir/`, the module cache. Only
+  `src-tauri/tauri.bundle.conf.json` declares them (`bundle.externalBin`, `bundle.resources` → `repo/`
+  and `deno-dir/` in the resources), so `cargo build` and `tauri dev` never need them. Fetching Deno
+  per target, for other platforms and for CI, is phase 6's.
+  - **The source mirrors the repository's layout**, so every `REPO`-relative path keeps working:
+    `REPO` (`apps/cli/lib/paths.ts`) is still the folder the code is in, now decoded (a macOS bundle
+    sits under `Agents Multi.app`). It is the CLI's module graph (with the four brain modules it
+    imports), and, as git tracks them, `apps/cli` without its tests (the old page under `/old/` is
+    there), `shared/` (settings, hooks, the MCP registry and servers), `bin/` (the commands the
+    console runs), `deno.json`, `deno.lock`, `CHANGELOG.md` («What's new»), plus the built
+    `apps/ui/dist`. Not bundled, for the replacement step: what only install, init and the doctor
+    read (`desktop/`, `systemd/`, `config.example/`, `pkg/`), and the git checkout itself — in the
+    package, the doctor's `repo` check fails («not a git repository») and the update actions have
+    nothing to pull.
+  - **Offline modules: a module cache shipped as a resource** and used read-only (`DENO_DIR`), with
+    `--cached-only` so a missing module is an error, never a download, and `DENO_NO_UPDATE_CHECK`.
+    The script fills it with `deno cache --frozen` of the CLI and of each MCP server with its own
+    lock (they run with `--no-config`), then drops what Deno compiled, which is keyed by path and
+    recompiled in memory where the cache cannot be written. The CLI's graph has no npm: or jsr:
+    module today; the servers' (29 MB) is there for the replacement step, which runs them on this
+    Deno. Not `vendor`/`node_modules`: those would change how the repository itself resolves, for a
+    need only the package has, and the servers each have their own lock.
+  - **The cache is the backend's alone**: the app names it in `AGENTS_MULTI_BACKEND_ONLY`, and
+    `serve` removes those variables from its environment as it starts (`forgetBackendOnly`), so
+    Claude and its MCP servers, started from the console, keep the person's own writable cache. The
+    package's Deno is handed on as `AGENTS_MULTI_DENO`, which `bin/agents` runs instead of `deno`, so
+    the console's commands work on a machine without Deno.
+  - **Which source** (`src-tauri/src/repo.rs`): `AGENTS_MULTI_REPO` (the name `bin/lib/prelaunch.sh`
+    reads) when set, else in a debug build the checkout it was built from, else the package's copy.
+    A checkout runs as a developer runs it, through its `bin/agents serve --no-open` (the Deno on
+    `PATH`, `bin/agents`' permissions); the package's copy runs on the package's Deno. Without either,
+    nothing is started and the log says why.
   - **Permissions**: `bin/agents`' set (`--allow-read --allow-write --allow-run --allow-env
     --allow-sys=hostname`) with the network open (`--allow-net`), not `-A`: `bin/agents` lists the
-    brain's host, which comes from the person's `accounts.json` and is unknown when the binary is
-    built, and permissions are fixed at compile time. Opening the network adds no reach the process
-    lacks, since `--allow-run` already lets it start any program. No FFI and no dynamic imports.
+    brain's host, which comes from the person's `accounts.json`, read by Python in that script.
+    Opening the network adds no reach the process lacks, since `--allow-run` already lets it start
+    any program. A test in `backend.rs` keeps the list equal to `bin/agents`' but for the network.
   - **Lifecycle**: on start, if a console already answers `GET /api/code` on the port (the systemd
     unit during the transition, one started by hand), the app uses it and starts nothing, and never
-    stops or restarts it. Otherwise it starts the sidecar (`serve --no-open`, with
-    `AGENTS_MULTI_PORT`, `AGENTS_MULTI_REPO`, and the unit's `PATH` folders appended to its own, since
-    a desktop session's `PATH` often lacks `~/.deno/bin`), its output appended to `backend.log` in the
-    app's log folder. When it exits, a window showing the console goes back to the local page, which
-    waits and returns, and the app restarts it after 1 s, doubling to 30 s; eight quick failures in a
-    row (each run under a minute) and it stops trying. Before a restart, a console that answers in
-    the meantime is used instead. On exit (`RunEvent::Exit`) the app sends SIGTERM to the process it
-    started, SIGKILL after five seconds; on Linux the child also has a parent-death signal (SIGTERM),
-    so it ends with the app even when the app is killed or crashes.
+    stops or restarts it. Otherwise it starts the backend (with `AGENTS_MULTI_PORT`, and the unit's
+    `PATH` folders appended to its own, since a desktop session's `PATH` often lacks `~/.deno/bin`),
+    its output appended to `backend.log` in the app's log folder. When it exits, a window showing the
+    console goes back to the local page, which waits and returns, and the app restarts it after 1 s,
+    doubling to 30 s; eight quick failures in a row (each run under a minute) and it stops trying.
+    Before a restart, a console that answers in the meantime is used instead. On exit
+    (`RunEvent::Exit`) the app sends SIGTERM to the process it started, SIGKILL after five seconds;
+    on Linux the child also has a parent-death signal (SIGTERM), so it ends with the app even when
+    the app is killed or crashes.
+  - **The tray's «Start the console»**: when the app runs the backend, it starts it now — out of the
+    backoff, or again after it gave up (`backend::start_again`); a console the app does not run (the
+    unit) is still started with `systemctl --user start`.
   - **`std::process`, not tauri-plugin-shell**: the plugin's sidecar API only resolves the path
     (`<exe dir>/<name>`, which `backend.rs` does in one line) and its `kill()` is SIGKILL, with no
     graceful stop and no hook for the parent-death signal; it would also be a plugin carrying
     JavaScript commands. The backend is a Rust-only plugin with no commands, so no page can reach it.
-  - **Dev mode**: a debug build uses the sidecar when it sits next to the executable (`pnpm tauri
-    build --debug --config src-tauri/tauri.sidecar.conf.json` puts it there), else the checkout's
-    `bin/agents serve --no-open` (Deno, with `bin/agents`' own permissions). A release build without
-    the sidecar starts nothing and says so in its log; the local page then explains the console is
-    not reachable.
 - **Security model**:
   - No page gets IPC: the app declares no capabilities (`app.security.capabilities` is empty) and
     registers no plugin with JavaScript commands, so neither the local page nor the console's origin
@@ -128,6 +148,43 @@ shell's.
   1.x; the code avoids what would tie it to Linux (the bundled page's origin is recognised on all
   three).
 
+## 1.0: the app ships everything (Samuel, 2026-10-07)
+
+- **The package carries everything it runs**: the backend, the console's page, `shared/` (hooks,
+  settings, MCP servers) and **one Deno runtime**, which runs both the backend and the MCP servers
+  from the bundled source. No git checkout on a user's machine.
+- **Updates** come from Tauri's signed updater, its manifest on the project's own site (e.g.
+  `/updates/<channel>.json`), the artifacts wherever they are hosted (GitHub Releases or our server):
+  renaming or moving the repository changes one line in the manifest, never the installed apps.
+  **AUR** is an extra channel for Arch (the same release, the updater disabled in that build: pacman
+  updates it); Homebrew and winget later.
+- **`~/.agents-multi/shared`** becomes a versioned copy the app installs on each update (today it
+  is a link into the repository). **Dev mode** keeps today's model: `AGENTS_MULTI_REPO` points at a
+  checkout.
+- **Extensibility stays in the person's configuration** (`~/.agents-multi/config`): their own MCP
+  servers (any command: npx, uvx, deno, a binary) and templates, registered without waiting for a
+  release.
+- **Ready for «native Rust, a real binary» after 1.0**: the console's page talks to the backend only
+  through `apps/ui/src/api.ts`. After the release, endpoint by endpoint, the backend's work moves into
+  Rust commands (the page switches `fetch` to `invoke` for that endpoint), our MCP servers move to
+  Rust (rmcp) one at a time, and when nothing needs Deno it leaves the package. Every step is
+  releasable; there is no big rewrite.
+
+**The replacement step** (after this phase, not in it) puts installed machines on this model:
+
+- install, self-update and `bin/lib/prelaunch.sh` work from the app's copy and its updater, not from
+  a checkout's git; the doctor's `repo` and runtime-link checks expect the copy;
+- the app copies `shared/` into `~/.agents-multi/shared` on install and on each update (today a link);
+- `servers.json` runs our MCP servers on the package's Deno (`AGENTS_MULTI_DENO`), on its module
+  cache;
+- `claude-multi-console.service` is stopped, disabled and removed (install, and a migration for
+  machines that have it), install stops writing it, and the doctor's console check expects the app;
+  `agents serve` keeps working by hand on headless machines, where there is no app;
+- the PySide6 app (`apps/tray/`, its unit and desktop entries) is removed (the tray section below
+  lists what that changes);
+- what the package does not carry today and the CLI reads (`desktop/`, `systemd/`, `config.example/`,
+  `pkg/`) is bundled or goes with the code that reads it.
+
 ## The tray, the launch flags and the profile picker (phase 5, piece 3)
 
 The app takes over what `apps/tray/app.py`, `tray.py` and `picker.py` do, in its own modules
@@ -154,8 +211,8 @@ wiring them.
   on a timer; a stream silent for 70 s is dead; reconnection backs off 2, 4, 8, 16, then 30 s; the
   menu is rebuilt only when what it shows changes. The profiles of «Open Claude Desktop» come from
   the manifests (`profiles.rs`, the CLI's rule), so the menu opens a Desktop with the console down;
-  its actions are CLI commands (`claude-launch`, `systemctl --user start` of the console's unit) or the
-  app's windows. On Linux the indicator has no click, tooltip or «menu about to open» events: the menu
+  its actions are CLI commands (`claude-launch`; `systemctl --user start` of the console's unit when the
+  app does not run the backend, else the backend) or the app's windows. On Linux the indicator has no click, tooltip or «menu about to open» events: the menu
   opens on any click, and the tooltip shows on the other systems only.
 - **The picker is a page of the console** (`apps/ui/src/pages/pick/`, `/#pick`, drawn without the
   console's frame) in a small frameless window, loaded by URL through the local page like the main
@@ -186,20 +243,19 @@ When the app replaces the tray app, that step changes:
 
 ## Consequences
 
-- `apps/tray/`, `systemd/` and the unit written by `apps/cli/install.ts` stay until the app replaces
-  them; until then both can show the console (and a tray icon) at once, and whichever starts first serves the port (the
-  app uses a running unit; a unit started after the app fails to bind and retries). The step that
-  replaces them on installed machines must: stop and disable `claude-multi-console.service` and
-  remove its file (install, and a migration for machines that have it), have install stop writing it,
-  make the doctor's console check expect the app instead of the unit, start the app at login in place
-  of the tray, and keep `agents serve` working by hand for headless machines, where there is no app.
+- `apps/tray/`, `systemd/` and the unit written by `apps/cli/install.ts` stay until the replacement
+  step (above); until then both can show the console (and a tray icon) at once, and whichever starts
+  first serves the port (the app uses a running unit; a unit started after the app fails to bind and
+  retries).
 - A console the app started that dies sends the window back to the local page; one it did not start
   (the unit, by hand) is not supervised, and its death leaves the console's own reconnect behaviour
   on screen.
-- The sidecar is about 100 MB (the Deno runtime) and is built per target: `deno compile --target`
-  covers Linux, macOS and Windows on x86_64 and aarch64, so the 1.x platforms need no other tool.
-- The repository must exist on the machine: the sidecar ships the CLI's code, not `shared/`, the
-  console's page or the git checkout it updates.
+- The package grows with what it carries (Linux x86_64, release): the deb is 4.2 MB without a backend,
+  51 MB with it (128 MB installed: Deno 92 MB, the module cache 29 MB, the source 2.7 MB). A
+  `deno compile`d CLI, the first version of this piece, made it 38 MB (117 MB installed) and still
+  needed a checkout for everything but the code.
+- Deno is a release input like the Rust crates: its version is pinned in `scripts/bundle.sh`, and a
+  bump is a deliberate change there.
 - `scripts/check.sh` runs `cargo fmt --check` and `cargo clippy -D warnings` on the app where cargo
   and WebKitGTK are installed and skips it elsewhere; CI's image has neither, so CI does not check
   the Rust until it installs them.
