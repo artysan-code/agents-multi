@@ -42,18 +42,18 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
       } else add("console.unit", "ok", `console on http://127.0.0.1:${PORT} (systemd user unit)`);
     }
   }
-  // --- the new interface under /next: built from the tree the checkout is on
+  // --- the interface: built from the tree the checkout is on; without a build there is no console page
   const ui = await uiStatus();
   if (ui !== "built") {
     const pnpm = await has("pnpm");
     add(
       "console.ui",
-      "warn",
-      `the console's new interface (/next) is ${ui === "missing" ? "not built" : "built from older code"}${
+      ui === "missing" ? "fail" : "warn",
+      `the console's interface is ${ui === "missing" ? "not built" : "built from older code"}${
         pnpm ? "" : ", and pnpm is not installed"
       }`,
       pnpm ? "agents-multi ui build" : "install pnpm (https://pnpm.io/installation), then agents-multi ui build",
     );
-  } else add("console.ui", "ok", "the console's new interface is built (/next)");
+  } else add("console.ui", "ok", "the console's interface is built");
   return c;
 }

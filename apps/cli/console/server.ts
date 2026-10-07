@@ -1,6 +1,6 @@
 // server.ts — the local console: `agents-multi serve` listens on http://127.0.0.1:7331 and serves
-// the page in apps/cli/dashboard/ (no build step, works offline), the new interface built from apps/ui
-// under /next while the pages move over, and their API.
+// the interface built from apps/ui, its API, and for one release the old page in apps/cli/dashboard/
+// under /old.
 //
 // Routes are a table: each path has a GET handler, a POST handler, or both. A POST handler runs only
 // with the anti-CSRF header; a path with only a POST handler answers 405 to anything else. The
@@ -27,7 +27,7 @@ import { catalog, catalogPage, details, inventory, type PluginOp, pluginOp } fro
 import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
 import { connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
-import { hasCsrfHeader, isLocalHost, json, jsonText, nextFile, staticFile } from "./http.ts";
+import { hasCsrfHeader, isLocalHost, json, jsonText, staticFile, uiFile } from "./http.ts";
 import { broadcast, eventStream, onTopic, watchBrain, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
@@ -282,8 +282,12 @@ export function createHandler(table: Record<string, Route>): (req: Request) => P
         await taskApi(req, u, json, () => broadcast("tasks")) ??
         (req.method === "GET" ? await memoryApi(u) : null);
       if (delegated) return delegated;
-      if (u.pathname === "/next" || u.pathname.startsWith("/next/")) return await nextFile(UI_DIST, u.pathname);
-      return await staticFile(DASH, u.pathname);
+      // the old console, kept one release as a fallback; its page links its files relatively
+      if (u.pathname === "/old") return Response.redirect(`${u.origin}/old/`, 301);
+      if (u.pathname.startsWith("/old/")) return await staticFile(DASH, u.pathname.slice(4));
+      // where the new interface lived while its pages moved over
+      if (u.pathname === "/next" || u.pathname.startsWith("/next/")) return Response.redirect(`${u.origin}/`, 301);
+      return await uiFile(UI_DIST, u.pathname);
     } catch (e) {
       return json({ error: (e as Error).message }, 500);
     }

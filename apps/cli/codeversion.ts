@@ -1,12 +1,12 @@
 // codeversion.ts — a fingerprint of the code the console runs: its server (cli/, the libraries it
-// shares with the MCP servers) and its page (apps/cli/dashboard). The console takes it when it starts and
+// shares with the MCP servers) and its page (the build in apps/ui/dist). The console takes it when it starts and
 // tells it to every page it serves (/api/code, and the first event of /api/events); a page that hears
 // another one reloads itself, and the doctor compares it with the files as they are now: a console
 // started before a pull or an edit is running old code, and says so instead of showing stale errors.
 
 import { REPO } from "./lib/paths.ts";
 
-const ROOTS = ["apps/cli", "shared/mcp/lib"];
+const ROOTS = ["apps/cli", "shared/mcp/lib", "apps/ui/dist"];
 const SKIP = /\/(tests|node_modules)(\/|$)/;
 
 async function files(dir: string, out: string[]) {

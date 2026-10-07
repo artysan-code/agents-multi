@@ -251,7 +251,7 @@ switch (cmd) {
   tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
-  ui      build               build the console's new interface (apps/ui, pnpm) that serve shows under /next
+  ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
   version                     the version of agents-multi (also --version, -V)
 

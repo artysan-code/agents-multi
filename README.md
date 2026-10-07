@@ -194,7 +194,7 @@ closed, then run `agents-multi install` and `agents-multi doctor`.
 | `agents-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                   |
 | `agents-multi usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                       |
 | `agents-multi serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally already running as a unit)                                                                                  |
-| `agents-multi ui build`                                               | build the console's new interface (`apps/ui`, pnpm), served under `/next`; install and self-update run it when `apps/ui` changed                             |
+| `agents-multi ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                       |
 | `agents-multi vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                         |
 | `agents-multi tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                               |
 | `agents-multi google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                           |
@@ -214,15 +214,14 @@ exactly the same, which is the point on a headless box.
 
 Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
 asks the brain every half minute whether its tasks or pages moved, and the page redraws the view you
-are actually looking at. The page itself is HTML, CSS and vanilla JS with no build step; the libraries
-it uses are vendored in `apps/cli/dashboard/vendor/` (d3-force, for the brain's graph) and nothing is
-loaded from elsewhere, so it renders on a machine that has never been online.
+are actually looking at. The page is `apps/ui/` (Preact and TypeScript, built with Vite and pnpm); its
+libraries are bundled into the build and nothing is loaded from elsewhere, so it renders on a machine
+that has never been online. The build is made on the machine and never committed: `install` and every
+update that changed `apps/ui` run `agents-multi ui build`, a failed build keeps the previous one, and
+the doctor says when it is missing or behind. It needs pnpm.
 
-The console is moving to a new interface, `apps/ui/` (Preact and TypeScript, built with Vite and
-pnpm), at <http://127.0.0.1:7331/next> while its pages move over one at a time; System › Health is
-the first. The build is made on the machine and never committed: `install` and every update that
-changed `apps/ui` run `agents-multi ui build`, a failed build keeps the previous one, and the doctor
-says when it is missing or behind. It needs pnpm; the current console does not.
+The previous page (`apps/cli/dashboard/`, HTML and vanilla JS with no build step) stays at
+<http://127.0.0.1:7331/old/> for one release, as a fallback, and goes in the next.
 
 Five sections, in English or Italian. The language follows the machine's locale — the regional
 format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
@@ -506,8 +505,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 bin/            wrappers and scripts: claude, agents-multi, claude-multi-app, claude-launch, claude-update, …
 bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
 apps/cli/            the agents-multi CLI (Deno, zero dependencies)
-apps/cli/dashboard/  the console page (HTML/CSS/JS, no build step)
-apps/ui/             the console's new interface (Preact + TSX, Vite, pnpm), under /next
+apps/ui/             the console page (Preact + TSX, Vite, pnpm)
+apps/cli/dashboard/  the previous console page, under /old for one release; its style.css and fonts are the UI's too
 shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
 config.example/ the configuration `agents-multi init` starts from
 lib/            the desktop app: tray and console window (PySide6)

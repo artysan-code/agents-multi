@@ -4,8 +4,10 @@
 /** Pure: which running parts a set of changed files makes stale. */
 export function staleParts(changed: string[]): { console: boolean; app: boolean } {
   return {
+    // the page too (apps/ui): a restart is what tells the open pages to reload onto the new build
     console: changed.some((f) =>
-      f.startsWith("apps/cli/") && !f.startsWith("apps/cli/tests/") || f.startsWith("shared/mcp/lib/")
+      f.startsWith("apps/cli/") && !f.startsWith("apps/cli/tests/") || f.startsWith("shared/mcp/lib/") ||
+      f.startsWith("apps/ui/")
     ),
     app: changed.some((f) => f.startsWith("apps/tray/")),
   };

@@ -19,6 +19,7 @@ Deno.test("self-update: pulls only fast-forward on a clean tree that follows a r
 Deno.test("self-update: the console restarts for its code, the app for its own, tests and docs restart nothing", () => {
   assertEquals(staleParts(["apps/cli/serve.ts"]), { console: true, app: false });
   assertEquals(staleParts(["shared/mcp/lib/tasks.ts"]), { console: true, app: false });
+  assertEquals(staleParts(["apps/ui/src/pages/today/index.tsx"]), { console: true, app: false });
   assertEquals(staleParts(["apps/tray/console.py"]), { console: false, app: true });
   assertEquals(staleParts(["apps/cli/tests/x_test.ts", "README.md", "apps/brain/main.ts"]), {
     console: false,

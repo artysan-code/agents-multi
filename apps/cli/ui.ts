@@ -1,5 +1,5 @@
-// ui.ts — the console's new interface (apps/ui): built with pnpm into apps/ui/dist, which the console
-// serves under /next. The build carries the git tree it was made from, so a pull that changed apps/ui
+// ui.ts — the console's interface (apps/ui): built with pnpm into apps/ui/dist, which the console
+// serves at its root. The build carries the git tree it was made from, so a pull that changed apps/ui
 // is seen as a stale build. A failed build leaves the previous one in place.
 
 import { REPO } from "./lib/paths.ts";

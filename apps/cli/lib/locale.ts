@@ -1,6 +1,6 @@
 // locale.ts — The interface language a machine asks for.
 
-/** The console's languages. The page carries one dictionary per entry (apps/cli/dashboard/i18n.js). */
+/** The console's languages. The page carries one dictionary per entry (apps/ui/src/i18n.ts). */
 export const UI_LANGUAGES = ["en", "it"] as const;
 export type UiLanguage = typeof UI_LANGUAGES[number];
 

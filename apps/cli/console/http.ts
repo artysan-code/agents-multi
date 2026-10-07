@@ -62,18 +62,22 @@ export async function staticFile(dir: string, pathname: string): Promise<Respons
 }
 
 /**
- * A file of the new interface under /next, from its build in `dist`: the page itself revalidated on
- * each load, its hashed assets immutable. A console whose interface is not built says how to build it.
+ * A file of the console's interface, from its build in `dist`: the page itself revalidated on each
+ * load, its hashed assets immutable. A console whose interface is not built says how to build it, and
+ * where the old one still is.
  */
-export async function nextFile(dist: string, pathname: string): Promise<Response> {
-  const rest = pathname.replace(/^\/next\/?/, "");
+export async function uiFile(dist: string, pathname: string): Promise<Response> {
+  const rest = pathname.replace(/^\//, "");
   if (rest === "" || rest === "index.html") {
     const page = await readText(`${dist}/index.html`);
     if (page === null) {
-      return new Response("The new interface is not built: run `agents-multi ui build`.", {
-        status: 503,
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
+      return new Response(
+        "The console's interface is not built: run `agents-multi ui build`. The old one is at /old/.",
+        {
+          status: 503,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        },
+      );
     }
     return new Response(page, { headers: { "content-type": MIME[".html"], "cache-control": "no-cache" } });
   }

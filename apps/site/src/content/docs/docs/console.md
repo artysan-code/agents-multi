@@ -8,11 +8,9 @@ description: A local web app that shows what every profile is doing.
 
 Updates are **pushed, not polled**: the server watches the transcripts and the shared configuration,
 asks the brain whether its tasks or pages moved, and the page redraws the view you are looking at. It
-is HTML, CSS and vanilla JavaScript with no build step, its libraries vendored: it renders on a
-machine that has never been online. English or Italian, following the machine's locale.
-
-A new interface (Preact and TypeScript) is taking its place at `/next`, one page at a time. It is
-built on the machine with pnpm when Agents Multi is installed or updated, never downloaded.
+is Preact and TypeScript, built on the machine with pnpm when Agents Multi is installed or updated,
+never downloaded; nothing is loaded from elsewhere, so it renders on a machine that has never been
+online. English or Italian, following the machine's locale.
 
 ## Sections
 
