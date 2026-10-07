@@ -9,8 +9,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod activation;
+mod backend;
 mod console;
 mod navigation;
+mod repo;
 
 use navigation::Decision;
 use tauri::webview::NewWindowResponse;
@@ -35,12 +37,14 @@ fn main() {
                 activation::bring_forward(&window, activation::forwarded_token(&args));
             }
         }))
+        // The console's backend: started before the window, stopped on exit (backend.rs).
+        .plugin(backend::init())
         .setup(|app| {
             #[cfg(target_os = "linux")]
             set_window_class(&app.config().identifier);
             let port = console::port();
-            // Phase 5, piece 2: start the backend sidecar here, before the window. The local page
-            // already waits for whatever serves the console on `port`.
+            // The local page waits for whatever serves the console on `port`: the backend plugin's
+            // sidecar, or a console that was already running.
             open_main_window(app.handle(), port)?;
             Ok(())
         })

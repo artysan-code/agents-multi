@@ -18,3 +18,7 @@ url = "2"
 [target.'cfg(target_os = "linux")'.dependencies]
 # the GTK window behind the webview, to hand it the launcher's activation token (src/activation.rs)
 gtk = "=0.18.2"
+
+[target.'cfg(unix)'.dependencies]
+# SIGTERM to the backend, and its parent-death signal on Linux (src/backend.rs).
+libc = "=0.2.190"

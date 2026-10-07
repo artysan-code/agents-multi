@@ -13,6 +13,7 @@ name = "agents-multi-desktop"
 version = "0.0.0"
 dependencies = [
  "gtk",
+ "libc",
  "serde_json",
  "tauri",
  "tauri-build",
