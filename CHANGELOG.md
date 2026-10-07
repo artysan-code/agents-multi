@@ -5,6 +5,28 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.4.0] - 2026-10-07
+
+### Added
+
+- **console**: Repair button on health checks with steps, live output and a re-check (bed9ce2)
+- **console**: long actions stream their output as a job, one per action, cancellable (d0d701c)
+- **brain**: the compose file runs outside Coolify too, with BRAIN_URL set by hand (96d3c7b)
+- **doctor**: a check can carry a structured repair; desktop-rebuild takes a known profile (82a6d48)
+- **brain**: an account's areas are named in its language, English for any but Italian (5dc25fe)
+- **brain**: admin CLI for the container and a daily sealed backup of every database (b011fb9)
+- **console**: «Close Claude and update» for an install waiting on open sessions (#12) (e48d3b4)
+- **brain**: versioned schema migrations, and an hourly purge of expired rows (dbeb448)
+- **brain**: structured JSON logs, one access line per request (ed21498)
+- **brain**: the site is served from memory with ETags and 304s (868f9d9)
+- **console**: update button in System tabs bar and Today (90fc5c0)
+
+### Fixed
+
+- **doctor**: no guided repair for the console unit, since install restarts the console mid-stream (2ba996c)
+- **console**: the update fixes get their button, and a failed Desktop rebuild logs why (bd9b034)
+- **mcp**: our servers run with --no-config, so their lock files stop changing (3b0426d)
+
 ## [0.3.0] - 2026-10-06
 
 ### Breaking changes
