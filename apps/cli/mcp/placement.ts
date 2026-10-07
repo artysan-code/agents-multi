@@ -45,10 +45,10 @@ export function forAccount<T>(v: T, a: Account): T {
 /** Pure: one word for a POSIX shell. */
 export const shellQuote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
 
-/** Pure: the deno command line of launch.ts, allowed to run `run` and nothing else. */
+/** Pure: the Deno command line of launch.ts, allowed to run `run` and nothing else. */
 export function launcher(paths: LaunchPaths, run?: string, bind = false): string[] {
   return [
-    "deno",
+    paths.deno,
     "run",
     "--quiet",
     "--no-lock",
@@ -103,7 +103,7 @@ export function perAccount(
         cmd,
         ...(out.args as string[] ?? []),
       ];
-      out.command = "deno";
+      out.command = paths.deno;
     }
     out.env = { ...(out.env as Record<string, string> ?? {}), ...amEnvBoth("PROFILE", t.profile) };
     if (t.surface === "desktop" && reg.bus) (out.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
@@ -259,10 +259,10 @@ export function permissionRules(reg: Registry, profile: string): RegistryRules {
     for (const tool of cfg._ask ?? []) ask.push(`mcp__${name}__${tool}`);
     if (cfg._guard) guarded.set(entry, [...guarded.get(entry) ?? [], `mcp__${name}__${cfg._guard.tool}`]);
   }
-  const dir = (reg.launch ?? launchPaths()).hooks;
+  const { hooks: dir, deno } = reg.launch ?? launchPaths();
   const hooks: GuardHook[] = [...guarded].map(([entry, tools]) => ({
     matcher: `^(${tools.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`,
-    hooks: [{ type: "command", command: `deno run --quiet --no-lock ${dir}/${reg.servers[entry]._guard!.hook}` }],
+    hooks: [{ type: "command", command: `${deno} run --quiet --no-lock ${dir}/${reg.servers[entry]._guard!.hook}` }],
   }));
   return { deny: deny.sort(), ask: ask.sort(), hooks };
 }

@@ -1,0 +1,13 @@
+# The desktop app at login, in the tray: `agents install` writes it to ~/.config/autostart/agents-multi.desktop,
+# @BIN@ filled in. Through the claude-multi-app wrapper, which finds the app (the package's, linked
+# into the runtime) and, from a checkout, runs it on that checkout's code.
+[Desktop Entry]
+Type=Application
+Name=Agents Multi
+Comment=The Agents Multi console in the tray
+Exec=@BIN@/claude-multi-app --tray
+Icon=claude-multi
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel

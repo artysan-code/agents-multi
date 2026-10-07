@@ -17,6 +17,7 @@ import { desktopNotify } from "./notify.ts";
 import { staleParts, staleUnits } from "./lib/stale.ts";
 import { syncAllSettings } from "./settings.ts";
 import { uiBuild, uiStatus } from "./ui.ts";
+import { installation } from "./lib/mode.ts";
 
 export interface RepoView {
   upstream: string | null;
@@ -81,6 +82,7 @@ const T = {
     remoteGone: (url: string) =>
       `il remote ${url} non esiste più (repository rinominato o spostato): git -C <repo> remote set-url origin <nuovo URL>`,
     notRepo: "non è un repository git: niente da aggiornare",
+    app: "si aggiorna con l'app (il suo aggiornamento, o il gestore dei pacchetti)",
     notifyTitle: (v: string) => `agents-multi aggiornato${v ? ` alla ${v}` : ""}`,
     notifyMore: (n: number) => `…e ${n} ${n === 1 ? "altra novità" : "altre novità"}`,
     notifyOpen: "Le novità sono nella console, in Sistema › Aggiornamenti.",
@@ -111,6 +113,7 @@ const T = {
     remoteGone: (url: string) =>
       `the remote ${url} is gone (the repository was renamed or moved): git -C <repo> remote set-url origin <new URL>`,
     notRepo: "not a git repository: nothing to update",
+    app: "updated with the app (its updater, or the package manager)",
     notifyTitle: (v: string) => `agents-multi updated${v ? ` to ${v}` : ""}`,
     notifyMore: (n: number) => `…and ${n} more`,
     notifyOpen: "What's new is in the console, under System › Updates.",
@@ -129,7 +132,8 @@ const note = (text: string) => `${" ".repeat(31)}${C.dim}${text}${C.x}`;
 const skipWhy = (r: RepoView) =>
   !r.upstream ? T.noUpstream(r.branch) : r.ahead ? T.diverged(r.behind, r.ahead) : T.dirty(r.dirty);
 
-const PENDING = `${STATE}/install-pending`;
+/** An install left waiting for Claude to be closed, with the build or commit it is for. */
+export const PENDING = `${STATE}/install-pending`;
 const SKIPPED = `${CACHE}/self-update-skipped`;
 
 export async function log(event: string, from: string, to: string, detail = "", component = "agents-multi") {
@@ -213,6 +217,13 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
   const say = (s: string) => {
     if (!quiet) console.log(s);
   };
+  // app mode: the code is the app's copy, which the app installs when it starts on a new build
+  // (appinstall.ts); what is left here is an install that waited for Claude to be closed
+  if ((await installation()).mode === "app") {
+    say(row("ok", (await currentVersion()) ?? "", T.app));
+    const head = await installWaiting();
+    return head ? (await settleInstall(head, say) ? 0 : 1) : 0;
+  }
   if ((await g("rev-parse", "--git-dir")).code !== 0) {
     say(row("ok", "", T.notRepo));
     return 0;
@@ -283,6 +294,10 @@ function updateNote(rs: Release[]): string {
 /** `self-update --check` as a row: what a round would do, without doing it. 10 when there is
  *  something to take, as `update --check` counts it. */
 export async function selfCheckRow(): Promise<number> {
+  if ((await installation()).mode === "app") {
+    console.log(row("ok", (await currentVersion()) ?? "", T.app));
+    return 0;
+  }
   const c = await selfCheck();
   const r = await view(); // after the fetch selfCheck made
   if (c.plan.do === "pull") {
@@ -313,6 +328,9 @@ async function fetchFailure(err: string): Promise<string> {
 
 /** For `update --check`: how far behind the repository is after a fetch, without changing it. */
 export async function selfCheck(): Promise<{ current: string; behind: number; plan: SelfPlan }> {
+  if ((await installation()).mode === "app") {
+    return { current: (await currentVersion()) ?? "", behind: 0, plan: { do: "nothing", why: T.app } };
+  }
   await run("timeout", ["15", "git", "-C", REPO, "fetch", "-q", "origin"]);
   const r = await view();
   return { current: (await g("rev-parse", "--short", "HEAD")).out, behind: r.behind, plan: selfPlan(r) };

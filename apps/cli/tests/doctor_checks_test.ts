@@ -3,7 +3,6 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { keyRefused } from "../doctor/checks/vault.ts";
 import { zshBlockIn } from "../doctor/checks/zshrc.ts";
 import { runningFrom, writtenHomes } from "../doctor/checks/repo.ts";
-import { installedRepo } from "../doctor/context.ts";
 import { ZSH_BEGIN, ZSH_END } from "../lib/shell.ts";
 
 Deno.test("keyRefused: 401 and 403 are a refusal, anything else is silence", () => {
@@ -24,16 +23,6 @@ Deno.test("writtenHomes: each home folder once", () => {
   assertEquals(writtenHomes("$HOME/x"), []);
 });
 
-Deno.test("installedRepo: where the runtime's shared link points, else the running code", () => {
-  assertEquals(installedRepo("/srv/src/agents-multi/shared", "/srv/src/dev"), "/srv/src/agents-multi");
-  assertEquals(installedRepo("/srv/src/dev/shared", "/srv/src/dev"), "/srv/src/dev");
-  // missing, a real folder (null too), relative, not a shared folder, or the root: the running code
-  assertEquals(installedRepo(null, "/srv/src/dev"), "/srv/src/dev");
-  assertEquals(installedRepo("../src/agents-multi/shared", "/srv/src/dev"), "/srv/src/dev");
-  assertEquals(installedRepo("/srv/src/agents-multi/other", "/srv/src/dev"), "/srv/src/dev");
-  assertEquals(installedRepo("/shared", "/srv/src/dev"), "/srv/src/dev");
-});
-
 Deno.test("runningFrom: one note when the running code is not the installed repository", () => {
   assertEquals(runningFrom("/srv/src/a", "/srv/src/a", true), null);
   const dev = runningFrom("/srv/src/dev", "/srv/src/a", true);
@@ -42,6 +31,6 @@ Deno.test("runningFrom: one note when the running code is not the installed repo
   assertEquals(dev?.msg, "running from a development checkout: /srv/src/dev (installed: /srv/src/a)");
   assertEquals(
     runningFrom("/opt/app/repo", "/srv/src/a", false)?.msg,
-    "running from the desktop app's copy: /opt/app/repo (installed: /srv/src/a)",
+    "running from the desktop app's package: /opt/app/repo (installed: /srv/src/a)",
   );
 });

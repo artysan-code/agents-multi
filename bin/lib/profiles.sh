@@ -16,6 +16,15 @@ cm_runtime() {
   else printf '%s\n' "$HOME/.claude-multi"; fi
 }
 
+# The installation's mode, as apps/cli/lib/mode.ts decides it: "app" when ~/.agents-multi/shared is the
+# app's copy (app/current/shared), "dev" when it is a checkout's — or when there is none yet.
+cm_mode() {
+  local rt link
+  rt="$(cm_runtime)"
+  link="$(readlink "$rt/shared" 2>/dev/null || true)"
+  if [[ "$link" == "app/current/shared" || "$link" == "$rt/app/current/shared" ]]; then echo app; else echo dev; fi
+}
+
 # The person's configuration (profiles, accounts, rules): ~/.agents-multi/config, a link to their folder.
 cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$(cm_runtime)/config}}"; }
 
