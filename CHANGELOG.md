@@ -5,6 +5,17 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.10.0] - 2026-10-07
+
+### Added
+
+- **name**: the project is Agents Multi, with the agents-multi command (claude-multi stays) (db8e0fb)
+- **ui**: the console's new interface under /next (Preact, Vite, pnpm), Health first (c381221)
+
+### Fixed
+
+- **vault**: deny the recovery code under the agents-multi name too (3c5198a)
+
 ## [0.9.0] - 2026-10-07
 
 ### Added
