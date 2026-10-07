@@ -5,7 +5,7 @@
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { go } from "../../router.ts";
+import { request } from "../../router.ts";
 import { owner, useTopic } from "../../state.ts";
 import { t, tk } from "../../i18n.ts";
 import { ago } from "../../lib/format.ts";
@@ -48,14 +48,14 @@ function detailTarget(d: string, folder: string | null): Attachment {
   };
 }
 
-/** A wiki page opens the brain; the brain page itself is not ported with this one: it lands on Brain. */
+/** A wiki page opens in the brain's reader. */
 function openAttachment(a: Attachment | undefined): void {
   if (!a) return;
   if (a.kind === "url") {
     open(a.target, "_blank", "noopener");
   } else if (a.kind === "page") {
     closeDrawer();
-    go("brain");
+    request("brain.open", "brain", a.target);
   } else void openPath(a.target);
 }
 

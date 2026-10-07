@@ -6,7 +6,8 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { t } from "../../i18n.ts";
 import { toast } from "../../lib/ui.tsx";
-import { ask, askContext } from "../../shell/ask.tsx";
+import { ask, askContext, askNow } from "../../shell/ask.tsx";
+import { useIntent } from "../../router.ts";
 import { useTopic } from "../../state.ts";
 import { brainApi, errText, type PageReply } from "./api.ts";
 import { Archive } from "./archive.tsx";
@@ -126,6 +127,14 @@ export function Brain() {
     if (!path) return toast(t("brain.missing", { p: target }), true);
     read(path);
   };
+  // a page another one asked for ([[links]] in a task): read once the brain is here
+  const [wanted, setWanted] = useState<string | null>(null);
+  useIntent("brain.open", (p) => p && setWanted(p));
+  useEffect(() => {
+    if (!brain || !wanted) return;
+    setWanted(null);
+    openTarget(wanted);
+  }, [brain, wanted]);
   const toggleDir = (dir: string) =>
     setOpen((o) => {
       const n = new Set(o);
@@ -147,10 +156,7 @@ export function Brain() {
   /** Hands a request to the field below as a change to the brain as a whole, and sends it. */
   const askClaude = (text: string) => {
     askContext("brain", null);
-    const ta = document.querySelector<HTMLTextAreaElement>(".ask-dock textarea");
-    if (!ta?.form) return;
-    ta.value = text;
-    ta.form.requestSubmit();
+    askNow(text);
   };
 
   const search = async (text: string) => {

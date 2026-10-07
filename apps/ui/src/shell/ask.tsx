@@ -25,6 +25,13 @@ export function askContext(kind: AskKind, project: string | null = null, label?:
 /** Puts the cursor in the field (the "/" key, the new-task button). */
 export const focusAsk = signal(0);
 
+const queued = signal<string | null>(null);
+
+/** Sends `text` from the field as if typed there, in the context set now ("Fix with Claude"). */
+export function askNow(text: string): void {
+  queued.value = text;
+}
+
 function ctxLabel(): string {
   const { kind, project, label } = ask.value;
   if (kind === "brain") return project ? t("ask.ctx.brain", { p: label ?? project }) : t("ask.ctx.brainAll");
@@ -60,6 +67,14 @@ export function AskDock() {
   useEffect(() => {
     if (focusAsk.value) ta.current?.focus();
   }, [focusAsk.value]);
+
+  useEffect(() => {
+    const text = queued.value;
+    if (text === null || !ta.current?.form) return;
+    queued.value = null;
+    ta.current.value = text;
+    ta.current.form.requestSubmit();
+  }, [queued.value]);
 
   // "/" anywhere outside a field puts the cursor in the field, as in most chat apps
   useEffect(() => {

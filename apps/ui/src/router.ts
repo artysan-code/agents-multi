@@ -28,7 +28,8 @@ export type IntentName =
   | "tasks.new" // open the new-task form
   | "profiles.new" // open the form for a new profile
   | "update.wizard" // start the update wizard (on any page: the wizard is a drawer)
-  | "health.rerun"; // run the health checks again
+  | "health.rerun" // run the health checks again
+  | "brain.open"; // read a page of the brain (arg: its path or a [[target]])
 
 export const intent = signal<{ name: IntentName; at: number; arg?: string } | null>(null);
 
