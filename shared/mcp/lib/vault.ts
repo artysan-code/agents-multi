@@ -30,7 +30,9 @@ import { amEnv } from "./env.ts";
 const HOME = Deno.env.get("HOME") ?? "";
 const SECRET_TOOL = "/usr/bin/secret-tool";
 const KEY_ATTRS = ["application", "claude-multi", "kind", "vault-key"];
-const CHECK_TEXT = "agents vault";
+// The plaintext sealed in every vault's key-check.json. It is data, not a name: it is the text a key must
+// open, so it keeps the project's name from before Agents Multi, as do the HKDF infos below. Never rename.
+export const CHECK_TEXT = "claude-multi vault";
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 

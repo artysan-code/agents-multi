@@ -61,3 +61,13 @@ Deno.test("probeRequest: on the account's address, on the service's API, or no c
   assertEquals(probeRequest({ service: "coolify" }, "k"), null);
   assertEquals(probeRequest({ service: "railway", url: "https://x" }, "k"), null);
 });
+
+Deno.test("key-check: the sealed text and the key derivation infos keep their original value (a vault made before the rename opens)", async () => {
+  assertEquals(v.CHECK_TEXT, "claude-multi vault");
+  // an existing vault's key-check.json is this seal of this text under the key it was made with
+  const k = await v.importKey(new Uint8Array(32).fill(7));
+  assertEquals(await v.open(k, "key-check", await v.seal(k, "key-check", v.CHECK_TEXT)), "claude-multi vault");
+  // a fixed box made by the version before the rename, with the same key, must still open
+  const old = JSON.parse(await Deno.readTextFile(new URL("./fixtures/vault-key-check.json", import.meta.url)));
+  assertEquals(await v.open(k, "key-check", old), "claude-multi vault");
+});
