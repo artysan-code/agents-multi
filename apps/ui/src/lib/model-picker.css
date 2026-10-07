@@ -1,0 +1,143 @@
+/* model-picker.css — the model button and its list (model-picker.tsx), in the ask bar and in Hey. */
+
+.mpk {
+  position: relative;
+  flex: none;
+}
+.mpk-t {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  font: 500 12.5px var(--sans);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.mpk-t:hover,
+.mpk-t[aria-expanded="true"] {
+  background: var(--raised);
+  color: var(--fg);
+}
+.mpk-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--k, var(--faint));
+  flex: none;
+}
+.mpk-pop {
+  position: absolute;
+  right: -6px;
+  top: calc(100% + 12px);
+  width: 332px;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--pop);
+  padding: 6px;
+  z-index: 45;
+  text-align: left;
+}
+.mpk-pop:focus {
+  outline: none;
+}
+.mpk-pop.flow {
+  position: static;
+  width: auto;
+  margin: 2px 0 4px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.mpk-pop h6 {
+  margin: 6px 10px 4px;
+  font: 600 10.5px var(--sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.mpk-o {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 1px 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--fg);
+}
+.mpk-o.hl {
+  background: var(--raised);
+}
+.mpk-o .mpk-dot {
+  grid-row: 1 / 3;
+}
+.mpk-o b {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.mpk-o[aria-selected="true"] b {
+  color: var(--accent);
+}
+.mpk-o em {
+  font: 500 10.5px var(--sans);
+  font-style: normal;
+  color: var(--faint);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+  line-height: 16px;
+}
+.mpk-o small {
+  grid-column: 2;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+.mpk-k {
+  grid-row: 1 / 3;
+  grid-column: 3;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--accent);
+}
+.mpk-k svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  fill: none;
+}
+.mpk-ef {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  margin-left: 2px;
+}
+.mpk-ef i {
+  width: 3px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--line);
+}
+.mpk-ef i:nth-child(2) {
+  height: 10px;
+}
+.mpk-ef i:nth-child(3) {
+  height: 12px;
+}
+.mpk-ef i.on {
+  background: var(--k);
+}
+.mpk-ft {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 7px 10px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  color: var(--faint);
+}

@@ -29,7 +29,8 @@ export type IntentName =
   | "profiles.new" // open the form for a new profile
   | "update.wizard" // start the update wizard (on any page: the wizard is a drawer)
   | "health.rerun" // run the health checks again
-  | "brain.open"; // read a page of the brain (arg: its path or a [[target]])
+  | "brain.open" // read a page of the brain (arg: its path or a [[target]])
+  | "system.show"; // bring Today's system card to the eye (the header's pill)
 
 export const intent = signal<{ name: IntentName; at: number; arg?: string } | null>(null);
 

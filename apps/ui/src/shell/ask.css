@@ -1,0 +1,161 @@
+/* ask.css — the bar to ask Claude and the panel its answer opens over the page (ask.tsx). */
+
+.ab-wrap {
+  position: relative;
+  z-index: 15;
+}
+.ab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 8px 9px 8px 18px;
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  transition: box-shadow .15s;
+}
+.ab:focus-within {
+  box-shadow: 0 0 0 2px var(--accent),0 8px 28px rgba(173,78,44,.12);
+}
+.ab .ab-spk {
+  font-size: 20px;
+  color: var(--spark);
+  flex: none;
+}
+.ab textarea {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  resize: none;
+  font: 400 16px/1.4 var(--sans);
+  color: var(--fg);
+  padding: 8px 0;
+  height: 38px;
+  max-height: 120px;
+}
+.ab textarea::placeholder {
+  color: var(--faint);
+}
+.ab-ctx {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  max-width: 220px;
+  padding: 3px 4px 3px 9px;
+  border-radius: 7px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+.ab-ctx span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ab-ctx button {
+  color: inherit;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+.ab-modes {
+  flex: none;
+}
+.ab-modes button {
+  padding: 5px 10px;
+}
+.ab-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.ab-send:hover {
+  background: var(--accent-hi);
+}
+.ab-send svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--on-accent);
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* the answer, over the page */
+.ab-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--pop);
+  padding: 16px 20px 10px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(460px, calc(100vh - 170px));
+}
+.ab-q {
+  color: var(--faint);
+  font-size: 12.5px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ab-q .spark {
+  color: var(--spark);
+  font-size: 14px;
+}
+.ab-a {
+  font: 400 15px/1.6 var(--serif);
+  max-width: 780px;
+  overflow: auto;
+  min-height: 24px;
+}
+.ab-a p {
+  margin: 0 0 8px;
+}
+.ab-f {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--faint);
+}
+.ab-s {
+  margin-right: auto;
+}
+.ab-m {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin-left: 6px;
+}
+.ab-x {
+  width: 28px;
+  height: 28px;
+}
+.ab-x svg {
+  width: 15px;
+  height: 15px;
+}
+@media (max-width: 900px) {
+  .ab-slash {
+    display: none;
+  }
+}

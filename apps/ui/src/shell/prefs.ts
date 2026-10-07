@@ -33,3 +33,7 @@ export function cycleLang(): void {
   const order = ["auto", ...LANGS];
   setLangPref(order[(order.indexOf(langPref.value) + 1) % order.length]);
 }
+
+export function setTheme(v: Theme): void {
+  theme.value = v;
+}

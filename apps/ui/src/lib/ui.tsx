@@ -8,6 +8,7 @@ import { useEffect } from "preact/hooks";
 import { ndjson, post, postInit } from "../api.ts";
 import { loadStatus, status } from "../state.ts";
 import { t } from "../i18n.ts";
+import { profileColor } from "./pcolor.ts";
 
 /* ---------------- toast ---------------- */
 
@@ -89,12 +90,9 @@ export function Overlays() {
 
 /* ---------------- profiles ---------------- */
 
-/** A profile's colour: its place among the profiles, so no name is ever spelled out here. */
+/** A profile's colour: from its name, kept apart from the other profiles here (lib/pcolor.ts). */
 export function pcolor(name: string): string {
-  const names = Object.keys(status.value?.profiles ?? {}).sort();
-  let i = names.indexOf(name);
-  if (i < 0) i = [...String(name)].reduce((a, c) => a + c.charCodeAt(0), 0);
-  return `var(--p-${(i % 4) + 1})`;
+  return profileColor(name, Object.keys(status.value?.profiles ?? {}));
 }
 
 export function Pf({ name, label }: { name: string; label?: string }) {

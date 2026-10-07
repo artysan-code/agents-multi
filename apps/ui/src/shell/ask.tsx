@@ -1,16 +1,20 @@
-// ask.tsx — the field to ask Claude, at the foot of Today, Tasks and Brain. A plain question, a new task
-// (in the project on screen, in none, or wherever Claude finds it belongs) or a change to the brain: the
-// page on screen sets that through `askContext`. The answer streams in above the field; what Claude
+// ask.tsx — the bar to ask Claude, at the top of Today, Tasks and Brain: the first thing under the
+// header. A plain question, a new task (in the project on screen, in none, or wherever Claude finds it
+// belongs) or a change to the brain: the bar's modes choose, and the page on screen sets a project
+// through `askContext`. The answer streams into a panel over the page (Esc closes it); what Claude
 // changed with its tools shows at once, through the topics, not at the next event.
 
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { get, ndjson, post, postInit, type Result } from "../api.ts";
+import { ndjson, post, postInit, type Result } from "../api.ts";
 import { t, tk } from "../i18n.ts";
 import { Spark, type SparkMode } from "../lib/claude.tsx";
 import { renderMarkdown } from "../lib/markdown.tsx";
-import { toast } from "../lib/ui.tsx";
+import { drawerOpen, toast } from "../lib/ui.tsx";
+import { ModelPicker, useAskModel } from "../lib/model-picker.tsx";
+import { paletteOpen } from "./palette.tsx";
 import { touch } from "../state.ts";
+import "./ask.css";
 
 export type AskKind = "ask" | "newtask" | "brain";
 
@@ -51,18 +55,16 @@ interface Answer {
   code: string | null;
 }
 
-export function AskDock() {
+const MODES: AskKind[] = ["ask", "newtask", "brain"];
+
+export function AskBar() {
   const [answer, setAnswer] = useState<Answer | null>(null);
-  const [models, setModels] = useState<{ models: string[]; model: string } | null>(null);
+  const { state: models, pick } = useAskModel((m) => toast(m, true));
   const ta = useRef<HTMLTextAreaElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const busy = useRef<AbortController | null>(null);
   const session = useRef<string | null>(null);
   const last = useRef("");
-
-  // the model the requests go to: one choice, shared with the Hey window (kept by the server)
-  const loadModel = () => get<{ models: string[]; model: string }>("/api/ask/model").then(setModels, () => setModels(null));
-  useEffect(() => void loadModel(), []);
 
   useEffect(() => {
     if (focusAsk.value) ta.current?.focus();
@@ -76,9 +78,13 @@ export function AskDock() {
     ta.current.form.requestSubmit();
   }, [queued.value]);
 
-  // "/" anywhere outside a field puts the cursor in the field, as in most chat apps
+  // "/" anywhere outside a field puts the cursor in the bar, as in most chat apps; Esc closes the answer
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && answer && !drawerOpen() && !paletteOpen.value) {
+        close();
+        return;
+      }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as Element)?.closest?.("input, textarea, select, [contenteditable]")) return;
       e.preventDefault();
@@ -86,7 +92,7 @@ export function AskDock() {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, []);
+  }, [answer]);
 
   useEffect(() => {
     if (body.current) body.current.scrollTop = body.current.scrollHeight;
@@ -96,7 +102,7 @@ export function AskDock() {
     const el = ta.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   };
 
   const close = () => {
@@ -169,60 +175,24 @@ export function AskDock() {
     if (!r.ok) toast(r.message ?? "", true);
   };
 
-  const pickModel = async (model: string) => {
-    const r = await post("/api/ask/model", { model }).catch((err: Error): Result => ({ ok: false, message: err.message }));
-    if (!r.ok) {
-      toast(r.message ?? "", true);
-      void loadModel();
-    }
-    ta.current?.focus();
-  };
-
-  const ctx = ask.value.kind === "ask" ? "" : ctxLabel();
-  const ph = ask.value.kind === "newtask" ? "ask.ph.newtask" : ask.value.kind === "brain" ? "ask.ph.brain" : "ask.ph";
+  const kind = ask.value.kind;
+  const ctx = kind !== "ask" && ask.value.project !== null ? ctxLabel() : "";
+  const ph = kind === "newtask" ? "ask.ph.newtask" : kind === "brain" ? "ask.ph.brain" : "ask.ph";
   const codeName = answer?.code ? answer.code.replace(/\/+$/, "").split("/").pop() || "~" : "";
+  const working = !!answer && !answer.done;
 
   return (
-    <div class="ask-dock">
-      {answer && (
-        <section class="answer" aria-live="polite">
-          <div class="answer-q">{answer.q}</div>
-          <div class="answer-b md" ref={body}>
-            {answer.error ? <p class="err">{answer.error}</p> : renderMarkdown(answer.text)}
-          </div>
-          <div class="answer-f">
-            <span class="answer-s">
-              {answer.done ? <span>{t("ask.followup")}</span> : (
-                <>
-                  <Spark mode={answer.state} />
-                  <span class="ask-state">{answer.doing}</span>
-                </>
-              )}
-            </span>
-            {answer.done && session.current && (
-              <button type="button" class="btn sm" onClick={() => terminal({ resume: session.current })}>{t("ask.terminal")}</button>
-            )}
-            {answer.done && answer.code && (
-              <button type="button" class="btn sm primary" onClick={() => terminal({ cwd: answer.code, ask: last.current })}>
-                {t("ask.code", { p: codeName })}
-              </button>
-            )}
-            <button type="button" class="icon-btn" title={t("ask.close")} onClick={close}>
-              <svg viewBox="0 0 24 24" class="ico"><path d="M6 6l12 12M18 6L6 18" /></svg>
-            </button>
-          </div>
-        </section>
-      )}
-      <form class="composer" onSubmit={submit}>
-        <Spark mode={answer && !answer.done ? "thinking" : ""} />
+    <div class="ab-wrap">
+      <form class="ab" onSubmit={submit}>
+        <Spark mode={working ? "thinking" : ""} class="spark ab-spk" />
         {ctx && (
-          <span class="ask-ctx">
+          <span class="ab-ctx">
             <span>{ctx}</span>
             <button
               type="button"
               title={t("ask.ctx.clear")}
               onClick={() => {
-                askContext("ask");
+                askContext(kind, null);
                 ta.current?.focus();
               }}
             >
@@ -235,6 +205,7 @@ export function AskDock() {
           name="text"
           rows={1}
           autocomplete="off"
+          aria-label={t("ask.label")}
           placeholder={t(ph)}
           onInput={autosize}
           onKeyDown={(e) => {
@@ -242,21 +213,62 @@ export function AskDock() {
               e.preventDefault();
               (e.currentTarget.form as HTMLFormElement).requestSubmit();
             }
-            if (e.key === "Escape") {
-              if (answer) close();
-              else e.currentTarget.blur();
-            }
+            if (e.key === "Escape" && !answer) e.currentTarget.blur();
           }}
         />
-        {models && (
-          <select class="ask-model" title={t("ask.model")} value={models.model} onChange={(e) => pickModel(e.currentTarget.value)}>
-            {models.models.map((m) => <option key={m} value={m}>{tk(`ask.model.${m}`)}</option>)}
-          </select>
-        )}
-        <button class="send" type="submit" title={t("ask.send")}>
-          <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+        <div class="sg ab-modes" role="radiogroup" aria-label={t("ask.mode")}>
+          {MODES.map((m) => (
+            <button
+              type="button"
+              key={m}
+              role="radio"
+              aria-checked={kind === m}
+              onClick={() => {
+                if (kind !== m) askContext(m, null);
+                ta.current?.focus();
+              }}
+            >
+              {t(`ask.mode.${m}`)}
+            </button>
+          ))}
+        </div>
+        {models && <ModelPicker state={models} onPick={(m) => void pick(m)} onDone={() => ta.current?.focus()} />}
+        <kbd class="k2 ab-slash">/</kbd>
+        <button class="ab-send" type="submit" title={t("ask.send")} aria-label={t("ask.send")}>
+          <svg viewBox="0 0 20 20"><path d="M10 16V4M5 9l5-5 5 5" /></svg>
         </button>
       </form>
+      {answer && (
+        <section class="ab-sheet" role="dialog" aria-label={t("ask.sheet")} aria-live="polite">
+          <div class="ab-q">
+            <Spark mode={working ? answer.state : ""} />
+            <span>{answer.q}</span>
+          </div>
+          <div class="ab-a md" ref={body}>
+            {answer.error ? <p class="err">{answer.error}</p> : renderMarkdown(answer.text)}
+          </div>
+          <div class="ab-f">
+            <span class="ab-s" role="status">
+              {answer.done ? t("ask.followup") : answer.doing}
+            </span>
+            {answer.done && session.current && (
+              <button type="button" class="bt sm ghost" onClick={() => terminal({ resume: session.current })}>{t("ask.terminal")}</button>
+            )}
+            {answer.done && answer.code && (
+              <button type="button" class="bt sm pri" onClick={() => terminal({ cwd: answer.code, ask: last.current })}>
+                {t("ask.code", { p: codeName })}
+              </button>
+            )}
+            <span class="ab-m">
+              {models ? `${tk(`ask.model.${models.model}`)} · ` : ""}
+              <kbd class="k2">Esc</kbd> {t("ask.esc")}
+            </span>
+            <button type="button" class="ib ab-x" title={t("ask.close")} aria-label={t("ask.close")} onClick={close}>
+              <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
