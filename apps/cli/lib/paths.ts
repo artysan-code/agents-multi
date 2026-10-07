@@ -5,9 +5,9 @@ import { amEnv } from "../../../shared/mcp/lib/env.ts";
 import { runtimeRoot } from "./runtime-root.ts";
 
 export const HOME = Deno.env.get("HOME") ?? "";
-/** The repository: AGENTS_MULTI_REPO when set, else the checkout this file is in. A compiled binary (the
- *  desktop app's backend, docs/adr/0003) has its modules in a virtual file system, so it must be told. */
-export const REPO = amEnv("REPO") ?? moduleRepo();
+/** The repository this file is in: a checkout, or the desktop app's copy in its resources, which mirrors
+ *  its layout (docs/adr/0003) under a folder that can have a space (macOS: `Agents Multi.app`). */
+export const REPO = decodeURIComponent(new URL("../../..", import.meta.url).pathname).replace(/\/$/, "");
 export const RUNTIME = amEnv("ROOT") ?? runtimeRoot(HOME);
 /** The person's own configuration (profiles, accounts, rules, preferences): a folder of theirs, outside
  *  the repository, that ~/.agents-multi/config links to (`agents init`). The repository is code. */
@@ -34,11 +34,4 @@ export function expandHome(p: string) {
 }
 export function shortHome(p: string) {
   return p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p;
-}
-
-function moduleRepo() {
-  if (Deno.build.standalone) {
-    throw new Error("agents: a compiled binary needs AGENTS_MULTI_REPO, the path of the repository");
-  }
-  return new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 }

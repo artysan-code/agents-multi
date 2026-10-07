@@ -1,23 +1,31 @@
 import { assertEquals } from "@std/assert";
+import { forgetBackendOnly } from "../console/server.ts";
 
-// REPO is computed at import, so each case runs in its own process with the environment it needs.
-const paths = new URL("../lib/paths.ts", import.meta.url).href;
-const checkout = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
-
-async function repoWith(env: Record<string, string>) {
+Deno.test("REPO: the folder the code is in, decoded: the app's bundled copy sits under «Agents Multi»", async () => {
+  // REPO is computed at import: a copy of paths.ts and what it imports, in a folder with a space
+  const root = `${await Deno.makeTempDir()}/Agents Multi/repo`;
+  const here = new URL("../../..", import.meta.url).pathname;
+  for (const f of ["apps/cli/lib/paths.ts", "apps/cli/lib/runtime-root.ts", "shared/mcp/lib/env.ts"]) {
+    await Deno.mkdir(`${root}/${f.slice(0, f.lastIndexOf("/"))}`, { recursive: true });
+    await Deno.copyFile(`${here}${f}`, `${root}/${f}`);
+  }
+  const paths = new URL(`file://${root}/apps/cli/lib/paths.ts`).href;
   const out = await new Deno.Command(Deno.execPath(), {
-    args: ["eval", `import { REPO } from "${paths}"; console.log(REPO);`],
-    env: { HOME: Deno.env.get("HOME") ?? "/", PATH: Deno.env.get("PATH") ?? "", ...env },
-    clearEnv: true,
+    args: ["eval", "--no-config", `import { REPO } from "${paths}"; console.log(REPO);`],
     stdout: "piped",
-    stderr: "piped",
   }).output();
-  return new TextDecoder().decode(out.stdout).trim();
-}
+  await Deno.remove(root.slice(0, root.indexOf("/Agents Multi")), { recursive: true });
+  assertEquals(new TextDecoder().decode(out.stdout).trim(), root);
+});
 
-Deno.test("REPO: the checkout this file is in, unless AGENTS_MULTI_REPO names another", async () => {
-  assertEquals(await repoWith({}), checkout);
-  assertEquals(await repoWith({ AGENTS_MULTI_REPO: "/srv/agents-multi" }), "/srv/agents-multi");
-  // the name bin/lib/prelaunch.sh already read before the rename
-  assertEquals(await repoWith({ CLAUDE_MULTI_REPO: "/srv/old" }), "/srv/old");
+Deno.test("forgetBackendOnly: the variables the app named, and the list itself, leave the environment", () => {
+  const env = new Map([["AGENTS_MULTI_BACKEND_ONLY", "DENO_DIR, DENO_NO_UPDATE_CHECK"], ["DENO_DIR", "/x"], [
+    "DENO_NO_UPDATE_CHECK",
+    "1",
+  ], ["HOME", "/h"]]);
+  forgetBackendOnly({ get: (k) => env.get(k), delete: (k) => void env.delete(k) });
+  assertEquals([...env.keys()], ["HOME"]);
+  const none = new Map([["DENO_DIR", "/mine"]]);
+  forgetBackendOnly({ get: (k) => none.get(k), delete: (k) => void none.delete(k) });
+  assertEquals([...none.keys()], ["DENO_DIR"], "without the list, nothing is forgotten");
 });

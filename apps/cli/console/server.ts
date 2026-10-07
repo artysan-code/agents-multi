@@ -303,8 +303,17 @@ export function createHandler(table: Record<string, Route>): (req: Request) => P
   };
 }
 
+/** The variables the desktop app set for its backend alone (AGENTS_MULTI_BACKEND_ONLY, a comma list, e.g.
+ *  DENO_DIR: the app's read-only cache) leave this process's environment, so the programs the console
+ *  starts (Claude and its MCP servers, the CLI) get the person's own. Deno has read them by now. */
+export function forgetBackendOnly(env: Pick<typeof Deno.env, "get" | "delete"> = Deno.env) {
+  const names = env.get("AGENTS_MULTI_BACKEND_ONLY")?.split(",").map((n) => n.trim()).filter(Boolean) ?? [];
+  for (const n of [...names, "AGENTS_MULTI_BACKEND_ONLY"]) env.delete(n);
+}
+
 /** Starts the console and resolves when it stops. `open` opens it in the default browser. */
 export async function serve(opts: { open?: boolean } = { open: true }) {
+  forgetBackendOnly();
   const url = `http://127.0.0.1:${PORT}`;
   const code = await codeVersion();
   const status = new StatusCache();
