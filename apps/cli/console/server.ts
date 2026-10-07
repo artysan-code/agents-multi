@@ -9,6 +9,7 @@
 import { ANSI } from "../lib/output.ts";
 import { PORT, REPO } from "../lib/paths.ts";
 import { codeVersion } from "../codeversion.ts";
+import { whatsNew } from "../lib/changelog.ts";
 import { summarize } from "../status.ts";
 import { ingest, openDb, sessions } from "../usage.ts";
 import { startConnect, storeClient } from "../google.ts";
@@ -54,6 +55,8 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
   return {
     "/api/events": { get: () => eventStream(code) },
     "/api/code": { get: () => json({ code }) },
+    // the CHANGELOG sections after ?since= up to the version on disk: the update wizard's last step
+    "/api/whatsnew": { get: async ({ url }) => json(await whatsNew(url.searchParams.get("since"))) },
     "/api/status": { get: async ({ url }) => jsonText((await status.get(url.searchParams.has("fresh"))).body) },
     // the tray's view of the same report: one level and the lines behind it
     "/api/summary": {

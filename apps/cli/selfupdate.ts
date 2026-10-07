@@ -12,6 +12,8 @@ import { uiLanguage } from "./lib/locale.ts";
 import { CACHE, REPO, STATE } from "./lib/paths.ts";
 import { run } from "./lib/proc.ts";
 import { blockers } from "./mcp/apply.ts";
+import { currentVersion, highlights, type Release, whatsNew } from "./lib/changelog.ts";
+import { desktopNotify } from "./notify.ts";
 import { staleParts, staleUnits } from "./lib/stale.ts";
 import { syncAllSettings } from "./settings.ts";
 
@@ -76,6 +78,9 @@ const T = {
         : `riavviata ${console ? "la console" : "l'app"}: girava col codice vecchio`,
     pullFail: "pull non riuscito: git pull --ff-only nel repo per vedere perché",
     notRepo: "non è un repository git: niente da aggiornare",
+    notifyTitle: (v: string) => `claude-multi aggiornato${v ? ` alla ${v}` : ""}`,
+    notifyMore: (n: number) => `…e ${n} ${n === 1 ? "altra novità" : "altre novità"}`,
+    notifyOpen: "Le novità sono nella console, in Sistema › Aggiornamenti.",
   },
   en: {
     latest: "already the latest",
@@ -101,6 +106,9 @@ const T = {
       }: it was running the old code`,
     pullFail: "pull failed: git pull --ff-only in the repository to see why",
     notRepo: "not a git repository: nothing to update",
+    notifyTitle: (v: string) => `claude-multi updated${v ? ` to ${v}` : ""}`,
+    notifyMore: (n: number) => `…and ${n} more`,
+    notifyOpen: "What's new is in the console, under System › Updates.",
   },
 }[lang];
 
@@ -226,6 +234,7 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
     if (await Deno.stat(PENDING).catch(() => null)) return await settleInstall(from, say) ? 0 : 1;
     return 0;
   }
+  const fromVersion = await currentVersion();
   const pull = await g("pull", "-q", "--ff-only");
   const to = (await g("rev-parse", "--short", "HEAD")).out;
   if (pull.code !== 0 || to === from) {
@@ -236,7 +245,11 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
   }
   await Deno.remove(SKIPPED).catch(() => {});
   const changed = (await g("diff", "--name-only", from, to)).out.split("\n").filter(Boolean);
-  await log("installed", from, to, `${r.behind} commit${r.behind === 1 ? "" : "s"}`);
+  const news = await whatsNew(fromVersion);
+  const moved = news.version && news.version !== fromVersion ? ` · ${fromVersion ?? "?"} → ${news.version}` : "";
+  await log("installed", from, to, `${r.behind} commit${r.behind === 1 ? "" : "s"}${moved}`);
+  // the timer updates in the background: a notification says so, or nobody would notice
+  if (quiet) await desktopNotify(T.notifyTitle(moved ? news.version! : ""), updateNote(news.releases)).catch(() => {});
   say(row("new", to, T.updated(from, r.behind)));
   await syncAllSettings().catch(() => {});
   const installed = await settleInstall(to, say);
@@ -249,6 +262,12 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
     await run("systemctl", ["--user", "--no-block", "try-restart", ...units]);
   }
   return installed ? 0 : 1;
+}
+
+/** The notification's body after an update: its first changes, then where to read the rest. */
+function updateNote(rs: Release[]): string {
+  const h = highlights(rs, 3);
+  return [...h.lines.map((l) => `• ${l}`), h.more ? T.notifyMore(h.more) : "", T.notifyOpen].filter(Boolean).join("\n");
 }
 
 /** `self-update --check` as a row: what a round would do, without doing it. 10 when there is
