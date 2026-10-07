@@ -5,6 +5,16 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.13.3] - 2026-10-07
+
+### Fixed
+
+- **brain**: the compose file reads the owner variables under their new names (38b45b7)
+
+### Documentation
+
+- **source**: the checkout lives in ~/.local/src/agents-multi (f454b5a)
+
 ## [0.13.2] - 2026-10-07
 
 ### Fixed
