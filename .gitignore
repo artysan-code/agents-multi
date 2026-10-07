@@ -30,5 +30,6 @@ apps/ui/dist.old/
 # The desktop app: Cargo's build output and the schemas tauri-build writes on every build
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
-# the backend sidecar, compiled by apps/desktop/scripts/sidecar.sh
+# what the desktop app packs, prepared by apps/desktop/scripts/bundle.sh
 apps/desktop/src-tauri/binaries/
+apps/desktop/src-tauri/bundle/

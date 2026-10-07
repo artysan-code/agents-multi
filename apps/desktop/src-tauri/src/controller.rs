@@ -6,7 +6,8 @@
 //!   menu. Without one (GNOME without the AppIndicator extension) the app quits with its last window.
 //! - `--tray` waits up to a minute for a tray host (at login it can come up after the app), then gives
 //!   up, says so, and notes it for the doctor; any other launch looks once.
-//! - What the menu does is a CLI command (`claude-launch`, `systemctl`) or one of the app's windows.
+//! - What the menu does is a CLI command (`claude-launch`, `systemctl` for a console the app does not run),
+//!   the app's backend (`backend.rs`), or one of the app's windows.
 
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,7 +21,7 @@ use crate::{picker, profiles};
 
 /// At login the tray host can come up after the app.
 const TRAY_WAIT: Duration = Duration::from_secs(60);
-/// The console's unit while the console is not the app's sidecar (phase 5, piece 2).
+/// The console's unit, for a console the app does not run (backend.rs): the transition's.
 const CONSOLE_UNIT: &str = "claude-multi-console.service";
 
 struct Shell {
@@ -191,7 +192,9 @@ fn launch(profile: &str) {
 }
 
 fn start_console(app: &AppHandle) {
-    spawn("systemctl", &["--user", "start", CONSOLE_UNIT]);
+    if !crate::backend::start_again(app) {
+        spawn("systemctl", &["--user", "start", CONSOLE_UNIT]);
+    }
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(1500));

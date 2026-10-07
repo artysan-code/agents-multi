@@ -7,8 +7,8 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "bash scripts/sidecar.sh && tauri build --config src-tauri/tauri.sidecar.conf.json",
-    "sidecar": "bash scripts/sidecar.sh"
+    "build": "bash scripts/bundle.sh && tauri build --config src-tauri/tauri.bundle.conf.json",
+    "bundle": "bash scripts/bundle.sh"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.12.1"
