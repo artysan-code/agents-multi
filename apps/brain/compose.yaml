@@ -2,8 +2,9 @@
 # private network.
 # Coolify builds this from the repository (base directory /apps/brain, compose file /compose.yaml:
 # the build context is the repository root) and puts the domain in front of `brain`: SERVICE_URL_BRAIN_8080
-# tells its proxy the port, and SERVICE_URL_BRAIN is that domain. The secrets are set in Coolify,
-# never here.
+# tells its proxy the port, and SERVICE_URL_BRAIN is that domain. Anywhere else, `docker compose up`
+# from this folder with BRAIN_URL (the public address) and the secrets in a .env next to it, and a
+# proxy with TLS in front of port 8080. The secrets are never written here.
 services:
   brain:
     build:
@@ -11,7 +12,7 @@ services:
       dockerfile: apps/brain/Dockerfile
     environment:
       - SERVICE_URL_BRAIN_8080
-      - BRAIN_URL=${SERVICE_URL_BRAIN}
+      - BRAIN_URL=${BRAIN_URL:-${SERVICE_URL_BRAIN:-}}
       - BRAIN_MASTER_KEY=${BRAIN_MASTER_KEY}
       - BRAIN_ADMIN_ID=${BRAIN_ADMIN_ID:-}
       # whose brain this is (shared/mcp/lib/owner.ts): the default owner of a task, the name and language
