@@ -5,6 +5,20 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.13.0] - 2026-10-07
+
+### Added
+
+- **runtime**: agents migrate moves the runtime to ~/.agents-multi, the old name a link to it (5078307)
+
+### Fixed
+
+- **hooks**: the guards and nudges find the runtime under its new name (1ccb113)
+
+### Documentation
+
+- **onboarding**: over SSH the repository is reached by its direct address, not through the proxy (5472698)
+
 ## [0.12.1] - 2026-10-07
 
 ### Fixed
