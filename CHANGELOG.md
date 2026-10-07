@@ -5,6 +5,25 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.11.0] - 2026-10-07
+
+### Added
+
+- **ui**: wikilinks read the page in the brain from anywhere; Brain asks through the field (d466ed4)
+- **ui**: Brain moves to the new interface (22304a1)
+- **ui**: Tasks moves to the new interface (5f97216)
+- **ui**: System's plugins, updates and the update wizard move over (ae22c1c)
+- **ui**: System's overview, profiles, permissions and repair move over (ce93635)
+- **ui**: Connections moves to the new interface (181319f)
+- **ui**: Today moves to the new interface (c4441d0)
+- **console**: the new interface at the root, the old page under /old for one release (aeb14d4)
+- **ui**: dictionaries of their own for Plugins and Updates (951024f)
+- **ui**: the new console's shell: rail, palette, the field to ask Claude, shared pieces (8f6c3a9)
+
+### Fixed
+
+- **ui**: a task on Today opens its sheet, as before (a690598)
+
 ## [0.10.0] - 2026-10-07
 
 ### Added
