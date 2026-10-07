@@ -159,36 +159,82 @@ export function siteCache(rel: string): string {
   return "public, max-age=2592000";
 }
 
-/** A file of the built site in `dir`, or null when there is none. */
-export async function siteFile(dir: string, pathname: string, s: Site, status = 200): Promise<Response | null> {
-  const rel = sitePath(pathname);
-  if (rel === null) return null;
-  const bytes = await Deno.readFile(`${dir}/${rel}`).catch(() => null);
-  if (!bytes) return null;
-  const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
-  const headers: Record<string, string> = {
-    "content-type": TYPES[ext] ?? "application/octet-stream",
-    "cache-control": siteCache(rel),
-    "x-content-type-options": "nosniff",
-    "referrer-policy": "strict-origin-when-cross-origin",
-  };
-  if (ext === "svg") headers["content-security-policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
-  if (ext === "xml" || ext === "txt") {
-    return new Response(fillSite(new TextDecoder().decode(bytes), s, false), { status, headers });
+/** A file of the built site, ready to send: its body already filled with this instance's particulars. */
+interface SiteEntry {
+  bytes: Uint8Array<ArrayBuffer>;
+  etag: string;
+  headers: Record<string, string>;
+}
+
+/** The built site held in memory, path (relative to its directory) to file. */
+export type SiteFiles = Map<string, SiteEntry>;
+
+const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+
+async function* walk(dir: string, prefix = ""): AsyncGenerator<string> {
+  for await (const e of Deno.readDir(`${dir}/${prefix}`)) {
+    if (e.isDirectory) yield* walk(dir, `${prefix}${e.name}/`);
+    else if (e.isFile) yield `${prefix}${e.name}`;
   }
-  if (ext !== "html") return new Response(bytes, { status, headers });
-  return new Response(fillSite(new TextDecoder().decode(bytes), s), {
-    status,
-    headers: { ...headers, "content-security-policy": SITE_CSP, "x-frame-options": "DENY" },
-  });
+}
+
+/** The built site in `dir` read once, with its placeholders filled and a strong ETag (a hash of
+ *  what is sent) for each file. An absent directory is an empty site. */
+export async function loadSite(dir: string, s: Site): Promise<SiteFiles> {
+  const files: SiteFiles = new Map();
+  const rels: string[] = [];
+  try {
+    for await (const rel of walk(dir)) rels.push(rel);
+  } catch { /* not built: nothing to serve */ }
+  for (const rel of rels) {
+    const raw = await Deno.readFile(`${dir}/${rel}`);
+    const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
+    const headers: Record<string, string> = {
+      "content-type": TYPES[ext] ?? "application/octet-stream",
+      "cache-control": siteCache(rel),
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    };
+    let bytes = raw;
+    if (ext === "svg") headers["content-security-policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    else if (ext === "xml" || ext === "txt") {
+      bytes = new TextEncoder().encode(fillSite(new TextDecoder().decode(raw), s, false));
+    } else if (ext === "html") {
+      bytes = new TextEncoder().encode(fillSite(new TextDecoder().decode(raw), s));
+      headers["content-security-policy"] = SITE_CSP;
+      headers["x-frame-options"] = "DENY";
+    }
+    files.set(rel, { bytes, headers, etag: `"${hex(await crypto.subtle.digest("SHA-256", bytes)).slice(0, 32)}"` });
+  }
+  return files;
+}
+
+/** Bytes held by a loaded site. */
+export const siteSize = (files: SiteFiles) => [...files.values()].reduce((n, f) => n + f.bytes.byteLength, 0);
+
+/** Pure: whether an If-None-Match header matches this ETag (`*`, or a listed tag, weak or not). */
+export function etagMatches(header: string | null, etag: string): boolean {
+  return header !== null &&
+    header.split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
+}
+
+/** A file of the built site, or null when there is none. A request that already holds the current
+ *  version (If-None-Match) gets a 304 with the same headers; an error page (`status` not 200) never does. */
+export function siteFile(files: SiteFiles, pathname: string, req: Headers, status = 200): Response | null {
+  const rel = sitePath(pathname);
+  const f = rel === null ? undefined : files.get(rel);
+  if (!f) return null;
+  const headers = { ...f.headers, etag: f.etag };
+  if (status === 200 && etagMatches(req.get("if-none-match"), f.etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(f.bytes, { status, headers });
 }
 
 /** Where a request on the brain's address goes when the site has an address of its own: the same
  *  path there when it is one of the site's, null when it is the brain's. */
-export async function siteMoved(dir: string, u: URL, s: Site): Promise<string | null> {
+export function siteMoved(files: SiteFiles, u: URL, s: Site): string | null {
   if (s.siteUrl === s.url) return null;
   const rel = sitePath(u.pathname);
-  if (rel === null) return null;
-  const there = await Deno.stat(`${dir}/${rel}`).then((f) => f.isFile).catch(() => false);
-  return there ? `${s.siteUrl}${u.pathname}${u.search}` : null;
+  return rel !== null && files.has(rel) ? `${s.siteUrl}${u.pathname}${u.search}` : null;
 }
