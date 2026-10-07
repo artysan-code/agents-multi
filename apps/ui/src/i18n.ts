@@ -16,8 +16,9 @@ import * as plugins from "./i18n/plugins.ts";
 import * as updates from "./i18n/updates.ts";
 import * as pick from "./i18n/pick.ts";
 import * as hey from "./i18n/hey.ts";
+import * as setup from "./i18n/setup.ts";
 
-const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en, ...plugins.en, ...updates.en, ...pick.en, ...hey.en };
+const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en, ...plugins.en, ...updates.en, ...pick.en, ...hey.en, ...setup.en };
 
 export type Key = keyof typeof en;
 
@@ -32,6 +33,7 @@ const it: Record<Key, string> = {
   ...updates.it,
   ...pick.it,
   ...hey.it,
+  ...setup.it,
 };
 
 const DICTS: Record<string, Record<Key, string>> = { en, it };

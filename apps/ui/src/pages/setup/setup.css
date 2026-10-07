@@ -1,0 +1,234 @@
+/* setup.css — the first-run wizard (index.tsx), on the update screen's card (lib/screen.css): a rail
+   of the steps above, the fields and choices of each step, the recovery code. */
+
+.su-screen {
+  background: var(--bg);
+  backdrop-filter: none;
+}
+.su-card {
+  width: min(600px, 100%);
+  padding: 22px 34px 26px;
+}
+.su-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.su-of {
+  font: 11.5px var(--mono);
+  color: var(--faint);
+}
+.su-rail {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+}
+.su-rail i {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background .3s;
+}
+.su-rail i.ok {
+  background: var(--ok);
+}
+.su-rail i.on {
+  background: var(--accent);
+}
+.su-sub {
+  color: var(--dim);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 16px;
+}
+.su-note {
+  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+.su-ok {
+  color: var(--ok);
+  font-size: 13.5px;
+  margin: 10px 0 0;
+}
+.su-warn {
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+}
+.su-points {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.su-points li + li {
+  margin-top: 6px;
+}
+.su-lang {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.su-lang span {
+  margin-right: 4px;
+}
+.su-card .fld {
+  margin-top: 12px;
+}
+.su-card .fld input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+}
+.su-card input.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.su-go .su-fill {
+  flex: 1;
+}
+.su-go .bt.ghost:first-child {
+  margin-right: 0;
+}
+.su-profiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr 32px;
+  gap: 8px;
+  align-items: center;
+}
+.su-th {
+  font-size: 12px;
+  color: var(--faint);
+}
+.su-profiles input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13.5px;
+  min-width: 0;
+}
+.su-profiles input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.su-profiles input:disabled {
+  color: var(--dim);
+  background: transparent;
+}
+.su-add {
+  margin-top: 10px;
+}
+.su-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.su-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.su-opt:hover {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.su-opt b {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.su-opt span {
+  font: 11.5px var(--mono);
+  color: var(--faint);
+}
+.su-code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+.su-code code {
+  flex: 1;
+  font: 500 15px/1.5 var(--mono);
+  letter-spacing: .02em;
+  word-break: break-all;
+  user-select: all;
+}
+.su-saved {
+  margin-top: 14px;
+}
+.su-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.su-list li {
+  display: grid;
+  grid-template-columns: 10px auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 13.5px;
+}
+.su-list code {
+  font: 12px var(--mono);
+  color: var(--faint);
+}
+.su-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.su-list li.in .su-dot {
+  background: var(--ok);
+}
+.su-state {
+  font-size: 12px;
+  color: var(--faint);
+}
+.su-list li.in .su-state {
+  color: var(--ok);
+}
+.su-opt-tag {
+  font: 500 11px var(--sans);
+  color: var(--faint);
+  vertical-align: middle;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  margin-left: 6px;
+}
+.su-card .uw-steps {
+  margin-top: 8px;
+}

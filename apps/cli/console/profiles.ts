@@ -19,17 +19,21 @@ export interface ProfileBody {
 
 /** Profile names become directory names and are interpolated into paths, so the shape is fixed
  *  here rather than sanitised later: lowercase, starts with a letter, no separators. */
-const NAME_RE = /^[a-z][a-z0-9_-]{1,30}$/;
+export const NAME_RE = /^[a-z][a-z0-9_-]{1,30}$/;
 
 /**
- * Create or update a profile: write its manifest, point the MCP registry at it, then run
- * `install` to materialise the runtime. Every write lands in the repository, which
- * is the source of truth — nothing here touches ~/.agents-multi directly.
+ * Write a profile's manifest (and, for a new one, its CLAUDE.md importing the person's rules) into
+ * the person's configuration. Nothing is installed: the console's form and the first-run wizard each
+ * run install when they are ready for it.
  */
-export async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: string; output?: string }> {
+export async function writeProfile(b: ProfileBody): Promise<{ error?: string; name: string; isNew: boolean }> {
   const name = String(b.name ?? "").trim();
   if (!NAME_RE.test(name)) {
-    return { error: "name must be lowercase, start with a letter, and use only letters, digits, - or _" };
+    return {
+      error: "name must be lowercase, start with a letter, and use only letters, digits, - or _",
+      name,
+      isNew: false,
+    };
   }
 
   const dir = `${PROFILES}/${name}`;
@@ -64,6 +68,17 @@ export async function saveProfile(b: ProfileBody): Promise<{ error?: string; mes
       `# CLAUDE.md — ${name} profile\n\n${manifest.description}\n${rules ? `\n## Rules\n\n${rules}\n` : ""}`,
     );
   }
+  return { name, isNew };
+}
+
+/**
+ * Create or update a profile: write its manifest, point the MCP registry at it, then run
+ * `install` to materialise the runtime. Every write lands in the person's configuration —
+ * nothing here touches ~/.agents-multi directly.
+ */
+export async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: string; output?: string }> {
+  const { error, name, isNew } = await writeProfile(b);
+  if (error) return { error };
 
   if (Array.isArray(b.mcp)) await applyRegistrySelection(name, b.mcp);
 

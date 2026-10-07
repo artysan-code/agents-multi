@@ -18,12 +18,12 @@ import { openDrawer, runJob } from "../../lib/ui.tsx";
 import { appUpdate, appUpdateAction, appUpdater, loadAppUpdate, notePoints } from "../../shell/app-update.ts";
 import { cmpVer, COMPONENTS, fetchNews, keep, kept, News, pendingUpdates, type Report, type Whatsnew } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
-import "./wizard.css";
+import { type StepState, StepRows } from "../../lib/steps.tsx";
+import "../../lib/screen.css";
 
 const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
 const STEPS = ["check", "update", "download", "restart", "verify"] as const;
 type Step = typeof STEPS[number];
-type StepState = "todo" | "running" | "done" | "failed" | "skipped";
 
 /** What the run keeps across the restart. */
 interface Run {
@@ -269,29 +269,14 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
         )}
 
         {begun && (
-          <ol class="uw-steps">
-            {shown.map((s) => {
+          <StepRows
+            rows={shown.map((s) => {
               const st = stepState(s);
               const pct = s === "download" && st === "running" && app?.progress != null ? Math.round(app.progress * 100) : null;
-              return (
-                <li key={s} class={`uw-${st}`}>
-                  <span class="uw-ic">
-                    {st === "running" ? <span class="spin2" /> : st === "done" ? "✓" : st === "failed" ? "!" : st === "skipped" ? "–" : ""}
-                  </span>
-                  <span class="uw-n">{t(`uw.s.${s}`)}</span>
-                  <span class="uw-d">
-                    {st === "skipped" ? t("uw.st.skipped") : pct != null ? `${pct}%` : s === "download" && run.app ? run.app.version : ""}
-                  </span>
-                  <span class="uw-bar">
-                    <i
-                      class={st === "running" && pct == null ? "ind" : ""}
-                      style={{ width: st === "done" || st === "skipped" ? "100%" : pct != null ? `${pct}%` : st === "running" ? "40%" : "0" }}
-                    />
-                  </span>
-                </li>
-              );
+              const detail = st === "skipped" ? t("uw.st.skipped") : pct != null ? `${pct}%` : s === "download" && run.app ? run.app.version : "";
+              return { key: s, label: t(`uw.s.${s}`), state: st, detail, pct };
             })}
-          </ol>
+          />
         )}
 
         {step === "restart" && <p class="uw-sub">{t("uw.restartNote")}</p>}

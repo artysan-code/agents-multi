@@ -96,7 +96,16 @@ asks for your password to install. Betas are a channel of their own: a beta buil
 
 ### First run
 
-Someone new is best guided by a Claude Code session following [ONBOARDING.md](ONBOARDING.md).
+**With the desktop app**, there is nothing to type: on a machine with no configuration the console
+opens on the first-run wizard, which does the steps below one screen at a time — your name and
+language, the configuration folder (`agents init`; a folder that already holds one, synced from another
+machine, is only linked), the profiles, `agents install --app` with its output, the vault (made there,
+its recovery code shown once, or opened with another machine's code), each profile's sign-in
+(`<command> auth login` in a terminal), the brain (optional) and `agents mcp sync`. It resumes where it
+stopped: each step is done when its result is on disk (`apps/cli/setup.ts`).
+
+From a checkout, or for someone guided by a Claude Code session following
+[ONBOARDING.md](ONBOARDING.md):
 
 1. `agents init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
    `profiles/` (one folder per Claude account).

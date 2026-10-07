@@ -1,6 +1,7 @@
 // main.tsx — boots the new console: the shared style sheet of the current one, whose console this is
 // (before the tasks draw: it says which are "mine"), the report, the live connection, then the shell;
-// or, at #pick, the profile picker alone, and at #hey «Hey Claude» alone.
+// or, at #pick, the profile picker alone, and at #hey «Hey Claude» alone; on a machine not set up yet,
+// the first-run wizard.
 
 import { render } from "preact";
 import "../../cli/dashboard/style.css";
@@ -8,6 +9,8 @@ import "./styles/v2.css";
 import { App } from "./app.tsx";
 import { Pick } from "./pages/pick/index.tsx";
 import { Hey } from "./pages/hey/index.tsx";
+import { Setup } from "./pages/setup/index.tsx";
+import { loadSetup } from "./pages/setup/api.ts";
 import { connect, loadOwner, loadStatus } from "./state.ts";
 import { loadClaude } from "./lib/claude.tsx";
 import { go } from "./router.ts";
@@ -28,10 +31,16 @@ if (location.hash === "#pick") {
 } else if (location.hash === "#hey") {
   render(<Hey />, document.getElementById("root")!);
 } else {
-  go(location.hash.slice(1));
-  void loadClaude();
-  await loadOwner();
-  render(<App />, document.getElementById("root")!);
-  loadStatus().catch((e: Error) => toast(t("err.server", { e: e.message }), true));
+  const setup = await loadSetup().catch(() => null);
+  if (setup?.active) {
+    // a machine with no configuration yet: the first-run wizard, in place of the console
+    render(<Setup initial={setup} />, document.getElementById("root")!);
+  } else {
+    go(location.hash.slice(1));
+    void loadClaude();
+    await loadOwner();
+    render(<App />, document.getElementById("root")!);
+    loadStatus().catch((e: Error) => toast(t("err.server", { e: e.message }), true));
+  }
   connect();
 }

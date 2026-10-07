@@ -1,5 +1,6 @@
-/* wizard.css — the update screen (wizard.tsx): it covers the window, one card in the middle, the
-   mark turning while something runs, a bar per step. */
+/* screen.css — a screen that covers the window, one card in the middle, the mark turning while
+   something runs, a bar per step (steps.tsx): the update screen (pages/system/wizard.tsx) and the
+   first-run wizard (pages/setup/). */
 
 .uw-screen {
   position: fixed;
