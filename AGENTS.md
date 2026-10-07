@@ -102,6 +102,9 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   worktree on `dev` (`git worktree add ../claude-multi-dev dev`). A version is cut with
   `deno task release` — stable on `release`, `beta` on `beta` — which bumps every manifest in
   `MANIFESTS` (`scripts/release.ts`), writes the CHANGELOG section and tags `vX.Y.Z`.
+  The CHANGELOG is the only place notes are written: pushing the tag makes the Forgejo release
+  from its section (`.forgejo/workflows/release.yml`, `scripts/publish-releases.ts`), the site's
+  Changelog page is generated from it at build, and the console shows it as «What's new».
 - **Commit subjects are Conventional Commits**: `<type>(<scope>)!: <description>`, types in
   `TYPES` of `scripts/release.ts`. The CHANGELOG and the bump come from them; the `commit-msg`
   hook and CI (`release.ts --lint`) reject anything else since the last tag.

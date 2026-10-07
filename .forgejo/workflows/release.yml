@@ -1,0 +1,30 @@
+# Releases on Forgejo: on every version tag, a release for each tag that has none yet, with its
+# CHANGELOG section as the notes (scripts/publish-releases.ts). The job's own token is enough; no
+# secret is stored for it.
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  DENO_VERSION: v2.9.7
+
+jobs:
+  publish:
+    runs-on: docker
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every tag, for the ones without a release yet
+
+      - uses: https://github.com/denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: publish
+        env:
+          FORGEJO_API: ${{ github.server_url }}/api/v1
+          FORGEJO_REPO: ${{ github.repository }}
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: deno run --allow-read --allow-env --allow-net --allow-run=git scripts/publish-releases.ts
