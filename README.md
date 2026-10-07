@@ -22,6 +22,10 @@ git clone <the repository> ~/.local/src/claude-multi
 ~/.local/src/claude-multi/bin/agents install
 ```
 
+Over SSH, the repository's host name must reach the server directly, not through a proxy that does
+not forward the SSH port: otherwise `git fetch` hangs until it times out, and so does the self-update
+(see [ONBOARDING.md](ONBOARDING.md#2-the-repository)).
+
 The project was called claude-multi: `claude-multi` still works as another name for the command, and
 the folders, services and settings keep that name until they move with a migration of their own.
 
