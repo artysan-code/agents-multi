@@ -2,6 +2,7 @@
 // morning debrief, the sessions running and the ones to pick up again, and what waits to be updated.
 // The task sheet belongs to the Tasks page: a click on a row goes there.
 
+import { openTask } from "../tasks/sheet.tsx";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { get, ndjson, post, postInit } from "../../api.ts";
@@ -10,7 +11,7 @@ import { Spark } from "../../lib/claude.tsx";
 import { ago, cap, dur, hhmm, modelShort } from "../../lib/format.ts";
 import { Markdown } from "../../lib/markdown.tsx";
 import { Pf, toast, toastErr } from "../../lib/ui.tsx";
-import { go, request } from "../../router.ts";
+import { request } from "../../router.ts";
 import { owner, status, summary, useTopic, working } from "../../state.ts";
 import type { Day, DayItem, DebriefDone, SessionRow } from "./api.ts";
 
@@ -74,7 +75,7 @@ function Row({ x, when = x.time ?? "", cls = "", onDone }: {
     : [x.project, x.owner && x.owner !== owner.value.id ? x.owner : null].filter(Boolean).join("  ");
   const c = `it${ev ? " event" : ""}${x.priority === 1 ? " hi" : ""}${cls ? ` ${cls}` : ""}`;
   return (
-    <div class={c} onClick={ev ? undefined : () => go("tasks")}>
+    <div class={c} onClick={ev ? undefined : () => void openTask(x.id)}>
       <span class="tm">{when}</span>
       {ev
         ? <span class="ev"><i style={x.color ? { background: x.color } : undefined} /></span>
