@@ -27,6 +27,13 @@ shell's.
   `?port=`), says clearly when nothing answers, retries by itself and on a button, and navigates to
   the console once it answers. The request is `no-cors`: an opaque answer is enough to know the
   console is up, so the console needs no CORS headers for it.
+- **A window appears already showing the console** (`src-tauri/src/reveal.rs`): each window (the
+  console's, the picker, Hey) is built hidden on the local page and shown when the console's page has
+  finished loading in it, or after 1.5 s when it has not — then the local page says the console is slow
+  or down, as before. So a console that answers at once (one already running, or the backend's cold
+  start, measured well inside that time) never flashes «Connecting to the console…». A second launch that
+  asks to raise a window still hidden leaves its activation token for the moment it is shown; the first
+  launch's window is mapped then too, and GTK applies the launcher's token from the environment.
 - **The backend is the package's Deno running the package's source** (phase 5, piece 2; the model
   is the next section's): started, supervised and stopped by the app (`src-tauri/src/backend.rs`) in
   place of the systemd unit. `apps/desktop/scripts/bundle.sh` (`pnpm bundle`; `pnpm build` runs it)
@@ -187,13 +194,12 @@ shell's.
 
 ## The tray, the launch flags and the profile picker (phase 5, piece 3)
 
-The app takes over what `apps/tray/app.py`, `tray.py` and `picker.py` do, in its own modules
-(`flags.rs`, `controller.rs`, `tray.rs`, `http.rs`, `profiles.rs`, `picker.rs`), with `main.rs` only
+The app takes over what `apps/tray/app.py`, `tray.py`, `picker.py` and `hey.py` do, in its own modules
+(`flags.rs`, `controller.rs`, `tray.rs`, `http.rs`, `profiles.rs`, `picker.rs`, `hey.rs`), with `main.rs` only
 wiring them.
 
 - **Flags are the tray app's**: none shows the console window (on Today, as `show` did), `--tray`
-  starts in the tray without a window, `--pick` opens the picker, `--hey` opens the console and logs
-  that «Hey Claude» is not ported yet (`controller::show_hey` is its place). The first match wins in
+  starts in the tray without a window, `--pick` opens the picker, `--hey` opens «Hey Claude» (below). The first match wins in
   the tray app's order. A second launch hands its arguments to the running app through the
   single-instance plugin, which routes them like its own; `--tray` there does nothing.
 - **Lifetime**: with a tray, closing the console window hides it and the app lives in the tray; Quit
@@ -236,6 +242,22 @@ wiring them.
   signal by destroying the web view alone, leaving an empty window. The window also closes when it loses the focus, once it has had
   it. With the console down the picker shows the local page, waiting, until the sidecar makes that
   rare. The tray menu's own «Open Claude Desktop» stays a CLI command.
+- **«Hey Claude» is a page of the console too** (`apps/ui/src/pages/hey/`, `/#hey`, drawn without the
+  console's frame) in a small frameless window (`hey.rs`), opened by `--hey`, a second launch with
+  `--hey` (raised with its activation token, as the console window is), and the tray's «Hey Claude…».
+  It does what `apps/tray/hey.py` did through endpoints that already exist, so none was added: the
+  question streams from `/api/ask` (kind `ask`, the same tools and prompt as the field at the foot of
+  Today), a follow-up passes the session back, the model is the one shared with that field
+  (`/api/ask/model`), and «Continue in the terminal» / «Open Claude Code in <folder>» are
+  `/api/terminal` (`resume`; `cwd` and `ask`). Esc aborts the request — which stops `claude -p` on the
+  server — and closes. The model is a button that cycles through the choices rather than a `<select>`,
+  whose popup would take the focus from the window and close it.
+  - **The window fits the page**: the page tells it its height through its title,
+    `agents-multi:size=<px>` (`,answer` added while an answer is on screen), next to the picker's
+    `agents-multi:close` (`apps/ui/src/lib/window.ts`; parsed and clamped by `hey::message`, with its
+    tests). It closes when it loses the focus, once it has had it, unless an answer is there to keep
+    reading (hey.py's rule). It opens at the top centre of the screen under the pointer, 22% of the way
+    down; on Wayland the compositor places it.
 - **The app speaks to a page only by setting its location** (a view's hash, validated as lowercase
   words and slashes on both sides, `flags::is_view` and the local page); pages still cannot call it.
 
@@ -245,8 +267,7 @@ When the app replaces the tray app, that step changes:
   to an autostart entry the app installs), and `apps/cli/install.ts` enables whichever it is.
 - `desktop/claude-multi.desktop` and `desktop/claude-multi-launcher.desktop`: `Exec` runs the app (no
   flag, and `--pick`); `bin/claude-multi-app` goes, or becomes a link to the app.
-- The KDE shortcut for «Hey Claude» (`~/.local/bin/claude-multi-app --hey`) points at the app once Hey
-  is ported; until then `--hey` there would only open the console.
+- The KDE shortcut for «Hey Claude» (`~/.local/bin/claude-multi-app --hey`) points at the app.
 - The doctor's `app.deps` (pyside6, qt6-webengine) becomes the app's own (WebKitGTK; no
   libayatana-appindicator, since the Linux tray is the app's own StatusNotifierItem), and its
   `app.tray` fix names the app's unit; the README's section on the

@@ -14,12 +14,14 @@ mod backend;
 mod console;
 mod controller;
 mod flags;
+mod hey;
 mod http;
 mod instance;
 mod navigation;
 mod picker;
 mod profiles;
 mod repo;
+mod reveal;
 mod tray;
 
 use navigation::Decision;
@@ -82,7 +84,7 @@ fn set_window_class(id: &str) {
 fn open_main_window(app: &AppHandle, port: u16, view: &str) -> tauri::Result<()> {
     let console = console::url(port);
     let page = WebviewUrl::App(format!("index.html?port={port}&view={view}").into());
-    let window = WebviewWindowBuilder::new(app, MAIN, page)
+    let builder = WebviewWindowBuilder::new(app, MAIN, page)
         .title("Agents Multi")
         .inner_size(1280.0, 860.0)
         .min_inner_size(720.0, 480.0)
@@ -101,8 +103,10 @@ fn open_main_window(app: &AppHandle, port: u16, view: &str) -> tauri::Result<()>
         .on_new_window(|url, _features| {
             refuse(&url, navigation::external(&url));
             NewWindowResponse::Deny
-        })
-        .build()?;
+        });
+    // shown once the console has loaded in it, not on the local page first (reveal.rs)
+    let window = reveal::hidden(builder, console::url(port)).build()?;
+    reveal::arm(&window);
     // the attention asked for when a second launch could not raise the window ends when it has focus
     let w = window.clone();
     window.on_window_event(move |event| {
