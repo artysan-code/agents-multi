@@ -18,7 +18,7 @@ Verificare che CCR non scriva su ~/.claude (tripwire 000) — controllare source
 
 ## Config file
 
-Path: ~/.config/ccr/config.json (NON in ~/.claude-multi, NON in ~/.claude)
+Path: ~/.config/ccr/config.json (NON in ~/.agents-multi, NON in ~/.claude)
 Modo: 600
 
 ```json

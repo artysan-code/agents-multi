@@ -58,3 +58,46 @@ Deno.test("hooks: graphify-nudge, agents-md-nested and brain-nudge print parseab
     await Deno.remove(home, { recursive: true });
   }
 });
+
+/** The raw output of a hook: what it prints, empty when it does not fire. */
+async function raw(hook: string, payload: unknown, env: Record<string, string>, cwd: string) {
+  const child = new Deno.Command("bash", {
+    args: [`${HOOKS}${hook}`],
+    cwd,
+    env,
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "null",
+  })
+    .spawn();
+  const w = child.stdin.getWriter();
+  await w.write(new TextEncoder().encode(JSON.stringify(payload)));
+  await w.close();
+  return new TextDecoder().decode((await child.output()).stdout).trim();
+}
+
+Deno.test("brain-nudge: silent for a profile whose manifest in the runtime's config has brainScope", async () => {
+  const home = await Deno.makeTempDir();
+  try {
+    const proj = `${home}/work/acme/site`;
+    await Deno.mkdir(proj, { recursive: true });
+    await Deno.mkdir(`${home}/.agents-multi/config/profiles/work`, { recursive: true });
+    await Deno.writeTextFile(`${home}/.agents-multi/config/profiles/work/profile.json`, '{"brainScope":["work"]}');
+    const env = { HOME: home, CLAUDE_CONFIG_DIR: `${home}/.agents-multi/work`, PATH: Deno.env.get("PATH") ?? "" };
+    assertEquals(await raw("brain-nudge.sh", { hook_event_name: "SessionStart", cwd: proj }, env, proj), "");
+  } finally {
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("memory-legacy-guard: denies the auto-memory under either runtime name, not a repository's memory/", async () => {
+  const env = { HOME: "/h", PATH: Deno.env.get("PATH") ?? "" };
+  const decide = async (file_path: string) => {
+    const out = await raw("memory-legacy-guard.sh", { tool_name: "Write", tool_input: { file_path } }, env, "/");
+    return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : "allow";
+  };
+  assertEquals(await decide("/h/.agents-multi/personal/projects/-h-x/memory/MEMORY.md"), "deny");
+  assertEquals(await decide("/h/.claude-multi/personal/projects/-h-x/memory/MEMORY.md"), "deny");
+  assertEquals(await decide("/h/.claude/projects/-h-x/memory/a.md"), "deny");
+  assertEquals(await decide("/h/code/app/projects/x/memory/a.md"), "allow");
+});

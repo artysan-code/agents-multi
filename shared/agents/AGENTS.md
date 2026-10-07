@@ -63,11 +63,11 @@ Provides command: /code-review (8-step multi-agent PR review with confidence sco
 
 PreToolUse hook on Edit/Write/MultiEdit — warns on: GitHub Actions injection, child_process.exec, new Function, eval, dangerouslySetInnerHTML, document.write, innerHTML, pickle, os.system.
 
-> **Known limitation**: session-level deduplication is broken because ~/.claude is permission 000 (tripwire). Each matching edit will re-show the warning. This is harmless. Fix: patch security_reminder_hook.py STATE_FILE path to ~/.claude-multi/shared/ (separate TASK).
+> **Known limitation**: session-level deduplication is broken because ~/.claude is permission 000 (tripwire). Each matching edit will re-show the warning. This is harmless. Fix: patch security_reminder_hook.py STATE_FILE path to ~/.agents-multi/shared/ (separate TASK).
 
 ---
 
 ## Known Limitations
 
-- **security-guidance state files**: The plugin tries to write per-session state to ~~/.claude/ which is a permission-000 tripwire. The PermissionError is caught silently (IOError subclass in Python 3). Result: warnings are not deduplicated per session. Patch target: line 132 of security_reminder_hook.py — change os.path.expanduser('~~/.claude') to '~/.claude-multi/shared/security-guidance-state' (expanded).
+- **security-guidance state files**: The plugin tries to write per-session state to ~~/.claude/ which is a permission-000 tripwire. The PermissionError is caught silently (IOError subclass in Python 3). Result: warnings are not deduplicated per session. Patch target: line 132 of security_reminder_hook.py — change os.path.expanduser('~~/.claude') to '~/.agents-multi/shared/security-guidance-state' (expanded).
 - **code-review plugin**: Requires gh CLI authentication and an open PR number. Does not work for local (uncommitted) diff review. For local review, invoke the code-reviewer Tier-2 agent manually, or `/react-review` per le lane React.

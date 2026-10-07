@@ -1,7 +1,7 @@
 // accounts.ts — which accounts an MCP server may use, and which one a call means.
 //
 // accounts.json lists them, with no secret in it: service, a short name, the address, and the
-// profiles that see it. It is the person's (their config folder, ~/.claude-multi/config); each
+// profiles that see it. It is the person's (their config folder, ~/.agents-multi/config); each
 // account's secret is in the vault (vault.ts) under the same service/name.
 //
 // A server learns its profile from CLAUDE_MULTI_PROFILE, which `agents mcp sync` writes into

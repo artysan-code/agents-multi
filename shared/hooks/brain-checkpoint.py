@@ -51,8 +51,10 @@ def tool_uses(path):
 
 def work_profile():
     """A profile with brainScope in its manifest has no brain memory, on purpose: nothing to ask."""
-    name = os.path.basename(os.environ.get("CLAUDE_CONFIG_DIR", "").rstrip("/"))
-    manifest = os.path.expanduser(f"~/.claude-multi/shared/../profiles/{name}/profile.json")
+    # the config dir is <runtime>/<profile>, and the person's profiles are in <runtime>/config/profiles
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR", "").rstrip("/")
+    runtime, name = os.path.dirname(cfg), os.path.basename(cfg)
+    manifest = os.path.join(runtime, "config", "profiles", name, "profile.json")
     try:
         with open(manifest) as f:
             return bool(json.load(f).get("brainScope"))

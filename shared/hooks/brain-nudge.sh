@@ -14,7 +14,9 @@ trap 'exit 0' EXIT
 command -v jq >/dev/null || exit 0
 
 # a work profile (brainScope in its manifest) has no brain memory, on purpose: nothing to point at
-manifest="$HOME/.claude-multi/shared/../profiles/$(basename "${CLAUDE_CONFIG_DIR:-x}")/profile.json"
+# the config dir is <runtime>/<profile>, and the person's profiles are in <runtime>/config/profiles
+cfg="${CLAUDE_CONFIG_DIR:-x}"; cfg="${cfg%/}"
+manifest="${cfg%/*}/config/profiles/${cfg##*/}/profile.json"
 [ -f "$manifest" ] && grep -q '"brainScope"' "$manifest" && exit 0
 
 dir="${CLAUDE_PROJECT_DIR:-$PWD}"

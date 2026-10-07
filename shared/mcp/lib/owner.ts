@@ -1,6 +1,6 @@
 // owner.ts — whose setup this is: the person the tasks belong to by default, the name the prompts
 // use, the language Claude answers in. Read from the person's configuration
-// (~/.claude-multi/config/owner.json) on a machine, and from the environment where there is no
+// (~/.agents-multi/config/owner.json) on a machine, and from the environment where there is no
 // such file (the brain service: CLAUDE_MULTI_OWNER_ID, CLAUDE_MULTI_OWNER_NAME, CLAUDE_MULTI_LANGUAGE),
 // which also wins over the file.
 //
@@ -19,7 +19,7 @@ export interface Owner {
 
 const DEFAULT: Owner = { id: "me", name: "the user", language: "English" };
 
-/** Where the person's configuration is: ~/.claude-multi/config, a link to their own folder. */
+/** Where the person's configuration is: ~/.agents-multi/config, a link to their own folder. */
 export function configDir(): string {
   const env = (k: string) => {
     try {
@@ -28,7 +28,7 @@ export function configDir(): string {
       return undefined;
     }
   };
-  return amEnv("CONFIG") ?? `${env("HOME") ?? ""}/.claude-multi/config`;
+  return amEnv("CONFIG") ?? `${env("HOME") ?? ""}/.agents-multi/config`;
 }
 
 /** Pure: an owner from what a file or the environment gives, the rest from the defaults. */
