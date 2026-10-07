@@ -2,6 +2,8 @@
 // the server refuses a parameter it does not know (nothing free is ever executed).
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { type ActionDef, ACTIONS, manualCommand, resolveAction } from "../console/actions.ts";
+import { createHandler, routes } from "../console/server.ts";
+import { StatusCache } from "../console/status-cache.ts";
 import { failedVariants } from "../doctor/checks/updates.ts";
 import { actionStep } from "../doctor/repair.ts";
 
@@ -79,4 +81,25 @@ Deno.test("failedVariants: the failing profiles of the last Desktop update, minu
   assertEquals(failedVariants([entry("failed", "download failed")], known), []);
   // a rebuilt entry older than the failure does not count
   assertEquals(failedVariants([failed, entry("rebuilt", "alice")], known).length, 2);
+});
+
+Deno.test("repair: the routes refuse a parameter outside the allowlist, and run nothing", async () => {
+  const handle = createHandler(routes("test", new StatusCache()));
+  const post = (path: string, b: unknown) =>
+    handle(
+      new Request(`http://127.0.0.1:7331${path}`, {
+        method: "POST",
+        headers: { host: "127.0.0.1:7331", "x-claude-multi": "1" },
+        body: JSON.stringify(b),
+      }),
+    );
+  for (const params of [{ profile: "no-such-profile" }, { profile: "x; id" }, { profile: "../other" }, {}]) {
+    const j = await post("/api/job", { action: "desktop-rebuild", params });
+    assertEquals(j.status, 400);
+    assertEquals((await j.json()).ok, false);
+    const a = await (await post("/api/action", { action: "desktop-rebuild", params })).json();
+    assertEquals(a.code, 2);
+  }
+  assertEquals((await post("/api/job", { action: "doctor", params: { profile: "x" } })).status, 400);
+  assertEquals((await post("/api/job", { action: "no-such-action" })).status, 400);
 });
