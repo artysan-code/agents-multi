@@ -5,6 +5,14 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.5.0] - 2026-10-07
+
+### Added
+
+- **today**: choose which calendars the day shows, found per Google account (b66a2d8)
+- **plugins**: the catalog loads a page at a time, searched on the server, and starts from a cache (dd853be)
+- **console**: move permission rules between lists by drag and drop or a menu (df675e2)
+
 ## [0.4.0] - 2026-10-07
 
 ### Added
