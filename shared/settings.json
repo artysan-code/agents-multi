@@ -11,6 +11,7 @@
       "Bash(ncat *)",
       "Bash(secret-tool:*)",
       "Bash(kwallet-query:*)",
+      "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",
       "Read(~/vault/claude-multi/**)",
       "Edit(~/vault/claude-multi/**)"
