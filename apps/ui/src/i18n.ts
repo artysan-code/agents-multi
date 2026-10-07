@@ -12,8 +12,10 @@ import * as tasks from "./i18n/tasks.ts";
 import * as brain from "./i18n/brain.ts";
 import * as connections from "./i18n/connections.ts";
 import * as system from "./i18n/system.ts";
+import * as plugins from "./i18n/plugins.ts";
+import * as updates from "./i18n/updates.ts";
 
-const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en };
+const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en, ...plugins.en, ...updates.en };
 
 export type Key = keyof typeof en;
 
@@ -24,6 +26,8 @@ const it: Record<Key, string> = {
   ...brain.it,
   ...connections.it,
   ...system.it,
+  ...plugins.it,
+  ...updates.it,
 };
 
 const DICTS: Record<string, Record<Key, string>> = { en, it };
