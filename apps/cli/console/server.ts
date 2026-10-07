@@ -13,7 +13,8 @@ import { summarize } from "../status.ts";
 import { ingest, openDb, sessions } from "../usage.ts";
 import { startConnect, storeClient } from "../google.ts";
 import { startBrainLogin } from "../brain-login.ts";
-import { calendarAsTasks } from "../agenda.ts";
+import { calendarAsTasks, resetAgenda } from "../agenda.ts";
+import { listCalendars, setShown } from "../calendars.ts";
 import { taskApi } from "../taskboard.ts";
 import { askApi } from "../ask.ts";
 import { assetsApi, claudeAssets } from "../claude-assets.ts";
@@ -126,6 +127,21 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
         const r = await permissionsOp(await body(req) as PermOp);
         broadcast("state");
         return json(r);
+      },
+    },
+    // which calendars the day shows: detected per connected Google account, chosen here
+    "/api/calendars": {
+      get: async ({ url }) => json(await listCalendars(url.searchParams.has("fresh"))),
+      post: async ({ req }) => {
+        const b = await body(req) as { account?: string; id?: string; shown?: boolean };
+        const known = (await listCalendars()).find((a) => a.account === b.account)?.calendars.some((c) =>
+          c.id === b.id
+        );
+        if (!known || typeof b.shown !== "boolean") return json({ ok: false, message: "unknown calendar" });
+        await setShown(String(b.account), String(b.id), b.shown);
+        resetAgenda();
+        broadcast("tasks");
+        return json({ ok: true });
       },
     },
     "/api/tasks": {

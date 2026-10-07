@@ -18,6 +18,7 @@ import { dayOf } from "../../shared/mcp/lib/tasks.ts";
 import { BRAIN as WIKI } from "./brain.ts";
 import { owner } from "../../shared/mcp/lib/owner.ts";
 import { recordLogin } from "./login.ts";
+import { choiceSignature, listCalendars, loadChoice } from "./calendars.ts";
 
 type Json = (v: unknown, code?: number) => Response;
 export type AskKind = "ask" | "newtask" | "debrief" | "brain";
@@ -64,7 +65,14 @@ const BASE = (now: string, o = owner()) =>
   `unless they write in another language. No preamble, no closing question. Now: ${now}.`;
 
 /** Pure but for the owner (owner.ts, passed in tests): the instructions for a kind of request. */
-export function promptFor(kind: AskKind, now: string, project?: string | null, noProject = false, o = owner()): string {
+export function promptFor(
+  kind: AskKind,
+  now: string,
+  project?: string | null,
+  noProject = false,
+  o = owner(),
+  calendars = "",
+): string {
   const base = BASE(now, o), who = o.name;
   if (kind === "newtask") {
     const where = project
@@ -99,7 +107,11 @@ export function promptFor(kind: AskKind, now: string, project?: string | null, n
   if (kind === "debrief") {
     return `${base}\nWrite ${who}'s debrief for today from tasks_brief and today's calendar events: at most three short ` +
       `lines, plain sentences, no headings, no bullets. First what matters today, with times; then anything late; then ` +
-      `what they are waiting for from others, if anything. If the day is empty say so in one line.`;
+      `what they are waiting for from others, if anything. If the day is empty say so in one line.` +
+      (calendars
+        ? ` Calendar events: read only these calendars (calendar_events, one call each, with its account and ` +
+          `calendarId), and never mention any other: ${calendars}.`
+        : "");
   }
   return `${base}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when they say ` +
     `something to do, add it), their calendar, mail and Drive read only, their brain (memory: projects, people, notes) read only. Never send mail or create events from ` +
@@ -133,7 +145,13 @@ export function askArgs(
   kind: AskKind,
   text: string,
   now: string,
-  opts: { session?: string | null; project?: string | null; noProject?: boolean; model?: AskModel } = {},
+  opts: {
+    session?: string | null;
+    project?: string | null;
+    noProject?: boolean;
+    model?: AskModel;
+    calendars?: string;
+  } = {},
 ) {
   const args = [
     "-p",
@@ -149,7 +167,7 @@ export function askArgs(
     "--allowedTools",
     ...TOOLS[kind],
     "--append-system-prompt",
-    promptFor(kind, now, opts.project, opts.noProject),
+    promptFor(kind, now, opts.project, opts.noProject, undefined, opts.calendars),
   ];
   if (opts.session) args.push("--resume", opts.session);
   if (opts.model && kind !== "debrief") args.push("--model", opts.model);
@@ -247,9 +265,17 @@ export async function defaultLauncher() {
 }
 
 const DEBRIEF = `${STATE}/debrief.json`;
+/** Today's debrief, if one was written under the calendars chosen now: another choice makes it out of date. */
 export async function cachedDebrief(): Promise<{ day: string; text: string } | null> {
-  const d = await readJson<{ day: string; text: string }>(DEBRIEF);
-  return d && d.day === dayOf(new Date()) ? d : null;
+  const d = await readJson<{ day: string; text: string; calendars?: string }>(DEBRIEF);
+  return d && d.day === dayOf(new Date()) && (d.calendars ?? "") === choiceSignature(await loadChoice()) ? d : null;
+}
+
+/** The calendars the debrief may read, for its prompt: the shown ones of each account. */
+async function shownCalendars(): Promise<string> {
+  return (await listCalendars()).filter((a) => a.state === "ok").map((a) =>
+    a.calendars.filter((c) => c.shown).map((c) => `account ${a.account}: "${c.name}" (calendarId ${c.id})`).join("; ")
+  ).filter(Boolean).join("; ");
 }
 
 function ask(
@@ -282,12 +308,15 @@ function ask(
         send({ t: "done", text: "", code: null, error: "no profile" });
         return ctl.close();
       }
+      // the debrief reads the calendars chosen now, and is kept under that choice
+      const calendars = kind === "debrief" ? await shownCalendars().catch(() => "") : "";
+      const choice = kind === "debrief" ? choiceSignature(await loadChoice()) : "";
       let child: Deno.ChildProcess;
       try {
         child = new Deno.Command(`${BIN}/${launcher.command}`, {
           // a change to the brain runs in the old wiki: Claude Code lets a session read its own folder
           // whatever the rules, so that folder must be the only one it may read
-          args: askArgs(kind, text, now, { ...opts, model: await askModel() }),
+          args: askArgs(kind, text, now, { ...opts, model: await askModel(), calendars }),
           cwd: kind === "brain" ? WIKI : HOME,
           stdin: "null",
           stdout: "piped",
@@ -313,7 +342,10 @@ function ask(
       if (done.error || done.text) await recordLogin(launcher.profile, launcher.command, done.error ?? null);
       if (kind === "debrief" && done.text && !done.error) {
         await Deno.mkdir(STATE, { recursive: true }).catch(() => {});
-        await Deno.writeTextFile(DEBRIEF, JSON.stringify({ day: dayOf(new Date()), text: done.text })).catch(() => {});
+        await Deno.writeTextFile(
+          DEBRIEF,
+          JSON.stringify({ day: dayOf(new Date()), text: done.text, calendars: choice }),
+        ).catch(() => {});
       }
       send(done);
       ctl.close();

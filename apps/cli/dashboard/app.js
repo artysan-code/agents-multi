@@ -274,7 +274,7 @@ function renderTasks() {
     const ev = x.source === "calendar";
     const p = ev ? null : notesProgress(x.notes);
     const sub = ev
-      ? t("day.calendar", { a: x.project ?? "" })
+      ? t("day.calendar", { a: x.calendar ? `${x.calendar} · ${x.project ?? ""}` : x.project ?? "" })
       : [x.project, x.owner && x.owner !== OWNER.id ? x.owner : null].filter(Boolean).join("  ");
     return `<div class="it${ev ? " event" : ""}${x.priority === 1 ? " hi" : ""}${cls ? ` ${cls}` : ""}"${
       ev ? "" : ` data-tk-open="${esc(x.id)}"`
@@ -282,7 +282,7 @@ function renderTasks() {
       <span class="tm">${esc(when)}</span>
       ${
       ev
-        ? `<span class="ev"><i></i></span>`
+        ? `<span class="ev"><i${x.color ? ` style="background:${esc(x.color)}"` : ""}></i></span>`
         : `<button class="ck" data-tk-done="${esc(x.id)}" title="${esc(t("ts.done"))}" aria-label="${
           esc(t("ts.done"))
         }"></button>`
@@ -292,7 +292,12 @@ function renderTasks() {
     </div>`;
   };
   const allday = (xs) =>
-    xs.length ? `<div class="allday">${xs.map((x) => `<span><i></i>${esc(x.title)}</span>`).join("")}</div>` : "";
+    xs.length
+      ? `<div class="allday">${
+        xs.map((x) => `<span><i${x.color ? ` style="background:${esc(x.color)}"` : ""}></i>${esc(x.title)}</span>`)
+          .join("")
+      }</div>`
+      : "";
 
   // today: what is late first, then one line of time with a mark for now
   const todayAll = [...(TK.earlier ?? []), ...TK.today];
@@ -1194,7 +1199,50 @@ document.addEventListener("click", (e) => {
 
 function renderConnections() {
   loadAccounts().catch((e) => toast(e.message, true));
+  loadCalendars().catch((e) => toast(e.message, true));
 }
+
+/* The calendars the day shows: every connected Google account's, found by asking Google, each with a switch. */
+let CALS = null;
+async function loadCalendars(fresh = false) {
+  CALS = await api("/api/calendars" + (fresh ? "?fresh" : ""));
+  renderCalendars();
+}
+function renderCalendars() {
+  $("#cal-panel").hidden = !CALS?.length;
+  if (!CALS?.length) return;
+  $("#cal-list").innerHTML = CALS.map((a) =>
+    `<div class="cal-acc"><div class="acct-h">${esc(a.account)}${
+      a.email ? ` <span class="dim">${esc(a.email)}</span>` : ""
+    }</div>${
+      a.state === "ok"
+        ? a.calendars.map((c) =>
+          `<label class="cal-row"><input type="checkbox" data-cal-acc="${esc(a.account)}" data-cal-id="${esc(c.id)}"${
+            c.shown ? " checked" : ""
+          }><i style="background:${esc(c.color)}"></i><span>${esc(c.name)}</span>${
+            c.primary ? `<span class="dim">${esc(t("cal.primary"))}</span>` : ""
+          }${
+            c.role === "reader" || c.role === "freeBusyReader"
+              ? `<span class="dim">${esc(t("cal.readonly"))}</span>`
+              : ""
+          }${c.noisy ? `<span class="dim">${esc(t("cal.noisy"))}</span>` : ""}</label>`
+        ).join("")
+        : `<div class="sub">${
+          esc(t(a.state === "disconnected" ? "cal.disconnected" : "cal.error", { m: a.message ?? "" }))
+        }</div>`
+    }</div>`
+  ).join("");
+}
+$("#cal-reload").addEventListener("click", () => loadCalendars(true).catch((e) => toast(e.message, true)));
+$("#cal-list").addEventListener("change", async (e) => {
+  const c = e.target.closest("[data-cal-id]");
+  if (!c) return;
+  const r = await post("/api/calendars", { account: c.dataset.calAcc, id: c.dataset.calId, shown: c.checked })
+    .catch((x) => ({ ok: false, message: x.message }));
+  if (!r.ok) toast(r.message, true);
+  await loadCalendars().catch(() => {});
+  if (r.ok) toast(t("cal.saved"));
+});
 
 /* ---------------- profiles ---------------- */
 function renderProfiles() {

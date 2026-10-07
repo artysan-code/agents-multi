@@ -9,12 +9,13 @@ import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
 import { accessToken, loadClient } from "../../shared/mcp/lib/google.ts";
 import { addDays, dayOf, hhmm, type Task } from "../../shared/mcp/lib/tasks.ts";
 import { getSecret } from "../../shared/mcp/lib/vault.ts";
+import { type CalendarInfo, listCalendars } from "./calendars.ts";
 
 // deno-lint-ignore no-explicit-any
 type Doc = any;
 
 /** Pure: a Google Calendar event as a task-shaped entry of the agenda. */
-export function eventAsTask(e: Doc, account: string): Task | null {
+export function eventAsTask(e: Doc, account: string, cal?: Pick<CalendarInfo, "name" | "color">): Task | null {
   if (e.status === "cancelled") return null;
   // an invitation declined is not something to do
   if (e.attendees?.find((a: Doc) => a.self)?.responseStatus === "declined") return null;
@@ -28,12 +29,25 @@ export function eventAsTask(e: Doc, account: string): Task | null {
     due,
     ...(start ? { time: hhmm(start) } : {}),
     project: account,
+    ...(cal ? { calendar: cal.name, color: cal.color } : {}),
     owner: owner().id,
     source: "calendar",
     created: e.created ?? "",
     updated: e.updated ?? "",
   };
 }
+
+/** Pure: the same event can sit in several calendars (an invitation, a shared one): shown once. */
+export function dedupeEvents(tasks: Task[], uids: Map<string, string>): Task[] {
+  const seen = new Set<string>();
+  return tasks.filter((t) => {
+    const key = `${uids.get(t.id) ?? t.id}|${t.due}|${t.time ?? ""}`;
+    return seen.has(key) ? false : (seen.add(key), true);
+  });
+}
+
+/** The choice of calendars changed: the next ask reads them again. */
+export const resetAgenda = () => memo.clear();
 
 /** Today's and tomorrow's events. Kept two minutes: Today asks on every redraw, and Google
  *  answers in about a second. */
@@ -65,32 +79,54 @@ async function fetchCalendar(days: number): Promise<{ tasks: Task[]; errors: str
   const from = new Date(y, m - 1, d).toISOString();
   const [y2, m2, d2] = addDays(today, days).split("-").map(Number);
   const to = new Date(y2, m2 - 1, d2).toISOString();
-  for (const a of google) {
+  const uids = new Map<string, string>();
+  const lists = await listCalendars();
+  await Promise.all(google.map(async (a) => {
     try {
       const refresh = await getSecret("google", a.name);
-      if (!refresh) continue; // not connected on this machine yet
+      if (!refresh) return; // not connected on this machine yet
       const token = await accessToken(client, refresh);
-      const q = new URLSearchParams({
-        timeMin: from,
-        timeMax: to,
-        singleEvents: "true",
-        orderBy: "startTime",
-        maxResults: "250",
-      });
-      const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!r.ok) {
-        errors.push(`${a.name}: HTTP ${r.status}`);
-        continue;
-      }
-      for (const e of (await r.json()).items ?? []) {
-        const t = eventAsTask(e, a.name);
-        if (t) tasks.push(t);
-      }
+      const mine = lists.find((l) => l.account === a.name);
+      // the list failed (offline, an old token): the main calendar, as before, rather than nothing
+      const cals = mine?.state === "ok" ? mine.calendars.filter((c) => c.shown) : [{
+        id: "primary",
+        name: a.name,
+        color: "#888888",
+        shown: true,
+        primary: true,
+        role: "owner",
+        noisy: false,
+      }];
+      await Promise.all(cals.map(async (c) => {
+        const q = new URLSearchParams({
+          timeMin: from,
+          timeMax: to,
+          singleEvents: "true",
+          orderBy: "startTime",
+          maxResults: "250",
+        });
+        const r = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(c.id)}/events?${q}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        if (!r.ok) {
+          errors.push(`${a.name}/${c.name}: HTTP ${r.status}`);
+          return;
+        }
+        for (const e of (await r.json()).items ?? []) {
+          const t = eventAsTask(e, a.name, c);
+          if (!t) continue;
+          t.id = `ev-${a.name}-${c.id}-${e.id}`;
+          if (e.iCalUID) uids.set(t.id, e.iCalUID);
+          tasks.push(t);
+        }
+      }));
     } catch (e) {
       errors.push(`${a.name}: ${(e as Error).message}`);
     }
-  }
-  return { tasks, errors };
+  }));
+  tasks.sort((x, y) => `${x.due}${x.time ?? ""}`.localeCompare(`${y.due}${y.time ?? ""}`));
+  return { tasks: dedupeEvents(tasks, uids), errors };
 }

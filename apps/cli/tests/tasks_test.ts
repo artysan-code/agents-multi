@@ -364,3 +364,46 @@ Deno.test("updateTask: a change made elsewhere meanwhile is read again and the c
     T.useTaskStore(before);
   }
 });
+
+Deno.test("calendars: noise is off by default, a choice overrides, new calendars show", async () => {
+  const { isNoisy, isShown, calendarInfos, choiceSignature } = await import("../calendars.ts");
+  assertEquals(isNoisy("it.italian#holiday@group.v.calendar.google.com"), true);
+  assertEquals(isNoisy("addressbook#contacts@group.v.calendar.google.com"), true);
+  assertEquals(isNoisy("me@gmail.com"), false);
+  assertEquals(isShown({}, "personal", "me@gmail.com"), true);
+  assertEquals(isShown({}, "personal", "x#holiday@group.v.calendar.google.com"), false);
+  assertEquals(isShown({ personal: { "x#holiday@g": true, uni: false } }, "personal", "x#holiday@g"), true);
+  assertEquals(isShown({ personal: { uni: false } }, "personal", "uni"), false);
+  const infos = calendarInfos(
+    [{ id: "uni", summary: "Università", backgroundColor: "#f00" }, { id: "me", summary: "me", primary: true }, {
+      id: "gone",
+      deleted: true,
+    }],
+    { personal: { uni: false } },
+    "personal",
+  );
+  assertEquals(infos.map((c) => [c.id, c.shown]), [["me", true], ["uni", false]]);
+  assertEquals(choiceSignature({}) === choiceSignature({ personal: { uni: false } }), false);
+  assertEquals(choiceSignature({ a: { x: true, y: false } }), choiceSignature({ a: { y: false, x: true } }));
+});
+
+Deno.test("dedupeEvents: the same event in two calendars is shown once; the same title at another time is not", async () => {
+  const { dedupeEvents } = await import("../agenda.ts");
+  const t = (id: string, due: string, time?: string) => ({
+    id,
+    title: "x",
+    status: "todo" as const,
+    due,
+    time,
+    created: "",
+    updated: "",
+  });
+  const uids = new Map([["a", "u1"], ["b", "u1"], ["c", "u1"]]);
+  const out = dedupeEvents([
+    t("a", "2026-10-07", "10:00"),
+    t("b", "2026-10-07", "10:00"),
+    t("c", "2026-10-08", "10:00"),
+    t("d", "2026-10-07", "10:00"),
+  ], uids);
+  assertEquals(out.map((x) => x.id), ["a", "c", "d"]);
+});

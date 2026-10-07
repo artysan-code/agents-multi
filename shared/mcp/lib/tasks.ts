@@ -49,6 +49,9 @@ export interface Task {
   notes?: string;
   /** where an agenda entry comes from when it is not a task ("calendar"): never written to a file */
   source?: string;
+  /** a calendar entry: the calendar it is in and that calendar's colour (a CSS colour) */
+  calendar?: string;
+  color?: string;
 }
 
 export interface TaskSettings {

@@ -3574,3 +3574,21 @@ body.plbusy #mk-add button {
     padding-right: 28px;
   }
 }
+
+/* ---------------- calendars (Connections) ---------------- */
+.cal-acc + .cal-acc {
+  margin-top: 14px;
+}
+.cal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.cal-row i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
