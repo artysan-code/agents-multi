@@ -54,7 +54,14 @@ async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
 }
 type Json = (o: unknown, status?: number) => Response;
 
-/** A task as the board shows it: the folder its project means, the checklist's progress, how many
+/** Pure: a task's checklist as the board shows it (each step, and the first one not done), or nothing
+ *  when it has none. */
+export function boardSteps(notes?: string) {
+  const s = steps(notes);
+  return s.length ? { steps: s, next_step: s.find((x) => !x.done)?.text ?? null } : {};
+}
+
+/** A task as the board shows it: the folder its project means, the checklist's progress and steps, how many
  *  attachments, whether it waits for an open task, how many of its parts are done. The notes travel
  *  only with the task's own page. */
 function card(t: Task, all: Task[], tree: Awaited<ReturnType<typeof projectTree>>) {
@@ -64,6 +71,7 @@ function card(t: Task, all: Task[], tree: Awaited<ReturnType<typeof projectTree>
     ...rest,
     folder: resolveProject(t.project, tree),
     progress: progress(t.notes),
+    ...boardSteps(t.notes),
     attachments: attachments(t.notes).length,
     ...(r.waiting_for.length ? { blocked: true } : {}),
     ...(r.parts.length ? { parts: { done: r.parts_done, total: r.parts.length } } : {}),

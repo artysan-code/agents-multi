@@ -449,7 +449,9 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
   if (p === "/api/debrief" && req.method === "GET") {
     return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
   }
-  if (p === "/api/ask/model" && req.method === "GET") return json({ model: await askModel(), models: ASK_MODELS });
+  if (p === "/api/ask/model" && req.method === "GET") {
+    return json({ model: await askModel(), models: ASK_MODELS, efforts: ASK_EFFORT, default: ASK_MODELS[0] });
+  }
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
   const b = await req.json().catch(() => ({})) as Record<string, unknown>;

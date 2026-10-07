@@ -22,12 +22,15 @@ export function eventAsTask(e: Doc, account: string, cal?: Pick<CalendarInfo, "n
   const start = e.start?.dateTime ? new Date(e.start.dateTime) : null;
   const due = start ? dayOf(start) : e.start?.date;
   if (!due) return null;
+  const end = start && e.end?.dateTime ? new Date(e.end.dateTime) : null;
   return {
     id: `ev-${account}-${e.id}`,
     title: e.summary ?? "(no title)",
     status: "todo",
     due,
     ...(start ? { time: hhmm(start) } : {}),
+    ...(end && dayOf(end) === due ? { end: hhmm(end) } : {}),
+    ...(typeof e.htmlLink === "string" ? { link: e.htmlLink } : {}),
     project: account,
     ...(cal ? { calendar: cal.name, color: cal.color } : {}),
     owner: owner().id,
