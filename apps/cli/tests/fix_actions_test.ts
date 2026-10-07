@@ -1,5 +1,5 @@
 // Tests for the doctor's fixes on the console: a fix that is a bare `agents-multi …` command gets a
-// button only when the page maps it to an allowlisted action (FIX_ACTIONS in app.js). The update
+// button only when the page maps it to an allowlisted action (FIX_ACTIONS in apps/ui/src/lib/ui.tsx). The update
 // check once suggested `agents-multi update --auto` as text to copy, though the action existed.
 import { assertEquals } from "jsr:@std/assert@1";
 import { ACTIONS } from "../console/actions.ts";
@@ -15,8 +15,8 @@ const MANUAL = new Set([
 ]);
 
 async function fixActions(): Promise<Record<string, string>> {
-  const src = await Deno.readTextFile(new URL("../dashboard/app.js", import.meta.url));
-  const body = src.match(/const FIX_ACTIONS = \{([^}]*)\}/)![1];
+  const src = await Deno.readTextFile(new URL("../../ui/src/lib/ui.tsx", import.meta.url));
+  const body = src.match(/const FIX_ACTIONS[^=]*= \{([^}]*)\}/)![1];
   return Object.fromEntries([...body.matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]));
 }
 
