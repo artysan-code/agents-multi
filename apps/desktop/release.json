@@ -1,6 +1,6 @@
 {
-  "site": "",
-  "github": "",
+  "site": "https://agents-multi.artysan.me",
+  "github": "artysan-code/agents-multi",
   "aur": "agents-multi-bin",
   "license": ""
 }
