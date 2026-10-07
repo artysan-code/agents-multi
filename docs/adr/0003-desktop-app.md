@@ -128,10 +128,66 @@ shell's.
   1.x; the code avoids what would tie it to Linux (the bundled page's origin is recognised on all
   three).
 
+## The tray, the launch flags and the profile picker (phase 5, piece 3)
+
+The app takes over what `apps/tray/app.py`, `tray.py` and `picker.py` do, in its own modules
+(`flags.rs`, `controller.rs`, `tray.rs`, `http.rs`, `profiles.rs`, `picker.rs`), with `main.rs` only
+wiring them.
+
+- **Flags are the tray app's**: none shows the console window (on Today, as `show` did), `--tray`
+  starts in the tray without a window, `--pick` opens the picker, `--hey` opens the console and logs
+  that «Hey Claude» is not ported yet (`controller::show_hey` is its place). The first match wins in
+  the tray app's order. A second launch hands its arguments to the running app through the
+  single-instance plugin, which routes them like its own; `--tray` there does nothing.
+- **Lifetime**: with a tray, closing the console window hides it and the app lives in the tray; Quit
+  is in the menu. Without one the app quits with its last window. `--tray` waits up to a minute for a
+  tray host (at login it can come up after the app), then says so and exits; any other launch looks
+  once. On Linux a tray host is a StatusNotifier watcher on the session bus — the one kind the app's
+  indicator speaks — asked with `zbus` (already in the tree through the single-instance plugin). The
+  answer goes to `$XDG_STATE_HOME/claude-multi/app.json`, the file the doctor's `app.tray` check reads.
+  The tray app's other habit — destroying a window hidden for twenty minutes to free the web engine —
+  is not carried over.
+- **The tray reads the console from Rust**, over HTTP on 127.0.0.1 (`http.rs`: a GET, a chunked or
+  sized body; no client library, since a stream's silence has to fail one read, not the whole body).
+  It draws `/api/summary` with the tray app's headline, lines, dot and menu (`tray::view`, with its
+  tests); it refetches on a `state` event of `/api/events` (a second after the last of a burst), never
+  on a timer; a stream silent for 70 s is dead; reconnection backs off 2, 4, 8, 16, then 30 s; the
+  menu is rebuilt only when what it shows changes. The profiles of «Open Claude Desktop» come from
+  the manifests (`profiles.rs`, the CLI's rule), so the menu opens a Desktop with the console down;
+  its actions are CLI commands (`claude-launch`, `systemctl --user start` of the console's unit) or the
+  app's windows. On Linux the indicator has no click, tooltip or «menu about to open» events: the menu
+  opens on any click, and the tooltip shows on the other systems only.
+- **The picker is a page of the console** (`apps/ui/src/pages/pick/`, `/#pick`, drawn without the
+  console's frame) in a small frameless window, loaded by URL through the local page like the main
+  window: it gets no IPC. Its action goes through **a new endpoint, `/api/launch`** (`GET` the
+  profiles from the manifests, `POST {profile}` to run `claude-launch` through the same function as
+  «Close Claude and update»'s reopen step, which starts only a declared profile). `/api/close-claude`'s
+  `reopen` step would have run the same command, but it belongs to that flow's contract, and a picker
+  calling «close Claude» to open one would break silently the day that flow changes. The page asks for
+  its window to close (after a choice, on Esc) by setting its title to `agents-multi:close`, which the
+  app watches on that window only: `window.close()` would not do — wry answers WebKitGTK's close
+  signal by destroying the web view alone, leaving an empty window. The window also closes when it loses the focus, once it has had
+  it. With the console down the picker shows the local page, waiting, until the sidecar makes that
+  rare. The tray menu's own «Open Claude Desktop» stays a CLI command.
+- **The app speaks to a page only by setting its location** (a view's hash, validated as lowercase
+  words and slashes on both sides, `flags::is_view` and the local page); pages still cannot call it.
+
+When the app replaces the tray app, that step changes:
+
+- `systemd/user/claude-multi-app.service`: `ExecStart` runs the app with `--tray` (or the unit gives way
+  to an autostart entry the app installs), and `apps/cli/install.ts` enables whichever it is.
+- `desktop/claude-multi.desktop` and `desktop/claude-multi-launcher.desktop`: `Exec` runs the app (no
+  flag, and `--pick`); `bin/claude-multi-app` goes, or becomes a link to the app.
+- The KDE shortcut for «Hey Claude» (`~/.local/bin/claude-multi-app --hey`) points at the app once Hey
+  is ported; until then `--hey` there would only open the console.
+- The doctor's `app.deps` (pyside6, qt6-webengine) becomes the app's own (WebKitGTK,
+  libayatana-appindicator), and its `app.tray` fix names the app's unit; the README's section on the
+  desktop app is rewritten; `apps/tray/` is removed.
+
 ## Consequences
 
 - `apps/tray/`, `systemd/` and the unit written by `apps/cli/install.ts` stay until the app replaces
-  them; until then both can show the console at once, and whichever starts first serves the port (the
+  them; until then both can show the console (and a tray icon) at once, and whichever starts first serves the port (the
   app uses a running unit; a unit started after the app fails to bind and retries). The step that
   replaces them on installed machines must: stop and disable `claude-multi-console.service` and
   remove its file (install, and a migration for machines that have it), have install stop writing it,

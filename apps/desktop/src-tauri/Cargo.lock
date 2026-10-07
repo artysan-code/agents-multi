@@ -14,12 +14,14 @@ version = "0.0.0"
 dependencies = [
  "gtk",
  "libc",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "url",
+ "zbus",
 ]
 
 [[package]]

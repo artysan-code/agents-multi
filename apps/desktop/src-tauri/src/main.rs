@@ -1,4 +1,5 @@
-//! Agents Multi's desktop app: one window on the local console.
+//! Agents Multi's desktop app: one window on the local console, a tray icon, and the profile picker
+//! (`controller` says what each launch and menu item does).
 //!
 //! The window opens on the bundled local page (`../src/index.html`), which waits for the console to
 //! answer on 127.0.0.1 and then navigates to it. The console is loaded by URL, never bundled: it is
@@ -11,12 +12,18 @@
 mod activation;
 mod backend;
 mod console;
+mod controller;
+mod flags;
+mod http;
 mod navigation;
+mod picker;
+mod profiles;
 mod repo;
+mod tray;
 
 use navigation::Decision;
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use url::Url;
 
 const MAIN: &str = "main";
@@ -31,11 +38,10 @@ fn main() {
     set_app_id(&context.config().identifier);
 
     tauri::Builder::default()
-        // First, so a second launch exits before it builds anything: it raises the window instead.
+        // First, so a second launch exits before it builds anything: it hands its flags (and the
+        // launcher's activation token, activation.rs) to this one.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            if let Some(window) = app.get_webview_window(MAIN) {
-                activation::bring_forward(&window, activation::forwarded_token(&args));
-            }
+            controller::second_launch(app, args.get(1..).unwrap_or_default())
         }))
         // The console's backend: started before the window, stopped on exit (backend.rs).
         .plugin(backend::init())
@@ -45,11 +51,14 @@ fn main() {
             let port = console::port();
             // The local page waits for whatever serves the console on `port`: the backend plugin's
             // sidecar, or a console that was already running.
-            open_main_window(app.handle(), port)?;
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            controller::start(app.handle(), port, flags::parse(&args));
             Ok(())
         })
-        .run(context)
-        .expect("error while running the desktop app");
+        .on_window_event(controller::on_window_event)
+        .build(context)
+        .expect("error while building the desktop app")
+        .run(controller::on_run_event);
 }
 
 /// The window's app_id on Wayland, set before GTK starts (GTK 3 sends the program name): the
@@ -67,10 +76,10 @@ fn set_window_class(id: &str) {
     gtk::gdk::set_program_class(id);
 }
 
-/// The main window, on the local page that waits for the console on `port`.
-fn open_main_window(app: &AppHandle, port: u16) -> tauri::Result<()> {
+/// The main window, on the local page that waits for the console on `port` and then shows `view`.
+fn open_main_window(app: &AppHandle, port: u16, view: &str) -> tauri::Result<()> {
     let console = console::url(port);
-    let page = WebviewUrl::App(format!("index.html?port={port}").into());
+    let page = WebviewUrl::App(format!("index.html?port={port}&view={view}").into());
     let window = WebviewWindowBuilder::new(app, MAIN, page)
         .title("Agents Multi")
         .inner_size(1280.0, 860.0)

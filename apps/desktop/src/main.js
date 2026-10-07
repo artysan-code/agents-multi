@@ -1,5 +1,6 @@
 // The local page: shown while the console does not answer. It asks GET /api/code on the console's
-// port (given by the app in ?port=) and navigates there once it answers; until then it says so and
+// port (given by the app in ?port=) and navigates there once it answers, to the view in ?view= (a
+// fragment: #system/health, #pick); until then it says so and
 // keeps trying. The request is no-cors: the console sends no CORS headers, and an opaque answer is
 // enough to know it is up. The page has no IPC: it needs nothing from the app.
 
@@ -32,9 +33,12 @@ const text = it
   };
 
 // the app always passes the port; 7331 is the default it would have resolved anyway
-const given = Number(new URLSearchParams(location.search).get("port"));
+const params = new URLSearchParams(location.search);
+const given = Number(params.get("port"));
 const port = Number.isInteger(given) && given > 0 && given < 65536 ? given : 7331;
 const consoleUrl = `http://127.0.0.1:${port}/`;
+// the same rule as the app's (flags::is_view): lowercase words and slashes
+const view = /^[a-z0-9/-]{1,64}$/.test(params.get("view") ?? "") ? params.get("view") : "";
 
 const main = document.querySelector("main");
 const status = document.getElementById("status");
@@ -65,7 +69,7 @@ async function check() {
   retry.disabled = true;
   clearTimeout(timer);
   if (await reachable()) {
-    location.replace(consoleUrl);
+    location.replace(view ? `${consoleUrl}#${view}` : consoleUrl);
     return;
   }
   main.dataset.state = "unreachable";
