@@ -50,12 +50,21 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   order); `app.js` boots on `DOMContentLoaded`, so code that runs at start may use the later ones.
   Libraries are welcome when they make the page better: vendored in `apps/cli/dashboard/vendor/` with
   their licence, never loaded from a CDN (the console works offline).
-- **The public site is the one place with a build step** (`apps/site/`, Astro + Starlight, pnpm): the
+- **The console is moving to a new interface** (`apps/ui/`: Preact + TSX, Vite, pnpm), served by the
+  same server under `/next` until every page has moved, then it replaces `apps/cli/dashboard`. A page
+  moves whole: its strings go to `apps/ui/src/i18n.ts` (the type makes Italian carry every English
+  key), its data comes through `src/api.ts`, its live updates through the signals in `src/state.ts`,
+  and its markup is JSX — never `innerHTML`. Types come from the server's modules only when those
+  have no Deno imports (`apps/cli/lib/output.ts`); otherwise the UI declares the part it reads. The
+  build is not committed: `claude-multi ui build` makes it (install and self-update run it when
+  `apps/ui` changed, the doctor's `console.ui` says when it is missing or stale), and a failed build
+  leaves the previous one. `pnpm dev` in `apps/ui` serves it with hot reload against the running console.
+- **The public site has its own build** (`apps/site/`, Astro + Starlight, pnpm): the
   landing and the docs, built into `apps/site/dist` by the brain's image and served by the brain
   (`apps/brain/public.ts`) on an address of its own, another origin than the brain's. Nothing of one
   instance in it: its address, the contact and the operator are placeholders the brain fills from its
-  environment. Its facts come from the README — when one changes, change both. The
-  console keeps its rule: no build, no framework.
+  environment. Its facts come from the README — when one changes, change both. Until it is retired,
+  the current console (`apps/cli/dashboard`) keeps its rule: no build, no framework.
 - **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `claude-multi vault`):
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
   A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A

@@ -21,7 +21,7 @@
 import { staleUnits } from "../apps/cli/lib/stale.ts";
 
 /** The manifests that carry the version, relative to the repository root. */
-export const MANIFESTS = ["deno.json", "apps/site/package.json"];
+export const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json"];
 
 export type Bump = "major" | "minor" | "patch" | "beta";
 

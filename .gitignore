@@ -21,3 +21,8 @@ shared/mcp/.sync-state.json
 
 # Skills from ~/.agents: absolute links created by `claude-multi install`, per-machine
 shared/skills/use-railway
+
+# The console's new interface: built by install and self-update (claude-multi ui build)
+apps/ui/dist/
+apps/ui/dist.next/
+apps/ui/dist.old/

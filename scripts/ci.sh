@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ci.sh — the whole gate, in the order CI runs it; the pre-push hook runs the same script.
 #
-#   scripts/ci.sh             check, commit subjects, tests, MCP server probe, secret scan, site build
+#   scripts/ci.sh             check, commit subjects, tests, MCP server probe, secret scan, console UI build, site build
 #   scripts/ci.sh --no-site   the same without the site build
 #
 # gitleaks is optional on a workstation (skipped with a warning) and required in CI (CI=true).
@@ -34,6 +34,9 @@ elif [[ "${CI:-}" == true ]]; then
 else
   echo "ci: gitleaks is not installed, secret scan skipped" >&2
 fi
+
+step "console ui"
+(cd apps/ui && pnpm install --frozen-lockfile --silent && pnpm build --logLevel warn)
 
 if ((site)); then
   step site

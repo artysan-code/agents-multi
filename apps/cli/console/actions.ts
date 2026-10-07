@@ -25,6 +25,7 @@ export const ACTIONS: Record<string, ActionDef> = {
   "mcp-sync": { args: ["mcp", "sync"], opts: { force: ["--force"] } },
   "install-dry": { args: ["install", "--dry-run"] },
   "install": { args: ["install"] },
+  "ui-build": { args: ["ui", "build"], timeoutMs: 300000 },
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
   "update-check": { args: ["update", "--check"], timeoutMs: 40000 },
   "update-now": { args: ["update", "--auto"], timeoutMs: 900000 },

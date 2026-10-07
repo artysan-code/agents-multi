@@ -16,6 +16,7 @@ import { currentVersion, highlights, type Release, whatsNew } from "./lib/change
 import { desktopNotify } from "./notify.ts";
 import { staleParts, staleUnits } from "./lib/stale.ts";
 import { syncAllSettings } from "./settings.ts";
+import { uiBuild, uiStatus } from "./ui.ts";
 
 export interface RepoView {
   upstream: string | null;
@@ -252,6 +253,11 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
   if (quiet) await desktopNotify(T.notifyTitle(moved ? news.version! : ""), updateNote(news.releases)).catch(() => {});
   say(row("new", to, T.updated(from, r.behind)));
   await syncAllSettings().catch(() => {});
+  // the console reads the new interface from disk on each request: a build is enough, no restart
+  if ((await uiStatus()) !== "built") {
+    const b = await uiBuild();
+    if (!b.ok) await log("failed", from, to, `ui build: ${b.error}`);
+  }
   const installed = await settleInstall(to, say);
   // last, and without waiting: the console may be the one running this round (its Update button),
   // and restarting it ends whatever runs inside it

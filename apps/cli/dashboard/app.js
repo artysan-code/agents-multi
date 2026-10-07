@@ -2152,6 +2152,7 @@ const FIX_ACTIONS = {
   "claude-multi usage ingest": "usage-ingest",
   "claude-multi update --auto": "update-now",
   "claude-multi update --check": "update-check",
+  "claude-multi ui build": "ui-build",
 };
 function actionButton(fix) {
   const act = FIX_ACTIONS[fix.trim()];

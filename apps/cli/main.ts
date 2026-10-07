@@ -42,6 +42,7 @@ import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
 import { selfCheck, selfCheckRow, selfUpdate, settlePending } from "./selfupdate.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
+import { uiCommand } from "./ui.ts";
 import manifest from "../../deno.json" with { type: "json" };
 
 const [cmd = "help", ...rest] = Deno.args;
@@ -177,6 +178,9 @@ switch (cmd) {
     else printReport(rep);
     break;
   }
+  case "ui":
+    Deno.exit(await uiCommand(rest));
+    break;
   case "serve":
     await serve({ open: !flag("--no-open") });
     break;
@@ -247,6 +251,7 @@ switch (cmd) {
   tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
+  ui      build               build the console's new interface (apps/ui, pnpm) that serve shows under /next
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
   version                     the version of claude-multi (also --version, -V)
 

@@ -1,0 +1,20 @@
+{
+  "version": "0.9.0",
+  "name": "claude-multi-ui",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.3",
+    "preact": "11.0.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "typescript": "7.0.2",
+    "vite": "8.3.3"
+  }
+}

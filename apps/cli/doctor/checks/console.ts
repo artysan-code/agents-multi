@@ -1,12 +1,13 @@
-// console.ts — The console systemd unit and whether it runs the current code.
+// console.ts — The console systemd unit, whether it runs the current code, and its new interface's build.
 
 import { codeVersion } from "../../codeversion.ts";
 import { PORT } from "../../lib/paths.ts";
-import { run } from "../../lib/proc.ts";
+import { has, run } from "../../lib/proc.ts";
+import { uiStatus } from "../../ui.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
 
-/** The console systemd unit and whether it runs the current code. */
+/** The console systemd unit, whether it runs the current code, and its new interface's build. */
 export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { m } = ctx;
@@ -41,5 +42,18 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
       } else add("console.unit", "ok", `console on http://127.0.0.1:${PORT} (systemd user unit)`);
     }
   }
+  // --- the new interface under /next: built from the tree the checkout is on
+  const ui = await uiStatus();
+  if (ui !== "built") {
+    const pnpm = await has("pnpm");
+    add(
+      "console.ui",
+      "warn",
+      `the console's new interface (/next) is ${ui === "missing" ? "not built" : "built from older code"}${
+        pnpm ? "" : ", and pnpm is not installed"
+      }`,
+      pnpm ? "claude-multi ui build" : "install pnpm (https://pnpm.io/installation), then claude-multi ui build",
+    );
+  } else add("console.ui", "ok", "the console's new interface is built (/next)");
   return c;
 }

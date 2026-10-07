@@ -11,6 +11,9 @@ asks the brain whether its tasks or pages moved, and the page redraws the view y
 is HTML, CSS and vanilla JavaScript with no build step, its libraries vendored: it renders on a
 machine that has never been online. English or Italian, following the machine's locale.
 
+A new interface (Preact and TypeScript) is taking its place at `/next`, one page at a time. It is
+built on the machine with pnpm when claude-multi is installed or updated, never downloaded.
+
 ## Sections
 
 - **Today** — the sessions running now, the day's tasks and appointments, the last sessions per

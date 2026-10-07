@@ -60,3 +60,27 @@ export async function staticFile(dir: string, pathname: string): Promise<Respons
   if (body === null || !MIME[ext]) return new Response("not found", { status: 404 });
   return new Response(body, { headers: { "content-type": MIME[ext], "cache-control": "no-cache" } });
 }
+
+/**
+ * A file of the new interface under /next, from its build in `dist`: the page itself revalidated on
+ * each load, its hashed assets immutable. A console whose interface is not built says how to build it.
+ */
+export async function nextFile(dist: string, pathname: string): Promise<Response> {
+  const rest = pathname.replace(/^\/next\/?/, "");
+  if (rest === "" || rest === "index.html") {
+    const page = await readText(`${dist}/index.html`);
+    if (page === null) {
+      return new Response("The new interface is not built: run `claude-multi ui build`.", {
+        status: 503,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+    return new Response(page, { headers: { "content-type": MIME[".html"], "cache-control": "no-cache" } });
+  }
+  const m = rest.match(/^assets\/[a-zA-Z0-9_-]+(\.[a-z0-9]+)$/);
+  const type = m && (MIME[m[1]] ?? (m[1] === ".woff2" ? "font/woff2" : undefined));
+  if (!type) return new Response("not found", { status: 404 });
+  const bytes = await Deno.readFile(`${dist}/${rest}`).catch(() => null);
+  if (!bytes) return new Response("not found", { status: 404 });
+  return new Response(bytes, { headers: { "content-type": type, "cache-control": "max-age=31536000, immutable" } });
+}

@@ -191,6 +191,7 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | `claude-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and claude-multi itself                                                                                                   |
 | `claude-multi usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                       |
 | `claude-multi serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally already running as a unit)                                                                                  |
+| `claude-multi ui build`                                               | build the console's new interface (`apps/ui`, pnpm), served under `/next`; install and self-update run it when `apps/ui` changed                             |
 | `claude-multi vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                         |
 | `claude-multi tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                               |
 | `claude-multi google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                           |
@@ -213,6 +214,12 @@ asks the brain every half minute whether its tasks or pages moved, and the page 
 are actually looking at. The page itself is HTML, CSS and vanilla JS with no build step; the libraries
 it uses are vendored in `apps/cli/dashboard/vendor/` (d3-force, for the brain's graph) and nothing is
 loaded from elsewhere, so it renders on a machine that has never been online.
+
+The console is moving to a new interface, `apps/ui/` (Preact and TypeScript, built with Vite and
+pnpm), at <http://127.0.0.1:7331/next> while its pages move over one at a time; System › Health is
+the first. The build is made on the machine and never committed: `install` and every update that
+changed `apps/ui` run `claude-multi ui build`, a failed build keeps the previous one, and the doctor
+says when it is missing or behind. It needs pnpm; the current console does not.
 
 Five sections, in English or Italian. The language follows the machine's locale — the regional
 format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
@@ -497,6 +504,7 @@ bin/            wrappers and scripts: claude, claude-multi, claude-multi-app, cl
 bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
 apps/cli/            the claude-multi CLI (Deno, zero dependencies)
 apps/cli/dashboard/  the console page (HTML/CSS/JS, no build step)
+apps/ui/             the console's new interface (Preact + TSX, Vite, pnpm), under /next
 shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
 config.example/ the configuration `claude-multi init` starts from
 lib/            the desktop app: tray and console window (PySide6)

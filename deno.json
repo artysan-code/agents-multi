@@ -19,6 +19,7 @@
     "proseWrap": "preserve",
     "exclude": [
       "apps/site/",
+      "apps/ui/",
       "apps/cli/dashboard/vendor/",
       "shared/skills/graphify/",
       "desktop/icons/",
@@ -28,7 +29,8 @@
   "lint": {
     "exclude": [
       "apps/cli/dashboard/vendor/",
-      "apps/site/"
+      "apps/site/",
+      "apps/ui/"
     ],
     "rules": {
       "exclude": [

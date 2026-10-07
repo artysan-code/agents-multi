@@ -35,6 +35,7 @@ import { doctor } from "./doctor/index.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
+import { uiBuild, uiStatus } from "./ui.ts";
 
 let DRY = false;
 const actions: string[] = [];
@@ -469,6 +470,15 @@ export async function install(dry: boolean) {
     }
   } else {
     console.log(`  ${ANSI.d}Claude Desktop is not installed: skipping desktop entries and icons${ANSI.x}`);
+  }
+
+  // the console's new interface: built here, not counted as install work, since self-update builds it
+  // on its own and an install waiting for Claude to close must not wait for it
+  if (!DRY && (await uiStatus()) !== "built") {
+    const b = await uiBuild();
+    console.log(
+      b.ok ? `  ${ANSI.g}✓${ANSI.x} console interface built` : `  ${ANSI.y}!${ANSI.x} console interface: ${b.error}`,
+    );
   }
 
   if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} everything already materialised, nothing to do`);
