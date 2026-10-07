@@ -19,6 +19,9 @@ bash scripts/check.sh
 step commits
 deno run --quiet --allow-read --allow-run=git scripts/release.ts --lint
 
+step "brain image"
+deno run --quiet --allow-read --allow-run=deno --allow-env scripts/brain-image.ts
+
 step test
 deno task --quiet test
 
