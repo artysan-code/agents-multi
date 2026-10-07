@@ -15,7 +15,7 @@
 // to the page as `confirm`, and runs only when the person re-sends its sha256.
 
 import { listDir, lstat, readJson } from "./lib/fs.ts";
-import { BIN, RUNTIME, STATE } from "./lib/paths.ts";
+import { BIN, CACHE, RUNTIME, STATE } from "./lib/paths.ts";
 import { type Profile, profileNames } from "./lib/profiles.ts";
 import { editSettingsSource, expectedSettings, runtimePath, syncAllSettings, syncSettings } from "./settings.ts";
 import { isObj, type Obj } from "./lib/json-patch.ts";
@@ -211,28 +211,72 @@ export interface CatalogEntry {
   installs: number;
 }
 let catalogCache: { at: number; entries: CatalogEntry[] } | null = null;
+let catalogLoad: Promise<CatalogEntry[]> | null = null;
+const CATALOG_FILE = `${CACHE}/plugin-catalog.json`;
+const CATALOG_FRESH_MS = 10 * 60_000;
 
-/** Everything the known marketplaces offer, across profiles (each knows its own marketplaces). */
-export async function catalog(fresh = false): Promise<CatalogEntry[]> {
-  if (!fresh && catalogCache && Date.now() - catalogCache.at < 10 * 60_000) return catalogCache.entries;
-  const byId = new Map<string, CatalogEntry>();
-  for (const p of await livingProfiles()) {
+/** Pure: one slice of the catalog, filtered by marketplace and by words in the id and description. */
+export function catalogPage(
+  entries: CatalogEntry[],
+  o: { q?: string; mk?: string; offset?: number; limit?: number },
+) {
+  const q = (o.q ?? "").trim().toLowerCase();
+  const hits = entries.filter((c) =>
+    (!o.mk || c.marketplace === o.mk) && (!q || `${c.id} ${c.description}`.toLowerCase().includes(q))
+  );
+  const offset = Math.max(0, Math.floor(o.offset ?? 0)), limit = Math.min(200, Math.max(1, Math.floor(o.limit ?? 20)));
+  return { total: hits.length, offset, entries: hits.slice(offset, offset + limit) };
+}
+
+/** Everything the known marketplaces offer, across profiles (each knows its own marketplaces). Profiles
+ *  are asked together; a repeated request while one is running waits for the same answer. */
+async function fetchCatalog(): Promise<CatalogEntry[]> {
+  const lists = await Promise.all((await livingProfiles()).map(async (p) => {
     const r = await claude(p, ["plugin", "list", "--available", "--json"], 120_000);
-    const avail = isObj(r.json) && Array.isArray(r.json.available) ? r.json.available as Record<string, unknown>[] : [];
-    for (const a of avail) {
-      const id = String(a.pluginId ?? "");
-      if (!id || byId.has(id)) continue;
-      byId.set(id, {
-        id,
-        name: String(a.name ?? id),
-        marketplace: String(a.marketplaceName ?? ""),
-        description: String(a.description ?? ""),
-        installs: Number(a.installCount ?? 0),
-      });
+    return isObj(r.json) && Array.isArray(r.json.available) ? r.json.available as Record<string, unknown>[] : [];
+  }));
+  const byId = new Map<string, CatalogEntry>();
+  for (const a of lists.flat()) {
+    const id = String(a.pluginId ?? "");
+    if (!id || byId.has(id)) continue;
+    byId.set(id, {
+      id,
+      name: String(a.name ?? id),
+      marketplace: String(a.marketplaceName ?? ""),
+      description: String(a.description ?? ""),
+      installs: Number(a.installCount ?? 0),
+    });
+  }
+  const entries = [...byId.values()].sort((a, b) => b.installs - a.installs);
+  catalogCache = { at: Date.now(), entries };
+  // only the first start is slow: later ones begin from this file
+  await Deno.mkdir(CACHE, { recursive: true }).then(() =>
+    Deno.writeTextFile(CATALOG_FILE, JSON.stringify(catalogCache))
+  ).catch(() => {});
+  return entries;
+}
+
+/** The marketplaces changed: what was kept no longer says what they offer. */
+function dropCatalog() {
+  catalogCache = null;
+  Deno.remove(CATALOG_FILE).catch(() => {});
+}
+
+function refreshCatalog(): Promise<CatalogEntry[]> {
+  return catalogLoad ??= fetchCatalog().finally(() => catalogLoad = null);
+}
+
+/** The catalog, from memory or from the file of the last run: an old one is served at once while a
+ *  new one is fetched behind it. `fresh` waits for a new one. */
+export async function catalog(fresh = false): Promise<CatalogEntry[]> {
+  if (!fresh) {
+    catalogCache ??= await readJson<{ at: number; entries: CatalogEntry[] }>(CATALOG_FILE).catch(() => null);
+    if (catalogCache?.entries?.length) {
+      if (Date.now() - catalogCache.at >= CATALOG_FRESH_MS) refreshCatalog().catch(() => {});
+      return catalogCache.entries;
     }
   }
-  catalogCache = { at: Date.now(), entries: [...byId.values()].sort((a, b) => b.installs - a.installs) };
-  return catalogCache.entries;
+  return await refreshCatalog();
 }
 
 /** `claude plugin details`: component inventory and projected token cost. */
@@ -485,7 +529,7 @@ async function runOp(op: PluginOp): Promise<OpResult> {
         log.push(`${p}: ${said(r2)}`);
       }
       await regenerate();
-      catalogCache = null;
+      dropCatalog();
       return { ok: true, message: `marketplace ${name} added for every profile`, log };
     }
     case "marketplace-remove": {
@@ -509,7 +553,7 @@ async function runOp(op: PluginOp): Promise<OpResult> {
         log.push(`${p}: ${said(r)}`);
       }
       await regenerate();
-      catalogCache = null;
+      dropCatalog();
       return { ok: true, message: `marketplace ${op.name} removed, with its plugins`, log };
     }
     case "marketplace-update": {
@@ -519,7 +563,7 @@ async function runOp(op: PluginOp): Promise<OpResult> {
         log.push(`${p}: ${said(r)}`);
       }
       await regenerate();
-      catalogCache = null;
+      dropCatalog();
       return { ok: true, message: `${op.name ?? "every marketplace"} updated`, log };
     }
   }

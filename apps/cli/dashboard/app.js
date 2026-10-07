@@ -2012,24 +2012,36 @@ document.addEventListener("click", (e) => {
 
 /* ---------------- plugins ---------------- */
 let PL = null, CAT = null, plBusy = false;
-// the catalog draws a page at a time; a new search or marketplace starts again from the first
-const CAT_PAGE = 20;
-let catShown = CAT_PAGE;
+// the catalog is asked of the server a page at a time, filtered there: the first answer is a dozen entries,
+// "Load more" asks for the next ones. A newer search makes an older answer obsolete (catSeq).
+const CAT_FIRST = 10, CAT_PAGE = 20;
+let catSeq = 0;
 
 async function loadPlugins(fresh = false) {
   PL = await api("/api/plugins" + (fresh ? "?fresh" : ""));
   renderPlugins();
 }
-async function loadCatalog(fresh = false) {
-  CAT = await api("/api/plugins/catalog" + (fresh ? "?fresh" : ""));
+/** Ask for a page: from the start (a new search or marketplace, or `fresh`) or the one after what is shown. */
+async function loadCatalog(fresh = false, more = false) {
+  const seq = ++catSeq, offset = more && CAT ? CAT.entries.length : 0;
+  const qs = new URLSearchParams({
+    q: $("#cat-q").value.trim(),
+    mk: $("#cat-mk").value,
+    offset,
+    limit: more ? CAT_PAGE : CAT_FIRST,
+  });
+  if (fresh) qs.set("fresh", "");
+  $("#cat-sum").textContent = t("cat.loadingN", { n: more ? CAT.entries.length : 0 });
+  const r = await api("/api/plugins/catalog?" + qs);
+  if (seq !== catSeq) return; // a newer request owns the table
+  CAT = more && CAT ? { ...r, entries: [...CAT.entries, ...r.entries] } : r;
   renderCatalogSelect();
   renderCatalog();
 }
 function renderCatalogSelect() {
   const sel = $("#cat-mk"), cur = sel.value;
-  const mks = CAT ? [...new Set(CAT.map((c) => c.marketplace))].sort() : [];
   sel.innerHTML = `<option value="">${esc(t("cat.allMk"))}</option>` +
-    mks.map((m) => `<option${m === cur ? " selected" : ""}>${esc(m)}</option>`).join("");
+    CAT.marketplaces.map((m) => `<option${m === cur ? " selected" : ""}>${esc(m)}</option>`).join("");
 }
 
 /** One toggle: `value` is the entry this source holds (true/false, or null/undefined = none). */
@@ -2126,11 +2138,7 @@ function renderPlugins() {
 
 function renderCatalog() {
   if (!CAT) return;
-  const q = $("#cat-q").value.trim().toLowerCase(), mk = $("#cat-mk").value;
-  const hits = CAT.filter((c) =>
-    (!mk || c.marketplace === mk) && (!q || `${c.id} ${c.description}`.toLowerCase().includes(q))
-  );
-  const page = hits.slice(0, catShown);
+  const page = CAT.entries, hits = { length: CAT.total };
   $("#cat-sum").textContent = t("cat.sum", { n: page.length, t: hits.length });
   const profs = PL?.profiles ?? [];
   const where = (id) => profs.filter((p) => PL?.plugins.find((r) => r.id === id)?.profiles[p]?.installed);
@@ -2271,10 +2279,7 @@ $("#mk-add").addEventListener("submit", (e) => {
   });
 });
 let catTimer = null;
-const catFilter = () => {
-  catShown = CAT_PAGE;
-  renderCatalog();
-};
+const catFilter = () => loadCatalog().catch((e) => toast(e.message, true));
 $("#cat-q").addEventListener("input", () => {
   clearTimeout(catTimer);
   catTimer = setTimeout(catFilter, 120);
@@ -2282,8 +2287,7 @@ $("#cat-q").addEventListener("input", () => {
 $("#cat-mk").addEventListener("change", catFilter);
 $("#cat-rows").addEventListener("click", (e) => {
   if (!e.target.closest("[data-cat-more]")) return;
-  catShown += CAT_PAGE;
-  renderCatalog();
+  loadCatalog(false, true).catch((e) => toast(e.message, true));
 });
 
 /* ---------------- navigation ---------------- */

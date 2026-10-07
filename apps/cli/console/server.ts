@@ -20,7 +20,7 @@ import { assetsApi, claudeAssets } from "../claude-assets.ts";
 import { brainGraph, brainPage } from "../brain.ts";
 import { memoryApi } from "../memory.ts";
 import { permissionsOp, permissionsView, type PermOp } from "../permissions.ts";
-import { catalog, details, inventory, type PluginOp, pluginOp } from "../plugins.ts";
+import { catalog, catalogPage, details, inventory, type PluginOp, pluginOp } from "../plugins.ts";
 import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
 import { connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
@@ -177,7 +177,21 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
         return json(r); // a refused operation is a result (ok: false, message), not an HTTP error
       },
     },
-    "/api/plugins/catalog": { get: async ({ url }) => json(await catalog(url.searchParams.has("fresh"))) },
+    "/api/plugins/catalog": {
+      // one page at a time, filtered here: the whole catalog is thousands of entries and never leaves the server
+      get: async ({ url }) => {
+        const all = await catalog(url.searchParams.has("fresh")), g = (k: string) => url.searchParams.get(k);
+        return json({
+          ...catalogPage(all, {
+            q: g("q") ?? "",
+            mk: g("mk") ?? "",
+            offset: Number(g("offset")),
+            limit: Number(g("limit")),
+          }),
+          marketplaces: [...new Set(all.map((c) => c.marketplace))].sort(),
+        });
+      },
+    },
     "/api/plugins/details": {
       get: async ({ url }) => json({ text: await details(url.searchParams.get("id") ?? "") }),
     },

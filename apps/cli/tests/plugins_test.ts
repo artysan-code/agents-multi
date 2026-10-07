@@ -63,3 +63,22 @@ Deno.test("argument injection: nothing that reaches the CLI can start with a das
     assertEquals(validSource(s), true, s);
   }
 });
+
+Deno.test("catalogPage: filters by marketplace and words, then slices; the total is of the filtered list", async () => {
+  const { catalogPage } = await import("../plugins.ts");
+  const e = (id: string, marketplace: string, description = "") => ({
+    id,
+    name: id,
+    marketplace,
+    description,
+    installs: 0,
+  });
+  const all = [e("a@m1", "m1", "git helper"), e("b@m2", "m2", "GIT tools"), e("c@m1", "m1", "docs"), e("d@m1", "m1")];
+  assertEquals(catalogPage(all, { limit: 2 }).entries.map((c) => c.id), ["a@m1", "b@m2"]);
+  assertEquals(catalogPage(all, { limit: 2 }).total, 4);
+  assertEquals(catalogPage(all, { offset: 2, limit: 5 }).entries.map((c) => c.id), ["c@m1", "d@m1"]);
+  const git = catalogPage(all, { q: " Git " });
+  assertEquals([git.total, git.entries.map((c) => c.id)], [2, ["a@m1", "b@m2"]]);
+  assertEquals(catalogPage(all, { q: "git", mk: "m2" }).entries.map((c) => c.id), ["b@m2"]);
+  assertEquals(catalogPage(all, { offset: -3, limit: 0 }).offset, 0);
+});
