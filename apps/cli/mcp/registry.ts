@@ -32,6 +32,7 @@ import { type Account, loadAccounts } from "../../../shared/mcp/lib/accounts.ts"
 import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
 import { readJson } from "../lib/fs.ts";
 import { CONFIG, HOME, REPO, RUNTIME } from "../lib/paths.ts";
+import { installation, type Mode } from "../lib/mode.ts";
 import { diffPatch, mergePatch } from "../lib/json-patch.ts";
 import { loadManifest, profileNames } from "../lib/profiles.ts";
 
@@ -59,6 +60,8 @@ export interface LaunchPaths {
   script: string;
   read: string[];
   hooks: string;
+  /** the Deno our servers and their wrapper run on (denoFor) */
+  deno: string;
 }
 export interface Registry {
   profiles: string[];
@@ -104,15 +107,30 @@ export async function writePersonRegistry(reg: RawRegistry) {
   await Deno.writeTextFile(PERSON_REGISTRY, JSON.stringify(diffPatch(base as never, reg as never), null, 2) + "\n");
 }
 
+/** Pure: the Deno our servers run on. In app mode the package's, through the runtime's stable link
+ *  (appcopy.ts) — Claude and Desktop start servers with their own PATH, which need not have one; in
+ *  dev mode the `deno` on PATH, as ever. */
+export const denoFor = (mode: Mode, runtime = RUNTIME) => mode === "app" ? `${runtime}/bin/deno` : "deno";
+
+/** Pure: every server whose command is `deno` run by `deno` instead. */
+export function withDeno(servers: Record<string, ServerCfg>, deno: string): Record<string, ServerCfg> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([n, c]) => [n, c.command === "deno" ? { ...c, command: deno } : c]),
+  );
+}
+
 /**
  * The registry as the setup uses it: catalogue plus the person's patch, `${HOME}` expanded, with the
  * profiles, accounts, session bus, brain scopes and launch paths of this machine.
  *
+ * @param opts.mode the installation's mode to place servers for (`agents migrate app` plans the
+ *   app's before the machine is in it); this machine's by default
  * @throws when servers.json is missing or invalid.
  */
-export async function loadRegistry(): Promise<Registry> {
+export async function loadRegistry(opts: { mode?: Mode } = {}): Promise<Registry> {
   const raw = await rawRegistry();
-  const r = { ...raw, servers: expandHome(raw.servers) };
+  const deno = denoFor(opts.mode ?? (await installation()).mode);
+  const r = { ...raw, servers: withDeno(expandHome(raw.servers), deno) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) {
     const s = (await loadManifest(p)).brainScope;
@@ -124,17 +142,18 @@ export async function loadRegistry(): Promise<Registry> {
     accounts: loadAccounts(ACCOUNTS),
     bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS"),
     brainScopes,
-    launch: launchPaths(),
+    launch: launchPaths(deno),
   };
 }
 
 /** launch.ts as the servers start it: through the runtime path, like every registry server. */
-export function launchPaths(): LaunchPaths {
+export function launchPaths(deno = "deno"): LaunchPaths {
   const mcp = `${RUNTIME}/shared/mcp`;
   return {
     script: `${mcp}/lib/launch.ts`,
     read: [vaultDir(), `${RUNTIME}/config`, `${HOME}/.cache/deno`],
     hooks: `${RUNTIME}/shared/hooks`,
+    deno,
   };
 }
 /**

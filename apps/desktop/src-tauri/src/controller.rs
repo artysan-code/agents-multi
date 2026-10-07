@@ -17,7 +17,7 @@ use tauri::{AppHandle, Manager, RunEvent, Window, WindowEvent};
 
 use crate::flags::{self, Request};
 use crate::tray::{self, Action};
-use crate::{picker, profiles};
+use crate::{hey, picker, profiles, reveal};
 
 /// At login the tray host can come up after the app.
 const TRAY_WAIT: Duration = Duration::from_secs(60);
@@ -84,14 +84,17 @@ fn attach_tray(app: AppHandle, wait: Duration, tray_only: bool) {
 pub fn second_launch(app: &AppHandle, args: &[String]) {
     let request = flags::parse(args);
     eprintln!("agents-multi: request from a second launch: {request:?}");
-    let raises = matches!(request, Request::Show(_) | Request::Hey);
+    let raises = match request {
+        Request::Show(_) => Some(crate::MAIN),
+        Request::Hey => Some(hey::LABEL),
+        _ => None,
+    };
     handle_request(app, request);
-    // the console window, shown again, comes forward with the launcher's token if it gave one: a
-    // compositor refuses a plain focus request (activation.rs)
-    if raises {
-        if let Some(window) = app.get_webview_window(crate::MAIN) {
-            crate::activation::bring_forward(&window, crate::activation::forwarded_token(args));
-        }
+    // the window, shown again, comes forward with the launcher's token if it gave one: a compositor
+    // refuses a plain focus request (activation.rs); one still waiting for the console keeps the
+    // token until it is shown (reveal.rs)
+    if let Some(window) = raises.and_then(|label| app.get_webview_window(label)) {
+        reveal::raise(&window, crate::activation::forwarded_token(args));
     }
 }
 
@@ -124,6 +127,10 @@ pub fn show_console(app: &AppHandle, view: Option<&str>) -> tauri::Result<()> {
         url.set_query(Some(&format!("port={port}&view={view}")));
         window.navigate(url)?;
     }
+    // still hidden, waiting for the console: it shows itself (reveal.rs)
+    if reveal::is_pending(&window) {
+        return Ok(());
+    }
     window.unminimize()?;
     window.show()?;
     window.set_focus()
@@ -152,11 +159,9 @@ pub fn toggle_console(app: &AppHandle) {
     }
 }
 
-/// «Hey Claude», the quick entry: not ported yet (apps/tray/hey.py). Its place: until it is, the
-/// console window opens instead.
+/// «Hey Claude», the quick entry (hey.rs).
 fn show_hey(app: &AppHandle) -> tauri::Result<()> {
-    eprintln!("agents-multi: Hey Claude is not ported to the desktop app yet; showing the console");
-    show_console(app, None)
+    hey::open(app, port(app))
 }
 
 /// What the tray menu asked for.
@@ -232,8 +237,8 @@ fn maybe_quit(app: &AppHandle) {
     }
 }
 
-/// Window events: the console window hides into the tray instead of closing; the picker closes when
-/// the focus leaves it.
+/// Window events: the console window hides into the tray instead of closing; the picker and Hey close
+/// when the focus leaves them.
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     match window.label() {
         crate::MAIN => {
@@ -245,6 +250,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             }
         }
         picker::LABEL => picker::on_window_event(window, event),
+        hey::LABEL => hey::on_window_event(window, event),
         _ => {}
     }
 }

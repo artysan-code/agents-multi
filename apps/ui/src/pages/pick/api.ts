@@ -15,10 +15,6 @@ export interface PickStatus {
   running: { desktop: { variant: string }[] };
 }
 
-/** The title that asks the desktop app to close the picker's window (`picker.rs` watches for it):
- *  the page has no IPC, and in a browser a title is harmless. */
-export const CLOSE_TITLE = "agents-multi:close";
-
 export const pickApi = {
   launchers: () => get<{ profiles: Launcher[] }>("/api/launch"),
   status: () => get<PickStatus>("/api/status"),

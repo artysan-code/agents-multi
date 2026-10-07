@@ -124,10 +124,14 @@ export function promptFor(
 /** The user's text as a positional argument: a leading "-" would read as an option. */
 export const asArg = (s: string) => s.startsWith("-") ? ` ${s}` : s;
 
-/** The models a request can be asked of, by Claude Code's aliases; the first is the default. The
- *  debrief is not among the choices: it runs on the profile's own model. */
-export const ASK_MODELS = ["sonnet", "haiku", "opus"] as const;
+/** The models a request can be asked of, by Claude Code's aliases; the first is the default: most of
+ *  what is asked here (a summary, a question on the day, a task to add) is light work. The debrief is
+ *  not among the choices: it always runs on the light model, at low effort. */
+export const ASK_MODELS = ["haiku", "sonnet", "opus"] as const;
 export type AskModel = typeof ASK_MODELS[number];
+/** The effort each model is asked with: enough for the work it is chosen for, no more. */
+export const ASK_EFFORT: Record<AskModel, "low" | "medium" | "high"> = { haiku: "low", sonnet: "medium", opus: "high" };
+const DEBRIEF_MODEL: AskModel = "haiku";
 const ASK_MODEL_FILE = `${STATE}/ask-model.json`;
 export const isAskModel = (m: unknown): m is AskModel => ASK_MODELS.includes(m as AskModel);
 /** The model chosen last, in the console or in the Hey window: one choice for both. */
@@ -170,7 +174,8 @@ export function askArgs(
     promptFor(kind, now, opts.project, opts.noProject, undefined, opts.calendars),
   ];
   if (opts.session) args.push("--resume", opts.session);
-  if (opts.model && kind !== "debrief") args.push("--model", opts.model);
+  const model = kind === "debrief" ? DEBRIEF_MODEL : opts.model;
+  if (model) args.push("--model", model, "--effort", ASK_EFFORT[model]);
   return args;
 }
 
@@ -444,7 +449,9 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
   if (p === "/api/debrief" && req.method === "GET") {
     return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
   }
-  if (p === "/api/ask/model" && req.method === "GET") return json({ model: await askModel(), models: ASK_MODELS });
+  if (p === "/api/ask/model" && req.method === "GET") {
+    return json({ model: await askModel(), models: ASK_MODELS, efforts: ASK_EFFORT, default: ASK_MODELS[0] });
+  }
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   if (req.headers.get("x-claude-multi") !== "1") return json({ error: "missing header" }, 403);
   const b = await req.json().catch(() => ({})) as Record<string, unknown>;

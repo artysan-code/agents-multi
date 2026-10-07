@@ -108,8 +108,8 @@ The app owns the updater (`src-tauri/src/updater.rs`); the console shows it.
   doubling to 30 s), and relays (`apps/cli/console/app-update.ts`). The socket's file permission is the
   authentication: a loopback HTTP endpoint would have needed a server in the app and a token in a file
   with the same protection; IPC from the page was ruled out by ADR 0003 (no page reaches the app); a
-  status file the console reads, the first draft, cannot carry the page's requests. The name is not the
-  PySide app's socket, which still runs during the transition. A development instance has its own
+  status file the console reads, the first draft, cannot carry the page's requests. The name is not
+  the old PySide app's (`claude-multi-app.sock`). A development instance has its own
   (`agents-multi-app.dev_<name>.sock`), which the app hands to the backend it starts as
   `AGENTS_MULTI_APP_SOCKET`; `bin/agents` allows that path (Deno checks unix sockets as network).
 - **Installing**: a deb or an rpm is installed with `pkexec dpkg -i` / `rpm -U`, which asks for an
@@ -118,7 +118,8 @@ The app owns the updater (`src-tauri/src/updater.rs`); the console shows it.
   itself and what it runs: the backend stops with it and starts with the new version, as do the tray
   and the windows. At start the new version finds the note (`after_relaunch`), sets `updated` in the
   status, and opens the console on the update screen (`system/updates`), whatever the launch asked.
-  The replacement step's silent install of what changed runs there, before the console is shown. A note
+  The install of what changed (`agents install --app`, `install.rs`, ADR 0003) runs before the
+  backend starts, so before the console the window waits for. A note
   for another version than the running one is an error («the update did not take»).
 - **An AppImage installs on quit** a version it downloaded and did not install, since that asks nothing,
   and leaves the same note. A deb or an rpm never does: a quit must not ask for a password. The app

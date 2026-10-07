@@ -128,9 +128,15 @@ Deno.test("sessionEnv: the graphical session's variables, unquoted; everything e
   assertEquals(sessionEnv(""), {});
 });
 
-Deno.test("askArgs: the chosen model goes with every request but the debrief, which keeps the profile's", () => {
-  const ask = askArgs("ask", "ciao", "now", { model: "haiku" });
-  assertEquals(ask.slice(ask.indexOf("--model"), ask.indexOf("--model") + 2), ["--model", "haiku"]);
-  assertEquals(askArgs("debrief", "debrief", "now", { model: "opus" }).includes("--model"), false);
+Deno.test("askArgs: the chosen model goes with every request, with its effort; the debrief is light", () => {
+  const ask = askArgs("ask", "ciao", "now", { model: "opus" });
+  assertEquals(ask.slice(ask.indexOf("--model"), ask.indexOf("--model") + 4), ["--model", "opus", "--effort", "high"]);
+  const debrief = askArgs("debrief", "debrief", "now", { model: "opus" });
+  assertEquals(debrief.slice(debrief.indexOf("--model"), debrief.indexOf("--model") + 4), [
+    "--model",
+    "haiku",
+    "--effort",
+    "low",
+  ]);
   assertEquals(askArgs("ask", "ciao", "now").includes("--model"), false);
 });

@@ -23,7 +23,10 @@ export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
   // --- Syncthing: stignore-gen keeps the git repositories out (post-checkout hook on clone + timer)
   if (await lstat(SYNCTHING_CONFIG)) {
     const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
-    const timer = m.systemd ? (await run("systemctl", ["--user", "is-enabled", "stignore-gen.timer"])).out : "enabled";
+    // in app mode the app's backend runs it (console/schedule.ts): there is no timer
+    const timer = ctx.mode === "dev" && m.systemd
+      ? (await run("systemctl", ["--user", "is-enabled", "stignore-gen.timer"])).out
+      : "enabled";
     if (tpl !== `${ctx.installed}/${STIGNORE_GEN_TEMPLATE_IN_REPO}`) {
       add(
         "stignore-gen",
@@ -36,7 +39,9 @@ export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
     } else {add(
         "stignore-gen",
         "ok",
-        "stignore-gen: git repositories kept out of Syncthing (hook on clone, timer every 15 min)",
+        `stignore-gen: git repositories kept out of Syncthing (hook on clone, ${
+          ctx.mode === "app" ? "the app" : "a timer"
+        } every 15 min)`,
       );}
   }
   return c;

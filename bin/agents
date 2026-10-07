@@ -9,8 +9,11 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 source "$HERE/lib/profiles.sh"
-# The desktop app's backend hands its bundled Deno to the commands the console runs (docs/adr/0003).
-DENO="${AGENTS_MULTI_DENO:-deno}"
+# The desktop app's backend hands its bundled Deno to the commands the console runs (docs/adr/0003);
+# in app mode a terminal finds the same one through the runtime's link (apps/cli/appcopy.ts).
+DENO="${AGENTS_MULTI_DENO:-}"
+if [[ -z "$DENO" && "$(cm_mode)" == app && -x "$(cm_runtime)/bin/deno" ]]; then DENO="$(cm_runtime)/bin/deno"; fi
+DENO="${DENO:-deno}"
 command -v "$DENO" >/dev/null 2>&1 || { echo "agents: deno is required (https://deno.land)" >&2; exit 1; }
 # Brain host(s), taken from the `brain` accounts of accounts.json.
 ACCOUNTS="${AGENTS_MULTI_ACCOUNTS:-${CLAUDE_MULTI_ACCOUNTS:-$(cm_config)/accounts.json}}"

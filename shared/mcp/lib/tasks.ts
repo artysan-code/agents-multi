@@ -53,6 +53,9 @@ export interface Task {
   /** a calendar entry: the calendar it is in and that calendar's colour (a CSS colour) */
   calendar?: string;
   color?: string;
+  /** a calendar entry: when it ends (HH:MM, only when that is the same day) and its page in the calendar */
+  end?: string;
+  link?: string;
 }
 
 export interface TaskSettings {

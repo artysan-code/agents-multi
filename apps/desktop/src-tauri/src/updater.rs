@@ -444,8 +444,9 @@ pub fn init() -> TauriPlugin<Wry> {
 }
 
 /// The launch request after an install: the note the previous version left says this run is the
-/// update, and the console opens on the update screen, which shows it once. The replacement step's
-/// silent install of what changed belongs here, before the console is shown.
+/// update, and the console opens on the update screen, which shows it once. The install of what
+/// changed (`agents install --app`, install.rs) runs before the backend starts, so before the console
+/// the window waits for.
 pub fn after_relaunch(app: &AppHandle, request: Request) -> Request {
     let Some(f) = updated_file(app) else {
         return request;

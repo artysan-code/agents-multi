@@ -118,6 +118,20 @@ Deno.test("eventAsTask: timed and all-day events; cancelled and declined ones ar
   assertEquals([timed.title, timed.source, timed.project, timed.due], ["Call", "calendar", "acme", "2026-09-30"]);
   assert(/^\d\d:\d\d$/.test(timed.time!));
   assertEquals(eventAsTask({ id: "e2", summary: "Ferie", start: { date: "2026-10-02" } }, "personal")!.time, undefined);
+  // the end (same day only) and the event's page travel with it
+  const call = eventAsTask({
+    id: "e5",
+    start: { dateTime: "2026-09-30T17:30:00" },
+    end: { dateTime: "2026-09-30T18:15:00" },
+    htmlLink: "https://calendar.example/e5",
+  }, "acme")!;
+  assertEquals([call.end, call.link], ["18:15", "https://calendar.example/e5"]);
+  const overnight = eventAsTask({
+    id: "e6",
+    start: { dateTime: "2026-09-30T23:00:00" },
+    end: { dateTime: "2026-10-01T01:00:00" },
+  }, "acme")!;
+  assertEquals(overnight.end, undefined);
   assertEquals(eventAsTask({ id: "e3", status: "cancelled", start: { date: "2026-10-02" } }, "p"), null);
   assertEquals(
     eventAsTask(
@@ -406,4 +420,15 @@ Deno.test("dedupeEvents: the same event in two calendars is shown once; the same
     t("d", "2026-10-07", "10:00"),
   ], uids);
   assertEquals(out.map((x) => x.id), ["a", "c", "d"]);
+});
+
+Deno.test("boardSteps: the board carries each step and the first one not done", async () => {
+  const { boardSteps } = await import("../taskboard.ts");
+  assertEquals(boardSteps("- [x] uno\n- [ ] due\n- [ ] tre"), {
+    steps: [{ text: "uno", done: true }, { text: "due", done: false }, { text: "tre", done: false }],
+    next_step: "due",
+  });
+  assertEquals(boardSteps("- [x] fatto").next_step, null);
+  assertEquals(boardSteps("niente passi"), {});
+  assertEquals(boardSteps(undefined), {});
 });

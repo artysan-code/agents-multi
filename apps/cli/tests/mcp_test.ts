@@ -123,6 +123,7 @@ const LAUNCH = {
   script: "/rt/shared/mcp/lib/launch.ts",
   read: ["/vault", "/rt/accounts.json"],
   hooks: "/rt/shared/hooks",
+  deno: "deno",
 };
 const perAccountReg: Registry = {
   profiles: PROFILES,

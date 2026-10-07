@@ -104,7 +104,7 @@ export function Overview() {
 
   // profiles: who each one is and what is open now
   const live = new Set(s.running.cli.map((c) => c.profile));
-  const deskOpen = new Set(s.running.desktop.map((d) => String(d.variant)));
+  const deskOpen = new Set(s.running.desktop.map((d) => d.variant));
   const profiles = profilesOf(s).map(([n, p]) => (
     <div class="ov-prof" key={n}>
       <span class={`dot${live.has(n) || deskOpen.has(n) ? " active" : ""}`} />
