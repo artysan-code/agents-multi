@@ -1,5 +1,6 @@
 // git.ts — The repository's git state, and git's global ignore file.
 
+import { currentVersion } from "./changelog.ts";
 import { lstat } from "./fs.ts";
 import { CACHE, HOME, REPO } from "./paths.ts";
 import { run } from "./proc.ts";
@@ -49,6 +50,7 @@ export async function repoState() {
     dirtyFiles,
     head,
     headDate,
+    version: await currentVersion(),
     fetchedAt,
   };
 }

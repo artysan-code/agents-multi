@@ -1653,6 +1653,290 @@ async function closeClaudeFlow() {
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-cc=open]")) closeClaudeFlow();
 });
+/* ---------------- update wizard ---------------- */
+// «Update now» as steps: what is out, the update with its live output, the console's restart when
+// claude-multi itself changed, the doctor, and what is new. The restart reloads this page, so the
+// wizard keeps its state in sessionStorage and opens again where it was. An update the timer made on
+// its own is told by a notice on the next visit (the version last seen is in localStorage).
+const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
+const UW_STEPS = ["check", "update", "restart", "verify", "news"];
+function keep(store, key, value) {
+  try {
+    if (value === undefined) store.removeItem(key);
+    else store.setItem(key, JSON.stringify(value));
+  } catch { /* private window or blocked storage: the wizard still works, it just cannot resume */ }
+}
+function kept(store, key) {
+  try {
+    return JSON.parse(store.getItem(key) ?? "null");
+  } catch {
+    return null;
+  }
+}
+/** X.Y.Z or X.Y.Z-beta.N, a beta before its stable version: the same order as lib/changelog.ts. */
+function cmpVer(a, b) {
+  const p = (v) => {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(String(v ?? ""));
+    return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? Infinity : +m[4]] : [0, 0, 0, 0];
+  };
+  const x = p(a), y = p(b);
+  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  return 0;
+}
+/** What an update would take now, one line per component; empty when everything is current. */
+function pendingUpdates() {
+  const m = S?.machine ?? {}, u = S?.update ?? {}, r = S?.repo ?? {};
+  return [
+    u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code ${m.cliVersion ?? "—"} → ${u.cli.latest}` : null,
+    m.desktopStaged ? `Claude Desktop ${m.desktopVersion ?? "—"} → ${m.desktopStaged}` : null,
+    r.isRepo && r.behind ? `claude-multi: ${t("up.self.behind", { n: r.behind })}` : null,
+    S?.selfInstall ? `claude-multi: ${t("up.self.install")}` : null,
+  ].filter(Boolean);
+}
+/** A CHANGELOG section as HTML: its `###` headings and `- **scope**: change (hash)` lines. */
+function changelogHtml(body) {
+  let html = "", open = false;
+  for (const l of body.split("\n")) {
+    if (l.startsWith("- ")) {
+      if (!open) html += "<ul>";
+      open = true;
+      const line = esc(l.slice(2).replace(/\s*\(([0-9a-f]{7,})\)$/, "")).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+      html += `<li>${line}</li>`;
+      continue;
+    }
+    if (open) html += "</ul>";
+    open = false;
+    if (l.startsWith("### ")) html += `<h4>${esc(l.slice(4))}</h4>`;
+    else if (l.trim()) html += `<p>${esc(l)}</p>`;
+  }
+  return html + (open ? "</ul>" : "");
+}
+function newsHtml(n, since) {
+  if (!n?.releases?.length) {
+    return `<p class="sub">${esc(t("uw.noRelease", { v: n?.version ?? "—", f: since ?? "—" }))}</p>`;
+  }
+  return n.releases.map((r) =>
+    `<section class="uw-rel"><h3>${esc(r.version)} <span class="sub">${esc(r.date)}</span></h3>${
+      changelogHtml(r.body)
+    }</section>`
+  ).join("");
+}
+/** «What's new» alone: the notice after an update the timer made. */
+async function newsDrawer(since) {
+  const host = drawer(t("uw.news"), `<div class="rep"><p class="sub">${esc(t("uw.loading"))}</p></div>`);
+  const n = await api(`/api/whatsnew?since=${encodeURIComponent(since ?? "")}`).catch(() => null);
+  host.querySelector(".dbody").innerHTML = `<div class="rep uw-news">${newsHtml(n, since)}</div>`;
+  if (n?.version) keep(localStorage, SEEN_KEY, n.version);
+}
+/** The console answers again, with other code than `old`: claude-multi's restart is over. */
+async function consoleBack(old, timeoutMs = 90000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    const r = await api("/api/code").catch(() => null);
+    if (r?.code && r.code !== old) return true;
+    await new Promise((res) => setTimeout(res, 2000));
+  }
+  return false;
+}
+
+function updateFlow(resume = null) {
+  const w = resume ?? {
+    from: S?.repo?.version ?? null,
+    code: bootCode,
+    self: !!(S?.repo?.behind || S?.selfInstall),
+    at: new Date().toISOString(),
+    state: UW_STEPS.map(() => "todo"),
+    pending: [],
+  };
+  let out = "", cause = "", running = false, jobId = null, news = null, health = null, proceed = null;
+  const host = drawer(t("uw.title"), "");
+  const save = () => keep(sessionStorage, UW_KEY, w);
+  const at = (step) => UW_STEPS.indexOf(step);
+  const set = (step, st) => {
+    w.state[at(step)] = st;
+    save();
+    draw();
+  };
+  const logSince = () => (S?.updateLog ?? []).filter((e) => e.at >= w.at.replace(/\.\d+Z$/, "Z"));
+  const draw = () => {
+    const step = UW_STEPS.find((_s, i) => w.state[i] === "running" || w.state[i] === "waiting");
+    const log = w.state[at("verify")] === "done" || w.state[at("verify")] === "failed" ? logSince() : [];
+    host.querySelector(".dbody").innerHTML = `<div class="rep">
+      <ol class="rep-steps">${
+      UW_STEPS.map((s, i) =>
+        `<li class="rep-${w.state[i]}"><span class="rep-st">${esc(t(`uw.st.${w.state[i]}`))}</span> ${
+          esc(t(`uw.${s}`))
+        }</li>`
+      ).join("")
+    }</ol>
+      ${
+      w.pending.length && step === "update" && w.state[at("update")] === "waiting"
+        ? `<p>${esc(t("uw.found"))}</p><ul class="uw-list">${w.pending.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`
+        : ""
+    }
+      ${cause ? `<p class="rep-cause">${esc(cause)}</p>` : ""}
+      ${step === "restart" ? `<p class="sub">${esc(t("uw.restarting"))}</p>` : ""}
+      ${out ? `<pre class="out rep-out">${esc(out)}</pre>` : ""}
+      ${
+      health
+        ? `<p class="${health.fails ? "rep-cause" : ""}">${
+          esc(health.fails ? t("uw.fails", { n: health.fails, msg: health.msg }) : t("uw.healthy", { n: health.n }))
+        }</p>`
+        : ""
+    }
+      ${
+      log.length
+        ? `<div class="uw-log">${
+          log.map((e) =>
+            `<div class="sub">${esc(COMPONENTS[e.component] ?? e.component)} · ${esc(t(`up.ev.${e.event}`))}${
+              e.detail ? ` · ${esc(e.detail)}` : ""
+            }</div>`
+          ).join("")
+        }</div>`
+        : ""
+    }
+      ${S?.selfInstall && log.length ? `<p><button class="btn sm" data-cc="open">${esc(t("cc.btn"))}</button></p>` : ""}
+      ${news ? `<h3 class="uw-h">${esc(t("uw.news"))}</h3><div class="uw-news">${newsHtml(news, w.from)}</div>` : ""}
+      <p>${
+      running
+        ? `<button class="btn sm" data-uw="cancel">${esc(t("rep.cancel"))}</button>`
+        : step === "update"
+        ? `<button class="btn" data-uw="go">${esc(t("uw.go"))}</button>`
+        : w.state.every((s) => s === "todo")
+        ? `<button class="btn" data-uw="start">${esc(t("uw.start"))}</button>`
+        : ""
+    }</p>
+    </div>`;
+    const el = host.querySelector(".rep-out");
+    if (el) el.scrollTop = el.scrollHeight;
+  };
+  const job = async (action) => {
+    running = true;
+    out = "";
+    draw();
+    const r = await runJob(action, {}, (o) => {
+      out += o;
+      const el = host.querySelector(".rep-out");
+      if (!el) return draw();
+      el.textContent = out;
+      el.scrollTop = el.scrollHeight;
+    }, (j) => jobId = j).catch((e) => ({ error: e.message }));
+    jobId = null;
+    running = false;
+    return r;
+  };
+  const finish = async () => {
+    // restart: only when claude-multi itself moved; the page may already be the new one
+    if (w.state[at("restart")] !== "done") {
+      if (!w.self) set("restart", "skipped");
+      else {
+        set("restart", "running");
+        const back = await consoleBack(w.code);
+        set("restart", back ? "done" : "failed");
+        if (!back) cause = t("uw.noRestart");
+        // this page runs the old code: the new one, reloaded, carries on from the saved state
+        else if (!resume) return location.reload();
+      }
+    }
+    set("verify", "running");
+    await loadStatus(true).catch(() => null);
+    renderView();
+    const fails = (S?.doctor ?? []).filter((c) => c.status === "fail");
+    health = { n: (S?.doctor ?? []).length, fails: fails.length, msg: fails[0]?.msg ?? "" };
+    const bad = logSince().find((e) => e.event === "failed" || e.event === "verify-failed");
+    if (bad && !cause) cause = `${COMPONENTS[bad.component] ?? bad.component}: ${bad.detail || t("up.ev.failed")}`;
+    set("verify", fails.length || bad ? "failed" : "done");
+    set("news", "running");
+    news = await api(`/api/whatsnew?since=${encodeURIComponent(w.from ?? "")}`).catch(() => null);
+    if (news?.version) keep(localStorage, SEEN_KEY, news.version);
+    set("news", "done");
+    keep(sessionStorage, UW_KEY);
+  };
+  const start = async () => {
+    cause = "";
+    w.code = (await api("/api/code").catch(() => ({}))).code ?? bootCode;
+    set("check", "running");
+    const r = await job("update-check");
+    if (r.error || r.code) {
+      cause = r.error ?? out.trim().split("\n").filter(Boolean).pop() ?? t("rep.exit", { c: r.code });
+      return set("check", "failed");
+    }
+    await loadStatus().catch(() => null);
+    w.pending = pendingUpdates();
+    w.self = !!(S?.repo?.behind || S?.selfInstall);
+    out = "";
+    set("check", "done");
+    if (!w.pending.length) {
+      for (const s of ["update", "restart"]) w.state[at(s)] = "skipped";
+      cause = "";
+      out = t("uw.current");
+      return await finish();
+    }
+    set("update", "waiting");
+    await new Promise((res) => proceed = res);
+    proceed = null;
+    set("update", "running");
+    const u = await job("update-now");
+    // the stream ends early when claude-multi restarts the console under it: the restart step follows
+    if (u.error && !w.self) {
+      cause = u.error;
+      return set("update", "failed");
+    }
+    if (u.cancelled) {
+      cause = t("rep.cancelled");
+      return set("update", "failed");
+    }
+    if (!u.error && u.code) {
+      cause = out.trim().split("\n").filter(Boolean).pop() ?? t("rep.exit", { c: u.code });
+      return set("update", "failed");
+    }
+    set("update", "done");
+    await finish();
+  };
+  host.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-uw]");
+    if (!b) return;
+    if (b.dataset.uw === "cancel" && jobId) await post("/api/job/cancel", { id: jobId }).catch(() => {});
+    if (b.dataset.uw === "go") proceed?.();
+    if (b.dataset.uw === "start" && !running) await start();
+  });
+  draw();
+  if (resume) {
+    // back after the console's restart: the update ran as far as the restart, the rest is here
+    if (w.state[at("update")] === "running") w.state[at("update")] = "done";
+    void finish();
+  }
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-upwiz]")) updateFlow();
+});
+/** At start: a wizard that the console's restart interrupted opens again; otherwise a version newer
+ *  than the last one seen here (the timer updated in the background) gets a notice. */
+function updatesOnBoot() {
+  const w = kept(sessionStorage, UW_KEY);
+  // only a wizard that got as far as the update resumes; one still asking is simply closed
+  const past = w?.state && ["running", "done", "failed"].includes(w.state[UW_STEPS.indexOf("update")]);
+  if (past && Date.now() - Date.parse(w.at) < 30 * 60000) return updateFlow(w);
+  keep(sessionStorage, UW_KEY);
+  const v = S?.repo?.version, seen = kept(localStorage, SEEN_KEY);
+  if (!v) return;
+  if (!seen) return keep(localStorage, SEEN_KEY, v);
+  if (cmpVer(v, seen) <= 0) return;
+  const el = document.createElement("div");
+  el.className = "upnote";
+  el.innerHTML = `<span>${esc(t("uw.notice", { v }))}</span>
+    <button class="btn sm" data-un="news">${esc(t("uw.news"))}</button>
+    <button class="x" data-un="close" aria-label="${esc(t("close"))}">×</button>`;
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-un]");
+    if (!b) return;
+    el.remove();
+    if (b.dataset.un === "news") newsDrawer(seen);
+    else keep(localStorage, SEEN_KEY, v);
+  });
+  document.body.appendChild(el);
+}
+
 function renderUpdates() {
   const m = S.machine;
   const u = S.update ?? {};
@@ -1804,7 +2088,7 @@ function renderOverview() {
     (r.isRepo
       ? upLine("claude-multi", (r.head ?? "").split(" ")[0], r.behind ? t("up.self.behind", { n: r.behind }) : null)
       : "") +
-    `<div class="ov-acts"><button class="btn sm" data-action="update-now">${esc(t("up.now"))}</button></div>`;
+    `<div class="ov-acts"><button class="btn sm" data-upwiz>${esc(t("up.now"))}</button></div>`;
 
   // brain: whether this machine reaches it, and the last copy kept here
   const b = S.brain, tok = byId("brain.token");
@@ -2463,7 +2747,7 @@ const CMDS = () => [
   { s: "pal.run", n: t("cmd.installDry"), d: "install --dry-run", f: () => runAction("install-dry") },
   { s: "pal.run", n: t("cmd.install"), d: "install", f: () => runAction("install") },
   { s: "pal.run", n: t("cmd.updateCheck"), d: "update --check", f: () => runAction("update-check") },
-  { s: "pal.run", n: t("cmd.updateNow"), d: "update --auto", f: () => runAction("update-now") },
+  { s: "pal.run", n: t("cmd.updateNow"), d: "update --auto", f: () => updateFlow() },
   {
     s: "pal.do",
     n: t("cmd.addProfile"),
@@ -2563,6 +2847,7 @@ addEventListener("DOMContentLoaded", async () => {
   try {
     await loadStatus();
     renderView();
+    updatesOnBoot();
   } catch (e) {
     renderState();
     toast(t("err.server", { e: e.message }), true);
