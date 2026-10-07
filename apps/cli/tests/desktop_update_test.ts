@@ -15,13 +15,13 @@ async function setup(versions: string[], current: string | null) {
   return root;
 }
 
-async function run(root: string, args: string[], running = false) {
+async function run(root: string, args: string[], running = false, variants = "") {
   const out = await new Deno.Command("bash", {
     args: [SCRIPT, ...args],
     env: {
       CLAUDE_DESKTOP_ROOT: root,
       CM_DESKTOP_RUNNING: running ? "1" : "0",
-      CLAUDE_DESKTOP_VARIANTS: "",
+      CLAUDE_DESKTOP_VARIANTS: variants,
       CM_UPDATE_LOG: `${root}/log.jsonl`,
       QUIET: "1",
     },
@@ -76,4 +76,14 @@ Deno.test("claude-desktop-update: rollback goes back one version, and refuses wi
   assert(r.code === 1);
   await Deno.remove(root, { recursive: true });
   await Deno.remove(lone, { recursive: true });
+});
+
+Deno.test("claude-desktop-update: a failed variant rebuild logs its reason, not just its name", async () => {
+  const root = await setup(["1.0.0", "1.1.0"], "1.0.0");
+  // an undeclared profile: the rebuild refuses at once, touching nothing, with its usage line
+  assertEquals((await run(root, ["--apply"], false, "no-such-profile")).code, 1);
+  const e = (await log(root)).at(-1);
+  assertEquals(e.event, "failed");
+  assert(e.detail.startsWith("variant rebuild failed: no-such-profile: Usage: claude-desktop-rebuild"), e.detail);
+  await Deno.remove(root, { recursive: true });
 });

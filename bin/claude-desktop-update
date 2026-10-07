@@ -142,7 +142,7 @@ variant_profiles() {
 }
 
 switch_to() {  # <version> <event>
-  local ver="$1" event="$2" from p failed=()
+  local ver="$1" event="$2" from p out failed=() why=()
   from="$(current)"
   ln -sfn "versions/$ver" "$ROOT/.current.tmp" && mv -T "$ROOT/.current.tmp" "$ROOT/current" \
     || { err "cannot switch to $ver"; cm_update_log desktop failed "$from" "$ver" "switch failed"; return 1; }
@@ -151,7 +151,9 @@ switch_to() {  # <version> <event>
   fi
   while read -r p; do
     [[ -z "$p" ]] && continue
-    QUIET=1 "$HERE/claude-desktop-rebuild" "$p" >/dev/null 2>&1 || failed+=("$p")
+    # the last line of a failed rebuild is its reason: the log keeps it, so the doctor can say why
+    out="$(QUIET=1 "$HERE/claude-desktop-rebuild" "$p" 2>&1)" \
+      || { failed+=("$p"); why+=("$p: $(tail -n1 <<<"$out" | cut -c1-200)"); }
   done < <(variant_profiles)
   # keep the version in use and the one before it (the rollback); the rest goes
   local keep_prev v; keep_prev="$(versions | grep -vx "$ver" | head -n1)"
@@ -162,7 +164,7 @@ switch_to() {  # <version> <event>
     rm -rf -- "${ROOT:?}/versions/$v"
   done < <(versions)
   if (( ${#failed[@]} )); then
-    cm_update_log desktop failed "$from" "$ver" "variant rebuild failed: ${failed[*]}"
+    cm_update_log desktop failed "$from" "$ver" "variant rebuild failed: $(IFS=';'; echo "${why[*]}")"
     err "switched to $ver, but the variant for ${failed[*]} failed to rebuild (claude-desktop-rebuild <profile>)"
     return 1
   fi

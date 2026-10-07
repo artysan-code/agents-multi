@@ -1655,6 +1655,8 @@ const FIX_ACTIONS = {
   "claude-multi doctor": "doctor",
   "claude-multi sync --fetch": "sync-fetch",
   "claude-multi usage ingest": "usage-ingest",
+  "claude-multi update --auto": "update-now",
+  "claude-multi update --check": "update-check",
 };
 function actionButton(fix) {
   const act = FIX_ACTIONS[fix.trim()];
