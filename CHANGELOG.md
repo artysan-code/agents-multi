@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.13.2] - 2026-10-07
+
+### Fixed
+
+- **units**: pnpm 10's bin directory on the units' PATH, so the console can rebuild its interface (8511bc5)
+
 ## [0.13.1] - 2026-10-07
 
 ### Fixed
