@@ -47,24 +47,25 @@ export function openRepair(id: string): void {
   openDrawer(t("rep.title"), () => <Repair id={id} check={check} steps={check.repair!} />);
 }
 
-function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairStep[] }) {
+/** A repair's run, for the drawer and for Today's system card: the steps' state, the running step's
+ *  output, the cause of a failure, and the controls. */
+export function useRepair(id: string, steps: RepairStep[]) {
   const [state, setState] = useState<StepState[]>(() => steps.map(() => "todo"));
   const [running, setRunning] = useState(false);
   const [cause, setCause] = useState("");
   const [out, setOut] = useState("");
   const jobId = useRef<string | null>(null);
   const userGo = useRef<(() => void) | null>(null);
-  const outEl = useRef<HTMLPreElement>(null);
   const cur = useRef<StepState[]>(state); // the steps' state as the loop sees it
+  const outEl = useRef<HTMLPreElement>(null);
 
   const mark = (i: number, s: StepState) => {
     cur.current = cur.current.map((x, j) => (j === i ? s : x));
     setState(cur.current);
   };
-  const go = !running && (state.includes("failed") || state.every((s) => s === "todo"));
-  const manual = steps.filter((s) => s.kind !== "verify").map((s) => s.kind === "action" ? s.cmd : s.text).join("\n");
 
-  const run = async () => {
+  /** true when the check passes at the end */
+  const run = async (): Promise<boolean> => {
     setRunning(true);
     setCause("");
     let text = "";
@@ -74,6 +75,7 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
       const fail = (why: string) => {
         mark(i, "failed");
         setCause(why);
+        return false;
       };
       mark(i, "running");
       text = "";
@@ -102,16 +104,20 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
       mark(i, "done");
     }
     toast(t("rep.fixed"));
+    return true;
   };
 
-  const start = async () => {
-    if (running) return;
+  /** Starts (or retries) the repair, asking first when a step changes something. */
+  const start = async (): Promise<boolean> => {
+    if (running) return false;
     const changes = steps.filter((s) => s.kind === "action" && !READ_ONLY_ACTIONS.includes(s.action));
-    if (changes.length && !confirm(t("rep.confirm", { cmds: changes.map((s) => (s as { cmd: string }).cmd).join("\n") }))) return;
+    if (changes.length && !confirm(t("rep.confirm", { cmds: changes.map((s) => (s as { cmd: string }).cmd).join("\n") }))) {
+      return false;
+    }
     cur.current = cur.current.map((s) => s === "failed" ? "todo" : s);
     setState(cur.current);
     try {
-      await run();
+      return await run();
     } finally {
       setRunning(false);
     }
@@ -120,6 +126,14 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
   const cancel = async () => {
     if (jobId.current) await post("/api/job/cancel", { id: jobId.current }).catch(() => {});
   };
+
+  return { state, running, cause, out, outEl, start, cancel, userDone: () => userGo.current?.() };
+}
+
+function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairStep[] }) {
+  const { state, running, cause, out, outEl, start, cancel, userDone } = useRepair(id, steps);
+  const go = !running && (state.includes("failed") || state.every((s) => s === "todo"));
+  const manual = steps.filter((s) => s.kind !== "verify").map((s) => s.kind === "action" ? s.cmd : s.text).join("\n");
 
   return (
     <div class="rep">
@@ -130,7 +144,7 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
             <span class="rep-st">{t(`rep.${state[i]}`)}</span>{" "}
             {s.kind === "action" ? <code>{s.cmd}</code> : s.kind === "user" ? s.text : t("rep.verifyStep")}
             {state[i] === "waiting" && (
-              <>{" "}<button type="button" class="btn sm" onClick={() => userGo.current?.()}>{t("rep.userDone")}</button></>
+              <>{" "}<button type="button" class="btn sm" onClick={userDone}>{t("rep.userDone")}</button></>
             )}
           </li>
         ))}
@@ -141,7 +155,7 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
         {running
           ? <button type="button" class="btn sm" onClick={cancel}>{t("rep.cancel")}</button>
           : go
-          ? <button type="button" class="btn" onClick={start}>{t("rep.start")}</button>
+          ? <button type="button" class="btn" onClick={() => void start()}>{t("rep.start")}</button>
           : null}
       </p>
       <details>

@@ -6,6 +6,7 @@ import { computed, signal } from "@preact/signals";
 import type { Check } from "../api.ts";
 import { live, status } from "../state.ts";
 import { pendingUpdates, type Report } from "../pages/system/updates-lib.tsx";
+import { appUpdate } from "./app-update.ts";
 
 export type Level = "ok" | "warn" | "crit" | "up" | "down";
 
@@ -26,7 +27,11 @@ export const sys = computed<SysState>(() => {
   const s = status.value;
   const checks = s?.doctor ?? [];
   const problems = checks.filter((c) => c.status !== "ok").sort((a, b) => ORDER[a.status] - ORDER[b.status]);
-  const pending = pendingUpdates(s as Report | null);
+  const app = appUpdate.value;
+  const pending = [
+    ...(app?.available ? [`Agents Multi ${app.current ?? "—"} → ${app.available.version}`] : []),
+    ...pendingUpdates(s as Report | null),
+  ];
   const fails = problems.some((c) => c.status === "fail");
   const level: Level = live.value === "down" && s
     ? "down"

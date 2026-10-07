@@ -94,8 +94,8 @@
 /* the answer, over the page */
 .ab-sheet {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 20px;
+  right: 20px;
   top: calc(100% + 8px);
   z-index: 30;
   background: var(--surface);
@@ -119,6 +119,7 @@
   font-size: 14px;
 }
 .ab-a {
+  padding: 0;
   font: 400 15px/1.6 var(--serif);
   max-width: 780px;
   overflow: auto;

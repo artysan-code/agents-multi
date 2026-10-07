@@ -8,7 +8,7 @@ import { useEffect } from "preact/hooks";
 import { api, type Owner, type StatusView, type Summary } from "./api.ts";
 
 export type Live = "live" | "busy" | "down";
-export type Topic = "state" | "usage" | "tasks" | "brain";
+export type Topic = "state" | "usage" | "tasks" | "brain" | "app-update";
 
 export const status = signal<StatusView | null>(null);
 export const summary = signal<Summary | null>(null);
@@ -22,6 +22,7 @@ export const topics = {
   usage: signal(0),
   tasks: signal(0),
   brain: signal(0),
+  "app-update": signal(0),
 } satisfies Record<Topic, unknown>;
 
 /** The sessions the last usage event named: they are writing right now. */
@@ -125,6 +126,11 @@ export function connect(): void {
     es.addEventListener("brain", () => {
       last = Date.now();
       topics.brain.value++;
+    });
+    // the desktop app's own update (shell/app-update.ts): its state moves while it downloads and installs
+    es.addEventListener("app-update", () => {
+      last = Date.now();
+      topics["app-update"].value++;
     });
   };
   open();

@@ -32,6 +32,9 @@ export interface BoardTask {
   updated?: string;
   done?: string;
   progress: Progress | null;
+  /** the checklist, when the task has one, and its first step not done */
+  steps?: { text: string; done: boolean }[];
+  next_step?: string | null;
   attachments?: number;
   parts?: { done: number; total: number };
   parent?: string;
