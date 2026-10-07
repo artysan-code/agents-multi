@@ -17,9 +17,9 @@ The repository is code; what is yours — profiles, accounts, rules, preferences
 of yours that `~/.agents-multi/config` links to (see [Your configuration](#your-configuration)).
 
 ```bash
-git clone <the repository> ~/.local/src/claude-multi
-~/.local/src/claude-multi/bin/agents init ~/claude-multi-config --name Ann --language Italian
-~/.local/src/claude-multi/bin/agents install
+git clone <the repository> ~/.local/src/agents-multi
+~/.local/src/agents-multi/bin/agents init ~/agents-multi-config --name Ann --language Italian
+~/.local/src/agents-multi/bin/agents install
 ```
 
 Over SSH, the repository's host name must reach the server directly, not through a proxy that does

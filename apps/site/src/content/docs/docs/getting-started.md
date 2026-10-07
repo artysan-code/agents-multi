@@ -15,9 +15,9 @@ The repository is not public yet: these steps are how it installs once it is.
 :::
 
 ```bash
-git clone <the repository> ~/.local/src/claude-multi
-~/.local/src/claude-multi/bin/agents init ~/claude-multi-config --name Ann --language English
-~/.local/src/claude-multi/bin/agents install
+git clone <the repository> ~/.local/src/agents-multi
+~/.local/src/agents-multi/bin/agents init ~/agents-multi-config --name Ann --language English
+~/.local/src/agents-multi/bin/agents install
 ```
 
 `init` makes your configuration from `config.example/`; on a second machine, once the folder is

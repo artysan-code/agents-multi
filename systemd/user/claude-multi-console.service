@@ -1,6 +1,6 @@
 [Unit]
 Description=agents-multi console — local dashboard on http://127.0.0.1:7331
-Documentation=file:%h/.local/src/claude-multi/README.md
+Documentation=file:%h/.local/src/agents-multi/README.md
 # Not tied to graphical-session: the console is just as useful over an ssh tunnel on a headless box.
 
 [Service]

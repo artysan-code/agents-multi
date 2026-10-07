@@ -15,7 +15,7 @@ can, ask before anything hard to undo, and follow the rules below without except
 - **Read before you write**: `install --dry-run` and show the plan; the same for `mcp sync`.
 - **`install` and `mcp sync` run with every Claude closed**, this session included: when you get
   there, hand the person the commands and stop; the next session picks up from the doctor.
-- Where you are at any time: `~/.local/src/claude-multi/bin/agents doctor` (once installed,
+- Where you are at any time: `~/.local/src/agents-multi/bin/agents doctor` (once installed,
   `agents doctor`). Resume from the first step whose result is missing.
 
 ## 0. What to know first
@@ -43,7 +43,7 @@ sudo npm install -g @electron/asar
 ## 2. The repository
 
 ```bash
-git clone <repository URL> ~/.local/src/claude-multi
+git clone <repository URL> ~/.local/src/agents-multi
 ```
 
 Read access is enough: the person never commits here (`prelaunch` pulls the updates at every
@@ -75,11 +75,11 @@ tar -C ~ -czf ~/claude-backup-$(date +%F).tar.gz .claude .claude.json .config/Cl
 ## 4. Their configuration
 
 ```bash
-~/.local/src/claude-multi/bin/agents init ~/claude-multi-config --name "<Name>" --language "<Language>"
+~/.local/src/agents-multi/bin/agents init ~/agents-multi-config --name "<Name>" --language "<Language>"
 ```
 
 (Another folder if they sync it: inside their Syncthing folder, for instance.) Then shape it with
-them, file by file — `~/claude-multi-config/README.md` says what each one is:
+them, file by file — `~/agents-multi-config/README.md` says what each one is:
 
 - `profiles/` — one folder per Claude account. The default keeps `"command": "claude"`; every other
   one gets `"command": "claude-<name>"` and, if it needs its own Desktop,
@@ -91,11 +91,11 @@ them, file by file — `~/claude-multi-config/README.md` says what each one is:
 
 ## 5. Install (with Claude closed)
 
-Show `~/.local/src/claude-multi/bin/agents install --dry-run`, then tell the person to quit
+Show `~/.local/src/agents-multi/bin/agents install --dry-run`, then tell the person to quit
 this session and run, in a terminal:
 
 ```bash
-~/.local/src/claude-multi/bin/agents install
+~/.local/src/agents-multi/bin/agents install
 agents vault init
 ```
 
@@ -105,7 +105,7 @@ each profile's command once (`claude`, `claude-<name>`, …) to sign in with `/l
 ## 6. Claude Desktop (if they use it)
 
 If Claude Desktop is already installed as a system package (AUR or other), say so to the person
-and remove it with them first: Agents Multi keeps Desktop in user space. Once, the system half: `cd ~/.local/src/claude-multi/pkg/claude-desktop-shims && makepkg -si`.
+and remove it with them first: Agents Multi keeps Desktop in user space. Once, the system half: `cd ~/.local/src/agents-multi/pkg/claude-desktop-shims && makepkg -si`.
 Then `agents update --desktop`, and for each profile with its own `desktopDir`
 `claude-desktop-rebuild <profile>`, then `agents install` again. Every Claude Desktop closed
 while doing it. Each profile appears in the menu with its own icon.
