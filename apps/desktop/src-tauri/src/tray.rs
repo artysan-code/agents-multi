@@ -32,7 +32,7 @@ use tauri::{AppHandle, Manager};
 
 #[cfg(not(target_os = "linux"))]
 use crate::controller;
-use crate::{http, profiles};
+use crate::{http, profiles, updater};
 
 #[cfg(target_os = "linux")]
 mod sni;
@@ -312,7 +312,7 @@ pub fn refresh(app: &AppHandle) {
 
 /// Creates the tray icon on `port`'s console and starts following it.
 pub fn create(app: &AppHandle, port: u16) -> tauri::Result<()> {
-    let first = view(None, profiles::names());
+    let first = updater::annotate(app, view(None, profiles::names()));
     build(app, &first)?;
 
     let (tx, rx) = mpsc::channel();
@@ -375,7 +375,7 @@ fn draw(app: AppHandle, port: u16, rx: Receiver<Msg>, mut shown: View) {
             Some(Msg::Up) | Some(Msg::Refresh) | None => fetch(port),
         };
         due = None;
-        let next = view(summary.as_ref(), profiles::names());
+        let next = updater::annotate(&app, view(summary.as_ref(), profiles::names()));
         if let Err(e) = apply(&app, &shown, &next) {
             eprintln!("agents-multi: cannot update the tray: {e}");
         }

@@ -1,6 +1,20 @@
-# Releases on Forgejo: on every version tag, a release for each tag that has none yet, with its
-# CHANGELOG section as the notes (scripts/publish-releases.ts). The job's own token is enough; no
-# secret is stored for it.
+# Releases on Forgejo, on every version tag (vX.Y.Z, vX.Y.Z-beta.N): docs/adr/0002, docs/adr/0004.
+#
+# `publish`: a Forgejo release for each tag that has none yet, with its CHANGELOG section as the notes
+# (scripts/publish-releases.ts). The job's own token is enough.
+#
+# `app`: the desktop app. The gate, then the Linux bundles (deb, rpm, AppImage) signed for the updater,
+# uploaded to the GitHub release of the tag, then the site's update manifests moved to the version and
+# committed on `release`, whose push redeploys the site (the brain's image) that serves them. A stable
+# version also renders the AUR package there, and pushes it when the AUR key is set.
+#
+# The runner's image (node:22-bookworm) has neither Rust nor WebKitGTK: this job installs them, the
+# toolchain pinned below; Deno is pinned like bundle.sh's DENO_VERSION, which refuses any other.
+#
+# Secrets (Forgejo › repository › Settings › Actions › Secrets), held by the owner:
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD   the updater's signing key
+#   GH_RELEASE_TOKEN    a GitHub token with Contents: read and write on the repository in release.json
+#   AUR_SSH_PRIVATE_KEY the AUR account's SSH key; without it the AUR files are committed, not pushed
 name: release
 on:
   push:
@@ -28,3 +42,121 @@ jobs:
           FORGEJO_REPO: ${{ github.repository }}
           FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: deno run --allow-read --allow-env --allow-net --allow-run=git scripts/publish-releases.ts
+
+  app:
+    runs-on: docker
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    # one release at a time writes the update manifests on `release`
+    concurrency:
+      group: app-release
+      cancel-in-progress: false
+    env:
+      CI: "true"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      RUST_VERSION: "1.99.0"
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+      # linuxdeploy (the AppImage) is itself an AppImage: no FUSE in a container
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history; the manifests' commit needs `release`
+
+      - uses: https://github.com/denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: the version is the tag's
+        run: |
+          version="$(jq -r .version apps/desktop/package.json)"
+          [[ "v$version" == "$GITHUB_REF_NAME" ]] || { echo "the tag $GITHUB_REF_NAME is not v$version" >&2; exit 1; }
+          echo "VERSION=$version" >>"$GITHUB_ENV"
+          deno run --allow-read scripts/app-release.ts check
+
+      - name: tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends jq shellcheck file patchelf \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev >/dev/null
+          curl -fsSL -o /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
+            --default-toolchain "$RUST_VERSION" --component rustfmt,clippy
+          echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
+          corepack enable
+
+      - name: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.local/share/pnpm/store
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+          key: app-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: app-
+
+      - name: gate
+        run: bash scripts/ci.sh
+
+      - name: build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          deno eval 'import { uiCommand } from "./apps/cli/ui.ts"; Deno.exit(await uiCommand(["build"]));'
+          cd apps/desktop
+          pnpm install --frozen-lockfile
+          pnpm release
+          cd ../..
+          deno run --allow-read --allow-write scripts/app-release.ts prepare \
+            apps/desktop/src-tauri/target/release/bundle dist-app
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+        run: deno run --allow-read --allow-env --allow-net=api.github.com,uploads.github.com scripts/app-release.ts publish dist-app
+
+      - name: update channels
+        run: |
+          git config user.name "Agents Multi release"
+          git config user.email "release@agents-multi.invalid"
+          for _ in 1 2 3; do
+            git fetch --quiet origin release
+            git checkout --quiet -B release origin/release
+            deno run --allow-read --allow-write scripts/app-release.ts channels dist-app/latest.json
+            if [[ "$VERSION" != *-beta.* ]]; then
+              if [[ -n "$(jq -r '.license // ""' apps/desktop/release.json)" ]]; then
+                deno run --allow-read --allow-write scripts/aur.ts render "$VERSION" \
+                  "$(sha256sum "dist-app/agents-multi_${VERSION}_amd64.deb" | cut -d' ' -f1)"
+              else
+                echo "::warning::release.json has no licence: the AUR package is not rendered"
+              fi
+            fi
+            git add apps/site/public/updates
+            if [[ -d pkg/agents-multi-bin ]]; then git add pkg/agents-multi-bin; fi
+            git diff --cached --quiet && exit 0
+            git commit --quiet -m "chore(updates): v$VERSION on its update channels"
+            git push --quiet origin release && exit 0
+            git reset --quiet --hard origin/release # someone pushed meanwhile: again on top
+          done
+          exit 1
+
+      - name: AUR
+        if: ${{ !contains(github.ref_name, '-beta.') }}
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          [[ -f pkg/agents-multi-bin/PKGBUILD ]] || { echo "no AUR package rendered"; exit 0; }
+          [[ -n "$AUR_SSH_PRIVATE_KEY" ]] || { echo "no AUR key: the package is committed, not pushed"; exit 0; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" >~/.ssh/aur && chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes" \
+            deno run --allow-read --allow-write --allow-run=git --allow-env scripts/aur.ts push pkg/agents-multi-bin
