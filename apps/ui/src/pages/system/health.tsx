@@ -5,7 +5,10 @@
 import { useState } from "preact/hooks";
 import type { Check } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
+import { useIntent } from "../../router.ts";
 import { type Key, t } from "../../i18n.ts";
+import { toast, toastErr } from "../../lib/ui.tsx";
+import { FixControl } from "./health-repair.tsx";
 
 type Area = "brain" | "mcp" | "desktop" | "profiles" | "setup";
 type Row = Omit<Check, "status"> & { status: Check["status"] | "run" };
@@ -29,7 +32,7 @@ function CheckRow({ c }: { c: Row }) {
         <div class="name">{c.msg}</div>
         <div class="msg">{c.id}</div>
       </div>
-      {c.status !== "ok" && c.fix ? <code class="fix">{c.fix}</code> : <span />}
+      {c.status !== "ok" && (c.repair?.length || c.fix) ? <FixControl c={c} /> : <span />}
     </div>
   );
 }
@@ -37,7 +40,7 @@ function CheckRow({ c }: { c: Row }) {
 export function Health() {
   const [running, setRunning] = useState(false);
   const checks: Row[] = running
-    ? (status.value?.doctor ?? []).map((c) => ({ ...c, status: "run", msg: t("health.checking"), fix: undefined }))
+    ? (status.value?.doctor ?? []).map((c) => ({ ...c, status: "run", msg: t("health.checking"), fix: undefined, repair: undefined }))
     : status.value?.doctor ?? [];
   const todo = checks.filter((c) => c.status !== "ok").sort((a, b) => ORDER[a.status] - ORDER[b.status]);
   const ok = checks.filter((c) => c.status === "ok");
@@ -47,10 +50,15 @@ export function Health() {
     setRunning(true);
     try {
       await loadStatus(true);
+      toast(t("health.done"));
+    } catch (e) {
+      toastErr(e);
     } finally {
       setRunning(false);
     }
   };
+
+  useIntent("health.rerun", () => void rerun());
 
   return (
     <div class="sub-view">
