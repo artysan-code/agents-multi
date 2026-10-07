@@ -10,7 +10,7 @@ PartOf=graphical-session.target
 Type=oneshot
 # deno is needed by agents-multi, asar (pnpm) by the Desktop variant rebuild; the systemd --user
 # session reads no login shell
-Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
 # Code is installed as soon as it is out; Desktop is staged and switches once no instance runs.
 # Every result goes to ~/.local/state/claude-multi/updates.jsonl (the console's System › Updates).
 ExecStart=-%h/.local/bin/claude-update --auto
