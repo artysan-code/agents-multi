@@ -35,23 +35,6 @@ body:has(.hey) {
 .hey-row input::placeholder {
   color: var(--fg-faint);
 }
-.hey-model {
-  flex: none;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--fg-dim);
-  font: 500 12.5px var(--sans);
-  cursor: pointer;
-}
-.hey-model:hover,
-.hey-model:focus-visible {
-  background: var(--line);
-  color: var(--fg);
-  outline: none;
-}
 .hey kbd {
   flex: none;
   color: var(--fg-faint);

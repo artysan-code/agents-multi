@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { t, tk } from "../../i18n.ts";
 import { loadClaude, Spark, type SparkMode } from "../../lib/claude.tsx";
 import { renderMarkdown } from "../../lib/markdown.tsx";
+import { ModelPicker, useAskModel } from "../../lib/model-picker.tsx";
 import { closeWindow, sizeWindow } from "../../lib/window.ts";
 import { machineLang } from "../../state.ts";
 import { heyApi } from "./api.ts";
@@ -35,9 +36,11 @@ const folderName = (p: string) => p.replace(/\/+$/, "").split("/").pop() || "~";
 const noPage = () => {};
 
 export function Hey() {
-  const [models, setModels] = useState<{ models: string[]; model: string } | null>(null);
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const { state: models, pick } = useAskModel((m) => setNote(m));
+  // the model list opens here, in the page's flow, so the window grows to show it
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
   const main = useRef<HTMLElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -51,7 +54,6 @@ export function Hey() {
     heyApi.status().then((s) => {
       machineLang.value = s.language;
     }, () => {/* the browser's language, then */});
-    heyApi.model().then(setModels, () => setModels(null));
     field.current?.focus();
   }, []);
 
@@ -135,19 +137,6 @@ export function Hey() {
     else setNote(r.message ?? "");
   };
 
-  const nextModel = async () => {
-    if (!models) return;
-    const { models: ms, model } = models;
-    const next = ms[(ms.indexOf(model) + 1) % ms.length];
-    setModels({ models: ms, model: next });
-    const r = await heyApi.setModel(next).catch((err: Error) => ({ ok: false, message: err.message }));
-    if (!r.ok) {
-      setNote(r.message ?? "");
-      heyApi.model().then(setModels, () => setModels(null));
-    }
-    field.current?.focus();
-  };
-
   return (
     <main class="hey" ref={main}>
       <form class="hey-row" onSubmit={submit}>
@@ -161,12 +150,17 @@ export function Hey() {
           placeholder={t(answer ? "hey.ph.more" : "hey.ph")}
         />
         {models && (
-          <button type="button" class="hey-model" title={t("hey.model")} onClick={nextModel}>
-            {tk(`ask.model.${models.model}`)}
-          </button>
+          <ModelPicker
+            state={models}
+            host={host}
+            shared="mp.shared.hey"
+            onPick={(m) => void pick(m)}
+            onDone={() => field.current?.focus()}
+          />
         )}
         <kbd>Esc</kbd>
       </form>
+      <div ref={setHost} />
       {answer && (
         <section class="hey-body" aria-live="polite">
           <div class="hey-q">{answer.q}</div>

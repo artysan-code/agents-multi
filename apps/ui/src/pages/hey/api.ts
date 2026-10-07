@@ -1,6 +1,6 @@
 // api.ts — what «Hey Claude» reads and does: the console's ask endpoint (POST /api/ask, streamed as
-// NDJSON: apps/cli/ask.ts), the model shared with the console's field, and the hand-over to a terminal
-// (POST /api/terminal). The same endpoints as the field at the foot of Today.
+// NDJSON: apps/cli/ask.ts) and the hand-over to a terminal (POST /api/terminal). The same endpoints as
+// the console's ask bar; the model, shared with it, is lib/model-picker.tsx's.
 
 import { get, ndjson, post, postInit, type Result } from "../../api.ts";
 
@@ -12,8 +12,6 @@ export type AskLine =
   | { t: "done"; text: string; code: string | null; error?: string };
 
 export const heyApi = {
-  model: () => get<{ models: string[]; model: string }>("/api/ask/model"),
-  setModel: (model: string) => post<Result>("/api/ask/model", { model }),
   /** Asks, continuing `session` when given; `on` gets each line as it comes. Aborting `signal` stops
    *  claude -p on the server. */
   async ask(text: string, session: string | null, signal: AbortSignal, on: (l: AskLine) => void): Promise<void> {
