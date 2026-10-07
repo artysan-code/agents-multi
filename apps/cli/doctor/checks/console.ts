@@ -5,7 +5,6 @@ import { PORT } from "../../lib/paths.ts";
 import { run } from "../../lib/proc.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
-import { actionStep, verifyStep } from "../repair.ts";
 
 /** The console systemd unit and whether it runs the current code. */
 export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -16,10 +15,8 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
     const en = (await run("systemctl", ["--user", "is-enabled", "claude-multi-console.service"])).out;
     const act = (await run("systemctl", ["--user", "is-active", "claude-multi-console.service"])).out;
     if (en !== "enabled") {
-      add("console.unit", "warn", `claude-multi-console.service: ${en || "not installed"}`, "claude-multi install", [
-        actionStep("install"),
-        verifyStep,
-      ]);
+      // no guided repair: install restarts the console, which would cut the repair's own stream
+      add("console.unit", "warn", `claude-multi-console.service: ${en || "not installed"}`, "claude-multi install");
     } else if (act !== "active") {
       add(
         "console.unit",
