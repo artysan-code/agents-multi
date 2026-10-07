@@ -10,12 +10,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { t } from "../../i18n.ts";
 import { machineLang } from "../../state.ts";
-import { CLOSE_TITLE, type Launcher, pickApi, type PickStatus } from "./api.ts";
+import { closeWindow as close } from "../../lib/window.ts";
+import { type Launcher, pickApi, type PickStatus } from "./api.ts";
 import "./pick.css";
 
-const close = () => {
-  document.title = CLOSE_TITLE;
-};
 const label = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
 
 export function Pick() {

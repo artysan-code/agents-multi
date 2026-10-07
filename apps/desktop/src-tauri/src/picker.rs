@@ -11,10 +11,10 @@ use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, Window, WindowEvent};
 
 use crate::navigation::{self, Decision};
-use crate::{console, profiles};
+use crate::{console, profiles, reveal};
 
 pub const LABEL: &str = "picker";
-/// The page's request to close (apps/ui/src/pages/pick/api.ts).
+/// The page's request to close (apps/ui/src/lib/window.ts).
 const CLOSE_TITLE: &str = "agents-multi:close";
 const WIDTH: f64 = 480.0;
 
@@ -31,8 +31,10 @@ pub fn height(profiles: usize) -> f64 {
 /// Opens the picker, or brings it forward when it is open.
 pub fn open(app: &AppHandle, port: u16) -> tauri::Result<()> {
     if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.show();
-        let _ = w.set_focus();
+        if !reveal::is_pending(&w) {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
         return Ok(());
     }
     if let Some(focus) = app.try_state::<Focus>() {
@@ -42,7 +44,8 @@ pub fn open(app: &AppHandle, port: u16) -> tauri::Result<()> {
     }
     let console = console::url(port);
     let page = WebviewUrl::App(format!("index.html?port={port}&view=pick").into());
-    WebviewWindowBuilder::new(app, LABEL, page)
+    let nav = console.clone();
+    let builder = WebviewWindowBuilder::new(app, LABEL, page)
         .title("Claude")
         .inner_size(WIDTH, height(profiles::names().len()))
         .resizable(false)
@@ -51,7 +54,7 @@ pub fn open(app: &AppHandle, port: u16) -> tauri::Result<()> {
         .skip_taskbar(true)
         .center()
         .focused(true)
-        .on_navigation(move |url| match navigation::decide(url, &console) {
+        .on_navigation(move |url| match navigation::decide(url, &nav) {
             Decision::Allow => true,
             other => {
                 crate::refuse(url, other);
@@ -66,8 +69,10 @@ pub fn open(app: &AppHandle, port: u16) -> tauri::Result<()> {
             if title == CLOSE_TITLE {
                 let _ = w.close();
             }
-        })
-        .build()?;
+        });
+    // shown once the console has loaded in it (reveal.rs)
+    let window = reveal::hidden(builder, console).build()?;
+    reveal::arm(&window);
     Ok(())
 }
 

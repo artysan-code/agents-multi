@@ -1,11 +1,12 @@
 // main.tsx — boots the new console: the shared style sheet of the current one, whose console this is
 // (before the tasks draw: it says which are "mine"), the report, the live connection, then the shell;
-// or, at #pick, the profile picker alone.
+// or, at #pick, the profile picker alone, and at #hey «Hey Claude» alone.
 
 import { render } from "preact";
 import "../../cli/dashboard/style.css";
 import { App } from "./app.tsx";
 import { Pick } from "./pages/pick/index.tsx";
+import { Hey } from "./pages/hey/index.tsx";
 import { connect, loadOwner, loadStatus } from "./state.ts";
 import { loadClaude } from "./lib/claude.tsx";
 import { go } from "./router.ts";
@@ -19,10 +20,12 @@ faces.rel = "stylesheet";
 faces.href = "/claude/faces.css";
 document.head.append(faces);
 
-// «Which Claude?» (#pick) is a page of its own, without the console's frame: the desktop app shows it
-// in a small window
+// «Which Claude?» (#pick) and «Hey Claude» (#hey) are pages of their own, without the console's frame:
+// the desktop app shows each in a small window
 if (location.hash === "#pick") {
   render(<Pick />, document.getElementById("root")!);
+} else if (location.hash === "#hey") {
+  render(<Hey />, document.getElementById("root")!);
 } else {
   go(location.hash.slice(1));
   void loadClaude();

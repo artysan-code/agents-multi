@@ -4,7 +4,7 @@
 //!   (none)    show the console window
 //!   --tray    start in the tray, no window: what the login unit runs
 //!   --pick    «Which Claude?»: choose the profile whose Desktop to open
-//!   --hey     «Hey Claude», the quick entry (not ported yet: it shows the console)
+//!   --hey     «Hey Claude», the quick entry (hey.rs)
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
