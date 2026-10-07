@@ -10,7 +10,7 @@ tauri-build = { version = "=2.7.1", features = [] }
 serde_json = "=1.0.151"
 
 [dependencies]
-tauri = { version = "=2.12.1", features = ["tray-icon"] }
+tauri = { version = "=2.12.1", features = [] }
 tauri-plugin-opener = "=2.7.0"
 tauri-plugin-single-instance = "=2.5.2"
 url = "2"
@@ -22,6 +22,13 @@ serde_json = "=1.0.151"
 gtk = "=0.18.2"
 # the tray asks D-Bus whether a StatusNotifier host is there (the single-instance plugin already uses it)
 zbus = "=5.19.0"
+# the tray itself, a StatusNotifierItem with a left click (src/tray/sni.rs): on the zbus above and its
+# async-io executor, not tokio, so the tree keeps one D-Bus stack
+ksni = { version = "=0.3.6", default-features = false, features = ["async-io", "blocking"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+# Tauri's tray elsewhere; on Linux it is libayatana-appindicator, which delivers no left click
+tauri = { version = "=2.12.1", features = ["tray-icon"] }
 
 [target.'cfg(unix)'.dependencies]
 # SIGTERM to the backend, and its parent-death signal on Linux (src/backend.rs).

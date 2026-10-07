@@ -10,6 +10,10 @@
 //!
 //! Everything here talks to the console over HTTP from Rust: no web view is involved. The menu's
 //! actions are carried out by `controller` (CLI commands and the app's windows).
+//!
+//! What is drawn is a `View`; two backends draw it. On Linux a StatusNotifierItem of the app's own
+//! (`sni`), which has the left click (it toggles the console window) that Tauri's tray lacks there;
+//! elsewhere Tauri's tray, where a click opens the menu.
 
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -18,12 +22,20 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
-use tauri::image::Image;
-use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::tray::TrayIconBuilder;
+#[cfg(not(target_os = "linux"))]
+use tauri::{
+    image::Image,
+    menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+    tray::TrayIconBuilder,
+};
 use tauri::{AppHandle, Manager};
 
-use crate::{controller, http, profiles};
+#[cfg(not(target_os = "linux"))]
+use crate::controller;
+use crate::{http, profiles};
+
+#[cfg(target_os = "linux")]
+mod sni;
 
 const TRAY_ID: &str = "agents-multi";
 const TITLE: &str = "Agents Multi";
@@ -86,6 +98,8 @@ pub enum Action {
     Quit,
 }
 
+// the ids of Tauri's menu items; the Linux tray hands each item its action instead
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 impl Action {
     pub fn id(&self) -> String {
         match self {
@@ -233,16 +247,24 @@ fn blend(px: &mut [u8], colour: [u8; 3], a: f32) {
     px[3] = (out * 255.0).round() as u8;
 }
 
-fn icon(level: Level) -> Image<'static> {
+/// The icon for `level`: RGBA pixels, width, height.
+fn icon_rgba(level: Level) -> (Vec<u8>, u32, u32) {
     let base = tauri::include_image!("../../../desktop/icons/64x64/claude-multi.png");
     let (w, h) = (base.width(), base.height());
     let mut rgba = base.rgba().to_vec();
     if let Some(colour) = level.dot() {
         draw_dot(&mut rgba, w.min(h), colour);
     }
+    (rgba, w, h)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn icon(level: Level) -> Image<'static> {
+    let (rgba, w, h) = icon_rgba(level);
     Image::new_owned(rgba, w, h)
 }
 
+#[cfg(not(target_os = "linux"))]
 fn menu(app: &AppHandle, entries: &[Entry]) -> tauri::Result<Menu<tauri::Wry>> {
     let mut b = MenuBuilder::new(app);
     for (n, e) in entries.iter().enumerate() {
@@ -291,15 +313,7 @@ pub fn refresh(app: &AppHandle) {
 /// Creates the tray icon on `port`'s console and starts following it.
 pub fn create(app: &AppHandle, port: u16) -> tauri::Result<()> {
     let first = view(None, profiles::names());
-    TrayIconBuilder::with_id(TRAY_ID)
-        .icon(icon(first.level))
-        .tooltip(&first.tooltip)
-        .menu(&menu(app, &first.menu)?)
-        .on_menu_event(|app, event| match Action::from_id(event.id().as_ref()) {
-            Some(action) => controller::on_tray(app, action),
-            None => eprintln!("agents-multi: unknown menu item {:?}", event.id()),
-        })
-        .build(app)?;
+    build(app, &first)?;
 
     let (tx, rx) = mpsc::channel();
     app.manage(Inbox(Mutex::new(tx.clone())));
@@ -374,14 +388,47 @@ fn fetch(port: u16) -> Option<Summary> {
     serde_json::from_str(&text).ok()
 }
 
+/// The tray icon, showing `first`: on Linux the app's own StatusNotifierItem.
+#[cfg(target_os = "linux")]
+fn build(app: &AppHandle, first: &View) -> tauri::Result<()> {
+    sni::create(app, first).map_err(|e| tauri::Error::Io(std::io::Error::other(e.to_string())))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn build(app: &AppHandle, first: &View) -> tauri::Result<()> {
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icon(first.level))
+        .tooltip(&first.tooltip)
+        .menu(&menu(app, &first.menu)?)
+        .on_menu_event(|app, event| match Action::from_id(event.id().as_ref()) {
+            Some(action) => controller::on_tray(app, action),
+            None => eprintln!("agents-multi: unknown menu item {:?}", event.id()),
+        })
+        .build(app)?;
+    Ok(())
+}
+
 fn apply(app: &AppHandle, old: &View, new: &View) -> tauri::Result<()> {
+    if new.level != old.level && cfg!(debug_assertions) {
+        eprintln!("agents-multi: tray {:?} -> {:?}", old.level, new.level);
+    }
+    redraw(app, old, new)
+}
+
+#[cfg(target_os = "linux")]
+fn redraw(app: &AppHandle, old: &View, new: &View) -> tauri::Result<()> {
+    if new != old {
+        sni::apply(app, new);
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn redraw(app: &AppHandle, old: &View, new: &View) -> tauri::Result<()> {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return Ok(());
     };
     if new.level != old.level {
-        if cfg!(debug_assertions) {
-            eprintln!("agents-multi: tray {:?} -> {:?}", old.level, new.level);
-        }
         tray.set_icon(Some(icon(new.level)))?;
     }
     if new.tooltip != old.tooltip {
@@ -411,8 +458,11 @@ pub fn host_available() -> bool {
 }
 
 /// Notes for the doctor whether this session has a tray (its `app.tray` check reads the same file the
-/// tray app writes: `$XDG_STATE_HOME/claude-multi/app.json`).
+/// tray app writes: `$XDG_STATE_HOME/claude-multi/app.json`); a development instance does not.
 pub fn record(tray: bool) {
+    if crate::instance::dev().is_some() {
+        return; // the session's app speaks for it
+    }
     let Some(dir) = std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))

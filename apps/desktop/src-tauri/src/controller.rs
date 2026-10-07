@@ -129,6 +129,29 @@ pub fn show_console(app: &AppHandle, view: Option<&str>) -> tauri::Result<()> {
     window.set_focus()
 }
 
+/// The tray icon's left click (Linux, tray/sni.rs), as the tray app does it: the console window hides
+/// when it is shown and has the focus, and is shown (on Today) otherwise.
+pub fn toggle_console(app: &AppHandle) {
+    let shown = app.get_webview_window(crate::MAIN).is_some_and(|w| {
+        w.is_visible().unwrap_or(false)
+            && !w.is_minimized().unwrap_or(false)
+            && w.is_focused().unwrap_or(false)
+    });
+    if cfg!(debug_assertions) {
+        let what = if shown { "hiding" } else { "showing" };
+        eprintln!("agents-multi: tray click: {what} the console window");
+    }
+    let result = if shown {
+        app.get_webview_window(crate::MAIN)
+            .map_or(Ok(()), |w| w.hide())
+    } else {
+        show_console(app, None)
+    };
+    if let Err(e) = result {
+        eprintln!("agents-multi: {e}");
+    }
+}
+
 /// «Hey Claude», the quick entry: not ported yet (apps/tray/hey.py). Its place: until it is, the
 /// console window opens instead.
 fn show_hey(app: &AppHandle) -> tauri::Result<()> {
