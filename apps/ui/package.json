@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@preact/signals": "2.11.3",
+    "d3-force": "3.0.0",
     "preact": "11.0.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "2.10.6",
+    "@types/d3-force": "3.0.10",
     "typescript": "7.0.2",
     "vite": "8.3.3"
   }
