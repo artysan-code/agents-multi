@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # check.sh — the static gate: formatting, lint, type-check (CLI, MCP servers and libraries, hooks,
-# tools, brain, tests), shell scripts (bash -n, shellcheck) and the desktop app's Python.
+# tools, brain, tests), shell scripts (bash -n, shellcheck), the tray's Python and the desktop app's Rust.
 # Run by `deno task check`, the pre-commit hook and scripts/ci.sh. Stops at the first failure.
 # The shellcheck step is optional on a workstation (skipped with a warning) and required in CI (CI=true).
+# The Rust step runs where cargo and WebKitGTK are installed, CI included; elsewhere it is skipped.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,4 +37,14 @@ done
 if optional shellcheck; then shellcheck -S warning "${shell[@]}"; fi
 
 python3 -m py_compile apps/tray/*.py
+
+# The desktop app (apps/desktop): formatting and clippy, no release build. Building it needs WebKitGTK's
+# headers besides cargo, which CI's image does not have yet: skipped, never required.
+if ! command -v cargo >/dev/null; then
+  echo "check: cargo is not installed, desktop app skipped" >&2
+elif ! pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
+  echo "check: webkit2gtk-4.1 is not installed, desktop app skipped" >&2
+else
+  (cd apps/desktop/src-tauri && cargo fmt --check && cargo clippy --quiet --all-targets -- -D warnings)
+fi
 echo "check ok"
