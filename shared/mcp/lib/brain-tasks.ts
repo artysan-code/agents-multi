@@ -9,6 +9,7 @@
 import { type Account, loadAccounts, visibleAccounts } from "./accounts.ts";
 import { fromFile, StaleError, type Task, type TaskStore, toFile, useTaskStore } from "./tasks.ts";
 import { getSecret } from "./vault.ts";
+import { amEnv } from "./env.ts";
 
 /** The TaskStore on a brain at `url`, signed in with a personal token. */
 export function brainStore(url: string, token: string, fetcher: typeof fetch = fetch): TaskStore {
@@ -110,7 +111,7 @@ export function lazyStore(account: Account, token: () => Promise<string | null>,
 
 /** The brain account a profile sees, if there is one. */
 export function brainAccount(
-  profile = Deno.env.get("CLAUDE_MULTI_PROFILE") || undefined,
+  profile = amEnv("PROFILE") || undefined,
   all: Account[] = loadAccounts(),
 ): Account | null {
   return visibleAccounts(all, "brain", profile).find((a) => !!a.url) ?? null;
@@ -121,9 +122,7 @@ export function connectTasks(): "brain" | "files" {
   const account = brainAccount();
   if (!account) return "files";
   const store = lazyStore(account, () => getSecret("brain", account.name));
-  const scope = (Deno.env.get("CLAUDE_MULTI_BRAIN_SCOPE") ?? "").split(",").map((s) =>
-    s.trim().replace(/^\/+|\/+$/g, "")
-  ).filter(Boolean);
+  const scope = (amEnv("BRAIN_SCOPE") ?? "").split(",").map((s) => s.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean);
   useTaskStore(scope.length ? scoped(store, scope) : store);
   return "brain";
 }

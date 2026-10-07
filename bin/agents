@@ -9,7 +9,7 @@ HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 command -v deno >/dev/null 2>&1 || { echo "agents: deno is required (https://deno.land)" >&2; exit 1; }
 # Brain host(s), taken from the `brain` accounts of accounts.json.
-ACCOUNTS="${CLAUDE_MULTI_ACCOUNTS:-${CLAUDE_MULTI_CONFIG:-$HOME/.claude-multi/config}/accounts.json}"
+ACCOUNTS="${AGENTS_MULTI_ACCOUNTS:-${CLAUDE_MULTI_ACCOUNTS:-${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$HOME/.claude-multi/config}}/accounts.json}}"
 BRAIN_HOSTS=$(python3 - "$ACCOUNTS" 2>/dev/null <<'PY' || true
 import json, sys, urllib.parse
 try:

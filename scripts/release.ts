@@ -19,6 +19,7 @@
  */
 
 import { staleUnits } from "../apps/cli/lib/stale.ts";
+import { amEnv } from "../shared/mcp/lib/env.ts";
 
 /** The manifests that carry the version, relative to the repository root. */
 export const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json"];
@@ -191,7 +192,7 @@ async function git(...args: string[]): Promise<string> {
 
 /** Whether `root` is the checkout the runtime runs: ~/.claude-multi/shared is a link into it. */
 async function isRuntime(root: string): Promise<boolean> {
-  const runtime = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${Deno.env.get("HOME")}/.claude-multi`;
+  const runtime = amEnv("ROOT") ?? `${Deno.env.get("HOME")}/.claude-multi`;
   return await Deno.realPath(`${runtime}/shared`).then((p) => p === `${root}/shared`, () => false);
 }
 

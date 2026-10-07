@@ -9,7 +9,7 @@
 cm_repo() { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd; }
 
 # The person's configuration (profiles, accounts, rules): ~/.claude-multi/config, a link to their folder.
-cm_config() { printf '%s\n' "${CLAUDE_MULTI_CONFIG:-${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}/config}"; }
+cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-${AGENTS_MULTI_ROOT:-${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}}/config}}"; }
 
 # Every declared profile, one per line.
 cm_profiles() {

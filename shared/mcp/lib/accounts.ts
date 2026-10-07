@@ -11,6 +11,7 @@
 // among several.
 
 import { configDir } from "./owner.ts";
+import { amEnv } from "./env.ts";
 
 export interface Account {
   service: string;
@@ -26,7 +27,7 @@ export interface Account {
 }
 
 export function accountsFile(): string {
-  return Deno.env.get("CLAUDE_MULTI_ACCOUNTS") ?? `${configDir()}/accounts.json`;
+  return amEnv("ACCOUNTS") ?? `${configDir()}/accounts.json`;
 }
 
 export function loadAccounts(path = accountsFile()): Account[] {

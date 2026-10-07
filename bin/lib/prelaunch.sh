@@ -12,13 +12,13 @@
 #   - locking: two profiles may start at the same time
 set -uo pipefail
 
-REPO="${CLAUDE_MULTI_REPO:-$HOME/.local/src/claude-multi}"
+REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$HOME/.local/src/claude-multi}}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi"
 STATE="$CACHE/sync.json"
 STAMP="$CACHE/fetch.stamp"
 LOCK="$CACHE/sync.lock"
-TTL="${CLAUDE_MULTI_FETCH_TTL:-43200}"
-FETCH_TIMEOUT="${CLAUDE_MULTI_FETCH_TIMEOUT:-3}"
+TTL="${AGENTS_MULTI_FETCH_TTL:-${CLAUDE_MULTI_FETCH_TTL:-43200}}"
+FETCH_TIMEOUT="${AGENTS_MULTI_FETCH_TIMEOUT:-${CLAUDE_MULTI_FETCH_TIMEOUT:-3}}"
 
 g() { git -C "$REPO" "$@"; }
 
@@ -78,8 +78,8 @@ main() {
 # adopted into the profile patch). Requires Deno: without it, Claude starts with the file as last
 # generated. Uses its own lock and never blocks.
 regen_settings() {
-  local runtime="${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}" stamp="$CACHE/settings.stamp"
-  local config="${CLAUDE_MULTI_CONFIG:-$runtime/config}"
+  local runtime="${AGENTS_MULTI_ROOT:-${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}}" stamp="$CACHE/settings.stamp"
+  local config="${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$runtime/config}}"
   [[ -x "$REPO/bin/agents" ]] && command -v deno >/dev/null 2>&1 || return 0
   mkdir -p "$CACHE"
   exec 8>"$CACHE/settings.lock"

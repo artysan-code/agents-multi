@@ -3,13 +3,13 @@
 # revert) whose message carries an assistant attribution trailer.
 #
 # Opt-in, a preference of the person rather than of the setup. Their config/settings.json turns
-# it on with  "env": { "CLAUDE_MULTI_NO_ASSISTANT_TRAILER": "1" }. The harness adds those
+# it on with  "env": { "AGENTS_MULTI_NO_ASSISTANT_TRAILER": "1" }. The harness adds those
 # trailers by default; this hook makes the preference independent of remembering it.
 #
 # Blocks with exit 2: stderr goes back to the agent, which rewrites the message.
 set -uo pipefail
 
-[ "${CLAUDE_MULTI_NO_ASSISTANT_TRAILER:-}" = "1" ] || exit 0
+[ "${AGENTS_MULTI_NO_ASSISTANT_TRAILER:-${CLAUDE_MULTI_NO_ASSISTANT_TRAILER:-}}" = "1" ] || exit 0
 
 # shellcheck source=lib/guard.sh
 source "$(dirname "$0")/lib/guard.sh"

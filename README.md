@@ -241,7 +241,7 @@ the globe button in the rail overrides it per browser.
   neighbourhood as a live graph. **Graph**: the whole brain, laid out by d3-force with each area in
   its own region (drag, pan, zoom, filter by area). **Diary**: the days as a timeline. **Health**:
   what `brain_check` finds, with "Fix with Claude". **Archive**: the old wiki (`~/brains/claude`,
-  `CLAUDE_MULTI_BRAIN`), read only since 2026-10-02, with "Bring into the brain". The page does not
+  `AGENTS_MULTI_BRAIN`), read only since 2026-10-02, with "Bring into the brain". The page does not
   edit: the field at the bottom asks Claude for a change (ask kind `brain`), with the brain's tools
   and nothing else, never deletion, running inside the old wiki so the only files it can read are
   there.
@@ -430,7 +430,7 @@ token goes to the vault and the address next to the account's name.
 The owner's tasks live in their brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
-are files in `~/brains/tasks/items` (`CLAUDE_MULTI_TASKS`), as they were until 2026-10-02;
+are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`), as they were until 2026-10-02;
 `agents tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
 `settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
@@ -474,7 +474,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   name, the address, and the profiles that see it (none = every profile). A profile can see several
   accounts of one service; each tool then takes `account`, required as soon as there is more than
   one — never a silent default. A registry entry with `_service` goes only to the profiles that see
-  one of that service's accounts, with `CLAUDE_MULTI_PROFILE` in its environment and `{hosts}` in
+  one of that service's accounts, with `AGENTS_MULTI_PROFILE` in its environment and `{hosts}` in
   its arguments replaced by those accounts' hosts (its `--allow-net`). A server that is not ours is
   one per account instead ([above](#servers-that-are-not-ours-one-per-account)).
 - **Secrets** are in the vault, `~/vault/claude-multi` (a Syncthing folder: they travel between
@@ -605,3 +605,11 @@ deno task test    # usage (rates, dedupe, turns), notifications,
 - Put `~/.claude-multi` into a file-sync folder: it holds credentials, and backups containing
   tokens have leaked that way before.
 - Update Claude Desktop with the app open.
+
+## Environment variables
+
+The variables are `AGENTS_MULTI_<NAME>` (`ROOT`, `CONFIG`, `PORT`, `VAULT`, `TASKS`, `BRAIN`, `ACCOUNTS`,
+`PROFILE`, `BRAIN_SCOPE`, `OWNER_ID`, `OWNER_NAME`, `LANGUAGE`, `REPO`, `FETCH_TTL`, `FETCH_TIMEOUT`,
+`NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` is still read when the new one is not set, and the
+MCP servers get both until 1.0; the brain's `compose.yaml` keeps the old names for the owner variables
+until its Coolify settings are renamed.

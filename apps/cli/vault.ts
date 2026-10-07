@@ -22,6 +22,7 @@ import {
   vaultDir,
   VaultError,
 } from "../../shared/mcp/lib/vault.ts";
+import { amEnv } from "../../shared/mcp/lib/env.ts";
 
 async function readStdin(prompt: string): Promise<string> {
   if (Deno.stdin.isTerminal()) {
@@ -168,7 +169,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
         // a service's command-line tool with the account's token in its environment (toolrun.ts)
         const plan = parseRun(rest);
         const profile = profileFrom({
-          profile: Deno.env.get("CLAUDE_MULTI_PROFILE"),
+          profile: amEnv("PROFILE"),
           configDir: Deno.env.get("CLAUDE_CONFIG_DIR"),
         }, RUNTIME);
         const account = resolveAccount(

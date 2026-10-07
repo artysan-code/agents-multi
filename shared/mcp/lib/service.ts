@@ -5,9 +5,10 @@
 import { z } from "npm:zod@4.6.5";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
+import { amEnv } from "./env.ts";
 
 export function service(name: string) {
-  const profile = Deno.env.get("CLAUDE_MULTI_PROFILE") || undefined;
+  const profile = amEnv("PROFILE") || undefined;
   const visible = visibleAccounts(loadAccounts(), name, profile);
   const secrets = new Map<string, string>();
 

@@ -9,6 +9,8 @@
 // `id` is what a task's `owner` says when it is this person's to do: it is written into the task
 // files, so it does not change once tasks exist.
 
+import { amEnv } from "./env.ts";
+
 export interface Owner {
   id: string;
   name: string;
@@ -26,7 +28,7 @@ export function configDir(): string {
       return undefined;
     }
   };
-  return env("CLAUDE_MULTI_CONFIG") ?? `${env("HOME") ?? ""}/.claude-multi/config`;
+  return amEnv("CONFIG") ?? `${env("HOME") ?? ""}/.claude-multi/config`;
 }
 
 /** Pure: an owner from what a file or the environment gives, the rest from the defaults. */
@@ -52,20 +54,13 @@ export function useOwner(fn: () => Owner | null) {
 export function owner(): Owner {
   const now = current?.();
   if (now) return now;
-  const env = (k: string) => {
-    try {
-      return Deno.env.get(k) || undefined;
-    } catch {
-      return undefined;
-    }
-  };
   let file: Partial<Owner> | null = null;
   try {
     file = JSON.parse(Deno.readTextFileSync(`${configDir()}/owner.json`));
   } catch { /* no file, or not readable here */ }
   return ownerFrom({
-    id: env("CLAUDE_MULTI_OWNER_ID") ?? file?.id,
-    name: env("CLAUDE_MULTI_OWNER_NAME") ?? file?.name,
-    language: env("CLAUDE_MULTI_LANGUAGE") ?? file?.language,
+    id: amEnv("OWNER_ID") || file?.id,
+    name: amEnv("OWNER_NAME") || file?.name,
+    language: amEnv("LANGUAGE") || file?.language,
   });
 }

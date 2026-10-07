@@ -68,7 +68,7 @@ Deno.test("wanted: an account-backed server goes only where an account is visibl
   assertEquals(got, {
     command: "deno",
     args: ["--allow-net=one.example:8443,two.example", "s.ts"],
-    env: { CLAUDE_MULTI_PROFILE: A },
+    env: { AGENTS_MULTI_PROFILE: A, CLAUDE_MULTI_PROFILE: A },
   });
   // B sees no svc account: no server at all, rather than one that can only fail
   assertEquals(wanted(withAccounts, t(B, "cli")).svc, undefined);
@@ -85,11 +85,12 @@ Deno.test("wanted: on Desktop an account-backed server gets the session bus, whi
     accounts: [{ service: "svc", name: "one", url: "https://one.example", profiles: [A] }],
   };
   assertEquals(wanted(reg, t(A, "desktop")).svc.env, {
+    AGENTS_MULTI_PROFILE: A,
     CLAUDE_MULTI_PROFILE: A,
     DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
   });
   // the CLI inherits the session's env: nothing pinned there
-  assertEquals(wanted(reg, t(A, "cli")).svc.env, { CLAUDE_MULTI_PROFILE: A });
+  assertEquals(wanted(reg, t(A, "cli")).svc.env, { AGENTS_MULTI_PROFILE: A, CLAUDE_MULTI_PROFILE: A });
   // a server that reads no secret is left as written
   assertEquals(wanted(reg, t(A, "desktop")).plain, { command: "p" });
 });
@@ -198,7 +199,7 @@ Deno.test("perAccount (stdio): launch.ts wraps the command, the secret stays a p
     "--quiet",
     "--no-lock",
     "--allow-read=/vault,/rt/accounts.json",
-    "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
+    "--allow-env=HOME,AGENTS_MULTI_PROFILE,CLAUDE_MULTI_PROFILE,AGENTS_MULTI_VAULT,CLAUDE_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS,CLAUDE_MULTI_ACCOUNTS",
     "--allow-run=/usr/bin/secret-tool,npx",
     "/rt/shared/mcp/lib/launch.ts",
     "run",
@@ -214,7 +215,7 @@ Deno.test("perAccount (stdio): launch.ts wraps the command, the secret stays a p
     "flows-mcp",
     "--base=https://flows.work.example:8443",
   ]);
-  assertEquals(s.env, { MODE: "stdio", CLAUDE_MULTI_PROFILE: A });
+  assertEquals(s.env, { MODE: "stdio", AGENTS_MULTI_PROFILE: A, CLAUDE_MULTI_PROFILE: A });
   assertEquals(s.type, "stdio");
   // on Desktop: no `type`, and the session bus is not pinned unless the registry knows it
   assertEquals("type" in wanted(perAccountReg, t(A, "desktop"))["flows-work"], false);
@@ -247,8 +248,8 @@ Deno.test("perAccount (http): headers come from a headersHelper, never written; 
   assertEquals(s.url, "https://mcp.remote.example/mcp?project_ref=abc&read_only=true");
   assertEquals(
     s.headersHelper,
-    `CLAUDE_MULTI_PROFILE=${A} deno run --quiet --no-lock --allow-read=/vault,/rt/accounts.json ` +
-      "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS --allow-run=/usr/bin/secret-tool " +
+    `AGENTS_MULTI_PROFILE=${A} CLAUDE_MULTI_PROFILE=${A} deno run --quiet --no-lock --allow-read=/vault,/rt/accounts.json ` +
+      "--allow-env=HOME,AGENTS_MULTI_PROFILE,CLAUDE_MULTI_PROFILE,AGENTS_MULTI_VAULT,CLAUDE_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS,CLAUDE_MULTI_ACCOUNTS --allow-run=/usr/bin/secret-tool " +
       "/rt/shared/mcp/lib/launch.ts headers remote proj 'Authorization=Bearer {secret}'",
   );
   assertEquals("env" in s, false);

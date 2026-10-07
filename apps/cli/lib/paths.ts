@@ -1,12 +1,14 @@
 // paths.ts — Where things are: the repository, the runtime, the person's configuration, the XDG
 // directories and the console's port. Every path is derived from the environment once, at import.
 
+import { amEnv } from "../../../shared/mcp/lib/env.ts";
+
 export const HOME = Deno.env.get("HOME") ?? "";
 export const REPO = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
-export const RUNTIME = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${HOME}/.claude-multi`;
+export const RUNTIME = amEnv("ROOT") ?? `${HOME}/.claude-multi`;
 /** The person's own configuration (profiles, accounts, rules, preferences): a folder of theirs, outside
  *  the repository, that ~/.claude-multi/config links to (`agents init`). The repository is code. */
-export const CONFIG = Deno.env.get("CLAUDE_MULTI_CONFIG") ?? `${RUNTIME}/config`;
+export const CONFIG = amEnv("CONFIG") ?? `${RUNTIME}/config`;
 export const PROFILES = `${CONFIG}/profiles`;
 export const BIN = `${HOME}/.local/bin`;
 export const LIB = `${HOME}/.local/lib`;
@@ -14,7 +16,7 @@ export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/clau
 export const STATE = `${Deno.env.get("XDG_STATE_HOME") ?? `${HOME}/.local/state`}/claude-multi`;
 export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
 /** The local console's port on 127.0.0.1 (`agents serve`). */
-export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
+export const PORT = Number(amEnv("PORT") ?? 7331);
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
 export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
 export const STIGNORE_GEN_TEMPLATE = `${REPO}/shared/tools/stignore-gen/git-template`;

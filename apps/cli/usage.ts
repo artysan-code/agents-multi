@@ -18,9 +18,10 @@
 // counts invocations, `cost` is the share. A declared approximation, not a direct measurement.
 
 import { DatabaseSync } from "node:sqlite";
+import { amEnv } from "../../shared/mcp/lib/env.ts";
 
 const HOME = Deno.env.get("HOME") ?? "";
-const RUNTIME = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${HOME}/.claude-multi`;
+const RUNTIME = amEnv("ROOT") ?? `${HOME}/.claude-multi`;
 const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
 export const DB_PATH = `${DATA}/usage.db`;
 

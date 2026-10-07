@@ -99,7 +99,7 @@ switch (cmd) {
   }
   case "sync": {
     const env: Record<string, string> = flag("--fetch")
-      ? { CLAUDE_MULTI_FETCH_TTL: "0", CLAUDE_MULTI_FETCH_TIMEOUT: "15" }
+      ? { AGENTS_MULTI_FETCH_TTL: "0", AGENTS_MULTI_FETCH_TIMEOUT: "15" }
       : {};
     const r = await run("bash", [`${REPO}/bin/lib/prelaunch.sh`], { env });
     if (r.err) console.error(r.err);

@@ -25,6 +25,8 @@
 // Nothing here prints a secret. The only way a value leaves this module is the return value of
 // getSecret(), and the MCP servers use it for their HTTP headers, never in a tool result.
 
+import { amEnv } from "./env.ts";
+
 const HOME = Deno.env.get("HOME") ?? "";
 const SECRET_TOOL = "/usr/bin/secret-tool";
 const KEY_ATTRS = ["application", "claude-multi", "kind", "vault-key"];
@@ -33,7 +35,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 export function vaultDir(): string {
-  return Deno.env.get("CLAUDE_MULTI_VAULT") ?? `${HOME}/vault/claude-multi`;
+  return amEnv("VAULT") ?? `${HOME}/vault/claude-multi`;
 }
 
 export interface Entry {

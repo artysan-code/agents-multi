@@ -15,7 +15,7 @@ TITLE = "Agents Multi"
 
 HOME = Path.home()
 BIN = HOME / ".local" / "bin"
-PORT = int(os.environ.get("CLAUDE_MULTI_PORT", "7331"))
+PORT = int(os.environ.get("AGENTS_MULTI_PORT") or os.environ.get("CLAUDE_MULTI_PORT", "7331"))
 CONSOLE_URL = f"http://127.0.0.1:{PORT}"
 
 
@@ -43,7 +43,7 @@ def repo() -> Path:
 
 def config_dir() -> Path:
     """The person's configuration: ~/.claude-multi/config, a link to their own folder."""
-    return Path(os.environ.get("CLAUDE_MULTI_CONFIG") or Path.home() / ".claude-multi" / "config")
+    return Path(os.environ.get("AGENTS_MULTI_CONFIG") or os.environ.get("CLAUDE_MULTI_CONFIG") or Path.home() / ".claude-multi" / "config")
 
 
 def manifests() -> dict[str, dict]:

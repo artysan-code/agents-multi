@@ -20,6 +20,7 @@
 // without a clock.
 
 import { owner } from "./owner.ts";
+import { amEnv } from "./env.ts";
 
 export type Status = "todo" | "doing" | "waiting" | "done" | "dropped";
 export const STATUSES: Status[] = ["todo", "doing", "waiting", "done", "dropped"];
@@ -63,7 +64,7 @@ export interface TaskSettings {
 export const DEFAULT_SETTINGS: TaskSettings = { briefs: ["08:30", "13:30", "19:00"], remind: 15 };
 
 const HOME = Deno.env.get("HOME") ?? "";
-export const tasksRoot = () => Deno.env.get("CLAUDE_MULTI_TASKS") ?? `${HOME}/brains/tasks`;
+export const tasksRoot = () => amEnv("TASKS") ?? `${HOME}/brains/tasks`;
 const itemsDir = () => `${tasksRoot()}/items`;
 
 // ---------------------------------------------------------------- dates

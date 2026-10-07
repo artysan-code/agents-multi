@@ -24,6 +24,7 @@
 
 import { loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
+import { amEnv } from "./env.ts";
 
 export interface LaunchArgs {
   mode: "run" | "headers";
@@ -128,7 +129,7 @@ const needsSecret = (vars: Record<string, string>) => Object.values(vars).some((
 
 async function main() {
   const a = parseLaunchArgs(Deno.args);
-  const visible = visibleAccounts(loadAccounts(), a.service, Deno.env.get("CLAUDE_MULTI_PROFILE") || undefined);
+  const visible = visibleAccounts(loadAccounts(), a.service, amEnv("PROFILE") || undefined);
   const account = resolveAccount(visible, a.account, a.service);
   let vars = a.vars;
   if (needsSecret(vars)) {
