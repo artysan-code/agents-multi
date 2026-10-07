@@ -201,7 +201,8 @@ function Timeline({ day, next }: { day: Day; next: DayItem | undefined }) {
   const now = nowMin(minute.value);
   const ms = marks(day);
   const lane = lanes(ms);
-  const { from, to } = dayWindow(ms);
+  // the window widens to now too, from the early morning on: the line for now is always there by day
+  const { from, to } = dayWindow(now >= 5 * 60 ? [...ms, { start: now, end: now }] : ms);
   const x = (m: number) => ((m - from) / (to - from)) * 100;
   const hours: number[] = [];
   for (let h = from / 60; h <= to / 60; h++) hours.push(h);
