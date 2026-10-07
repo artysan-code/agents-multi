@@ -200,7 +200,7 @@ wiring them.
   is in the menu. Without one the app quits with its last window. `--tray` waits up to a minute for a
   tray host (at login it can come up after the app), then says so and exits; any other launch looks
   once. On Linux a tray host is a StatusNotifier watcher on the session bus — the one kind the app's
-  indicator speaks — asked with `zbus` (already in the tree through the single-instance plugin). The
+  tray speaks — asked with `zbus` (already in the tree through the single-instance plugin). The
   answer goes to `$XDG_STATE_HOME/claude-multi/app.json`, the file the doctor's `app.tray` check reads.
   The tray app's other habit — destroying a window hidden for twenty minutes to free the web engine —
   is not carried over.
@@ -212,8 +212,18 @@ wiring them.
   menu is rebuilt only when what it shows changes. The profiles of «Open Claude Desktop» come from
   the manifests (`profiles.rs`, the CLI's rule), so the menu opens a Desktop with the console down;
   its actions are CLI commands (`claude-launch`; `systemctl --user start` of the console's unit when the
-  app does not run the backend, else the backend) or the app's windows. On Linux the indicator has no click, tooltip or «menu about to open» events: the menu
-  opens on any click, and the tooltip shows on the other systems only.
+  app does not run the backend, else the backend) or the app's windows.
+- **On Linux the tray is a StatusNotifierItem of the app's own** (`tray/sni.rs`, the `ksni` crate),
+  not Tauri's: Tauri's goes through libayatana-appindicator there, which reports no click, so any
+  click opened the menu. The item has `Activate`: the left click shows the console window, or hides
+  it when it is shown and has the focus (`controller::toggle_console`, the tray app's rule); the menu
+  is on the right click. It draws the same `tray::View` as Tauri's tray elsewhere — icon with its dot,
+  the menu, the tooltip (the headline as its title, the other lines as its text). `ksni` runs on the
+  `zbus` already in the tree, on its async-io executor (features `async-io` and `blocking`, not the
+  default tokio), so there is one D-Bus stack; Tauri's `tray-icon` feature is enabled on the other
+  systems only. KDE hands an item an activation token before `Activate`
+  (`ProvideXdgActivationToken`, a KDE extension) that `ksni` 0.3.6 does not implement: the window a
+  click shows is raised as far as the compositor allows a request without a token.
 - **The picker is a page of the console** (`apps/ui/src/pages/pick/`, `/#pick`, drawn without the
   console's frame) in a small frameless window, loaded by URL through the local page like the main
   window: it gets no IPC. Its action goes through **a new endpoint, `/api/launch`** (`GET` the
@@ -237,9 +247,28 @@ When the app replaces the tray app, that step changes:
   flag, and `--pick`); `bin/claude-multi-app` goes, or becomes a link to the app.
 - The KDE shortcut for «Hey Claude» (`~/.local/bin/claude-multi-app --hey`) points at the app once Hey
   is ported; until then `--hey` there would only open the console.
-- The doctor's `app.deps` (pyside6, qt6-webengine) becomes the app's own (WebKitGTK,
-  libayatana-appindicator), and its `app.tray` fix names the app's unit; the README's section on the
+- The doctor's `app.deps` (pyside6, qt6-webengine) becomes the app's own (WebKitGTK; no
+  libayatana-appindicator, since the Linux tray is the app's own StatusNotifierItem), and its
+  `app.tray` fix names the app's unit; the README's section on the
   desktop app is rewritten; `apps/tray/` is removed.
+
+## Development
+
+- **A development instance beside the installed app**: in a debug build,
+  `AGENTS_MULTI_DEV_INSTANCE=<name>` gives the app a single-instance identity of its own
+  (`src-tauri/src/instance.rs`): on Linux the plugin's D-Bus name becomes
+  `<identifier>.dev_<name>.SingleInstance`, elsewhere the plugin is left out. So a build under test
+  runs on the normal session bus next to the installed app instead of handing its launch over to it,
+  and a second launch with the same name still reaches it. Give it a port of its own too
+  (`AGENTS_MULTI_PORT`), or it uses the console already on 7331. A development instance does not
+  write `app.json` (the doctor's `app.tray`), which belongs to the session's app. Release builds
+  ignore the variable.
+- **Not `dbus-run-session`**: a private bus starts its own secret service, and KDE Wallet asks for its
+  password at every run.
+- **The doctor run from another checkout** (a development console, `bin/agents doctor` in a worktree)
+  checks the installation's links against the installed repository — what `~/.agents-multi/shared`
+  points at — and says once that it runs from a development checkout (`repo.running`), instead of
+  failing every link.
 
 ## Consequences
 
