@@ -1440,14 +1440,127 @@ function selfCard(card) {
     : r.behind
     ? t("up.self.behind", { n: r.behind })
     : t("up.uptodate");
-  return card("claude-multi", (r.head ?? "").split(" ")[0], [state, S.selfInstall ? t("up.self.install") : null], null);
+  // the button only for an install waiting on Claude: not for an update skipped for another reason
+  const close = S.selfInstall ? `<button class="btn sm" data-cc="open">${esc(t("cc.btn"))}</button>` : "";
+  return card(
+    "claude-multi",
+    (r.head ?? "").split(" ")[0],
+    [state, S.selfInstall ? t("up.self.install") : null],
+    null,
+    close,
+  );
 }
+
+/** «Close Claude and update»: the server lists who holds the install (it alone knows the PIDs), the
+ *  person confirms, then TERM; KILL only as a second, explicit confirmation; then the install. */
+function ccAge(s) {
+  if (s == null) return "";
+  const a = s < 90
+    ? `${s}s`
+    : s < 5400
+    ? `${Math.round(s / 60)}m`
+    : s < 172800
+    ? `${Math.round(s / 3600)}h`
+    : `${Math.round(s / 86400)}d`;
+  return t("cc.age", { a });
+}
+function ccList(bs) {
+  return `<ul class="cc-list">${
+    bs.map((b) =>
+      `<li><code>${esc(b.key)}</code> pid ${b.pid} ${pf(b.profile)} <span class="sub">${
+        esc(
+          [
+            b.embedded ? t("cc.embedded") : null,
+            b.busy === null ? null : t(b.busy ? "cc.busy" : "cc.idle"),
+            ccAge(b.ageSec),
+            b.protected ? t("cc.protected") : null,
+          ].filter(Boolean).join(" · "),
+        )
+      }</span></li>`
+    ).join("")
+  }</ul>`;
+}
+async function closeClaudeFlow() {
+  let plan;
+  try {
+    plan = await api("/api/close-claude");
+  } catch (e) {
+    return toast(String(e.message), true);
+  }
+  if (!plan.offer) return toast(t("cc.none"));
+  const todo = plan.blockers.filter((b) => !b.protected);
+  const body = (inner) => host.querySelector(".dbody").innerHTML = inner;
+  const host = drawer(
+    t("cc.btn"),
+    `<p>${esc(t("cc.intro"))}</p>${ccList(plan.blockers)}${
+      todo.length
+        ? `<p><button class="btn" data-cc="term">${esc(t("cc.go"))}</button></p>`
+        : `<p class="sub">${esc(t("cc.onlyProtected"))}</p>`
+    }`,
+  );
+  const settle = async (reopenProfiles) => {
+    body(`<p>${esc(t("cc.updating"))}</p>`);
+    const r = await post("/api/action", { action: "settle-install", opts: [] }).catch((e) => ({
+      code: 1,
+      output: e.message,
+    }));
+    const again = reopenProfiles.length
+      ? `<p>${
+        reopenProfiles.map((p) =>
+          `<button class="btn" data-cc="reopen" data-p="${esc(p)}">${esc(t("cc.reopen", { p }))}</button>`
+        )
+          .join(" ")
+      }</p>`
+      : "";
+    body(`<pre class="out">${esc(r.output || t("act.noOutput"))}</pre>${again}`);
+    toast(
+      r.code
+        ? t("act.doneExit", { a: "settle-install", c: r.code, s: (r.ms / 1000).toFixed(1) })
+        : t("act.done", { a: "settle-install", s: (r.ms / 1000).toFixed(1) }),
+      r.code !== 0,
+    );
+    await refresh("state");
+  };
+  let reopenProfiles = [];
+  host.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-cc]");
+    if (!b) return;
+    if (b.dataset.cc === "reopen") {
+      b.disabled = true;
+      const r = await post("/api/close-claude", { step: "reopen", profiles: [b.dataset.p] }).catch(() => null);
+      return toast(r ? t("cc.reopened", { p: (r.started ?? []).join(", ") }) : "reopen failed", !r);
+    }
+    if (b.dataset.cc !== "term" && b.dataset.cc !== "kill") return;
+    body(`<p>${esc(t("cc.closing"))}</p>`);
+    const r = await post("/api/close-claude", { step: b.dataset.cc }).catch((err) => ({
+      ok: false,
+      message: err.message,
+    }));
+    if (!r.ok) {
+      body(`<p>${esc(r.message ?? "")}</p>`);
+      return toast(r.message ?? "", true);
+    }
+    reopenProfiles = [...new Set([...reopenProfiles, ...r.reopen])];
+    if (r.remaining.length) {
+      body(
+        `<p>${esc(t("cc.stuck"))}</p>${ccList(r.remaining)}<p class="sub">${
+          esc(t("cc.forceWarn"))
+        }</p><p><button class="btn" data-cc="kill">${esc(t("cc.force"))}</button></p>`,
+      );
+      return;
+    }
+    await settle(reopenProfiles);
+  });
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-cc=open]")) closeClaudeFlow();
+});
 function renderUpdates() {
   const m = S.machine;
   const u = S.update ?? {};
-  const card = (name, current, lines, rollback) =>
+  const card = (name, current, lines, rollback, extra = "") =>
     `<div class="vcard"><i></i><div style="flex:1;min-width:0"><b>${esc(name)}</b><code>${esc(current ?? "—")}</code>
-      ${lines.filter(Boolean).map((l) => `<div class="sub">${esc(l)}</div>`).join("")}</div>${
+      ${lines.filter(Boolean).map((l) => `<div class="sub">${esc(l)}</div>`).join("")}</div>${extra}${
       rollback ? `<button class="btn sm" data-action="${rollback}">${esc(t("up.rollback"))}</button>` : ""
     }</div>`;
   const cliPrev = m.cliVersions.filter((v) => v !== m.cliVersion).sort().pop();

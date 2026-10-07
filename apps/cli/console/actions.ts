@@ -14,6 +14,8 @@ export const ACTIONS: Record<string, { args: string[]; opts?: Record<string, str
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
   "update-check": { args: ["update", "--check"], timeoutMs: 40000 },
   "update-now": { args: ["update", "--auto"], timeoutMs: 900000 },
+  // the install a round left waiting for Claude to be closed (the sessions are closed by close-claude.ts)
+  "settle-install": { args: ["self-update", "--settle"], timeoutMs: 300000 },
   "rollback-cli": { args: ["update", "--rollback"] },
   "rollback-desktop": { args: ["update", "--rollback", "--desktop"], timeoutMs: 180000 },
 };
