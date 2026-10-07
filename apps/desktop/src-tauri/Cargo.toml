@@ -1,0 +1,15 @@
+[package]
+name = "agents-multi-desktop"
+# The app's version is tauri.conf.json's, which reads ../package.json (bumped by scripts/release.ts).
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "=2.7.1", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.1", features = [] }
+tauri-plugin-opener = "=2.7.0"
+tauri-plugin-single-instance = "=2.5.2"
+url = "2"

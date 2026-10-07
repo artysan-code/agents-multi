@@ -1,0 +1,65 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f5f2;
+  --fg: #1d1d1b;
+  --muted: #6b6a65;
+  --accent: #c2410c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161614;
+    --fg: #ecebe6;
+    --muted: #9b9a94;
+    --accent: #fb923c;
+  }
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+main {
+  max-width: 28rem;
+  padding: 0 16px;
+  text-align: center;
+}
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+.status {
+  margin: 0;
+}
+main[data-state="unreachable"] .status {
+  color: var(--accent);
+}
+.hint {
+  color: var(--muted);
+  margin: 0.5rem 0 0;
+}
+code {
+  font: 0.9em ui-monospace, monospace;
+  white-space: nowrap;
+}
+button {
+  margin-top: 1.25rem;
+  padding: 0.45rem 1.1rem;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

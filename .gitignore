@@ -26,3 +26,7 @@ shared/skills/use-railway
 apps/ui/dist/
 apps/ui/dist.next/
 apps/ui/dist.old/
+
+# The desktop app: Cargo's build output and the schemas tauri-build writes on every build
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
