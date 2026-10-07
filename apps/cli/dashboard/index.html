@@ -69,6 +69,14 @@
                   class="pane-h"><h3 data-i18n="today.resume"></h3><span class="pane-r" data-i18n="today.resume.sub"></span></div>
                 <div class="pane-b" id="resume"></div>
               </section>
+              <section class="pane">
+                <div class="pane-h">
+                  <h3 data-i18n="sys.updates"></h3>
+                  <span
+                    class="pane-r"><button class="btn sm" data-action="update-now" data-i18n="up.now"></button></span>
+                </div>
+                <div class="pane-b sub" id="today-up"></div>
+              </section>
             </div>
           </div>
         </section>
@@ -166,6 +174,7 @@
             <a href="#system/plugins" role="tab" data-t="plugins" data-i18n="sys.plugins"></a>
             <a href="#system/updates" role="tab" data-t="updates" data-i18n="sys.updates"></a>
             <a href="#system/health" role="tab" data-t="health" data-i18n="sys.health"></a>
+            <button class="btn sm tabs-r" data-action="update-now" data-i18n="up.now"></button>
           </div>
 
           <!-- overview: what needs you, and the state of each part, before the detail -->
@@ -283,8 +292,6 @@
             <div class="panel" style="margin-top:20px">
               <div class="panel-h">
                 <h3 data-i18n="up.log"></h3>
-                <span class="r"></span>
-                <button class="btn" data-action="update-now" data-i18n="up.now"></button>
               </div>
               <div class="log" id="uplog"></div>
             </div>

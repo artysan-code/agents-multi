@@ -229,9 +229,21 @@ function renderToday() {
     new Date().toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long" }),
   );
   if (S) renderRunning();
+  if (S) renderTodayUpdates();
   loadResume();
   loadTasks().catch(() => {});
   loadDebrief();
+}
+
+/** Today's update line: what is pending, in the Updates tab's words; the button is in the pane header. */
+function renderTodayUpdates() {
+  const m = S.machine, u = S.update ?? {}, r = S.repo ?? {};
+  const pending = [
+    u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code: ${t("up.next", { v: u.cli.latest })}` : null,
+    m.desktopStaged ? `Claude Desktop: ${t("up.staged", { v: m.desktopStaged })}` : null,
+    r.isRepo && r.behind ? `claude-multi: ${t("up.self.behind", { n: r.behind })}` : null,
+  ].filter(Boolean);
+  $("#today-up").textContent = pending.length ? pending.join(" · ") : t("up.uptodate");
 }
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);

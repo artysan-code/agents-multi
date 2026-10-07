@@ -426,6 +426,10 @@ kbd {
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
+.tabs-r {
+  margin: 0 0 6px auto;
+  align-self: center;
+}
 .tabs a:hover {
   color: var(--fg);
 }
