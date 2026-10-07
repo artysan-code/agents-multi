@@ -1,6 +1,6 @@
 # Your Agents Multi configuration
 
-This folder is yours: `agents init <folder>` copied it here and linked `~/.claude-multi/config`
+This folder is yours: `agents init <folder>` copied it here and linked `~/.agents-multi/config`
 to it. Keep it in step between your machines (Syncthing, or a private git repository); the code
 stays in the Agents Multi repository.
 

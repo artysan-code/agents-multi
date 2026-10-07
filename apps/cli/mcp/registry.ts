@@ -1,5 +1,5 @@
 // mcp.ts — one MCP registry (shared/mcp/servers.json) applied to two surfaces per profile:
-//   cli      → ~/.claude-multi/<p>/.claude.json                     (Claude Code CLI, and the copy embedded in Desktop)
+//   cli      → ~/.agents-multi/<p>/.claude.json                     (Claude Code CLI, and the copy embedded in Desktop)
 //   desktop  → <profile desktop dir>/claude_desktop_config.json     (the Claude Desktop chat)
 //
 // Registry: { "profiles": [...], "servers": { name: { ...config, "_profiles": [...], "_surfaces": ["cli","desktop"] } } }

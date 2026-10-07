@@ -1,7 +1,7 @@
 // syncthing.ts — Syncthing: the runtime is not a folder, and stignore-gen keeps git repositories out.
 
 import { lstat } from "../../lib/fs.ts";
-import { RUNTIME, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "../../lib/paths.ts";
+import { RUNTIME, shortHome, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "../../lib/paths.ts";
 import { run } from "../../lib/proc.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
@@ -15,7 +15,7 @@ export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
     add(
       "syncthing",
       "warn",
-      "~/.claude-multi is still a Syncthing folder",
+      `${shortHome(RUNTIME)} is still a Syncthing folder`,
       "remove the agents-multi folder from Syncthing",
     );
   }

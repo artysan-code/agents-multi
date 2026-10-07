@@ -11,6 +11,7 @@
 #   - state goes to ~/.cache/claude-multi/sync.json, read by the statusline (cfg segment)
 #   - locking: two profiles may start at the same time
 set -uo pipefail
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/profiles.sh"
 
 REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$HOME/.local/src/claude-multi}}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi"
@@ -78,7 +79,8 @@ main() {
 # adopted into the profile patch). Requires Deno: without it, Claude starts with the file as last
 # generated. Uses its own lock and never blocks.
 regen_settings() {
-  local runtime="${AGENTS_MULTI_ROOT:-${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}}" stamp="$CACHE/settings.stamp"
+  local runtime stamp="$CACHE/settings.stamp"
+  runtime="$(cm_runtime)"
   local config="${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$runtime/config}}"
   [[ -x "$REPO/bin/agents" ]] && command -v deno >/dev/null 2>&1 || return 0
   mkdir -p "$CACHE"

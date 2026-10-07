@@ -11,6 +11,7 @@
 // written to slip past it; the token's scope stays the hard boundary.
 
 import { HIDDEN } from "../../shared/mcp/lib/mask.ts";
+import { profileOfConfigDir } from "./lib/runtime-root.ts";
 
 const dirname = (p: string) => p.replace(/\/+[^/]*\/*$/, "") || "/";
 const join = (...parts: string[]) => parts.join("/").replace(/\/{2,}/g, "/");
@@ -62,11 +63,10 @@ export const RUNNERS: Record<string, Runner> = {
 };
 
 /** Pure: the profile a command runs in — the one a server is given, else the Claude configuration
- *  directory it was started from (~/.claude-multi/<profile>), which a shell and a session both have. */
+ *  directory it was started from (~/.agents-multi/<profile>, or the old name of a session started
+ *  before the runtime moved), which a shell and a session both have. */
 export function profileFrom(env: { profile?: string; configDir?: string }, runtime: string): string | undefined {
-  if (env.profile) return env.profile;
-  const dir = env.configDir?.replace(/\/+$/, "");
-  return dir && dirname(dir) === runtime.replace(/\/+$/, "") ? dir.split("/").pop() : undefined;
+  return env.profile ?? profileOfConfigDir(env.configDir, runtime);
 }
 
 export interface RunPlan {

@@ -24,7 +24,7 @@ const NAME_RE = /^[a-z][a-z0-9_-]{1,30}$/;
 /**
  * Create or update a profile: write its manifest, point the MCP registry at it, then run
  * `install` to materialise the runtime. Every write lands in the repository, which
- * is the source of truth — nothing here touches ~/.claude-multi directly.
+ * is the source of truth — nothing here touches ~/.agents-multi directly.
  */
 export async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: string; output?: string }> {
   const name = String(b.name ?? "").trim();
@@ -57,7 +57,7 @@ export async function saveProfile(b: ProfileBody): Promise<{ error?: string; mes
   if (isNew && !(await readText(`${dir}/CLAUDE.md`))) {
     // the person's rules, all of them, as the other profiles import them
     const rules = (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) =>
-      `@~/.claude-multi/config/rules/${f}`
+      `@~/.agents-multi/config/rules/${f}`
     ).join("\n");
     await Deno.writeTextFile(
       `${dir}/CLAUDE.md`,

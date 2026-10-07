@@ -1,5 +1,5 @@
 // init.ts — `agents init <folder>`: a person's configuration, made from config.example/ and
-// linked from ~/.claude-multi/config. The repository is code; profiles, accounts, rules and
+// linked from ~/.agents-multi/config. The repository is code; profiles, accounts, rules and
 // preferences live in that folder, which its owner keeps in step between their machines.
 //
 //   agents init ~/personal/claude-multi-config --name Ann --language Italian [--id ann]
@@ -60,7 +60,7 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
     );
   } else console.log(`${ANSI.d}${shortHome(abs)} already holds a configuration: only linking it${ANSI.x}`);
 
-  // ~/.claude-multi/config → the folder; never over something else
+  // ~/.agents-multi/config → the folder; never over something else
   if (linked) console.log(`${ANSI.d}${shortHome(CONFIG)} already links to it${ANSI.x}`);
   else {
     await Deno.mkdir(CONFIG.slice(0, CONFIG.lastIndexOf("/")), { recursive: true });

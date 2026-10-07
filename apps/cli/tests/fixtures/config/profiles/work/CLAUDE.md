@@ -1,3 +1,3 @@
 # CLAUDE.md — work
 
-@~/.claude-multi/config/rules/style.md
+@~/.agents-multi/config/rules/style.md

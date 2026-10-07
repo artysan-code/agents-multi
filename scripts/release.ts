@@ -13,13 +13,14 @@
  *
  * Channels follow branches: a stable version is cut on `release`, a beta on `beta`.
  *
- * When the repository is the one the runtime runs (~/.claude-multi/shared links into it), the console
+ * When the repository is the one the runtime runs (~/.agents-multi/shared links into it), the console
  * and the tray app still hold the code from before the merge: they are restarted if it changed since
  * the last tag, as self-update does after a pull.
  */
 
 import { staleUnits } from "../apps/cli/lib/stale.ts";
 import { amEnv } from "../shared/mcp/lib/env.ts";
+import { runtimeRoot } from "../apps/cli/lib/runtime-root.ts";
 
 /** The manifests that carry the version, relative to the repository root. */
 export const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json"];
@@ -190,9 +191,9 @@ async function git(...args: string[]): Promise<string> {
   return new TextDecoder().decode(out.stdout).trim();
 }
 
-/** Whether `root` is the checkout the runtime runs: ~/.claude-multi/shared is a link into it. */
+/** Whether `root` is the checkout the runtime runs: ~/.agents-multi/shared is a link into it. */
 async function isRuntime(root: string): Promise<boolean> {
-  const runtime = amEnv("ROOT") ?? `${Deno.env.get("HOME")}/.claude-multi`;
+  const runtime = amEnv("ROOT") ?? runtimeRoot(Deno.env.get("HOME") ?? "");
   return await Deno.realPath(`${runtime}/shared`).then((p) => p === `${root}/shared`, () => false);
 }
 

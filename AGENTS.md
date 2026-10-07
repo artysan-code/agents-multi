@@ -11,12 +11,12 @@
 ## What this is
 
 A multi-profile setup for Claude Code and Claude Desktop: several accounts isolated on one machine.
-**This repository is the source of truth**; `~/.claude-multi/` is runtime materialised by
+**This repository is the source of truth**; `~/.agents-multi/` is runtime materialised by
 `agents install`. Operational detail lives in the [README](README.md).
 
 ## Rules for working here
 
-- **Never edit `~/.claude-multi/shared` by hand**: it is a symlink to this repository's `shared/`.
+- **Never edit `~/.agents-multi/shared` by hand**: it is a symlink to this repository's `shared/`.
   Change it here, commit, push. Other machines pick it up on the next Claude launch
   (`bin/lib/prelaunch.sh`).
 - **Runtime never enters the repository**: credentials, `.claude.json`, sessions, plugin cache,
@@ -24,7 +24,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   covers the backups (`*.bak*`, `*.backup`).
 - **Every new invariant goes in `apps/cli/doctor/`**, not in the README. The README describes, the
   doctor verifies. Those two have already drifted apart once.
-- **The repository is code; what is a person's is in their configuration** (`~/.claude-multi/config`,
+- **The repository is code; what is a person's is in their configuration** (`~/.agents-multi/config`,
   a link to a folder of theirs, made by `agents init` from `config.example/`): profiles,
   `accounts.json`, rules, their settings and server choices (merge patches over `shared/settings.json`
   and `shared/mcp/servers.json`), `owner.json`. Nothing personal goes back into the repository —
@@ -104,7 +104,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   If you touched `install`, run `agents install --dry-run` first. A new pure function gets a
   new test in `apps/cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the
   output, not just the filter.
-- **Changing `~/.claude-multi` while a Claude session is open moves the ground under that session.**
+- **Changing `~/.agents-multi` while a Claude session is open moves the ground under that session.**
   Run `install` and `agents mcp sync` from a terminal with Claude closed.
 - **Branches and versions.** Work lands on `dev`; `beta` and `release` only move by merge from the
   branch before them. Installations follow `release` (self-update pulls the checkout's upstream),

@@ -8,7 +8,7 @@
 The repository grew as top-level folders by history (`cli/`, `brain/`, `site/`, `lib/claude-multi-app/`,
 `shared/`). Two of them are deployed on their own (the brain service and the site it serves), one
 is installed on each machine (the CLI and its local console), and `shared/` is read at run time by
-Claude Code through the `~/.claude-multi/shared` symlink. Code used by more than one of them (the
+Claude Code through the `~/.agents-multi/shared` symlink. Code used by more than one of them (the
 task model, the owner, masking) lived under `shared/mcp/lib/` and was reached by relative paths.
 
 A self-hoster should be able to deploy one app by pointing a platform (Coolify, a compose host) at
@@ -23,7 +23,7 @@ apps/
   brain/      the brain service: Dockerfile and compose.yaml in this folder (deployed)
   site/       the public site, Astro; built into the brain's image (deployed with it)
   tray/       the PySide6 tray app, until the desktop app replaces it
-shared/       read at run time through ~/.claude-multi/shared: settings, hooks, agents, commands,
+shared/       read at run time through ~/.agents-multi/shared: settings, hooks, agents, commands,
               skills, the MCP registry, the MCP servers and their library (shared/mcp/lib)
 bin/          the bash launchers (no Deno on the launch path)
 scripts/      the gate (check.sh, ci.sh) and release.ts
@@ -36,7 +36,7 @@ docs/adr/     decisions like this one
   fs, proc, output, git, profiles, machine, processes, …). A `packages/` folder appears when a
   second consumer does, not before.
 - `shared/mcp/lib` never imports outside `shared/`: the MCP servers load it through the
-  `~/.claude-multi/shared` symlink, where the rest of the repository is not reachable by a
+  `~/.agents-multi/shared` symlink, where the rest of the repository is not reachable by a
   relative path. What the servers and the CLI both need (the vault, the task model) lives there.
 - `apps/brain/compose.yaml` builds with the repository root as context, so a platform pointed at
   `apps/brain` (base directory) still reaches the shared code it imports. A prebuilt image is published as well

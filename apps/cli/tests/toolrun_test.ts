@@ -61,6 +61,10 @@ Deno.test("profileFrom: the server's profile, else the Claude configuration dire
   assertEquals(profileFrom({ configDir: "/h/.claude-multi/personal/" }, "/h/.claude-multi"), "personal");
   assertEquals(profileFrom({ configDir: "/h/.claude" }, "/h/.claude-multi"), undefined);
   assertEquals(profileFrom({}, "/h/.claude-multi"), undefined);
+  // the runtime moved: a session started before still names the old folder, and the other way round
+  assertEquals(profileFrom({ configDir: "/h/.claude-multi/personal" }, "/h/.agents-multi"), "personal");
+  assertEquals(profileFrom({ configDir: "/h/.agents-multi/work" }, "/h/.claude-multi"), "work");
+  assertEquals(profileFrom({ configDir: "/h/other/personal" }, "/h/.agents-multi"), undefined);
 });
 
 Deno.test("hiding: the token is replaced even when split across chunks", async () => {

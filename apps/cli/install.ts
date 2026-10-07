@@ -143,7 +143,7 @@ async function removeLink(p: string, why: string) {
  *
  *  It used to take a shortcut — "all" with no owned items became a single symlink to the shared
  *  directory — and that shortcut pointed a WRITABLE runtime path straight at the repository:
- *  ~/.claude-multi/personal/skills -> ../shared/skills -> <repo>/shared/skills. Claude Code writes
+ *  ~/.agents-multi/personal/skills -> ../shared/skills -> <repo>/shared/skills. Claude Code writes
  *  into <config dir>/skills (the account skill sync lands a synced/<uuid>/ bucket there) and into
  *  agents/ and commands/, so its writes ended up inside the source of truth — untracked content in
  *  the repository, flagged broken by the doctor. And shared/ is shared by every profile: one
@@ -246,7 +246,7 @@ export async function install(dry: boolean) {
   }
 
   // 3. shared → repo
-  await ensureSymlink(`${REPO}/shared`, `${RUNTIME}/shared`, "~/.claude-multi/shared");
+  await ensureSymlink(`${REPO}/shared`, `${RUNTIME}/shared`, "~/.agents-multi/shared");
 
   // 4. profili
   for (const p of await profileNames()) {

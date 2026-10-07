@@ -22,7 +22,7 @@ export async function syncConflicts(root: string, rel = ""): Promise<string[]> {
 /** The person's configuration folder and its Syncthing conflict copies. */
 export async function configChecks(): Promise<Check[]> {
   const [c, add] = checkList();
-  // --- the person's configuration: a folder of theirs that ~/.claude-multi/config links to,
+  // --- the person's configuration: a folder of theirs that ~/.agents-multi/config links to,
   // usually kept in step between machines by Syncthing, which leaves a copy when two edits collide
   const cfgLink = await readlink(CONFIG);
   if (!(await stat(`${CONFIG}/owner.json`))) {

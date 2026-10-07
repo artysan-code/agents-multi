@@ -9,7 +9,7 @@ Deno.test("idFrom: lower case, no accents, letters and digits", async () => {
 });
 
 Deno.test("init: copies the example, sets the owner, links it; a second time only links", async () => {
-  // the link is made in a throwaway place, never at the real ~/.claude-multi/config
+  // the link is made in a throwaway place, never at the real ~/.agents-multi/config
   const root = await Deno.makeTempDir();
   const { init } = await import("../init.ts");
   const CONFIG = `${root}/runtime/config`;

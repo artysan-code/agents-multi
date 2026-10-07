@@ -2,12 +2,13 @@
 // directories and the console's port. Every path is derived from the environment once, at import.
 
 import { amEnv } from "../../../shared/mcp/lib/env.ts";
+import { runtimeRoot } from "./runtime-root.ts";
 
 export const HOME = Deno.env.get("HOME") ?? "";
 export const REPO = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
-export const RUNTIME = amEnv("ROOT") ?? `${HOME}/.claude-multi`;
+export const RUNTIME = amEnv("ROOT") ?? runtimeRoot(HOME);
 /** The person's own configuration (profiles, accounts, rules, preferences): a folder of theirs, outside
- *  the repository, that ~/.claude-multi/config links to (`agents init`). The repository is code. */
+ *  the repository, that ~/.agents-multi/config links to (`agents init`). The repository is code. */
 export const CONFIG = amEnv("CONFIG") ?? `${RUNTIME}/config`;
 export const PROFILES = `${CONFIG}/profiles`;
 export const BIN = `${HOME}/.local/bin`;

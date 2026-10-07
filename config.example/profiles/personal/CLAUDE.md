@@ -2,4 +2,4 @@
 
 ## Rules
 
-@~/.claude-multi/config/rules/working-style.md
+@~/.agents-multi/config/rules/working-style.md

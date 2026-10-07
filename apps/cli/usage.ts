@@ -1,6 +1,6 @@
 // usage.ts — token counts and list-price estimates per profile / model / project / agent.
 //
-// Source: Claude Code's JSONL transcripts (~/.claude-multi/<profile>/projects/**).
+// Source: Claude Code's JSONL transcripts (~/.agents-multi/<profile>/projects/**).
 // Every `assistant` line carries `message.usage` (input, output, cache read, cache write 5m/1h) and
 // `message.model`. Lines sharing a `message.id` are chunks of one response and are counted once.
 // Subagents live in <session>/subagents/**/agent-*.jsonl and in lines flagged `isSidechain`;
@@ -19,9 +19,10 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { amEnv } from "../../shared/mcp/lib/env.ts";
+import { runtimeRoot } from "./lib/runtime-root.ts";
 
 const HOME = Deno.env.get("HOME") ?? "";
-const RUNTIME = amEnv("ROOT") ?? `${HOME}/.claude-multi`;
+const RUNTIME = amEnv("ROOT") ?? runtimeRoot(HOME);
 const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
 export const DB_PATH = `${DATA}/usage.db`;
 

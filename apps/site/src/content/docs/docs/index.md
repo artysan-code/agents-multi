@@ -25,7 +25,7 @@ them allowed to touch the secrets.
 
 ## How it is built
 
-The repository is the source of truth; `~/.claude-multi/` is runtime materialised by
+The repository is the source of truth; `~/.agents-multi/` is runtime materialised by
 `agents install`. What is yours — profiles, accounts, rules, preferences — lives in a folder of
 yours, apart from the code, which you keep in step between machines with git or Syncthing. The code
 travels over git; the runtime directory never goes into a synced folder, because it holds credentials.

@@ -1,8 +1,9 @@
 #!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
 // agents-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
 //
-//   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.claude-multi/config
-//   install [--dry-run]     materialise ~/.claude-multi, ~/.local/bin, units and .desktop entries (idempotent)
+//   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.agents-multi/config
+//   install [--dry-run]     materialise ~/.agents-multi, ~/.local/bin, units and .desktop entries (idempotent)
+//   migrate [--dry-run] [--rollback]   move the runtime from ~/.claude-multi to ~/.agents-multi
 //   settings [--dry-run] [--quiet]   regenerate each profile's settings.json, adopting what Claude wrote into it
 //   doctor  [--probe] [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only;
 //           --probe also sends each profile one tiny request (Haiku) to check its Claude Code login
@@ -16,7 +17,7 @@
 //   vault   [...]           the MCP servers' secrets: encrypted in ~/vault/claude-multi, key in the keyring
 //   version                 the version (deno.json), also --version / -V
 //
-// Principle: the repository is the source of truth, ~/.claude-multi is runtime materialised by
+// Principle: the repository is the source of truth, ~/.agents-multi is runtime materialised by
 // `install`. Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
 // management lives here. Zero external dependencies — Deno APIs plus the built-in node:sqlite — so
 // it runs on a fresh machine with no cache to warm.
@@ -26,7 +27,11 @@ import { tasksCommand } from "./tasks.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
 import { ANSI, printDoctor } from "./lib/output.ts";
-import { CACHE, PORT, REPO } from "./lib/paths.ts";
+import { CACHE, HOME, PORT, REPO, STAMP, STATE } from "./lib/paths.ts";
+import { ensureRuntimeLink } from "./lib/runtime-root.ts";
+import { migrate } from "./migrate.ts";
+import { running } from "./lib/processes.ts";
+import { amEnv } from "../../shared/mcp/lib/env.ts";
 import { run } from "./lib/proc.ts";
 import { doctor } from "./doctor/index.ts";
 import { notifyDoctor } from "./notify.ts";
@@ -52,7 +57,28 @@ const opt = (name: string, def?: string) => {
   return i >= 0 ? rest[i + 1] : def;
 };
 
+// A machine whose runtime has not moved yet gets ~/.agents-multi as a link to ~/.claude-multi,
+// before anything here (settings, servers, install) writes a path with the new name.
+if (!amEnv("ROOT")) await ensureRuntimeLink(HOME).catch(() => false);
+
 switch (cmd) {
+  case "migrate": {
+    const procs = await running();
+    Deno.exit(
+      await migrate({
+        home: HOME,
+        dry: flag("--dry-run"),
+        rollback: flag("--rollback"),
+        force: flag("--force"),
+        backupDir: `${STATE}/migrate-${STAMP}`,
+        running: [
+          ...procs.cli.map((p) => `claude ${p.profile ?? "?"} (pid ${p.pid})`),
+          ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
+        ],
+      }),
+    );
+    break;
+  }
   case "init":
     Deno.exit(await init(rest));
     break;
@@ -234,8 +260,9 @@ switch (cmd) {
   default:
     console.log(`agents-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
 
-  init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.claude-multi/config
+  init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.agents-multi/config
   install [--dry-run]         materialise runtime, wrappers, units and desktop entries (idempotent)
+  migrate [--dry-run] [--rollback] [--force]   move the runtime from ~/.claude-multi to ~/.agents-multi (with Claude closed)
   doctor  [--probe] [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only;
           --probe: one tiny request per profile, to see that its Claude Code login works
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances

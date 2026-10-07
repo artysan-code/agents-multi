@@ -42,7 +42,7 @@ fi
 # disableAccountMcp: the generated settings.json already says it (apps/cli/settings.ts); the overlay,
 # rebuilt here at every launch, also catches a plugin the organisation synced since the last
 # regeneration. A --settings file merges into the settings, enabledPlugins included.
-CONFIG_DIR="$HOME/.claude-multi/$PROFILE"
+CONFIG_DIR="$(cm_runtime)/$PROFILE"
 OVERLAY=()
 # If the overlay cannot be written, Claude still starts, just without it.
 if cm_flag "$PROFILE" disableAccountMcp &&

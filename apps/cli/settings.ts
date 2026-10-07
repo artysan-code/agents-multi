@@ -6,7 +6,7 @@
 //                                   else replaces, null deletes the key)
 //   config/profiles/<p>/settings.json   that profile's differences, a merge patch over both
 //   the manifest                    what it implies (disableAccountMcp)
-//     → ~/.claude-multi/<p>/settings.json
+//     → ~/.agents-multi/<p>/settings.json
 //
 // Claude Code writes into its settings.json (/plugin, /config, "always allow"): those writes land in
 // the generated file. Before regenerating, the difference between the file and the last generated

@@ -8,8 +8,16 @@
 # Repository root, from this file's real location.
 cm_repo() { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd; }
 
-# The person's configuration (profiles, accounts, rules): ~/.claude-multi/config, a link to their folder.
-cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-${AGENTS_MULTI_ROOT:-${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}}/config}}"; }
+# The runtime: ~/.agents-multi, or ~/.claude-multi on a machine that has not moved it yet (agents migrate).
+cm_runtime() {
+  local root="${AGENTS_MULTI_ROOT:-${CLAUDE_MULTI_ROOT:-}}"
+  if [[ -n "$root" ]]; then printf '%s\n' "$root"
+  elif [[ -e "$HOME/.agents-multi" || ! -e "$HOME/.claude-multi" ]]; then printf '%s\n' "$HOME/.agents-multi"
+  else printf '%s\n' "$HOME/.claude-multi"; fi
+}
+
+# The person's configuration (profiles, accounts, rules): ~/.agents-multi/config, a link to their folder.
+cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$(cm_runtime)/config}}"; }
 
 # Every declared profile, one per line.
 cm_profiles() {

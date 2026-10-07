@@ -1346,7 +1346,7 @@ function openProfileForm(name) {
 
 const shortHome = (p) => {
   const h = S?.profiles
-    ? Object.values(S.profiles)[0]?.dir?.replace(/\/[^/]+$/, "").replace(/\/\.claude-multi$/, "")
+    ? Object.values(S.profiles)[0]?.dir?.replace(/\/[^/]+$/, "").replace(/\/\.agents-multi$/, "")
     : null;
   return h && p.startsWith(h) ? "~" + p.slice(h.length) : p;
 };

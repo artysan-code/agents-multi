@@ -42,8 +42,13 @@ def repo() -> Path:
 
 
 def config_dir() -> Path:
-    """The person's configuration: ~/.claude-multi/config, a link to their own folder."""
-    return Path(os.environ.get("AGENTS_MULTI_CONFIG") or os.environ.get("CLAUDE_MULTI_CONFIG") or Path.home() / ".claude-multi" / "config")
+    """The person's configuration: ~/.agents-multi/config, a link to their own folder."""
+    env = os.environ.get("AGENTS_MULTI_CONFIG") or os.environ.get("CLAUDE_MULTI_CONFIG")
+    if env:
+        return Path(env)
+    # ~/.claude-multi on a machine that has not moved its runtime yet (agents migrate)
+    now, old = Path.home() / ".agents-multi", Path.home() / ".claude-multi"
+    return (now if now.exists() or not old.exists() else old) / "config"
 
 
 def manifests() -> dict[str, dict]:
