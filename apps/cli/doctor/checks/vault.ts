@@ -127,7 +127,8 @@ export async function vaultChecks(): Promise<Check[]> {
     const needed = [
       "Bash(secret-tool:*)",
       "Bash(kwallet-query:*)",
-      // the command answers to both names (claude-multi is the alias kept from before the rename)
+      // the command answers to three names (agents, and the aliases agents-multi and claude-multi kept from before)
+      "Bash(agents vault recovery-code:*)",
       "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",
       "Read(~/vault/claude-multi/**)",
