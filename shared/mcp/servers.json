@@ -11,6 +11,7 @@
         "--allow-read=${HOME}",
         "--allow-env=HOME,ST_URL,ST_CONFIG,STGUI_APIKEY",
         "--allow-run=git",
+        "--no-config",
         "--lock=${HOME}/.claude-multi/shared/mcp/syncthing-status/deno.lock",
         "${HOME}/.claude-multi/shared/mcp/syncthing-status/server.ts"
       ]
@@ -59,6 +60,7 @@
         "--allow-read=${HOME}/vault/claude-multi,${HOME}/.claude-multi/config,${HOME}/.cache/deno",
         "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
+        "--no-config",
         "--lock=${HOME}/.claude-multi/shared/mcp/coolify/deno.lock",
         "${HOME}/.claude-multi/shared/mcp/coolify/server.ts"
       ]
@@ -74,6 +76,7 @@
         "--allow-write=${HOME}/brains/tasks",
         "--allow-env=HOME,CLAUDE_MULTI_TASKS,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_BRAIN_SCOPE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS,CLAUDE_MULTI_CONFIG,CLAUDE_MULTI_OWNER_ID,CLAUDE_MULTI_OWNER_NAME,CLAUDE_MULTI_LANGUAGE",
         "--allow-run=/usr/bin/secret-tool",
+        "--no-config",
         "--lock=${HOME}/.claude-multi/shared/mcp/tasks/deno.lock",
         "${HOME}/.claude-multi/shared/mcp/tasks/server.ts"
       ],
@@ -96,6 +99,7 @@
         "--allow-write=${HOME}/Downloads,${HOME}/downloads",
         "--allow-env=HOME,CLAUDE_MULTI_PROFILE,CLAUDE_MULTI_VAULT,CLAUDE_MULTI_ACCOUNTS",
         "--allow-run=/usr/bin/secret-tool",
+        "--no-config",
         "--lock=${HOME}/.claude-multi/shared/mcp/google/deno.lock",
         "${HOME}/.claude-multi/shared/mcp/google/server.ts"
       ],

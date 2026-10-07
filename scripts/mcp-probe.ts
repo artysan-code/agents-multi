@@ -20,7 +20,14 @@ function frame(id: number, method: string, params: unknown = {}): string {
 /** The tool names a server lists, or the reason it could not list them. */
 export async function probe(name: string, timeoutMs = 20_000): Promise<{ tools: string[] } | { error: string }> {
   const child = new Deno.Command("deno", {
-    args: ["run", "--quiet", "-A", `--lock=${ROOT}shared/mcp/${name}/deno.lock`, `${ROOT}shared/mcp/${name}/server.ts`],
+    args: [
+      "run",
+      "--quiet",
+      "-A",
+      "--no-config",
+      `--lock=${ROOT}shared/mcp/${name}/deno.lock`,
+      `${ROOT}shared/mcp/${name}/server.ts`,
+    ],
     stdin: "piped",
     stdout: "piped",
     stderr: "piped",
