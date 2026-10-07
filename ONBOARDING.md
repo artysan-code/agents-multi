@@ -34,7 +34,7 @@ Ask the person, one question at a time:
 ## 1. Requirements (Arch Linux, KDE)
 
 ```bash
-sudo pacman -S --needed git deno python pyside6 qt6-webengine jq gnupg binutils libarchive base-devel nodejs npm
+sudo pacman -S --needed git deno python jq gnupg binutils libarchive base-devel nodejs npm
 sudo npm install -g @electron/asar
 ```
 

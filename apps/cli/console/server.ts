@@ -8,7 +8,7 @@
 // theirs before the static files.
 
 import { ANSI } from "../lib/output.ts";
-import { PORT, REPO } from "../lib/paths.ts";
+import { PORT, REPO, SYNCTHING_CONFIG } from "../lib/paths.ts";
 import { codeVersion } from "../codeversion.ts";
 import { whatsNew } from "../lib/changelog.ts";
 import { summarize } from "../status.ts";
@@ -26,7 +26,7 @@ import { permissionsOp, permissionsView, type PermOp } from "../permissions.ts";
 import { catalog, catalogPage, details, inventory, type PluginOp, pluginOp } from "../plugins.ts";
 import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
-import { connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
+import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { hasCsrfHeader, isLocalHost, json, jsonText, staticFile, uiFile } from "./http.ts";
 import { broadcast, eventStream, onTopic, watchBrain, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
@@ -37,6 +37,9 @@ import { launchList, launchOne } from "./picker.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
 import { UI_DIST } from "../ui.ts";
+import { jobsFor, startSchedule } from "./schedule.ts";
+import { installation } from "../lib/mode.ts";
+import { lstat } from "../lib/fs.ts";
 
 const DASH = `${REPO}/apps/cli/dashboard`;
 
@@ -334,6 +337,16 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   void watchTree(ac.signal);
   void watchBrain(ac.signal, connectTasks() === "brain");
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
+  // app mode: the timers' jobs are the backend's (schedule.ts); dev mode keeps its systemd timers
+  if ((await installation()).mode === "app") {
+    const stop = startSchedule(jobsFor({
+      repo: REPO,
+      graphical: !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY")),
+      brain: !!brainAccount(),
+      syncthing: !!(await lstat(SYNCTHING_CONFIG)),
+    }));
+    ac.signal.addEventListener("abort", stop);
+  }
   if (opts.open) {
     try {
       new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref();

@@ -49,10 +49,10 @@ shell's.
     imports), and, as git tracks them, `apps/cli` without its tests (the old page under `/old/` is
     there), `shared/` (settings, hooks, the MCP registry and servers), `bin/` (the commands the
     console runs), `deno.json`, `deno.lock`, `CHANGELOG.md` («What's new»), plus the built
-    `apps/ui/dist`. Not bundled, for the replacement step: what only install, init and the doctor
-    read (`desktop/`, `systemd/`, `config.example/`, `pkg/`), and the git checkout itself — in the
-    package, the doctor's `repo` check fails («not a git repository») and the update actions have
-    nothing to pull.
+    `apps/ui/dist`; since the replacement step also what install, init and the doctor read
+    (`desktop/`, `config.example/`, `pkg/`), and `build.json` (the version, the commit and a digest of
+    the files: the build's name). Not bundled: `systemd/` (app mode installs no unit) and the git
+    checkout itself.
   - **Offline modules: a module cache shipped as a resource** and used read-only (`DENO_DIR`), with
     `--cached-only` so a missing module is an error, never a download, and `DENO_NO_UPDATE_CHECK`.
     The script fills it with `deno cache --frozen` of the CLI and of each MCP server with its own
@@ -177,20 +177,81 @@ shell's.
   Rust (rmcp) one at a time, and when nothing needs Deno it leaves the package. Every step is
   releasable; there is no big rewrite.
 
-**The replacement step** (after this phase, not in it) puts installed machines on this model:
+## The replacement step: installed machines run the app (done, 2026-10-07)
 
-- install, self-update and `bin/lib/prelaunch.sh` work from the app's copy and its updater, not from
-  a checkout's git; the doctor's `repo` and runtime-link checks expect the copy;
-- the app copies `shared/` into `~/.agents-multi/shared` on install and on each update (today a link);
-- `servers.json` runs our MCP servers on the package's Deno (`AGENTS_MULTI_DENO`), on its module
-  cache;
-- `claude-multi-console.service` is stopped, disabled and removed (install, and a migration for
-  machines that have it), install stops writing it, and the doctor's console check expects the app;
-  `agents serve` keeps working by hand on headless machines, where there is no app;
-- the PySide6 app (`apps/tray/`, its unit and desktop entries) is removed (the tray section below
-  lists what that changes);
-- what the package does not carry today and the CLI reads (`desktop/`, `systemd/`, `config.example/`,
-  `pkg/`) is bundled or goes with the code that reads it.
+Samuel's decisions: every machine, his included, runs the packaged app; a git checkout is for
+development only; nothing in app mode depends on systemd (macOS and Windows come with 1.x).
+
+- **Two modes, decided in one place** (`apps/cli/lib/mode.ts`, and `cm_mode` in `bin/lib/profiles.sh`
+  reading the same link): **app** when `~/.agents-multi/shared` links to `app/current/shared`,
+  **dev** when it links to a checkout's `shared` (an absolute link, as every earlier install made it).
+  A machine with no runtime yet takes the running code's: a checkout installs dev, the app's code app.
+  The installation decides, not the code running: the app's backend (the package's code) on a dev
+  machine keeps the installation's checkout, and a checkout's `bin/agents` on an app machine installs
+  into the app's copy.
+- **The copy** (`apps/cli/appcopy.ts`): the package's code is copied, as it is, into
+  `~/.agents-multi/app/<version>-<digest>/` (the digest from `build.json`, so two builds of one version
+  differ), then swapped in by renaming a new link over `app/current`; the build before becomes
+  `app/previous`, older ones go. `shared` is the link `app/current/shared`, so it never changes on an
+  update and a reader sees one build or the other. Not `shared` itself as a real folder: the launchers
+  need `bin/` and the CLI beside it, and a copy of one folder can only be swapped atomically through
+  a link. Links to skills installed by other tools (absolute links that install puts in
+  `shared/skills`) are carried into the new build. The same for deb, rpm and AppImage: the package's
+  path is never linked into the runtime, since an AppImage's mount moves at every run.
+- **Launchers** (`~/.local/bin/claude`, `claude-<profile>`, `agents`, …) point into
+  `~/.agents-multi/app/current/bin`, so an update moves them all at once. `prelaunch.sh` does git
+  work only in dev mode (or when `AGENTS_MULTI_REPO` names a checkout); it still regenerates the
+  settings. `self-update` and `sync` have nothing to pull in app mode; `self-update` settles an
+  install left waiting.
+- **No systemd in app mode.** The console's unit and the PySide6 app's unit are stopped, disabled and
+  removed in both modes; in app mode install removes every unit of ours (a link into some code's
+  `systemd/user`) and installs none. The timers' jobs — task reminders on the clock every five
+  minutes, the brain backup (10 min after start, then every 30), Claude Code and Desktop updates with
+  `doctor --notify` (10 min, then every 4 h), stignore-gen (2 min, then every 15) — are run by the
+  console's backend while it runs in app mode (`apps/cli/console/schedule.ts`), under the conditions
+  install enabled their timers on, never two at once, each with a time limit. The app starts at login
+  from an XDG autostart entry with `--tray` (`desktop/autostart.desktop.in`, written by install where
+  there is a session and the app is installed). Dev mode keeps the timers. The doctor's checks follow
+  the mode. Install leaves the systemd manager alone when its HOME is not this HOME (a sandbox, a
+  test: `machine().systemd`), and still removes this HOME's unit files.
+- **MCP servers**: in app mode the registry's `deno` servers, `launch.ts` and the guard hooks run on
+  `~/.agents-multi/bin/deno` (`denoFor` in `apps/cli/mcp/registry.ts`), a link to the package's Deno
+  (a copy out of an AppImage) refreshed by `install --app`; Claude and Desktop start servers with
+  their own PATH, which need not have one. In dev mode the `deno` on PATH, as before. The servers use
+  **the person's writable Deno cache**, never the package's read-only one (it is the backend's
+  alone), and `install --app` **seeds** it with the package's cache, copying only the files it lacks:
+  a server then starts offline on its first run and without a download inside Claude's MCP start-up
+  time, the cache stays the person's (Deno writes it, other Deno programs share it), and what is
+  copied is exactly what the servers' locks pin. `bin/agents` runs on the same Deno in app mode, so a
+  terminal needs none.
+- **Install is run by the app** (`src-tauri/src/install.rs`): a release build running the package's
+  code writes the build it carries (`$XDG_STATE_HOME/claude-multi/app-build.json`) and, when the
+  copy's build differs, runs `agents install --app` (`apps/cli/appinstall.ts`) from its package, with
+  its Deno and module cache, before its backend starts — after an update, then, before the console
+  is shown. `install --app` is idempotent: it installs the copy, links the package's programs, seeds
+  the cache, then runs install (in app mode, without printing the doctor), or — with a Claude open
+  on an existing installation — leaves it waiting (`install-pending`) for the console's «Close Claude
+  and update» or the next scheduled round. It refuses a dev installation (that is the migration's)
+  and a machine without a configuration (the first-run wizard's). Its result goes to
+  `app-install.json`, which the doctor turns into `app.install` on the health page; the app's own log
+  is `install.log`. The first-run wizard and the update flow (ADR 0004) call the same command.
+- **The doctor in app mode**: the repository's git checks give way to `app.version` (the build the
+  app carries and the copy's agree), `app.copy`, `app.install`, `runtime.shared` (the link to the
+  copy) and the launchers against the copy; the console's unit check to `console.unit` (the retired
+  units still there) and `console` (something answers on the port); the app's PySide6 dependencies to
+  the app's executable and its autostart entry. Dev mode keeps its checks and the dev-checkout note.
+- **Migration** (`agents migrate app [--from <dir>] [--dry-run] [--rollback [--to <checkout>]]`,
+  `apps/cli/migrate-app.ts`), with every Claude closed: the package's code (beside the installed
+  app's executable, or `--from`) becomes the copy, install runs in app mode (links, units, autostart),
+  the MCP servers are placed again on the stable Deno, and the checkout's sync state goes. The
+  configuration, the vault, the brain login and the profiles are not touched. The checkout is
+  recorded (`migrate-app.json` in the state folder); `--rollback` points `shared` back at it, runs
+  that checkout's own install and `mcp sync`, and removes the copy and the runtime's `bin/`. Tested
+  on a fixture runtime in a throwaway home (`apps/cli/tests/migrate_app_test.ts`).
+- **The PySide6 app** goes: `bin/claude-multi-app` runs the desktop app (the runtime's link, or the one
+  on PATH; from a checkout with `AGENTS_MULTI_REPO` set to it), `desktop/claude-multi.desktop` goes
+  (the package has its own entry) and install removes the copy it wrote; the picker's entry stays.
+  `apps/tray/` is removed, and with it the check's Python step.
 
 ## The tray, the launch flags and the profile picker (phase 5, piece 3)
 
@@ -261,17 +322,10 @@ wiring them.
 - **The app speaks to a page only by setting its location** (a view's hash, validated as lowercase
   words and slashes on both sides, `flags::is_view` and the local page); pages still cannot call it.
 
-When the app replaces the tray app, that step changes:
-
-- `systemd/user/claude-multi-app.service`: `ExecStart` runs the app with `--tray` (or the unit gives way
-  to an autostart entry the app installs), and `apps/cli/install.ts` enables whichever it is.
-- `desktop/claude-multi.desktop` and `desktop/claude-multi-launcher.desktop`: `Exec` runs the app (no
-  flag, and `--pick`); `bin/claude-multi-app` goes, or becomes a link to the app.
-- The KDE shortcut for «Hey Claude» (`~/.local/bin/claude-multi-app --hey`) points at the app.
-- The doctor's `app.deps` (pyside6, qt6-webengine) becomes the app's own (WebKitGTK; no
-  libayatana-appindicator, since the Linux tray is the app's own StatusNotifierItem), and its
-  `app.tray` fix names the app's unit; the README's section on the
-  desktop app is rewritten; `apps/tray/` is removed.
+The replacement step (above) made the app the tray app: the autostart entry runs it with `--tray`,
+the picker's entry runs `claude-multi-app --pick`, which runs the app, and the KDE shortcut for «Hey
+Claude» (`~/.local/bin/claude-multi-app --hey`) reaches it the same way and opens the Hey window. The doctor checks the app's executable and its autostart entry in place of
+pyside6 and the unit.
 
 ## Development
 
@@ -293,10 +347,11 @@ When the app replaces the tray app, that step changes:
 
 ## Consequences
 
-- `apps/tray/`, `systemd/` and the unit written by `apps/cli/install.ts` stay until the replacement
-  step (above); until then both can show the console (and a tray icon) at once, and whichever starts
-  first serves the port (the app uses a running unit; a unit started after the app fails to bind and
-  retries).
+- Until a machine is migrated (`agents migrate app`), its console unit and the app can both serve
+  the console; whichever starts first serves the port (the app uses a running unit; a unit started
+  after the app fails to bind and retries). The migration removes the unit.
+- An update replaces the copy under running Claude sessions, as a pull did in dev mode; what install
+  rewrites besides waits for them to be closed.
 - A console the app started that dies sends the window back to the local page; one it did not start
   (the unit, by hand) is not supervised, and its death leaves the console's own reconnect behaviour
   on screen.

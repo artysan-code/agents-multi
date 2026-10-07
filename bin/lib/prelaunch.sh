@@ -3,6 +3,10 @@
 # loaded and no restart is ever needed. Called by the `claude` wrapper, the per-profile launchers
 # and `claude-launch`. It never fails the launch: every error ends in exit 0.
 #
+# Only in dev mode (a checkout, cm_mode; or AGENTS_MULTI_REPO naming one): in app mode the code is the
+# desktop app's copy, updated with the app, and there is no git work at all. The settings are
+# regenerated in both.
+#
 # Rules:
 #   - the network is touched only if the last fetch is older than TTL (default 12h), with a 3s
 #     timeout; offline, it carries on with what is there
@@ -13,7 +17,7 @@
 set -uo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/profiles.sh"
 
-REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$HOME/.local/src/agents-multi}}"
+REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$(cm_repo)}}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi"
 STATE="$CACHE/sync.json"
 STAMP="$CACHE/fetch.stamp"
@@ -33,7 +37,8 @@ write_state() {
 }
 
 main() {
-  [[ -d "$REPO/.git" ]] || return 0
+  [[ -n "${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-}}" || "$(cm_mode)" == dev ]] || return 0
+  [[ -e "$REPO/.git" ]] || return 0
   mkdir -p "$CACHE"
   exec 9>"$LOCK"
   flock -n 9 || return 0
@@ -63,10 +68,6 @@ main() {
     if g pull -q --ff-only 2>/dev/null; then
       pulled=$behind; behind=0
       echo "agents-multi: config updated (+$pulled commits)" >&2
-      # the console keeps in memory the code it started with: restart it if the pull changed that code
-      if ! g diff --quiet ORIG_HEAD HEAD -- cli shared/mcp/lib 2>/dev/null; then
-        systemctl --user try-restart claude-multi-console.service >/dev/null 2>&1 || true
-      fi
     fi
   fi
 
@@ -82,7 +83,9 @@ regen_settings() {
   local runtime stamp="$CACHE/settings.stamp"
   runtime="$(cm_runtime)"
   local config="${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$runtime/config}}"
-  [[ -x "$REPO/bin/agents" ]] && command -v deno >/dev/null 2>&1 || return 0
+  # bin/agents runs on the deno on PATH, or in app mode on the package's (the runtime's bin/deno)
+  [[ -x "$REPO/bin/agents" ]] || return 0
+  command -v deno >/dev/null 2>&1 || [[ -x "$runtime/bin/deno" ]] || return 0
   mkdir -p "$CACHE"
   exec 8>"$CACHE/settings.lock"
   flock -n 8 || return 0

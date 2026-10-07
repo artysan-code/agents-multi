@@ -2,8 +2,10 @@
 // agents-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
 //
 //   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.agents-multi/config
-//   install [--dry-run]     materialise ~/.agents-multi, ~/.local/bin, units and .desktop entries (idempotent)
-//   migrate [--dry-run] [--rollback]   move the runtime from ~/.claude-multi to ~/.agents-multi
+//   install [--app] [--dry-run]   materialise ~/.agents-multi, ~/.local/bin, units and .desktop entries (idempotent);
+//                           --app: from the desktop app's code, installed first as the runtime's copy
+//   migrate [app] [--dry-run] [--rollback]   move the runtime from ~/.claude-multi to ~/.agents-multi;
+//                           app: move a checkout installation to the desktop app
 //   settings [--dry-run] [--quiet]   regenerate each profile's settings.json, adopting what Claude wrote into it
 //   doctor  [--probe] [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only;
 //           --probe also sends each profile one tiny request (Haiku) to check its Claude Code login
@@ -18,7 +20,7 @@
 //   version                 the version (deno.json), also --version / -V
 //
 // Principle: the repository is the source of truth, ~/.agents-multi is runtime materialised by
-// `install`. Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
+// `install` — from the desktop app's copy of the code, or from a checkout (lib/mode.ts). Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
 // management lives here. Zero external dependencies — Deno APIs plus the built-in node:sqlite — so
 // it runs on a fresh machine with no cache to warm.
 
@@ -30,6 +32,9 @@ import { ANSI, printDoctor } from "./lib/output.ts";
 import { CACHE, HOME, PORT, REPO, STAMP, STATE } from "./lib/paths.ts";
 import { ensureRuntimeLink } from "./lib/runtime-root.ts";
 import { migrate } from "./migrate.ts";
+import { migrateApp } from "./migrate-app.ts";
+import { installApp } from "./appinstall.ts";
+import { installation } from "./lib/mode.ts";
 import { running } from "./lib/processes.ts";
 import { amEnv } from "../../shared/mcp/lib/env.ts";
 import { run } from "./lib/proc.ts";
@@ -64,6 +69,21 @@ if (!amEnv("ROOT")) await ensureRuntimeLink(HOME).catch(() => false);
 switch (cmd) {
   case "migrate": {
     const procs = await running();
+    if (rest[0] === "app") {
+      Deno.exit(
+        await migrateApp({
+          dry: flag("--dry-run"),
+          rollback: flag("--rollback"),
+          force: flag("--force"),
+          from: opt("--from"),
+          to: opt("--to"),
+          running: [
+            ...procs.cli.map((p) => `claude ${p.profile ?? "?"} (pid ${p.pid})`),
+            ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
+          ],
+        }),
+      );
+    }
     const code = await migrate({
       home: HOME,
       dry: flag("--dry-run"),
@@ -93,7 +113,7 @@ switch (cmd) {
     Deno.exit(await init(rest));
     break;
   case "install":
-    Deno.exit(await install(flag("--dry-run")));
+    Deno.exit(flag("--app") ? await installApp({ dry: flag("--dry-run") }) : await install(flag("--dry-run")));
     break;
   case "settings": {
     const dry = flag("--dry-run");
@@ -134,6 +154,10 @@ switch (cmd) {
     break;
   }
   case "sync": {
+    if ((await installation()).mode === "app") {
+      console.log("the code is the desktop app's copy: it is updated with the app, there is no repository to align");
+      break;
+    }
     const env: Record<string, string> = flag("--fetch")
       ? { AGENTS_MULTI_FETCH_TTL: "0", AGENTS_MULTI_FETCH_TIMEOUT: "15" }
       : {};
@@ -271,8 +295,11 @@ switch (cmd) {
     console.log(`agents-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
 
   init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.agents-multi/config
-  install [--dry-run]         materialise runtime, wrappers, units and desktop entries (idempotent)
+  install [--app] [--dry-run] materialise runtime, wrappers, units and desktop entries (idempotent);
+          --app: from the desktop app's code, which becomes the runtime's copy (what the app runs)
   migrate [--dry-run] [--rollback] [--force]   move the runtime from ~/.claude-multi to ~/.agents-multi (with Claude closed)
+  migrate app [--from <package code>] [--dry-run] [--rollback [--to <checkout>]] [--force]
+          move this machine from a checkout to the desktop app's code (with Claude closed)
   doctor  [--probe] [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only;
           --probe: one tiny request per profile, to see that its Claude Code login works
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
@@ -294,7 +321,7 @@ switch (cmd) {
 
   agents-multi and claude-multi are other names for the same command (the second is the project's name before Agents Multi).
 
-  The console runs as a systemd user unit after install, so it is always there:
-  systemctl --user status claude-multi-console.service`);
+  The desktop app serves the console and starts at login in the tray; without it (a headless box),
+  agents serve runs it by hand.`);
     if (!["help", "--help", "-h"].includes(cmd)) Deno.exit(2);
 }

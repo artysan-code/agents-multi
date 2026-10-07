@@ -14,8 +14,9 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
   // --- binaries and wrappers: links into the installed repository, which need not be the running code
   const repo = ctx.installed;
   const claudeLink = await readlink(`${BIN}/claude`);
-  if (claudeLink === `${repo}/bin/claude`) add("bin.claude", "ok", "~/.local/bin/claude → the repository's launcher");
-  else if (claudeLink?.includes("claude/versions/")) {
+  if (claudeLink === `${repo}/bin/claude`) {
+    add("bin.claude", "ok", `~/.local/bin/claude → the ${ctx.mode === "app" ? "app's" : "repository's"} launcher`);
+  } else if (claudeLink?.includes("claude/versions/")) {
     add(
       "bin.claude",
       "fail",

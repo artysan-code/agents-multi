@@ -16,15 +16,31 @@ credentials.
 The repository is code; what is yours — profiles, accounts, rules, preferences — lives in a folder
 of yours that `~/.agents-multi/config` links to (see [Your configuration](#your-configuration)).
 
+Every machine runs the **Agents Multi** desktop app (a deb, an rpm, an AppImage): it carries the code,
+the console and the Deno that runs both, and installs the code into your runtime itself. With your
+configuration in place (`agents init`, below), start the app once: it copies its code to
+`~/.agents-multi/app/` and runs `agents install --app`, which materialises everything else, and from
+then on it starts in the tray at login. A git checkout is for development only (dev mode, below).
+
 ```bash
-git clone <the repository> ~/.local/src/agents-multi
-~/.local/src/agents-multi/bin/agents init ~/agents-multi-config --name Ann --language Italian
-~/.local/src/agents-multi/bin/agents install
+agents init ~/agents-multi-config --name Ann --language Italian   # from the app's code: ~/.agents-multi/app/current/bin/agents
 ```
 
-Over SSH, the repository's host name must reach the server directly, not through a proxy that does
-not forward the SSH port: otherwise `git fetch` hangs until it times out, and so does the self-update
-(see [ONBOARDING.md](ONBOARDING.md#2-the-repository)).
+Two modes, decided by what `~/.agents-multi/shared` links to (`apps/cli/lib/mode.ts`):
+
+- **app** — `shared` → `app/current/shared`, the copy of the build in use (`app/<version>-<digest>`,
+  the one before kept as `app/previous`). The launchers in `~/.local/bin`, the MCP servers (on
+  `~/.agents-multi/bin/deno`, a link to the package's Deno) and the jobs on a schedule (run by the
+  app's backend, no systemd unit) all go through it. Updated with the app; no git anywhere.
+- **dev** — `shared` → a checkout, as `bin/agents install` from that checkout makes it: the launch
+  pulls (`prelaunch.sh`), the systemd timers run the jobs, and `claude-multi-app` runs the app on the
+  checkout's code (`AGENTS_MULTI_REPO`).
+
+A machine installed from a checkout moves to the app with `agents migrate app` (below).
+
+Over SSH (dev mode), the repository's host name must reach the server directly, not through a proxy
+that does not forward the SSH port: otherwise `git fetch` hangs until it times out, and so does the
+self-update (see [ONBOARDING.md](ONBOARDING.md#2-the-repository)).
 
 The project was called claude-multi: `claude-multi` still works as another name for the command, and
 the folders, services and settings keep that name until they move with a migration of their own.
@@ -40,14 +56,26 @@ claude              # the default profile → /login
 agents doctor # every invariant, each with a fix
 ```
 
-The console is enabled as a systemd user unit by `install`, so it is already running on
-<http://127.0.0.1:7331>. On a desktop, the **Agents Multi** app starts in the tray at login and
-opens it in a window of its own.
+The console is the app's: its backend serves it on <http://127.0.0.1:7331> while the app runs (it
+starts in the tray at login), and the app shows it in a window of its own. On a headless box,
+`agents serve` runs it by hand.
 
-Requirements: `deno`, `git`, and `pnpm` for the console's new interface. For Claude Desktop also `gnupg`, `binutils` (`ar`), `libarchive`
+Requirements: the app's package (it brings Deno and WebKitGTK as its dependency). In dev mode also
+`deno`, `git`, and `pnpm` for the console's interface. For Claude Desktop also `gnupg`, `binutils` (`ar`), `libarchive`
 (`bsdtar`) and `@electron/asar` (the profile variants), plus `base-devel` once, for the shims
-package. For the desktop app `pyside6` **and** `qt6-webengine` —
-the second is only an optional dependency of the first on Arch, so install it explicitly. OAuth credentials are per-machine and never leave it.
+package. OAuth credentials are per-machine and never leave it.
+
+### Moving a machine from a checkout to the app
+
+`agents migrate app` (with every Claude closed, from a terminal, after installing the app's package):
+the package's code becomes the runtime's copy, `shared`, the launchers and the stignore-gen template
+point into it, the systemd units go (the app runs their jobs) together with the old console and tray
+units, the app's autostart entry is written, and the MCP servers are placed again on the package's
+Deno. Your configuration, the vault, the brain login, the profiles and their sessions do not move.
+`--dry-run` shows the plan; `--from <dir>` names the package's code when it is not beside the
+installed app (an AppImage: its mount's `usr/lib/net.local.agents-multi/repo`). The checkout is
+recorded and left as it is: `agents migrate app --rollback` points the runtime back at it and runs
+its own `install` and `mcp sync`.
 
 ### First run
 
@@ -55,7 +83,8 @@ Someone new is best guided by a Claude Code session following [ONBOARDING.md](ON
 
 1. `agents init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
    `profiles/` (one folder per Claude account).
-2. `agents install` — the runtime, the launchers, the console and the tray app.
+2. Start the app — it installs its code and runs `agents install --app`: the runtime, the launchers
+   and its own autostart entry.
 3. `agents vault init` — the secret vault; keep the recovery code somewhere safe. Then each
    account's secret: `agents vault set <service> <account>`, or the console's Connections.
 4. `claude` (and each profile's command) — sign in with `/login`.
@@ -185,25 +214,26 @@ closed, then run `agents install` and `agents doctor`.
 
 ## Commands
 
-| Command                                                         | What it does                                                                                                                                                 |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `claude`                                                        | Claude Code on the default profile                                                                                                                           |
-| `claude-work`, `claude-client`                                  | Claude Code on that profile (each profile declares its own `command`)                                                                                        |
-| `agents install [--dry-run]`                                    | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent                                                              |
-| `agents settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                       |
-| `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears          |
-| `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
-| `agents sync [--fetch]`                                         | align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                        |
-| `agents mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                 |
-| `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                   |
-| `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                       |
-| `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally already running as a unit)                                                                                  |
-| `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                       |
-| `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                         |
-| `agents tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                               |
-| `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                           |
-| `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                   |
-| `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app: console window, tray icon, Hey Claude, the profile picker (below)                                                                           |
+| Command                                                         | What it does                                                                                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude`                                                        | Claude Code on the default profile                                                                                                                            |
+| `claude-work`, `claude-client`                                  | Claude Code on that profile (each profile declares its own `command`)                                                                                         |
+| `agents install [--app] [--dry-run]`                            | materialise runtime, wrappers, desktop entries (and in dev mode the systemd units) from the manifests. Idempotent. `--app`: from the app's code, copied first |
+| `agents settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                        |
+| `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears           |
+| `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console  |
+| `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                               |
+| `agents migrate app [--dry-run] [--rollback]`                   | move a checkout installation to the app's code, or back (above)                                                                                               |
+| `agents mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                  |
+| `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                    |
+| `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                        |
+| `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                         |
+| `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                        |
+| `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                          |
+| `agents tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                                |
+| `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                            |
+| `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                    |
+| `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                |
 
 `claude update` inside a wrapper is redirected to `agents update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -212,17 +242,17 @@ would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 
 ## The console
 
-`agents install` enables `claude-multi-console.service`, so the console is always at
-<http://127.0.0.1:7331>. It is not tied to a graphical session — over an ssh tunnel it works
-exactly the same, which is the point on a headless box.
+The desktop app's backend serves the console at <http://127.0.0.1:7331> while the app runs. A
+browser or an ssh tunnel reaches it the same; on a headless box `agents serve` runs it by hand.
 
 Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
 asks the brain every half minute whether its tasks or pages moved, and the page redraws the view you
 are actually looking at. The page is `apps/ui/` (Preact and TypeScript, built with Vite and pnpm); its
 libraries are bundled into the build and nothing is loaded from elsewhere, so it renders on a machine
-that has never been online. The build is made on the machine and never committed: `install` and every
-update that changed `apps/ui` run `agents ui build`, a failed build keeps the previous one, and
-the doctor says when it is missing or behind. It needs pnpm.
+that has never been online. The app's package carries its build. In dev mode the build is made on
+the machine and never committed: `install` and every update that changed `apps/ui` run
+`agents ui build`, a failed build keeps the previous one, and the doctor says when it is missing or
+behind. It needs pnpm.
 
 The previous page (`apps/cli/dashboard/`, HTML and vanilla JS with no build step) stays at
 <http://127.0.0.1:7331/old/> for one release, as a fallback, and goes in the next.
@@ -267,10 +297,12 @@ rolling back are actions like the others: nothing in them needs root.
 
 ## The desktop app
 
-`claude-multi-app` (`apps/tray/`, PySide6) makes the console an application. It is a
-**view**, like everything that is not the CLI: its state is the console's, its actions are the
-commands a terminal would run. The console server stays its own unit, so a browser or an ssh
-tunnel still reaches it.
+The **Agents Multi** app (`apps/desktop/`, Tauri; `claude-multi-app` runs it) makes the console an
+application ([ADR 0003](docs/adr/0003-desktop-app.md)). It is a **view**, like everything that is
+not the CLI: its state is the console's, its actions are the commands a terminal would run. It also
+runs the console's backend, and while it runs that backend runs the jobs the systemd timers run in
+dev mode: task reminders every five minutes, the brain backup, Claude Code and Desktop updates with
+`doctor --notify`, stignore-gen (`apps/cli/console/schedule.ts`).
 
 - **Window** — the console in a window with its own icon and menu entry (`agents-multi`). Links
   that leave it open in the system browser. With the server down it says so and offers to start
@@ -283,9 +315,13 @@ tunnel still reaches it.
   console's `state` events and when the menu opens, never on a timer. The menu opens the console,
   Hey Claude, a profile's Claude Desktop, the Updates tab and the Health view. A Claude Desktop version waiting
   to switch is listed there, not coloured: it needs nothing from you.
-- **At login** — `claude-multi-app.service` (graphical session only, enabled by `install`) runs
-  `--tray`. One instance per session: a second start hands its request to the first over
-  `$XDG_RUNTIME_DIR/claude-multi-app.sock` and exits.
+- **At login** — the XDG autostart entry `~/.config/autostart/agents-multi.desktop`, written by
+  `install`, runs `claude-multi-app --tray`. One instance per session: a second start hands its
+  request to the first and exits.
+- **Its code** — when the app starts with a build its copy in the runtime is not (after an update),
+  it runs `agents install --app` before its backend starts: the new copy is swapped in, and the rest
+  of install runs then, or — with a Claude open — waits for the console's «Close Claude and update».
+  The result is on the Health page (`app.install`, `app.version`).
 
 - **Claude in the menu** — one entry, _Claude_, for every profile: it runs `claude-multi-app --pick`,
   a small window that lists the profiles (with the account each is signed in to, and which Desktop
@@ -305,7 +341,7 @@ tunnel still reaches it.
 
 Without a system tray (GNOME needs the AppIndicator extension) the windows still work and the app
 quits with the last one; `--tray` waits a minute for a tray to appear, then exits cleanly and the
-doctor says why. After pulling new app code: `systemctl --user restart claude-multi-app`.
+doctor says why.
 
 ---
 
@@ -507,15 +543,15 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 
 ```
 bin/            wrappers and scripts: claude, agents-multi, claude-multi-app, claude-launch, claude-update, …
-bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
+bin/lib/        prelaunch.sh — repository sync before every launch, dev mode only (pure bash, never blocking)
 apps/cli/            the agents-multi CLI (Deno, zero dependencies)
 apps/ui/             the console page (Preact + TSX, Vite, pnpm)
 apps/cli/dashboard/  the previous console page, under /old for one release; its style.css and fonts are the UI's too
 shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
 config.example/ the configuration `agents init` starts from
-lib/            the desktop app: tray and console window (PySide6)
-systemd/user/   console and app units, update-check and tasks timers, optional local inference units
-desktop/        .desktop entries and icons
+apps/desktop/   the desktop app (Tauri): console window, tray, picker, the backend and the post-update install
+systemd/user/   dev mode's timers: update check, tasks, brain backup, stignore-gen
+desktop/        .desktop entries, the autostart entry and icons
 pkg/            the pinned Anthropic apt key, and claude-desktop-shims (the system half of Claude Desktop)
 ```
 
@@ -523,7 +559,9 @@ Runtime, generated by `install`:
 
 ```
 ~/.agents-multi/
-  shared         → <repo>/shared
+  shared         → app/current/shared (app mode) or <checkout>/shared (dev mode)
+  app/           the app's code: <version>-<digest>/ per build, current and previous links (app mode)
+  bin/           deno and agents-multi-desktop: links to the package's (copies out of an AppImage)
   config         → your configuration folder
   marketplaces/  plugin marketplace clones (per-machine, re-clonable)
   <profile>/     CLAUDE.md, hooks, skills, agents, commands → shared or your configuration
@@ -534,6 +572,8 @@ Runtime, generated by `install`:
 ---
 
 ## How it travels between machines
+
+In app mode the code travels with the app's updates; what follows is dev mode's.
 
 - One machine is where you work and commit. **Pushing is never automatic.**
 - On every launch, `bin/lib/prelaunch.sh` fetches if the last fetch is over 12 h old (3 s timeout),
@@ -550,8 +590,9 @@ Runtime, generated by `install`:
 Everything updates itself, in the background, with no approval and no window. `DISABLE_AUTOUPDATER=1`
 stays set everywhere: the updates are driven from here, not by each binary on its own.
 
-- **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) runs
-  `claude-update --auto` (Code, Desktop, then Agents Multi), then `doctor --notify`. Nice and idle I/O: it should not be felt.
+- **Schedule**: 10 min after login, then every 4 h, `claude-update --auto` (Code, Desktop, then
+  Agents Multi), then `doctor --notify` — run by the app's backend in app mode, by
+  `claude-update-check.timer` in dev mode (nice and idle I/O: it should not be felt).
 - **Claude Code** is installed as soon as a new version is out. The native updater downloads into
   `~/.local/share/claude/versions/X.Y.Z`; `claude-update` re-points `claude-bin`, restores the
   wrapper, prunes old versions (keeping N-1) and fixes the `claude-cli://` handler. Open sessions
@@ -562,8 +603,9 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   each profile's variant, install the icons) only when no Claude Desktop runs: replacing files
   under a running Electron app crashes it. `claude-launch` applies a staged version right before it
   starts the app, so in practice an update lands at the next launch. The previous version is kept.
-- **Agents Multi** updates itself in the same round, last (`agents self-update`,
-  `apps/cli/selfupdate.ts`): a fetch, then a pull only fast-forward and only on a clean tree that follows
+- **Agents Multi** in app mode is the app: it updates with its package, and installs its code when
+  it starts on a new build (above); `self-update` only runs an install left waiting. In dev mode it
+  updates itself in the same round, last (`agents self-update`, `apps/cli/selfupdate.ts`): a fetch, then a pull only fast-forward and only on a clean tree that follows
   a remote branch (local changes or diverged history: nothing is touched, the log says why, once).
   After a pull the console and the tray app restart if their code changed, the generated settings
   are rebuilt, and `install` runs when it has work to do — only with every Claude closed; otherwise
@@ -586,7 +628,7 @@ stays set everywhere: the updates are driven from here, not by each binary on it
 ## Development
 
 ```bash
-deno task check   # type-check the CLI and tests, bash -n every script, py_compile the app
+deno task check   # type-check the CLI and tests, bash -n every script, the app's Rust
 deno task test    # usage (rates, dedupe, turns), notifications,
                   # mcp, manifests, changelog, prelaunch against real git repositories
 ```
@@ -604,7 +646,8 @@ deno task test    # usage (rates, dedupe, turns), notifications,
 ## Don't
 
 - Write into `~/.claude/` (it is a read-only stub) or change its permissions.
-- Edit `~/.agents-multi/shared` outside the repository — it is a symlink into it.
+- Edit `~/.agents-multi/shared` — it is the app's copy (replaced at the next update) or a link into
+  a checkout.
 - Run `claude update` or `claude-bin update` by hand; use `agents update`.
 - Put `~/.agents-multi` into a file-sync folder: it holds credentials, and backups containing
   tokens have leaked that way before.

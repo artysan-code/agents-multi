@@ -22,14 +22,13 @@ export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/
 export const PORT = Number(amEnv("PORT") ?? 7331);
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
 export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
-/** The template's place in a repository: the doctor finds it in the installed one (DoctorCtx.installed). */
+/** The template's place in the code: install and the doctor find it in the installed one (lib/mode.ts). */
 export const STIGNORE_GEN_TEMPLATE_IN_REPO = "shared/tools/stignore-gen/git-template";
-export const STIGNORE_GEN_TEMPLATE = `${REPO}/${STIGNORE_GEN_TEMPLATE_IN_REPO}`;
 export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (skills CLI) install skills
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
 
 /** Reserved entries under RUNTIME that are not profiles. */
-export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "config"]);
+export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "config", "app", "bin"]);
 
 export function expandHome(p: string) {
   return p.startsWith("~/") ? `${HOME}/${p.slice(2)}` : p;
