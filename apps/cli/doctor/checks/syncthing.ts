@@ -1,7 +1,7 @@
 // syncthing.ts — Syncthing: the runtime is not a folder, and stignore-gen keeps git repositories out.
 
 import { lstat } from "../../lib/fs.ts";
-import { RUNTIME, shortHome, STIGNORE_GEN_TEMPLATE, SYNCTHING_CONFIG } from "../../lib/paths.ts";
+import { RUNTIME, shortHome, STIGNORE_GEN_TEMPLATE_IN_REPO, SYNCTHING_CONFIG } from "../../lib/paths.ts";
 import { run } from "../../lib/proc.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
@@ -24,7 +24,7 @@ export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
   if (await lstat(SYNCTHING_CONFIG)) {
     const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
     const timer = m.systemd ? (await run("systemctl", ["--user", "is-enabled", "stignore-gen.timer"])).out : "enabled";
-    if (tpl !== STIGNORE_GEN_TEMPLATE) {
+    if (tpl !== `${ctx.installed}/${STIGNORE_GEN_TEMPLATE_IN_REPO}`) {
       add(
         "stignore-gen",
         "warn",

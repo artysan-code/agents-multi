@@ -9,30 +9,31 @@ import { REPO } from "./lib/paths.ts";
 const ROOTS = ["apps/cli", "shared/mcp/lib", "apps/ui/dist"];
 const SKIP = /\/(tests|node_modules)(\/|$)/;
 
-async function files(dir: string, out: string[]) {
+async function files(root: string, dir: string, out: string[]) {
   let entries: Deno.DirEntry[];
   try {
-    entries = [...Deno.readDirSync(`${REPO}/${dir}`)];
+    entries = [...Deno.readDirSync(`${root}/${dir}`)];
   } catch {
     return;
   }
   for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const rel = `${dir}/${e.name}`;
     if (SKIP.test(`/${rel}`)) continue;
-    if (e.isDirectory) await files(rel, out);
+    if (e.isDirectory) await files(root, rel, out);
     else if (e.isFile && /\.(ts|js|css|html|svg)$/.test(e.name)) out.push(rel);
   }
 }
 
-/** The fingerprint of the code as it is on disk now: twelve hex characters. */
-export async function codeVersion(): Promise<string> {
+/** The fingerprint of the code as it is on disk now (the running code's, unless `root` names another
+ *  checkout): twelve hex characters. */
+export async function codeVersion(root = REPO): Promise<string> {
   const list: string[] = [];
-  for (const r of ROOTS) await files(r, list);
+  for (const r of ROOTS) await files(root, r, list);
   const enc = new TextEncoder();
   const parts: Uint8Array[] = [];
   for (const f of list) {
     parts.push(enc.encode(`${f}\0`));
-    parts.push(await Deno.readFile(`${REPO}/${f}`).catch(() => new Uint8Array()));
+    parts.push(await Deno.readFile(`${root}/${f}`).catch(() => new Uint8Array()));
     parts.push(enc.encode("\0"));
   }
   const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));

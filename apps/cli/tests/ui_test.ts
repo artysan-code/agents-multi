@@ -9,6 +9,12 @@ Deno.test("uiState: no build, a build of another tree, a build of this one", () 
   assertEquals(uiState("abc\n", "abc"), "built");
 });
 
+Deno.test("uiState: a page built without the stamp is there, from unknown code", () => {
+  assertEquals(uiState(null, "abc", true), "unstamped");
+  assertEquals(uiState(null, "abc", false), "missing");
+  assertEquals(uiState("abc\n", "abc", true), "built");
+});
+
 Deno.test("uiFile: the page, its hashed assets, nothing else; a missing build says how to build", async () => {
   const dist = await Deno.makeTempDir();
   try {

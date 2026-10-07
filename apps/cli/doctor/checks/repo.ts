@@ -11,10 +11,27 @@ export function writtenHomes(text: string): string[] {
   return [...new Set(text.match(/\/home\/[a-z_][\w.-]*/g) ?? [])];
 }
 
+/**
+ * Pure: the note that the running code is not the installed repository (`DoctorCtx.installed`) — a
+ * development checkout, or the desktop app's copy — or null when it is. Said once here, so the checks
+ * of the installation's links compare them with the installed repository and stay quiet.
+ */
+export function runningFrom(repo: string, installed: string, isRepo: boolean): Check | null {
+  if (repo === installed) return null;
+  const what = isRepo ? "a development checkout" : "the desktop app's copy";
+  return {
+    id: "repo.running",
+    status: "ok",
+    msg: `running from ${what}: ${shortHome(repo)} (installed: ${shortHome(installed)})`,
+  };
+}
+
 /** Repository: git state, hooks, and home folders written out in shared files. */
 export async function repoChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { repo } = ctx;
+  const note = runningFrom(REPO, ctx.installed, repo.isRepo);
+  if (note) add(note.id, note.status, note.msg);
   // --- repository
   if (!repo.isRepo) add("repo", "fail", `${REPO} is not a git repository`, `git clone <your fork> ${shortHome(REPO)}`);
   else {

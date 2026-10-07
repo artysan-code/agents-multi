@@ -1,7 +1,7 @@
 // console.ts — The console systemd unit, whether it runs the current code, and its new interface's build.
 
 import { codeVersion } from "../../codeversion.ts";
-import { PORT } from "../../lib/paths.ts";
+import { PORT, REPO } from "../../lib/paths.ts";
 import { has, run } from "../../lib/proc.ts";
 import { uiStatus } from "../../ui.ts";
 import { type Check } from "../../lib/output.ts";
@@ -31,8 +31,11 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
         .then(async (r): Promise<{ code?: string }> => r.ok ? await r.json() : (await r.body?.cancel(), {})).catch(() =>
           null
         );
-      const now = await codeVersion();
-      if (running && running.code !== now) {
+      // the unit runs the installed repository; from a development checkout the console on the port
+      // can be either, so either one's current code will do
+      const now = [await codeVersion()];
+      if (ctx.installed !== REPO) now.push(await codeVersion(ctx.installed));
+      if (running && !now.includes(running.code ?? "")) {
         add(
           "console.code",
           "warn",
@@ -42,9 +45,19 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
       } else add("console.unit", "ok", `console on http://127.0.0.1:${PORT} (systemd user unit)`);
     }
   }
-  // --- the interface: built from the tree the checkout is on; without a build there is no console page
+  // --- the interface: built from the tree the checkout is on; without a build there is no console page.
+  // A build without the stamp (`pnpm build` in apps/ui, as a developer does) serves the page all the
+  // same, but which code it was built from is unknown: fine in a development checkout, a warning in the
+  // installed one.
   const ui = await uiStatus();
-  if (ui !== "built") {
+  if (ui === "unstamped") {
+    add(
+      "console.ui",
+      ctx.installed === REPO ? "warn" : "ok",
+      "the console's interface is built, outside `agents ui build`: which code it was built from is unknown",
+      "agents ui build",
+    );
+  } else if (ui !== "built") {
     const pnpm = await has("pnpm");
     add(
       "console.ui",

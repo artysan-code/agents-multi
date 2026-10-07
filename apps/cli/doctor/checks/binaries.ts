@@ -1,7 +1,7 @@
 // binaries.ts — Launchers and wrappers in ~/.local/bin, jq, and the Claude Code binary.
 
 import { listDir, lstat, readlink } from "../../lib/fs.ts";
-import { BIN, REPO } from "../../lib/paths.ts";
+import { BIN } from "../../lib/paths.ts";
 import { has } from "../../lib/proc.ts";
 import { launchers } from "../../lib/profiles.ts";
 import { type Check } from "../../lib/output.ts";
@@ -11,9 +11,10 @@ import { checkList, type DoctorCtx } from "../context.ts";
 export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { m } = ctx;
-  // --- binaries and wrappers
+  // --- binaries and wrappers: links into the installed repository, which need not be the running code
+  const repo = ctx.installed;
   const claudeLink = await readlink(`${BIN}/claude`);
-  if (claudeLink === `${REPO}/bin/claude`) add("bin.claude", "ok", "~/.local/bin/claude → the repository's launcher");
+  if (claudeLink === `${repo}/bin/claude`) add("bin.claude", "ok", "~/.local/bin/claude → the repository's launcher");
   else if (claudeLink?.includes("claude/versions/")) {
     add(
       "bin.claude",
@@ -29,16 +30,16 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
     );}
   // Every wrapper the repository ships, plus one launcher per profile pointed at bin/claude —
   // both lists come from what is there, so a new profile or script needs no edit here.
-  for (const b of await listDir(`${REPO}/bin`)) {
+  for (const b of await listDir(`${repo}/bin`)) {
     if (b === "lib" || b === "claude") continue;
-    if ((await readlink(`${BIN}/${b}`)) !== `${REPO}/bin/${b}`) {
+    if ((await readlink(`${BIN}/${b}`)) !== `${repo}/bin/${b}`) {
       add(`bin.${b}`, "fail", `~/.local/bin/${b} does not point at the repository`, "agents install");
     }
   }
   const missingLaunchers = [];
   for (const l of await launchers()) {
     if (l.command === "claude") continue; // covered by bin.claude above
-    if ((await readlink(`${BIN}/${l.command}`)) !== `${REPO}/bin/claude`) {
+    if ((await readlink(`${BIN}/${l.command}`)) !== `${repo}/bin/claude`) {
       missingLaunchers.push(`${l.command} (${l.profile})`);
     }
   }

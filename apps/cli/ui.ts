@@ -9,11 +9,12 @@ export const UI = `${REPO}/apps/ui`;
 export const UI_DIST = `${UI}/dist`;
 const STAMP = ".source";
 
-export type UiState = "built" | "stale" | "missing";
+/** `unstamped`: a page is there, built without `agents ui build` (its stamp), so from code unknown. */
+export type UiState = "built" | "stale" | "unstamped" | "missing";
 
-/** Pure: a build against the tree of apps/ui it should match. */
-export function uiState(stamp: string | null, tree: string): UiState {
-  if (stamp === null) return "missing";
+/** Pure: a build (its stamp, and whether it has the page) against the tree of apps/ui it should match. */
+export function uiState(stamp: string | null, tree: string, page = stamp !== null): UiState {
+  if (stamp === null) return page ? "unstamped" : "missing";
   return stamp.trim() === tree ? "built" : "stale";
 }
 
@@ -24,7 +25,8 @@ async function uiTree(): Promise<string> {
 
 export async function uiStatus(): Promise<UiState> {
   const stamp = await Deno.readTextFile(`${UI_DIST}/${STAMP}`).catch(() => null);
-  return uiState(stamp, await uiTree());
+  const page = await Deno.stat(`${UI_DIST}/index.html`).then((s) => s.isFile, () => false);
+  return uiState(stamp, await uiTree(), page);
 }
 
 /** Builds the interface into dist.next, then swaps it in. `say` gets one line per step. */

@@ -5,7 +5,7 @@ import { HOME, REPO, RUNTIME, shortHome } from "../../lib/paths.ts";
 import { LEGACY_RUNTIME_NAME, RUNTIME_NAME } from "../../lib/runtime-root.ts";
 import { type Check } from "../../lib/output.ts";
 import { amEnv } from "../../../../shared/mcp/lib/env.ts";
-import { checkList } from "../context.ts";
+import { checkList, type DoctorCtx } from "../context.ts";
 
 /** Pure: where the runtime stands, from what ~/.agents-multi and ~/.claude-multi are. */
 export function runtimeName(now: "dir" | "link-old" | "other" | null, old: "dir" | "link-new" | "other" | null): Check {
@@ -45,7 +45,7 @@ async function kind(path: string, target: string) {
 }
 
 /** The runtime's folder and its `shared` link into the repository. */
-export async function runtimeChecks(): Promise<Check[]> {
+export async function runtimeChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   // --- the runtime's name: ~/.agents-multi, the old name a link to it (agents migrate)
   if (!amEnv("ROOT")) {
@@ -54,11 +54,16 @@ export async function runtimeChecks(): Promise<Check[]> {
     const r = runtimeName(now === "link" ? "link-old" : now, old === "link" ? "link-new" : old);
     add(r.id, r.status, r.msg, r.fix);
   }
-  // --- runtime shared → repo
+  // --- runtime shared → repo: the installed repository is the one it points at (ctx.installed),
+  // which need not be the running code (a development checkout: repo.running says so)
   const where = `${shortHome(RUNTIME)}/shared`;
   const sharedLink = await readlink(`${RUNTIME}/shared`);
-  if (sharedLink === `${REPO}/shared`) add("runtime.shared", "ok", `${where} → repository`);
-  else if (await lstat(`${RUNTIME}/shared`)) {
+  const installed = ctx.installed === REPO ? "repository" : `repository (${shortHome(ctx.installed)})`;
+  if (sharedLink === `${ctx.installed}/shared` && (await lstat(`${ctx.installed}/apps/cli/main.ts`))) {
+    add("runtime.shared", "ok", `${where} → ${installed}`);
+  } else if (sharedLink === `${ctx.installed}/shared`) {
+    add("runtime.shared", "fail", `${where} points at no repository (${sharedLink})`, "agents install");
+  } else if (await lstat(`${RUNTIME}/shared`)) {
     add(
       "runtime.shared",
       "fail",
