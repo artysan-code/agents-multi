@@ -124,7 +124,7 @@ switch (cmd) {
     }
     for (const c of changes) console.log(`  ${describe(c)}`);
     if (sub === "check" || flag("--dry-run")) {
-      console.log(`\n${changes.length} pending changes → agents-multi mcp sync (with Claude closed)`);
+      console.log(`\n${changes.length} pending changes → agents mcp sync (with Claude closed)`);
       Deno.exit(1);
     }
     if (sub !== "sync") {
@@ -255,7 +255,7 @@ switch (cmd) {
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
   version                     the version of agents-multi (also --version, -V)
 
-  claude-multi is another name for the same command (the project's name before Agents Multi).
+  agents-multi and claude-multi are other names for the same command (the second is the project's name before Agents Multi).
 
   The console runs as a systemd user unit after install, so it is always there:
   systemctl --user status claude-multi-console.service`);

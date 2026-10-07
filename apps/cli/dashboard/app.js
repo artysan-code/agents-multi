@@ -2145,14 +2145,14 @@ function renderOverview() {
     otherwise it is shown as text to copy, because running arbitrary strings from here would
     quietly turn the console into a remote shell. */
 const FIX_ACTIONS = {
-  "agents-multi install": "install",
-  "agents-multi mcp sync": "mcp-sync",
-  "agents-multi doctor": "doctor",
-  "agents-multi sync --fetch": "sync-fetch",
-  "agents-multi usage ingest": "usage-ingest",
-  "agents-multi update --auto": "update-now",
-  "agents-multi update --check": "update-check",
-  "agents-multi ui build": "ui-build",
+  "agents install": "install",
+  "agents mcp sync": "mcp-sync",
+  "agents doctor": "doctor",
+  "agents sync --fetch": "sync-fetch",
+  "agents usage ingest": "usage-ingest",
+  "agents update --auto": "update-now",
+  "agents update --check": "update-check",
+  "agents ui build": "ui-build",
 };
 function actionButton(fix) {
   const act = FIX_ACTIONS[fix.trim()];

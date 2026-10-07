@@ -33,4 +33,4 @@ else
   sudo pacman -U claude-desktop-shims-*.pkg.tar.zst
 fi
 
-echo "==> done: Claude Desktop now updates itself (agents-multi doctor to check)"
+echo "==> done: Claude Desktop now updates itself (agents doctor to check)"

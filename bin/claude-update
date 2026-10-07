@@ -31,7 +31,7 @@ source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/ui.sh"
 
 VERSIONS_DIR="$HOME/.local/share/claude/versions"
 REPO_DIR="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
-CM="$REPO_DIR/bin/claude-multi"
+CM="$REPO_DIR/bin/agents"
 BIN_DIR="$HOME/.local/bin"
 
 # Channel used by the native updater: `stable` lags a few releases behind (gradual rollout), while
@@ -126,7 +126,7 @@ do_cli() (
   # entries and filter by semver name: files that do not belong there are never touched.
   # Guard: never the live version ($latest, validated non-empty above and the target of claude-bin).
   # Deleting the ELF of a running session is harmless: the inode stays alive until exit.
-  # The second newest (N-1) is kept too, for `agents-multi update --rollback`.
+  # The second newest (N-1) is kept too, for `agents update --rollback`.
   local v bn prev pruned=()
   prev="$(semver_dirs "$VERSIONS_DIR" | grep -vx "$latest" | tail -n1 || true)"
   for v in "$VERSIONS_DIR"/*; do

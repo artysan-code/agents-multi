@@ -207,7 +207,7 @@ export function accountPage(
       ZONES.map((z) => `<option${z === tz ? " selected" : ""}>${esc(z)}</option>`).join("")
     }</select><button>Salva</button></form>
   <h2>Chiave delle copie</h2>
-  <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Arriva da sola nel vault quando una macchina accede dalla console (Connessioni › Accedi, o <code>agents-multi brain-login</code>).</p>
+  <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Arriva da sola nel vault quando una macchina accede dalla console (Connessioni › Accedi, o <code>agents brain-login</code>).</p>
   ${
       backupKey
         ? `<div class="token">${esc(backupKey)}</div>`

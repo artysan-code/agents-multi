@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed in every new repository by `git config --global init.templateDir` (agents-multi install).
+# Installed in every new repository by `git config --global init.templateDir` (agents install).
 # On a clone (the previous HEAD is the null sha) it runs stignore-gen in the background, so a repository
 # cloned inside a Syncthing folder gets its block before Syncthing (watcher delay ~10 s) picks the files up.
 # Never blocks or fails the clone.

@@ -37,7 +37,7 @@ fi
 
 step "console ui"
 # into a scratch directory: in the runtime checkout apps/ui/dist is what the console serves, and the
-# pre-push hook runs this there (only `agents-multi ui build` replaces it, with its stamp)
+# pre-push hook runs this there (only `agents ui build` replaces it, with its stamp)
 ui_out=$(mktemp -d)
 (cd apps/ui && pnpm install --frozen-lockfile --silent && pnpm exec tsc --noEmit &&
   pnpm exec vite build --logLevel warn --outDir "$ui_out" --emptyOutDir)

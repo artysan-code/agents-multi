@@ -72,7 +72,7 @@ export async function uiFile(dist: string, pathname: string): Promise<Response> 
     const page = await readText(`${dist}/index.html`);
     if (page === null) {
       return new Response(
-        "The console's interface is not built: run `agents-multi ui build`. The old one is at /old/.",
+        "The console's interface is not built: run `agents ui build`. The old one is at /old/.",
         {
           status: 503,
           headers: { "content-type": "text/plain; charset=utf-8" },

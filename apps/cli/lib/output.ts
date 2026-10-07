@@ -35,7 +35,7 @@ export const icon: Record<Status, string> = {
 export function printDoctor(checks: Check[]) {
   const order: Status[] = ["fail", "warn", "ok"];
   const sorted = [...checks].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
-  console.log(`${ANSI.b}agents-multi doctor${ANSI.x}`);
+  console.log(`${ANSI.b}agents doctor${ANSI.x}`);
   for (const c of sorted) {
     console.log(
       `  ${icon[c.status]} ${c.msg}${c.fix && c.status !== "ok" ? `\n      ${ANSI.d}fix:${ANSI.x} ${c.fix}` : ""}`,

@@ -4,7 +4,7 @@
 // profiles that see it. It is the person's (their config folder, ~/.claude-multi/config); each
 // account's secret is in the vault (vault.ts) under the same service/name.
 //
-// A server learns its profile from CLAUDE_MULTI_PROFILE, which `agents-multi mcp sync` writes into
+// A server learns its profile from CLAUDE_MULTI_PROFILE, which `agents mcp sync` writes into
 // each profile's configuration, and sees only that profile's accounts: the personal Google account
 // does not exist for that profile. A profile can hold several accounts of one service; a tool call then
 // names the one it means, and with a single one the name can be left out. Never a silent default

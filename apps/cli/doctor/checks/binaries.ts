@@ -19,20 +19,20 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
       "bin.claude",
       "fail",
       "~/.local/bin/claude is the native updater's symlink: `claude` would start on the wrong profile",
-      "agents-multi install",
+      "agents install",
     );
   } else {add(
       "bin.claude",
       "fail",
       `~/.local/bin/claude → ${claudeLink ?? "a real file, or missing"}`,
-      "agents-multi install",
+      "agents install",
     );}
   // Every wrapper the repository ships, plus one launcher per profile pointed at bin/claude —
   // both lists come from what is there, so a new profile or script needs no edit here.
   for (const b of await listDir(`${REPO}/bin`)) {
     if (b === "lib" || b === "claude") continue;
     if ((await readlink(`${BIN}/${b}`)) !== `${REPO}/bin/${b}`) {
-      add(`bin.${b}`, "fail", `~/.local/bin/${b} does not point at the repository`, "agents-multi install");
+      add(`bin.${b}`, "fail", `~/.local/bin/${b} does not point at the repository`, "agents install");
     }
   }
   const missingLaunchers = [];
@@ -47,7 +47,7 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
       "bin.launchers",
       "fail",
       `launchers not pointing at the repository: ${missingLaunchers.join(", ")}`,
-      "agents-multi install",
+      "agents install",
     );
   } else {add(
       "bin.launchers",
@@ -69,11 +69,11 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
     add(
       "bin.finalize",
       "warn",
-      "claude-multi-finalize is superseded by `agents-multi doctor`",
+      "claude-multi-finalize is superseded by `agents doctor`",
       `rm ${BIN}/claude-multi-finalize`,
     );
   }
-  if (!m.cliVersion) add("bin.claude-bin", "fail", "claude-bin resolves to no version", "agents-multi update --cli");
+  if (!m.cliVersion) add("bin.claude-bin", "fail", "claude-bin resolves to no version", "agents update --cli");
   else {
     add(
       "bin.claude-bin",
@@ -81,7 +81,7 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
       `Claude Code ${m.cliVersion}${
         m.cliVersions.length > 1 ? ` (+${m.cliVersions.length - 1} cached, rollback available)` : ""
       }`,
-      m.cliVersions.length > 2 ? "agents-multi update --cli (prunes past N-1)" : undefined,
+      m.cliVersions.length > 2 ? "agents update --cli (prunes past N-1)" : undefined,
     );
   }
   return c;

@@ -61,13 +61,13 @@ export async function desktopChecks(ctx: DoctorCtx): Promise<Check[]> {
       const source = await readText(`${REPO}/desktop/${d}`) ?? "";
       const installed = await readText(`${HOME}/.local/share/applications/${d}`);
       if (!installed) {
-        add(`desktop.entry.${d}`, "fail", `${d} is missing`, "agents-multi install");
+        add(`desktop.entry.${d}`, "fail", `${d} is missing`, "agents install");
         continue;
       }
       // Only launchers go through claude-launch; other entries (the update GUI) legitimately do
       // not, so the requirement is read off the repository's own copy rather than assumed.
       if (source.includes("claude-launch") && !installed.includes("claude-launch")) {
-        add(`desktop.entry.${d}`, "fail", `${d} does not go through claude-launch`, "agents-multi install");
+        add(`desktop.entry.${d}`, "fail", `${d} does not go through claude-launch`, "agents install");
       }
     }
   }
@@ -99,7 +99,7 @@ export async function desktopPackagingChecks(ctx: DoctorCtx): Promise<Check[]> {
         "desktop.urlhandler",
         "fail",
         "the claude-cli:// url handler does not point at claude-bin",
-        "agents-multi install",
+        "agents install",
       );
     }
   }

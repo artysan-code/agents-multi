@@ -12,7 +12,7 @@
 
 A multi-profile setup for Claude Code and Claude Desktop: several accounts isolated on one machine.
 **This repository is the source of truth**; `~/.claude-multi/` is runtime materialised by
-`agents-multi install`. Operational detail lives in the [README](README.md).
+`agents install`. Operational detail lives in the [README](README.md).
 
 ## Rules for working here
 
@@ -25,7 +25,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
 - **Every new invariant goes in `apps/cli/doctor/`**, not in the README. The README describes, the
   doctor verifies. Those two have already drifted apart once.
 - **The repository is code; what is a person's is in their configuration** (`~/.claude-multi/config`,
-  a link to a folder of theirs, made by `agents-multi init` from `config.example/`): profiles,
+  a link to a folder of theirs, made by `agents init` from `config.example/`): profiles,
   `accounts.json`, rules, their settings and server choices (merge patches over `shared/settings.json`
   and `shared/mcp/servers.json`), `owner.json`. Nothing personal goes back into the repository —
   no names, clients, accounts or preferences; the repository is shared by everyone who uses it.
@@ -54,7 +54,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   never by reaching into its markup. Drawers, toasts, actions and jobs are in `src/lib/ui.tsx`.
   Types come from the server's modules only when those have no Deno imports (`apps/cli/lib/output.ts`).
   Libraries are welcome when they make the page better: pinned in `apps/ui/package.json` and bundled,
-  never loaded from a CDN (the console works offline). The build is not committed: `agents-multi ui
+  never loaded from a CDN (the console works offline). The build is not committed: `agents ui
   build` makes it (install and self-update run it when `apps/ui` changed, the doctor's `console.ui`
   says when it is missing or stale), and a failed build leaves the previous one. `pnpm dev` in
   `apps/ui` serves it with hot reload against the running console.
@@ -66,7 +66,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   (`apps/brain/public.ts`) on an address of its own, another origin than the brain's. Nothing of one
   instance in it: its address, the contact and the operator are placeholders the brain fills from its
   environment. Its facts come from the README — when one changes, change both.
-- **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `agents-multi vault`):
+- **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `agents vault`):
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
   A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A
   server that returns data masks it (`lib/mask.ts`), and one that writes whole objects back refuses
@@ -100,12 +100,12 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   renaming the app makes the stored token unreachable and the user is asked to sign in again. That
   happened once, to get a per-profile tooltip; the tooltip is now changed at its call site instead,
   leaving the app's identity alone.
-- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `agents-multi doctor`.
-  If you touched `install`, run `agents-multi install --dry-run` first. A new pure function gets a
+- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `agents doctor`.
+  If you touched `install`, run `agents install --dry-run` first. A new pure function gets a
   new test in `apps/cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the
   output, not just the filter.
 - **Changing `~/.claude-multi` while a Claude session is open moves the ground under that session.**
-  Run `install` and `agents-multi mcp sync` from a terminal with Claude closed.
+  Run `install` and `agents mcp sync` from a terminal with Claude closed.
 - **Branches and versions.** Work lands on `dev`; `beta` and `release` only move by merge from the
   branch before them. Installations follow `release` (self-update pulls the checkout's upstream),
   so a machine whose runtime is a checkout keeps that checkout on `release` and develops in a

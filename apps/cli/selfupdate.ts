@@ -1,5 +1,5 @@
-// selfupdate.ts — agents-multi updating itself: `agents-multi self-update`, the third part of
-// `agents-multi update` (and of its timer, `--auto`) next to Claude Code and Claude Desktop.
+// selfupdate.ts — agents-multi updating itself: `agents self-update`, the third part of
+// `agents update` (and of its timer, `--auto`) next to Claude Code and Claude Desktop.
 //
 // The repository is the program, so updating it is a pull, with the same care as the one before a
 // launch (bin/lib/prelaunch.sh): only fast-forward, only on a clean tree, never a push. Then what
@@ -41,7 +41,7 @@ export function selfPlan(r: RepoView): SelfPlan {
 }
 
 // ---------------------------------------------------------------- how it speaks
-// The row of bin/lib/ui.sh, so that `agents-multi update` lines up: an icon, the name, the version,
+// The row of bin/lib/ui.sh, so that `agents update` lines up: an icon, the name, the version,
 // what happened, and dimmed details under it. claude-update passes its language and whether to colour
 // (CM_LANG, CM_COLOR); alone, the machine's language and whether this is a terminal.
 const lang = (Deno.env.get("CM_LANG") || uiLanguage(Deno.env.toObject())) === "it" ? "it" : "en";
@@ -69,9 +69,9 @@ const T = {
     diverged: (b: number, a: number) => `la storia è divergente (↓${b} ↑${a}): serve un rebase a mano`,
     noUpstream: (b: string) => `il branch ${b} non segue un branch remoto`,
     installWait:
-      "install ha del lavoro e aspetta che chiudi ogni Claude: lo fa il prossimo giro, o lancia agents-multi install",
+      "install ha del lavoro e aspetta che chiudi ogni Claude: lo fa il prossimo giro, o lancia agents install",
     installDone: "install eseguito",
-    installFail: "install non riuscito: lancia agents-multi install per vedere perché",
+    installFail: "install non riuscito: lancia agents install per vedere perché",
     nothingPending: "nessun install in attesa",
     restarted: (console: boolean, app: boolean) =>
       console && app
@@ -97,9 +97,9 @@ const T = {
     diverged: (b: number, a: number) => `diverged history (↓${b} ↑${a}): a rebase by hand`,
     noUpstream: (b: string) => `branch ${b} follows no remote branch`,
     installWait:
-      "install has work to do and waits for every Claude to be closed: the next round does it, or run agents-multi install",
+      "install has work to do and waits for every Claude to be closed: the next round does it, or run agents install",
     installDone: "install done",
-    installFail: "install failed: run agents-multi install to see why",
+    installFail: "install failed: run agents install to see why",
     nothingPending: "no install waiting",
     restarted: (console: boolean, app: boolean) =>
       `restarted ${
@@ -159,7 +159,7 @@ async function view(): Promise<RepoView> {
 
 /** `install --dry-run` and whether it found anything to do. */
 async function installPending(): Promise<boolean> {
-  const r = await run(`${REPO}/bin/claude-multi`, ["install", "--dry-run"]);
+  const r = await run(`${REPO}/bin/agents`, ["install", "--dry-run"]);
   return r.code === 0 && !/nothing to do/.test(r.out);
 }
 
@@ -177,7 +177,7 @@ async function settleInstall(head: string, say: (s: string) => void): Promise<bo
     say(note(T.installWait));
     return true;
   }
-  const r = await run(`${REPO}/bin/claude-multi`, ["install"]);
+  const r = await run(`${REPO}/bin/agents`, ["install"]);
   if (r.code === 0) {
     await Deno.remove(PENDING).catch(() => {});
     await log("applied", "", head, "install");

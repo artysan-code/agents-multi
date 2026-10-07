@@ -1,4 +1,4 @@
-// notify.ts — the doctor that comes to you: `agents-multi doctor --notify` compares the verdict with
+// notify.ts — the doctor that comes to you: `agents doctor --notify` compares the verdict with
 // the last saved one and sends ONE desktop notification only when a NEW failure appears (or when a
 // failure clears, to say things are healthy again). Warnings never notify: every four hours they
 // would be noise. Driven by the claude-update-check timer, alongside the update check.

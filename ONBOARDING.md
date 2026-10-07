@@ -8,15 +8,15 @@ can, ask before anything hard to undo, and follow the rules below without except
 
 - **Secrets never pass through you.** Passphrases, TOTP secrets, tokens, the vault's recovery code:
   the person types them in their own terminal (outside this session, or with `!` only for commands
-  that read them hidden from stdin, such as `agents-multi vault set`). Never ask for them in chat,
+  that read them hidden from stdin, such as `agents vault set`). Never ask for them in chat,
   never put them in a file, an argument or an environment variable.
 - **Back up before you move anything.** `install` turns `~/.claude` into a read-only stub and keeps
   every profile under `~/.claude-multi/<profile>`: their current Claude Code state moves aside.
 - **Read before you write**: `install --dry-run` and show the plan; the same for `mcp sync`.
 - **`install` and `mcp sync` run with every Claude closed**, this session included: when you get
   there, hand the person the commands and stop; the next session picks up from the doctor.
-- Where you are at any time: `~/.local/src/claude-multi/bin/claude-multi doctor` (once installed,
-  `agents-multi doctor`). Resume from the first step whose result is missing.
+- Where you are at any time: `~/.local/src/claude-multi/bin/agents doctor` (once installed,
+  `agents doctor`). Resume from the first step whose result is missing.
 
 ## 0. What to know first
 
@@ -59,7 +59,7 @@ tar -C ~ -czf ~/claude-backup-$(date +%F).tar.gz .claude .claude.json .config/Cl
 ## 4. Their configuration
 
 ```bash
-~/.local/src/claude-multi/bin/claude-multi init ~/claude-multi-config --name "<Name>" --language "<Language>"
+~/.local/src/claude-multi/bin/agents init ~/claude-multi-config --name "<Name>" --language "<Language>"
 ```
 
 (Another folder if they sync it: inside their Syncthing folder, for instance.) Then shape it with
@@ -75,12 +75,12 @@ them, file by file — `~/claude-multi-config/README.md` says what each one is:
 
 ## 5. Install (with Claude closed)
 
-Show `~/.local/src/claude-multi/bin/claude-multi install --dry-run`, then tell the person to quit
+Show `~/.local/src/claude-multi/bin/agents install --dry-run`, then tell the person to quit
 this session and run, in a terminal:
 
 ```bash
-~/.local/src/claude-multi/bin/claude-multi install
-agents-multi vault init
+~/.local/src/claude-multi/bin/agents install
+agents vault init
 ```
 
 `vault init` prints a **recovery code**: it goes into their password manager, not into a chat. Then
@@ -90,8 +90,8 @@ each profile's command once (`claude`, `claude-<name>`, …) to sign in with `/l
 
 If Claude Desktop is already installed as a system package (AUR or other), say so to the person
 and remove it with them first: Agents Multi keeps Desktop in user space. Once, the system half: `cd ~/.local/src/claude-multi/pkg/claude-desktop-shims && makepkg -si`.
-Then `agents-multi update --desktop`, and for each profile with its own `desktopDir`
-`claude-desktop-rebuild <profile>`, then `agents-multi install` again. Every Claude Desktop closed
+Then `agents update --desktop`, and for each profile with its own `desktopDir`
+`claude-desktop-rebuild <profile>`, then `agents install` again. Every Claude Desktop closed
 while doing it. Each profile appears in the menu with its own icon.
 
 ## 7. Their brain
@@ -110,19 +110,19 @@ The administrator runs their brain instance and gives them its address, passphra
 4. A token for this machine: they open `<brain address>/account`, sign in, create a token named
    after the machine, and store it themselves:
    ```bash
-   agents-multi vault set brain brain
+   agents vault set brain brain
    ```
 
 ## 8. Finish (with Claude closed)
 
 ```bash
-agents-multi mcp sync
-agents-multi doctor
+agents mcp sync
+agents doctor
 ```
 
 Every ✗ in the doctor comes with its fix. Then, in a profile that only has the MCP server, `/mcp` →
 brain → Authenticate (passphrase + TOTP once per profile and machine). The console is at
 <http://127.0.0.1:7331>; the tray app opens it.
 
-Optional, later: Google (their own OAuth client, `agents-multi google client`), other services in
+Optional, later: Google (their own OAuth client, `agents google client`), other services in
 the console's Connections, the phone with the Claude app and the Brain connector.

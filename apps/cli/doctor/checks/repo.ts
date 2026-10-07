@@ -32,7 +32,7 @@ export async function repoChecks(ctx: DoctorCtx): Promise<Check[]> {
         `repository diverged: ↓${repo.behind} ↑${repo.ahead}`,
         `git -C ${shortHome(REPO)} pull --rebase (by hand)`,
       );
-    } else if (repo.behind) add("repo.sync", "warn", `config is ${repo.behind} commits behind`, "agents-multi sync");
+    } else if (repo.behind) add("repo.sync", "warn", `config is ${repo.behind} commits behind`, "agents sync");
     else if (repo.ahead) {
       add("repo.sync", "warn", `${repo.ahead} local commits not pushed`, `git -C ${shortHome(REPO)} push`);
     } else add("repo.sync", "ok", `in sync with ${repo.upstream} (${repo.head})`);
@@ -53,7 +53,7 @@ export async function repoChecks(ctx: DoctorCtx): Promise<Check[]> {
       "repo.hooks",
       "warn",
       "repository pre-commit is not active (secret guard + type check)",
-      "agents-multi install",
+      "agents install",
     );
   }
 

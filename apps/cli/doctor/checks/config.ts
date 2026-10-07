@@ -30,7 +30,7 @@ export async function configChecks(): Promise<Check[]> {
       "config",
       "fail",
       `no configuration at ${shortHome(CONFIG)}${cfgLink ? ` (it links to ${shortHome(cfgLink)})` : ""}`,
-      "agents-multi init <folder>, or link your configuration folder there",
+      "agents init <folder>, or link your configuration folder there",
     );
   } else {
     add(

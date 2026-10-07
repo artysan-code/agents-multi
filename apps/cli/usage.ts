@@ -591,7 +591,7 @@ const usd = (n: number | null | undefined) => n == null ? "—" : `$${n.toFixed(
 export function printReport(r: ReturnType<typeof report>) {
   const B = "\x1b[1m", D = "\x1b[2m", X = "\x1b[0m";
   console.log(
-    `${B}agents-multi usage${X} — by ${r.by}${r.since ? ` since ${r.since}` : ""}${
+    `${B}agents usage${X} — by ${r.by}${r.since ? ` since ${r.since}` : ""}${
       r.profile ? ` · profile ${r.profile}` : ""
     }  ${D}(estimate = list price, never billed)${X}`,
   );

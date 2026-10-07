@@ -29,10 +29,10 @@ export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
         "stignore-gen",
         "warn",
         `git init.templateDir is ${tpl || "unset"}: a clone inside a Syncthing folder waits for the timer`,
-        "agents-multi install",
+        "agents install",
       );
     } else if (timer !== "enabled") {
-      add("stignore-gen", "warn", `stignore-gen.timer: ${timer || "not installed"}`, "agents-multi install");
+      add("stignore-gen", "warn", `stignore-gen.timer: ${timer || "not installed"}`, "agents install");
     } else {add(
         "stignore-gen",
         "ok",

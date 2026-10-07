@@ -119,14 +119,14 @@ export async function runAction(action: string, opts: string[] = []): Promise<vo
 
 /** The fixes the doctor prints that the console can run itself. */
 export const FIX_ACTIONS: Record<string, string> = {
-  "agents-multi install": "install",
-  "agents-multi mcp sync": "mcp-sync",
-  "agents-multi doctor": "doctor",
-  "agents-multi sync --fetch": "sync-fetch",
-  "agents-multi usage ingest": "usage-ingest",
-  "agents-multi update --auto": "update-now",
-  "agents-multi update --check": "update-check",
-  "agents-multi ui build": "ui-build",
+  "agents install": "install",
+  "agents mcp sync": "mcp-sync",
+  "agents doctor": "doctor",
+  "agents sync --fetch": "sync-fetch",
+  "agents usage ingest": "usage-ingest",
+  "agents update --auto": "update-now",
+  "agents update --check": "update-check",
+  "agents ui build": "ui-build",
 };
 
 export type JobEnd = { code: number; cancelled?: boolean } | { error: string };

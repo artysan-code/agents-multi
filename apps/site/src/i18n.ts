@@ -40,7 +40,7 @@ const en = {
     ["brain", "One brain for every Claude", "Memory and tasks on your own server, reached over MCP — the protocol Claude uses to call tools — by the apps, claude.ai, Claude Code, Desktop and the phone."],
     ["vault", "Secrets out of reach", "Every credential encrypted in a vault, its key in the system keyring. Never in a config file, a command line or a tool result, and permission rules keep a session away from the key."],
     ["mcp", "Tools, per account", "One registry of MCP servers, all off until you turn one on. Gmail, Calendar, Drive, Coolify, Cloudflare and more: each tool knows which account it acts on."],
-    ["doctor", "A doctor, and updates that ask nothing", "One command, doctor, checks that everything is in place and says how to fix what is not. Claude Code, Desktop and agents-multi update in the background — verified, and one click to roll back."],
+    ["doctor", "A doctor, and updates that ask nothing", "One command, doctor, checks that everything is in place and says how to fix what is not. Claude Code, Desktop and agents update in the background — verified, and one click to roll back."],
   ] as [string, string, string][],
   brainKicker: "The brain",
   brainTitle: "A memory that follows you from the terminal to the phone.",
@@ -56,7 +56,7 @@ const en = {
   steps: [
     ["Your configuration", "Profiles, accounts and rules live in a folder of yours, apart from the code — keep it in step between machines with git or Syncthing."],
     ["Install", "One idempotent command materialises launchers, settings, the console and the tray app. It never deletes: what it replaces is moved aside. <code>--dry-run</code> shows the plan."],
-    ["Sign in, and check", "Log in once per profile. <code>agents-multi doctor</code> verifies every invariant and tells you how to fix what is off."],
+    ["Sign in, and check", "Log in once per profile. <code>agents doctor</code> verifies every invariant and tells you how to fix what is off."],
   ] as [string, string][],
   principlesKicker: "Principles",
   principlesTitle: "Built the way you would want it built.",
@@ -127,7 +127,7 @@ const it: Dict = {
   steps: [
     ["La tua configurazione", "Profili, account e regole stanno in una cartella tua, separata dal codice, che tieni allineata tra le macchine con git o Syncthing."],
     ["Installa", "Un comando idempotente crea launcher, impostazioni, la console e l'app nella barra. Non cancella mai: quello che sostituisce lo mette da parte. <code>--dry-run</code> mostra il piano."],
-    ["Entra, e controlla", "Un login per profilo. <code>agents-multi doctor</code> verifica ogni invariante e ti dice come sistemare quello che non va."],
+    ["Entra, e controlla", "Un login per profilo. <code>agents doctor</code> verifica ogni invariante e ti dice come sistemare quello che non va."],
   ],
   principlesKicker: "Principi",
   principlesTitle: "Fatto come lo vorresti fatto tu.",

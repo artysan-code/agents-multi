@@ -21,7 +21,7 @@ export async function mcpChecks(): Promise<Check[]> {
         `MCP registry out of sync: ${changes.length} changes (${
           [...new Set(changes.map((x) => x.target.managedKey))].join(", ")
         })`,
-        "agents-multi mcp sync (with Claude closed)",
+        "agents mcp sync (with Claude closed)",
         [userStep("Close every Claude session and Desktop window"), actionStep("mcp-sync"), verifyStep],
       );}
     const problems = registryProblems(await loadRegistry());

@@ -75,7 +75,7 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
   (`Sec-Fetch-Site`, or the `Origin`) — the session cookie is `SameSite=Lax`, which a sibling
   subdomain would still get. Every answer carries `nosniff`, and HSTS on https.
 - **Machines** use personal tokens. Agents Multi gets one by signing in (console › Connections ›
-  Sign in, or `agents-multi brain-login`): the brain's OAuth with scope `machine`, only to a loopback
+  Sign in, or `agents brain-login`): the brain's OAuth with scope `machine`, only to a loopback
   redirect, answers with a token named after the machine and the account's backup key, and both go
   straight into the vault. `/account` lists them, makes one by hand when needed, and revokes them;
   it also lists Claude's connections and can cut them all.
@@ -91,7 +91,7 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
 database (the WAL folded in and the file read in one go), sealed with AES-256-GCM under the
 account's own backup key (it reaches the vault, `brain/<account>` field `backup-key`, when a machine
 signs in; `/account` shows it too): one person's copies never open with another's key. The owner's machines check the state every half hour while they are on and fetch a copy only when
-it changed (`agents-multi brain-backup`, `claude-brain-backup.timer`), keeping the last ones; without the key from the vault a copy cannot be read. No third party
+it changed (`agents brain-backup`, `claude-brain-backup.timer`), keeping the last ones; without the key from the vault a copy cannot be read. No third party
 holds the brain.
 
 ### The server's own copies
@@ -102,7 +102,7 @@ account's `brain.db`) once a day into `BRAIN_DATA/backups/<UTC time>/` (`account
 `BRAIN_BACKUP_KEEP` runs. A run is written whole or not at all, and the timer stops on SIGTERM. The
 copies use SQLite's online backup, so writers are not held up. They sit on the same volume as the
 brain: they cover a bad write or a deleted account, not losing the server, so copy them off it too
-(`GET /backup` and `agents-multi brain-backup` do that for the owner's brain).
+(`GET /backup` and `agents brain-backup` do that for the owner's brain).
 
 ### Administration from a shell
 
@@ -192,7 +192,7 @@ file: copied to `users/<id>/brain.db` before the invitation is accepted, it is w
   (the console and Hey Claude address its tools as `mcp__claude_ai_Brain__*`), URL `https://<the brain>/mcp`; sign in on the page that opens. It is then in the Android app too.
 - **Claude Code**: `claude mcp add --transport http brain https://brain.example.com/mcp`, then `/mcp`
   to sign in.
-- **A person's machines** (the console, backups): `agents-multi brain-login`, or Sign in in the
+- **A person's machines** (the console, backups): `agents brain-login`, or Sign in in the
   console's Connections; the token and the backup key land in the vault.
 - **A browser**, a phone included: `https://<the brain>/tasks`, the board (below).
 

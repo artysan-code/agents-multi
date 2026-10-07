@@ -21,6 +21,6 @@ as there is more than one — never a silent default.
   recovery code.
 - A secret is never a command-line argument and never a tool result. Servers mask what they return,
   and the shared permissions deny a Claude session the ways to the key.
-- A service's own command-line tool gets the same token: `agents-multi vault run cloudflare --
+- A service's own command-line tool gets the same token: `agents vault run cloudflare --
   wrangler deploy`. What deletes or rolls back asks for a typed "yes" on a terminal — a Claude session
   has none, so there it is refused with the command to run.

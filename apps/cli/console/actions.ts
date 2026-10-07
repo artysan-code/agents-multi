@@ -9,7 +9,7 @@ import { log } from "../selfupdate.ts";
 
 export interface ActionDef {
   args: string[];
-  /** A script of bin/ to run instead of bin/claude-multi, with the parameter as its argument. */
+  /** A script of bin/ to run instead of bin/agents, with the parameter as its argument. */
   bin?: string;
   opts?: Record<string, string[]>;
   timeoutMs?: number;
@@ -57,18 +57,18 @@ export async function resolveAction(
   if (!a) return { error: `unknown action: ${name}` };
   if (Object.keys(params).some((k) => k !== a.param?.name)) return { error: `${name}: unknown parameter` };
   const extra = opts.flatMap((o) => a.opts?.[o] ?? []);
-  if (!a.param) return { cmd: `${REPO}/bin/${a.bin ?? "agents-multi"}`, args: [...a.args, ...extra] };
+  if (!a.param) return { cmd: `${REPO}/bin/${a.bin ?? "agents"}`, args: [...a.args, ...extra] };
   const v = params[a.param.name];
   if (typeof v !== "string" || !(await a.param.allowed()).includes(v)) {
     return { error: `${name}: ${a.param.name} is not one this machine knows` };
   }
-  return { cmd: `${REPO}/bin/${a.bin ?? "agents-multi"}`, args: [...a.args, v, ...extra] };
+  return { cmd: `${REPO}/bin/${a.bin ?? "agents"}`, args: [...a.args, v, ...extra] };
 }
 
 /** The action as a command to type, for «run manually». */
 export function manualCommand(name: string, params: Params = {}, defs: Record<string, ActionDef> = ACTIONS): string {
   const a = defs[name];
-  return [a.bin ?? "agents-multi", ...a.args, ...Object.values(params)].join(" ");
+  return [a.bin ?? "agents", ...a.args, ...Object.values(params)].join(" ");
 }
 
 /** What an action leaves behind when it succeeds: a variant rebuilt by hand is entered in the update

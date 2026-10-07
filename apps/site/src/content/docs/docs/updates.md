@@ -12,6 +12,6 @@ ten minutes after login and every four hours, then the doctor.
   time and *applied* only when no Claude Desktop is running, then each profile's variant is rebuilt.
 - **Agents Multi** — a fast-forward pull on a clean tree; the console and the tray restart if their
   code changed, and `install` runs only with every Claude closed.
-- **Rollback** — `agents-multi update --rollback`, or one button in the console.
+- **Rollback** — `agents update --rollback`, or one button in the console.
 - **Supply chain** — the Anthropic apt repository key is pinned: the `InRelease` signature, the index
   hash and the package hash are all checked before a file is extracted.

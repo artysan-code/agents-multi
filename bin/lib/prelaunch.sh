@@ -80,7 +80,7 @@ main() {
 regen_settings() {
   local runtime="${CLAUDE_MULTI_ROOT:-$HOME/.claude-multi}" stamp="$CACHE/settings.stamp"
   local config="${CLAUDE_MULTI_CONFIG:-$runtime/config}"
-  [[ -x "$REPO/bin/claude-multi" ]] && command -v deno >/dev/null 2>&1 || return 0
+  [[ -x "$REPO/bin/agents" ]] && command -v deno >/dev/null 2>&1 || return 0
   mkdir -p "$CACHE"
   exec 8>"$CACHE/settings.lock"
   flock -n 8 || return 0
@@ -89,7 +89,7 @@ regen_settings() {
     return 0
   fi
   touch "$stamp.next"
-  "$REPO/bin/claude-multi" settings --quiet && mv -f "$stamp.next" "$stamp"
+  "$REPO/bin/agents" settings --quiet && mv -f "$stamp.next" "$stamp"
 }
 
 # stderr stays open: the "config updated" line must reach the user; git calls already have their own 2>/dev/null

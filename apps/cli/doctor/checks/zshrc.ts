@@ -24,9 +24,9 @@ export async function zshrcChecks(): Promise<Check[]> {
   // catches a profile added or renamed since the last install, whose alias is still the old one.
   const wantBlock = await zshBlock();
   const haveBlock = zshBlockIn(zsh);
-  if (!haveBlock) add("zshrc", "warn", "no agents-multi block in ~/.zshrc", "agents-multi install");
+  if (!haveBlock) add("zshrc", "warn", "no agents-multi block in ~/.zshrc", "agents install");
   else if (haveBlock !== wantBlock) {
-    add("zshrc", "warn", "the agents-multi block in ~/.zshrc no longer matches the manifests", "agents-multi install");
+    add("zshrc", "warn", "the agents-multi block in ~/.zshrc no longer matches the manifests", "agents install");
   } else add("zshrc", "ok", "~/.zshrc block is current");
   return c;
 }

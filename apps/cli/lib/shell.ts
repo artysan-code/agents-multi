@@ -15,7 +15,7 @@ export async function zshBlock(): Promise<string> {
   const aliases = ls.filter((l) => l.alias).map((l) => `alias ${l.alias}='${l.command}'`);
   return [
     ZSH_BEGIN,
-    "# Managed by `claude-multi install`: do not edit by hand.",
+    "# Managed by `agents install`: do not edit by hand.",
     ...lines,
     `export CLAUDE_CONFIG_DIR="\${CLAUDE_CONFIG_DIR:-${RUNTIME}/${def?.profile ?? ""}}"`,
     "export DISABLE_AUTOUPDATER=1",

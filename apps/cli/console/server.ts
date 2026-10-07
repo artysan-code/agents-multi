@@ -1,4 +1,4 @@
-// server.ts — the local console: `agents-multi serve` listens on http://127.0.0.1:7331 and serves
+// server.ts — the local console: `agents serve` listens on http://127.0.0.1:7331 and serves
 // the interface built from apps/ui, its API, and for one release the old page in apps/cli/dashboard/
 // under /old.
 //
@@ -312,7 +312,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
 
   const handler = createHandler(table);
 
-  console.log(`${ANSI.b}agents-multi serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
+  console.log(`${ANSI.b}agents serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   void watchTree(ac.signal);
   void watchBrain(ac.signal, connectTasks() === "brain");
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);

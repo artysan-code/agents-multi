@@ -1,4 +1,4 @@
-// The console's interface, served by `agents-multi serve` at its root. `pnpm dev` serves it with hot
+// The console's interface, served by `agents serve` at its root. `pnpm dev` serves it with hot
 // reload and sends /api to the running console.
 import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";

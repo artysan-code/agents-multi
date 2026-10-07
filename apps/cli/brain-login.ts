@@ -1,4 +1,4 @@
-// brain-login.ts — signing this machine in to the brain: `agents-multi brain-login` and the console's
+// brain-login.ts — signing this machine in to the brain: `agents brain-login` and the console's
 // Sign in button (Connections). Nothing is copied by hand.
 //
 // The brain's own OAuth (apps/brain/auth.ts) with scope `machine`: a listener on a random 127.0.0.1 port is

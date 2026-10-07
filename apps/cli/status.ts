@@ -44,7 +44,7 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
     sync,
     update,
     updateLog: await updateLog(),
-    // an install that a agents-multi update left for when every Claude is closed: the commit it came with
+    // an install that a agents update left for when every Claude is closed: the commit it came with
     selfInstall: await installWaiting(),
     // what the console shows when the viewer has not picked a language: the machine's, not the browser's
     language: uiLanguage(Deno.env.toObject()),
@@ -99,7 +99,7 @@ export function printStatus(s: StatusReport) {
   const m = s.machine;
   const r = s.repo;
   const up = (k: "cli" | "desktop") => s.update?.[k]?.outdated ? `  ${ANSI.y}⬆ ${s.update?.[k]?.latest}${ANSI.x}` : "";
-  console.log(`${ANSI.b}agents-multi status${ANSI.x} — ${m.hostname}`);
+  console.log(`${ANSI.b}agents status${ANSI.x} — ${m.hostname}`);
   console.log(`  Claude Code     ${m.cliVersion ?? "?"}${up("cli")}`);
   console.log(`  Claude Desktop  ${m.desktopVersion ?? "not installed"}${up("desktop")}`);
   for (const [variant, vs] of Object.entries(m.embeddedCode)) {

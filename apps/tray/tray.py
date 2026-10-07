@@ -1,6 +1,6 @@
 """tray.py — the tray icon: the setup's state at a glance, and a menu to act on it.
 
-The state is the console's `/api/summary` (a pure function of `agents-multi status`, tested in
+The state is the console's `/api/summary` (a pure function of `agents status`, tested in
 apps/cli/tests/summary_test.ts): this module only draws it. It is refetched when the console says
 something changed (`state` on the `/api/events` stream the page also listens to) and when the menu
 opens — never on a timer. With the console down the icon turns grey and the stream reconnects with

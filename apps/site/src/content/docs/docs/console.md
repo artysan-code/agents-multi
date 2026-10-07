@@ -3,7 +3,7 @@ title: The console
 description: A local web app that shows what every profile is doing.
 ---
 
-`agents-multi install` enables the console as a systemd user unit, so it is always at
+`agents install` enables the console as a systemd user unit, so it is always at
 <http://127.0.0.1:7331> — over an ssh tunnel it works the same, which is the point on a headless box.
 
 Updates are **pushed, not polled**: the server watches the transcripts and the shared configuration,

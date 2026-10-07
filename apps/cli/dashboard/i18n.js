@@ -269,8 +269,8 @@ const I18N = {
     "google.form.hint":
       "No secret to paste: save the account, then press Connect on its row and grant access in the browser.",
     "vault.title": "Secret vault",
-    "vault.init": "No vault yet. In a terminal, run: agents-multi vault init — and keep the recovery code it prints.",
-    "vault.pair": "This machine is not paired. In a terminal, run: agents-multi vault pair — with the recovery code.",
+    "vault.init": "No vault yet. In a terminal, run: agents vault init — and keep the recovery code it prints.",
+    "vault.pair": "This machine is not paired. In a terminal, run: agents vault pair — with the recovery code.",
     "vault.wrongKey": "This machine's key does not open the vault: pair it again with the right recovery code.",
     "vault.conflicts": "{n} Syncthing conflict copies in the vault: tell Claude, they need a look.",
 
@@ -852,9 +852,8 @@ const I18N = {
       "Nessun secret da incollare: salva l'account, poi premi Collega sulla sua riga e concedi l'accesso nel browser.",
     "vault.title": "Archivio dei secret",
     "vault.init":
-      "Non c'è ancora un archivio. In un terminale: agents-multi vault init — e conserva il codice di recupero che stampa.",
-    "vault.pair":
-      "Questa macchina non è abbinata. In un terminale: agents-multi vault pair — con il codice di recupero.",
+      "Non c'è ancora un archivio. In un terminale: agents vault init — e conserva il codice di recupero che stampa.",
+    "vault.pair": "Questa macchina non è abbinata. In un terminale: agents vault pair — con il codice di recupero.",
     "vault.wrongKey":
       "La chiave di questa macchina non apre l'archivio: abbinala di nuovo con il codice di recupero giusto.",
     "vault.conflicts": "{n} copie di conflitto di Syncthing nell'archivio: dillo a Claude, vanno guardate.",

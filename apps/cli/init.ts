@@ -1,9 +1,9 @@
-// init.ts — `agents-multi init <folder>`: a person's configuration, made from config.example/ and
+// init.ts — `agents init <folder>`: a person's configuration, made from config.example/ and
 // linked from ~/.claude-multi/config. The repository is code; profiles, accounts, rules and
 // preferences live in that folder, which its owner keeps in step between their machines.
 //
-//   agents-multi init ~/personal/claude-multi-config --name Ann --language Italian [--id ann]
-//   agents-multi init <existing folder>     only link it (a second machine)
+//   agents init ~/personal/claude-multi-config --name Ann --language Italian [--id ann]
+//   agents init <existing folder>     only link it (a second machine)
 
 import { lstat, readlink } from "./lib/fs.ts";
 import { ANSI } from "./lib/output.ts";
@@ -29,7 +29,7 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
   };
   const folder = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
   if (!folder) {
-    console.error("usage: agents-multi init <folder> [--name N] [--language L] [--id I]");
+    console.error("usage: agents init <folder> [--name N] [--language L] [--id I]");
     return 2;
   }
   const dir = expandHome(folder).replace(/\/+$/, "");
@@ -68,7 +68,7 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
     console.log(`${ANSI.g}+${ANSI.x} ${shortHome(CONFIG)} → ${shortHome(abs)}`);
   }
   console.log(
-    `\nNext: agents-multi install, then agents-multi vault init, then claude in each profile to sign in (README › First run).`,
+    `\nNext: agents install, then agents vault init, then claude in each profile to sign in (README › First run).`,
   );
   return 0;
 }

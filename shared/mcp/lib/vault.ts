@@ -18,8 +18,8 @@
 // built into Deno) with a fresh IV per write and the entry id as associated data, so an entry cannot
 // be swapped for another one unnoticed.
 //
-// A new machine gets the key once, from the recovery code (`claude-multi vault recovery-code` on a
-// machine that has it, `claude-multi vault pair` on the new one). key-check.json tells a right key
+// A new machine gets the key once, from the recovery code (`agents vault recovery-code` on a
+// machine that has it, `agents vault pair` on the new one). key-check.json tells a right key
 // from a wrong one before anything is written with it.
 //
 // Nothing here prints a secret. The only way a value leaves this module is the return value of
@@ -28,7 +28,7 @@
 const HOME = Deno.env.get("HOME") ?? "";
 const SECRET_TOOL = "/usr/bin/secret-tool";
 const KEY_ATTRS = ["application", "claude-multi", "kind", "vault-key"];
-const CHECK_TEXT = "claude-multi vault";
+const CHECK_TEXT = "agents vault";
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -170,14 +170,14 @@ export async function loadKey(): Promise<VaultKey> {
   }
   if (r.code !== 0 || !r.out) {
     throw new VaultError(
-      "this machine has no vault key: `claude-multi vault pair` (or `vault init` on the first machine)",
+      "this machine has no vault key: `agents vault pair` (or `vault init` on the first machine)",
     );
   }
   return await importKey(unb64(r.out));
 }
 
 async function storeKey(raw: Uint8Array) {
-  const r = await secretTool(["store", "--label=claude-multi vault key", ...KEY_ATTRS], b64(raw));
+  const r = await secretTool(["store", "--label=agents vault key", ...KEY_ATTRS], b64(raw));
   if (r.code !== 0) throw new VaultError("the keyring refused the vault key");
 }
 

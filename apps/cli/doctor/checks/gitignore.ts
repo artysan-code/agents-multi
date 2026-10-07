@@ -18,7 +18,7 @@ export async function gitIgnoreChecks(): Promise<Check[]> {
         "git.ignore",
         "warn",
         `${shortHome(file)} does not ignore ${miss.join(", ")}: a project's binding could be committed`,
-        "agents-multi install",
+        "agents install",
       );
     } else add("git.ignore", "ok", "git ignores the projects' .claude/claude-multi.json everywhere");
   }

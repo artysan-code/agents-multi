@@ -1,17 +1,17 @@
 // Tests for the doctor's fixes on the console: a fix that is a bare `agents-multi …` command gets a
 // button only when the page maps it to an allowlisted action (FIX_ACTIONS in apps/ui/src/lib/ui.tsx). The update
-// check once suggested `agents-multi update --auto` as text to copy, though the action existed.
+// check once suggested `agents update --auto` as text to copy, though the action existed.
 import { assertEquals } from "jsr:@std/assert@1";
 import { ACTIONS } from "../console/actions.ts";
 
 /** Commands the console does not run on purpose: they need a terminal, or do more than repair. */
 const MANUAL = new Set([
-  "agents-multi brain-backup",
-  "agents-multi doctor --probe",
-  "agents-multi sync",
-  "agents-multi tasks migrate",
-  "agents-multi update --cli",
-  "agents-multi vault status",
+  "agents brain-backup",
+  "agents doctor --probe",
+  "agents sync",
+  "agents tasks migrate",
+  "agents update --cli",
+  "agents vault status",
 ]);
 
 async function fixActions(): Promise<Record<string, string>> {

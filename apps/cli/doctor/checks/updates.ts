@@ -42,7 +42,7 @@ export async function updateChecks(): Promise<Check[]> {
         `update.${comp}`,
         "fail",
         `${name}: the last update failed verification (${last.detail}) — nothing was installed`,
-        "agents-multi update --auto",
+        "agents update --auto",
         [actionStep("update-now"), verifyStep],
       );
     } else if (last?.event === "failed") {
@@ -53,7 +53,7 @@ export async function updateChecks(): Promise<Check[]> {
         `update.${comp}`,
         "warn",
         `${name}: the last update failed (${last.detail || "see the journal"})`,
-        "agents-multi update --auto",
+        "agents update --auto",
         [
           ...(variants.length
             ? variants.map((v) => actionStep("desktop-rebuild", { profile: v.profile }))
@@ -64,7 +64,7 @@ export async function updateChecks(): Promise<Check[]> {
     }
   }
   if (!upd) {
-    add("update.check", "warn", "no update check cached", "agents-multi update --check", [
+    add("update.check", "warn", "no update check cached", "agents update --check", [
       actionStep("update-check"),
       verifyStep,
     ]);
@@ -75,7 +75,7 @@ export async function updateChecks(): Promise<Check[]> {
         "update.check",
         "warn",
         `update check is ${Math.round(ageH)} h old (timer stopped?)`,
-        "agents-multi update --check",
+        "agents update --check",
         [actionStep("update-check"), verifyStep],
       );
     }

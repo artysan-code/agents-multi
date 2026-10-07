@@ -37,7 +37,7 @@ export async function loadClient(): Promise<Client> {
   ]);
   if (!id || !secret) {
     throw new Error(
-      "no Google OAuth client on this machine: import it in the console (Connections) or with `agents-multi google client <file.json>`",
+      "no Google OAuth client on this machine: import it in the console (Connections) or with `agents google client <file.json>`",
     );
   }
   return { id, secret };

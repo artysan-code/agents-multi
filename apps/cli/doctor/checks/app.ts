@@ -30,7 +30,7 @@ export async function appChecks(ctx: DoctorCtx): Promise<Check[]> {
           "app.unit",
           "warn",
           `claude-multi-app.service: ${u.out || "not installed"} — no tray icon at login`,
-          "agents-multi install",
+          "agents install",
         );
       }
     }
@@ -49,7 +49,7 @@ export async function appChecks(ctx: DoctorCtx): Promise<Check[]> {
     if (m.systemd && m.graphical) {
       const t = await run("systemctl", ["--user", "is-enabled", "claude-update-check.timer"]);
       if (t.out !== "enabled") {
-        add("desktop.timer", "warn", `claude-update-check.timer: ${t.out || "not installed"}`, "agents-multi install");
+        add("desktop.timer", "warn", `claude-update-check.timer: ${t.out || "not installed"}`, "agents install");
       }
       const tt = await run("systemctl", ["--user", "is-enabled", "claude-tasks.timer"]);
       if (tt.out !== "enabled") {
@@ -57,7 +57,7 @@ export async function appChecks(ctx: DoctorCtx): Promise<Check[]> {
           "tasks.timer",
           "warn",
           `claude-tasks.timer: ${tt.out || "not installed"} — no task reminders on this machine`,
-          "agents-multi install",
+          "agents install",
         );
       }
     }

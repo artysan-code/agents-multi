@@ -31,7 +31,7 @@ cm_t() {
     latest)       it="già all'ultima versione"; en="already the latest" ;;
     updated)      it="aggiornata dalla %s"; en="updated from %s" ;;
     available)    it="c'è la %s"; en="%s is out" ;;
-    keep)         it="la %s resta per tornare indietro (agents-multi update --rollback)"; en="%s is kept to roll back to (agents-multi update --rollback)" ;;
+    keep)         it="la %s resta per tornare indietro (agents update --rollback)"; en="%s is kept to roll back to (agents update --rollback)" ;;
     pruned)       it="tolte le versioni vecchie: %s"; en="old versions removed: %s" ;;
     wrapper)      it="il comando claude passa di nuovo da agents-multi"; en="the claude command goes through agents-multi again" ;;
     handler)      it="i link claude-cli:// aprono di nuovo claude-bin"; en="claude-cli:// links open claude-bin again" ;;
@@ -40,10 +40,10 @@ cm_t() {
     desk_verify)  it="la firma non torna: non è stato installato niente"; en="the signature does not check out: nothing was installed" ;;
     busy)         it="c'è già un aggiornamento in corso"; en="another update is already running" ;;
     rolled)       it="tornata alla %s"; en="back to %s" ;;
-    forward)      it="la %s resta: agents-multi update --cli per tornare avanti"; en="%s stays: agents-multi update --cli to go forward again" ;;
+    forward)      it="la %s resta: agents update --cli per tornare avanti"; en="%s stays: agents update --cli to go forward again" ;;
     end_ok)       it="Tutto aggiornato."; en="Everything is up to date." ;;
     end_fail)     it="Qualcosa non è andato: i dettagli sono sopra."; en="Something went wrong: the details are above." ;;
-    end_avail)    it="C'è qualcosa da aggiornare: agents-multi update"; en="Something can be updated: agents-multi update" ;;
+    end_avail)    it="C'è qualcosa da aggiornare: agents update"; en="Something can be updated: agents update" ;;
     *)            it="$k"; en="$k" ;;
   esac
   # shellcheck disable=SC2059

@@ -2,7 +2,7 @@
 // launch.ts — how a server that is not ours gets one account's secret without it ever being
 // written into a configuration file.
 //
-// `agents-multi mcp sync` expands a registry entry with `_perAccount` into one server per account
+// `agents mcp sync` expands a registry entry with `_perAccount` into one server per account
 // (apps/cli/mcp/placement.ts). Everything about the account but its secret is already in that server's config:
 // the address, the name. The secret stays a `{secret}` placeholder, and this script fills it in when
 // the server starts, reading the vault (vault.ts) like our own servers do:
@@ -70,7 +70,7 @@ export function fill(vars: Record<string, string>, secret: string): Record<strin
 }
 
 /** Where a project keeps what it chose for agents-multi's servers, under its folder. Never committed:
- *  `agents-multi install` puts it in git's global ignore. */
+ *  `agents install` puts it in git's global ignore. */
 export const BINDING_FILE = ".claude/claude-multi.json";
 
 /** Pure: the arguments a project's binding adds for one service. A value is a plain word (letters,
@@ -135,7 +135,7 @@ async function main() {
     const secret = await getSecret(a.service, account.name);
     if (!secret) {
       throw new Error(
-        `no secret for ${a.service}/${account.name} on this machine: console › Connections, or agents-multi vault set ${a.service} ${account.name}`,
+        `no secret for ${a.service}/${account.name} on this machine: console › Connections, or agents vault set ${a.service} ${account.name}`,
       );
     }
     vars = fill(vars, secret);

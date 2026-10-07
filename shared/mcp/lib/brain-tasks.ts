@@ -38,7 +38,7 @@ export function brainStore(url: string, token: string, fetcher: typeof fetch = f
       await r.body?.cancel();
       throw new Error(
         r.status === 401
-          ? "the brain refused the token in the vault: sign this machine in again (console › Connections › Sign in, or agents-multi brain-login)"
+          ? "the brain refused the token in the vault: sign this machine in again (console › Connections › Sign in, or agents brain-login)"
           : `the brain answered ${r.status} on ${path}`,
       );
     }

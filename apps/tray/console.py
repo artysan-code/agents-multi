@@ -1,4 +1,4 @@
-"""console.py — the console (`agents-multi serve`) in a window of its own.
+"""console.py — the console (`agents serve`) in a window of its own.
 
 The page is the one the browser gets from 127.0.0.1: nothing is rebuilt here. What the window adds
 is being an application — its own icon and entry in the menu — and a clear answer when the console
