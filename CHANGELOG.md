@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.8.0] - 2026-10-07
+
+### Added
+
+- **site**: a Changelog page and Forgejo releases, both from CHANGELOG.md (b6a509d)
+
 ## [0.7.0] - 2026-10-07
 
 ### Added
