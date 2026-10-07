@@ -1,51 +1,35 @@
-// i18n.ts — the strings of the new interface, English and Italian. The type makes Italian carry every
-// English key: a string added in one language only does not compile. Keys move here from
-// apps/cli/dashboard/i18n.js as their page moves. The language: the viewer's pick (the same
-// localStorage key as the old console), else the machine's, else the browser's, else English.
+// i18n.ts — the strings of the new interface, English and Italian, one dictionary per area in ./i18n/
+// (the frame, then each page). The type makes Italian carry every English key: a string added in one
+// language only does not compile. Keys move here from apps/cli/dashboard/i18n.js as their page moves.
+// The language: the viewer's pick (the same localStorage key as the old console), else the machine's,
+// else the browser's, else English. Both are signals, so a page redraws when either changes.
 
+import { signal } from "@preact/signals";
 import { machineLang } from "./state.ts";
+import * as shell from "./i18n/shell.ts";
+import * as today from "./i18n/today.ts";
+import * as tasks from "./i18n/tasks.ts";
+import * as brain from "./i18n/brain.ts";
+import * as connections from "./i18n/connections.ts";
+import * as system from "./i18n/system.ts";
 
-const en = {
-  "nav.system": "System",
-  "health.checks": "Checks",
-  "health.rerun": "Re-run",
-  "health.sum": "{ok} pass · {w} warn · {f} fail",
-  "health.checking": "checking…",
-  "health.allGood": "All good: {n} checks pass.",
-  "health.areaOk": "{n} pass",
-  "health.area.brain": "Brain and tasks",
-  "health.area.mcp": "MCP servers and vault",
-  "health.area.desktop": "Claude Desktop and the app",
-  "health.area.profiles": "Profiles and launchers",
-  "health.area.setup": "Agents Multi",
-  "live.live": "live",
-  "live.busy": "refreshing",
-  "live.down": "reconnecting",
-} as const;
+const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en };
 
 export type Key = keyof typeof en;
 
 const it: Record<Key, string> = {
-  "nav.system": "Sistema",
-  "health.checks": "Controlli",
-  "health.rerun": "Ricontrolla",
-  "health.sum": "{ok} ok · {w} avvisi · {f} errori",
-  "health.checking": "controllo…",
-  "health.allGood": "Tutto in ordine: {n} controlli superati.",
-  "health.areaOk": "{n} ok",
-  "health.area.brain": "Brain e task",
-  "health.area.mcp": "Server MCP e archivio",
-  "health.area.desktop": "Claude Desktop e l'app",
-  "health.area.profiles": "Profili e launcher",
-  "health.area.setup": "Agents Multi",
-  "live.live": "in diretta",
-  "live.busy": "aggiorno",
-  "live.down": "riconnessione",
+  ...shell.it,
+  ...today.it,
+  ...tasks.it,
+  ...brain.it,
+  ...connections.it,
+  ...system.it,
 };
 
 const DICTS: Record<string, Record<Key, string>> = { en, it };
+export const LANGS = Object.keys(DICTS);
 
-function pref(): string {
+function stored(): string {
   try {
     return localStorage.getItem("cm-lang") || "auto";
   } catch {
@@ -53,8 +37,18 @@ function pref(): string {
   }
 }
 
+/** "auto" or a language the viewer picked. */
+export const langPref = signal<string>(stored());
+
+export function setLangPref(p: string): void {
+  langPref.value = p;
+  try {
+    localStorage.setItem("cm-lang", p);
+  } catch { /* not remembered, still applied */ }
+}
+
 export function lang(): string {
-  const p = pref();
+  const p = langPref.value;
   if (p !== "auto" && DICTS[p]) return p;
   if (DICTS[machineLang.value]) return machineLang.value;
   const nav = navigator.language.slice(0, 2);
@@ -63,4 +57,9 @@ export function lang(): string {
 
 export function t(key: Key, vars: Record<string, string | number> = {}): string {
   return DICTS[lang()][key].replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
+}
+
+/** A key built at run time (`health.area.${a}`): checked against the dictionary, else shown as is. */
+export function tk(key: string, vars: Record<string, string | number> = {}): string {
+  return key in en ? t(key as Key, vars) : key;
 }

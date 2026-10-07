@@ -3,9 +3,9 @@
 // re-run), and writes no markup by hand.
 
 import { useState } from "preact/hooks";
-import type { Check } from "../api.ts";
-import { loadStatus, status } from "../state.ts";
-import { type Key, t } from "../i18n.ts";
+import type { Check } from "../../api.ts";
+import { loadStatus, status } from "../../state.ts";
+import { type Key, t } from "../../i18n.ts";
 
 type Area = "brain" | "mcp" | "desktop" | "profiles" | "setup";
 type Row = Omit<Check, "status"> & { status: Check["status"] | "run" };
