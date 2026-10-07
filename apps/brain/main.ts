@@ -515,6 +515,18 @@ const server = Deno.serve(
     }
   },
 );
+// what expired is deleted at start and then every hour (it is refused on lookup anyway: this keeps
+// accounts.db from growing)
+const purge = () => {
+  try {
+    const gone = auth.purge() + users.purge();
+    if (gone) console.log(`brain: ${gone} expired rows removed`);
+  } catch (e) {
+    console.error(`brain: purge failed: ${(e as Error).message}`);
+  }
+};
+purge();
+const purging = setInterval(purge, 3600_000);
 // stopping (a deploy sends SIGTERM): no new requests, the ones in flight finish, the indexers stop
 // and every database is closed, so nothing is cut halfway through a write. Ten seconds at most.
 let stopping = false;
@@ -522,6 +534,7 @@ const stop = async (signal: string) => {
   if (stopping) return;
   stopping = true;
   console.log(`brain: ${signal}, stopping`);
+  clearInterval(purging);
   setTimeout(() => Deno.exit(1), 10_000);
   await server.shutdown();
   tenants.close();
