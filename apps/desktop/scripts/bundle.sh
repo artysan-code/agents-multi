@@ -60,7 +60,7 @@ cp -RL apps/ui/dist "$stage/repo/apps/ui/dist"
 
 # The build's stamp: two builds of one version (a development build) differ by their digest.
 version="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' deno.json | head -n1)"
-commit="$(git rev-parse --short HEAD)$([[ -z "$(git status --porcelain)" ]] || echo -dirty)"
+commit="$(git rev-parse --short HEAD)$([[ -z "$(git status --porcelain --untracked-files=no)" ]] || echo -dirty)"
 digest="$(cd "$stage/repo" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
 printf '{"version":"%s","commit":"%s","digest":"%s"}\n' "$version" "$commit" "$digest" > "$stage/repo/build.json"
 

@@ -87,7 +87,8 @@ export async function installApp(o: { dry: boolean }): Promise<number> {
       say("the app's code is current");
       return 0;
     }
-    const open = Object.keys(await blockers());
+    // a Claude open holds files of an installation; a first install has none of ours in use
+    const open = inst.fresh ? [] : Object.keys(await blockers());
     if (open.length && !o.dry) {
       await Deno.writeTextFile(PENDING, copy.to);
       await record({ build: copy.to, ok: true, pending: true });
