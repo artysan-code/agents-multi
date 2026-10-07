@@ -2,9 +2,9 @@
 
 Two tiers. Tier 1 = always loaded. Tier 2 = via plugin (auto-active when plugin enabled).
 
-> Esisteva un Tier 3 ("R7 catalog": 8 agent on-demand da
-> `~/claude-multi-optimization/ECC/agents/`). Rimosso il 2026-07-26:
-> quella directory non esiste più e non era nel backup pre-format.
+> Esisteva un Tier 3 ("R7 catalog": 8 agent on-demand presi da
+> [everything-claude-code](https://github.com/affaan-m/everything-claude-code/tree/main/agents)).
+> Rimosso il 2026-07-26. Fonti e licenze degli agent: `THIRD_PARTY_NOTICES.md` alla radice.
 
 ---
 
