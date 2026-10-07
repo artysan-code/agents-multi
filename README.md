@@ -628,7 +628,7 @@ stays set everywhere: the updates are driven from here, not by each binary on it
 ## Development
 
 ```bash
-deno task check   # type-check the CLI and tests, bash -n every script, py_compile the app
+deno task check   # type-check the CLI and tests, bash -n every script, the app's Rust
 deno task test    # usage (rates, dedupe, turns), notifications,
                   # mcp, manifests, changelog, prelaunch against real git repositories
 ```

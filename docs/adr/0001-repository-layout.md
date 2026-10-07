@@ -22,7 +22,6 @@ apps/
   cli/        the agents-multi CLI and the local console (installed on each machine)
   brain/      the brain service: Dockerfile and compose.yaml in this folder (deployed)
   site/       the public site, Astro; built into the brain's image (deployed with it)
-  tray/       the PySide6 tray app, until the desktop app replaces it
   desktop/    the desktop app, Tauri 2 (installed on each machine; docs/adr/0003)
 shared/       read at run time through ~/.agents-multi/shared: settings, hooks, agents, commands,
               skills, the MCP registry, the MCP servers and their library (shared/mcp/lib)

@@ -84,11 +84,9 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   session out (the doctor checks they are there).
 - **Notifications go through `desktopNotify()`** (`apps/cli/notify.ts`): normal urgency, eight seconds,
   once per event. Never `-u critical` — on KDE it ignores the expiry and stays on screen.
-- **The desktop app is a view** (`apps/tray/`, PySide6): what it shows comes from the
-  console's API, what it does is a CLI command. A colour or a rule the tray applies is TypeScript
-  (`summarize()` in `apps/cli/status.ts`, with its test), not Python. Its name and identifiers derive
-  from `NAME` in `common.py`. Qt aborts the whole process when a running `QThread` is destroyed:
-  a window that owns a worker is not deleted before the worker finishes.
+- **The desktop app is a view**: what it shows comes from the console's API, what it does is a CLI
+  command. A colour or a rule the tray applies is TypeScript (`summarize()` in `apps/cli/status.ts`,
+  with its test), not Rust.
 - **The desktop app is `apps/desktop/`** (Tauri 2, Rust in `src-tauri/`; [ADR 0003](docs/adr/0003-desktop-app.md)),
   replacing the tray and the console's unit piece by piece. Its window loads the console by URL
   (`http://127.0.0.1:<port>`), never a bundled copy of `apps/ui`; a bundled local page (`src/`, no

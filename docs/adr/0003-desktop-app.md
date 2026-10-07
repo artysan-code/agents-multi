@@ -244,6 +244,7 @@ development only; nothing in app mode depends on systemd (macOS and Windows come
 - **The PySide6 app** goes: `bin/claude-multi-app` runs the desktop app (the runtime's link, or the one
   on PATH; from a checkout with `AGENTS_MULTI_REPO` set to it), `desktop/claude-multi.desktop` goes
   (the package has its own entry) and install removes the copy it wrote; the picker's entry stays.
+  `apps/tray/` is removed, and with it the check's Python step.
 
 ## The tray, the launch flags and the profile picker (phase 5, piece 3)
 
