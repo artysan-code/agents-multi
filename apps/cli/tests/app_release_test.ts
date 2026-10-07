@@ -15,9 +15,12 @@ import { DEPENDS, type Package, packageProblems, pkgbuild, srcinfo } from "../..
 
 const KEY = { plugins: { updater: { pubkey: "dW50cnVzdGVk" } } };
 
-Deno.test("app release: a release refuses an empty site, repository or key", () => {
+Deno.test("app release: a release refuses an empty site, repository or key, or two licences", () => {
   assertEquals(configProblems({ site: "https://am.example", github: "o/agents-multi" }, KEY), []);
   assertEquals(configProblems({ site: "", github: "", aur: "x" }, { plugins: { updater: { pubkey: "" } } }).length, 3);
+  const tauri = { ...KEY, bundle: { license: "AGPL-3.0-only" } };
+  assertEquals(configProblems({ site: "https://am.example", github: "o/a", license: "AGPL-3.0-only" }, tauri), []);
+  assertEquals(configProblems({ site: "https://am.example", github: "o/a", license: "MIT" }, tauri).length, 1);
   assertEquals(configProblems({ site: "http://am.example", github: "o/r" }, KEY).length, 1);
   assertEquals(configProblems({ site: "https://am.example", github: "nope" }, {}).length, 2);
 });
@@ -81,7 +84,7 @@ const PKG: Package = {
   version: "1.0.0",
   sha256: "a".repeat(64),
   github: "owner/agents-multi",
-  license: "MIT",
+  license: "AGPL-3.0-only AND LicenseRef-Commons-Clause",
   identifier: "me.artysan.agents",
 };
 
@@ -102,7 +105,10 @@ Deno.test("aur: the PKGBUILD repackages the release's deb with the updater off, 
   );
   assertStringIncludes(b, `sha256sums_x86_64=('${"a".repeat(64)}')`);
   assertStringIncludes(b, `> "$pkgdir/usr/lib/me.artysan.agents/package-manager"`);
-  assertStringIncludes(b, "license=('MIT')");
+  assertStringIncludes(b, "license=('AGPL-3.0-only AND LicenseRef-Commons-Clause')");
+  assertStringIncludes(s, "\tlicense = AGPL-3.0-only AND LicenseRef-Commons-Clause\n");
+  // a LicenseRef- licence ships its text: the deb carries it in the repository's copy
+  assertStringIncludes(b, `"$pkgdir/usr/lib/me.artysan.agents/repo/$f" "$pkgdir/usr/share/licenses/$pkgname/$f"`);
   assertStringIncludes(
     s,
     "\tsource_x86_64 = https://github.com/owner/agents-multi/releases/download/v1.0.0/agents-multi_1.0.0_amd64.deb\n",

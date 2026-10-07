@@ -70,7 +70,7 @@ const en = {
   callText: "The code is being readied for a public release. Want to know more, or try it early? Write to me.",
   callContact: "Write to me",
   callDocs: "Read the docs",
-  footer: { made: "Made by", privacy: "Privacy", docs: "Docs", signin: "Sign in", legal: "Agents Multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC." },
+  footer: { made: "Made by", privacy: "Privacy", docs: "Docs", signin: "Sign in", license: "Source-available under the AGPL-3.0 with the Commons Clause: free to use, modify, fork and share, not to sell.", legal: "Agents Multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC." },
 };
 
 export type Dict = typeof en;
@@ -141,7 +141,7 @@ const it: Dict = {
   callText: "Il codice si sta preparando per uscire pubblico. Vuoi saperne di più, o provarlo prima? Scrivimi.",
   callContact: "Scrivimi",
   callDocs: "Leggi la documentazione (EN)",
-  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
+  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", license: "Codice disponibile sotto AGPL-3.0 con la Commons Clause: libero da usare, modificare, forkare e condividere, non da vendere.", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
 };
 
 export const dict: Record<Lang, Dict> = { en, it };

@@ -73,6 +73,10 @@ package() {
   bsdtar -xf data.tar.* -C "$pkgdir"
   # pacman updates the app: its own updater stays off (apps/desktop/src-tauri/src/updater.rs)
   printf 'pacman\\n' > "$pkgdir/usr/lib/${p.identifier}/package-manager"
+  # the licence is not only an SPDX identifier (LicenseRef-): its text goes where pacman looks for it
+  for f in LICENSE THIRD_PARTY_NOTICES.md; do
+    install -Dm644 "$pkgdir/usr/lib/${p.identifier}/repo/$f" "$pkgdir/usr/share/licenses/$pkgname/$f"
+  done
 }
 `;
 }

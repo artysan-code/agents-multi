@@ -682,3 +682,14 @@ The variables are `AGENTS_MULTI_<NAME>` (`ROOT`, `CONFIG`, `PORT`, `VAULT`, `TAS
 `NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` is still read when the new one is not set, and the
 MCP servers get both until 1.0; the brain's `compose.yaml` keeps the old names for the owner variables
 until its Coolify settings are renamed.
+
+## License
+
+Agents Multi is **source-available**: the [GNU AGPL-3.0](LICENSE) with the
+[Commons Clause](https://commonsclause.com/) on top. You may use it, modify it, fork it and share it,
+for yourself or inside a company; you may not sell it, nor a product or service (hosting and support
+included) whose value comes substantially from it. Forks and copies keep the same terms. Because of
+the Commons Clause it is not open source in the OSI's sense.
+
+Files taken from other projects keep their own licences: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Contributions are welcome under the contributor licence agreement in [CONTRIBUTING.md](CONTRIBUTING.md).

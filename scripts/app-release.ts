@@ -39,7 +39,7 @@ export interface ReleaseConfig {
   github: string;
   /** the AUR package's name */
   aur: string;
-  /** the SPDX licence the AUR package declares */
+  /** the SPDX licence the AUR package declares, the same as tauri.conf.json's bundle.license */
   license?: string;
 }
 
@@ -67,6 +67,10 @@ export function configProblems(release: Partial<ReleaseConfig>, tauri: unknown):
   if (!/^[\w.-]+\/[\w.-]+$/.test(release.github ?? "")) out.push(`${RELEASE_CONFIG}: "github" is not owner/name`);
   if (typeof pubkey !== "string" || !pubkey.trim()) {
     out.push(`${TAURI_CONFIG}: plugins.updater.pubkey is empty`);
+  }
+  const license = (tauri as { bundle?: { license?: unknown } })?.bundle?.license;
+  if ((license ?? "") !== (release.license ?? "")) {
+    out.push(`${RELEASE_CONFIG}: "license" is not ${TAURI_CONFIG}'s bundle.license`);
   }
   return out;
 }

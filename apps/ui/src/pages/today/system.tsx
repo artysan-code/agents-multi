@@ -124,7 +124,7 @@ function Versions() {
     <div class="calm">
       <i class="still" />
       <span><b>{t("sc.current")}</b></span>
-      <span class="v">{parts.join(" · ")}</span>
+      <span class="v">{[...parts, t("sc.license")].join(" · ")}</span>
     </div>
   );
 }
