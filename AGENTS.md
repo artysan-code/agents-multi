@@ -89,7 +89,9 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   build step) waits for the console to answer. No page gets IPC: the app has no capabilities, and one
   added for the local page never lists the console's origin (`remote.urls`). Navigation stays on the local
   page and the console (`navigation.rs`); other links go to the system browser. The bundle
-  identifier `net.local.agents-multi` is provisional, decided before phase 6. `check.sh` runs
+  identifier `net.local.agents-multi` is provisional, decided before phase 6. A second launch carries
+  the launcher's activation token in its arguments (`activation.rs`): the single-instance plugin forwards
+  nothing else, and without it Wayland does not raise the window. `check.sh` runs
   `cargo fmt` and `clippy -D warnings` where cargo and WebKitGTK are installed.
 - **Launching stays pure bash** (`bin/claude`, `bin/claude-launch`, `bin/lib/`): no Deno on the hot
   path, so a wrapper still works on a machine without it. The manifests are read from bash through

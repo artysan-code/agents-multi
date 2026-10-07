@@ -40,8 +40,27 @@ shell's.
     `window.open`) never opens one: a web URL goes to the system browser, the console's included.
   - The local page has a CSP (`tauri.conf.json`): nothing but its own files, and connections only
     to `http://127.0.0.1:*`. The console's own headers govern the console.
-- **One instance**: a second launch focuses the running window and exits
-  (`tauri-plugin-single-instance`).
+- **One instance**: a second launch raises the running window and exits
+  (`tauri-plugin-single-instance`). A compositor raises a window only with the launcher's proof
+  that the user asked for it, an activation token, and the plugin forwards nothing but the second
+  launch's arguments and working directory (over D-Bus on Linux). So on Linux the second launch
+  executes itself again with the token added as `--activation-token=` (the environment kept, so a
+  first launch still finds it there), and the running instance hands it to GTK as the window's
+  startup id (`src-tauri/src/activation.rs`). When the window has not got the focus half a second
+  later, it asks for attention — never always-on-top. What that gives:
+
+  - From the app menu, KRunner, a `.desktop` file or a file manager (the launcher gives a token):
+    on Wayland the window is raised, GTK activating it with `XDG_ACTIVATION_TOKEN`
+    (xdg-activation-v1); on X11 it is presented with the launch time from `DESKTOP_STARTUP_ID`, and
+    the window manager's focus-stealing prevention has the last word.
+  - From a terminal, or any launcher that gives no token: on Wayland the window is not raised —
+    KWin refuses the activation GTK asks for on its own and highlights the taskbar entry; on X11 the
+    window manager decides, and if it refuses, the urgency hint highlights the taskbar entry.
+
+  GTK 3 ignores the urgency hint on Wayland, so there the highlight is the compositor's own answer
+  to a refused activation; other compositors may show nothing. Tao (the window layer) has no
+  activation-token support of its own, and its focus call is a plain `present`, which is why the
+  token goes through GTK directly.
 - **The bundle identifier is provisional**: `net.local.agents-multi`, in `tauri.conf.json` only. It
   is decided before phase 6 (signed releases and the updater), since changing it afterwards moves
   the app's data directories and breaks updates.
