@@ -5,8 +5,8 @@
   "type": "module",
   "packageManager": "pnpm@10.18.0",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro check && astro build",
+    "dev": "node scripts/changelog.mjs && astro dev",
+    "build": "node scripts/changelog.mjs && astro check && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

@@ -12,6 +12,8 @@ WORKDIR /site
 COPY apps/site/package.json apps/site/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY apps/site/ ./
+# the docs' Changelog page is written from it (apps/site/scripts/changelog.mjs)
+COPY CHANGELOG.md /CHANGELOG.md
 RUN pnpm build
 
 FROM denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432
