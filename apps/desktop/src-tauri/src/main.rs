@@ -15,6 +15,7 @@ mod console;
 mod controller;
 mod flags;
 mod http;
+mod instance;
 mod navigation;
 mod picker;
 mod profiles;
@@ -39,10 +40,11 @@ fn main() {
 
     tauri::Builder::default()
         // First, so a second launch exits before it builds anything: it hands its flags (and the
-        // launcher's activation token, activation.rs) to this one.
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            controller::second_launch(app, args.get(1..).unwrap_or_default())
-        }))
+        // launcher's activation token, activation.rs) to this one. A development instance has its own.
+        .plugin(instance::single_instance(
+            &context.config().identifier,
+            |app, args, _cwd| controller::second_launch(app, args.get(1..).unwrap_or_default()),
+        ))
         // The console's backend: started before the window, stopped on exit (backend.rs).
         .plugin(backend::init())
         .setup(|app| {
