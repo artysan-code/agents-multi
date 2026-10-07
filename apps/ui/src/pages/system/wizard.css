@@ -233,3 +233,6 @@
   overflow: auto;
   font-size: 11.5px;
 }
+.uw-skipped .uw-ic {
+  color: var(--faint);
+}

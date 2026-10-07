@@ -14,7 +14,7 @@ import { FIX_ACTIONS, runJob, toastErr } from "../../lib/ui.tsx";
 import { request, useIntent } from "../../router.ts";
 import { loadStatus, status } from "../../state.ts";
 import { askNow } from "../../shell/ask.tsx";
-import { appUpdate, notePoints } from "../../shell/app-update.ts";
+import { appUpdater, notePoints } from "../../shell/app-update.ts";
 import { setUpdateLater, sys, updateLater } from "../../shell/sysstate.ts";
 import { openRepair, useRepair } from "../system/health-repair.tsx";
 import { checkTitle } from "./health-title.ts";
@@ -141,7 +141,7 @@ function Health({ n }: { n: number }) {
 
 /** One row per component an update would move: from → to. */
 function UpdateRows() {
-  const S = status.value, app = appUpdate.value;
+  const S = status.value, app = appUpdater();
   const rows: [string, string][] = [];
   if (app?.available) rows.push(["Agents Multi", `${app.current ?? "—"} → ${app.available.version}`]);
   if (S) {
@@ -163,7 +163,7 @@ function UpdateRows() {
 }
 
 function UpdateCard() {
-  const S = status.value, app = appUpdate.value;
+  const S = status.value, app = appUpdater();
   const news = app?.available?.notes ? notePoints(app.available.notes) : [];
   // Desktop restarts to take its new version: say which ones are open, and if a session works in one
   const desk = S?.running.desktop.map((d) => d.variant) ?? [];

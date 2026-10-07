@@ -15,7 +15,7 @@ import { loadStatus, status, useTopic } from "../../state.ts";
 import { type Key, t, tk } from "../../i18n.ts";
 import { intent, useIntent } from "../../router.ts";
 import { openDrawer, runJob } from "../../lib/ui.tsx";
-import { appUpdate, appUpdateAction, loadAppUpdate, notePoints } from "../../shell/app-update.ts";
+import { appUpdate, appUpdateAction, appUpdater, loadAppUpdate, notePoints } from "../../shell/app-update.ts";
 import { cmpVer, COMPONENTS, fetchNews, keep, kept, News, pendingUpdates, type Report, type Whatsnew } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
 import "./wizard.css";
@@ -43,7 +43,7 @@ interface Run {
 const fresh = (): Run => {
   const S = status.value as Report | null;
   return {
-    from: appUpdate.value?.current ?? S?.repo.version ?? null,
+    from: appUpdater()?.current ?? S?.repo.version ?? null,
     code: "",
     self: false,
     app: null,
@@ -52,6 +52,17 @@ const fresh = (): Run => {
     pending: [],
   };
 };
+
+/** The run after the app's relaunch from an update: the one kept here when there is one, else one made
+ *  from the app's note (an update started from the tray, or the run's storage gone). */
+function relaunched(u: { from: string; to: string }): Run {
+  const kept_ = kept<Run>(localStorage, UW_KEY);
+  const base = kept_ ?? { ...fresh(), from: u.from, self: true, app: { version: u.to, notes: "" }, pending: [`Agents Multi ${u.from} → ${u.to}`] };
+  return {
+    ...base,
+    state: { ...base.state, check: "done", download: "done", restart: "done", update: base.state.update === "todo" ? "skipped" : base.state.update },
+  };
+}
 
 /** The console answers again, with other code than `old`: the restart is over. */
 async function consoleBack(old: string, timeoutMs = 120000): Promise<boolean> {
@@ -94,7 +105,7 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
   const v = useRef({ out: "", cause: "", running: false, jobId: null as string | null, news: null as Whatsnew | null, health: null as Health | null, showOut: false }).current;
   const outEl = useRef<HTMLPreElement>(null);
   const S = status.value as Report | null;
-  const app = appUpdate.value;
+  const app = appUpdater();
 
   const set = (step: Step, st: StepState) => {
     run.state[step] = st;
@@ -158,13 +169,13 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
     // the console's check, and the app's when there is an app to update
     const [r] = await Promise.all([
       job("update-check"),
-      appUpdate.value ? appUpdateAction("check").then(() => appLeaves(["checking"], 60000)) : Promise.resolve(),
+      appUpdater() ? appUpdateAction("check").then(() => appLeaves(["checking"], 60000)) : Promise.resolve(),
     ]);
     if ("error" in r || r.code) {
       return fail("check", "error" in r ? why(r.error) : lastLine(v.out) ?? t("uw.exit", { c: r.code }));
     }
     await loadStatus().catch(() => null);
-    const a = appUpdate.value?.available;
+    const a = appUpdater()?.available;
     run.app = a ? { version: a.version, notes: a.notes } : null;
     const ours = pendingUpdates(status.value as Report | null);
     run.pending = [...(a ? [`Agents Multi ${appUpdate.value?.current ?? "—"} → ${a.version}`] : []), ...ours];
@@ -405,6 +416,12 @@ export function UpdateWizardHost() {
     if (cmpVer(v, seen) > 0) setNote({ v, seen });
   }, [ready]);
 
+  // the app relaunched from an update: say so, once (closing the screen dismisses the app's note)
+  const updated = appUpdate.value?.updated;
+  useEffect(() => {
+    if (updated && !open) setOpen({ resume: relaunched(updated), auto: false, at: Date.now() });
+  }, [updated?.to]);
+
   // a request that came before the shell drew this host
   useEffect(() => {
     if (intent.value?.name === "update.wizard") setOpen({ resume: null, auto: intent.value.arg === "auto", at: Date.now() });
@@ -420,6 +437,7 @@ export function UpdateWizardHost() {
           close={() => {
             setOpen(null);
             keep(localStorage, UW_KEY);
+            if (appUpdate.value?.updated) void appUpdateAction("dismiss");
           }}
         />
       )}

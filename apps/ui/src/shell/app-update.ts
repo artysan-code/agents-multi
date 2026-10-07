@@ -1,8 +1,10 @@
-// app-update.ts — the desktop app's own update, as the console's backend relays it: GET /api/app/update
-// says what is installed, what is available and where an update stands; POST starts a check or the
-// install (download if needed, install, relaunch). The state moves on the "app-update" topic of the
-// server's events, never by polling. Where the backend has no such endpoint (an older console, or no
-// desktop app), `appUpdate` stays null and the update wizard does the console's own steps only.
+// app-update.ts — the desktop app's own update, as the console's backend relays it
+// (apps/cli/console/app-update.ts): GET /api/app/update says what runs, what is available and where an
+// update stands; POST starts a check, the install (download if needed, install, relaunch), or
+// dismisses the «Updated» screen a relaunch opens. The state moves on the "app-update" topic of the
+// server's events, never by polling. Where no app answers (`app` false: a console run by hand), where
+// the app does not update itself (`off`), or where the backend has no such endpoint (an older one),
+// the update screen does the console's own steps only.
 
 import { signal } from "@preact/signals";
 import { get, post, type Result } from "../api.ts";
@@ -10,22 +12,35 @@ import { get, post, type Result } from "../api.ts";
 export type AppUpdateState = "idle" | "checking" | "downloading" | "ready" | "installing" | "restarting" | "error";
 
 export interface AppUpdate {
+  /** whether an app answers */
+  app: boolean;
   current: string | null;
-  available: { version: string; notes: string; date: string } | null;
+  channel: "stable" | "beta" | null;
   state: AppUpdateState;
+  available: { version: string; notes: string; date: string | null } | null;
   /** 0..1, while downloading */
   progress?: number;
   error?: string;
-  channel?: string;
+  /** why the app does not update itself: build, not-configured, not-packaged, package-manager:<name> */
+  off?: string;
+  /** this run of the app is an update from `from`: the «Updated» screen shows until it is dismissed */
+  updated?: { from: string; to: string };
+  checkedAt?: number;
 }
 
 export const appUpdate = signal<AppUpdate | null>(null);
+
+/** The app's status when the app updates itself here, else null. */
+export const appUpdater = (): AppUpdate | null => {
+  const a = appUpdate.value;
+  return a?.app && !a.off ? a : null;
+};
 
 export async function loadAppUpdate(): Promise<void> {
   appUpdate.value = await get<AppUpdate>("/api/app/update").catch(() => null);
 }
 
-export async function appUpdateAction(action: "check" | "install"): Promise<Result> {
+export async function appUpdateAction(action: "check" | "install" | "dismiss"): Promise<Result> {
   const r = await post("/api/app/update", { action }).catch((e: Error): Result => ({ ok: false, message: e.message }));
   await loadAppUpdate();
   return r;
