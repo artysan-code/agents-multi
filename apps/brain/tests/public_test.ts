@@ -2,7 +2,19 @@
 // placeholders take the instance's particulars, its files are served with the right headers, the
 // brain's address sends visitors to the site's own, and the notice names every Google scope.
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
-import { contactOf, fillSite, privacyPage, siteCache, siteFile, siteMoved, sitePath } from "../public.ts";
+import {
+  contactOf,
+  etagMatches,
+  fillSite,
+  loadSite,
+  privacyPage,
+  siteCache,
+  siteFile,
+  siteMoved,
+  sitePath,
+  siteSize,
+} from "../public.ts";
+import { hardened } from "../guard.ts";
 import { SCOPES } from "../../../shared/mcp/lib/google.ts";
 
 const site = {
@@ -58,21 +70,58 @@ Deno.test("public: hashed assets are kept for a year, pages revalidated, the res
   assertEquals(siteCache("fonts/dm-sans.woff2"), "public, max-age=2592000");
 });
 
-Deno.test("public: a file of the site is served with its type, its CSP and filled; a missing one is not", async () => {
+Deno.test("public: a file of the site is served from memory with its type, its CSP and filled; a missing one is not", async () => {
   const dir = await Deno.makeTempDir();
   try {
     await Deno.mkdir(`${dir}/it`);
     await Deno.writeTextFile(`${dir}/it/index.html`, "<body>__OPERATOR__</body>");
     await Deno.writeTextFile(`${dir}/mark.svg`, "<svg/>");
-    const h = (await siteFile(dir, "/it/", site))!;
+    const files = await loadSite(dir, site);
+    await Deno.remove(`${dir}/it`, { recursive: true }); // nothing is read from disk after the load
+    const none = new Headers();
+    const h = siteFile(files, "/it/", none)!;
     assertEquals(h.headers.get("content-type"), "text/html; charset=utf-8");
     assertStringIncludes(h.headers.get("content-security-policy")!, "frame-ancestors 'none'");
     assertStringIncludes(await h.text(), "Ann &lt;x&gt;");
-    const svg = (await siteFile(dir, "/mark.svg", site))!;
+    const svg = siteFile(files, "/mark.svg", none)!;
     assertStringIncludes(svg.headers.get("content-security-policy")!, "sandbox");
-    assertEquals((await siteFile(dir, "/it/", site, 404))!.status, 404);
-    assertEquals(await siteFile(dir, "/nope/", site), null);
-    assertEquals(await siteFile(dir, "/mcp", site), null);
+    assertEquals(siteFile(files, "/it/", none, 404)!.status, 404);
+    assertEquals(siteFile(files, "/nope/", none), null);
+    assertEquals(siteFile(files, "/mcp", none), null);
+    assertEquals(siteSize(files), (await siteFile(files, "/it/", none)!.arrayBuffer()).byteLength + 6);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("public: a matching If-None-Match gets a 304 that keeps the security headers; a stale one gets the file", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(`${dir}/_astro`);
+    await Deno.writeTextFile(`${dir}/index.html`, "<body>hi</body>");
+    await Deno.writeTextFile(`${dir}/_astro/a.B1x.css`, "a{}");
+    const files = await loadSite(dir, site);
+    const first = siteFile(files, "/", new Headers())!;
+    const etag = first.headers.get("etag")!;
+    assert(/^"[0-9a-f]{32}"$/.test(etag), "strong etag");
+    assertEquals(first.headers.get("cache-control"), "no-cache");
+    for (const inm of [etag, `W/${etag}`, `"x", ${etag}`, "*"]) {
+      const r = hardened(siteFile(files, "/", new Headers({ "if-none-match": inm }))!, true);
+      assertEquals(r.status, 304, inm);
+      assertEquals(await r.text(), "");
+      assertEquals(r.headers.get("etag"), etag);
+      assertEquals(r.headers.get("cache-control"), "no-cache");
+      assertEquals(r.headers.get("x-content-type-options"), "nosniff");
+      assertEquals(r.headers.get("strict-transport-security"), "max-age=31536000");
+      assertStringIncludes(r.headers.get("content-security-policy")!, "frame-ancestors 'none'");
+    }
+    assertEquals(siteFile(files, "/", new Headers({ "if-none-match": '"other"' }))!.status, 200);
+    assertEquals(siteFile(files, "/", new Headers({ "if-none-match": etag }), 404)!.status, 404); // an error page is never "not modified"
+    assertEquals(
+      siteFile(files, "/_astro/a.B1x.css", new Headers())!.headers.get("cache-control"),
+      "public, max-age=31536000, immutable",
+    );
+    assert(!etagMatches(null, etag));
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -84,11 +133,12 @@ Deno.test("public: the brain's address sends a page of the site to the site's ow
     await Deno.mkdir(`${dir}/docs`);
     await Deno.writeTextFile(`${dir}/index.html`, "");
     await Deno.writeTextFile(`${dir}/docs/index.html`, "");
-    assertEquals(await siteMoved(dir, new URL("https://b.test/"), site), "https://s.test/");
-    assertEquals(await siteMoved(dir, new URL("https://b.test/docs/?q=1"), site), "https://s.test/docs/?q=1");
-    assertEquals(await siteMoved(dir, new URL("https://b.test/tasks"), site), null);
-    assertEquals(await siteMoved(dir, new URL("https://b.test/nope"), site), null);
-    assertEquals(await siteMoved(dir, new URL("https://b.test/"), { ...site, siteUrl: site.url }), null); // one address: nothing moves
+    const files = await loadSite(dir, site);
+    assertEquals(siteMoved(files, new URL("https://b.test/"), site), "https://s.test/");
+    assertEquals(siteMoved(files, new URL("https://b.test/docs/?q=1"), site), "https://s.test/docs/?q=1");
+    assertEquals(siteMoved(files, new URL("https://b.test/tasks"), site), null);
+    assertEquals(siteMoved(files, new URL("https://b.test/nope"), site), null);
+    assertEquals(siteMoved(files, new URL("https://b.test/"), { ...site, siteUrl: site.url }), null); // one address: nothing moves
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
