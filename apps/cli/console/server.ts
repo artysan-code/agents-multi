@@ -33,6 +33,7 @@ import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
 import { cancelJob, jobStream, startJob } from "./jobs.ts";
 import { closePlan, closeSessions, reopen } from "./close-claude.ts";
+import { launchList, launchOne } from "./picker.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
 import { UI_DIST } from "../ui.ts";
@@ -230,6 +231,14 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
         }
         if (b.step === "reopen") return json({ ok: true, started: await reopen(b.profiles ?? []) });
         return json({ ok: false, message: "unknown step" }, 400);
+      },
+    },
+    // «Which Claude?»: the profiles, and opening one's Claude Desktop (the picker at /#pick)
+    "/api/launch": {
+      get: async () => json(await launchList()),
+      post: async ({ req }) => {
+        const r = await launchOne(await body(req));
+        return json(r, r.ok ? 200 : 400);
       },
     },
     "/api/action": {
