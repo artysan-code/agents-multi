@@ -118,7 +118,8 @@ claude.ai account and is not affected. It is the **Account MCP** checkbox in the
 Each profile's `settings.json` is a generated file, not a link:
 
 ```
-shared/settings.json                 the setup's own: hooks, statusline, the safety rules
+shared/settings.json                 the setup's own: hooks, statusline, the safety rules, and a
+                                     repository's AGENTS.md read beside any CLAUDE.md above it
 config/settings.json                 yours: what every profile gets, as a JSON Merge Patch over it
                                      (RFC 7386: objects merge, anything else replaces, null deletes)
 config/profiles/<p>/settings.json    that profile's differences, the same kind of patch
