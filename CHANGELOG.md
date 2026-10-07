@@ -5,6 +5,18 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.12.0] - 2026-10-07
+
+### Fixed
+
+- **update**: a renamed repository is reported as such, not as offline (33ae82c)
+- **vault**: deny the recovery code under the agents name too (aa5637f)
+
+### Changed
+
+- **env**: AGENTS_MULTI_* variables, with CLAUDE_MULTI_* read as the fallback (b7c8af2)
+- **cli**: the command is `agents`; agents-multi and claude-multi stay as aliases (5746e95)
+
 ## [0.11.2] - 2026-10-07
 
 ### Fixed
