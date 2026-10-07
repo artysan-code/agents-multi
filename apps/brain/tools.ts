@@ -11,11 +11,12 @@ import { linksIn, type Store } from "./store.ts";
 import { type EmbedConfig, fuse, searchMeaning } from "./embed.ts";
 import {
   areaOf,
-  AREAS,
+  AREAS_IT,
+  areasOf,
   check,
   diaryRewriteErrors,
   entryErrors,
-  LOGS,
+  logs,
   MAX_ENTRY_WORDS,
   MAX_WORDS,
   maxWords,
@@ -29,23 +30,23 @@ import { type Owner, owner } from "../../shared/mcp/lib/owner.ts";
  *  (owner.ts: CLAUDE_MULTI_OWNER_NAME, CLAUDE_MULTI_LANGUAGE), from io/, so each conversation starts
  *  knowing them. */
 export function instructions(store: Store, o: Owner = owner()): string {
-  const who = o.name;
+  const who = o.name, a = areasOf(store);
   const rules =
-    `${who}'s brain: their memory and their tasks, the same from every Claude they use. Seven areas: io/ (who they are, how they work), ` +
-    "progetti/ (one page per project, the same path as their folder: progetti/work/acme/site.md), " +
-    `clienti/ (who ${who} works for, directly or through another client: the relationship, the people, links to the projects; a client ` +
-    "that is only one project stays on the project page), persone/ (people only), " +
-    "note/ (how things are done: setups, fixes, procedures), diario/ (what happened, one page a day, only added to), inbox/ (said in passing, to sort). " +
+    `${who}'s brain: their memory and their tasks, the same from every Claude they use. Seven areas: ${a.self}/ (who they are, how they work), ` +
+    `${a.projects}/ (one page per project, the same path as their folder: ${a.projects}/work/acme/site.md), ` +
+    `${a.clients}/ (who ${who} works for, directly or through another client: the relationship, the people, links to the projects; a client ` +
+    `that is only one project stays on the project page), ${a.people}/ (people only), ` +
+    `${a.notes}/ (how things are done: setups, fixes, procedures), ${a.diary}/ (what happened, one page a day, only added to), ${a.inbox}/ (said in passing, to sort). ` +
     `Before assuming anything about ${who}, their projects or tools, search here (brain_search) and read what you find. ` +
     `Write without asking, by these rules (the brain refuses what breaks them, with the reason): one subject per page, at most ${MAX_WORDS} words; ` +
     "it starts with '# Title' and one sentence saying what it is; it links at least one existing page with [[path]]; search before creating, and update " +
     "a page rather than making a near copy. Write only what lasts: decisions, state, how things are done, preferences, who is who; never work steps, " +
     "transcripts, what the code already says, secrets or clients' data. While working, add one line to today's diary (brain_append) linking the project: " +
     `what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words (the detail goes on the project page); ` +
-    `when the state of a project changes, update its page. Change io/ only when ${who} says something about themselves, never by inference. ` +
+    `when the state of a project changes, update its page. Change ${a.self}/ only when ${who} says something about themselves, never by inference. ` +
     `Write in ${o.language}. Say in one line what you wrote.`;
-  const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like 'io/%' order by path")
-    .all() as { path: string; title: string; body: string }[];
+  const io = store.db.prepare("select path, title, body from docs where deleted = 0 and path like ? order by path")
+    .all(`${a.self}/%`) as { path: string; title: string; body: string }[];
   if (!io.length) return rules;
   // each io page by its title and what stands above its first "## ": the part meant for every
   // conversation; the sections below (a contract, details) are a brain_read away
@@ -56,7 +57,7 @@ export function instructions(store: Store, o: Owner = owner()): string {
     ).trim();
     return `${d.title} (${d.path}): ${top.slice(0, 900)}`;
   }).join("\n").slice(0, 4000);
-  return `${rules}\n\nWho ${who} is (from io/, read the pages for more):\n${portrait}`;
+  return `${rules}\n\nWho ${who} is (from ${a.self}/, read the pages for more):\n${portrait}`;
 }
 
 const text = (o: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(o, null, 2) }] });
@@ -70,7 +71,7 @@ export function staleProjects(store: Store, diary: string, line: string, now: Da
   const stale: string[] = [];
   for (const t of linksIn(line)) {
     const proj = store.resolve(t);
-    if (!proj?.startsWith("progetti/")) continue;
+    if (!proj?.startsWith(`${areasOf(store).projects}/`)) continue;
     const updated = store.get(proj)?.updated;
     if (!updated) continue;
     const name = proj.replace(/\.md$/, "");
@@ -92,6 +93,7 @@ export function staleProjects(store: Store, diary: string, line: string, now: Da
 
 /** The brain's health against its rules: what brain_check answers and the console shows. */
 export function health(store: Store) {
+  const a = areasOf(store);
   const pages = store.list("", { limit: 100000 });
   const linked = new Set<string>(),
     broken: { page: string; link: string }[] = [],
@@ -103,16 +105,16 @@ export function health(store: Store) {
       else broken.push({ page: p.path, link: l.target });
     }
     const n = (body.match(/[\p{L}\p{N}]+/gu) ?? []).length;
-    if (n > maxWords(areaOf(p.path))) long.push({ page: p.path, words: n });
+    if (n > maxWords(areaOf(p.path), a)) long.push({ page: p.path, words: n });
   }
-  const orphans = pages.filter((p) => !linked.has(p.path) && !["io", "diario", "inbox"].includes(areaOf(p.path))).map((
+  const orphans = pages.filter((p) => !linked.has(p.path) && ![a.self, a.diary, a.inbox].includes(areaOf(p.path))).map((
     p,
   ) => p.path);
   const weekAgo = dayOf(new Date(Date.now() - 7 * 86400_000));
-  const stale = (store.get("inbox/inbox.md")?.body.split("\n") ?? []).filter((l) =>
+  const stale = (store.get(`${a.inbox}/inbox.md`)?.body.split("\n") ?? []).filter((l) =>
     /^- \d{4}-\d{2}-\d{2}/.test(l) && l.slice(2, 12) < weekAgo
   );
-  const outside = pages.filter((p) => !AREAS.includes(areaOf(p.path))).map((p) => p.path);
+  const outside = pages.filter((p) => !a.all.includes(areaOf(p.path))).map((p) => p.path);
   return {
     pages: pages.length,
     orphans,
@@ -151,6 +153,7 @@ export async function search(ctx: ToolContext, query: string, limit = 10, tasks 
 export function brainServer(ctx: ToolContext): McpServer {
   const server = new McpServer({ name: "brain", version: "0.2.0" }, { instructions: instructions(ctx.store) });
   const { store } = ctx;
+  const a = areasOf(store);
   /** A write the rules refuse comes back as the reasons, for the writer to fix. */
   const refuse = (errors: string[], extra: Record<string, unknown> = {}) => text({ refused: true, errors, ...extra });
 
@@ -203,7 +206,7 @@ export function brainServer(ctx: ToolContext): McpServer {
       "Diary and inbox are added to with brain_append. A diary page may be replaced only to tidy it: every timed line kept, at its time and in its order.",
     inputSchema: {
       path: z.string().describe(
-        `${AREAS.join("|")}/name.md (progetti/ follows the folder: progetti/work/acme/site.md)`,
+        `${a.all.join("|")}/name.md (${a.projects}/ follows the folder: ${a.projects}/work/acme/site.md)`,
       ),
       body: z.string().describe(
         "the whole Markdown: '# Title', one sentence saying what it is, then the content with [[links]]",
@@ -217,8 +220,8 @@ export function brainServer(ctx: ToolContext): McpServer {
   }, ({ path, body, base_rev, distinct }: { path: string; body: string; base_rev?: number; distinct?: boolean }) => {
     const p = slugPath(path);
     const cur = store.get(p);
-    if (cur && areaOf(p) === "inbox") return refuse([`${p} is only added to: use brain_append`]);
-    if (cur && areaOf(p) === "diario") {
+    if (cur && areaOf(p) === a.inbox) return refuse([`${p} is only added to: use brain_append`]);
+    if (cur && areaOf(p) === a.diary) {
       const e = diaryRewriteErrors(cur.body, body);
       if (e.length) return refuse(e);
     }
@@ -242,7 +245,7 @@ export function brainServer(ctx: ToolContext): McpServer {
   }, ({ path, find, replace, base_rev }: { path: string; find: string; replace: string; base_rev?: number }) => {
     const d = store.get(path) ?? store.get(slugPath(path));
     if (!d) throw new Error(`no document ${path}`);
-    if (LOGS.includes(areaOf(d.path))) return refuse([`${d.path} is only added to: use brain_append`]);
+    if (logs(a).includes(areaOf(d.path))) return refuse([`${d.path} is only added to: use brain_append`]);
     const n = d.body.split(find).length - 1;
     if (n !== 1) {
       throw new Error(
@@ -286,32 +289,37 @@ export function brainServer(ctx: ToolContext): McpServer {
 
   server.registerTool("brain_append", {
     description:
-      `Add a line to today's diary (what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words: link the project with [[progetti/…]]), or to the inbox ` +
+      `Add a line to today's diary (what changed, in one sentence of at most ${MAX_ENTRY_WORDS} words: link the project with [[${a.projects}/…]]), or to the inbox ` +
       "(something said in passing, to sort later). The page is created when it does not exist; lines are timed and never rewritten.",
     inputSchema: {
-      where: z.enum(["diario", "inbox"]).optional().describe("default diario"),
+      // either name of the diary: what matters is the account's own area, below
+      where: z.enum(["diary", "diario", "inbox"]).optional().describe("default the diary"),
       text: z.string().min(1).max(1000).describe("one line"),
     },
     annotations: CHANGE,
-  }, ({ where, text: line }: { where?: "diario" | "inbox"; text: string }) => {
+  }, ({ where, text: line }: { where?: "diary" | "diario" | "inbox"; text: string }) => {
     const now = new Date(), day = dayOf(now);
     if (where !== "inbox") {
       const e = entryErrors(line);
       if (e.length) return refuse(e);
     }
-    const p = where === "inbox" ? "inbox/inbox.md" : `diario/${day}.md`;
+    const p = where === "inbox" ? `${a.inbox}/inbox.md` : `${a.diary}/${day}.md`;
     const cur = store.get(p);
+    const it = a === AREAS_IT;
+    const date = now.toLocaleDateString(it ? "it-IT" : "en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: zone(),
+    });
     const head = where === "inbox"
-      ? "# Inbox\n\nCose dette al volo, da sistemare nelle pagine giuste e poi togliere da qui.\n"
-      : `# ${day}\n\nCosa è successo il ${
-        now.toLocaleDateString("it-IT", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-          timeZone: zone(),
-        })
-      }.\n`;
+      ? `# Inbox\n\n${
+        it
+          ? "Cose dette al volo, da sistemare nelle pagine giuste e poi togliere da qui."
+          : "Things said in passing, to sort into the right pages and then take out of here."
+      }\n`
+      : `# ${day}\n\n${it ? `Cosa è successo il ${date}.` : `What happened on ${date}.`}\n`;
     const entry = line.trim().split("\n").map((l, i) =>
       i ? `  ${l.trim()}` : `- ${where === "inbox" ? day + " " : ""}${hhmm(now)} ${l.trim()}`
     ).join("\n");
@@ -329,7 +337,7 @@ export function brainServer(ctx: ToolContext): McpServer {
     inputSchema: { lines: z.array(z.string().min(3)).min(1) },
     annotations: CHANGE,
   }, ({ lines }: { lines: string[] }) => {
-    const cur = store.get("inbox/inbox.md");
+    const cur = store.get(`${a.inbox}/inbox.md`);
     if (!cur) throw new Error("the inbox is empty");
     const kept = cur.body.split("\n").filter((l) => !(l.startsWith("- ") && lines.some((x) => l.includes(x.trim()))));
     const removed = cur.body.split("\n").length - kept.length;

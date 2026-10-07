@@ -9,6 +9,7 @@
 // No structure is imposed: a path is a folder/name.md the client chooses. One prefix is reserved,
 // tasks/, where tasks.ts keeps one document per task.
 
+import type { Areas } from "./rules.ts";
 import { DatabaseSync } from "node:sqlite";
 import { migrate, type Migration } from "./migrate.ts";
 
@@ -81,6 +82,8 @@ export function linksIn(body: string): string[] {
 
 export class Store {
   db: DatabaseSync;
+  /** The area names of the account (rules.ts `areasFor`); unset, the Italian ones. */
+  areas?: Areas;
 
   constructor(file: string) {
     this.db = new DatabaseSync(file);

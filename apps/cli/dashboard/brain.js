@@ -9,7 +9,16 @@
    Loaded after app.js (helpers: $, esc, api, t, toast, mdToHtml, ago, short). */
 
 const AREAS = ["io", "progetti", "clienti", "persone", "note", "diario", "inbox"];
-const areaOf = (a) => AREAS.includes(a) ? a : "other";
+/** An account in English names its areas me/, projects/…: the same groups, colours and labels. */
+const AREA_EN = {
+  me: "io",
+  projects: "progetti",
+  clients: "clienti",
+  people: "persone",
+  notes: "note",
+  diary: "diario",
+};
+const areaOf = (a) => AREAS.includes(a) ? a : AREA_EN[a] ?? "other";
 let BRAIN = null, bSel = null, bMode = "read", bDepth2 = false, bOpen = new Set(["progetti"]);
 const bOff = new Set();
 let bPage = null; // the page on screen, as /api/brain/page answers it
@@ -148,7 +157,9 @@ function matches() {
 function renderTree() {
   if (bFound && bFound.q === $("#b-q").value.trim()) return renderResults();
   const hits = matches();
-  const roots = new Map(AREAS.map((a) => [a, { dirs: new Map(), pages: [], path: a }]));
+  // the areas as this brain names them (the API lists them in order)
+  const names = BRAIN.areas ? Object.keys(BRAIN.areas) : AREAS;
+  const roots = new Map(names.map((a) => [a, { dirs: new Map(), pages: [], path: a }]));
   for (const p of BRAIN.pages) {
     if (hits && !hits.has(p.path)) continue;
     const parts = bare(p.path).split("/");
@@ -171,7 +182,7 @@ function renderTree() {
     const dirs = [...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b));
     // the diary reads newest first; elsewhere by title
     const pages = [...node.pages].sort(
-      area === "diario" ? (a, b) => b.path.localeCompare(a.path) : (a, b) => a.title.localeCompare(b.title),
+      areaOf(area) === "diario" ? (a, b) => b.path.localeCompare(a.path) : (a, b) => a.title.localeCompare(b.title),
     );
     return dirs.map(([name, d]) => folder(d, name, depth, area)).join("") +
       pages.map((p) => pageBtn(p, depth)).join("");
@@ -189,7 +200,7 @@ function renderTree() {
     </div>`;
   };
   $("#bn-tree").innerHTML = [...roots.entries()]
-    .map(([a, node]) => folder(node, AREAS.includes(a) ? t(`brain.g.${a}`) : a, 0, a)).join("");
+    .map(([a, node]) => folder(node, areaOf(a) !== "other" ? t(`brain.g.${areaOf(a)}`) : a, 0, a)).join("");
 }
 
 /* ---------------- search ---------------- */
@@ -271,7 +282,7 @@ function renderPage(top = true) {
     <h1 class="bn-title">${esc(p.title)}</h1>
     <div class="bn-meta">
       <i class="gdot" style="background:var(--g-${areaOf(p.area)})"></i>${
-    esc(AREAS.includes(p.area) ? t(`brain.g.${p.area}`) : p.area)
+    esc(areaOf(p.area) !== "other" ? t(`brain.g.${areaOf(p.area)}`) : p.area)
   }
       <span title="${esc(when(p.updated))}">${esc(t("brain.updatedBy", { d: ago(p.updated), w: who(p.by) }))}</span>
       <span class="chip">${esc(t("brain.rev", { n: p.rev }))}</span>
@@ -681,7 +692,7 @@ function diaryEntries(body) {
 let diarySeq = 0;
 async function renderDiary() {
   const box = $("#bn-diary"), seq = ++diarySeq;
-  const days = BRAIN.pages.filter((p) => p.area === "diario").sort((a, b) => b.path.localeCompare(a.path));
+  const days = BRAIN.pages.filter((p) => areaOf(p.area) === "diario").sort((a, b) => b.path.localeCompare(a.path));
   if (!days.length) {
     box.innerHTML = `<p class="sub">${esc(t("brain.d.empty"))}</p>`;
     return;

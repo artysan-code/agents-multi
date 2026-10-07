@@ -5,6 +5,7 @@
 
 import { type EmbedConfig, indexer } from "./embed.ts";
 import { Store } from "./store.ts";
+import { areasFor } from "./rules.ts";
 import { USER_ID } from "./users.ts";
 import { fromFile, StaleError, type Task, type TaskStore, toFile } from "../../shared/mcp/lib/tasks.ts";
 
@@ -24,7 +25,13 @@ export function tenantFile(dataDir: string, user: string): string {
 
 export class Tenants {
   private open_ = new Map<string, Tenant>();
-  constructor(private dataDir: string, private embed: EmbedConfig, private by: () => string) {}
+  constructor(
+    private dataDir: string,
+    private embed: EmbedConfig,
+    private by: () => string,
+    /** The account's language, which names its areas. */
+    private languageOf: (user: string) => string = () => "Italian",
+  ) {}
 
   open(user: string): Tenant {
     const hit = this.open_.get(user);
@@ -32,6 +39,7 @@ export class Tenants {
     const file = tenantFile(this.dataDir, user);
     Deno.mkdirSync(file.slice(0, file.lastIndexOf("/")), { recursive: true });
     const store = new Store(file);
+    store.areas = areasFor(this.languageOf(user));
     const index = indexer(store, this.embed);
     // tasks live here as documents under tasks/, with the rules of shared/mcp/lib/tasks.ts on top
     const tasks: TaskStore = {

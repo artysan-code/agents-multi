@@ -8,7 +8,7 @@
 //   GET /api/brain/search?q=        words and meaning, as brain_search
 //   GET /api/brain/health           what brain_check finds
 
-import { areaOf, AREAS } from "./rules.ts";
+import { areaOf, areasOf } from "./rules.ts";
 import type { Store } from "./store.ts";
 import { health, search, type ToolContext } from "./tools.ts";
 
@@ -31,7 +31,7 @@ export async function brainApi(ctx: ToolContext, u: URL): Promise<{ status: numb
       return ok({ version: memoryVersion(store) });
     case "/api/brain/pages": {
       const pages = store.list("", { limit: 100000 }).map((p) => ({ ...p, area: areaOf(p.path) }));
-      const areas = Object.fromEntries(AREAS.map((a) => [a, pages.filter((p) => p.area === a).length]));
+      const areas = Object.fromEntries(areasOf(store).all.map((a) => [a, pages.filter((p) => p.area === a).length]));
       return ok({ version: memoryVersion(store), areas, pages, edges: store.graph().edges });
     }
     case "/api/brain/page": {

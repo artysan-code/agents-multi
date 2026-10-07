@@ -8,7 +8,18 @@ import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, tot
 import { open, seal } from "../backup.ts";
 import { instructions, staleProjects } from "../tools.ts";
 import { brainApi } from "../api.ts";
-import { check, diaryRewriteErrors, entryErrors, relink, shapeErrors, similarity, slugPath } from "../rules.ts";
+import {
+  AREAS_EN,
+  AREAS_IT,
+  areasFor,
+  check,
+  diaryRewriteErrors,
+  entryErrors,
+  relink,
+  shapeErrors,
+  similarity,
+  slugPath,
+} from "../rules.ts";
 
 Deno.test("cleanPath: a folder/name.md inside the tree, nothing else", () => {
   assertEquals(cleanPath("progetti/claude-multi"), "progetti/claude-multi.md");
@@ -254,4 +265,26 @@ Deno.test("instructions: whose brain it is and the language, from the owner; nob
   assert(txt.includes("Who Ann is (from io/"));
   assert(!txt.includes("Alice"));
   s.close();
+});
+
+Deno.test("areas: Italian for an Italian account, English names for any other language", () => {
+  for (const l of ["Italian", "italiano", "it", " IT"]) assertEquals(areasFor(l), AREAS_IT);
+  for (const l of ["English", "en", "German", ""]) assertEquals(areasFor(l), AREAS_EN);
+  const page = "# Ann\n\nWho Ann is.\n";
+  assertEquals(shapeErrors("me/ann.md", page, AREAS_EN), []);
+  assert(shapeErrors("io/ann.md", page, AREAS_EN)[0].startsWith("a page lives in one of: me, projects"));
+  assertEquals(shapeErrors("diary/2026-10-07.md", page, AREAS_EN), []);
+  assertEquals(shapeErrors("diary/today.md", page, AREAS_EN), ["a diary page is diary/YYYY-MM-DD.md, one a day"]);
+});
+
+Deno.test("areas: an English brain is described and checked with its own names", () => {
+  const s = new Store(":memory:");
+  s.areas = AREAS_EN;
+  s.write("me/ann.md", "# Ann\n\nWho Ann is.\n", "test");
+  const txt = instructions(s, { id: "ann", name: "Ann", language: "English" });
+  assert(txt.includes("me/ (who they are") && txt.includes("projects/work/acme/site.md") && !txt.includes("progetti/"));
+  assert(txt.includes("Who Ann is (from me/"));
+  // the diary is a log there too: no link needed, no duplicate check
+  assert(check(s, "diary/2026-10-07.md", "# 2026-10-07\n\nWhat happened.\n\n- 10:00 a line\n", { creating: true }).ok);
+  s.db.close();
 });

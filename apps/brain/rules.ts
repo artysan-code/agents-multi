@@ -3,19 +3,29 @@
 // fixes it. Agreed with the owner on 2026-10-01 and meant to be tuned while using it: the numbers are
 // the constants below.
 //
-// Seven areas, named the way the owner thinks: io (who they are), progetti (their folders), clienti (who
-// he works for, directly or through someone: the relationship, not the work), persone, note
-// (what he knows how to do), diario (what happened, one page a day, only added to), inbox (said in
-// passing, to sort later). Pages are small and linked: one subject each, a title and a sentence
+// Seven areas, named in the account's language (Italian: io, progetti, clienti, persone, note, diario,
+// inbox; otherwise me, projects, clients, people, notes, diary, inbox): who they are, their folders, who
+// they work for (the relationship, not the work), people, what they know how to do, what happened (one
+// page a day, only added to), what was said in passing, to sort later. Pages are small and linked: one subject each, a title and a sentence
 // saying what it is, at least one link to an existing page.
 
 import { maskText } from "../../shared/mcp/lib/mask.ts";
 import { linksIn, type Store } from "./store.ts";
 
-export const AREAS = ["io", "progetti", "clienti", "persone", "note", "diario", "inbox"] as const;
-export type Area = typeof AREAS[number];
-/** Areas written by adding lines, not by rewriting. */
-export const LOGS: Area[] = ["diario", "inbox"];
+/** What each area is for; its name depends on the account's language, chosen when it is created. */
+const ROLES = ["self", "projects", "clients", "people", "notes", "diary", "inbox"] as const;
+export type Areas = Record<typeof ROLES[number], string> & { all: string[] };
+const areas = (names: string[]): Areas =>
+  ({ ...Object.fromEntries(ROLES.map((r, i) => [r, names[i]])), all: names }) as Areas;
+/** Italian, as the brain began (its pages never move); every other language gets the English names. */
+export const AREAS_IT = areas(["io", "progetti", "clienti", "persone", "note", "diario", "inbox"]);
+export const AREAS_EN = areas(["me", "projects", "clients", "people", "notes", "diary", "inbox"]);
+/** Pure: the area names of an account, from its language ("Italian", "italiano", "it"…). */
+export const areasFor = (language: string): Areas => /^\s*it(al|$)/i.test(language) ? AREAS_IT : AREAS_EN;
+/** The area names a brain uses. */
+export const areasOf = (store: Store): Areas => store.areas ?? AREAS_IT;
+/** Pure: the areas written by adding lines, not by rewriting. */
+export const logs = (a: Areas) => [a.diary, a.inbox];
 export const MAX_WORDS = 400;
 export const MAX_WORDS_LOG = 1000; // the inbox: what is said in passing waits there to be sorted, it does not pile up
 export const MAX_ENTRY_WORDS = 40; // one diary line: what changed, in a sentence; the detail lives on the project page
@@ -33,7 +43,8 @@ export function slugPath(p: string): string {
 }
 
 /** The diary is a record: a busy day may be long, but nothing is refused for the size of the page. */
-export const maxWords = (area: Area) => area === "diario" ? Infinity : area === "inbox" ? MAX_WORDS_LOG : MAX_WORDS;
+export const maxWords = (area: string, a: Areas = AREAS_IT) =>
+  area === a.diary ? Infinity : area === a.inbox ? MAX_WORDS_LOG : MAX_WORDS;
 const words = (s: string) => (s.replace(/^---\n[\s\S]*?\n---\n?/, "").match(/[\p{L}\p{N}]+/gu) ?? []).length;
 const titleWords = (s: string) =>
   new Set((s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2));
@@ -47,7 +58,7 @@ export function similarity(a: string, b: string): number {
   return inter / (x.size + y.size - inter);
 }
 
-export const areaOf = (path: string) => path.split("/")[0] as Area;
+export const areaOf = (path: string) => path.split("/")[0];
 
 /** Pure: the words of a diary entry, its [[links]] not counted. */
 export const entryWords = (s: string) => words(s.replace(/\[\[[^\]]*\]\]/g, ""));
@@ -74,17 +85,17 @@ export function diaryRewriteErrors(cur: string, next: string): string[] {
 }
 
 /** Pure: what is wrong with a page's place and shape, before anything is looked up. */
-export function shapeErrors(path: string, body: string): string[] {
+export function shapeErrors(path: string, body: string, a: Areas = AREAS_IT): string[] {
   const err: string[] = [];
   const parts = path.replace(/\.md$/, "").split("/");
-  const area = parts[0] as Area;
-  if (!AREAS.includes(area)) return [`a page lives in one of: ${AREAS.join(", ")} (not "${parts[0]}")`];
+  const area = parts[0];
+  if (!a.all.includes(area)) return [`a page lives in one of: ${a.all.join(", ")} (not "${parts[0]}")`];
   if (parts.length < 2) err.push(`${area}/ needs a name: ${area}/<name>.md`);
-  if (["io", "clienti", "persone", "note", "inbox"].includes(area) && parts.length > 2) {
+  if ([a.self, a.clients, a.people, a.notes, a.inbox].includes(area) && parts.length > 2) {
     err.push(`${area}/ is flat: ${area}/<name>.md, no subfolders`);
   }
-  if (area === "diario" && !/^diario\/\d{4}-\d{2}-\d{2}$/.test(parts.join("/"))) {
-    err.push("a diary page is diario/YYYY-MM-DD.md, one a day");
+  if (area === a.diary && !/^\d{4}-\d{2}-\d{2}$/.test(parts.slice(1).join("/"))) {
+    err.push(`a diary page is ${a.diary}/YYYY-MM-DD.md, one a day`);
   }
 
   const text = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
@@ -95,7 +106,7 @@ export function shapeErrors(path: string, body: string): string[] {
     err.push("under the title, one plain sentence saying what the page is");
   }
 
-  const n = words(body), max = maxWords(area);
+  const n = words(body), max = maxWords(area, a);
   if (n > max) err.push(`${n} words: at most ${max}. Split it into smaller pages linked to each other`);
   let code = 0, inCode = false;
   for (const l of lines) {
@@ -129,21 +140,22 @@ export function check(
   body: string,
   opts: { creating: boolean; distinct?: boolean },
 ): Verdict {
-  const errors = shapeErrors(path, body);
+  const a = areasOf(store);
+  const errors = shapeErrors(path, body, a);
   const area = areaOf(path);
-  if (!LOGS.includes(area)) {
+  if (!logs(a).includes(area)) {
     // a living page links to at least one page that exists — unless there is none yet to link to
     const others = store.db.prepare(
-      "select count(*) n from docs where deleted = 0 and path not like 'tasks/%' and path not like 'diario/%' and path not like 'inbox/%' and path <> ?",
+      "select count(*) n from docs where deleted = 0 and path not like 'tasks/%' and path not like ? and path not like ? and path <> ?",
     )
-      .get(path) as { n: number };
+      .get(`${a.diary}/%`, `${a.inbox}/%`, path) as { n: number };
     const live = linksIn(body).map((t) => store.resolve(t)).filter((p) => p && p !== path);
     if (others.n > 0 && !live.length) {
       errors.push("link at least one existing page with [[path]]: the project, person or note this belongs to");
     }
   }
   let similar: Verdict["similar"];
-  if (opts.creating && !opts.distinct && !LOGS.includes(area)) {
+  if (opts.creating && !opts.distinct && !logs(a).includes(area)) {
     const title = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trim().match(/^# (.+)$/m)?.[1] ?? path;
     const name = path.split("/").pop()!.replace(/\.md$/, "").replace(/-/g, " ");
     // only within the area: a client and its project, or a person and the client they work for, share a name by nature

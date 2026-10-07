@@ -84,7 +84,7 @@ interface Ctx {
 }
 const ctx = new AsyncLocalStorage<Ctx>();
 const by = () => ctx.getStore()?.label ?? "brain";
-const tenants = new Tenants(DATA, embedCfg, by);
+const tenants = new Tenants(DATA, embedCfg, by, (id) => users.get(id)?.language ?? "Italian");
 const here = (): Ctx => {
   const c = ctx.getStore();
   if (!c) throw new Error("no account for this request");

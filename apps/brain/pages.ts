@@ -251,7 +251,7 @@ function adminSection(a: AdminView) {
   <form method="post" action="/account/admin/invite" class="row">
     <input name="id" placeholder="id, es. bob" required pattern="[a-z][a-z0-9_\-]{1,30}" autocapitalize="none">
     <input name="name" placeholder="nome" required maxlength="60">
-    <input name="language" placeholder="lingua, es. Italian" value="Italian" maxlength="30">
+    <input name="language" placeholder="lingua, es. Italian" value="Italian" maxlength="30" title="Dà anche i nomi delle aree, per sempre: in italiano io/, progetti/…; in ogni altra lingua me/, projects/…">
     <button>Invita</button></form>
   <p class="sub">Un nuovo invito azzera passphrase e codice dell'account (telefono perso, passphrase dimenticata); i suoi dati restano.</p>`;
 }
