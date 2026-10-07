@@ -12,13 +12,15 @@ keywords = ["accesstoken", "refreshtoken", "oauthaccount"]
 
 [[rules.allowlists]]
 description = "tests and the guards that look for these fields"
-paths = ['''^cli/tests/''', '''^\.githooks/''', '''^shared/hooks/''']
+paths = ['''^apps/cli/tests/''', '''^apps/brain/tests/''', '''^\.githooks/''', '''^shared/hooks/''',
+  # where the tests lived before apps/ (the scan covers the history)
+  '''^cli/tests/''', '''^brain/tests/''']
 
 [allowlist]
 description = "public values that look like keys"
 regexes = [
   # fingerprint of Anthropic's apt signing key, pinned in bin/claude-desktop-update
   '''31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE''',
-  # RFC 6238 test vector secret, brain/tests/brain_test.ts
+  # RFC 6238 test vector secret, apps/brain/tests/brain_test.ts
   '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
 ]

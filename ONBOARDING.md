@@ -50,21 +50,22 @@ Read access is enough: the person never commits here (`prelaunch` pulls the upda
 launch). Over HTTPS, let git keep the credential (`git config --global credential.helper libsecret`
 if available).
 
-**Over SSH, use the server's direct address.** The repository's host name (`git.example.com`) goes
-through Cloudflare, which does not forward the SSH port (2222): `git fetch` hangs, with no error, until
-it times out. Put the direct address of the server in `~/.ssh/config` (the owner gives it):
+**Over SSH behind a proxy, use the server's direct address.** If the repository's host name
+(`git.example` here) goes through a proxy that does not forward the SSH port (Cloudflare, for
+instance, with Forgejo's SSH on 2222), `git fetch` hangs, with no error, until it times out. Put the
+direct address of the server in `~/.ssh/config` (the owner gives it):
 
 ```
-Host git.example.com
+Host git.example
   HostName <the server's address>
   Port 2222
   User git
 ```
 
 or make the remote point at that address (`git remote set-url origin
-ssh://git@<the server's address>:2222/owner/agents-multi.git`). The same applies when the remote
+ssh://git@<the server's address>:2222/<owner>/agents-multi.git`). The same applies when the remote
 is changed after a rename: set-url with the host name alone is not enough. If a fetch hangs, test with
-`ssh -p 2222 -T git@git.example.com`: a greeting from Forgejo means the path works.
+`ssh -p 2222 -T git@git.example`: a greeting from Forgejo means the path works.
 
 ## 3. Back up what exists
 

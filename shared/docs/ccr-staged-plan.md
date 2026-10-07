@@ -8,7 +8,7 @@
 
 1. T1 tiering (model: frontmatter) misurato per ≥2 settimane.
 2. Delta costo documentato via `agents usage` (per profilo e per modello).
-3. CCR testato SOLO su un progetto personale (mai clientapp, mai main-project client).
+3. CCR testato SOLO su un progetto personale (mai su un progetto di un cliente).
 4. Chiave DeepSeek salvata PRIMA di abilitare.
 
 ## Install (quando gate superato)

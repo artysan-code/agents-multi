@@ -93,7 +93,7 @@ Deno.test("scoped: a work profile sees and writes only the tasks of its projects
   const s = scoped(base, ["work/acme"]);
   assertEquals((await s.list()).map((t) => t.id), ["t-1", "t-2"]);
   assertEquals(await s.get("t-3"), null);
-  await s.write(mk("t-6", "work/acme/shop"));
+  await s.write(mk("t-6", "work/acme/site"));
   await assertRejects(() => s.write(mk("t-7", "personal/dnd")), Error, "work/acme");
   await assertRejects(() => s.write(mk("t-8")), Error, "work/acme");
   assertEquals(written, ["t-6"]);
