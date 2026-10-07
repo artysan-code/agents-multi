@@ -94,6 +94,44 @@ signs in; `/account` shows it too): one person's copies never open with another'
 it changed (`claude-multi brain-backup`, `claude-brain-backup.timer`), keeping the last ones; without the key from the vault a copy cannot be read. No third party
 holds the brain.
 
+### The server's own copies
+
+With `BRAIN_BACKUP_KEY` set, the service seals a copy of every database (`accounts.db` and each
+account's `brain.db`) once a day into `BRAIN_DATA/backups/<UTC time>/` (`accounts.db.brn`,
+`<account>.brn`), 30 seconds after a start when the last one is over a day old, and keeps the last
+`BRAIN_BACKUP_KEEP` runs. A run is written whole or not at all, and the timer stops on SIGTERM. The
+copies use SQLite's online backup, so writers are not held up. They sit on the same volume as the
+brain: they cover a bad write or a deleted account, not losing the server, so copy them off it too
+(`GET /backup` and `claude-multi brain-backup` do that for the owner's brain).
+
+### Administration from a shell
+
+`brain-admin <command>` in the container (Coolify: the application's terminal; elsewhere
+`docker exec -it <container> brain-admin …`; from a checkout, `deno run -A apps/brain/admin.ts …` with
+the service's environment) does what the administrator's page does, with the same code, on the files
+the server has open (same WAL settings; every statement is short, so they take turns):
+
+| Command                              |                                                                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list`                               | accounts: id, name, role, state (active, invited, disabled)                                                                                             |
+| `create <id> <name…> [--language L]` | a new account; prints its invitation link once (7 days, one use)                                                                                        |
+| `disable <id>` / `enable <id>`       | an account shut out (its tokens and sessions cut) or let back in                                                                                        |
+| `reset <id>`                         | lockout lifted, passphrase, TOTP and tokens cleared, a new invitation link (the administrator too: this is the way back after losing the authenticator) |
+| `unlock <id>`                        | only the lockout lifted                                                                                                                                 |
+| `delete <id> --yes`                  | the account, its tokens and its whole brain, for good (not the administrator); restart the server after, so it lets go of the open file                 |
+| `stats`                              | per account: pages, tasks, database size on disk                                                                                                        |
+| `backup`                             | a sealed copy of every database now, as the daily job does (needs `BRAIN_BACKUP_KEY`)                                                                   |
+| `restore <file> [--yes]`             | a copy back in place of its database                                                                                                                    |
+
+Restoring replaces a database, so the server must not hold it: **stop, restore, start**. In Coolify
+stop the application, then run the restore from a one-off container on the same volume
+(`docker run --rm -v <volume>:/data -e BRAIN_MASTER_KEY=… -e BRAIN_BACKUP_KEY=… <image> brain-admin restore /data/backups/<run>/alice.brn`;
+the entrypoint is `deno`, so pass `--entrypoint brain-admin`), then start it. `restore` refuses while a
+server answers on this machine's `PORT` or the database's shared-memory file is there; `--yes` skips
+that check when you know it is stale. The file's name picks the database (`accounts.db.brn` or
+`<account>.brn`), the replaced file stays beside it as `.pre-restore`, and a copy that does not open
+with `BRAIN_BACKUP_KEY` is refused.
+
 ## Running it
 
 | Variable                                           |                                                                                                                                                                                   |
@@ -104,6 +142,8 @@ holds the brain.
 | `BRAIN_TIMEZONE`                                   | the zone of the days of an account that has not chosen its own on `/account` (the process's `TZ`; the compose file sets `TZ` from it, `Europe/Rome`)                              |
 | `BRAIN_CLIENT_IP_HEADER`                           | the header a proxy in front puts the client's address in, for the rate limits (`cf-connecting-ip` behind Cloudflare; none: the connection's)                                      |
 | `BRAIN_DATA`                                       | where `accounts.db` and `users/` live (`/data`)                                                                                                                                   |
+| `BRAIN_BACKUP_KEY`                                 | 32 random bytes, base64: seals the server's own daily copies in `BRAIN_DATA/backups` (none without it; also the administrator's backup key when the service first starts)         |
+| `BRAIN_BACKUP_KEEP`                                | how many daily copies stay (`7`)                                                                                                                                                  |
 | `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server a Francoforte, in Germania") |
 | `BRAIN_SITE_URL`                                   | the site's own address, another origin than the brain's (both domains on the `brain` service in Coolify); unset, the site is served on the brain's address                        |
 | `BRAIN_DEV=1`                                      | local only: signing in without TOTP                                                                                                                                               |

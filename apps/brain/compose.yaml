@@ -30,6 +30,10 @@ services:
       - BRAIN_EMBED_URL=${BRAIN_EMBED_URL:-http://ollama:11434}
       # the embedding model: the same name is pulled by the ollama service below
       - BRAIN_EMBED_MODEL=${BRAIN_EMBED_MODEL:-bge-m3}
+      # a sealed copy of every database a day in /data/backups, the last BRAIN_BACKUP_KEEP kept (default 7);
+      # none without the key (32 random bytes, base64)
+      - BRAIN_BACKUP_KEY=${BRAIN_BACKUP_KEY:-}
+      - BRAIN_BACKUP_KEEP=${BRAIN_BACKUP_KEEP:-7}
       - BRAIN_DATA=/data
       - PORT=8080
       # the zone of the days of an account that has not chosen its own (the account page)

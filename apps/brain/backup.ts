@@ -5,6 +5,7 @@
 // clear, and the machines keeping copies cannot read them without the key from the vault.
 // Format: "BRN1", a 12-byte IV, the ciphertext.
 
+import { backup, DatabaseSync } from "node:sqlite";
 import type { Store } from "./store.ts";
 
 const MAGIC = new TextEncoder().encode("BRN1");
@@ -48,4 +49,21 @@ export async function snapshot(store: Store, dbFile: string, b64key: string): Pr
   const c = store.db.prepare("pragma wal_checkpoint(truncate)").get() as { busy: number };
   if (c.busy) throw new Error("the database is busy: try again");
   return await seal(Deno.readFileSync(dbFile) as Uint8Array<ArrayBuffer>, b64key);
+}
+
+/** A database file as one sealed copy, taken from a connection of its own, so it works from another
+ *  process than the one serving (the admin CLI) as well as from the server's scheduled job: SQLite's
+ *  online backup copies a consistent state while writers go on. The plain copy exists only as a
+ *  temporary file in `tmpDir` (mode 0600), removed before this returns. */
+export async function sealedCopy(file: string, b64key: string, tmpDir: string): Promise<Uint8Array<ArrayBuffer>> {
+  const tmp = await Deno.makeTempFile({ dir: tmpDir, suffix: ".tmp" });
+  const src = new DatabaseSync(file, { readOnly: true });
+  try {
+    src.exec("pragma busy_timeout = 5000");
+    await backup(src, tmp);
+    return await seal(Deno.readFileSync(tmp) as Uint8Array<ArrayBuffer>, b64key);
+  } finally {
+    src.close();
+    await Deno.remove(tmp).catch(() => {});
+  }
 }

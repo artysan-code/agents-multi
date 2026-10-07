@@ -243,4 +243,13 @@ export class Users {
     if (u.admin && disabled) throw new Error("l'amministratore non si disattiva");
     this.db.prepare("update users set disabled = ? where id = ?").run(disabled ? 1 : 0, id);
   }
+
+  /** An account deleted (its row and invitations; the caller removes what it owns elsewhere). */
+  remove(id: string) {
+    const u = this.get(id);
+    if (!u) throw new Error(`nessun account ${id}`);
+    if (u.admin) throw new Error("l'amministratore non si elimina");
+    this.db.prepare("delete from invites where user = ?").run(id);
+    this.db.prepare("delete from users where id = ?").run(id);
+  }
 }
