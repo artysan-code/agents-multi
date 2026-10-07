@@ -225,6 +225,7 @@ export function SystemCard() {
   );
   const update = s.pending.length > 0 && !updateLater.value;
   const rows = [...open, ...fixed];
+  if (!status.value) return <article class="card sc" ref={card} />;
 
   return (
     <article class="card sc" ref={card}>

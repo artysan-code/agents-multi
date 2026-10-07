@@ -1,0 +1,235 @@
+/* wizard.css — the update screen (wizard.tsx): it covers the window, one card in the middle, the
+   mark turning while something runs, a bar per step. */
+
+.uw-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+  animation: uw-in .25s ease;
+}
+@keyframes uw-in {
+  from {
+    opacity: 0;
+  }
+}
+.uw-card {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: var(--pop);
+  padding: 28px 32px 24px;
+  animation: uw-up .3s cubic-bezier(.2, .8, .3, 1);
+}
+@keyframes uw-up {
+  from {
+    transform: translateY(10px);
+  }
+}
+.uw-x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.uw-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  transition: background .3s;
+}
+.uw-mark svg {
+  width: 24px;
+  height: 24px;
+  stroke: var(--on-accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.uw-mark.on svg {
+  animation: rot2 2.4s linear infinite;
+}
+.uw-mark.on {
+  animation: uw-pulse 1.6s ease-in-out infinite;
+}
+@keyframes uw-pulse {
+  50% {
+    box-shadow: 0 0 0 7px var(--accent-wash);
+  }
+}
+.uw-mark.ok {
+  background: var(--ok);
+}
+.uw-mark.ok svg {
+  stroke: var(--surface);
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: uw-tick .5s .1s ease forwards;
+}
+@keyframes uw-tick {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.uw-mark.bad {
+  background: var(--crit);
+}
+.uw-card h2 {
+  margin: 0 0 12px;
+  font: 500 24px/1.2 var(--serif);
+  letter-spacing: -.01em;
+}
+.uw-sub {
+  color: var(--dim);
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+.uw-cause {
+  color: var(--crit);
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+.uw-pend {
+  margin: 0;
+  padding-left: 18px;
+  font: 12.5px/1.7 var(--mono);
+  color: var(--dim);
+}
+.uw-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.uw-steps li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 13.5px;
+  color: var(--faint);
+}
+.uw-steps li.uw-running,
+.uw-steps li.uw-done,
+.uw-steps li.uw-failed {
+  color: var(--fg);
+}
+.uw-ic {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font: 700 11px var(--sans);
+  background: var(--raised);
+  color: var(--accent);
+}
+.uw-done .uw-ic {
+  background: var(--ok-wash);
+  color: var(--ok);
+  animation: uw-pop .3s ease;
+}
+@keyframes uw-pop {
+  50% {
+    transform: scale(1.18);
+  }
+}
+.uw-failed .uw-ic {
+  background: var(--crit-wash);
+  color: var(--crit);
+}
+.uw-n {
+  font-weight: 500;
+}
+.uw-d {
+  font: 11.5px var(--mono);
+  color: var(--faint);
+}
+.uw-bar {
+  grid-column: 2 / 4;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.uw-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width .4s ease;
+}
+.uw-done .uw-bar i {
+  background: var(--ok);
+}
+.uw-skipped .uw-bar i {
+  background: var(--line-soft);
+}
+.uw-failed .uw-bar i {
+  background: var(--crit);
+}
+.uw-bar i.ind {
+  animation: uw-ind 1.3s ease-in-out infinite;
+}
+@keyframes uw-ind {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+.uw-news {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+  color: var(--dim);
+}
+.uw-news h3 {
+  margin: 0 0 6px;
+  font: 600 13px var(--sans);
+  color: var(--fg);
+}
+.uw-news ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.uw-log {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--faint);
+}
+.uw-go {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 22px;
+}
+.uw-go .bt.pri {
+  height: 36px;
+  padding: 0 18px;
+  font-size: 13.5px;
+}
+.uw-more {
+  margin-left: auto;
+}
+.uw-out {
+  margin-top: 10px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11.5px;
+}

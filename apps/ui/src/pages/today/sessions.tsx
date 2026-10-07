@@ -143,7 +143,7 @@ export function SessionsCard() {
         </div>
       )}
       <div class="sess">
-        {!rows.length && <div class="rc-none">{t("today.nothing")}</div>}
+        {s && !rows.length && <div class="rc-none">{t("today.nothing")}</div>}
         {rows.map(({ c, busy }) => (
           <button
             type="button"

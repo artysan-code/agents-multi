@@ -1,6 +1,6 @@
 // updates-lib.tsx — what the Updates tab, the update wizard and «Close Claude and update» share: the
-// part of the report they read, what an update would take now, the changelog as elements, and the
-// two small stores (sessionStorage for a wizard in progress, localStorage for the version last seen).
+// part of the report they read, what an update would take now, the changelog as elements, and
+// reading and writing a small JSON value in a browser store.
 
 import type { ComponentChildren } from "preact";
 import { get } from "../../api.ts";
@@ -32,21 +32,6 @@ export interface Release {
 export interface Whatsnew {
   version?: string;
   releases?: Release[];
-}
-
-export const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
-export const UW_STEPS = ["check", "update", "restart", "verify", "news"] as const;
-export type Step = typeof UW_STEPS[number];
-export type StepState = "todo" | "running" | "waiting" | "done" | "failed" | "skipped";
-
-/** What the wizard keeps across the console's restart. */
-export interface WizState {
-  from: string | null;
-  code: string;
-  self: boolean;
-  at: string;
-  state: StepState[];
-  pending: string[];
 }
 
 export function keep(store: Storage, key: string, value?: unknown): void {

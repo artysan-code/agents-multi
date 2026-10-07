@@ -1,40 +1,60 @@
-// wizard.tsx — the update wizard: a drawer any page can open (the "update.wizard" intent), and what
-// the console says on boot when it was updated. «Update now» as steps: what is out, the update with
-// its live output, the console's restart when agents-multi itself changed, the doctor, and what is
-// new. The restart reloads this page, so the wizard keeps its state in sessionStorage and opens again
-// where it was. An update the timer made on its own is told by a notice on the next visit (the
-// version last seen is in localStorage).
+// wizard.tsx — the update screen: «Update now» from anywhere (the "update.wizard" intent) covers the
+// whole window and updates everything in one flow, a step at a time with its progress: check what is
+// out (the console's check and the desktop app's), update Claude Code, Claude Desktop and the
+// agents-multi checkout (the console's update job), download and install the desktop app's new
+// version (shell/app-update.ts), restart, verify, and say «Updated to X.Y.Z» with what is new.
+//
+// The restart takes the page with it (the console, or the whole app, comes back on new code), so the
+// run is kept in localStorage — the app's relaunch is a new window, which sessionStorage would not
+// survive — and the screen opens again where it was. An update the timer made on its own is told by a
+// notice on the next visit (the version last seen is in localStorage).
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { get, post } from "../../api.ts";
-import { loadStatus, status } from "../../state.ts";
-import { t, tk } from "../../i18n.ts";
-import { useIntent } from "../../router.ts";
+import { loadStatus, status, useTopic } from "../../state.ts";
+import { type Key, t, tk } from "../../i18n.ts";
+import { intent, useIntent } from "../../router.ts";
 import { openDrawer, runJob } from "../../lib/ui.tsx";
-import {
-  cmpVer,
-  COMPONENTS,
-  fetchNews,
-  keep,
-  kept,
-  News,
-  pendingUpdates,
-  type Report,
-  SEEN_KEY,
-  type Step,
-  UW_KEY,
-  UW_STEPS,
-  type StepState,
-  type Whatsnew,
-  type WizState,
-} from "./updates-lib.tsx";
+import { appUpdate, appUpdateAction, loadAppUpdate, notePoints } from "../../shell/app-update.ts";
+import { cmpVer, COMPONENTS, fetchNews, keep, kept, News, pendingUpdates, type Report, type Whatsnew } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
+import "./wizard.css";
 
-const at = (step: Step) => UW_STEPS.indexOf(step);
-const lastLine = (out: string) => out.trim().split("\n").filter(Boolean).pop();
+const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
+const STEPS = ["check", "update", "download", "restart", "verify"] as const;
+type Step = typeof STEPS[number];
+type StepState = "todo" | "running" | "done" | "failed" | "skipped";
 
-/** The console answers again, with other code than `old`: agents-multi's restart is over. */
-async function consoleBack(old: string, timeoutMs = 90000): Promise<boolean> {
+/** What the run keeps across the restart. */
+interface Run {
+  /** agents-multi's version before, for «what is new» */
+  from: string | null;
+  /** the console's code before: another code after the restart means it came back new */
+  code: string;
+  /** agents-multi itself moves (the checkout is behind, or the app has a new version) */
+  self: boolean;
+  /** the desktop app's new version, when it has one, and its notes */
+  app: { version: string; notes: string } | null;
+  at: string;
+  state: Record<Step, StepState>;
+  pending: string[];
+}
+
+const fresh = (): Run => {
+  const S = status.value as Report | null;
+  return {
+    from: appUpdate.value?.current ?? S?.repo.version ?? null,
+    code: "",
+    self: false,
+    app: null,
+    at: new Date().toISOString(),
+    state: { check: "todo", update: "todo", download: "todo", restart: "todo", verify: "todo" },
+    pending: [],
+  };
+};
+
+/** The console answers again, with other code than `old`: the restart is over. */
+async function consoleBack(old: string, timeoutMs = 120000): Promise<boolean> {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
     const r = await get<{ code?: string }>("/api/code").catch(() => null);
@@ -44,44 +64,48 @@ async function consoleBack(old: string, timeoutMs = 90000): Promise<boolean> {
   return false;
 }
 
+/** Resolves when the app's update leaves `states` (it moves on the "app-update" topic), or after `ms`. */
+function appLeaves(states: string[], ms: number): Promise<void> {
+  return new Promise((res) => {
+    const end = Date.now() + ms;
+    const tick = () => {
+      const s = appUpdate.value?.state;
+      if (!s || !states.includes(s) || Date.now() > end) return res();
+      setTimeout(tick, 500);
+    };
+    tick();
+  });
+}
+
+const lastLine = (out: string) => out.trim().split("\n").filter(Boolean).pop();
+/** A job's error in words: "lost" is a stream that ended without its result. */
+const why = (e: string) => (e === "lost" ? t("rep.lost") : e);
+
 interface Health {
   n: number;
   fails: number;
   msg: string;
 }
 
-/** What the run says to the screen and nothing else keeps: mutated by the flow, drawn by `draw`. */
-interface View {
-  out: string;
-  cause: string;
-  running: boolean;
-  jobId: string | null;
-  news: Whatsnew | null;
-  health: Health | null;
-}
-
-function Wizard({ resume }: { resume: WizState | null }) {
+function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; close: () => void }) {
   const [, force] = useState(0);
   const draw = () => force((n) => n + 1);
-  const w = useRef<WizState>(resume ?? {
-    from: (status.value as Report | null)?.repo.version ?? null,
-    code: "",
-    self: !!((status.value as Report | null)?.repo.behind || (status.value as Report | null)?.selfInstall),
-    at: new Date().toISOString(),
-    state: UW_STEPS.map(() => "todo" as StepState),
-    pending: [],
-  }).current;
-  const v = useRef<View>({ out: "", cause: "", running: false, jobId: null, news: null, health: null }).current;
-  const proceed = useRef<(() => void) | null>(null);
+  const run = useRef<Run>(resume ?? fresh()).current;
+  const v = useRef({ out: "", cause: "", running: false, jobId: null as string | null, news: null as Whatsnew | null, health: null as Health | null, showOut: false }).current;
   const outEl = useRef<HTMLPreElement>(null);
   const S = status.value as Report | null;
+  const app = appUpdate.value;
 
   const set = (step: Step, st: StepState) => {
-    w.state[at(step)] = st;
-    keep(sessionStorage, UW_KEY, w);
+    run.state[step] = st;
+    keep(localStorage, UW_KEY, run);
     draw();
   };
-  const logSince = () => (status.value?.updateLog ?? []).filter((e) => e.at >= w.at.replace(/\.\d+Z$/, "Z"));
+  const fail = (step: Step, why: string) => {
+    v.cause = why;
+    set(step, "failed");
+  };
+  const logSince = () => (status.value?.updateLog ?? []).filter((e) => e.at >= run.at.replace(/\.\d+Z$/, "Z"));
 
   useEffect(() => {
     if (outEl.current) outEl.current.scrollTop = outEl.current.scrollHeight;
@@ -100,152 +124,241 @@ function Wizard({ resume }: { resume: WizState | null }) {
     return r;
   };
 
+  /** After the update: the restart when agents-multi moved, the doctor, and what is new. */
   const finish = async () => {
-    // restart: only when agents-multi itself moved; the page may already be the new one
-    if (w.state[at("restart")] !== "done") {
-      if (!w.self) set("restart", "skipped");
+    if (run.state.restart !== "done") {
+      if (!run.self) set("restart", "skipped");
       else {
         set("restart", "running");
-        const back = await consoleBack(w.code);
-        set("restart", back ? "done" : "failed");
-        if (!back) v.cause = t("uw.noRestart");
-        // this page runs the old code: the new one, reloaded, carries on from the saved state
-        else if (!resume) return location.reload();
+        const back = await consoleBack(run.code);
+        if (!back) return fail("restart", t("uw.noRestart"));
+        set("restart", "done");
+        // this page runs the old code: the new one, reloaded, carries on from the kept run
+        if (!resume) return location.reload();
       }
     }
     set("verify", "running");
     await loadStatus(true).catch(() => null);
+    await loadAppUpdate();
     const doctor = status.value?.doctor ?? [];
     const fails = doctor.filter((c) => c.status === "fail");
     v.health = { n: doctor.length, fails: fails.length, msg: fails[0]?.msg ?? "" };
     const bad = logSince().find((e) => e.event === "failed" || e.event === "verify-failed");
     if (bad && !v.cause) v.cause = `${COMPONENTS[bad.component] ?? bad.component}: ${bad.detail || tk("up.ev.failed")}`;
+    v.news = await fetchNews(run.from);
+    const now = appUpdate.value?.current ?? v.news?.version ?? status.value?.repo.version;
+    if (now) keep(localStorage, SEEN_KEY, now);
     set("verify", fails.length || bad ? "failed" : "done");
-    set("news", "running");
-    v.news = await fetchNews(w.from);
-    if (v.news?.version) keep(localStorage, SEEN_KEY, v.news.version);
-    set("news", "done");
-    keep(sessionStorage, UW_KEY);
   };
 
   const start = async () => {
     v.cause = "";
-    w.code = (await get<{ code?: string }>("/api/code").catch(() => ({ code: "" }))).code ?? "";
+    run.code = (await get<{ code?: string }>("/api/code").catch(() => ({ code: "" }))).code ?? "";
     set("check", "running");
-    const r = await job("update-check");
+    // the console's check, and the app's when there is an app to update
+    const [r] = await Promise.all([
+      job("update-check"),
+      appUpdate.value ? appUpdateAction("check").then(() => appLeaves(["checking"], 60000)) : Promise.resolve(),
+    ]);
     if ("error" in r || r.code) {
-      v.cause = ("error" in r ? r.error : undefined) ?? lastLine(v.out) ?? t("uw.exit", { c: "code" in r ? r.code : "?" });
-      return set("check", "failed");
+      return fail("check", "error" in r ? why(r.error) : lastLine(v.out) ?? t("uw.exit", { c: r.code }));
     }
     await loadStatus().catch(() => null);
-    w.pending = pendingUpdates(status.value as Report | null);
-    w.self = !!(status.value?.repo.behind || (status.value as Report | null)?.selfInstall);
+    const a = appUpdate.value?.available;
+    run.app = a ? { version: a.version, notes: a.notes } : null;
+    const ours = pendingUpdates(status.value as Report | null);
+    run.pending = [...(a ? [`Agents Multi ${appUpdate.value?.current ?? "—"} → ${a.version}`] : []), ...ours];
+    run.self = !!(status.value?.repo.behind || (status.value as Report | null)?.selfInstall || a);
     v.out = "";
     set("check", "done");
-    if (!w.pending.length) {
-      for (const s of ["update", "restart"] as const) w.state[at(s)] = "skipped";
-      v.cause = "";
-      v.out = t("uw.current");
+    if (!run.pending.length) {
+      set("update", "skipped");
+      set("download", "skipped");
       return await finish();
     }
-    set("update", "waiting");
-    await new Promise<void>((res) => proceed.current = res);
-    proceed.current = null;
-    set("update", "running");
-    const u = await job("update-now");
-    // the stream ends early when agents-multi restarts the console under it: the restart step follows
-    if ("error" in u && !w.self) {
-      v.cause = u.error;
-      return set("update", "failed");
-    }
-    if ("cancelled" in u && u.cancelled) {
-      v.cause = t("uw.cancelled");
-      return set("update", "failed");
-    }
-    if (!("error" in u) && u.code) {
-      v.cause = lastLine(v.out) ?? t("uw.exit", { c: u.code });
-      return set("update", "failed");
-    }
-    set("update", "done");
+
+    // Claude Code, Claude Desktop and the checkout: the console's own update
+    if (ours.length) {
+      set("update", "running");
+      const u = await job("update-now");
+      // the stream ends early when agents-multi restarts the console under it: the restart step follows
+      if ("error" in u && !run.self) return fail("update", why(u.error));
+      if ("cancelled" in u && u.cancelled) return fail("update", t("uw.cancelled"));
+      if (!("error" in u) && u.code) return fail("update", lastLine(v.out) ?? t("uw.exit", { c: u.code }));
+      set("update", "done");
+    } else set("update", "skipped");
+
+    // the desktop app last: installing it relaunches everything, this page included
+    if (run.app) {
+      set("download", "running");
+      const r = await appUpdateAction("install");
+      if (!r.ok) return fail("download", r.message ?? appUpdate.value?.error ?? "");
+      await appLeaves(["checking", "downloading", "ready"], 15 * 60000);
+      if (appUpdate.value?.state === "error") return fail("download", appUpdate.value.error ?? "");
+      set("download", "done");
+    } else set("download", "skipped");
     await finish();
   };
 
-  // back after the console's restart: the update ran as far as the restart, the rest is here
+  // back after the restart: the update ran as far as the restart, the rest is here
   useEffect(() => {
-    if (!resume) return;
-    if (w.state[at("update")] === "running") w.state[at("update")] = "done";
-    void finish();
+    if (resume) {
+      if (run.state.update === "running") run.state.update = "done";
+      if (run.state.download === "running") run.state.download = "done";
+      void finish();
+    } else if (auto) void start();
   }, []);
 
-  const step = UW_STEPS.find((_s, i) => w.state[i] === "running" || w.state[i] === "waiting");
-  const verified = w.state[at("verify")] === "done" || w.state[at("verify")] === "failed";
-  const log = verified ? logSince() : [];
+  // the steps on screen: the download only when the app has a new version
+  const shown = STEPS.filter((s) => s !== "download" || run.app || run.state.download === "running");
+  const step = shown.find((s) => run.state[s] === "running");
+  const failed = shown.find((s) => run.state[s] === "failed");
+  const begun = shown.some((s) => run.state[s] !== "todo");
+  const finished = run.state.verify === "done" || (run.state.verify === "failed" && !!v.health);
+  const busy = (S?.running.cli ?? []).length;
+  const log = finished ? logSince() : [];
+  const notes = run.app?.notes ? notePoints(run.app.notes, 6) : [];
   const h = v.health;
+  const nowVersion = appUpdate.value?.current ?? v.news?.version ?? S?.repo.version ?? "";
+
+  const title: Key = finished
+    ? (run.pending.length ? "uw.h.done" : "uw.h.current")
+    : failed
+    ? "uw.h.failed"
+    : step === "restart"
+    ? "uw.h.restarting"
+    : begun
+    ? "uw.h.running"
+    : "uw.h.ready";
+  const stepState = (s: Step): StepState => run.state[s];
+
   return (
-    <div class="rep">
-      <ol class="rep-steps">
-        {UW_STEPS.map((s, i) => (
-          <li class={`rep-${w.state[i]}`} key={s}>
-            <span class="rep-st">{tk(`uw.st.${w.state[i]}`)}</span> {tk(`uw.${s}`)}
-          </li>
-        ))}
-      </ol>
-      {w.pending.length > 0 && step === "update" && w.state[at("update")] === "waiting" && (
-        <>
-          <p>{t("uw.found")}</p>
-          <ul class="uw-list">{w.pending.map((p) => <li key={p}>{p}</li>)}</ul>
-        </>
-      )}
-      {v.cause && <p class="rep-cause">{v.cause}</p>}
-      {step === "restart" && <p class="sub">{t("uw.restarting")}</p>}
-      {v.out && <pre class="out rep-out" ref={outEl}>{v.out}</pre>}
-      {h && (
-        <p class={h.fails ? "rep-cause" : ""}>
-          {h.fails ? t("uw.fails", { n: h.fails, msg: h.msg }) : t("uw.healthy", { n: h.n })}
-        </p>
-      )}
-      {log.length > 0 && (
-        <div class="uw-log">
-          {log.map((e, i) => (
-            <div class="sub" key={`${e.at}${i}`}>
-              {COMPONENTS[e.component] ?? e.component} · {tk(`up.ev.${e.event}`)}
-              {e.detail ? ` · ${e.detail}` : ""}
-            </div>
-          ))}
+    <div class="uw-screen" role="dialog" aria-modal="true" aria-label={t("uw.title")}>
+      <div class="uw-card">
+        <button type="button" class="ib uw-x" title={t("close")} aria-label={t("close")} onClick={close}>
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+        <div class={`uw-mark${step ? " on" : ""}${finished && !failed ? " ok" : ""}${failed ? " bad" : ""}`} aria-hidden="true">
+          {finished && !failed
+            ? <svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg>
+            : <svg viewBox="0 0 16 16"><path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" /></svg>}
         </div>
-      )}
-      {S?.selfInstall && log.length > 0 && (
-        <p><button type="button" class="btn sm" onClick={() => void openCloseClaude()}>{t("cc.btn")}</button></p>
-      )}
-      {v.news && (
-        <>
-          <h3 class="uw-h">{t("uw.news")}</h3>
-          <div class="uw-news"><News news={v.news} since={w.from} /></div>
-        </>
-      )}
-      <p>
-        {v.running
+        <h2>{t(title, { v: nowVersion })}</h2>
+        {!begun && (
+          <>
+            {pendingUpdates(S).length || app?.available
+              ? (
+                <ul class="uw-pend">
+                  {app?.available && <li>Agents Multi {app.current ?? "—"} → {app.available.version}</li>}
+                  {pendingUpdates(S).map((p) => <li key={p}>{p}</li>)}
+                </ul>
+              )
+              : <p class="uw-sub">{t("uw.h.readySub")}</p>}
+          </>
+        )}
+
+        {begun && (
+          <ol class="uw-steps">
+            {shown.map((s) => {
+              const st = stepState(s);
+              const pct = s === "download" && st === "running" && app?.progress != null ? Math.round(app.progress * 100) : null;
+              return (
+                <li key={s} class={`uw-${st}`}>
+                  <span class="uw-ic">
+                    {st === "running" ? <span class="spin2" /> : st === "done" ? "✓" : st === "failed" ? "!" : st === "skipped" ? "–" : ""}
+                  </span>
+                  <span class="uw-n">{t(`uw.s.${s}`)}</span>
+                  <span class="uw-d">
+                    {st === "skipped" ? t("uw.st.skipped") : pct != null ? `${pct}%` : s === "download" && run.app ? run.app.version : ""}
+                  </span>
+                  <span class="uw-bar">
+                    <i
+                      class={st === "running" && pct == null ? "ind" : ""}
+                      style={{ width: st === "done" || st === "skipped" ? "100%" : pct != null ? `${pct}%` : st === "running" ? "40%" : "0" }}
+                    />
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+
+        {step === "restart" && <p class="uw-sub">{t("uw.restartNote")}</p>}
+        {v.cause && <p class="uw-cause">{v.cause}</p>}
+        {h && <p class={h.fails ? "uw-cause" : "uw-sub"}>{h.fails ? t("uw.fails", { n: h.fails, msg: h.msg }) : t("uw.healthy", { n: h.n })}</p>}
+
+        {finished && (notes.length > 0 || v.news?.releases?.length)
           ? (
-            <button
-              type="button"
-              class="btn sm"
-              onClick={() => v.jobId && void post("/api/job/cancel", { id: v.jobId }).catch(() => {})}
-            >
-              {t("uw.cancel")}
-            </button>
+            <div class="uw-news">
+              <h3>{t("uw.news")}</h3>
+              {notes.length ? <ul>{notes.map((l) => <li key={l}>{l}</li>)}</ul> : <News news={v.news} since={run.from} />}
+            </div>
           )
-          : step === "update"
-          ? <button type="button" class="btn" onClick={() => proceed.current?.()}>{t("uw.go")}</button>
-          : w.state.every((s) => s === "todo")
-          ? <button type="button" class="btn" onClick={() => void start()}>{t("uw.start")}</button>
           : null}
-      </p>
+        {log.length > 0 && (
+          <div class="uw-log">
+            {log.map((e, i) => (
+              <div key={`${e.at}${i}`}>
+                {COMPONENTS[e.component] ?? e.component} · {tk(`up.ev.${e.event}`)}
+                {e.detail ? ` · ${e.detail}` : ""}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!begun && busy > 0 && <p class="uw-sub">{t("uw.busy", { n: busy })}</p>}
+
+        <div class="uw-go">
+          {v.running
+            ? (
+              <button type="button" class="bt" onClick={() => v.jobId && void post("/api/job/cancel", { id: v.jobId }).catch(() => {})}>
+                {t("uw.cancel")}
+              </button>
+            )
+            : !begun
+            ? (
+              <>
+                <button type="button" class="bt pri" onClick={() => void start()}>{t(pendingUpdates(S).length || app?.available ? "up.now" : "uw.start")}</button>
+                <button type="button" class="bt ghost" onClick={close}>{t("sc.later")}</button>
+              </>
+            )
+            : failed && failed !== "verify"
+            ? (
+              <>
+                <button
+                  type="button"
+                  class="bt pri"
+                  onClick={() => {
+                    for (const s of STEPS) run.state[s] = "todo";
+                    v.cause = "";
+                    void start();
+                  }}
+                >
+                  {t("uw.retry")}
+                </button>
+                <button type="button" class="bt ghost" onClick={close}>{t("close")}</button>
+              </>
+            )
+            : finished
+            ? (
+              <>
+                {S?.selfInstall && log.length > 0 && (
+                  <button type="button" class="bt" onClick={() => void openCloseClaude()}>{t("cc.btn")}</button>
+                )}
+                <button type="button" class="bt pri" onClick={close}>{t("uw.done")}</button>
+              </>
+            )
+            : null}
+          {v.out && (
+            <button type="button" class="bt ghost uw-more" onClick={() => (v.showOut = !v.showOut, draw())}>
+              {t(v.showOut ? "uw.hideOut" : "uw.showOut")}
+            </button>
+          )}
+        </div>
+        {v.out && v.showOut && <pre class="out uw-out" ref={outEl}>{v.out}</pre>}
+      </div>
     </div>
   );
-}
-
-function openWizard(resume: WizState | null = null): void {
-  openDrawer(t("uw.title"), () => <Wizard resume={resume} />);
 }
 
 /** «What's new» alone: the notice after an update the timer made. */
@@ -265,54 +378,77 @@ function NewsDrawer({ since }: { since: string | null }) {
 }
 
 export function UpdateWizardHost() {
+  const [open, setOpen] = useState<{ resume: Run | null; auto: boolean; at: number } | null>(null);
   const [note, setNote] = useState<{ v: string; seen: string } | null>(null);
   const booted = useRef(false);
   const ready = status.value !== null;
 
-  useIntent("update.wizard", () => openWizard());
+  // the desktop app's update, from the start and on each of its events
+  useTopic(() => loadAppUpdate(), ["app-update"]);
 
-  // At start: a wizard that the console's restart interrupted opens again; otherwise a version newer
-  // than the last one seen here (the timer updated in the background) gets a notice.
+  useIntent("update.wizard", (arg) => setOpen({ resume: null, auto: arg === "auto", at: Date.now() }));
+
+  // At start: a run that the restart interrupted opens again; otherwise a version newer than the last
+  // one seen here (the timer updated in the background) gets a notice.
   useEffect(() => {
     const S = status.value;
     if (!S || booted.current) return;
     booted.current = true;
-    const w = kept<WizState>(sessionStorage, UW_KEY);
-    // only a wizard that got as far as the update resumes; one still asking is simply closed
-    const past = w?.state && ["running", "done", "failed"].includes(w.state[at("update")]);
-    if (w && past && Date.now() - Date.parse(w.at) < 30 * 60000) return openWizard(w);
-    keep(sessionStorage, UW_KEY);
+    const w = kept<Run>(localStorage, UW_KEY);
+    // only a run that got as far as the update resumes; one still asking is simply closed
+    const past = w?.state && ["running", "done"].some((x) => x === w.state.update || x === w.state.download);
+    if (w && past && Date.now() - Date.parse(w.at) < 30 * 60000) return setOpen({ resume: w, auto: false, at: Date.now() });
+    keep(localStorage, UW_KEY);
     const v = S.repo.version, seen = kept<string>(localStorage, SEEN_KEY);
     if (!v) return;
     if (!seen) return keep(localStorage, SEEN_KEY, v);
     if (cmpVer(v, seen) > 0) setNote({ v, seen });
   }, [ready]);
 
-  if (!note) return null;
+  // a request that came before the shell drew this host
+  useEffect(() => {
+    if (intent.value?.name === "update.wizard") setOpen({ resume: null, auto: intent.value.arg === "auto", at: Date.now() });
+  }, []);
+
   return (
-    <div class="upnote">
-      <span>{t("uw.notice", { v: note.v })}</span>
-      <button
-        type="button"
-        class="btn sm"
-        onClick={() => {
-          setNote(null);
-          openDrawer(t("uw.news"), () => <NewsDrawer since={note.seen} />);
-        }}
-      >
-        {t("uw.news")}
-      </button>
-      <button
-        type="button"
-        class="x"
-        aria-label={t("close")}
-        onClick={() => {
-          setNote(null);
-          keep(localStorage, SEEN_KEY, note.v);
-        }}
-      >
-        ×
-      </button>
-    </div>
+    <>
+      {open && (
+        <Screen
+          key={open.at}
+          resume={open.resume}
+          auto={open.auto}
+          close={() => {
+            setOpen(null);
+            keep(localStorage, UW_KEY);
+          }}
+        />
+      )}
+      {note && (
+        <div class="upnote">
+          <span>{t("uw.notice", { v: note.v })}</span>
+          <button
+            type="button"
+            class="btn sm"
+            onClick={() => {
+              setNote(null);
+              openDrawer(t("uw.news"), () => <NewsDrawer since={note.seen} />);
+            }}
+          >
+            {t("uw.news")}
+          </button>
+          <button
+            type="button"
+            class="x"
+            aria-label={t("close")}
+            onClick={() => {
+              setNote(null);
+              keep(localStorage, SEEN_KEY, note.v);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </>
   );
 }
