@@ -12,15 +12,9 @@
 // lives only in the server's environment.
 
 import type { DatabaseSync } from "node:sqlite";
-import { base32Encode, randomToken, same, sha256, totpOk } from "./auth.ts";
+import { ACCOUNTS_MIGRATIONS, base32Encode, randomToken, same, sha256, totpOk } from "./auth.ts";
+import { migrate } from "./migrate.ts";
 import { validZone } from "../../shared/mcp/lib/tasks.ts";
-
-const SCHEMA = `
-create table if not exists users (
-  id text primary key, name text not null, language text not null, pass text, totp text, backup text not null,
-  admin integer not null default 0, disabled integer not null default 0, created text not null, timezone text);
-create table if not exists invites (hash text primary key, user text not null, expires integer not null);
-`;
 
 /** What an account id looks like: also the name of the person's folder under /data/users. */
 export const USER_ID = /^[a-z][a-z0-9_-]{1,30}$/;
@@ -90,11 +84,7 @@ export function accountError(id: string, name: string): string | null {
 
 export class Users {
   constructor(private db: DatabaseSync, private key: CryptoKey, private dev = false) {
-    db.exec(SCHEMA);
-    // accounts from before each had a zone: the service's own, until the person chooses
-    if (!(db.prepare("pragma table_info(users)").all() as { name: string }[]).some((c) => c.name === "timezone")) {
-      db.exec("alter table users add column timezone text");
-    }
+    migrate(db, ACCOUNTS_MIGRATIONS);
   }
 
   private row = (r: Record<string, unknown> | undefined): User | null =>
@@ -184,6 +174,11 @@ export class Users {
       Date.now() + INVITE_DAYS * 86400_000,
     );
     return t;
+  }
+
+  /** Invitations past their week: they open nothing any more. Returns how many went. */
+  purge(now = Date.now()): number {
+    return Number(this.db.prepare("delete from invites where expires < ?").run(now).changes);
   }
 
   /** The account an invitation opens and the TOTP secret to show, or null when it is not valid. */

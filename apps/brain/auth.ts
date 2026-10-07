@@ -19,16 +19,40 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Users } from "./users.ts";
 import { Gate } from "./guard.ts";
+import { migrate, type Migration } from "./migrate.ts";
 
 const SCHEMA = `
+create table if not exists users (
+  id text primary key, name text not null, language text not null, pass text, totp text, backup text not null,
+  admin integer not null default 0, disabled integer not null default 0, created text not null, timezone text);
+create table if not exists invites (hash text primary key, user text not null, expires integer not null);
 create table if not exists oauth_clients (id text primary key, name text, redirects text not null, created text not null);
-create table if not exists oauth_codes (hash text primary key, user text not null, client text not null, redirect text not null, challenge text not null, resource text, expires integer not null);
+create table if not exists oauth_codes (hash text primary key, user text not null, client text not null, redirect text not null, challenge text not null, resource text, scope text, expires integer not null);
 create table if not exists tokens (
   hash text primary key, user text not null, kind text not null, client text, name text, family text, expires integer,
   created text not null, used text, revoked integer not null default 0);
 create table if not exists sessions (hash text primary key, user text not null, expires integer not null, ends integer not null);
 create table if not exists login_failures (user text not null, ip text not null, at integer not null);
 `;
+
+/** accounts.db holds the people (users.ts) and their credentials (this file), so one list serves
+ *  both: whichever opens the file first brings it up to date. Step 1 is the schema as it was before
+ *  versions, and also adapts the older shapes a file may still have. */
+export const ACCOUNTS_MIGRATIONS: Migration[] = [(db) => {
+  const lacks = (t: string, c: string) => {
+    const cols = db.prepare(`pragma table_info(${t})`).all() as { name: string }[];
+    return cols.length > 0 && !cols.some((x) => x.name === c);
+  };
+  // accounts from before each had a zone: the service's own, until the person chooses
+  if (lacks("users", "timezone")) db.exec("alter table users add column timezone text");
+  // codes made before scope was kept: they last a minute, the column is simply added
+  if (lacks("oauth_codes", "scope")) db.exec("alter table oauth_codes add column scope text");
+  // sessions from before they had an end: signing in again is all it costs
+  if (lacks("sessions", "ends")) db.exec("drop table sessions");
+  // failures from before they were kept per address: they last fifteen minutes, so they simply go
+  if (lacks("login_failures", "ip")) db.exec("drop table login_failures");
+  db.exec(SCHEMA);
+}];
 
 export interface AuthConfig {
   url: string;
@@ -153,23 +177,7 @@ export function redirectMatches(registered: string[], uri: string): boolean {
 
 export class Auth {
   constructor(private db: DatabaseSync, private users: Users, private cfg: AuthConfig) {
-    db.exec(SCHEMA);
-    // codes made before scope was kept: they last a minute, the column is simply added
-    if (!(db.prepare("pragma table_info(oauth_codes)").all() as { name: string }[]).some((c) => c.name === "scope")) {
-      db.exec("alter table oauth_codes add column scope text");
-    }
-    // sessions from before they had an end: signing in again is all it costs
-    if (!(db.prepare("pragma table_info(sessions)").all() as { name: string }[]).some((c) => c.name === "ends")) {
-      db.exec(
-        "drop table sessions; create table sessions (hash text primary key, user text not null, expires integer not null, ends integer not null);",
-      );
-    }
-    // failures from before they were kept per address: they last fifteen minutes, so they simply go
-    if (!(db.prepare("pragma table_info(login_failures)").all() as { name: string }[]).some((c) => c.name === "ip")) {
-      db.exec(
-        "drop table login_failures; create table login_failures (user text not null, ip text not null, at integer not null);",
-      );
-    }
+    migrate(db, ACCOUNTS_MIGRATIONS);
   }
 
   get resourceMeta() {
@@ -266,16 +274,32 @@ export class Auth {
   /** Anyone may register a client (RFC 7591: that is how Claude connects), so the ones nobody uses
    *  go: a client that never got a code or a token after a day, and one with no live token after
    *  ninety days. Past MAX_CLIENTS still in use, registration waits. */
-  private pruneClients(now: number) {
+  private pruneClients(now: number): number {
     const day = new Date(now - 86_400_000).toISOString(), quarter = new Date(now - 90 * 86_400_000).toISOString();
-    this.db.prepare(
+    const unused = this.db.prepare(
       `delete from oauth_clients where created < ? and not exists (select 1 from tokens t where t.client = oauth_clients.id)
         and not exists (select 1 from oauth_codes c where c.client = oauth_clients.id)`,
     ).run(day);
-    this.db.prepare(
+    const idle = this.db.prepare(
       `delete from oauth_clients where created < ? and not exists (select 1 from tokens t where t.client = oauth_clients.id
         and t.revoked = 0 and (t.expires is null or t.expires > ?))`,
     ).run(quarter, now);
+    return Number(unused.changes) + Number(idle.changes);
+  }
+
+  /** Rows nothing will read again: spent codes, expired sessions, old login failures, unused clients.
+   *  Every one is already refused or ignored when it is looked up; this only keeps the file from
+   *  growing. Tokens go ninety days after they expire, not at once: pruneClients counts them to tell
+   *  a client in use from one nobody uses, and by then that rule has settled the client either way.
+   *  Returns how many rows went. */
+  purge(now = Date.now()): number {
+    const n = (r: { changes: number | bigint }) => Number(r.changes);
+    let gone = this.pruneClients(now);
+    gone += n(this.db.prepare("delete from oauth_codes where expires < ?").run(now));
+    gone += n(this.db.prepare("delete from tokens where expires < ?").run(now - 90 * 86_400_000));
+    gone += n(this.db.prepare("delete from sessions where expires < ?").run(now));
+    gone += n(this.db.prepare("delete from login_failures where at < ?").run(now - 15 * 60_000));
+    return gone;
   }
 
   register(

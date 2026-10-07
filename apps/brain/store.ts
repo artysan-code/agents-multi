@@ -10,6 +10,7 @@
 // tasks/, where tasks.ts keeps one document per task.
 
 import { DatabaseSync } from "node:sqlite";
+import { migrate, type Migration } from "./migrate.ts";
 
 export interface Doc {
   path: string;
@@ -43,6 +44,8 @@ create table if not exists chunks (
   path text not null, ord integer not null, text text not null, vec blob, model text,
   primary key (path, ord));
 `;
+/** The brain database's schema, step by step: step 1 is the schema as it was before versions. */
+export const BRAIN_MIGRATIONS: Migration[] = [(db) => db.exec(SCHEMA)];
 
 /** Pure: a path the brain accepts — folders and a name ending in .md, no way out of the tree. */
 export function cleanPath(p: string): string {
@@ -82,7 +85,7 @@ export class Store {
   constructor(file: string) {
     this.db = new DatabaseSync(file);
     this.db.exec("pragma journal_mode = wal; pragma foreign_keys = on; pragma busy_timeout = 5000;");
-    this.db.exec(SCHEMA);
+    migrate(this.db, BRAIN_MIGRATIONS);
   }
 
   get(path: string): Doc | null {
