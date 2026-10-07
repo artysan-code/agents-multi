@@ -78,6 +78,7 @@ const T = {
       "install ha del lavoro e aspetta che chiudi ogni Claude: lo fa il prossimo giro, o lancia claude-multi install",
     installDone: "install eseguito",
     installFail: "install non riuscito: lancia claude-multi install per vedere perché",
+    nothingPending: "nessun install in attesa",
     restarted: (console: boolean, app: boolean) =>
       console && app
         ? "riavviate la console e l'app: giravano col codice vecchio"
@@ -102,6 +103,7 @@ const T = {
       "install has work to do and waits for every Claude to be closed: the next round does it, or run claude-multi install",
     installDone: "install done",
     installFail: "install failed: run claude-multi install to see why",
+    nothingPending: "no install waiting",
     restarted: (console: boolean, app: boolean) =>
       `restarted ${
         [console && "the console", app && "the app"].filter(Boolean).join(" and ")
@@ -126,7 +128,7 @@ const skipWhy = (r: RepoView) =>
 const PENDING = `${STATE}/install-pending`;
 const SKIPPED = `${CACHE}/self-update-skipped`;
 
-async function log(event: string, from: string, to: string, detail = "") {
+export async function log(event: string, from: string, to: string, detail = "") {
   await Deno.mkdir(STATE, { recursive: true });
   const line = JSON.stringify({
     at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
@@ -186,6 +188,17 @@ async function settleInstall(head: string, say: (s: string) => void): Promise<bo
     say(note(T.installFail));
     return false;
   }
+}
+
+/** `self-update --settle`: the install a round left waiting, now — what the console's «Close Claude
+ *  and update» runs once the sessions are closed. Still waits if something is open. */
+export async function settlePending(): Promise<number> {
+  const head = await installWaiting();
+  if (!head) {
+    console.log(row("ok", "", T.nothingPending));
+    return 0;
+  }
+  return await settleInstall(head, console.log) ? 0 : 1;
 }
 
 /**

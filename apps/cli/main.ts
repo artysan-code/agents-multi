@@ -40,7 +40,7 @@ import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./us
 import { serve } from "./console/server.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
-import { selfCheck, selfCheckRow, selfUpdate } from "./selfupdate.ts";
+import { selfCheck, selfCheckRow, selfUpdate, settlePending } from "./selfupdate.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import manifest from "../../deno.json" with { type: "json" };
 
@@ -203,6 +203,7 @@ switch (cmd) {
       );
       Deno.exit(c.plan.do === "pull" ? 10 : 0);
     }
+    if (flag("--settle")) Deno.exit(await settlePending());
     Deno.exit(await selfUpdate({ quiet: flag("--quiet") }));
     break;
   }
@@ -237,7 +238,7 @@ switch (cmd) {
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
   mcp     check|sync|health [--probe]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop); --force ignores running instances; --probe really starts each server and waits for initialize
   update  [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and claude-multi itself (--auto: what the timer runs)
-  self-update [--check [--json]] [--quiet]   claude-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
+  self-update [--check [--json]] [--settle] [--quiet]   claude-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
   vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,

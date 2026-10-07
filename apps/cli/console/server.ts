@@ -28,6 +28,7 @@ import { hasCsrfHeader, isLocalHost, json, jsonText, staticFile } from "./http.t
 import { broadcast, eventStream, onTopic, watchBrain, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
+import { closePlan, closeSessions, reopen } from "./close-claude.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
 
@@ -178,6 +179,22 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
     "/api/plugins/catalog": { get: async ({ url }) => json(await catalog(url.searchParams.has("fresh"))) },
     "/api/plugins/details": {
       get: async ({ url }) => json({ text: await details(url.searchParams.get("id") ?? "") }),
+    },
+    // «Close Claude and update»: who holds the waiting install, then SIGTERM, SIGKILL, reopen. The PIDs
+    // are always the server's own; the page only names a step (and the profiles to reopen)
+    "/api/close-claude": {
+      get: async () => json(await closePlan()),
+      post: async ({ req }) => {
+        const b = await body(req) as { step?: string; profiles?: string[] };
+        if (b.step === "term" || b.step === "kill") {
+          const r = await closeSessions(b.step === "term" ? "SIGTERM" : "SIGKILL");
+          status.invalidate();
+          broadcast("state");
+          return json(r);
+        }
+        if (b.step === "reopen") return json({ ok: true, started: await reopen(b.profiles ?? []) });
+        return json({ ok: false, message: "unknown step" }, 400);
+      },
     },
     "/api/action": {
       post: async ({ req }) => {
