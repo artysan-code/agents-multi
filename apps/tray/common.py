@@ -30,6 +30,7 @@ def owner() -> dict:
         pass
     return o
 CONSOLE_UNIT = f"{NAME}-console.service"
+APP_UNIT = f"{NAME}-app.service"
 DATA_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local" / "share")) / NAME / "app"
 STATE_FILE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state")) / NAME / "app.json"
 SOCKET = f"{os.environ.get('XDG_RUNTIME_DIR', '/tmp')}/{NAME}-app.sock"

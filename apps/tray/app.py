@@ -14,7 +14,8 @@ Updates need no window: the timer installs them (bin/claude-update --auto) and t
 System › Updates shows what happened.
 
 One instance per session: a second start hands its request to the first over a local socket and
-exits.
+exits. With none running, a start from the menu or a shortcut brings up the systemd unit and hands the
+request to it, so the app always runs under the unit — the one that updates restart onto new code.
 
 Without a system tray (GNOME without the AppIndicator extension) the app still opens its windows and
 quits when the last one closes; `--tray` gives up after a minute and says so to the doctor.
@@ -31,7 +32,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from common import BIN, CONSOLE_UNIT, NAME, SOCKET, write_state
+from common import APP_UNIT, BIN, CONSOLE_UNIT, NAME, SOCKET, TITLE, write_state
 
 TRAY_WAIT_S = 60  # at login the tray host can come up after us
 
@@ -152,6 +153,35 @@ def forward(cmd: str) -> bool:
     return True
 
 
+def in_unit() -> bool:
+    """Whether this process runs inside the app's own unit (KDE starts menu entries in transient
+    units of their own, so being under systemd says nothing)."""
+    try:
+        with open("/proc/self/cgroup") as f:
+            return f"/{APP_UNIT}" in f.read()
+    except OSError:
+        return False
+
+
+def start_unit(cmd: str) -> bool:
+    """Starts the app's unit and hands it the request. False without systemd, or when the unit does
+    not answer: the caller then runs the app itself, as before."""
+    if cmd == "tray" or in_unit():
+        return False
+    try:
+        r = subprocess.run(["systemctl", "--user", "start", APP_UNIT], capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if r.returncode != 0:
+        return False
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if forward(cmd):
+            return True
+        time.sleep(0.2)
+    return False
+
+
 def listen(ctl: Controller) -> QLocalServer:
     QLocalServer.removeServer(SOCKET)  # a stale socket left by a crash
     srv = QLocalServer(ctl)
@@ -177,10 +207,12 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName(NAME)
+    # what the tray host and the notifications show; NAME stays the identity until the internal rename
+    app.setApplicationDisplayName(TITLE)
     app.setDesktopFileName(NAME)
     app.setWindowIcon(QIcon.fromTheme("claude-multi", QIcon.fromTheme("claude-desktop")))
     app.setQuitOnLastWindowClosed(False)
-    if forward(cmd):
+    if forward(cmd) or start_unit(cmd):
         return 0
 
     ctl = Controller(app)
