@@ -68,7 +68,7 @@ export function appCodeChecks(
       `the app carries ${f.app.build}, its copy is ${copy}`,
       "restart Agents Multi: it installs its code when it starts",
     );
-  } else add("app.version", "ok", `the app ${f.app.version} and its copy agree (${copy})`);
+  } else add("app.version", "ok", `the app and its copy agree: ${copy}`);
   return out;
 }
 
@@ -76,7 +76,9 @@ export function appCodeChecks(
 export async function repoChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { repo } = ctx;
-  const note = runningFrom(REPO, ctx.installed, repo.isRepo);
+  // the installed code through its links (the app's copy is reached through app/current)
+  const installed = await Deno.realPath(ctx.installed).catch(() => ctx.installed);
+  const note = runningFrom(REPO, installed, repo.isRepo);
   if (note) add(note.id, note.status, note.msg);
   const record = await readRecord();
   if (ctx.mode === "app") {
