@@ -13,6 +13,8 @@ serde_json = "=1.0.151"
 tauri = { version = "=2.12.1", features = [] }
 tauri-plugin-opener = "=2.7.0"
 tauri-plugin-single-instance = "=2.5.2"
+# signed app updates (src/updater.rs); optional, so a build for a package manager can leave it out
+tauri-plugin-updater = { version = "=2.12.0", optional = true }
 url = "2"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
@@ -33,3 +35,8 @@ tauri = { version = "=2.12.1", features = ["tray-icon"] }
 [target.'cfg(unix)'.dependencies]
 # SIGTERM to the backend, and its parent-death signal on Linux (src/backend.rs).
 libc = "=0.2.190"
+
+[features]
+default = ["updater"]
+# the in-app updater (src/updater.rs, docs/adr/0004): left out of builds a package manager updates
+updater = ["dep:tauri-plugin-updater"]

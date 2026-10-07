@@ -14,6 +14,12 @@
       "capabilities": []
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "requireSignedVersion": true
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["deb", "rpm", "appimage"],

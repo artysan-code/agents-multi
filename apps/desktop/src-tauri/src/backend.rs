@@ -432,6 +432,8 @@ fn spawn(launch: &Launch, port: u16, log_path: Option<&PathBuf>) -> std::io::Res
         .current_dir(&launch.dir)
         .envs(launch.env.iter().map(|(k, v)| (k, v)))
         .env("AGENTS_MULTI_PORT", port.to_string())
+        // where the app answers about its own updates (updater/socket.rs)
+        .env(crate::updater::SOCKET_VAR, crate::updater::socket::path())
         .stdin(Stdio::null())
         .stdout(out)
         .stderr(err);

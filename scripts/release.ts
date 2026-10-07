@@ -13,6 +13,10 @@
  *
  * Channels follow branches: a stable version is cut on `release`, a beta on `beta`.
  *
+ * What the pushed tag starts (.forgejo/workflows/release.yml, docs/adr/0004): the Forgejo release with
+ * the notes, then the desktop app's signed bundles on the GitHub release, and the site's update manifest
+ * for the channel, committed on `release` by the workflow — pull it before cutting the next version.
+ *
  * When the repository is the one the runtime runs (~/.agents-multi/shared links into it), the console
  * and the tray app still hold the code from before the merge: they are restarted if it changed since
  * the last tag, as self-update does after a pull.
@@ -272,6 +276,7 @@ async function main(args: string[]) {
   await git("commit", "-q", "-m", `chore(release): v${next}`);
   await git("tag", "-a", `v${next}`, "-m", `v${next}`);
   console.log(`tagged v${next}. Publish with: git push origin ${branch} v${next}`);
+  console.log("The tag builds the app's bundles and moves its update channel (docs/adr/0004); pull release after.");
   await restartStale(root, lastTag);
 }
 

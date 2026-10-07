@@ -24,6 +24,7 @@ mod profiles;
 mod repo;
 mod reveal;
 mod tray;
+mod updater;
 
 use navigation::Decision;
 use tauri::webview::NewWindowResponse;
@@ -50,6 +51,9 @@ fn main() {
         ))
         // The console's backend: started before the window, stopped on exit (backend.rs).
         .plugin(backend::init())
+        // The app's own updates: Tauri's updater, driven from Rust by updater.rs for the console.
+        .plugin_boxed(updater::tauri_updater())
+        .plugin(updater::init())
         .setup(|app| {
             #[cfg(target_os = "linux")]
             set_window_class(&app.config().identifier);
@@ -57,7 +61,9 @@ fn main() {
             // The local page waits for whatever serves the console on `port`: the backend plugin's
             // sidecar, or a console that was already running.
             let args: Vec<String> = std::env::args().skip(1).collect();
-            controller::start(app.handle(), port, flags::parse(&args));
+            // after an update the console opens on the update screen (updater.rs)
+            let request = updater::after_relaunch(app.handle(), flags::parse(&args));
+            controller::start(app.handle(), port, request);
             Ok(())
         })
         .on_window_event(controller::on_window_event)

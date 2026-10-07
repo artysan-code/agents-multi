@@ -152,9 +152,15 @@ export function fillSite(text: string, s: Site, html = true): string {
   return html ? out.replace(/<body[^>]*>/, "$&<!--email_off-->").replace("</body>", "<!--/email_off--></body>") : out;
 }
 
+/** The desktop app's update manifests, one per channel (docs/adr/0004): written into the site's
+ *  public/updates/ by the release workflow (scripts/app-release.ts). */
+const UPDATE_MANIFEST = /^\/updates\/(stable|beta)\.json$/;
+
 /** Pure: how long a file of the site may be kept. */
 export function siteCache(rel: string): string {
   if (rel.startsWith("_astro/")) return "public, max-age=31536000, immutable"; // named by their hash
+  // an update manifest moves with every release, and back on a rollback: always revalidated
+  if (rel.startsWith("updates/")) return "no-cache";
   if (rel.endsWith(".html") || rel.endsWith(".xml") || rel.endsWith(".txt")) return "no-cache";
   return "public, max-age=2592000";
 }
@@ -219,10 +225,15 @@ export function etagMatches(header: string | null, etag: string): boolean {
 }
 
 /** A file of the built site, or null when there is none. A request that already holds the current
- *  version (If-None-Match) gets a 304 with the same headers; an error page (`status` not 200) never does. */
+ *  version (If-None-Match) gets a 304 with the same headers; an error page (`status` not 200) never does.
+ *  A channel's update manifest that is not there yet (no release on it) is a 204, which the app's
+ *  updater reads as «nothing newer». */
 export function siteFile(files: SiteFiles, pathname: string, req: Headers, status = 200): Response | null {
   const rel = sitePath(pathname);
   const f = rel === null ? undefined : files.get(rel);
+  if (!f && status === 200 && UPDATE_MANIFEST.test(pathname)) {
+    return new Response(null, { status: 204, headers: { "cache-control": "no-cache" } });
+  }
   if (!f) return null;
   const headers = { ...f.headers, etag: f.etag };
   if (status === 200 && etagMatches(req.get("if-none-match"), f.etag)) {

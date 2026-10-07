@@ -7,7 +7,7 @@ import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
 import { listTasks, tasksRoot } from "../../../shared/mcp/lib/tasks.ts";
 import { memoryVersion } from "../memory.ts";
 
-export type Topic = "usage" | "state" | "brain" | "tasks";
+export type Topic = "usage" | "state" | "brain" | "tasks" | "app-update";
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
  *  rather than repainting every row as busy. */
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
@@ -27,7 +27,8 @@ export function onTopic(fn: (topic: Topic) => void) {
 }
 
 /**
- * Watch what the console displays and say which half moved.
+ * Watch what the console displays and say which half moved (`app-update` is the app's own word,
+ * relayed by app-update.ts).
  * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
  * `brain`  a page of the brain changed (anywhere: watchBrain asks it every half minute)

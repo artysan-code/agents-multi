@@ -37,6 +37,7 @@ import { launchList, launchOne } from "./picker.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
 import { UI_DIST } from "../ui.ts";
+import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
 import { jobsFor, startSchedule } from "./schedule.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
@@ -54,7 +55,7 @@ export interface Route {
 }
 
 /** The routes of the console, given the state they share. */
-export function routes(code: string, status: StatusCache): Record<string, Route> {
+export function routes(code: string, status: StatusCache, app?: AppLink): Record<string, Route> {
   let plugins: { at: number; body: string } | null = null;
   const body = (req: Request) => req.json().catch(() => ({}));
 
@@ -268,6 +269,8 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
     "/api/job/cancel": {
       post: async ({ req }) => json({ ok: cancelJob(String((await body(req) as { id?: string }).id ?? "")) }),
     },
+    // the desktop app's own updates, relayed to and from the app (app-update.ts)
+    ...(app ? { "/api/app/update": appUpdateRoute(app) } : {}),
   };
 }
 
@@ -320,7 +323,8 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   const url = `http://127.0.0.1:${PORT}`;
   const code = await codeVersion();
   const status = new StatusCache();
-  const table = routes(code, status);
+  const app = new AppLink(unixDial(appSocket()), () => broadcast("app-update"));
+  const table = routes(code, status, app);
   const ac = new AbortController();
 
   // a state change outdates the kept report, lazily: state events are frequent while sessions run,
@@ -336,6 +340,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   console.log(`${ANSI.b}agents serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   void watchTree(ac.signal);
   void watchBrain(ac.signal, connectTasks() === "brain");
+  void app.follow(ac.signal);
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
   // app mode: the timers' jobs are the backend's (schedule.ts); dev mode keeps its systemd timers
   if ((await installation()).mode === "app") {

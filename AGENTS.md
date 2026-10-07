@@ -131,6 +131,13 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   The CHANGELOG is the only place notes are written: pushing the tag makes the Forgejo release
   from its section (`.forgejo/workflows/release.yml`, `scripts/publish-releases.ts`), the site's
   Changelog page is generated from it at build, and the console shows it as «What's new».
+- **The desktop app's releases** ([ADR 0004](docs/adr/0004-desktop-app-releases.md)): the same tag builds
+  the signed bundles in CI, puts them on the GitHub release and commits the site's update manifests
+  (`apps/site/public/updates/`) on `release` — pull before the next `deno task release`. Those
+  manifests are written by `scripts/app-release.ts`, by hand only for a rollback. The site, the GitHub
+  repository and the AUR package are named once, in `apps/desktop/release.json`; the updater's public
+  key in `tauri.conf.json`. The app's update is the console's to show (`/api/app/update`), the app's to
+  do: the backend reaches it over its unix socket, never the page.
 - **Commit subjects are Conventional Commits**: `<type>(<scope>)!: <description>`, types in
   `TYPES` of `scripts/release.ts`. The CHANGELOG and the bump come from them; the `commit-msg`
   hook and CI (`release.ts --lint`) reject anything else since the last tag.

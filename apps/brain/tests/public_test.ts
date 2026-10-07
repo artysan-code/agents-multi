@@ -127,6 +127,29 @@ Deno.test("public: a matching If-None-Match gets a 304 that keeps the security h
   }
 });
 
+Deno.test("public: the desktop app's update manifests are served as they are, revalidated; a channel without one says 204", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(`${dir}/updates`);
+    const manifest = JSON.stringify({ version: "1.0.0", notes: "__OPERATOR__ https://site.invalid", platforms: {} });
+    await Deno.writeTextFile(`${dir}/updates/stable.json`, manifest);
+    const files = await loadSite(dir, site);
+    const r = siteFile(files, "/updates/stable.json", new Headers())!;
+    assertEquals(r.status, 200);
+    assertEquals(r.headers.get("content-type"), "application/json");
+    assertEquals(r.headers.get("cache-control"), "no-cache");
+    assertEquals(await r.text(), manifest); // never filled: its URLs are the artifacts'
+    const etag = r.headers.get("etag")!;
+    assertEquals(siteFile(files, "/updates/stable.json", new Headers({ "if-none-match": etag }))!.status, 304);
+    const none = siteFile(files, "/updates/beta.json", new Headers())!;
+    assertEquals([none.status, none.headers.get("cache-control"), await none.text()], [204, "no-cache", ""]);
+    assertEquals(siteFile(files, "/updates/nightly.json", new Headers()), null);
+    assertEquals(siteFile(files, "/updates/beta.json", new Headers(), 404), null); // not as an error page
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
 Deno.test("public: the brain's address sends a page of the site to the site's own, and keeps its own paths", async () => {
   const dir = await Deno.makeTempDir();
   try {

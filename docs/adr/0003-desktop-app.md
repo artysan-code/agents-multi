@@ -95,9 +95,9 @@ shell's.
     graceful stop and no hook for the parent-death signal; it would also be a plugin carrying
     JavaScript commands. The backend is a Rust-only plugin with no commands, so no page can reach it.
 - **Security model**:
-  - No page gets IPC: the app declares no capabilities (`app.security.capabilities` is empty) and
-    registers no plugin with JavaScript commands, so neither the local page nor the console's origin
-    can call into the app. The opener crate is used from Rust only, without its plugin.
+  - No page gets IPC: the app declares no capabilities (`app.security.capabilities` is empty), so no
+    plugin command is granted to any page — the updater plugin (ADR 0004) carries commands, none
+    granted — and neither the local page nor the console's origin can call into the app. The opener crate is used from Rust only, without its plugin.
   - The main frame may show two origins, the bundled page and `http://127.0.0.1:<port>`
     (`src-tauri/src/navigation.rs`, with its tests). Any other web link (http, https, mailto) opens
     in the system browser; any other scheme is refused. A request for a new window (`target="_blank"`,

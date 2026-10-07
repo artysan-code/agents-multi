@@ -12,6 +12,9 @@ ten minutes after login and every four hours, then the doctor.
   time and *applied* only when no Claude Desktop is running, then each profile's variant is rebuilt.
 - **Agents Multi** — a fast-forward pull on a clean tree; the console and the tray restart if their
   code changed, and `install` runs only with every Claude closed.
+- **The desktop app** — checks for a new version every day and downloads it in the background,
+  verified against the project's signing key; the console's Updates screen installs it and restarts the
+  app. Betas are a channel of their own, and the Arch package is updated by pacman instead.
 - **Rollback** — `agents update --rollback`, or one button in the console.
 - **Supply chain** — the Anthropic apt repository key is pinned: the `InRelease` signature, the index
   hash and the package hash are all checked before a file is extracted.
