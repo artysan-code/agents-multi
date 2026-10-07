@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.7.0] - 2026-10-07
+
+### Added
+
+- **console**: an update wizard with the restart, a health check and what's new (dbc4c40)
+
 ## [0.6.0] - 2026-10-07
 
 ### Added
