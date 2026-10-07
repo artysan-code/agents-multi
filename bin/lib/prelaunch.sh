@@ -13,7 +13,7 @@
 set -uo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/profiles.sh"
 
-REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$HOME/.local/src/claude-multi}}"
+REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$HOME/.local/src/agents-multi}}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi"
 STATE="$CACHE/sync.json"
 STAMP="$CACHE/fetch.stamp"
