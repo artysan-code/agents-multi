@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "net.local.agents-multi",
+  "bundle": {
+    "linux": {
+      "deb": { "desktopTemplate": "linux/app.desktop" },
+      "rpm": { "desktopTemplate": "linux/app.desktop" }
+    }
+  }
+}

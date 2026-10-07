@@ -24,6 +24,10 @@ fn main() {
     #[cfg(target_os = "linux")]
     activation::forward_through_args();
 
+    let context = tauri::generate_context!();
+    #[cfg(target_os = "linux")]
+    set_app_id(&context.config().identifier);
+
     tauri::Builder::default()
         // First, so a second launch exits before it builds anything: it raises the window instead.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -32,14 +36,31 @@ fn main() {
             }
         }))
         .setup(|app| {
+            #[cfg(target_os = "linux")]
+            set_window_class(&app.config().identifier);
             let port = console::port();
             // Phase 5, piece 2: start the backend sidecar here, before the window. The local page
             // already waits for whatever serves the console on `port`.
             open_main_window(app.handle(), port)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running the desktop app");
+}
+
+/// The window's app_id on Wayland, set before GTK starts (GTK 3 sends the program name): the
+/// compositor finds `<app_id>.desktop`, and the icon there, by it. The bundles' desktop file is named
+/// after the same identifier (tauri.linux.conf.json, checked by build.rs).
+#[cfg(target_os = "linux")]
+fn set_app_id(id: &str) {
+    gtk::glib::set_prgname(Some(id));
+}
+
+/// The X11 class (WM_CLASS) of the windows opened from now on. GTK's init resets it to the program
+/// name with a capital first letter, so this runs after it, before the first window.
+#[cfg(target_os = "linux")]
+fn set_window_class(id: &str) {
+    gtk::gdk::set_program_class(id);
 }
 
 /// The main window, on the local page that waits for the console on `port`.

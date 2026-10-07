@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Agents Multi
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+Icon={{icon}}
+StartupWMClass={{name}}
+StartupNotify=true
+Terminal=false
+Categories={{categories}}
+{{#if mime_type}}
+MimeType={{mime_type}}
+{{/if}}
