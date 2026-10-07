@@ -16,9 +16,15 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
 
 ## Rules for working here
 
-- **Never edit `~/.agents-multi/shared` by hand**: it is a symlink to this repository's `shared/`.
-  Change it here, commit, push. Other machines pick it up on the next Claude launch
-  (`bin/lib/prelaunch.sh`).
+- **Never edit `~/.agents-multi/shared` by hand**: in app mode it is the desktop app's copy of the
+  code (`~/.agents-multi/app/current`, replaced at the next update), in dev mode a link to a
+  checkout's `shared/`. Change it here, commit, push; it reaches machines with the app's release (or,
+  in dev mode, on the next Claude launch: `bin/lib/prelaunch.sh`).
+- **Two modes, decided in one place** (`apps/cli/lib/mode.ts`, `cm_mode` in `bin/lib/profiles.sh`):
+  app (every machine: the package's code, copied into the runtime) and dev (a checkout, for
+  development). Nothing in app mode depends on systemd or git: a scheduled job is the backend's
+  (`apps/cli/console/schedule.ts`), never a unit ([ADR 0003](docs/adr/0003-desktop-app.md), the
+  replacement step).
 - **Runtime never enters the repository**: credentials, `.claude.json`, sessions, plugin cache,
   marketplaces. A file containing `oauthAccount` or a token must never be committed. `.gitignore`
   covers the backups (`*.bak*`, `*.backup`).
@@ -42,7 +48,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
 - **The cost in `usage` is a list-price equivalent, not a charge**, and nothing in this repository
   monitors billing: the budget module was removed on purpose (2026-09-30). Do not bring back
   thresholds or notifications on spending.
-- **The console serves itself** (`claude-multi-console.service`). UI updates arrive over SSE on
+- **The console is the desktop app's backend** (`agents serve` by hand on a headless box). UI updates arrive over SSE on
   `/api/events`: a page reloads its data when its topic's counter moves (`useTopic` in
   `apps/ui/src/state.ts`), never from a polling loop of its own.
 - **The console's page is `apps/ui/`** (Preact + TSX, Vite, pnpm), served at the root. Each page lives
