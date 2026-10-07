@@ -6,6 +6,7 @@ import { loadRegistry, registryProblems } from "../../mcp/registry.ts";
 import { REPO } from "../../lib/paths.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
+import { actionStep, userStep, verifyStep } from "../repair.ts";
 
 /** The MCP registry against the surfaces, its validity, and the health of each server. */
 export async function mcpChecks(): Promise<Check[]> {
@@ -21,6 +22,7 @@ export async function mcpChecks(): Promise<Check[]> {
           [...new Set(changes.map((x) => x.target.managedKey))].join(", ")
         })`,
         "claude-multi mcp sync (with Claude closed)",
+        [userStep("Close every Claude session and Desktop window"), actionStep("mcp-sync"), verifyStep],
       );}
     const problems = registryProblems(await loadRegistry());
     if (problems.length) {

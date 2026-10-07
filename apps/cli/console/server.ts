@@ -198,8 +198,8 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
     },
     "/api/action": {
       post: async ({ req }) => {
-        const b = await body(req) as { action?: string; opts?: string[] };
-        const r = await runAction(String(b.action ?? ""), b.opts ?? []);
+        const b = await body(req) as { action?: string; opts?: string[]; params?: Record<string, string> };
+        const r = await runAction(String(b.action ?? ""), b.opts ?? [], b.params ?? {});
         status.invalidate();
         broadcast("state");
         return json(r);
