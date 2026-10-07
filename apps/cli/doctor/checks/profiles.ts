@@ -2,10 +2,11 @@
 
 import { listDir, mode, stat } from "../../lib/fs.ts";
 import { PROFILES, RUNTIME, shortHome } from "../../lib/paths.ts";
-import { KINDS, ownItems, profileInfo, runtimeProfiles } from "../../lib/profiles.ts";
+import { commandOf, KINDS, ownItems, profileInfo, runtimeProfiles } from "../../lib/profiles.ts";
 import { settingsState } from "../../settings.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
+import { userStep, verifyStep } from "../repair.ts";
 
 /** Every declared profile (links, manifest, settings, credentials, leftovers) and orphan runtime directories. */
 export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -136,7 +137,10 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
     }
     const cmd = info.manifest.command;
     if (!info.credentials.present) {
-      add(`profile.${p}.login`, "warn", `${p}: no stored credentials, sign-in needed`, `${cmd ?? "claude"} → /login`);
+      add(`profile.${p}.login`, "warn", `${p}: no stored credentials, sign-in needed`, `${cmd ?? "claude"} → /login`, [
+        userStep(`Open a terminal, run ${commandOf(p, info.manifest)}, then type /login and finish the sign-in`),
+        verifyStep,
+      ]);
     } else if (info.credentials.mode !== "600") {
       add(
         `profile.${p}.creds`,

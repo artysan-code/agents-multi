@@ -28,6 +28,7 @@ import { hasCsrfHeader, isLocalHost, json, jsonText, staticFile } from "./http.t
 import { broadcast, eventStream, onTopic, watchBrain, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
+import { cancelJob, jobStream, startJob } from "./jobs.ts";
 import { closePlan, closeSessions, reopen } from "./close-claude.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
@@ -198,12 +199,27 @@ export function routes(code: string, status: StatusCache): Record<string, Route>
     },
     "/api/action": {
       post: async ({ req }) => {
-        const b = await body(req) as { action?: string; opts?: string[] };
-        const r = await runAction(String(b.action ?? ""), b.opts ?? []);
+        const b = await body(req) as { action?: string; opts?: string[]; params?: Record<string, string> };
+        const r = await runAction(String(b.action ?? ""), b.opts ?? [], b.params ?? {});
         status.invalidate();
         broadcast("state");
         return json(r);
       },
+    },
+    // a long action with its output streamed: start, follow (one JSON per line), cancel
+    "/api/job": {
+      get: ({ url }) => jobStream(url.searchParams.get("id") ?? "") ?? json({ error: "no such job" }, 404),
+      post: async ({ req }) => {
+        const b = await body(req) as { action?: string; opts?: string[]; params?: Record<string, string> };
+        const r = await startJob(String(b.action ?? ""), b.opts ?? [], b.params ?? {}, () => {
+          status.invalidate();
+          broadcast("state");
+        });
+        return json(r, r.ok ? 200 : 400);
+      },
+    },
+    "/api/job/cancel": {
+      post: async ({ req }) => json({ ok: cancelJob(String((await body(req) as { id?: string }).id ?? "")) }),
     },
   };
 }

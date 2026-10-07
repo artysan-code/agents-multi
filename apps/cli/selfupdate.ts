@@ -128,11 +128,11 @@ const skipWhy = (r: RepoView) =>
 const PENDING = `${STATE}/install-pending`;
 const SKIPPED = `${CACHE}/self-update-skipped`;
 
-export async function log(event: string, from: string, to: string, detail = "") {
+export async function log(event: string, from: string, to: string, detail = "", component = "claude-multi") {
   await Deno.mkdir(STATE, { recursive: true });
   const line = JSON.stringify({
     at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-    component: "claude-multi",
+    component,
     event,
     from,
     to,

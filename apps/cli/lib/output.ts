@@ -1,11 +1,20 @@
 // output.ts — Terminal output: colours, status icons and the doctor's report.
 
 export type Status = "ok" | "warn" | "fail";
+/** One step of a guided repair: a console action (named in the allowlist, params checked by the
+ *  server), something the person does, or a re-run of the check that asked for the repair. */
+export type RepairStep =
+  | { kind: "action"; action: string; args?: Record<string, string>; cmd: string }
+  | { kind: "user"; text: string }
+  | { kind: "verify" };
 export interface Check {
   id: string;
   status: Status;
   msg: string;
+  /** What to do, as text or a command to copy. */
   fix?: string;
+  /** The same fix as steps the console can walk through (`cmd` of an action: to run it by hand). */
+  repair?: RepairStep[];
 }
 
 export const ANSI = {

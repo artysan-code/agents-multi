@@ -167,8 +167,9 @@ async function refresh(topic = "state") {
 }
 
 /* ---------------- status ---------------- */
-async function loadStatus() {
-  [S, SUM] = await Promise.all([api("/api/status"), api("/api/summary")]);
+async function loadStatus(fresh = false) {
+  const q = fresh ? "?fresh" : "";
+  [S, SUM] = await Promise.all([api("/api/status" + q), api("/api/summary" + q)]);
   if (S.language && S.language !== machineLang) {
     machineLang = S.language;
     applyLang();
@@ -1642,7 +1643,7 @@ const chkRow = (c) =>
   `<div class="chk">
     <span class="ic ${c.status}">${c.status === "run" ? `<span class="spin">◠</span>` : CHK_SYM[c.status]}</span>
     <div><div class="name">${esc(c.msg)}</div><div class="msg">${esc(c.id)}</div></div>
-    ${c.fix && c.status !== "ok" ? actionButton(c.fix) : "<span></span>"}
+    ${c.status !== "ok" && fixControl(c) || "<span></span>"}
   </div>`;
 
 /** Health: what needs you first, in the panel; what passes below, by area and folded. */
@@ -1684,7 +1685,7 @@ function renderOverview() {
     (a.status === "fail" ? -1 : 0) - (b.status === "fail" ? -1 : 0)
   );
   const health = todo.length
-    ? todo.slice(0, 5).map((c) => line(c.status, esc(c.msg), c.fix ? actionButton(c.fix) : "")).join("") +
+    ? todo.slice(0, 5).map((c) => line(c.status, esc(c.msg), fixControl(c))).join("") +
       (todo.length > 5 ? `<div class="sub">${esc(t("ov.more", { n: todo.length - 5 }))}</div>` : "")
     : line("ok", esc(t("health.allGood", { n: checks.length })));
 
@@ -1780,11 +1781,145 @@ function actionButton(fix) {
     }">${esc(short(fix, 40))}</code>`;
 }
 
+/* ---------------- guided repair ---------------- */
+/** Actions that only read or check: a repair made of these starts without asking. */
+const READ_ONLY_ACTIONS = ["doctor", "update-check", "mcp-check", "install-dry", "sync-fetch"];
+const repairButton = (c) => `<button class="fix" data-repair="${esc(c.id)}">${esc(t("rep.btn"))}</button>`;
+/** What a check offers: its repair when it has steps, else the fix as before. */
+const fixControl = (c) => c.repair?.length ? repairButton(c) : c.fix ? actionButton(c.fix) : "";
+
+/** Runs one job on the server, calling `onOut` with each piece of output as it arrives. Resolves with
+ *  `{ code, cancelled }` or `{ error }`; `track` receives the job id, for cancelling. */
+async function runJob(action, params, onOut, track) {
+  const r = await fetch("/api/job", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-claude-multi": "1" },
+    body: JSON.stringify({ action, params }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!j.ok) return { error: j.message ?? String(r.status) };
+  track(j.id);
+  const res = await fetch(`/api/job?id=${encodeURIComponent(j.id)}`);
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "", end = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    const lines = buf.split("\n");
+    buf = lines.pop();
+    for (const l of lines) {
+      const m = JSON.parse(l);
+      if (m.o !== undefined) onOut(m.o);
+      else if (m.done !== undefined) end = { code: m.done, cancelled: m.cancelled };
+    }
+  }
+  return end ?? { error: t("rep.lost") };
+}
+
+/** «Repair»: the numbered steps of a check with their state, the live output of the running one, and
+ *  a re-run of the check at the end. The steps come from the doctor; the server checks every action. */
+function repairFlow(id) {
+  const check = (S?.doctor ?? []).find((c) => c.id === id);
+  if (!check?.repair?.length) return;
+  const steps = check.repair;
+  const state = steps.map(() => "todo");
+  let jobId = null, running = false, cause = "", out = "", userGo = null;
+  const label = (s) =>
+    s.kind === "action" ? `<code>${esc(s.cmd)}</code>` : s.kind === "user" ? esc(s.text) : esc(t("rep.verifyStep"));
+  const manual = steps.filter((s) => s.kind !== "verify").map((s) => s.kind === "action" ? s.cmd : s.text).join("\n");
+  const host = drawer(t("rep.title"), "");
+  const draw = () => {
+    const go = !running && (state.includes("failed") || state.every((s) => s === "todo"));
+    host.querySelector(".dbody").innerHTML = `<div class="rep">
+      <p class="rep-msg">${esc(check.msg)}</p>
+      <ol class="rep-steps">${
+      steps.map((s, i) =>
+        `<li class="rep-${state[i]}"><span class="rep-st">${esc(t(`rep.${state[i]}`))}</span> ${label(s)}${
+          state[i] === "waiting" ? ` <button class="btn sm" data-rep="user">${esc(t("rep.userDone"))}</button>` : ""
+        }</li>`
+      ).join("")
+    }</ol>
+      ${cause ? `<p class="rep-cause">${esc(cause)}</p>` : ""}
+      ${out ? `<pre class="out rep-out">${esc(out)}</pre>` : ""}
+      <p>${
+      running
+        ? `<button class="btn sm" data-rep="cancel">${esc(t("rep.cancel"))}</button>`
+        : go
+        ? `<button class="btn" data-rep="go">${esc(t("rep.start"))}</button>`
+        : ""
+    }</p>
+      <details><summary>${esc(t("rep.manual"))}</summary><pre class="out">${esc(manual)}</pre></details>
+    </div>`;
+  };
+  const run = async () => {
+    running = true;
+    cause = "";
+    for (let i = 0; i < steps.length; i++) {
+      if (state[i] === "done") continue;
+      const s = steps[i];
+      const fail = (why) => {
+        state[i] = "failed";
+        cause = why;
+      };
+      state[i] = "running";
+      out = "";
+      draw();
+      if (s.kind === "action") {
+        const r = await runJob(s.action, s.args ?? {}, (o) => {
+          out += o;
+          const el = host.querySelector(".rep-out");
+          if (!el) return draw();
+          el.textContent = out;
+          el.scrollTop = el.scrollHeight;
+        }, (j) => jobId = j).catch((e) => ({ error: e.message }));
+        jobId = null;
+        if (r.error) return fail(r.error);
+        if (r.cancelled) return fail(t("rep.cancelled"));
+        if (r.code) return fail(out.trim().split("\n").filter(Boolean).pop() ?? t("rep.exit", { c: r.code }));
+      } else if (s.kind === "user") {
+        state[i] = "waiting";
+        draw();
+        await new Promise((res) => userGo = res);
+        userGo = null;
+      } else {
+        await loadStatus(true);
+        renderView();
+        const now = S.doctor.find((c) => c.id === id);
+        if (now && now.status !== "ok") return fail(t("rep.still", { msg: now.msg }));
+      }
+      state[i] = "done";
+    }
+    toast(t("rep.fixed"));
+  };
+  host.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-rep]");
+    if (!b) return;
+    if (b.dataset.rep === "cancel") {
+      if (jobId) await post("/api/job/cancel", { id: jobId }).catch(() => {});
+    } else if (b.dataset.rep === "user") {
+      userGo?.();
+    } else if (b.dataset.rep === "go" && !running) {
+      const changes = steps.filter((s) => s.kind === "action" && !READ_ONLY_ACTIONS.includes(s.action));
+      if (changes.length && !confirm(t("rep.confirm", { cmds: changes.map((s) => s.cmd).join("\n") }))) return;
+      state.forEach((s, i) => state[i] = s === "failed" ? "todo" : s);
+      await run();
+      running = false;
+      draw();
+    }
+  });
+  draw();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-repair]");
+  if (b) repairFlow(b.dataset.repair);
+});
+
 $("#rerun").addEventListener("click", async () => {
   const btn = $("#rerun");
   btn.disabled = true;
   // stream the re-run: mark everything pending, then swap in the fresh verdicts
-  renderHealth(S.doctor.map((c) => ({ ...c, status: "run", msg: t("health.checking"), fix: null })));
+  renderHealth(S.doctor.map((c) => ({ ...c, status: "run", msg: t("health.checking"), fix: null, repair: null })));
   try {
     await loadStatus();
     renderHealth(S.doctor);

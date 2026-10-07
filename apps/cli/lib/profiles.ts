@@ -83,6 +83,14 @@ export async function desktopDir(p: Profile, manifest?: Manifest): Promise<strin
   return (await lstat(suffixed)) ? suffixed : `${HOME}/.config/Claude`;
 }
 
+/** Profiles that need a Desktop build of their own: a data dir other than Desktop's default (the same
+ *  rule as `cm_desktop_appid` in bin/lib/profiles.sh). */
+export async function variantProfiles(): Promise<Profile[]> {
+  const out: Profile[] = [];
+  for (const p of await profileNames()) if (await desktopDir(p) !== `${HOME}/.config/Claude`) out.push(p);
+  return out;
+}
+
 export const KINDS = ["skills", "agents", "commands"] as const;
 export type Kind = typeof KINDS[number];
 /** Items the profile owns for a kind (profiles/<p>/<kind>/*), always mounted. */

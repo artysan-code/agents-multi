@@ -1,6 +1,6 @@
 // context.ts — what the check groups share, computed once per doctor run.
 
-import { type Check, type Status } from "../lib/output.ts";
+import { type Check, type RepairStep, type Status } from "../lib/output.ts";
 import { repoState } from "../lib/git.ts";
 import { machine } from "../lib/machine.ts";
 import { profileNames, sharedInventory } from "../lib/profiles.ts";
@@ -30,8 +30,11 @@ export async function makeContext(opts: { probe?: boolean }): Promise<DoctorCtx>
   };
 }
 
-/** A fresh check list and the `add` that appends to it (`fix` is optional). */
-export function checkList(): [Check[], (id: string, status: Status, msg: string, fix?: string) => void] {
+/** A fresh check list and the `add` that appends to it (`fix` and `repair` are optional). */
+export function checkList(): [
+  Check[],
+  (id: string, status: Status, msg: string, fix?: string, repair?: RepairStep[]) => void,
+] {
   const c: Check[] = [];
-  return [c, (id, status, msg, fix) => c.push({ id, status, msg, fix })];
+  return [c, (id, status, msg, fix, repair) => c.push({ id, status, msg, fix, repair })];
 }

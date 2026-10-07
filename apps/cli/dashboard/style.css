@@ -1374,6 +1374,40 @@ tbody tr[aria-selected="true"] {
   overflow-y: auto;
   flex: 1;
 }
+.rep {
+  padding: 14px 16px;
+}
+.rep-msg {
+  margin: 0 0 12px;
+}
+.rep-steps {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.rep-steps li {
+  margin: 6px 0;
+}
+.rep-st {
+  font: 500 10.5px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  margin-right: 6px;
+}
+.rep-running .rep-st,
+.rep-waiting .rep-st {
+  color: var(--accent);
+}
+.rep-done .rep-st {
+  color: var(--ok);
+}
+.rep-failed .rep-st,
+.rep-cause {
+  color: var(--crit);
+}
+.rep .out {
+  padding: 10px 0;
+}
 
 /* ---------------- command palette ---------------- */
 .pal-wrap {
