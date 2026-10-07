@@ -394,6 +394,27 @@ async function graphicalEnv(): Promise<Record<string, string>> {
   return out?.success ? sessionEnv(new TextDecoder().decode(out.stdout)) : {};
 }
 
+/** Opens a terminal in `workdir` running `argv` (/api/terminal, and the first-run wizard's sign-in). */
+export async function openTerminal(workdir: string, argv: string[]): Promise<{ ok: boolean; message?: string }> {
+  const cmd = await terminalArgv(workdir, argv);
+  if (!cmd) return { ok: false, message: "no terminal found (konsole, kitty, alacritty, wezterm)" };
+  const env = await graphicalEnv();
+  if (!env.WAYLAND_DISPLAY && !env.DISPLAY) return { ok: false, message: "no graphical session to open a terminal in" };
+  const child = new Deno.Command(cmd[0], {
+    args: cmd.slice(1),
+    cwd: workdir,
+    env,
+    stdin: "null",
+    stdout: "null",
+    stderr: "null",
+  }).spawn();
+  // a terminal that cannot open its window exits at once: say so, instead of a button that does nothing
+  const early = await Promise.race([child.status, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
+  if (early && !early.success) return { ok: false, message: `${cmd[0]} did not start (exit ${early.code})` };
+  child.unref();
+  return { ok: true };
+}
+
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Pure: the process ids from pid up to init, read from /proc stat lines. */
@@ -500,25 +521,7 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
       if (!SESSION_ID.test(b.resume)) return json({ ok: false, message: "bad session" }, 400);
       argv.push("--resume", b.resume);
     } else if (typeof b.ask === "string" && b.ask.trim()) argv.push(asArg(b.ask.trim().slice(0, 4000)));
-    const cmd = await terminalArgv(real, argv);
-    if (!cmd) return json({ ok: false, message: "no terminal found (konsole, kitty, alacritty, wezterm)" });
-    const env = await graphicalEnv();
-    if (!env.WAYLAND_DISPLAY && !env.DISPLAY) {
-      return json({ ok: false, message: "no graphical session to open a terminal in" });
-    }
-    const child = new Deno.Command(cmd[0], {
-      args: cmd.slice(1),
-      cwd: real,
-      env,
-      stdin: "null",
-      stdout: "null",
-      stderr: "null",
-    }).spawn();
-    // a terminal that cannot open its window exits at once: say so, instead of a button that does nothing
-    const early = await Promise.race([child.status, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
-    if (early && !early.success) return json({ ok: false, message: `${cmd[0]} did not start (exit ${early.code})` });
-    child.unref();
-    return json({ ok: true });
+    return json(await openTerminal(real, argv));
   }
 
   // /api/focus: only a process the console itself lists as a running session

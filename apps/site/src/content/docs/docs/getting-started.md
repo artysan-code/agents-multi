@@ -26,6 +26,10 @@ moves it aside to `*.pre-repo-<stamp>` and says so. Run `install --dry-run` firs
 
 ## First run
 
+With the desktop app, the console opens on a first-run wizard on a machine with no configuration: it
+does the steps below one screen at a time (configuration, profiles, install, vault, sign-in, brain) and
+resumes where it stopped. From a checkout:
+
 1. Edit `owner.json` and `profiles/` in your configuration: one folder per Claude account.
 2. `agents vault init` — the secret vault. Keep the recovery code somewhere safe.
 3. `claude` (and each profile's command) — sign in with `/login`.

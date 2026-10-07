@@ -41,6 +41,7 @@ import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
 import { jobsFor, startSchedule } from "./schedule.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
+import { setupRoutes } from "./setup.ts";
 
 const DASH = `${REPO}/apps/cli/dashboard`;
 
@@ -269,6 +270,8 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/job/cancel": {
       post: async ({ req }) => json({ ok: cancelJob(String((await body(req) as { id?: string }).id ?? "")) }),
     },
+    // the first-run wizard: where a new person's setup is, and its steps (setup.ts)
+    ...setupRoutes(status),
     // the desktop app's own updates, relayed to and from the app (app-update.ts)
     ...(app ? { "/api/app/update": appUpdateRoute(app) } : {}),
   };

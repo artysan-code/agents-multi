@@ -327,6 +327,40 @@ the picker's entry runs `claude-multi-app --pick`, which runs the app, and the K
 Claude» (`~/.local/bin/claude-multi-app --hey`) reaches it the same way and opens the Hey window. The doctor checks the app's executable and its autostart entry in place of
 pyside6 and the unit.
 
+## The first-run wizard (phase 5, piece 4)
+
+- **The console decides, the app does nothing new.** On a machine with no configuration
+  (`~/.agents-multi/config/owner.json`), or while a setup the wizard started is not finished, the
+  console's page opens on the wizard (`apps/ui/src/pages/setup/`) instead of Today; `GET /api/setup`
+  says so. The app needs no flag of its own: on a first run there is no autostart entry yet (install
+  writes it), so the app was started by the person and shows its window. Its own `install --app` at
+  that start fails with «no configuration yet» and records it (`app-install.json`); the wizard's install
+  records the success over it.
+- **Every step is the CLI's**, behind `/api/setup/*` (`apps/cli/console/setup.ts` over
+  `apps/cli/setup.ts`): the owner and the folder are `agents init` (a folder already holding a
+  configuration, another machine's, is only linked), the profiles the console's own manifest writer
+  (`writeProfile`), install the allowlisted job `install-app` (`install --app`, from the package's code,
+  which carries `build.json`) or `install` from a checkout, the vault `initVault`/`pairVault`, the
+  sign-in Claude Code's `<command> auth login` in a terminal (`openTerminal`, as /api/terminal), the
+  brain an account in `accounts.json` and `startBrainLogin`, as Connections does; the last screen runs
+  `mcp sync`, once the profiles and accounts it reads are in place.
+- **The state is the filesystem's**: each step is done when its result is on disk (the config link and
+  `owner.json`, the manifests, the runtime's `shared` link with every profile's folder and launcher, a
+  profile's `.credentials.json`, the brain's token in the vault). What leaves nothing of its own — the
+  welcome, the profiles confirmed, the recovery code saved, a step put off — is in `setup.json` in the
+  state folder, with the name and language asked before a configuration exists. A crash or a closed
+  window resumes at the first step whose result is missing (`nextStep`, with its tests).
+- **No polling.** The page reloads its view on the `state` topic; the sign-in's completion is told by a
+  watch the server starts on the profile's folder when it opens the terminal (`watchFor`), and «Check
+  again» asks by hand. The runtime does not exist when the console starts, so the console's own tree
+  watch (`watchTree`) cannot see it.
+- **The recovery code leaves the server once**, in the answer to the vault's creation; no endpoint gives
+  it back (a session could ask the console for it, past the deny rules on `vault recovery-code`). Once
+  the setup is finished, or on a machine configured without it, every `/api/setup/*` write answers 409:
+  the endpoints are not a way into a running installation. The configuration folder must be inside the
+  home folder, and empty or holding a configuration; a profile's command never takes the name of one
+  of the programs install links into `~/.local/bin`.
+
 ## Development
 
 - **A development instance beside the installed app**: in a debug build,
