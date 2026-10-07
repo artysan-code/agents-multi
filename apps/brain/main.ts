@@ -33,7 +33,8 @@ import {
   SIGNED_OUT_ERROR,
   signInPage,
 } from "./pages.ts";
-import { privacyPage, type Site, siteFile, siteMoved } from "./public.ts";
+import { loadSite, privacyPage, type Site, siteFile, siteMoved, siteSize } from "./public.ts";
+import { log, logRequest } from "./log.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
 import { bodyLimit, Buckets, capped, clientIp, fromOwnPages, hardened, isTooLarge } from "./guard.ts";
@@ -55,7 +56,7 @@ const env = (k: string, d?: string) => Deno.env.get(k) || d;
 const URL_ = (env("BRAIN_URL") ?? "").replace(/\/+$/, "");
 const DEV = env("BRAIN_DEV") === "1";
 const fail = (m: string) => {
-  console.error(`brain: ${m}`);
+  log.error(m);
   Deno.exit(2);
 };
 if (!URL_) fail("BRAIN_URL is required");
@@ -154,12 +155,13 @@ if (!users.count()) {
     db.close();
     await Deno.mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
     for (const s of ["", "-wal", "-shm"]) await Deno.rename(`${old}${s}`, `${dest}${s}`).catch(() => {});
-    console.log(`brain: ${old} is now the brain of ${id} (${carried} tokens carried over)`);
+    log.info("legacy database adopted", { from: old, account: id, tokens: carried });
   }
-  console.log(`brain: first account ${id}, administrator`);
+  log.info("first account created", { account: id, admin: true });
 }
 const admin = users.list().find((u) => u.admin);
 if (admin && !admin.ready) {
+  // plain output, not a log event: the invitation is a secret meant for the operator reading the console
   console.log(
     `brain: the administrator ${admin.id} has not signed up yet — their invitation (one use, 7 days): ${URL_}/invite?t=${await users
       .reinvite(admin.id)}`,
@@ -217,6 +219,9 @@ const SITE: Site = {
 const SITE_DIR = env("BRAIN_SITE", fromFileUrl(new URL("../site/dist", import.meta.url)))!;
 // the site on an address of its own answers with the site and the privacy notice, nothing of the brain
 const SITE_HOST = SITE.siteUrl !== URL_ ? new URL(SITE.siteUrl).host : null;
+// the built site, read once: files, their ETags and headers all stay in memory
+const SITE_FILES = await loadSite(SITE_DIR, SITE);
+log.info("site loaded", { dir: SITE_DIR, files: SITE_FILES.size, bytes: siteSize(SITE_FILES) });
 const otpauth = (id: string, secret: string) =>
   `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
@@ -239,8 +244,8 @@ async function handle(req: Request, ip: string): Promise<Response> {
   }
   if (SITE_HOST && u.host === SITE_HOST) {
     if (p === "/privacy") return html(privacyPage(SITE), 200, { "x-robots-tag": "all" });
-    const r = req.method === "GET" || req.method === "HEAD" ? await siteFile(SITE_DIR, p, SITE) : null;
-    return r ?? await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
+    const r = req.method === "GET" || req.method === "HEAD" ? siteFile(SITE_FILES, p, req.headers) : null;
+    return r ?? siteFile(SITE_FILES, "/404.html", req.headers, 404) ?? new Response("not found", { status: 404 });
   }
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -258,7 +263,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
       accountsDb.prepare("select 1").get();
       return json({ ok: true });
     } catch (e) {
-      console.error("brain: not ready", e);
+      log.error("not ready", { err: e });
       return json({ ok: false }, 503);
     }
   }
@@ -406,9 +411,9 @@ async function handle(req: Request, ip: string): Promise<Response> {
     if (SITE_HOST && p === "/robots.txt") {
       return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
     }
-    const moved = await siteMoved(SITE_DIR, u, SITE);
+    const moved = siteMoved(SITE_FILES, u, SITE);
     if (moved) return new Response(null, { status: 301, headers: { location: moved } });
-    const r = SITE_HOST ? null : await siteFile(SITE_DIR, p, SITE);
+    const r = SITE_HOST ? null : siteFile(SITE_FILES, p, req.headers);
     if (r) return r;
   }
 
@@ -418,7 +423,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
     if (p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup")) return withCors(auth.challenge());
     return SITE_HOST
       ? new Response("not found", { status: 404 })
-      : await siteFile(SITE_DIR, "/404.html", SITE, 404) ?? new Response("not found", { status: 404 });
+      : siteFile(SITE_FILES, "/404.html", req.headers, 404) ?? new Response("not found", { status: 404 });
   }
   const user = users.get(who.user)!;
   return await as(user, who.label, () => served(req, u, who));
@@ -503,15 +508,19 @@ const withCors = (r: Response) => {
 const server = Deno.serve(
   { port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") },
   async (req, info) => {
+    // what went wrong stays in the log: a 500 answer carries only this id, which the access line has too
+    const id = crypto.randomUUID().slice(0, 8), t0 = performance.now();
+    const done = (r: Response) => {
+      logRequest(log, req, r.status, performance.now() - t0, id);
+      return r;
+    };
     try {
       const ip = clientIp(req.headers, (info.remoteAddr as Deno.NetAddr).hostname, IP_HEADER);
-      return hardened(await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip), HTTPS);
+      return done(hardened(await handle(capped(req, bodyLimit(new URL(req.url).pathname)), ip), HTTPS));
     } catch (e) {
-      if (isTooLarge(e)) return hardened(json({ error: "request body too large" }, 413), HTTPS);
-      // what went wrong stays in the log: the answer carries only an id to find it there
-      const id = crypto.randomUUID().slice(0, 8);
-      console.error(`brain: error ${id}`, e);
-      return hardened(json({ error: "internal error", id }, 500), HTTPS);
+      if (isTooLarge(e)) return done(hardened(json({ error: "request body too large" }, 413), HTTPS));
+      log.error("unhandled error", { id, err: e });
+      return done(hardened(json({ error: "internal error", id }, 500), HTTPS));
     }
   },
 );
@@ -521,7 +530,7 @@ let stopping = false;
 const stop = async (signal: string) => {
   if (stopping) return;
   stopping = true;
-  console.log(`brain: ${signal}, stopping`);
+  log.info("stopping", { signal });
   setTimeout(() => Deno.exit(1), 10_000);
   await server.shutdown();
   tenants.close();
@@ -529,6 +538,9 @@ const stop = async (signal: string) => {
   Deno.exit(0);
 };
 for (const s of ["SIGTERM", "SIGINT"] as const) Deno.addSignalListener(s, () => void stop(s));
-console.log(
-  `brain on ${URL_} (data ${DATA}, ${users.count()} accounts, embeddings ${embedCfg.model} at ${embedCfg.url})`,
-);
+log.info("listening", {
+  url: URL_,
+  data: DATA,
+  accounts: users.count(),
+  embeddings: `${embedCfg.model} at ${embedCfg.url}`,
+});
