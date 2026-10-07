@@ -6,6 +6,13 @@ import { has, run } from "./proc.ts";
 import { desktopDir, profileNames } from "./profiles.ts";
 import { desktopVersions } from "./versions.ts";
 
+/** Pure: the user manager's HOME, from `systemctl --user show-environment`. Units are ours to manage
+ *  only when it is this HOME: in another (a test's, a sandbox's) the links land where the manager never
+ *  looks, while enabling or stopping a unit would act on the real user's. */
+export function managerHome(environment: string): string | null {
+  return environment.match(/^HOME=(.*)$/m)?.[1] ?? null;
+}
+
 export async function machine() {
   // Over ssh the session variables are absent: without this check install would think it is on a
   // headless box and silently skip systemd units and menu entries.
@@ -24,7 +31,8 @@ export async function machine() {
   const desktopPkg = await run("pacman", ["-Q", "claude-desktop"]);
   const desktopSystem = desktopPkg.code === 0 ? desktopPkg.out.split(/\s+/)[1]?.split("-")[0] ?? null : null;
   const desktopVersion = desktop.current ?? desktopSystem;
-  const systemd = await has("systemctl");
+  const systemd = await has("systemctl") &&
+    managerHome((await run("systemctl", ["--user", "show-environment"])).out) === HOME;
   const kde = (Deno.env.get("XDG_CURRENT_DESKTOP") ?? "").toUpperCase().includes("KDE") || await has("kbuildsycoca6");
   const cliBin = await run("readlink", ["-f", `${BIN}/claude-bin`]);
   const cliVersion = cliBin.code === 0 ? cliBin.out.split("/").pop() ?? null : null;

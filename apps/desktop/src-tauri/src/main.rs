@@ -16,6 +16,7 @@ mod controller;
 mod flags;
 mod hey;
 mod http;
+mod install;
 mod instance;
 mod navigation;
 mod picker;

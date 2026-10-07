@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check.sh — the static gate: formatting, lint, type-check (CLI, MCP servers and libraries, hooks,
-# tools, brain, tests), shell scripts (bash -n, shellcheck), the tray's Python and the desktop app's Rust.
+# tools, brain, tests), shell scripts (bash -n, shellcheck) and the desktop app's Rust.
 # Run by `deno task check`, the pre-commit hook and scripts/ci.sh. Stops at the first failure.
 # The shellcheck step is optional on a workstation (skipped with a warning) and required in CI (CI=true).
 # The Rust step runs where cargo and WebKitGTK are installed, CI included; elsewhere it is skipped.
@@ -37,7 +37,6 @@ for f in bin/* bin/lib/*.sh shared/statusline-command.sh shared/hooks/*.sh share
 done
 if optional shellcheck; then shellcheck -S warning "${shell[@]}"; fi
 
-python3 -m py_compile apps/tray/*.py
 
 # The desktop app (apps/desktop): formatting and clippy, no release build. Building it needs WebKitGTK's
 # headers besides cargo, which CI's image does not have yet: skipped, never required.

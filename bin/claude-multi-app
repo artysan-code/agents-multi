@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
-# claude-multi-app: the desktop app (tray and console window) — apps/tray/.
-# /usr/bin/python3 and not `python3`: PySide6 is a system package, and a pyenv, conda or venv
-# python first in PATH would not have it.
-HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-exec /usr/bin/python3 "$HERE/../apps/tray/app.py" "$@"
+# claude-multi-app: the desktop app, Agents Multi (apps/desktop): the console window, the tray, the profile
+# picker (--pick), and what the autostart entry runs at login (--tray). The app is the package's, linked
+# into the runtime by `install --app`, or the one on PATH. Run from a checkout (dev mode), it runs the
+# app on that checkout's code (AGENTS_MULTI_REPO, docs/adr/0003).
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+source "$HERE/lib/profiles.sh"
+APP="$(cm_runtime)/bin/agents-multi-desktop"
+[[ -x "$APP" ]] || APP="$(command -v agents-multi-desktop || true)"
+[[ -n "$APP" ]] || { echo "claude-multi-app: the desktop app (Agents Multi) is not installed" >&2; exit 1; }
+[[ -e "$REPO/.git" ]] && export AGENTS_MULTI_REPO="${AGENTS_MULTI_REPO:-$REPO}"
+exec "$APP" "$@"

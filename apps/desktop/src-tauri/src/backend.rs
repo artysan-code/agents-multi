@@ -32,7 +32,7 @@ use crate::repo::{self, Source};
 use crate::{console, repo::is_repo};
 
 /// The package's Deno next to the app's executable (`bundle.externalBin` without the target triple).
-const DENO: &str = "agents-multi-deno";
+pub const DENO: &str = "agents-multi-deno";
 /// The permissions the package's backend runs with: `bin/agents`' set, with the network open (the
 /// brain's host is in the person's accounts.json; ADR 0003). A test keeps the two from drifting.
 pub const PERMISSIONS: [&str; 6] = [
@@ -207,6 +207,8 @@ fn plan(app: &AppHandle) -> Result<Launch, String> {
 /// The supervisor's thread: it is also the thread that spawns the child, which matters on Linux, where
 /// the parent-death signal follows the spawning thread.
 fn supervise(app: &AppHandle, port: u16, shared: &Shared) {
+    // the post-update install, before the console (install.rs)
+    crate::install::before_backend(app);
     if answers(port) {
         shared.set_mode(Mode::External);
         return log(&format!(

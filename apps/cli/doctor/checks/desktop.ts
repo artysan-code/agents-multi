@@ -1,7 +1,7 @@
 // desktop.ts — Claude Desktop packaging, its per-profile variants and desktop entries.
 
 import { listDir, lstat, readText, stat } from "../../lib/fs.ts";
-import { HOME, LIB, REPO } from "../../lib/paths.ts";
+import { HOME, LIB } from "../../lib/paths.ts";
 import { loadManifest } from "../../lib/profiles.ts";
 import { has, run } from "../../lib/proc.ts";
 import { type Check } from "../../lib/output.ts";
@@ -56,9 +56,9 @@ export async function desktopChecks(ctx: DoctorCtx): Promise<Check[]> {
         );
       } else add(`desktop.${p}`, "ok", `Claude Desktop ${m.desktopVersion} + ${p} variant in step`);
     }
-    for (const d of await listDir(`${REPO}/desktop`)) {
+    for (const d of await listDir(`${ctx.installed}/desktop`)) {
       if (!d.endsWith(".desktop")) continue;
-      const source = await readText(`${REPO}/desktop/${d}`) ?? "";
+      const source = await readText(`${ctx.installed}/desktop/${d}`) ?? "";
       const installed = await readText(`${HOME}/.local/share/applications/${d}`);
       if (!installed) {
         add(`desktop.entry.${d}`, "fail", `${d} is missing`, "agents install");
@@ -79,7 +79,7 @@ export async function desktopPackagingChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { m } = ctx;
   if (m.desktopVersion) {
-    if (!(await lstat(`${REPO}/pkg/claude-desktop/anthropic-apt.asc`))) {
+    if (!(await lstat(`${ctx.installed}/pkg/claude-desktop/anthropic-apt.asc`))) {
       add(
         "desktop.apt-key",
         "warn",

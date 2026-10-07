@@ -1,5 +1,9 @@
-// install.ts — materialise the runtime from the repository. Idempotent: run it whenever, --dry-run to look first.
+// install.ts — materialise the runtime from the code. Idempotent: run it whenever, --dry-run to look first.
 // Rule: never delete real content. It is moved aside to *.pre-repo-<stamp>, and said out loud.
+//
+// The code is the installation's (lib/mode.ts): in app mode the copy of the app's code
+// (~/.agents-multi/app/current, appcopy.ts), in dev mode the checkout this runs from. Every link
+// install makes points into it; what install reads (bin/, shared/, systemd/, desktop/) comes from it.
 
 import { listDir, lstat, mode, readlink, readText, stat } from "./lib/fs.ts";
 import { GIT_IGNORED, gitGlobalIgnore, missingIgnores } from "./lib/git.ts";
@@ -16,10 +20,11 @@ import {
   RUNTIME,
   shortHome,
   STAMP,
-  STIGNORE_GEN_TEMPLATE,
+  STIGNORE_GEN_TEMPLATE_IN_REPO,
   SYNCTHING_CONFIG,
 } from "./lib/paths.ts";
-import { has, run } from "./lib/proc.ts";
+import { COPY_SHARED, type Installation, installation, isCheckout, type Mode } from "./lib/mode.ts";
+import { has, run, which } from "./lib/proc.ts";
 import {
   desktopDir,
   type Kind,
@@ -38,6 +43,10 @@ import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { uiBuild, uiStatus } from "./ui.ts";
 
 let DRY = false;
+/** Where the links point (the installation's code) and where what install reads is read from: the
+ *  same folder, except on a dry run in app mode before the copy exists, which reads the running code. */
+let CODE = REPO;
+let SRC = REPO;
 const actions: string[] = [];
 function say(s: string) {
   actions.push(s);
@@ -55,7 +64,7 @@ async function backupAway(p: string) {
  *  claude-desktop-rebuild produces. The claude:// scheme stays with the default profile — two
  *  entries claiming it would make the handler ambiguous. */
 async function writeDesktopEntries(apps: string) {
-  const tpl = await readText(`${REPO}/desktop/entry.desktop.in`);
+  const tpl = await readText(`${SRC}/desktop/entry.desktop.in`);
   if (tpl === null) return;
   const body = tpl.slice(tpl.indexOf("[Desktop Entry]"));
   const defaultProfile = (await launchers()).find((l) => l.command === "claude")?.profile;
@@ -165,9 +174,9 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   // alone. The doctor still reports it: not mounting it is not the same as condoning it.
   const sharedNames = spec === "all"
     ? (await Promise.all(
-      (await listDir(`${REPO}/shared/${kind}`)).map(async (n) =>
+      (await listDir(`${SRC}/shared/${kind}`)).map(async (n) =>
         (kind === "skills"
-            ? !!(await lstat(`${REPO}/shared/${kind}/${n}/SKILL.md`))
+            ? !!(await lstat(`${SRC}/shared/${kind}/${n}/SKILL.md`))
             : n.endsWith(".md") && n !== "AGENTS.md")
           ? n
           : null
@@ -177,7 +186,7 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
     : spec.map((n) => kind === "skills" || n.endsWith(".md") ? n : `${n}.md`);
   const expected = new Set<string>();
   for (const n of sharedNames) {
-    if (!(await lstat(`${REPO}/shared/${kind}/${n}`))) {
+    if (!(await lstat(`${SRC}/shared/${kind}/${n}`))) {
       say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`);
       continue;
     }
@@ -197,12 +206,64 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   }
 }
 
-export async function install(dry: boolean) {
+/** Pure: the code an installation's links point into. Dev installs the checkout it runs from, as
+ *  ever; the app's code running on a dev installation (the app's backend, before `migrate app`) keeps
+ *  the installation's checkout instead of pointing it into the package. */
+export function codeFor(inst: Installation, running: string, runningIsCheckout: boolean): string {
+  return inst.mode === "dev" && runningIsCheckout ? running : inst.code;
+}
+
+/** The units the desktop app replaced: install stops, disables and removes them (docs/adr/0003). */
+export const RETIRED_UNITS = ["claude-multi-console.service", "claude-multi-app.service"];
+/**
+ * Pure: the units in the user's unit folder (each with where its link points, null for a file) that
+ * install removes: in both modes the ones the app replaced; in app mode also every one of ours — a
+ * link into some code's systemd/user, as install makes them — since the app runs their jobs.
+ */
+export function unitsToRetire(mode: Mode, units: { name: string; target: string | null }[]): string[] {
+  return units.filter(({ name, target }) =>
+    RETIRED_UNITS.includes(name) || (mode === "app" && !!target?.endsWith(`/systemd/user/${name}`))
+  ).map((u) => u.name);
+}
+/** Menu entries an older install wrote, now the package's own (its desktop file is the app's entry). */
+export const RETIRED_ENTRIES = ["claude-multi.desktop", "claude-update-gui.desktop"];
+/** The login entry that starts the app in the tray (XDG autostart). */
+export const AUTOSTART = "agents-multi.desktop";
+
+/** The desktop app's executable: the runtime's link to the package's (appcopy.ts), else on PATH. */
+export async function appExecutable(): Promise<string | null> {
+  const own = `${RUNTIME}/bin/agents-multi-desktop`;
+  return (await stat(own)) ? own : await which("agents-multi-desktop");
+}
+
+/** Pure: the autostart entry, from desktop/autostart.desktop.in. */
+export const autostartEntry = (template: string, bin: string) =>
+  template.slice(template.indexOf("[Desktop Entry]")).replaceAll("@BIN@", bin);
+
+/**
+ * Materialises the runtime. `as` names the installation to install (agents migrate app plans one
+ * before the runtime is one); otherwise it is this machine's.
+ */
+export async function install(
+  dry: boolean,
+  opts: { as?: Installation; src?: string; diagnose?: boolean } = {},
+) {
   DRY = dry;
+  actions.length = 0;
   const m = await machine();
+  const inst = opts.as ?? await installation();
+  CODE = codeFor(inst, REPO, await isCheckout(REPO));
+  SRC = opts.src ?? ((await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO);
+  const dev = inst.mode === "dev";
   console.log(
-    `${ANSI.b}agents install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`,
+    `${ANSI.b}agents install${ANSI.x} — ${dev ? "checkout" : "the app's code"} ${
+      shortHome(CODE)
+    } → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`,
   );
+  if (!dev && !(await stat(`${SRC}/apps/cli/main.ts`))) {
+    console.log(`  ${ANSI.r}✗${ANSI.x} no copy of the app's code in ${shortHome(CODE)}: start the app, it installs it`);
+    return 1;
+  }
 
   // 0. the person's configuration: without it there is no profile to install
   if (!(await stat(`${CONFIG}/owner.json`))) {
@@ -228,13 +289,13 @@ export async function install(dry: boolean) {
   await ensureDir(AGENTS_SKILLS);
   for (const s of await listDir(AGENTS_SKILLS)) {
     if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
-    if (!(await lstat(`${REPO}/shared/skills/${s}`))) {
-      await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${REPO}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
+    if (!(await lstat(`${SRC}/shared/skills/${s}`))) {
+      await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${CODE}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
     }
   }
   // broken links in shared/skills (old relative paths, uninstalled skills)
-  for (const s of await listDir(`${REPO}/shared/skills`)) {
-    const p = `${REPO}/shared/skills/${s}`;
+  for (const s of await listDir(`${SRC}/shared/skills`)) {
+    const p = `${CODE}/shared/skills/${s}`;
     const st = await lstat(p);
     if (st?.isSymlink && !(await lstat(`${p}/SKILL.md`))) {
       const t = await readlink(p) ?? "";
@@ -245,8 +306,8 @@ export async function install(dry: boolean) {
     }
   }
 
-  // 3. shared → repo
-  await ensureSymlink(`${REPO}/shared`, `${RUNTIME}/shared`, "~/.agents-multi/shared");
+  // 3. shared → the code: the copy's (relative, through app/current) or the checkout's
+  await ensureSymlink(dev ? `${CODE}/shared` : COPY_SHARED, `${RUNTIME}/shared`, "~/.agents-multi/shared");
 
   // 4. profili
   for (const p of await profileNames()) {
@@ -285,17 +346,17 @@ export async function install(dry: boolean) {
 
   // 5. ~/.local/bin e ~/.local/lib
   await ensureDir(BIN);
-  for (const b of await listDir(`${REPO}/bin`)) {
+  for (const b of await listDir(`${SRC}/bin`)) {
     if (b === "lib") continue;
-    await ensureSymlink(`${REPO}/bin/${b}`, `${BIN}/${b}`, `~/.local/bin/${b}`);
+    await ensureSymlink(`${CODE}/bin/${b}`, `${BIN}/${b}`, `~/.local/bin/${b}`);
   }
   // Each profile gets its launcher name pointed at the one wrapper, which identifies the profile
   // from the name it is invoked as. A new profile needs no new file in bin/.
   for (const l of await launchers()) {
-    await ensureSymlink(`${REPO}/bin/claude`, `${BIN}/${l.command}`, `~/.local/bin/${l.command}`);
+    await ensureSymlink(`${CODE}/bin/claude`, `${BIN}/${l.command}`, `~/.local/bin/${l.command}`);
   }
   await ensureSymlink(
-    `${REPO}/shared/tools/stignore-gen/stignore-gen.ts`,
+    `${CODE}/shared/tools/stignore-gen/stignore-gen.ts`,
     `${BIN}/stignore-gen`,
     "~/.local/bin/stignore-gen",
   );
@@ -316,20 +377,23 @@ export async function install(dry: boolean) {
     if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");
   }
 
-  // 5b. the repository's git hooks (pre-commit: secret guard + type check)
-  const hooks = (await run("git", ["-C", REPO, "config", "--get", "core.hooksPath"])).out;
-  if (hooks !== ".githooks") {
-    say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`);
-    if (!DRY) await run("git", ["-C", REPO, "config", "core.hooksPath", ".githooks"]);
+  // 5b. the checkout's git hooks (pre-commit: secret guard + type check)
+  if (dev && await isCheckout(CODE)) {
+    const hooks = (await run("git", ["-C", CODE, "config", "--get", "core.hooksPath"])).out;
+    if (hooks !== ".githooks") {
+      say(`${ANSI.g}+${ANSI.x} git core.hooksPath → .githooks (pre-commit)`);
+      if (!DRY) await run("git", ["-C", CODE, "config", "core.hooksPath", ".githooks"]);
+    }
   }
 
   // 5c. stignore-gen's git template: a repository cloned inside a Syncthing folder gets its .stignore block
   // from the post-checkout hook before Syncthing picks its files up (the timer of step 8 is the safety net).
   if (await lstat(SYNCTHING_CONFIG)) {
     const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
-    if (tpl !== STIGNORE_GEN_TEMPLATE) {
+    const want = `${CODE}/${STIGNORE_GEN_TEMPLATE_IN_REPO}`;
+    if (tpl !== want) {
       say(`${ANSI.g}+${ANSI.x} git init.templateDir → stignore-gen template${tpl ? ` (was ${tpl})` : ""}`);
-      if (!DRY) await run("git", ["config", "--global", "init.templateDir", STIGNORE_GEN_TEMPLATE]);
+      if (!DRY) await run("git", ["config", "--global", "init.templateDir", want]);
     }
   }
 
@@ -373,58 +437,67 @@ export async function install(dry: boolean) {
     }
   }
 
-  // 8. systemd user units
-  if (m.systemd) {
+  // 8. systemd user units: dev mode only. In app mode the app's backend schedules their jobs while it
+  // runs (console/schedule.ts), so nothing depends on systemd, and the units an earlier install made go.
+  {
     const ud = `${HOME}/.config/systemd/user`;
-    await ensureDir(ud);
-    for (const u of await listDir(`${REPO}/systemd/user`)) {
-      await ensureSymlink(`${REPO}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
-    }
-    // a unit removed from the repository leaves its link behind: drop the ones pointing at nothing
-    for (const u of await listDir(ud)) {
-      const target = await readlink(`${ud}/${u}`);
-      if (target?.startsWith(`${REPO}/systemd/user/`) && !(await lstat(target))) {
-        say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
-        if (!DRY) {
-          await run("systemctl", ["--user", "disable", "--now", u]); // a linked unit: disable removes the link itself
-          await Deno.remove(`${ud}/${u}`).catch(() => {});
+    const present = await Promise.all(
+      (await listDir(ud)).map(async (name) => ({ name, target: await readlink(`${ud}/${name}`) })),
+    );
+    const gone = unitsToRetire(inst.mode, present);
+    if (dev && m.systemd) {
+      await ensureDir(ud);
+      for (const u of await listDir(`${SRC}/systemd/user`)) {
+        await ensureSymlink(`${CODE}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
+      }
+      // a unit removed from the code leaves its link behind: drop the ones pointing at nothing
+      for (const { name: u, target } of present) {
+        if (target?.endsWith(`/systemd/user/${u}`) && !gone.includes(u) && !(await lstat(target))) {
+          say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
+          if (!DRY) {
+            await run("systemctl", ["--user", "disable", "--now", u]); // a linked unit: disable removes the link itself
+            await Deno.remove(`${ud}/${u}`).catch(() => {});
+          }
+        }
+      }
+      if (!DRY) {
+        await run("systemctl", ["--user", "daemon-reload"]);
+        // The console is the desktop app's now (its backend), and the app starts at login from its
+        // autostart entry (step 10); a headless box runs `agents serve` by hand.
+        const wantEnabled: string[] = [];
+        // The update check raises desktop notifications, so it only makes sense with a session.
+        if (m.graphical) wantEnabled.push("claude-update-check.timer");
+        // task briefs and reminders are desktop notifications: only where there is a desktop
+        if (m.graphical) wantEnabled.push("claude-tasks.timer");
+        // a copy of the brain on every machine that is on, fetched only when it changed
+        if (brainAccount(undefined, loadAccounts())) wantEnabled.push("claude-brain-backup.timer");
+        // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
+        if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
+        for (const u of wantEnabled) {
+          const en = await run("systemctl", ["--user", "is-enabled", u]);
+          if (en.out !== "enabled") {
+            say(`${ANSI.g}+${ANSI.x} enable --now ${u}`);
+            await run("systemctl", ["--user", "enable", "--now", u]);
+          }
         }
       }
     }
-    if (!DRY) {
-      await run("systemctl", ["--user", "daemon-reload"]);
-      // The console serves itself: enabled everywhere systemd exists, including headless boxes
-      // reached over an ssh tunnel. Without it you have to remember to run `serve` by hand.
-      const wantEnabled = ["claude-multi-console.service"];
-      // The update check raises desktop notifications, so it only makes sense with a session.
-      if (m.graphical) wantEnabled.push("claude-update-check.timer");
-      // task briefs and reminders are desktop notifications: only where there is a desktop
-      if (m.graphical) wantEnabled.push("claude-tasks.timer");
-      // a copy of the brain on every machine that is on, fetched only when it changed
-      if (brainAccount(undefined, loadAccounts())) wantEnabled.push("claude-brain-backup.timer");
-      // The desktop app sits in the tray from login (it exits by itself where there is no tray).
-      if (m.graphical) wantEnabled.push("claude-multi-app.service");
-      // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
-      if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
-      for (const u of wantEnabled) {
-        const en = await run("systemctl", ["--user", "is-enabled", u]);
-        if (en.out !== "enabled") {
-          say(`${ANSI.g}+${ANSI.x} enable --now ${u}`);
-          await run("systemctl", ["--user", "enable", "--now", u]);
+    // Stopped last and without waiting: the console's unit may be what runs this install (its «Close
+    // Claude and update»), and stopping it ends whatever runs inside it. The files are this HOME's
+    // either way; the manager is told only when it is this HOME's (machine.ts).
+    if (gone.length) {
+      say(
+        `${ANSI.y}-${ANSI.x} systemd units ${gone.join(", ")} (${
+          dev ? "replaced by the desktop app" : "the app runs their jobs"
+        })`,
+      );
+      if (!DRY) {
+        if (m.systemd) await run("systemctl", ["--user", "disable", ...gone]);
+        for (const u of gone) await Deno.remove(`${ud}/${u}`).catch(() => {});
+        if (m.systemd) {
+          await run("systemctl", ["--user", "daemon-reload"]);
+          await run("systemctl", ["--user", "--no-block", "stop", ...gone]);
         }
-      }
-      // A unit whose file changed keeps running the old command until it is restarted.
-      const st = await run("systemctl", [
-        "--user",
-        "show",
-        "-p",
-        "NeedDaemonReload",
-        "--value",
-        "claude-multi-console.service",
-      ]);
-      if (st.out === "yes") {
-        say(`${ANSI.y}\u2192${ANSI.x} restart claude-multi-console.service`);
-        await run("systemctl", ["--user", "restart", "claude-multi-console.service"]);
       }
     }
   }
@@ -432,16 +505,16 @@ export async function install(dry: boolean) {
   // 9. Claude Desktop (only where it is installed)
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
-    for (const d of await listDir(`${REPO}/desktop`)) {
-      if (d.endsWith(".desktop")) await ensureRendered(`${REPO}/desktop/${d}`, `${apps}/${d}`);
+    for (const d of await listDir(`${SRC}/desktop`)) {
+      if (d.endsWith(".desktop")) await ensureRendered(`${SRC}/desktop/${d}`, `${apps}/${d}`);
     }
-    // a copy install wrote itself, of a file the repository no longer has
-    if (await lstat(`${apps}/claude-update-gui.desktop`)) {
-      await removeLink(`${apps}/claude-update-gui.desktop`, "replaced by claude-multi.desktop");
+    // copies an older install wrote, of files the code no longer has
+    for (const d of RETIRED_ENTRIES) {
+      if (await lstat(`${apps}/${d}`)) await removeLink(`${apps}/${d}`, "the desktop app's package has its own entry");
     }
     await writeDesktopEntries(apps);
     // the icons of the person's Desktop profiles (config/icons/<size>/claude-desktop-<profile>.png)
-    for (const root of [`${REPO}/desktop/icons`, `${CONFIG}/icons`]) {
+    for (const root of [`${SRC}/desktop/icons`, `${CONFIG}/icons`]) {
       for (const s of await listDir(root)) {
         for (const f of await listDir(`${root}/${s}`)) {
           await ensureCopy(`${root}/${s}/${f}`, `${HOME}/.local/share/icons/hicolor/${s}/apps/${f}`);
@@ -470,9 +543,28 @@ export async function install(dry: boolean) {
     console.log(`  ${ANSI.d}Claude Desktop is not installed: skipping desktop entries and icons${ANSI.x}`);
   }
 
-  // the console's new interface: built here, not counted as install work, since self-update builds it
-  // on its own and an install waiting for Claude to close must not wait for it
-  if (!DRY && (await uiStatus()) !== "built") {
+  // 10. the desktop app at login, in the tray: wherever there is a session and the app is installed
+  if (m.graphical) {
+    const entry = `${HOME}/.config/autostart/${AUTOSTART}`;
+    const tpl = await readText(`${SRC}/desktop/autostart.desktop.in`);
+    if (tpl !== null && await appExecutable()) {
+      const text = autostartEntry(tpl, BIN);
+      if ((await readText(entry)) !== text) {
+        say(`${ANSI.g}+${ANSI.x} ${shortHome(entry)} (the app in the tray at login)`);
+        if (!DRY) {
+          await Deno.mkdir(`${HOME}/.config/autostart`, { recursive: true });
+          await Deno.writeTextFile(entry, text);
+        }
+      }
+    } else if (tpl !== null && dev) {
+      console.log(`  ${ANSI.d}the desktop app is not installed: no autostart entry${ANSI.x}`);
+    }
+  }
+
+  // the console's new interface: built here in a checkout, not counted as install work, since
+  // self-update builds it on its own and an install waiting for Claude to close must not wait for it;
+  // the app's code carries its build
+  if (!DRY && dev && CODE === REPO && (await uiStatus()) !== "built") {
     const b = await uiBuild();
     console.log(
       b.ok ? `  ${ANSI.g}✓${ANSI.x} console interface built` : `  ${ANSI.y}!${ANSI.x} console interface: ${b.error}`,
@@ -481,6 +573,7 @@ export async function install(dry: boolean) {
 
   if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} everything already materialised, nothing to do`);
   console.log();
+  if (opts.diagnose === false) return 0;
   // The diagnosis is printed, but it is not this command's verdict: install reports whether it
   // materialised the runtime, not whether the machine is healthy. Returning the doctor's code made
   // `agents install && <next step>` skip the next step exactly when the doctor was
