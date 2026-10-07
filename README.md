@@ -49,6 +49,23 @@ Requirements: `deno`, `git`, and `pnpm` for the console's new interface. For Cla
 package. For the desktop app `pyside6` **and** `qt6-webengine` —
 the second is only an optional dependency of the first on Arch, so install it explicitly. OAuth credentials are per-machine and never leave it.
 
+### Installing the desktop app
+
+The desktop app (`apps/desktop/`, [ADR 0003](docs/adr/0003-desktop-app.md)) carries everything it runs:
+the console, its backend and the Deno that runs it. Each version is on the project's GitHub releases
+(Linux x86_64 for now; macOS and Windows come with 1.x):
+
+- **Debian, Ubuntu** — `sudo apt install ./agents-multi_<version>_amd64.deb`
+- **Fedora, openSUSE** — `sudo dnf install ./agents-multi-<version>-1.x86_64.rpm`
+- **Arch** — the AUR package `agents-multi-bin` (`paru -S agents-multi-bin`); pacman updates it, so the
+  app's own updater is off there
+- **Anywhere else** — the AppImage: `chmod +x` it and run it
+
+The app updates itself from then on: it looks for a new version every day and downloads it in the
+background, and **System › Updates** in the console installs it and restarts the app; a deb or an rpm
+asks for your password to install. Betas are a channel of their own: a beta build stays on it (see
+[ADR 0004](docs/adr/0004-desktop-app-releases.md)).
+
 ### First run
 
 Someone new is best guided by a Claude Code session following [ONBOARDING.md](ONBOARDING.md).
@@ -568,6 +585,11 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   After a pull the console and the tray app restart if their code changed, the generated settings
   are rebuilt, and `install` runs when it has work to do — only with every Claude closed; otherwise
   it waits for a later round, and System › Updates says so. The launch-time pull above stays.
+- **The desktop app** updates itself with Tauri's signed updater: it checks the project site's manifest
+  for its channel (`/updates/stable.json`, `/updates/beta.json`) daily, downloads and verifies a new
+  version in the background, and installs it when System › Updates asks — then restarts with what it
+  runs. A release (tag → CI → signed bundles on GitHub → the manifests on the site) is
+  [ADR 0004](docs/adr/0004-desktop-app-releases.md).
 - **Rollback**: `agents update --rollback [--desktop]`, or the button in System › Updates.
 - **Log**: every result is a line in `~/.local/state/claude-multi/updates.jsonl`, shown in
   System › Updates. The doctor turns a failed last attempt into a warning, a failed verification

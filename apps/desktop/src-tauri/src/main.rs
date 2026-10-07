@@ -48,7 +48,8 @@ fn main() {
         ))
         // The console's backend: started before the window, stopped on exit (backend.rs).
         .plugin(backend::init())
-        // The app's own updates: checked, downloaded and installed from Rust (updater.rs).
+        // The app's own updates: Tauri's updater, driven from Rust by updater.rs for the console.
+        .plugin_boxed(updater::tauri_updater())
         .plugin(updater::init())
         .setup(|app| {
             #[cfg(target_os = "linux")]

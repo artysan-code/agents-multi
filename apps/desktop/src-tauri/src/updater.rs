@@ -393,11 +393,13 @@ fn chosen_channel(app: &AppHandle, version: &str) -> Channel {
     ch
 }
 
+/// The note's path; a development instance's own, so the installed app never takes it for its own.
 fn updated_file(app: &AppHandle) -> Option<PathBuf> {
-    app.path()
-        .app_local_data_dir()
-        .ok()
-        .map(|d| d.join(UPDATED_FILE))
+    let name = match crate::instance::dev() {
+        Some(dev) => format!("dev_{dev}.{UPDATED_FILE}"),
+        None => UPDATED_FILE.into(),
+    };
+    app.path().app_local_data_dir().ok().map(|d| d.join(name))
 }
 
 /// Leaves the note the installed version finds at start.
@@ -412,6 +414,15 @@ fn leave_note(app: &AppHandle, from: &str, to: &str) {
         .map(std::fs::create_dir_all)
         .transpose()
         .and_then(|_| std::fs::write(&f, serde_json::to_string(&note).unwrap_or_default()));
+}
+
+/// Tauri's updater plugin, registered by the builder: a plugin cannot add another while the plugins
+/// start (the store is locked), and `init` needs it there. Without the feature, a plugin that does nothing.
+pub fn tauri_updater() -> Box<dyn tauri::plugin::Plugin<Wry>> {
+    #[cfg(feature = "updater")]
+    return Box::new(tauri_plugin_updater::Builder::new().build());
+    #[cfg(not(feature = "updater"))]
+    Box::new(Builder::<Wry>::new("agents-multi-no-updater").build())
 }
 
 /// The plugin that runs the updater and its socket.
@@ -566,13 +577,7 @@ mod imp {
         let current = package_version(app);
         let ch = chosen_channel(app, &current);
         let endpoint = endpoint(SITE, ch);
-        let mut off = off_reason(app, endpoint.as_ref());
-        if off.is_none() {
-            if let Err(e) = app.plugin(tauri_plugin_updater::Builder::new().build()) {
-                eprintln!("agents-multi: the updater did not start: {e}");
-                off = Some(format!("error: {e}"));
-            }
-        }
+        let off = off_reason(app, endpoint.as_ref());
         let hub = Arc::new(Hub::new(Status::new(&current, ch, off.clone())));
         app.manage(Arc::clone(&hub));
         // the tray shows «Update…» when a version appears or goes
@@ -656,7 +661,8 @@ mod imp {
             let available = update.as_ref().map(|u| Available {
                 version: u.version.clone(),
                 notes: clip(u.body.as_deref().unwrap_or_default()),
-                date: u.date.map(|d| d.to_string()),
+                // as the manifest writes it (RFC 3339), not as `time` prints it
+                date: u.raw_json["pub_date"].as_str().map(str::to_string),
             });
             self.hub.update(|s| {
                 s.found(available, have.as_deref(), now_secs());
