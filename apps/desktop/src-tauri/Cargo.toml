@@ -13,3 +13,7 @@ tauri = { version = "=2.12.1", features = [] }
 tauri-plugin-opener = "=2.7.0"
 tauri-plugin-single-instance = "=2.5.2"
 url = "2"
+
+[target.'cfg(unix)'.dependencies]
+# SIGTERM to the backend, and its parent-death signal on Linux (src/backend.rs).
+libc = "=0.2.190"

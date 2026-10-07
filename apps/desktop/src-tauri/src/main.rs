@@ -8,8 +8,10 @@
 // No console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod backend;
 mod console;
 mod navigation;
+mod repo;
 
 use navigation::Decision;
 use tauri::webview::NewWindowResponse;
@@ -24,10 +26,12 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus(app)
         }))
+        // The console's backend: started before the window, stopped on exit (backend.rs).
+        .plugin(backend::init())
         .setup(|app| {
             let port = console::port();
-            // Phase 5, piece 2: start the backend sidecar here, before the window. The local page
-            // already waits for whatever serves the console on `port`.
+            // The local page waits for whatever serves the console on `port`: the backend plugin's
+            // sidecar, or a console that was already running.
             open_main_window(app.handle(), port)?;
             Ok(())
         })

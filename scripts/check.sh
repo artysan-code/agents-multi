@@ -25,7 +25,8 @@ deno check --quiet apps/cli/*.ts apps/cli/lib/*.ts apps/cli/console/*.ts apps/cl
 
 # Every bash script, found by its shebang: a script added anywhere below is checked unedited.
 shell=()
-for f in bin/* bin/lib/*.sh shared/statusline-command.sh shared/hooks/*.sh shared/hooks/lib/*.sh .githooks/* scripts/*.sh; do
+for f in bin/* bin/lib/*.sh shared/statusline-command.sh shared/hooks/*.sh shared/hooks/lib/*.sh .githooks/* scripts/*.sh \
+  apps/desktop/scripts/*.sh; do
   [[ -f "$f" ]] || continue
   head -n1 "$f" | grep -Eq '^#!.*(bash|sh)$|^# shellcheck shell=' || continue
   bash -n "$f" || {
