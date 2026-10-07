@@ -8,21 +8,28 @@
 // No console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod activation;
 mod console;
 mod navigation;
 
 use navigation::Decision;
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use url::Url;
 
 const MAIN: &str = "main";
 
 fn main() {
+    // A second launch can only forward its arguments: the launcher's activation token goes there.
+    #[cfg(target_os = "linux")]
+    activation::forward_through_args();
+
     tauri::Builder::default()
-        // First, so a second launch exits before it builds anything: it focuses the window instead.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            focus(app)
+        // First, so a second launch exits before it builds anything: it raises the window instead.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if let Some(window) = app.get_webview_window(MAIN) {
+                activation::bring_forward(&window, activation::forwarded_token(&args));
+            }
         }))
         .setup(|app| {
             let port = console::port();
@@ -39,7 +46,7 @@ fn main() {
 fn open_main_window(app: &AppHandle, port: u16) -> tauri::Result<()> {
     let console = console::url(port);
     let page = WebviewUrl::App(format!("index.html?port={port}").into());
-    WebviewWindowBuilder::new(app, MAIN, page)
+    let window = WebviewWindowBuilder::new(app, MAIN, page)
         .title("Agents Multi")
         .inner_size(1280.0, 860.0)
         .min_inner_size(720.0, 480.0)
@@ -60,6 +67,13 @@ fn open_main_window(app: &AppHandle, port: u16) -> tauri::Result<()> {
             NewWindowResponse::Deny
         })
         .build()?;
+    // the attention asked for when a second launch could not raise the window ends when it has focus
+    let w = window.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::Focused(true) = event {
+            let _ = w.request_user_attention(None);
+        }
+    });
     Ok(())
 }
 
@@ -73,14 +87,4 @@ fn refuse(url: &Url, decision: Decision) {
         }
         _ => eprintln!("agents-multi: navigation to {url} blocked"),
     }
-}
-
-/// Brings the main window forward (a second launch of the app).
-fn focus(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(MAIN) else {
-        return;
-    };
-    let _ = window.unminimize();
-    let _ = window.show();
-    let _ = window.set_focus();
 }
