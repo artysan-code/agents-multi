@@ -64,19 +64,29 @@ if (!amEnv("ROOT")) await ensureRuntimeLink(HOME).catch(() => false);
 switch (cmd) {
   case "migrate": {
     const procs = await running();
-    Deno.exit(
-      await migrate({
-        home: HOME,
-        dry: flag("--dry-run"),
-        rollback: flag("--rollback"),
-        force: flag("--force"),
-        backupDir: `${STATE}/migrate-${STAMP}`,
-        running: [
-          ...procs.cli.map((p) => `claude ${p.profile ?? "?"} (pid ${p.pid})`),
-          ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
-        ],
-      }),
-    );
+    const code = await migrate({
+      home: HOME,
+      dry: flag("--dry-run"),
+      rollback: flag("--rollback"),
+      force: flag("--force"),
+      backupDir: `${STATE}/migrate-${STAMP}`,
+      running: [
+        ...procs.cli.map((p) => `claude ${p.profile ?? "?"} (pid ${p.pid})`),
+        ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
+      ],
+    });
+    // the console and the tray found the runtime by its name when they started: they restart on the
+    // new one, or they report the paths of the old (the console last: it may be the one asking)
+    if (code === 0 && !flag("--dry-run")) {
+      await run("systemctl", [
+        "--user",
+        "--no-block",
+        "try-restart",
+        "claude-multi-app.service",
+        "claude-multi-console.service",
+      ]);
+    }
+    Deno.exit(code);
     break;
   }
   case "init":
