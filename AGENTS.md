@@ -93,7 +93,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   build step) waits for the console to answer. No page gets IPC: the app has no capabilities, and one
   added for the local page never lists the console's origin (`remote.urls`). Navigation stays on the local
   page and the console (`navigation.rs`); other links go to the system browser. The bundle
-  identifier `net.local.agents-multi` is provisional, decided before phase 6; on Linux it is also the
+  identifier is `me.artysan.agents` (final since 2026-10-07: it never changes); on Linux it is also the
   window's app_id and the desktop file's name (`tauri.linux.conf.json`, kept equal by `build.rs`), or
   Wayland shows a generic icon. A second launch carries
   the launcher's activation token in its arguments (`activation.rs`): the single-instance plugin forwards

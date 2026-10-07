@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "net.local.agents-multi",
+  "productName": "me.artysan.agents",
   "bundle": {
     "linux": {
       "deb": { "desktopTemplate": "linux/app.desktop" },

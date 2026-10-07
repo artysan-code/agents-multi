@@ -73,7 +73,7 @@ point into it, the systemd units go (the app runs their jobs) together with the 
 units, the app's autostart entry is written, and the MCP servers are placed again on the package's
 Deno. Your configuration, the vault, the brain login, the profiles and their sessions do not move.
 `--dry-run` shows the plan; `--from <dir>` names the package's code when it is not beside the
-installed app (an AppImage: its mount's `usr/lib/net.local.agents-multi/repo`). The checkout is
+installed app (an AppImage: its mount's `usr/lib/me.artysan.agents/repo`). The checkout is
 recorded and left as it is: `agents migrate app --rollback` points the runtime back at it and runs
 its own `install` and `mcp sync`.
 

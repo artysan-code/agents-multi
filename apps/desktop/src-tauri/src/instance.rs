@@ -85,14 +85,11 @@ mod tests {
 
     #[test]
     fn the_dbus_id_carries_the_instance() {
-        assert_eq!(
-            dbus_id("net.local.agents-multi", None),
-            "net.local.agents-multi"
-        );
+        assert_eq!(dbus_id("me.artysan.agents", None), "me.artysan.agents");
         // `dev_` first: a name element may not start with a digit
         assert_eq!(
-            dbus_id("net.local.agents-multi", Some("4ever")),
-            "net.local.agents-multi.dev_4ever"
+            dbus_id("me.artysan.agents", Some("4ever")),
+            "me.artysan.agents.dev_4ever"
         );
     }
 }

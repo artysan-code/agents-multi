@@ -134,19 +134,19 @@ shell's.
   - the app sets the program name to the identifier before GTK starts (`set_app_id` in `main.rs`),
     and the X11 class (WM_CLASS) to the same after GTK's init, which resets it;
   - on Linux the product name _is_ the identifier (`tauri.linux.conf.json`), so the bundles' file is
-    `net.local.agents-multi.desktop`; its template (`src-tauri/linux/app.desktop`) writes the shown
+    `me.artysan.agents.desktop`; its template (`src-tauri/linux/app.desktop`) writes the shown
     name, `Agents Multi`, and `StartupWMClass` from the same product name; `Icon=` is the binary's
     name, under which the bundler installs the icons;
   - `build.rs` fails the build when the Linux product name and the identifier differ.
 
   The price: the deb and rpm packages are named after the product name too
-  (`net-local-agents-multi`, `net.local.agents-multi`). The window icon (X11, the task switcher) is the
+  (`me-artysan-agents`, `me.artysan.agents`). The window icon (X11, the task switcher) is the
   first PNG in `bundle.icon`, the 256-pixel one. The AppImage reuses the deb's desktop file; it was not
   built here.
-- **The bundle identifier is provisional**: `net.local.agents-multi`, in `tauri.conf.json` and, as
-  the product name, in `tauri.linux.conf.json` (`build.rs` keeps the two equal). It is decided
-  before phase 6 (signed releases and the updater), since changing it afterwards moves the app's data
-  directories, its desktop file and its package names, and breaks updates.
+- **The bundle identifier is `me.artysan.agents`** (decided by Samuel on 2026-10-07, replacing the
+  provisional `net.local.agents-multi`), in `tauri.conf.json` and, as the product name, in
+  `tauri.linux.conf.json` (`build.rs` keeps the two equal). It does not change any more: changing it
+  moves the app's data directories, its desktop file and its package names, and breaks updates.
 - **Versions**: the app's version is `apps/desktop/package.json`'s, listed in `MANIFESTS` and read by
   `tauri.conf.json`; Cargo's own version stays `0.0.0`. Rust crates are pinned exactly in
   `Cargo.toml`, with `Cargo.lock` committed; the Tauri CLI is a pinned devDependency (pnpm, like

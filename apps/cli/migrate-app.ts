@@ -56,7 +56,7 @@ async function findPackage(from?: string): Promise<{ code: string; app: string |
     : (await readBuild(REPO))
     ? [REPO]
     : app
-    ? packageCandidates(await Deno.realPath(app).catch(() => app), ["net.local.agents-multi", "Agents Multi"])
+    ? packageCandidates(await Deno.realPath(app).catch(() => app), ["me.artysan.agents", "Agents Multi"])
     : [];
   for (const c of candidates) if (await readBuild(c)) return { code: c, app, deno };
   return null;

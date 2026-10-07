@@ -264,8 +264,8 @@ Deno.test("jobPath: the runtime's bin last, once", () => {
 
 // ---------------------------------------------------------------- migration
 Deno.test("packageCandidates: the resources beside the app's executable", () => {
-  assertEquals(packageCandidates("/usr/bin/agents-multi-desktop", ["net.local.agents-multi", "Agents Multi"]), [
-    "/usr/lib/net.local.agents-multi/repo",
+  assertEquals(packageCandidates("/usr/bin/agents-multi-desktop", ["me.artysan.agents", "Agents Multi"]), [
+    "/usr/lib/me.artysan.agents/repo",
     "/usr/lib/Agents Multi/repo",
   ]);
 });

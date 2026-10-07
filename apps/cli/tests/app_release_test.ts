@@ -23,7 +23,7 @@ Deno.test("app release: a release refuses an empty site, repository or key", () 
 });
 
 Deno.test("app release: bundles are found by kind and published under the same names whatever the identifier", () => {
-  assertEquals(bundleKind("deb/net.local.agents-multi_1.0.0_amd64.deb"), { kind: "deb", sig: false });
+  assertEquals(bundleKind("deb/me.artysan.agents_1.0.0_amd64.deb"), { kind: "deb", sig: false });
   assertEquals(bundleKind("rpm/x-1.0.0-1.x86_64.rpm.sig"), { kind: "rpm", sig: true });
   assertEquals(bundleKind("appimage/x_1.0.0_amd64.AppImage"), { kind: "appimage", sig: false });
   assertEquals(bundleKind("appimage/build_appimage.sh"), null);
@@ -82,7 +82,7 @@ const PKG: Package = {
   sha256: "a".repeat(64),
   github: "owner/agents-multi",
   license: "MIT",
-  identifier: "net.local.agents-multi",
+  identifier: "me.artysan.agents",
 };
 
 Deno.test("aur: only a stable version with its checksum, repository and licence makes a package", () => {
@@ -101,7 +101,7 @@ Deno.test("aur: the PKGBUILD repackages the release's deb with the updater off, 
     'source_x86_64=("https://github.com/owner/agents-multi/releases/download/v${pkgver}/agents-multi_${pkgver}_amd64.deb")',
   );
   assertStringIncludes(b, `sha256sums_x86_64=('${"a".repeat(64)}')`);
-  assertStringIncludes(b, `> "$pkgdir/usr/lib/net.local.agents-multi/package-manager"`);
+  assertStringIncludes(b, `> "$pkgdir/usr/lib/me.artysan.agents/package-manager"`);
   assertStringIncludes(b, "license=('MIT')");
   assertStringIncludes(
     s,
