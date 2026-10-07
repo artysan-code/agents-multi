@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.13.1] - 2026-10-07
+
+### Fixed
+
+- **migrate**: the console and the tray restart after the move, so they stop reporting the old paths (55bb0e6)
+
 ## [0.13.0] - 2026-10-07
 
 ### Added
