@@ -72,7 +72,7 @@ export interface StatusView {
     [more: string]: unknown;
   };
   profiles: Record<string, ProfileView>;
-  running: { cli: RunningCli[]; desktop: { pid: number; profile: string; [more: string]: unknown }[] };
+  running: { cli: RunningCli[]; desktop: { pid: number; variant: string; [more: string]: unknown }[] };
   brain: { url: string | null; [more: string]: unknown };
   doctor: Check[];
 }
