@@ -7,6 +7,17 @@ export const en = {
   "pick.none": "No profile is declared in this configuration.",
   "pick.opening": "Opening {p}…",
   "pick.failed": "Could not open {p}: {e}",
+  "pick.default": "default",
+  "pick.sessions": "{n} sessions",
+  "pick.expired": "sign-in expired",
+  "pick.closed": "closed",
+  "pick.will.focus": "Already open: I bring it forward.",
+  "pick.will.login": "It opens and asks you to sign in again.",
+  "pick.will.open": "Claude Desktop opens with this profile.",
+  "pick.next": "In",
+  "pick.k.choose": "choose",
+  "pick.k.open": "open",
+  "pick.k.direct": "direct",
 };
 
 export const it: Record<keyof typeof en, string> = {
@@ -16,4 +27,15 @@ export const it: Record<keyof typeof en, string> = {
   "pick.none": "Questa configurazione non dichiara nessun profilo.",
   "pick.opening": "Apro {p}…",
   "pick.failed": "Impossibile aprire {p}: {e}",
+  "pick.default": "predefinito",
+  "pick.sessions": "{n} sessioni",
+  "pick.expired": "accesso scaduto",
+  "pick.closed": "chiuso",
+  "pick.will.focus": "Già aperto: lo porto in primo piano.",
+  "pick.will.login": "Si apre e ti chiede di accedere di nuovo.",
+  "pick.will.open": "Si apre Claude Desktop con questo profilo.",
+  "pick.next": "Tra",
+  "pick.k.choose": "scegli",
+  "pick.k.open": "apri",
+  "pick.k.direct": "diretto",
 };
