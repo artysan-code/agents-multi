@@ -39,6 +39,7 @@ import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
 import { bodyLimit, Buckets, capped, clientIp, fromOwnPages, hardened, isTooLarge } from "./guard.ts";
 import { snapshot } from "./backup.ts";
+import { startBackups } from "./backups.ts";
 import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/owner.ts";
 import { masterKey, type User, Users } from "./users.ts";
 import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
@@ -536,6 +537,11 @@ const purge = () => {
 };
 purge();
 const purging = setInterval(purge, 3600_000);
+// a sealed copy of every database a day into DATA/backups, only with a key to seal it (backups.ts)
+const keep = Number(env("BRAIN_BACKUP_KEEP", "7"));
+const backups = env("BRAIN_BACKUP_KEY")
+  ? startBackups(DATA, env("BRAIN_BACKUP_KEY")!, Number.isInteger(keep) && keep > 0 ? keep : 7, (m) => log.info(m))
+  : null;
 // stopping (a deploy sends SIGTERM): no new requests, the ones in flight finish, the indexers stop
 // and every database is closed, so nothing is cut halfway through a write. Ten seconds at most.
 let stopping = false;
@@ -546,6 +552,7 @@ const stop = async (signal: string) => {
   clearInterval(purging);
   setTimeout(() => Deno.exit(1), 10_000);
   await server.shutdown();
+  await backups?.stop();
   tenants.close();
   accountsDb.close();
   Deno.exit(0);

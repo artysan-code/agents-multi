@@ -532,6 +532,17 @@ export class Auth {
     this.db.prepare("delete from sessions where user = ?").run(user);
   }
 
+  /** An account's failed sign-ins forgotten, from every address: its lock lifted before the fifteen minutes. */
+  unlock(user: string) {
+    this.db.prepare("delete from login_failures where user = ?").run(user);
+  }
+  /** Everything of a deleted account removed: tokens, codes, sessions, failed attempts. */
+  forget(user: string) {
+    for (const t of ["tokens", "oauth_codes", "sessions", "login_failures"]) {
+      this.db.prepare(`delete from ${t} where user = ?`).run(user);
+    }
+  }
+
   /** The clients and live tokens of the database the service kept before it served several people,
    *  carried over to the account they belonged to: Claude's connections and the machines' tokens
    *  keep working through the change. Tokens are hashes there and here: nothing is revealed. */
