@@ -83,6 +83,14 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   (`summarize()` in `apps/cli/status.ts`, with its test), not Python. Its name and identifiers derive
   from `NAME` in `common.py`. Qt aborts the whole process when a running `QThread` is destroyed:
   a window that owns a worker is not deleted before the worker finishes.
+- **The desktop app is `apps/desktop/`** (Tauri 2, Rust in `src-tauri/`; [ADR 0003](docs/adr/0003-desktop-app.md)),
+  replacing the tray and the console's unit piece by piece. Its window loads the console by URL
+  (`http://127.0.0.1:<port>`), never a bundled copy of `apps/ui`; a bundled local page (`src/`, no
+  build step) waits for the console to answer. No page gets IPC: the app has no capabilities, and one
+  added for the local page never lists the console's origin (`remote.urls`). Navigation stays on the local
+  page and the console (`navigation.rs`); other links go to the system browser. The bundle
+  identifier `net.local.agents-multi` is provisional, decided before phase 6. `check.sh` runs
+  `cargo fmt` and `clippy -D warnings` where cargo and WebKitGTK are installed.
 - **Launching stays pure bash** (`bin/claude`, `bin/claude-launch`, `bin/lib/`): no Deno on the hot
   path, so a wrapper still works on a machine without it. The manifests are read from bash through
   `bin/lib/profiles.sh` (`cm_command`, `cm_desktop_dir`, `cm_desktop_appid`) — one place, no jq.
