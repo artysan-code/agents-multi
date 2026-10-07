@@ -12,7 +12,13 @@
  *   release.ts --lint-subject "<s>"   one subject (the commit-msg hook)
  *
  * Channels follow branches: a stable version is cut on `release`, a beta on `beta`.
+ *
+ * When the repository is the one the runtime runs (~/.claude-multi/shared links into it), the console
+ * and the tray app still hold the code from before the merge: they are restarted if it changed since
+ * the last tag, as self-update does after a pull.
  */
+
+import { staleUnits } from "../apps/cli/lib/stale.ts";
 
 /** The manifests that carry the version, relative to the repository root. */
 export const MANIFESTS = ["deno.json", "apps/site/package.json"];
@@ -183,6 +189,22 @@ async function git(...args: string[]): Promise<string> {
   return new TextDecoder().decode(out.stdout).trim();
 }
 
+/** Whether `root` is the checkout the runtime runs: ~/.claude-multi/shared is a link into it. */
+async function isRuntime(root: string): Promise<boolean> {
+  const runtime = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${Deno.env.get("HOME")}/.claude-multi`;
+  return await Deno.realPath(`${runtime}/shared`).then((p) => p === `${root}/shared`, () => false);
+}
+
+/** Restarts the console and the tray app when the code they run changed since `tag`. */
+async function restartStale(root: string, tag: string | null) {
+  if (!tag || !(await isRuntime(root))) return;
+  const units = staleUnits((await git("diff", "--name-only", tag, "HEAD")).split("\n").filter(Boolean));
+  if (!units.length) return;
+  const out = await new Deno.Command("systemctl", { args: ["--user", "--no-block", "try-restart", ...units] })
+    .output().catch(() => null);
+  console.log(out?.success ? `restarted ${units.join(", ")}` : `could not restart ${units.join(", ")}`);
+}
+
 async function commitsSince(tag: string | null): Promise<Commit[]> {
   const range = tag ? [`${tag}..HEAD`] : ["HEAD"];
   const raw = await git("log", "--no-merges", "--format=%H%x1f%s%x1f%b%x1e", ...range);
@@ -248,6 +270,7 @@ async function main(args: string[]) {
   await git("commit", "-q", "-m", `chore(release): v${next}`);
   await git("tag", "-a", `v${next}`, "-m", `v${next}`);
   console.log(`tagged v${next}. Publish with: git push origin ${branch} v${next}`);
+  await restartStale(root, lastTag);
 }
 
 if (import.meta.main) {

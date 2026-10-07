@@ -1,6 +1,7 @@
 // Tests for claude-multi updating itself (selfupdate.ts): when it pulls, and what a pull makes stale.
 import { assertEquals } from "jsr:@std/assert@1";
-import { selfPlan, staleParts } from "../selfupdate.ts";
+import { selfPlan } from "../selfupdate.ts";
+import { staleParts, staleUnits } from "../lib/stale.ts";
 
 const R = { upstream: "origin/release", branch: "release", ahead: 0, behind: 0, dirty: 0 };
 
@@ -23,4 +24,12 @@ Deno.test("self-update: the console restarts for its code, the app for its own, 
     console: false,
     app: false,
   });
+});
+
+Deno.test("self-update: the units to restart, the console last", () => {
+  assertEquals(staleUnits(["apps/tray/console.py", "apps/cli/serve.ts"]), [
+    "claude-multi-app.service",
+    "claude-multi-console.service",
+  ]);
+  assertEquals(staleUnits(["CHANGELOG.md", "deno.json"]), []);
 });

@@ -12,6 +12,7 @@ import { uiLanguage } from "./lib/locale.ts";
 import { CACHE, REPO, STATE } from "./lib/paths.ts";
 import { run } from "./lib/proc.ts";
 import { blockers } from "./mcp/apply.ts";
+import { staleParts, staleUnits } from "./lib/stale.ts";
 import { syncAllSettings } from "./settings.ts";
 
 export interface RepoView {
@@ -34,16 +35,6 @@ export function selfPlan(r: RepoView): SelfPlan {
     return { do: "skip", why: `${r.dirty} files changed and not committed: commit or put them aside, then update` };
   }
   return { do: "pull" };
-}
-
-/** Pure: which running parts a set of changed files makes stale. */
-export function staleParts(changed: string[]): { console: boolean; app: boolean } {
-  return {
-    console: changed.some((f) =>
-      f.startsWith("apps/cli/") && !f.startsWith("apps/cli/tests/") || f.startsWith("shared/mcp/lib/")
-    ),
-    app: changed.some((f) => f.startsWith("apps/tray/")),
-  };
 }
 
 // ---------------------------------------------------------------- how it speaks
@@ -252,9 +243,7 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
   // last, and without waiting: the console may be the one running this round (its Update button),
   // and restarting it ends whatever runs inside it
   const stale = staleParts(changed);
-  const units = [stale.app && "claude-multi-app.service", stale.console && "claude-multi-console.service"].filter((
-    u,
-  ): u is string => !!u);
+  const units = staleUnits(changed);
   if (units.length) {
     say(note(T.restarted(stale.console, stale.app)));
     await run("systemctl", ["--user", "--no-block", "try-restart", ...units]);
