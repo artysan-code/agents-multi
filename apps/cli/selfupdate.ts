@@ -1,5 +1,5 @@
-// selfupdate.ts — claude-multi updating itself: `claude-multi self-update`, the third part of
-// `claude-multi update` (and of its timer, `--auto`) next to Claude Code and Claude Desktop.
+// selfupdate.ts — agents-multi updating itself: `agents-multi self-update`, the third part of
+// `agents-multi update` (and of its timer, `--auto`) next to Claude Code and Claude Desktop.
 //
 // The repository is the program, so updating it is a pull, with the same care as the one before a
 // launch (bin/lib/prelaunch.sh): only fast-forward, only on a clean tree, never a push. Then what
@@ -41,7 +41,7 @@ export function selfPlan(r: RepoView): SelfPlan {
 }
 
 // ---------------------------------------------------------------- how it speaks
-// The row of bin/lib/ui.sh, so that `claude-multi update` lines up: an icon, the name, the version,
+// The row of bin/lib/ui.sh, so that `agents-multi update` lines up: an icon, the name, the version,
 // what happened, and dimmed details under it. claude-update passes its language and whether to colour
 // (CM_LANG, CM_COLOR); alone, the machine's language and whether this is a terminal.
 const lang = (Deno.env.get("CM_LANG") || uiLanguage(Deno.env.toObject())) === "it" ? "it" : "en";
@@ -69,9 +69,9 @@ const T = {
     diverged: (b: number, a: number) => `la storia è divergente (↓${b} ↑${a}): serve un rebase a mano`,
     noUpstream: (b: string) => `il branch ${b} non segue un branch remoto`,
     installWait:
-      "install ha del lavoro e aspetta che chiudi ogni Claude: lo fa il prossimo giro, o lancia claude-multi install",
+      "install ha del lavoro e aspetta che chiudi ogni Claude: lo fa il prossimo giro, o lancia agents-multi install",
     installDone: "install eseguito",
-    installFail: "install non riuscito: lancia claude-multi install per vedere perché",
+    installFail: "install non riuscito: lancia agents-multi install per vedere perché",
     nothingPending: "nessun install in attesa",
     restarted: (console: boolean, app: boolean) =>
       console && app
@@ -79,7 +79,7 @@ const T = {
         : `riavviata ${console ? "la console" : "l'app"}: girava col codice vecchio`,
     pullFail: "pull non riuscito: git pull --ff-only nel repo per vedere perché",
     notRepo: "non è un repository git: niente da aggiornare",
-    notifyTitle: (v: string) => `claude-multi aggiornato${v ? ` alla ${v}` : ""}`,
+    notifyTitle: (v: string) => `agents-multi aggiornato${v ? ` alla ${v}` : ""}`,
     notifyMore: (n: number) => `…e ${n} ${n === 1 ? "altra novità" : "altre novità"}`,
     notifyOpen: "Le novità sono nella console, in Sistema › Aggiornamenti.",
   },
@@ -97,9 +97,9 @@ const T = {
     diverged: (b: number, a: number) => `diverged history (↓${b} ↑${a}): a rebase by hand`,
     noUpstream: (b: string) => `branch ${b} follows no remote branch`,
     installWait:
-      "install has work to do and waits for every Claude to be closed: the next round does it, or run claude-multi install",
+      "install has work to do and waits for every Claude to be closed: the next round does it, or run agents-multi install",
     installDone: "install done",
-    installFail: "install failed: run claude-multi install to see why",
+    installFail: "install failed: run agents-multi install to see why",
     nothingPending: "no install waiting",
     restarted: (console: boolean, app: boolean) =>
       `restarted ${
@@ -107,7 +107,7 @@ const T = {
       }: it was running the old code`,
     pullFail: "pull failed: git pull --ff-only in the repository to see why",
     notRepo: "not a git repository: nothing to update",
-    notifyTitle: (v: string) => `claude-multi updated${v ? ` to ${v}` : ""}`,
+    notifyTitle: (v: string) => `agents-multi updated${v ? ` to ${v}` : ""}`,
     notifyMore: (n: number) => `…and ${n} more`,
     notifyOpen: "What's new is in the console, under System › Updates.",
   },
@@ -118,7 +118,7 @@ const pad = (s: string, n: number) => s + " ".repeat(Math.max(0, n - [...s].leng
 /** Pure-ish: the row, as bin/lib/ui.sh prints it. */
 function row(kind: keyof typeof ICON, version: string, text: string): string {
   const [icon, col] = ICON[kind];
-  return `  ${col}${icon}${C.x} ${C.b}${pad("claude-multi", 15)}${C.x} ${pad(version, 10)} ${text}`;
+  return `  ${col}${icon}${C.x} ${C.b}${pad("agents-multi", 15)}${C.x} ${pad(version, 10)} ${text}`;
 }
 const note = (text: string) => `${" ".repeat(31)}${C.dim}${text}${C.x}`;
 /** Why a repository is not updated, in words. */
@@ -128,7 +128,7 @@ const skipWhy = (r: RepoView) =>
 const PENDING = `${STATE}/install-pending`;
 const SKIPPED = `${CACHE}/self-update-skipped`;
 
-export async function log(event: string, from: string, to: string, detail = "", component = "claude-multi") {
+export async function log(event: string, from: string, to: string, detail = "", component = "agents-multi") {
   await Deno.mkdir(STATE, { recursive: true });
   const line = JSON.stringify({
     at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),

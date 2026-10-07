@@ -73,7 +73,7 @@ const taskFields = () => ({
     `who has to move: ${owner().id} (default: the owner), claude, or someone's name — then it is waiting on them`,
   ),
   project: z.string().nullable().optional().describe(
-    "the project's folder under $HOME when there is one (work/acme/site, personal/blog), otherwise a short name (claude-multi)",
+    "the project's folder under $HOME when there is one (work/acme/site, personal/blog), otherwise a short name (agents-multi)",
   ),
   priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional().describe(
     "1 high, 2 normal, 3 low",

@@ -3,14 +3,14 @@
 #
 # It is linked into ~/.local/bin once per profile (`claude`, `claude-alice`, …) and works out which
 # profile to start from the name it was invoked as, matched against the `command` field of
-# profiles/*/profile.json. Adding a profile therefore adds no file here: `claude-multi install`
+# profiles/*/profile.json. Adding a profile therefore adds no file here: `agents-multi install`
 # creates the link.
 #
 # 1. align the config from the repo (prelaunch.sh: fetch when stale, ff-only pull, never blocking)
 # 2. pin CLAUDE_CONFIG_DIR to the profile and disable the native auto-updater
 # 3. with `disableAccountMcp` in the manifest, pass a --settings overlay that switches off the
 #    claude.ai connectors and the organisation's synced plugins
-# 4. `<launcher> update` is redirected to `claude-multi update`: the native updater would rewrite
+# 4. `<launcher> update` is redirected to `agents-multi update`: the native updater would rewrite
 #    ~/.local/bin/claude and leave claude-bin behind
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -23,12 +23,12 @@ PROFILE="$(cm_profile_for "$SELF")"
 
 if [[ -z "$PROFILE" ]]; then
   echo "$SELF: no profile in $(cm_config)/profiles declares this command." >&2
-  echo "Add \"command\": \"$SELF\" to a profiles/<name>/profile.json, then run: claude-multi install" >&2
+  echo "Add \"command\": \"$SELF\" to a profiles/<name>/profile.json, then run: agents-multi install" >&2
   exit 1
 fi
 
 if [[ "${1:-}" == "update" ]]; then
-  echo "$SELF: updates go through 'claude-multi update' (it restores the wrappers and claude-bin)." >&2
+  echo "$SELF: updates go through 'agents-multi update' (it restores the wrappers and claude-bin)." >&2
   exec "$HERE/claude-multi" update --cli
 fi
 

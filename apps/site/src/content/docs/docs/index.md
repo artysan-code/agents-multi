@@ -1,9 +1,9 @@
 ---
 title: Introduction
-description: What claude-multi is, and what it brings together.
+description: What Agents Multi is, and what it brings together.
 ---
 
-claude-multi runs several **Claude Code** and **Claude Desktop** accounts on one Linux machine, without
+Agents Multi runs several **Claude Code** and **Claude Desktop** accounts on one Linux machine, without
 them seeing each other, and gives every Claude the same memory, the same tasks and the same tools.
 
 It grew out of daily use: a personal account and a couple of work accounts, each with its own login,
@@ -20,17 +20,17 @@ them allowed to touch the secrets.
   See [The brain](/docs/brain/).
 - **MCP and the vault** — one registry of servers, one account per tool, every credential
   encrypted. See [MCP and the vault](/docs/mcp-and-vault/).
-- **Updates** — Claude Code, Claude Desktop and claude-multi update themselves, verified and
+- **Updates** — Claude Code, Claude Desktop and Agents Multi update themselves, verified and
   reversible. See [Updates](/docs/updates/).
 
 ## How it is built
 
 The repository is the source of truth; `~/.claude-multi/` is runtime materialised by
-`claude-multi install`. What is yours — profiles, accounts, rules, preferences — lives in a folder of
+`agents-multi install`. What is yours — profiles, accounts, rules, preferences — lives in a folder of
 yours, apart from the code, which you keep in step between machines with git or Syncthing. The code
 travels over git; the runtime directory never goes into a synced folder, because it holds credentials.
 
 :::note
-claude-multi is being prepared for a public release. Until then these pages describe it; the code
+Agents Multi is being prepared for a public release. Until then these pages describe it; the code
 follows.
 :::

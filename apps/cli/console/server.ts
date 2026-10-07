@@ -1,4 +1,4 @@
-// server.ts — the local console: `claude-multi serve` listens on http://127.0.0.1:7331 and serves
+// server.ts — the local console: `agents-multi serve` listens on http://127.0.0.1:7331 and serves
 // the page in apps/cli/dashboard/ (no build step, works offline), the new interface built from apps/ui
 // under /next while the pages move over, and their API.
 //
@@ -308,7 +308,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
 
   const handler = createHandler(table);
 
-  console.log(`${ANSI.b}claude-multi serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
+  console.log(`${ANSI.b}agents-multi serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   void watchTree(ac.signal);
   void watchBrain(ac.signal, connectTasks() === "brain");
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);

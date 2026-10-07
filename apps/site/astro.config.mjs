@@ -1,4 +1,4 @@
-// The public site of claude-multi: the landing (src/pages, English on /, Italian on /it/) and the
+// The public site of agents-multi: the landing (src/pages, English on /, Italian on /it/) and the
 // documentation (Starlight, on /docs). Static: the brain's image builds it and serves dist/ (apps/brain/public.ts).
 // Its address is a placeholder the brain replaces with the real one when it serves a page: nothing of
 // one instance is built in.
@@ -10,7 +10,7 @@ export default defineConfig({
   build: { inlineStylesheets: "never" },
   integrations: [
     starlight({
-      title: "claude-multi",
+      title: "Agents Multi",
       description: "Every Claude you use, one setup: isolated accounts, one memory, one task list, secrets out of reach.",
       logo: { src: "./src/assets/mark.svg" },
       favicon: "/favicon.svg",

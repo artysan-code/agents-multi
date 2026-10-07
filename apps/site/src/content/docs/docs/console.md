@@ -3,7 +3,7 @@ title: The console
 description: A local web app that shows what every profile is doing.
 ---
 
-`claude-multi install` enables the console as a systemd user unit, so it is always at
+`agents-multi install` enables the console as a systemd user unit, so it is always at
 <http://127.0.0.1:7331> — over an ssh tunnel it works the same, which is the point on a headless box.
 
 Updates are **pushed, not polled**: the server watches the transcripts and the shared configuration,
@@ -12,7 +12,7 @@ is HTML, CSS and vanilla JavaScript with no build step, its libraries vendored: 
 machine that has never been online. English or Italian, following the machine's locale.
 
 A new interface (Preact and TypeScript) is taking its place at `/next`, one page at a time. It is
-built on the machine with pnpm when claude-multi is installed or updated, never downloaded.
+built on the machine with pnpm when Agents Multi is installed or updated, never downloaded.
 
 ## Sections
 

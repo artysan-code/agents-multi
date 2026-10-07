@@ -17,7 +17,7 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
     const act = (await run("systemctl", ["--user", "is-active", "claude-multi-console.service"])).out;
     if (en !== "enabled") {
       // no guided repair: install restarts the console, which would cut the repair's own stream
-      add("console.unit", "warn", `claude-multi-console.service: ${en || "not installed"}`, "claude-multi install");
+      add("console.unit", "warn", `claude-multi-console.service: ${en || "not installed"}`, "agents-multi install");
     } else if (act !== "active") {
       add(
         "console.unit",
@@ -52,7 +52,7 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
       `the console's new interface (/next) is ${ui === "missing" ? "not built" : "built from older code"}${
         pnpm ? "" : ", and pnpm is not installed"
       }`,
-      pnpm ? "claude-multi ui build" : "install pnpm (https://pnpm.io/installation), then claude-multi ui build",
+      pnpm ? "agents-multi ui build" : "install pnpm (https://pnpm.io/installation), then agents-multi ui build",
     );
   } else add("console.ui", "ok", "the console's new interface is built (/next)");
   return c;

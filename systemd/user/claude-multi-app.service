@@ -1,5 +1,5 @@
 [Unit]
-Description=claude-multi desktop app — tray icon and console window
+Description=agents-multi desktop app — tray icon and console window
 Documentation=file:%h/.local/src/claude-multi/README.md
 # A tray icon needs the graphical session; the console it shows is its own unit and is not tied to it.
 PartOf=graphical-session.target

@@ -1,5 +1,5 @@
 [Unit]
-Description=A copy of the brain on this machine, when it changed (claude-multi brain-backup)
+Description=A copy of the brain on this machine, when it changed (agents-multi brain-backup)
 Documentation=file://%h/.local/src/claude-multi/apps/brain/README.md
 After=network-online.target
 

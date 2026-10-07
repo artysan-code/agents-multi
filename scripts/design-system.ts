@@ -35,7 +35,7 @@ export function bundleCss(css: string): string {
   const a = b.indexOf("/* one colour per area"), z = b.indexOf(".md {", a);
   if (a >= 0 && z > a) b = b.slice(0, a) + b.slice(z);
   if (/<\/style/i.test(b)) throw new Error("style.css holds </style: it would end the preview's <style>");
-  return "/* claude-multi — the console's stylesheet (cli/dashboard/style.css) without its @font-face and token blocks:\n" +
+  return "/* agents-multi — the console's stylesheet (cli/dashboard/style.css) without its @font-face and token blocks:\n" +
     "   tokens.css carries those. The console reads --sans/--serif/--mono; here they point at the system's families. */\n" +
     ":root { --sans: var(--font-sans); --serif: var(--font-serif); --mono: var(--font-mono); }\n\n" + b;
 }

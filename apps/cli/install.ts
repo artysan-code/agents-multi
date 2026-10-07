@@ -201,7 +201,7 @@ export async function install(dry: boolean) {
   DRY = dry;
   const m = await machine();
   console.log(
-    `${ANSI.b}claude-multi install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${
+    `${ANSI.b}agents-multi install${ANSI.x} — repo ${REPO} → runtime ${RUNTIME} (${m.hostname}${
       DRY ? ", dry-run" : ""
     })\n`,
   );
@@ -211,7 +211,7 @@ export async function install(dry: boolean) {
     console.log(
       `  ${ANSI.r}✗${ANSI.x} no configuration at ${
         shortHome(CONFIG)
-      }: make one with  claude-multi init <folder>  (or link an existing one there)`,
+      }: make one with  agents-multi init <folder>  (or link an existing one there)`,
     );
     return 1;
   }
@@ -335,7 +335,7 @@ export async function install(dry: boolean) {
     }
   }
 
-  // 5d. git's global ignore: what a project keeps for claude-multi stays out of every repository
+  // 5d. git's global ignore: what a project keeps for agents-multi stays out of every repository
   {
     const file = await gitGlobalIgnore();
     const text = await readText(file) ?? "";
@@ -370,7 +370,7 @@ export async function install(dry: boolean) {
     const re = new RegExp(`${ZSH_BEGIN.replace(/[()]/g, "\\$&")}[\\s\\S]*?${ZSH_END}`);
     const next = re.test(zsh) ? zsh.replace(re, block) : `${zsh.trimEnd()}\n\n${block}\n`;
     if (next !== zsh) {
-      say(`${ANSI.y}→${ANSI.x} updating the claude-multi block in ~/.zshrc`);
+      say(`${ANSI.y}→${ANSI.x} updating the agents-multi block in ~/.zshrc`);
       if (!DRY) await Deno.writeTextFile(zp, next);
     }
   }
@@ -485,15 +485,15 @@ export async function install(dry: boolean) {
   console.log();
   // The diagnosis is printed, but it is not this command's verdict: install reports whether it
   // materialised the runtime, not whether the machine is healthy. Returning the doctor's code made
-  // `claude-multi install && <next step>` skip the next step exactly when the doctor was
+  // `agents-multi install && <next step>` skip the next step exactly when the doctor was
   // complaining about something that step would have fixed — a missing Desktop variant, say.
-  // `claude-multi doctor` is the command whose exit code means "healthy".
+  // `agents-multi doctor` is the command whose exit code means "healthy".
   const failed = printDoctor(await doctor());
   if (failed) {
     console.log(
       `  ${ANSI.d}install finished; the checks above are a diagnosis, not a failure of this command.${ANSI.x}`,
     );
-    console.log(`  ${ANSI.d}Run their fixes, then \`claude-multi doctor\` to confirm.${ANSI.x}\n`);
+    console.log(`  ${ANSI.d}Run their fixes, then \`agents-multi doctor\` to confirm.${ANSI.x}\n`);
   }
   return 0;
 }

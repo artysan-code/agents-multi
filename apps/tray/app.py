@@ -2,7 +2,7 @@
 """claude-multi-app — the desktop app: tray icon and console window.
 
 A view of the CLI, like everything that is not the CLI: state comes from the console server
-(`claude-multi serve`, its own systemd unit, still reachable from a browser or over ssh), actions go
+(`agents-multi serve`, its own systemd unit, still reachable from a browser or over ssh), actions go
 through the same commands a terminal would run. There is no setup logic here.
 
   claude-multi-app              open the console window (starting the app if it is not running)

@@ -1,4 +1,4 @@
-# Template for the per-profile Claude Desktop launchers. `claude-multi install` writes one file
+# Template for the per-profile Claude Desktop launchers. `agents-multi install` writes one file
 # per profile from this, substituting:
 #   @NAME@       display name          @PROFILE@   profile name
 #   @LAUNCH@     path to claude-launch  @ICON@     icon name

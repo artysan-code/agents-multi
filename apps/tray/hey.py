@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from common import BIN, CONSOLE_URL, HOME, NAME, default_profile, manifests, owner
+from common import BIN, CONSOLE_URL, HOME, TITLE, default_profile, manifests, owner
 
 # The only tools the answer may use: the tasks (all of them), and reading the rest. With
 # --permission-mode dontAsk anything else — sending mail, creating events, the other servers'
@@ -169,7 +169,7 @@ class HeyPanel(QWidget):
     def __init__(self, text: str = "") -> None:
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setWindowTitle(f"Hey Claude — {NAME}")
+        self.setWindowTitle(f"Hey Claude — {TITLE}")
         self.profile = default_profile()
         self.proc: QProcess | None = None
         self.session: str | None = None

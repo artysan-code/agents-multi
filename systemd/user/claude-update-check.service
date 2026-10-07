@@ -1,5 +1,5 @@
 [Unit]
-Description=Update Claude (Code + Desktop) and claude-multi in the background, and check the setup's health (doctor)
+Description=Update Claude (Code + Desktop) and agents-multi in the background, and check the setup's health (doctor)
 Documentation=file://%h/.local/bin/claude-update
 # Needs the graphical session: the only notifications (a failed verification, a new doctor failure)
 # go to the desktop.
@@ -8,7 +8,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
-# deno is needed by claude-multi, asar (pnpm) by the Desktop variant rebuild; the systemd --user
+# deno is needed by agents-multi, asar (pnpm) by the Desktop variant rebuild; the systemd --user
 # session reads no login shell
 Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
 # Code is installed as soon as it is out; Desktop is staged and switches once no instance runs.

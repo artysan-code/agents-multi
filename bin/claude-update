@@ -3,14 +3,14 @@
 #
 #   [CLI]     Claude Code    - internal updater, then restores claude-bin and the ~/.local/bin/claude wrapper
 #   [Desktop] Claude Desktop - claude-desktop-update: verified official .deb, user space, no root
-#   [Self]    claude-multi   - the repo itself: fast-forward-only pull on a clean working tree, then
+#   [Self]    agents-multi   - the repo itself: fast-forward-only pull on a clean working tree, then
 #                              console/app restart if their code changed and install with Claude closed (apps/cli/selfupdate.ts)
 #
 # Usage:
-#   claude-update              # everything: CLI + Desktop + claude-multi
+#   claude-update              # everything: CLI + Desktop + agents-multi
 #   claude-update --cli        # Claude Code only
 #   claude-update --desktop    # Claude Desktop only (all variants)
-#   claude-update --self       # claude-multi only
+#   claude-update --self       # agents-multi only
 #   claude-update --auto       # what the timer runs: check and update whatever is behind, silently
 #   claude-update --check      # does NOT update: only reports what is outdated (--json for scripts)
 #   claude-update --rollback [--desktop]   # back to the previous version (Code, or Desktop)
@@ -126,7 +126,7 @@ do_cli() (
   # entries and filter by semver name: files that do not belong there are never touched.
   # Guard: never the live version ($latest, validated non-empty above and the target of claude-bin).
   # Deleting the ELF of a running session is harmless: the inode stays alive until exit.
-  # The second newest (N-1) is kept too, for `claude-multi update --rollback`.
+  # The second newest (N-1) is kept too, for `agents-multi update --rollback`.
   local v bn prev pruned=()
   prev="$(semver_dirs "$VERSIONS_DIR" | grep -vx "$latest" | tail -n1 || true)"
   for v in "$VERSIONS_DIR"/*; do
@@ -220,7 +220,7 @@ do_check() {
     return 0
   fi
 
-  # text output: one row per component, claude-multi included (it checks itself)
+  # text output: one row per component, agents-multi included (it checks itself)
   if [[ $cli_out == true ]]; then cm_row wait "Claude Code" "$cc" "$(cm_t available "$cl")"
   else cm_row ok "Claude Code" "$cc" "$(cm_t latest)"; fi
   if [[ $desk_out == true ]]; then cm_row wait "Claude Desktop" "$dc" "$(cm_t available "$dl")"
@@ -322,7 +322,7 @@ if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
 fi
 
 if [[ "$scope" == "all" || "$scope" == "self" ]]; then
-  cm_working "claude-multi"
+  cm_working "agents-multi"
   [[ -n "$CM_TTY" ]] && printf "\r\e[K"
   CM_LANG="$CM_LANG" CM_COLOR="$CM_TTY" "$CM" self-update || failed=1
 fi

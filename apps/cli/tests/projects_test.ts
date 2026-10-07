@@ -24,6 +24,6 @@ Deno.test("resolveProject: a path as it is, a name to the shallowest folder, any
   assertEquals(resolveProject("PORTAL", tree), "work/acme/portal");
   assertEquals(resolveProject("acme", tree), "work/acme"); // not work/clients/acme
   assertEquals(resolveProject("dragons-lair", tree), "personal/dnd/dragons-lair");
-  assertEquals(resolveProject("claude-multi", tree), null);
+  assertEquals(resolveProject("agents-multi", tree), null);
   assertEquals(resolveProject(undefined, tree), null);
 });

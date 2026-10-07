@@ -1,4 +1,4 @@
-// Tests for claude-multi updating itself (selfupdate.ts): when it pulls, and what a pull makes stale.
+// Tests for agents-multi updating itself (selfupdate.ts): when it pulls, and what a pull makes stale.
 import { assertEquals } from "jsr:@std/assert@1";
 import { selfPlan } from "../selfupdate.ts";
 import { staleParts, staleUnits } from "../lib/stale.ts";

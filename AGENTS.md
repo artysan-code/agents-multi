@@ -1,4 +1,4 @@
-# AGENTS.md — claude-multi
+# AGENTS.md — Agents Multi
 
 ## Repo profile
 
@@ -12,7 +12,7 @@
 
 A multi-profile setup for Claude Code and Claude Desktop: several accounts isolated on one machine.
 **This repository is the source of truth**; `~/.claude-multi/` is runtime materialised by
-`claude-multi install`. Operational detail lives in the [README](README.md).
+`agents-multi install`. Operational detail lives in the [README](README.md).
 
 ## Rules for working here
 
@@ -25,7 +25,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
 - **Every new invariant goes in `apps/cli/doctor/`**, not in the README. The README describes, the
   doctor verifies. Those two have already drifted apart once.
 - **The repository is code; what is a person's is in their configuration** (`~/.claude-multi/config`,
-  a link to a folder of theirs, made by `claude-multi init` from `config.example/`): profiles,
+  a link to a folder of theirs, made by `agents-multi init` from `config.example/`): profiles,
   `accounts.json`, rules, their settings and server choices (merge patches over `shared/settings.json`
   and `shared/mcp/servers.json`), `owner.json`. Nothing personal goes back into the repository —
   no names, clients, accounts or preferences; the repository is shared by everyone who uses it.
@@ -56,7 +56,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   key), its data comes through `src/api.ts`, its live updates through the signals in `src/state.ts`,
   and its markup is JSX — never `innerHTML`. Types come from the server's modules only when those
   have no Deno imports (`apps/cli/lib/output.ts`); otherwise the UI declares the part it reads. The
-  build is not committed: `claude-multi ui build` makes it (install and self-update run it when
+  build is not committed: `agents-multi ui build` makes it (install and self-update run it when
   `apps/ui` changed, the doctor's `console.ui` says when it is missing or stale), and a failed build
   leaves the previous one. `pnpm dev` in `apps/ui` serves it with hot reload against the running console.
 - **The public site has its own build** (`apps/site/`, Astro + Starlight, pnpm): the
@@ -65,7 +65,7 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   instance in it: its address, the contact and the operator are placeholders the brain fills from its
   environment. Its facts come from the README — when one changes, change both. Until it is retired,
   the current console (`apps/cli/dashboard`) keeps its rule: no build, no framework.
-- **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `claude-multi vault`):
+- **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `agents-multi vault`):
   never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
   A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A
   server that returns data masks it (`lib/mask.ts`), and one that writes whole objects back refuses
@@ -99,12 +99,12 @@ A multi-profile setup for Claude Code and Claude Desktop: several accounts isola
   renaming the app makes the stored token unreachable and the user is asked to sign in again. That
   happened once, to get a per-profile tooltip; the tooltip is now changed at its call site instead,
   leaving the app's identity alone.
-- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `claude-multi doctor`.
-  If you touched `install`, run `claude-multi install --dry-run` first. A new pure function gets a
+- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `agents-multi doctor`.
+  If you touched `install`, run `agents-multi install --dry-run` first. A new pure function gets a
   new test in `apps/cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the
   output, not just the filter.
 - **Changing `~/.claude-multi` while a Claude session is open moves the ground under that session.**
-  Run `install` and `claude-multi mcp sync` from a terminal with Claude closed.
+  Run `install` and `agents-multi mcp sync` from a terminal with Claude closed.
 - **Branches and versions.** Work lands on `dev`; `beta` and `release` only move by merge from the
   branch before them. Installations follow `release` (self-update pulls the checkout's upstream),
   so a machine whose runtime is a checkout keeps that checkout on `release` and develops in a

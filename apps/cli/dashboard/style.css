@@ -1,4 +1,4 @@
-/* claude-multi console — no framework, no build step, nothing fetched from the network: the page
+/* agents-multi console — no framework, no build step, nothing fetched from the network: the page
    renders the same on a machine that has never been online. The palette is Claude Desktop's own
    (its surface, text and border values, the clay for the brand and the main action). The faces
    are Anthropic's, read from the Desktop installed here (/claude/faces.css, cli/claude-assets.ts);
@@ -3536,7 +3536,7 @@ body.plbusy #mk-add button {
     text-align: center;
   }
   .brand::before {
-    content: "cm";
+    content: "am";
     font-size: 18px;
   }
   nav a {

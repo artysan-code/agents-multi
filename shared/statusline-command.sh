@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line: reads the session JSON on stdin and prints one ANSI-coloured line.
-# Segments: folder │ branch+state @hash │ model │ ctx bar % tokens │ cost │ cfg (repo claude-multi) │ ⬆ update
+# Segments: folder │ branch+state @hash │ model │ ctx bar % tokens │ cost │ cfg (repo agents-multi) │ ⬆ update
 
 input=$(cat)
 
@@ -106,7 +106,7 @@ if [ -n "$cost" ]; then
   fi
 fi
 
-# --- claude-multi: config repo state + available updates ---
+# --- agents-multi: config repo state + available updates ---
 # Reads only local caches written by prelaunch.sh and claude-update --check: no network.
 cm_part=""
 cm_sync="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi/sync.json"

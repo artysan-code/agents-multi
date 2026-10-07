@@ -70,7 +70,7 @@ export async function nextFile(dist: string, pathname: string): Promise<Response
   if (rest === "" || rest === "index.html") {
     const page = await readText(`${dist}/index.html`);
     if (page === null) {
-      return new Response("The new interface is not built: run `claude-multi ui build`.", {
+      return new Response("The new interface is not built: run `agents-multi ui build`.", {
         status: 503,
         headers: { "content-type": "text/plain; charset=utf-8" },
       });

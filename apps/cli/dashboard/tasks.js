@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-window no-unused-vars -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — the Tasks tab. A task lives in a project: the projects are the owner's
+/* agents-multi console — the Tasks tab. A task lives in a project: the projects are the owner's
    folders (personal/…, work/…), plus the short names a chat used, plus "no project" for simple
    things. On the left the projects that have something open; on the right either all of them at a
    glance or one project's board, and each task's own page (steps, description, attachments).

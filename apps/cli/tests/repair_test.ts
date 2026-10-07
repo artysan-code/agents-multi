@@ -58,7 +58,7 @@ Deno.test("repair: an action without a parameter refuses one, and an unknown nam
 });
 
 Deno.test("repair: the command to run by hand matches the action", () => {
-  assertEquals(manualCommand("mcp-sync"), "claude-multi mcp sync");
+  assertEquals(manualCommand("mcp-sync"), "agents-multi mcp sync");
   assertEquals(actionStep("desktop-rebuild", { profile: "alice" }), {
     kind: "action",
     action: "desktop-rebuild",

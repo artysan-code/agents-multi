@@ -9,9 +9,9 @@ import { checkList } from "../context.ts";
 export async function stubChecks(): Promise<Check[]> {
   const [c, add] = checkList();
   const stub = await lstat(`${HOME}/.claude`);
-  if (!stub) add("stub", "warn", "~/.claude is missing (the safety stub)", "claude-multi install");
+  if (!stub) add("stub", "warn", "~/.claude is missing (the safety stub)", "agents-multi install");
   else if (!stub.isDirectory) {
-    add("stub", "fail", "~/.claude is not a directory", "rm ~/.claude && claude-multi install");
+    add("stub", "fail", "~/.claude is not a directory", "rm ~/.claude && agents-multi install");
   } else if (mode(stub) !== "500") {
     add("stub", "fail", `~/.claude mode ${mode(stub)} (expected 500)`, "chmod 500 ~/.claude");
   } else add("stub", "ok", "~/.claude stub is read-only (500)");

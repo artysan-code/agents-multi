@@ -19,7 +19,7 @@ writeFileSync(
   target,
   `---
 title: Changelog
-description: Every version of claude-multi and what changed in it, newest first.
+description: Every version of agents-multi and what changed in it, newest first.
 ---
 
 <!-- Generated from CHANGELOG.md by apps/site/scripts/changelog.mjs: change that file, not this one. -->

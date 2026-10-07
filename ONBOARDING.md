@@ -1,4 +1,4 @@
-# Onboarding — setting up claude-multi for a new person
+# Onboarding — setting up Agents Multi for a new person
 
 For the Claude Code session that guides someone through their first setup. Speak to them in their
 language; this file is in English like the rest of the repository. Do the work yourself where you
@@ -8,7 +8,7 @@ can, ask before anything hard to undo, and follow the rules below without except
 
 - **Secrets never pass through you.** Passphrases, TOTP secrets, tokens, the vault's recovery code:
   the person types them in their own terminal (outside this session, or with `!` only for commands
-  that read them hidden from stdin, such as `claude-multi vault set`). Never ask for them in chat,
+  that read them hidden from stdin, such as `agents-multi vault set`). Never ask for them in chat,
   never put them in a file, an argument or an environment variable.
 - **Back up before you move anything.** `install` turns `~/.claude` into a read-only stub and keeps
   every profile under `~/.claude-multi/<profile>`: their current Claude Code state moves aside.
@@ -16,7 +16,7 @@ can, ask before anything hard to undo, and follow the rules below without except
 - **`install` and `mcp sync` run with every Claude closed**, this session included: when you get
   there, hand the person the commands and stop; the next session picks up from the doctor.
 - Where you are at any time: `~/.local/src/claude-multi/bin/claude-multi doctor` (once installed,
-  `claude-multi doctor`). Resume from the first step whose result is missing.
+  `agents-multi doctor`). Resume from the first step whose result is missing.
 
 ## 0. What to know first
 
@@ -80,7 +80,7 @@ this session and run, in a terminal:
 
 ```bash
 ~/.local/src/claude-multi/bin/claude-multi install
-claude-multi vault init
+agents-multi vault init
 ```
 
 `vault init` prints a **recovery code**: it goes into their password manager, not into a chat. Then
@@ -89,9 +89,9 @@ each profile's command once (`claude`, `claude-<name>`, …) to sign in with `/l
 ## 6. Claude Desktop (if they use it)
 
 If Claude Desktop is already installed as a system package (AUR or other), say so to the person
-and remove it with them first: claude-multi keeps Desktop in user space. Once, the system half: `cd ~/.local/src/claude-multi/pkg/claude-desktop-shims && makepkg -si`.
-Then `claude-multi update --desktop`, and for each profile with its own `desktopDir`
-`claude-desktop-rebuild <profile>`, then `claude-multi install` again. Every Claude Desktop closed
+and remove it with them first: Agents Multi keeps Desktop in user space. Once, the system half: `cd ~/.local/src/claude-multi/pkg/claude-desktop-shims && makepkg -si`.
+Then `agents-multi update --desktop`, and for each profile with its own `desktopDir`
+`claude-desktop-rebuild <profile>`, then `agents-multi install` again. Every Claude Desktop closed
 while doing it. Each profile appears in the menu with its own icon.
 
 ## 7. Their brain
@@ -110,19 +110,19 @@ The administrator runs their brain instance and gives them its address, passphra
 4. A token for this machine: they open `<brain address>/account`, sign in, create a token named
    after the machine, and store it themselves:
    ```bash
-   claude-multi vault set brain brain
+   agents-multi vault set brain brain
    ```
 
 ## 8. Finish (with Claude closed)
 
 ```bash
-claude-multi mcp sync
-claude-multi doctor
+agents-multi mcp sync
+agents-multi doctor
 ```
 
 Every ✗ in the doctor comes with its fix. Then, in a profile that only has the MCP server, `/mcp` →
 brain → Authenticate (passphrase + TOTP once per profile and machine). The console is at
 <http://127.0.0.1:7331>; the tray app opens it.
 
-Optional, later: Google (their own OAuth client, `claude-multi google client`), other services in
+Optional, later: Google (their own OAuth client, `agents-multi google client`), other services in
 the console's Connections, the phone with the Claude app and the Brain connector.

@@ -16,8 +16,8 @@ export async function runtimeChecks(): Promise<Check[]> {
       "runtime.shared",
       "fail",
       `~/.claude-multi/shared does not point at the repository (${sharedLink ?? "real directory"})`,
-      "claude-multi install",
+      "agents-multi install",
     );
-  } else add("runtime.shared", "fail", "~/.claude-multi/shared is missing", "claude-multi install");
+  } else add("runtime.shared", "fail", "~/.claude-multi/shared is missing", "agents-multi install");
   return c;
 }

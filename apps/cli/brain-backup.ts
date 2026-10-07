@@ -1,4 +1,4 @@
-// brain-backup.ts — `claude-multi brain-backup`: a copy of the owner's brain on this machine, fetched
+// brain-backup.ts — `agents-multi brain-backup`: a copy of the owner's brain on this machine, fetched
 // only when the brain changed since the last one.
 //
 // claude-brain-backup.timer runs it every half hour while the machine is on (never a job at night:

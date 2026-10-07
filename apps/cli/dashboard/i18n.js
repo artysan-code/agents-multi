@@ -1,4 +1,4 @@
-/* claude-multi console — the interface in English and Italian.
+/* agents-multi console — the interface in English and Italian.
    One dictionary per language, same keys. `t(key, vars)` fills `{name}` placeholders; a key missing
    from a language falls back to English, then to the key itself, so a gap shows as a visible id
    rather than as nothing. Which language: the viewer's choice if they made one (localStorage),
@@ -211,7 +211,7 @@ const I18N = {
     "cal.disconnected": "Not connected, or the connection predates the calendar list: connect it again above.",
     "cal.error": "Could not read the calendars ({m}).",
     "cal.saved": "Saved. The day and the debrief use these calendars.",
-    "conn.ours": "claude-multi",
+    "conn.ours": "Agents Multi",
     "conn.ready": "ready",
     "conn.pending": "to apply in {p}",
     "conn.unused": "no profile uses it",
@@ -269,8 +269,8 @@ const I18N = {
     "google.form.hint":
       "No secret to paste: save the account, then press Connect on its row and grant access in the browser.",
     "vault.title": "Secret vault",
-    "vault.init": "No vault yet. In a terminal, run: claude-multi vault init — and keep the recovery code it prints.",
-    "vault.pair": "This machine is not paired. In a terminal, run: claude-multi vault pair — with the recovery code.",
+    "vault.init": "No vault yet. In a terminal, run: agents-multi vault init — and keep the recovery code it prints.",
+    "vault.pair": "This machine is not paired. In a terminal, run: agents-multi vault pair — with the recovery code.",
     "vault.wrongKey": "This machine's key does not open the vault: pair it again with the right recovery code.",
     "vault.conflicts": "{n} Syncthing conflict copies in the vault: tell Claude, they need a look.",
 
@@ -317,7 +317,7 @@ const I18N = {
     "health.area.mcp": "MCP servers and vault",
     "health.area.desktop": "Claude Desktop and the app",
     "health.area.profiles": "Profiles and launchers",
-    "health.area.setup": "claude-multi",
+    "health.area.setup": "Agents Multi",
 
     "profiles.note":
       "A profile is a directory under <code>profiles/</code> in the repository. Adding one writes its manifest, then <code>install</code> materialises the runtime and links the shared config.",
@@ -422,7 +422,7 @@ const I18N = {
     "shared.rules": "rules",
 
     "up.lede":
-      "Updates install themselves. Claude Code as soon as it is out; Claude Desktop is downloaded and verified in the background, and switches when no instance is open; claude-multi updates from its repository (fast-forward only, on a clean tree) and restarts what needs it. You are told only if a verification fails.",
+      "Updates install themselves. Claude Code as soon as it is out; Claude Desktop is downloaded and verified in the background, and switches when no instance is open; Agents Multi updates from its repository (fast-forward only, on a clean tree) and restarts what needs it. You are told only if a verification fails.",
     "up.log": "Log",
     "up.now": "Update now",
     "up.rollback": "Previous version",
@@ -487,7 +487,7 @@ const I18N = {
     "up.embedded": "Desktop {v} runs its own Claude Code: {vs}",
     "uw.title": "Update",
     "uw.check": "Check what is out",
-    "uw.update": "Update Claude Code, Claude Desktop and claude-multi",
+    "uw.update": "Update Claude Code, Claude Desktop and Agents Multi",
     "uw.restart": "Restart the console and the app on the new code",
     "uw.verify": "Check that everything works",
     "uw.news": "What's new",
@@ -501,14 +501,14 @@ const I18N = {
     "uw.found": "Ready to install:",
     "uw.go": "Update",
     "uw.current": "Everything is already up to date.",
-    "uw.restarting": "claude-multi changed: the console is restarting, this page reloads by itself.",
+    "uw.restarting": "Agents Multi changed: the console is restarting, this page reloads by itself.",
     "uw.noRestart":
       "The console did not come back on the new code within 90 seconds: systemctl --user restart claude-multi-console.service",
     "uw.healthy": "Health: {n} checks, no failures.",
     "uw.fails": "Health: {n} failing — {msg}",
     "uw.noRelease": "No new version since {f}: you are on {v}.",
     "uw.loading": "Loading…",
-    "uw.notice": "claude-multi was updated to {v}",
+    "uw.notice": "Agents Multi was updated to {v}",
 
     "health.checks": "Checks",
     "health.rerun": "Re-run",
@@ -793,7 +793,7 @@ const I18N = {
     "cal.disconnected": "Non collegato, o collegato prima dell'elenco dei calendari: ricollegalo qui sopra.",
     "cal.error": "Non riesco a leggere i calendari ({m}).",
     "cal.saved": "Salvato. La giornata e il debrief usano questi calendari.",
-    "conn.ours": "claude-multi",
+    "conn.ours": "Agents Multi",
     "conn.ready": "pronto",
     "conn.pending": "da applicare in {p}",
     "conn.unused": "nessun profilo lo usa",
@@ -852,9 +852,9 @@ const I18N = {
       "Nessun secret da incollare: salva l'account, poi premi Collega sulla sua riga e concedi l'accesso nel browser.",
     "vault.title": "Archivio dei secret",
     "vault.init":
-      "Non c'è ancora un archivio. In un terminale: claude-multi vault init — e conserva il codice di recupero che stampa.",
+      "Non c'è ancora un archivio. In un terminale: agents-multi vault init — e conserva il codice di recupero che stampa.",
     "vault.pair":
-      "Questa macchina non è abbinata. In un terminale: claude-multi vault pair — con il codice di recupero.",
+      "Questa macchina non è abbinata. In un terminale: agents-multi vault pair — con il codice di recupero.",
     "vault.wrongKey":
       "La chiave di questa macchina non apre l'archivio: abbinala di nuovo con il codice di recupero giusto.",
     "vault.conflicts": "{n} copie di conflitto di Syncthing nell'archivio: dillo a Claude, vanno guardate.",
@@ -902,7 +902,7 @@ const I18N = {
     "health.area.mcp": "Server MCP e archivio",
     "health.area.desktop": "Claude Desktop e l'app",
     "health.area.profiles": "Profili e launcher",
-    "health.area.setup": "claude-multi",
+    "health.area.setup": "Agents Multi",
 
     "profiles.note":
       "Un profilo è una cartella sotto <code>profiles/</code> nel repository. Aggiungerne uno scrive il suo manifest, poi <code>install</code> crea il runtime e collega la configurazione condivisa.",
@@ -1007,7 +1007,7 @@ const I18N = {
     "shared.rules": "regole",
 
     "up.lede":
-      "Gli aggiornamenti si installano da soli. Claude Code appena esce; Claude Desktop viene scaricato e verificato in background ed entra in uso quando nessuna istanza è aperta; claude-multi si aggiorna dal suo repo (solo in avanti, a working tree pulito) e si riavvia dove serve. Ti avviso solo se una verifica fallisce.",
+      "Gli aggiornamenti si installano da soli. Claude Code appena esce; Claude Desktop viene scaricato e verificato in background ed entra in uso quando nessuna istanza è aperta; Agents Multi si aggiorna dal suo repo (solo in avanti, a working tree pulito) e si riavvia dove serve. Ti avviso solo se una verifica fallisce.",
     "up.log": "Registro",
     "up.now": "Aggiorna ora",
     "up.rollback": "Versione precedente",
@@ -1072,7 +1072,7 @@ const I18N = {
     "up.embedded": "Desktop {v} usa un suo Claude Code: {vs}",
     "uw.title": "Aggiornamento",
     "uw.check": "Controlla cosa è uscito",
-    "uw.update": "Aggiorna Claude Code, Claude Desktop e claude-multi",
+    "uw.update": "Aggiorna Claude Code, Claude Desktop e Agents Multi",
     "uw.restart": "Riavvia console e app sul codice nuovo",
     "uw.verify": "Controlla che tutto funzioni",
     "uw.news": "Novità",
@@ -1086,14 +1086,14 @@ const I18N = {
     "uw.found": "Pronti da installare:",
     "uw.go": "Aggiorna",
     "uw.current": "È già tutto aggiornato.",
-    "uw.restarting": "claude-multi è cambiato: la console si riavvia, la pagina si ricarica da sola.",
+    "uw.restarting": "Agents Multi è cambiato: la console si riavvia, la pagina si ricarica da sola.",
     "uw.noRestart":
       "La console non è tornata col codice nuovo entro 90 secondi: systemctl --user restart claude-multi-console.service",
     "uw.healthy": "Salute: {n} controlli, nessun errore.",
     "uw.fails": "Salute: {n} in errore — {msg}",
     "uw.noRelease": "Nessuna versione nuova dalla {f}: sei sulla {v}.",
     "uw.loading": "Caricamento…",
-    "uw.notice": "claude-multi è stato aggiornato alla {v}",
+    "uw.notice": "Agents Multi è stato aggiornato alla {v}",
 
     "health.checks": "Controlli",
     "health.rerun": "Ripeti",

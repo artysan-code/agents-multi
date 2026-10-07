@@ -1,4 +1,4 @@
-// The console's new interface, served by `claude-multi serve` under /next while the pages move over
+// The console's new interface, served by `agents-multi serve` under /next while the pages move over
 // from apps/cli/dashboard. `pnpm dev` serves it with hot reload and sends /api to the running console.
 import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";

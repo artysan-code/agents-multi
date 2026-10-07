@@ -1,4 +1,4 @@
-// vault.ts — `claude-multi vault …`: the secret store from the terminal (the console does the same
+// vault.ts — `agents-multi vault …`: the secret store from the terminal (the console does the same
 // from Connections). The store itself is shared/mcp/lib/vault.ts, which the MCP servers use too.
 //
 // A secret is never an argument: it is read from stdin, so it does not land in the shell history or
@@ -89,7 +89,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
         const code = await initVault();
         console.log(`${ANSI.b}vault created${ANSI.x} in ${vaultDir()}, key in this machine's keyring.\n`);
         console.log(`Recovery code — keep it somewhere safe outside this machine (KeePassXC, paper):\n\n  ${code}\n`);
-        console.log("Another machine joins with `claude-multi vault pair` and this code.");
+        console.log("Another machine joins with `agents-multi vault pair` and this code.");
         return 0;
       }
       case "pair": {
@@ -103,7 +103,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       }
       case "status": {
         const key = await loadKey().catch((e) => e as Error);
-        console.log(`${ANSI.b}claude-multi vault${ANSI.x} — ${vaultDir()}`);
+        console.log(`${ANSI.b}agents-multi vault${ANSI.x} — ${vaultDir()}`);
         if (key instanceof Error) {
           console.log(`  ${ANSI.y}!${ANSI.x} ${key.message}`);
           return 1;
@@ -140,7 +140,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
         const [service, account, field = "token"] = rest;
         if (!service || !account) {
           console.error(
-            "usage: claude-multi vault set <service> <account> [field]   (the secret from stdin; field defaults to token)",
+            "usage: agents-multi vault set <service> <account> [field]   (the secret from stdin; field defaults to token)",
           );
           return 2;
         }
@@ -156,7 +156,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       case "delete": {
         const [service, account] = rest;
         if (!service || !account) {
-          console.error("usage: claude-multi vault delete <service> <account>");
+          console.error("usage: agents-multi vault delete <service> <account>");
           return 2;
         }
         console.log(
@@ -179,7 +179,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
         const secret = await getSecret(plan.service, account.name);
         if (!secret) {
           console.error(
-            `no secret for ${plan.service}/${account.name} on this machine: console › Connections, or claude-multi vault set ${plan.service} ${account.name}`,
+            `no secret for ${plan.service}/${account.name} on this machine: console › Connections, or agents-multi vault set ${plan.service} ${account.name}`,
           );
           return 1;
         }
@@ -187,7 +187,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       }
       default:
         console.error(
-          "usage: claude-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
+          "usage: agents-multi vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
         );
         return 2;
     }

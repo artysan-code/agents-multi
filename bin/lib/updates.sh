@@ -28,7 +28,7 @@ cm_update_log() {
 # cm_notify <title> <body> — never critical: on KDE a critical notification ignores its expiry.
 cm_notify() {
   command -v notify-send >/dev/null 2>&1 || return 0
-  notify-send -a claude-multi -i claude-desktop -u normal --expire-time=8000 "$1" "$2" 2>/dev/null || true
+  notify-send -a agents-multi -i claude-desktop -u normal --expire-time=8000 "$1" "$2" 2>/dev/null || true
 }
 
 # cm_desktop_running → true when any Claude Desktop runs: the default build (user space or, before

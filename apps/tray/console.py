@@ -1,4 +1,4 @@
-"""console.py — the console (`claude-multi serve`) in a window of its own.
+"""console.py — the console (`agents-multi serve`) in a window of its own.
 
 The page is the one the browser gets from 127.0.0.1: nothing is rebuilt here. What the window adds
 is being an application — its own icon and entry in the menu — and a clear answer when the console
@@ -16,7 +16,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
-from common import CONSOLE_UNIT, CONSOLE_URL, DATA_DIR, NAME, PORT
+from common import CONSOLE_UNIT, CONSOLE_URL, DATA_DIR, NAME, PORT, TITLE
 
 KEEP_MS = 20 * 60 * 1000
 
@@ -59,7 +59,7 @@ class ConsoleWindow(QMainWindow):
 
     def __init__(self, profile: QWebEngineProfile) -> None:
         super().__init__()
-        self.setWindowTitle(NAME)
+        self.setWindowTitle(TITLE)
         self.setWindowIcon(QIcon.fromTheme("claude-multi", QIcon.fromTheme("claude-desktop")))
         self.resize(1280, 860)
         # Closed, the window is hidden and kept a while: reopening is instant, where building the

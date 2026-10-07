@@ -1,11 +1,11 @@
-# claude-multi
+# Agents Multi
 
 Run several **Claude Code** and **Claude Desktop** accounts on one Linux machine, without them
 seeing each other. Shared configuration is versioned in git, updates need explicit approval, and a
 local console shows what every profile is doing.
 
 **This repository is the source of truth.** `~/.claude-multi/` is runtime materialised by
-`claude-multi install`; `~/.local/bin/claude*` are symlinks into `bin/`. Configuration travels
+`agents-multi install`; `~/.local/bin/claude*` are symlinks into `bin/`. Configuration travels
 between machines over **git** — never over a file-sync tool, because the runtime directories hold
 credentials.
 
@@ -18,9 +18,12 @@ of yours that `~/.claude-multi/config` links to (see [Your configuration](#your-
 
 ```bash
 git clone <the repository> ~/.local/src/claude-multi
-~/.local/src/claude-multi/bin/claude-multi init ~/claude-multi-config --name Ann --language Italian
-~/.local/src/claude-multi/bin/claude-multi install
+~/.local/src/claude-multi/bin/agents-multi init ~/claude-multi-config --name Ann --language Italian
+~/.local/src/claude-multi/bin/agents-multi install
 ```
+
+The project was called claude-multi: `claude-multi` still works as another name for the command, and
+the folders, services and settings keep that name until they move with a migration of their own.
 
 On a second machine of yours, `init` the same folder once it is there (Syncthing, a private git
 repository): it only links it. `install` is idempotent and reversible: it never deletes real content, it moves it aside to
@@ -30,14 +33,14 @@ Then sign in to each profile and check the result:
 
 ```bash
 claude              # the default profile → /login
-claude-multi doctor # every invariant, each with a fix
+agents-multi doctor # every invariant, each with a fix
 ```
 
 The console is enabled as a systemd user unit by `install`, so it is already running on
-<http://127.0.0.1:7331>. On a desktop, the **claude-multi** app starts in the tray at login and
+<http://127.0.0.1:7331>. On a desktop, the **Agents Multi** app starts in the tray at login and
 opens it in a window of its own.
 
-Requirements: `deno`, `git`. For Claude Desktop also `gnupg`, `binutils` (`ar`), `libarchive`
+Requirements: `deno`, `git`, and `pnpm` for the console's new interface. For Claude Desktop also `gnupg`, `binutils` (`ar`), `libarchive`
 (`bsdtar`) and `@electron/asar` (the profile variants), plus `base-devel` once, for the shims
 package. For the desktop app `pyside6` **and** `qt6-webengine` —
 the second is only an optional dependency of the first on Arch, so install it explicitly. OAuth credentials are per-machine and never leave it.
@@ -46,16 +49,16 @@ the second is only an optional dependency of the first on Arch, so install it ex
 
 Someone new is best guided by a Claude Code session following [ONBOARDING.md](ONBOARDING.md).
 
-1. `claude-multi init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
+1. `agents-multi init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
    `profiles/` (one folder per Claude account).
-2. `claude-multi install` — the runtime, the launchers, the console and the tray app.
-3. `claude-multi vault init` — the secret vault; keep the recovery code somewhere safe. Then each
-   account's secret: `claude-multi vault set <service> <account>`, or the console's Connections.
+2. `agents-multi install` — the runtime, the launchers, the console and the tray app.
+3. `agents-multi vault init` — the secret vault; keep the recovery code somewhere safe. Then each
+   account's secret: `agents-multi vault set <service> <account>`, or the console's Connections.
 4. `claude` (and each profile's command) — sign in with `/login`.
 5. Optionally your own brain: an instance of `apps/brain/` on your server (`apps/brain/README.md`), its address
-   as a `brain` account in `accounts.json`, then `claude-multi brain-login` (or Sign in, console ›
+   as a `brain` account in `accounts.json`, then `agents-multi brain-login` (or Sign in, console ›
    Connections) puts its token and backup key in the vault.
-6. `claude-multi mcp sync` with Claude closed, then `claude-multi doctor`.
+6. `agents-multi mcp sync` with Claude closed, then `agents-multi doctor`.
 
 ### Your configuration
 
@@ -134,7 +137,7 @@ the difference from the last generated copy (kept in `~/.local/state/claude-mult
 **adopted** into `config/profiles/<p>/settings.json`, so nothing is lost and the change stays with
 the profile it was made in. To give it to every profile, move it into `config/settings.json`.
 
-`claude-multi settings` regenerates (and adopts); `install` does the same, and so does every launch
+`agents-multi settings` regenerates (and adopts); `install` does the same, and so does every launch
 when Deno is there and a source is newer than the last run (`bin/lib/prelaunch.sh`). The doctor
 reports a file Claude wrote into and that is not adopted yet, and one that is behind its sources.
 
@@ -172,7 +175,7 @@ the one thing no manifest can carry.
 Renaming a profile is not a console operation, because it moves things `install` does not own: the
 runtime directory `~/.claude-multi/<name>` with its credentials and transcripts, the Desktop data
 dir, and the profile column already recorded in `usage.db`. Do it from a terminal with Claude
-closed, then run `claude-multi install` and `claude-multi doctor`.
+closed, then run `agents-multi install` and `agents-multi doctor`.
 
 ---
 
@@ -182,30 +185,30 @@ closed, then run `claude-multi install` and `claude-multi doctor`.
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `claude`                                                              | Claude Code on the default profile                                                                                                                           |
 | `claude-work`, `claude-client`                                        | Claude Code on that profile (each profile declares its own `command`)                                                                                        |
-| `claude-multi install [--dry-run]`                                    | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent                                                              |
-| `claude-multi settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                       |
-| `claude-multi doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears          |
-| `claude-multi status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
-| `claude-multi sync [--fetch]`                                         | align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                        |
-| `claude-multi mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                 |
-| `claude-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and claude-multi itself                                                                                                   |
-| `claude-multi usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                       |
-| `claude-multi serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally already running as a unit)                                                                                  |
-| `claude-multi ui build`                                               | build the console's new interface (`apps/ui`, pnpm), served under `/next`; install and self-update run it when `apps/ui` changed                             |
-| `claude-multi vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                         |
-| `claude-multi tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                               |
-| `claude-multi google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                           |
+| `agents-multi install [--dry-run]`                                    | materialise runtime, wrappers, systemd units and desktop entries from the manifests. Idempotent                                                              |
+| `agents-multi settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                       |
+| `agents-multi doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears          |
+| `agents-multi status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console |
+| `agents-multi sync [--fetch]`                                         | align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                        |
+| `agents-multi mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                 |
+| `agents-multi update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                   |
+| `agents-multi usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                       |
+| `agents-multi serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally already running as a unit)                                                                                  |
+| `agents-multi ui build`                                               | build the console's new interface (`apps/ui`, pnpm), served under `/next`; install and self-update run it when `apps/ui` changed                             |
+| `agents-multi vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                         |
+| `agents-multi tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                               |
+| `agents-multi google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                           |
 | `claude-launch <profile>`                                             | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                   |
 | `claude-multi-app [--tray\|--hey\|--pick]`                            | the desktop app: console window, tray icon, Hey Claude, the profile picker (below)                                                                           |
 
-`claude update` inside a wrapper is redirected to `claude-multi update --cli`: the native updater
+`claude update` inside a wrapper is redirected to `agents-multi update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 
 ---
 
 ## The console
 
-`claude-multi install` enables `claude-multi-console.service`, so the console is always at
+`agents-multi install` enables `claude-multi-console.service`, so the console is always at
 <http://127.0.0.1:7331>. It is not tied to a graphical session — over an ssh tunnel it works
 exactly the same, which is the point on a headless box.
 
@@ -218,7 +221,7 @@ loaded from elsewhere, so it renders on a machine that has never been online.
 The console is moving to a new interface, `apps/ui/` (Preact and TypeScript, built with Vite and
 pnpm), at <http://127.0.0.1:7331/next> while its pages move over one at a time; System › Health is
 the first. The build is made on the machine and never committed: `install` and every update that
-changed `apps/ui` run `claude-multi ui build`, a failed build keeps the previous one, and the doctor
+changed `apps/ui` run `agents-multi ui build`, a failed build keeps the previous one, and the doctor
 says when it is missing or behind. It needs pnpm; the current console does not.
 
 Five sections, in English or Italian. The language follows the machine's locale — the regional
@@ -251,7 +254,7 @@ the globe button in the rail overrides it per browser.
   rules to every profile), **Plugins & skills**, **Updates** (versions, and what is pending), **Health** (every doctor
   check, with a button for the fixes that map to a known action).
 
-Consumption is not on the page: `claude-multi usage` reports it in the terminal.
+Consumption is not on the page: `agents-multi usage` reports it in the terminal.
 
 `⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the
 local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating and
@@ -266,7 +269,7 @@ rolling back are actions like the others: nothing in them needs root.
 commands a terminal would run. The console server stays its own unit, so a browser or an ssh
 tunnel still reaches it.
 
-- **Window** — the console in a window with its own icon and menu entry (`claude-multi`). Links
+- **Window** — the console in a window with its own icon and menu entry (`agents-multi`). Links
   that leave it open in the system browser. With the server down it says so and offers to start
   it. It opens on Today. Closing it hides it for twenty minutes, so reopening is instant; after that
   it is destroyed, because the web engine is the heavy part and the tray alone should stay light.
@@ -305,7 +308,7 @@ doctor says why. After pulling new app code: `systemctl --user restart claude-mu
 
 ## Consumption
 
-`claude-multi usage` reports tokens by profile, model, project, agent, day, skill or command, with
+`agents-multi usage` reports tokens by profile, model, project, agent, day, skill or command, with
 what they would cost at list price. On a subscription tokens are not billed one by one, so that
 figure is for comparing, not accounting. Nothing here watches billing or raises alerts on spending.
 
@@ -320,8 +323,8 @@ invocations, `estimate` is the share. It is an approximation and it is declared 
 and in the console. Messages outside any turn are excluded and counted separately.
 
 ```bash
-claude-multi usage --by skill --since 30d
-claude-multi usage --by command --since all
+agents-multi usage --by skill --since 30d
+agents-multi usage --by command --since all
 ```
 
 ---
@@ -339,7 +342,7 @@ Per server, `_profiles` (default: all) and `_surfaces`:
 - `cli` → the profile's `.claude.json`, read by Claude Code and by the copy embedded in Desktop
 - `desktop` → that profile's `claude_desktop_config.json`, read by the Desktop chat
 
-`claude-multi mcp sync` applies the registry to every surface with a non-destructive merge: only
+`agents-multi mcp sync` applies the registry to every surface with a non-destructive merge: only
 registry-managed servers are touched, hand-added ones survive. It refuses to run while an instance
 that would rewrite the file is open (`--force` overrides), backs up into
 `~/.local/state/claude-multi/`, and keeps its per-machine state out of the repository.
@@ -403,7 +406,7 @@ The `google` server works on every Google account in `accounts.json` (service `g
 client…), each profile seeing its own. One OAuth client serves them all: create it once in a Google
 Cloud project (APIs: Gmail, Calendar, Drive; consent screen _External_ and **published** — in
 _Testing_ refresh tokens expire after seven days; client type _Desktop app_), download its JSON and
-import it (console › Connections, or `claude-multi google client <file.json>`). Then each account:
+import it (console › Connections, or `agents-multi google client <file.json>`). Then each account:
 add it, press **Connect**, grant access in the browser (loopback redirect with PKCE); the refresh
 token goes to the vault and the address next to the account's name.
 
@@ -429,7 +432,7 @@ The owner's tasks live in their brain (`apps/brain/`), one Markdown file per tas
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
 are files in `~/brains/tasks/items` (`CLAUDE_MULTI_TASKS`), as they were until 2026-10-02;
-`claude-multi tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
+`agents-multi tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
 `settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
 completing one creates the next) and an owner — who has to move: `alice`, `claude`, or someone else,
@@ -456,7 +459,7 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   `tasks_note`, `tasks_edit` (one passage of the notes), `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
   task that changed since it was opened. The tasks rule (in your `rules/`) tells every session to keep the
   list current from the conversation.
-- **Reminders**: `claude-tasks.timer` runs `claude-multi tasks remind` every five minutes: the
+- **Reminders**: `claude-tasks.timer` runs `agents-multi tasks remind` every five minutes: the
   briefs at the times in `~/brains/tasks/settings.json` (default 08:30, 13:30, 19:00; an empty brief
   is not sent) and a warning before each timed task. Never more than an hour late, never twice.
 - **In the console**: the Tasks tab, and on Today the day's list with a checkbox to complete and a
@@ -481,13 +484,13 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   machine's keyring (Secret Service: KWallet here), so nothing is typed at login.
 - **Deleting** a secret rewrites it as a tombstone instead of removing the file: through an encrypted
   relay a removal can lose against a concurrent modification and come back, a write cannot.
-- **Machines**: `claude-multi vault init` on the first one prints a recovery code — keep it outside the
-  machine. Every other machine runs `claude-multi vault pair` with it. Never restore the vault
+- **Machines**: `agents-multi vault init` on the first one prints a recovery code — keep it outside the
+  machine. Every other machine runs `agents-multi vault pair` with it. Never restore the vault
   directory from a backup onto a reinstalled machine: pair it and let Syncthing bring the entries.
 - **Adding an account**: console › Connections (the secret is checked against the service before it
-  is stored, and never comes back to the page), or `claude-multi vault set <service> <account>`
+  is stored, and never comes back to the page), or `agents-multi vault set <service> <account>`
   with the secret on stdin. A secret is never a command-line argument and never a tool result.
-- **A service's own command-line tool** gets the same token: `claude-multi vault run cloudflare
+- **A service's own command-line tool** gets the same token: `agents-multi vault run cloudflare
   [account] -- wrangler deploy` (`apps/cli/toolrun.ts`). Only that tool runs (the project's
   `node_modules/.bin`, else PATH; `pnpm add -D wrangler` in the project), the token is in its
   environment and hidden if it ever reaches the output, and its own login is refused. What deletes,
@@ -500,13 +503,13 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 ## Repository layout
 
 ```
-bin/            wrappers and scripts: claude, claude-multi, claude-multi-app, claude-launch, claude-update, …
+bin/            wrappers and scripts: claude, agents-multi, claude-multi-app, claude-launch, claude-update, …
 bin/lib/        prelaunch.sh — repository sync before every launch (pure bash, never blocking)
-apps/cli/            the claude-multi CLI (Deno, zero dependencies)
+apps/cli/            the agents-multi CLI (Deno, zero dependencies)
 apps/cli/dashboard/  the console page (HTML/CSS/JS, no build step)
 apps/ui/             the console's new interface (Preact + TSX, Vite, pnpm), under /next
 shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
-config.example/ the configuration `claude-multi init` starts from
+config.example/ the configuration `agents-multi init` starts from
 lib/            the desktop app: tray and console window (PySide6)
 systemd/user/   console and app units, update-check and tasks timers, optional local inference units
 desktop/        .desktop entries and icons
@@ -535,7 +538,7 @@ Runtime, generated by `install`:
   no restart needed. Offline, or with diverged history, it starts anyway and touches nothing.
 - The result lands in `~/.cache/claude-multi/sync.json` and in the statusline: `cfg ↓3` behind,
   `cfg ↑1` unpushed, `cfg ✎2` uncommitted, `cfg ≠` diverged, `cfg offline`.
-- `claude-multi sync --fetch` forces a fetch — useful on a laptop before starting.
+- `agents-multi sync --fetch` forces a fetch — useful on a laptop before starting.
 
 ---
 
@@ -545,7 +548,7 @@ Everything updates itself, in the background, with no approval and no window. `D
 stays set everywhere: the updates are driven from here, not by each binary on its own.
 
 - **Timer**: `claude-update-check.timer` (10 min after login, then every 4 h) runs
-  `claude-update --auto` (Code, Desktop, then claude-multi), then `doctor --notify`. Nice and idle I/O: it should not be felt.
+  `claude-update --auto` (Code, Desktop, then Agents Multi), then `doctor --notify`. Nice and idle I/O: it should not be felt.
 - **Claude Code** is installed as soon as a new version is out. The native updater downloads into
   `~/.local/share/claude/versions/X.Y.Z`; `claude-update` re-points `claude-bin`, restores the
   wrapper, prunes old versions (keeping N-1) and fixes the `claude-cli://` handler. Open sessions
@@ -556,13 +559,13 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   each profile's variant, install the icons) only when no Claude Desktop runs: replacing files
   under a running Electron app crashes it. `claude-launch` applies a staged version right before it
   starts the app, so in practice an update lands at the next launch. The previous version is kept.
-- **claude-multi** updates itself in the same round, last (`claude-multi self-update`,
+- **Agents Multi** updates itself in the same round, last (`agents-multi self-update`,
   `apps/cli/selfupdate.ts`): a fetch, then a pull only fast-forward and only on a clean tree that follows
   a remote branch (local changes or diverged history: nothing is touched, the log says why, once).
   After a pull the console and the tray app restart if their code changed, the generated settings
   are rebuilt, and `install` runs when it has work to do — only with every Claude closed; otherwise
   it waits for a later round, and System › Updates says so. The launch-time pull above stays.
-- **Rollback**: `claude-multi update --rollback [--desktop]`, or the button in System › Updates.
+- **Rollback**: `agents-multi update --rollback [--desktop]`, or the button in System › Updates.
 - **Log**: every result is a line in `~/.local/state/claude-multi/updates.jsonl`, shown in
   System › Updates. The doctor turns a failed last attempt into a warning, a failed verification
   into a failure.
@@ -599,7 +602,7 @@ deno task test    # usage (rates, dedupe, turns), notifications,
 
 - Write into `~/.claude/` (it is a read-only stub) or change its permissions.
 - Edit `~/.claude-multi/shared` outside the repository — it is a symlink into it.
-- Run `claude update` or `claude-bin update` by hand; use `claude-multi update`.
+- Run `claude update` or `claude-bin update` by hand; use `agents-multi update`.
 - Put `~/.claude-multi` into a file-sync folder: it holds credentials, and backups containing
   tokens have leaked that way before.
 - Update Claude Desktop with the app open.

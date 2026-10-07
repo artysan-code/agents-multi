@@ -13,7 +13,7 @@ export async function agentsChecks(): Promise<Check[]> {
       "agents.dir",
       "warn",
       "~/.agents/skills is missing: external skills are unavailable on this machine",
-      "claude-multi install creates it",
+      "agents-multi install creates it",
     );
   }
   return c;

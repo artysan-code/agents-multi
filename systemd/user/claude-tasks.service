@@ -1,5 +1,5 @@
 [Unit]
-Description=Send the task briefs and reminders that are due (claude-multi tasks remind)
+Description=Send the task briefs and reminders that are due (agents-multi tasks remind)
 Documentation=file://%h/.local/bin/claude-multi
 # the notifications go to the desktop
 After=graphical-session.target

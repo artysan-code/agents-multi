@@ -53,10 +53,10 @@ export async function uiBuild(say: (s: string) => void = () => {}): Promise<{ ok
   return { ok: true };
 }
 
-/** `claude-multi ui build`: builds, and says why when it cannot. */
+/** `agents-multi ui build`: builds, and says why when it cannot. */
 export async function uiCommand(args: string[]): Promise<number> {
   if (args[0] !== "build") {
-    console.error("usage: claude-multi ui build");
+    console.error("usage: agents-multi ui build");
     return 2;
   }
   const r = await uiBuild((s) => console.log(s));

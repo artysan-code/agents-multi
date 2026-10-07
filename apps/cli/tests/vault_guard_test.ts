@@ -35,7 +35,7 @@ const CASES: [string, string, string][] = [
   ["allow", "grep -n headers shared/mcp/lib/launch.ts", "Bash"],
   ["allow", "sed -n 1,40p shared/mcp/lib/launch.ts", "Bash"],
   ["allow", "deno test -A apps/cli/tests/launch_test.ts", "Bash"],
-  ["allow", "claude-multi vault run cloudflare -- wrangler deploy", "Bash"],
+  ["allow", "agents-multi vault run cloudflare -- wrangler deploy", "Bash"],
   ["allow", `${L} headers x y`, "Read"],
 ];
 

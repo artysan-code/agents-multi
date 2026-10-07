@@ -10,13 +10,13 @@ import { checkList, type DoctorCtx } from "../context.ts";
 export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { m } = ctx;
-  // --- Syncthing: the claude-multi folder must not exist any more (config travels through git)
+  // --- Syncthing: the agents-multi folder must not exist any more (config travels through git)
   if (await lstat(`${RUNTIME}/.stfolder`)) {
     add(
       "syncthing",
       "warn",
       "~/.claude-multi is still a Syncthing folder",
-      "remove the claude-multi folder from Syncthing",
+      "remove the agents-multi folder from Syncthing",
     );
   }
 
@@ -29,10 +29,10 @@ export async function syncthingChecks(ctx: DoctorCtx): Promise<Check[]> {
         "stignore-gen",
         "warn",
         `git init.templateDir is ${tpl || "unset"}: a clone inside a Syncthing folder waits for the timer`,
-        "claude-multi install",
+        "agents-multi install",
       );
     } else if (timer !== "enabled") {
-      add("stignore-gen", "warn", `stignore-gen.timer: ${timer || "not installed"}`, "claude-multi install");
+      add("stignore-gen", "warn", `stignore-gen.timer: ${timer || "not installed"}`, "agents-multi install");
     } else {add(
         "stignore-gen",
         "ok",

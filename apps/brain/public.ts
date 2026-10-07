@@ -1,8 +1,8 @@
-// public.ts — what anyone can open without an account: claude-multi's site (the landing and the docs,
+// public.ts — what anyone can open without an account: agents-multi's site (the landing and the docs,
 // built from apps/site/ into apps/site/dist by the image) and `/privacy`, the privacy notice. The site has an
 // address of its own when BRAIN_SITE_URL names one: a different origin from the brain's, so nothing
 // the site runs can act with a brain session; the brain's address then sends its visitors there. The notice covers
-// this service and claude-multi's Google integration, since its OAuth client points here (Google wants
+// this service and agents-multi's Google integration, since its OAuth client points here (Google wants
 // a public notice for it). Who runs the instance, how to reach them and where it is hosted come from
 // the environment (BRAIN_OPERATOR, BRAIN_CONTACT, BRAIN_HOSTING): nothing about one person is written
 // here or in the site, which carries placeholders the brain fills when it serves a page.
@@ -48,7 +48,7 @@ const contactLine = (s: Site) =>
     : "l'amministratore del servizio";
 
 const footer = (s: Site) => `
-  <p class="foot"><a href="${esc(s.siteUrl)}/">claude-multi</a> · <a href="${
+  <p class="foot"><a href="${esc(s.siteUrl)}/">Agents Multi</a> · <a href="${
   esc(s.siteUrl)
 }/docs/">Docs</a> · <a href="${esc(s.url)}/tasks">Entra</a></p>`;
 
@@ -64,7 +64,7 @@ export function privacyPage(s: Site) {
   <p>Il titolare è ${esc(s.operator)}, che gestisce questo servizio (${
       esc(s.url)
     }). Per qualsiasi domanda o richiesta: ${contactLine(s)}.</p>
-  <p>Questa informativa copre due cose: il servizio <b>Brain</b> su questo indirizzo, e l'integrazione con <b>Google</b> (Gmail, Calendar, Drive) di claude-multi, il software che lo collega ai Claude di chi lo usa.</p>
+  <p>Questa informativa copre due cose: il servizio <b>Brain</b> su questo indirizzo, e l'integrazione con <b>Google</b> (Gmail, Calendar, Drive) di Agents Multi, il software che lo collega ai Claude di chi lo usa.</p>
 
   <h2>Brain: cosa tiene</h2>
   <ul class="list">

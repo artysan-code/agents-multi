@@ -22,5 +22,5 @@ Deno.test("notifyText: only new failures or recovery; warnings never notify", ()
   assertEquals(t.title.includes("1 new problem"), true);
   assertEquals(t.body.includes("→ do this"), true);
   const r = notifyText(diffDoctor(["x"], [c("o", "ok")]))!;
-  assertEquals(r.title, "claude-multi: all clear");
+  assertEquals(r.title, "agents-multi: all clear");
 });

@@ -1,5 +1,5 @@
 // google.ts — connecting Google accounts: the OAuth client once, then each account through its
-// consent page. Used by `claude-multi google …` and by the console's Connect button.
+// consent page. Used by `agents-multi google …` and by the console's Connect button.
 //
 // The flow is the one Google documents for desktop apps: a listener on a random 127.0.0.1 port is
 // the redirect address, PKCE ties the code to this run, `state` to this request. The refresh token
@@ -53,7 +53,7 @@ export async function startConnect(
     clearTimeout(timer);
     const page = (msg: string) =>
       new Response(
-        `<!doctype html><meta charset="utf-8"><title>claude-multi</title><body style="font:16px system-ui;padding:40px">${msg}</body>`,
+        `<!doctype html><meta charset="utf-8"><title>agents-multi</title><body style="font:16px system-ui;padding:40px">${msg}</body>`,
         { headers: { "content-type": "text/html; charset=utf-8" } },
       );
     if (u.searchParams.get("state") !== state) {
@@ -110,6 +110,6 @@ export async function googleCommand(args: string[]): Promise<number> {
     console.log(r.message);
     return r.ok ? 0 : 1;
   }
-  console.error("usage: claude-multi google client <client_secret….json> | google connect <account>");
+  console.error("usage: agents-multi google client <client_secret….json> | google connect <account>");
   return 2;
 }

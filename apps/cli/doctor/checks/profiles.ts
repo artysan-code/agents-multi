@@ -21,7 +21,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
   for (const p of declared) {
     const info = await profileInfo(p);
     if (!info.exists) {
-      add(`profile.${p}`, "fail", `profile ${p} is not materialised`, "claude-multi install");
+      add(`profile.${p}`, "fail", `profile ${p} is not materialised`, "agents-multi install");
       continue;
     }
     if (info.claudeMd !== `${PROFILES}/${p}/CLAUDE.md`) {
@@ -29,7 +29,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
         `profile.${p}.claudemd`,
         "fail",
         `${p}/CLAUDE.md does not point at the configuration`,
-        "claude-multi install",
+        "agents-multi install",
       );
     }
     const set = await settingsState(p);
@@ -39,25 +39,25 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
         `profile.${p}.settings`,
         "fail",
         `${p}/settings.json is ${set.kind === "symlink" ? "still a link to shared/: it is generated now" : "missing"}`,
-        "claude-multi install",
+        "agents-multi install",
       );
     } else if (set.kind === "local-writes") {
       add(
         `profile.${p}.settings`,
         "warn",
         `${p}: Claude changed settings.json (${list(set.changed)}), not yet adopted into profiles/${p}/settings.json`,
-        "claude-multi settings (or just launch Claude)",
+        "agents-multi settings (or just launch Claude)",
       );
     } else if (set.kind === "stale") {
       add(
         `profile.${p}.settings`,
         "warn",
         `${p}/settings.json is behind its sources (${list(set.changed)})`,
-        "claude-multi settings (or just launch Claude)",
+        "agents-multi settings (or just launch Claude)",
       );
     }
     if (info.hooks !== "../shared/hooks") {
-      add(`profile.${p}.hooks`, "fail", `${p}/hooks → ${info.hooks ?? "not a symlink"}`, "claude-multi install");
+      add(`profile.${p}.hooks`, "fail", `${p}/hooks → ${info.hooks ?? "not a symlink"}`, "agents-multi install");
     }
 
     for (const k of KINDS) {
@@ -70,7 +70,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
           `profile.${p}.${k}`,
           "fail",
           `${p}/${k} is a symlink (→ ${info.kindLinks[k]}): it must be a real directory, Claude Code writes here`,
-          "claude-multi install",
+          "agents-multi install",
         );
         continue;
       }
@@ -85,7 +85,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
       const extra = [...actual].filter((n) => !expected.has(n));
       const broken = Object.entries(info.mounted[k]).filter(([, v]) => v.broken).map(([n]) => n);
       if (missing.length) {
-        add(`profile.${p}.${k}.missing`, "fail", `${p}/${k}: missing ${missing.join(", ")}`, "claude-multi install");
+        add(`profile.${p}.${k}.missing`, "fail", `${p}/${k}: missing ${missing.join(", ")}`, "agents-multi install");
       }
       if (extra.length) {
         add(
@@ -100,7 +100,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
           `profile.${p}.${k}.broken`,
           "fail",
           `${p}/${k}: broken links: ${broken.join(", ")}`,
-          "claude-multi install",
+          "agents-multi install",
         );
       }
     }
@@ -111,7 +111,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
         `profile.${p}.leak`,
         "fail",
         `${p} mounts skills owned by another profile: ${leak.map((s) => `${s} (${ownedElsewhere.get(s)})`).join(", ")}`,
-        "claude-multi install",
+        "agents-multi install",
       );
     }
 

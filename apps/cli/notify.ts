@@ -1,4 +1,4 @@
-// notify.ts — the doctor that comes to you: `claude-multi doctor --notify` compares the verdict with
+// notify.ts — the doctor that comes to you: `agents-multi doctor --notify` compares the verdict with
 // the last saved one and sends ONE desktop notification only when a NEW failure appears (or when a
 // failure clears, to say things are healthy again). Warnings never notify: every four hours they
 // would be noise. Driven by the claude-update-check timer, alongside the update check.
@@ -34,11 +34,11 @@ export function notifyText(d: DoctorDiff): { title: string; body: string } | nul
     const more = d.newFails.length > 3 ? `\n… and ${d.newFails.length - 3} more` : "";
     const still = d.stillFails.length ? `\n(${d.stillFails.length} already known)` : "";
     return {
-      title: `claude-multi: ${d.newFails.length} new problem${d.newFails.length === 1 ? "" : "s"}`,
+      title: `agents-multi: ${d.newFails.length} new problem${d.newFails.length === 1 ? "" : "s"}`,
       body: lines.join("\n") + more + still,
     };
   }
-  if (d.recovered) return { title: "claude-multi: all clear", body: `Resolved: ${d.gone.join(", ")}` };
+  if (d.recovered) return { title: "agents-multi: all clear", body: `Resolved: ${d.gone.join(", ")}` };
   return null;
 }
 
@@ -71,7 +71,7 @@ export async function notifyDoctor(current: Check[], opts: { dryRun?: boolean } 
 }
 
 /**
- * The one way claude-multi reaches the desktop. Never `-u critical`: on KDE a critical notification
+ * The one way agents-multi reaches the desktop. Never `-u critical`: on KDE a critical notification
  * ignores its expiry and stays on screen until dismissed. Eight seconds, then it waits in the notification centre.
  * No --wait: the timer's unit must not hang, so there is no clickable action and the body carries
  * whatever the reader needs to act. True if something was shown (or printed).
@@ -83,7 +83,7 @@ export async function desktopNotify(title: string, body: string, opts: { dryRun?
   }
   await run("notify-send", [
     "-a",
-    "claude-multi",
+    "agents-multi",
     "-i",
     "claude-desktop",
     "-u",

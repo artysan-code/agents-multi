@@ -1,4 +1,4 @@
-// brain-login.ts — signing this machine in to the brain: `claude-multi brain-login` and the console's
+// brain-login.ts — signing this machine in to the brain: `agents-multi brain-login` and the console's
 // Sign in button (Connections). Nothing is copied by hand.
 //
 // The brain's own OAuth (apps/brain/auth.ts) with scope `machine`: a listener on a random 127.0.0.1 port is
@@ -66,7 +66,7 @@ export async function startBrainLogin(
     clearTimeout(timer);
     const page = (msg: string) =>
       new Response(
-        `<!doctype html><meta charset="utf-8"><title>claude-multi</title><body style="font:16px system-ui;padding:40px">${msg}</body>`,
+        `<!doctype html><meta charset="utf-8"><title>agents-multi</title><body style="font:16px system-ui;padding:40px">${msg}</body>`,
         { headers: { "content-type": "text/html; charset=utf-8" } },
       );
     if (u.searchParams.get("state") !== state) {
@@ -119,7 +119,7 @@ export async function startBrainLogin(
     const reg = await fetcher(`${base}/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ client_name: `claude-multi su ${Deno.hostname()}`, redirect_uris: [redirect] }),
+      body: JSON.stringify({ client_name: `agents-multi su ${Deno.hostname()}`, redirect_uris: [redirect] }),
       signal: AbortSignal.timeout(15000),
     });
     const d = await reg.json().catch(() => ({})) as { client_id?: string };

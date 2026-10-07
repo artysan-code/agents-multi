@@ -5,7 +5,7 @@ export const HOME = Deno.env.get("HOME") ?? "";
 export const REPO = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 export const RUNTIME = Deno.env.get("CLAUDE_MULTI_ROOT") ?? `${HOME}/.claude-multi`;
 /** The person's own configuration (profiles, accounts, rules, preferences): a folder of theirs, outside
- *  the repository, that ~/.claude-multi/config links to (`claude-multi init`). The repository is code. */
+ *  the repository, that ~/.claude-multi/config links to (`agents-multi init`). The repository is code. */
 export const CONFIG = Deno.env.get("CLAUDE_MULTI_CONFIG") ?? `${RUNTIME}/config`;
 export const PROFILES = `${CONFIG}/profiles`;
 export const BIN = `${HOME}/.local/bin`;
@@ -13,7 +13,7 @@ export const LIB = `${HOME}/.local/lib`;
 export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/claude-multi`;
 export const STATE = `${Deno.env.get("XDG_STATE_HOME") ?? `${HOME}/.local/state`}/claude-multi`;
 export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
-/** The local console's port on 127.0.0.1 (`claude-multi serve`). */
+/** The local console's port on 127.0.0.1 (`agents-multi serve`). */
 export const PORT = Number(Deno.env.get("CLAUDE_MULTI_PORT") ?? 7331);
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
 export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;

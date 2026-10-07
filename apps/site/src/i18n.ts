@@ -5,12 +5,12 @@
 export type Lang = "en" | "it";
 
 const en = {
-  htmlTitle: "claude-multi — every Claude you use, one setup",
+  htmlTitle: "Agents Multi — every Claude you use, one setup",
   description: "Run several Claude Code and Claude Desktop accounts on one Linux machine, isolated, sharing one memory and one task list. Independent and unofficial.",
   nav: { features: "Features", brain: "Brain", how: "How it works", docs: "Docs" },
   pill: ["Open source soon", "Unofficial · for Linux"],
   h1: "Every Claude you use. <em>One setup.</em>",
-  lead: "claude-multi keeps each of your Claude Code and Claude Desktop accounts isolated on one Linux machine, and gives them all the same memory, the same tasks and the same tools.",
+  lead: "Agents Multi keeps each of your Claude Code and Claude Desktop accounts isolated on one Linux machine, and gives them all the same memory, the same tasks and the same tools.",
   ctaContact: "Get in touch",
   ctaHow: "See how it works",
   meta: "Needs Linux, Deno and git — made and used on Arch with KDE. The brain is optional and runs on your own server.",
@@ -40,7 +40,7 @@ const en = {
     ["brain", "One brain for every Claude", "Memory and tasks on your own server, reached over MCP — the protocol Claude uses to call tools — by the apps, claude.ai, Claude Code, Desktop and the phone."],
     ["vault", "Secrets out of reach", "Every credential encrypted in a vault, its key in the system keyring. Never in a config file, a command line or a tool result, and permission rules keep a session away from the key."],
     ["mcp", "Tools, per account", "One registry of MCP servers, all off until you turn one on. Gmail, Calendar, Drive, Coolify, Cloudflare and more: each tool knows which account it acts on."],
-    ["doctor", "A doctor, and updates that ask nothing", "One command, doctor, checks that everything is in place and says how to fix what is not. Claude Code, Desktop and claude-multi update in the background — verified, and one click to roll back."],
+    ["doctor", "A doctor, and updates that ask nothing", "One command, doctor, checks that everything is in place and says how to fix what is not. Claude Code, Desktop and agents-multi update in the background — verified, and one click to roll back."],
   ] as [string, string, string][],
   brainKicker: "The brain",
   brainTitle: "A memory that follows you from the terminal to the phone.",
@@ -56,12 +56,12 @@ const en = {
   steps: [
     ["Your configuration", "Profiles, accounts and rules live in a folder of yours, apart from the code — keep it in step between machines with git or Syncthing."],
     ["Install", "One idempotent command materialises launchers, settings, the console and the tray app. It never deletes: what it replaces is moved aside. <code>--dry-run</code> shows the plan."],
-    ["Sign in, and check", "Log in once per profile. <code>claude-multi doctor</code> verifies every invariant and tells you how to fix what is off."],
+    ["Sign in, and check", "Log in once per profile. <code>agents-multi doctor</code> verifies every invariant and tells you how to fix what is off."],
   ] as [string, string][],
   principlesKicker: "Principles",
   principlesTitle: "Built the way you would want it built.",
   principles: [
-    ["Your data stays yours", "The brain runs on your server; backups land on your machines, encrypted. claude-multi collects no analytics and sends no telemetry (Claude itself follows Anthropic's terms)."],
+    ["Your data stays yours", "The brain runs on your server; backups land on your machines, encrypted. Agents Multi collects no analytics and sends no telemetry (Claude itself follows Anthropic's terms)."],
     ["Secrets stay out of sessions", "Encrypted in a vault, never in a command line or a tool result; our MCP servers mask what they return."],
     ["Nothing behind your back", "Sending mail asks first; destructive commands are refused inside a session and handed to you instead."],
     ["Plain, and offline", "No build step for the console, libraries vendored, bash on the launch path. It starts on a machine that has never been online."],
@@ -70,18 +70,18 @@ const en = {
   callText: "The code is being readied for a public release. Want to know more, or try it early? Write to me.",
   callContact: "Write to me",
   callDocs: "Read the docs",
-  footer: { made: "Made by", privacy: "Privacy", docs: "Docs", signin: "Sign in", legal: "claude-multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC." },
+  footer: { made: "Made by", privacy: "Privacy", docs: "Docs", signin: "Sign in", legal: "Agents Multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC." },
 };
 
 export type Dict = typeof en;
 
 const it: Dict = {
-  htmlTitle: "claude-multi — tutti i tuoi Claude, un solo setup",
+  htmlTitle: "Agents Multi — tutti i tuoi Claude, un solo setup",
   description: "Più account di Claude Code e Claude Desktop sulla stessa macchina Linux, isolati, con una memoria e una lista di task in comune. Indipendente e non ufficiale.",
   nav: { features: "Cosa fa", brain: "Brain", how: "Come funziona", docs: "Documentazione" },
   pill: ["Presto open source", "Non ufficiale · per Linux"],
   h1: "Tutti i tuoi Claude. <em>Un solo setup.</em>",
-  lead: "claude-multi tiene separati i tuoi account di Claude Code e Claude Desktop sulla stessa macchina Linux, e dà a tutti la stessa memoria, le stesse task e gli stessi strumenti.",
+  lead: "Agents Multi tiene separati i tuoi account di Claude Code e Claude Desktop sulla stessa macchina Linux, e dà a tutti la stessa memoria, le stesse task e gli stessi strumenti.",
   ctaContact: "Scrivimi",
   ctaHow: "Guarda come funziona",
   meta: "Servono Linux, Deno e git — nato e usato su Arch con KDE. Il brain è facoltativo e gira sul tuo server.",
@@ -111,7 +111,7 @@ const it: Dict = {
     ["brain", "Un brain per ogni Claude", "Memoria e task sul tuo server, raggiunte via MCP — il protocollo con cui Claude usa strumenti esterni — dalle app, da claude.ai, Claude Code, Desktop e dal telefono."],
     ["vault", "Segreti fuori portata", "Ogni credenziale cifrata in un vault, con la chiave nel portachiavi di sistema. Mai in un file di configurazione, in un comando o nel risultato di uno strumento, e le regole di permesso tengono le sessioni lontane dalla chiave."],
     ["mcp", "Strumenti, per account", "Un solo registro di server MCP, tutti spenti finché non ne accendi uno. Gmail, Calendar, Drive, Coolify, Cloudflare e altri: ogni strumento sa su quale account agisce."],
-    ["doctor", "Un doctor, e aggiornamenti che non chiedono niente", "Un comando, doctor, controlla che tutto sia a posto e dice come sistemare quello che non va. Claude Code, Desktop e claude-multi si aggiornano in background: verificati, e un clic per tornare indietro."],
+    ["doctor", "Un doctor, e aggiornamenti che non chiedono niente", "Un comando, doctor, controlla che tutto sia a posto e dice come sistemare quello che non va. Claude Code, Desktop e Agents Multi si aggiornano in background: verificati, e un clic per tornare indietro."],
   ],
   brainKicker: "Il brain",
   brainTitle: "Una memoria che ti segue dal terminale al telefono.",
@@ -127,12 +127,12 @@ const it: Dict = {
   steps: [
     ["La tua configurazione", "Profili, account e regole stanno in una cartella tua, separata dal codice, che tieni allineata tra le macchine con git o Syncthing."],
     ["Installa", "Un comando idempotente crea launcher, impostazioni, la console e l'app nella barra. Non cancella mai: quello che sostituisce lo mette da parte. <code>--dry-run</code> mostra il piano."],
-    ["Entra, e controlla", "Un login per profilo. <code>claude-multi doctor</code> verifica ogni invariante e ti dice come sistemare quello che non va."],
+    ["Entra, e controlla", "Un login per profilo. <code>agents-multi doctor</code> verifica ogni invariante e ti dice come sistemare quello che non va."],
   ],
   principlesKicker: "Principi",
   principlesTitle: "Fatto come lo vorresti fatto tu.",
   principles: [
-    ["I tuoi dati restano tuoi", "Il brain gira sul tuo server; le copie arrivano sui tuoi computer, cifrate. claude-multi non raccoglie statistiche né invia telemetria (Claude segue le regole di Anthropic)."],
+    ["I tuoi dati restano tuoi", "Il brain gira sul tuo server; le copie arrivano sui tuoi computer, cifrate. Agents Multi non raccoglie statistiche né invia telemetria (Claude segue le regole di Anthropic)."],
     ["I segreti restano fuori dalle sessioni", "Cifrati in un vault, mai in un comando o nel risultato di uno strumento; i nostri server MCP mascherano quello che restituiscono."],
     ["Niente alle tue spalle", "Mandare una mail chiede prima; i comandi distruttivi vengono rifiutati nella sessione e passati a te."],
     ["Semplice, e offline", "Nessuna build per la console, librerie incluse nel progetto, bash sul percorso di avvio. Parte anche su una macchina che non è mai stata online."],
@@ -141,7 +141,7 @@ const it: Dict = {
   callText: "Il codice si sta preparando per uscire pubblico. Vuoi saperne di più, o provarlo prima? Scrivimi.",
   callContact: "Scrivimi",
   callDocs: "Leggi la documentazione (EN)",
-  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", legal: "claude-multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
+  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
 };
 
 export const dict: Record<Lang, Dict> = { en, it };

@@ -61,7 +61,7 @@ export const TOOLS: Record<AskKind, string[]> = {
 const BUILTIN: Record<AskKind, string> = { ask: "", newtask: "", debrief: "", brain: "Read" };
 
 const BASE = (now: string, o = owner()) =>
-  `You answer inside ${o.name}'s console (claude-multi), in a panel above the field they typed in. Answer in ${o.language} ` +
+  `You answer inside ${o.name}'s console (agents-multi), in a panel above the field they typed in. Answer in ${o.language} ` +
   `unless they write in another language. No preamble, no closing question. Now: ${now}.`;
 
 /** Pure but for the owner (owner.ts, passed in tests): the instructions for a kind of request. */

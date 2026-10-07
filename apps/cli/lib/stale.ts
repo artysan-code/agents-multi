@@ -1,4 +1,4 @@
-// stale.ts — which running parts of claude-multi a set of changed files leaves on old code. Pure, and
+// stale.ts — which running parts of agents-multi a set of changed files leaves on old code. Pure, and
 // free of the environment, so that scripts/release.ts can use it with git's permissions alone.
 
 /** Pure: which running parts a set of changed files makes stale. */

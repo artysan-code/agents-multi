@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# prelaunch.sh: aligns the claude-multi repo BEFORE Claude starts, so the new config is already
+# prelaunch.sh: aligns the agents-multi repo BEFORE Claude starts, so the new config is already
 # loaded and no restart is ever needed. Called by the `claude` wrapper, the per-profile launchers
 # and `claude-launch`. It never fails the launch: every error ends in exit 0.
 #
@@ -61,7 +61,7 @@ main() {
   if (( behind > 0 && ahead == 0 && dirty == 0 )); then
     if g pull -q --ff-only 2>/dev/null; then
       pulled=$behind; behind=0
-      echo "claude-multi: config updated (+$pulled commits)" >&2
+      echo "agents-multi: config updated (+$pulled commits)" >&2
       # the console keeps in memory the code it started with: restart it if the pull changed that code
       if ! g diff --quiet ORIG_HEAD HEAD -- cli shared/mcp/lib 2>/dev/null; then
         systemctl --user try-restart claude-multi-console.service >/dev/null 2>&1 || true

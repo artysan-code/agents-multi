@@ -19,7 +19,7 @@ const url = origin + home;
 const ld = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "claude-multi",
+  name: "Agents Multi",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Linux",
   description: t.description,
@@ -43,7 +43,7 @@ const ld = {
     <link rel="alternate" hreflang="it" href={origin + "/it/"} />
     <link rel="alternate" hreflang="x-default" href={origin + "/"} />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="claude-multi" />
+    <meta property="og:site_name" content="Agents Multi" />
     <meta property="og:url" content={url} />
     <meta property="og:locale" content={lang === "en" ? "en_US" : "it_IT"} />
     <meta property="og:locale:alternate" content={lang === "en" ? "it_IT" : "en_US"} />
@@ -61,7 +61,7 @@ const ld = {
   <body>
     <header class="nav">
       <div class="wrap">
-        <a class="brand" href={home}><span class="mark" set:html={mark} />claude-multi</a>
+        <a class="brand" href={home}><span class="mark" set:html={mark} />Agents Multi</a>
         <nav class="links">
           <a href="#features">{t.nav.features}</a>
           <a href="#brain">{t.nav.brain}</a>
@@ -89,7 +89,7 @@ const ld = {
           <div class="stage">
             <ConsoleMock t={t} />
             <div class="float term" aria-hidden="true">
-              <div><span class="pr">$</span> claude-multi {t.mock.doctor}</div>
+              <div><span class="pr">$</span> agents-multi {t.mock.doctor}</div>
               <div><span class="ok">✓</span> console on 127.0.0.1:7331</div>
               <div><span class="ok">✓</span> secret vault: every secret here</div>
               <div><span class="ok">✓</span> brain takes this machine's token</div>
@@ -147,17 +147,17 @@ const ld = {
             <div class="terminal reveal">
               <div class="titlebar"><i></i><i></i><i></i><span>~</span></div>
               <pre data-type><span class="c"># 1 · your configuration</span>
-<span class="pr">$</span> claude-multi init ~/claude-multi-config --name Ann
+<span class="pr">$</span> agents-multi init ~/claude-multi-config --name Ann
 <span class="c"># 2 · install: launchers, settings, console, tray</span>
-<span class="pr">$</span> claude-multi install
+<span class="pr">$</span> agents-multi install
 <span class="c"># 3 · sign in to each profile, then check</span>
 <span class="pr">$</span> claude          <span class="c"># → /login</span>
-<span class="pr">$</span> claude-multi doctor
+<span class="pr">$</span> agents-multi doctor
   <span class="ok">✓</span> profiles: personal, work, research
   <span class="ok">✓</span> console on http://127.0.0.1:7331
   <span class="ok">✓</span> secret vault: 6 accounts, every secret here
   <span class="w">!</span> MCP registry out of sync
-      fix: claude-multi mcp sync
+      fix: agents-multi mcp sync
   <span class="ok">36 pass</span> · 1 warn · 0 fail</pre>
             </div>
           </div>
@@ -190,7 +190,7 @@ const ld = {
 
     <footer>
       <div class="wrap">
-        <a class="brand" href={home}><span class="mark" set:html={mark} />claude-multi</a>
+        <a class="brand" href={home}><span class="mark" set:html={mark} />Agents Multi</a>
         <span>{t.footer.made} __OPERATOR__</span>
         <nav>
           <a href="/docs/">{t.footer.docs}</a>

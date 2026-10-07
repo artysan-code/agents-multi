@@ -15,7 +15,7 @@ export interface DoctorCtx {
   declared: string[];
   /** what shared/ holds, by kind */
   inv: Awaited<ReturnType<typeof sharedInventory>>;
-  /** `claude-multi doctor --probe`: also spend one request per profile on its login */
+  /** `agents-multi doctor --probe`: also spend one request per profile on its login */
   probe: boolean;
 }
 

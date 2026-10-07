@@ -1,4 +1,4 @@
-// tasks.ts — `claude-multi tasks …`: the task list from the terminal, the desktop reminders the
+// tasks.ts — `agents-multi tasks …`: the task list from the terminal, the desktop reminders the
 // timer sends (claude-tasks.timer → `tasks remind`, every five minutes), and `migrate`, which moves
 // the old task files into the brain.
 //
@@ -71,7 +71,7 @@ export function briefText(
   const ahead = b.moment === "evening" ? b.tomorrow : b.today;
   if (ahead.length) parts.push(`${b.moment === "evening" ? L.tomorrow : L.later}: ${list(ahead)}`);
   if (b.waiting.length) parts.push(`${L.waiting}: ${b.waiting.length}`);
-  return { title: `claude-multi — ${L[b.moment]}`, body: parts.join("\n") || L.nothing, empty: !parts.length };
+  return { title: `agents-multi — ${L[b.moment]}`, body: parts.join("\n") || L.nothing, empty: !parts.length };
 }
 
 async function remind(dry: boolean): Promise<number> {
@@ -179,7 +179,7 @@ export async function tasksCommand(args: string[]): Promise<number> {
   switch (sub) {
     case "brief": {
       const b = brief([...await listTasks(), ...(await calendarAsTasks()).tasks], new Date());
-      console.log(`${ANSI.b}claude-multi tasks${ANSI.x} — ${b.day}`);
+      console.log(`${ANSI.b}agents-multi tasks${ANSI.x} — ${b.day}`);
       print(it ? "In ritardo" : "Overdue", b.overdue);
       print(it ? "Saltate oggi" : "Missed today", b.missed);
       print(it ? "Oggi" : "Today", b.today);
@@ -203,7 +203,7 @@ export async function tasksCommand(args: string[]): Promise<number> {
     }
     case "done": {
       if (!rest[0]) {
-        console.error("usage: claude-multi tasks done <id>");
+        console.error("usage: agents-multi tasks done <id>");
         return 2;
       }
       const r = await updateTask(rest[0].replace(/^#/, ""), { status: "done" });
@@ -216,7 +216,7 @@ export async function tasksCommand(args: string[]): Promise<number> {
       return await migrate(rest.includes("--dry-run"));
     default:
       console.error(
-        "usage: claude-multi tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]|migrate [--dry-run]]",
+        "usage: agents-multi tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]|migrate [--dry-run]]",
       );
       return 2;
   }

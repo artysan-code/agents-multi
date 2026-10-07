@@ -23,7 +23,7 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
     if (ba) {
       // the token this machine's tasks, console and copies use: one request says whether the brain still takes it
       const token = await getSecret("brain", ba.name).catch(() => null);
-      const login = "claude-multi brain-login (or console › Connections › Sign in)";
+      const login = "agents-multi brain-login (or console › Connections › Sign in)";
       if (!token) {
         add(
           "brain.token",
@@ -54,18 +54,18 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
           "tasks.migrate",
           "warn",
           `${left.length} tasks are still files in ${shortHome(tasksRoot())}/items, not in the brain`,
-          "claude-multi tasks migrate",
+          "agents-multi tasks migrate",
         );
       } else add("tasks.store", "ok", "tasks: in the brain");
       // a copy of the brain on this machine: the server's volume is the only other one
       const b = await lastBackup();
-      if (!b) add("brain.backup", "warn", "no copy of the brain on this machine yet", "claude-multi brain-backup");
+      if (!b) add("brain.backup", "warn", "no copy of the brain on this machine yet", "agents-multi brain-backup");
       else if (!b.verified) {
         add(
           "brain.backup",
           "warn",
           `brain copies are kept (${b.file}) but not checked: the backup key is not in this vault`,
-          "claude-multi brain-login (or console › Connections › Sign in): it brings the backup key too",
+          "agents-multi brain-login (or console › Connections › Sign in): it brings the backup key too",
         );
       } else {add(
           "brain.backup",
@@ -79,7 +79,7 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
           "brain.timer",
           "warn",
           "claude-brain-backup.timer is not enabled: no copies of the brain here",
-          "claude-multi install",
+          "agents-multi install",
         );
       }
     }

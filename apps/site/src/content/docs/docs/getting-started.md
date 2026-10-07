@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install claude-multi, sign in to each profile, and check the result.
+description: Install Agents Multi, sign in to each profile, and check the result.
 ---
 
 ## Requirements
@@ -27,13 +27,13 @@ moves it aside to `*.pre-repo-<stamp>` and says so. Run `install --dry-run` firs
 ## First run
 
 1. Edit `owner.json` and `profiles/` in your configuration: one folder per Claude account.
-2. `claude-multi vault init` — the secret vault. Keep the recovery code somewhere safe.
+2. `agents-multi vault init` — the secret vault. Keep the recovery code somewhere safe.
 3. `claude` (and each profile's command) — sign in with `/login`.
-4. Optionally your own brain: an instance on your server, then `claude-multi brain-login`.
-5. `claude-multi mcp sync` with Claude closed, then:
+4. Optionally your own brain: an instance on your server, then `agents-multi brain-login`.
+5. `agents-multi mcp sync` with Claude closed, then:
 
 ```bash
-claude-multi doctor
+agents-multi doctor
 ```
 
 The doctor checks every invariant and prints the fix for whatever is off. The console is already

@@ -18,7 +18,7 @@ export async function sharedChecks(): Promise<Check[]> {
         `shared/${k}: ${broken.length} broken entries (${broken.slice(0, 4).join(", ")}${
           broken.length > 4 ? "…" : ""
         })`,
-        "claude-multi install, or remove the entry",
+        "agents-multi install, or remove the entry",
       );
     }
   }
@@ -28,7 +28,7 @@ export async function sharedChecks(): Promise<Check[]> {
       "shared.skills.unlinked",
       "warn",
       `skills in ~/.agents/skills are not mounted: ${unlinked.join(", ")}`,
-      "claude-multi install, then commit; if they were removed on purpose, move them out of ~/.agents/skills instead",
+      "agents-multi install, then commit; if they were removed on purpose, move them out of ~/.agents/skills instead",
     );
   }
   if (!Object.values(inv.skills).some((v) => v.broken)) {

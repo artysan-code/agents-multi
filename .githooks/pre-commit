@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pre-commit — enabled by `claude-multi install` (git config core.hooksPath .githooks).
+# pre-commit — enabled by `agents-multi install` (git config core.hooksPath .githooks).
 #
 #   1. runtime and credential files never enter the repository: only the staged files are looked at
 #   2. secret patterns in the staged lines

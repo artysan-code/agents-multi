@@ -20,7 +20,7 @@ set -uo pipefail
 
 DESKTOP="${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}/current/claude-desktop"
 
-# Align the config from the claude-multi repo BEFORE the app starts (fetch when stale, ff-only
+# Align the config from the agents-multi repo BEFORE the app starts (fetch when stale, ff-only
 # pull, never blocking). Same logic as the CLI launch wrappers.
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 bash "$HERE/lib/prelaunch.sh" || true

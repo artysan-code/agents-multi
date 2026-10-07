@@ -19,7 +19,7 @@ is a library.
 
 ```
 apps/
-  cli/        the claude-multi CLI and the local console (installed on each machine)
+  cli/        the agents-multi CLI and the local console (installed on each machine)
   brain/      the brain service: Dockerfile and compose.yaml in this folder (deployed)
   site/       the public site, Astro; built into the brain's image (deployed with it)
   tray/       the PySide6 tray app, until the desktop app replaces it

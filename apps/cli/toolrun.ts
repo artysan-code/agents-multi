@@ -1,4 +1,4 @@
-// toolrun.ts — `claude-multi vault run <service> [account] -- <tool> …`: a command-line tool of a
+// toolrun.ts — `agents-multi vault run <service> [account] -- <tool> …`: a command-line tool of a
 // service (wrangler for Cloudflare) run with the account's token from the vault in its environment,
 // so the token is the same one the MCP server uses and never sits in a file, an argument or a
 // login of the tool's own.
@@ -81,7 +81,7 @@ export function parseRun(argv: string[]): RunPlan {
   const dash = argv.indexOf("--");
   const head = dash < 0 ? [] : argv.slice(0, dash), cmd = dash < 0 ? [] : argv.slice(dash + 1);
   const [service, account, ...extra] = head;
-  const usage = `usage: claude-multi vault run <service> [account] -- <tool> [args…]   (services: ${
+  const usage = `usage: agents-multi vault run <service> [account] -- <tool> [args…]   (services: ${
     Object.keys(RUNNERS).join(", ")
   })`;
   if (!service || extra.length || !cmd.length) throw new Error(usage);
@@ -99,7 +99,7 @@ export function parseRun(argv: string[]): RunPlan {
   const args = cmd.slice(1);
   const sub = args.find((a) => !a.startsWith("-"));
   if (sub && runner.refused.includes(sub)) {
-    throw new Error(`${runner.tool} ${sub}: not here, the token comes from the vault (claude-multi vault run)`);
+    throw new Error(`${runner.tool} ${sub}: not here, the token comes from the vault (agents-multi vault run)`);
   }
   return { service, ...(account ? { account } : {}), runner, args };
 }
@@ -158,7 +158,7 @@ export async function runTool(plan: RunPlan, secret: string): Promise<number> {
   });
   if (why && !confirm(why, line)) {
     console.error(
-      `refused: ${line} — ${why}. Run it yourself from a terminal: claude-multi vault run ${plan.service}${
+      `refused: ${line} — ${why}. Run it yourself from a terminal: agents-multi vault run ${plan.service}${
         plan.account ? ` ${plan.account}` : ""
       } -- ${line}`,
     );

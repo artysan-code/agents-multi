@@ -26,24 +26,24 @@ cm_t() {
   local k="$1"; shift
   local it en
   case "$k" in
-    title)        it="Aggiornamento di Claude Code, Claude Desktop e claude-multi"; en="Updating Claude Code, Claude Desktop and claude-multi" ;;
+    title)        it="Aggiornamento di Claude Code, Claude Desktop e agents-multi"; en="Updating Claude Code, Claude Desktop and agents-multi" ;;
     checking)     it="controllo…"; en="checking…" ;;
     latest)       it="già all'ultima versione"; en="already the latest" ;;
     updated)      it="aggiornata dalla %s"; en="updated from %s" ;;
     available)    it="c'è la %s"; en="%s is out" ;;
-    keep)         it="la %s resta per tornare indietro (claude-multi update --rollback)"; en="%s is kept to roll back to (claude-multi update --rollback)" ;;
+    keep)         it="la %s resta per tornare indietro (agents-multi update --rollback)"; en="%s is kept to roll back to (agents-multi update --rollback)" ;;
     pruned)       it="tolte le versioni vecchie: %s"; en="old versions removed: %s" ;;
-    wrapper)      it="il comando claude passa di nuovo da claude-multi"; en="the claude command goes through claude-multi again" ;;
+    wrapper)      it="il comando claude passa di nuovo da agents-multi"; en="the claude command goes through agents-multi again" ;;
     handler)      it="i link claude-cli:// aprono di nuovo claude-bin"; en="claude-cli:// links open claude-bin again" ;;
     failed)       it="aggiornamento non riuscito"; en="update failed" ;;
     desk_wait)    it="la %s è pronta: entra in uso quando chiudi Claude Desktop"; en="%s is ready: it switches once Claude Desktop is closed" ;;
     desk_verify)  it="la firma non torna: non è stato installato niente"; en="the signature does not check out: nothing was installed" ;;
     busy)         it="c'è già un aggiornamento in corso"; en="another update is already running" ;;
     rolled)       it="tornata alla %s"; en="back to %s" ;;
-    forward)      it="la %s resta: claude-multi update --cli per tornare avanti"; en="%s stays: claude-multi update --cli to go forward again" ;;
+    forward)      it="la %s resta: agents-multi update --cli per tornare avanti"; en="%s stays: agents-multi update --cli to go forward again" ;;
     end_ok)       it="Tutto aggiornato."; en="Everything is up to date." ;;
     end_fail)     it="Qualcosa non è andato: i dettagli sono sopra."; en="Something went wrong: the details are above." ;;
-    end_avail)    it="C'è qualcosa da aggiornare: claude-multi update"; en="Something can be updated: claude-multi update" ;;
+    end_avail)    it="C'è qualcosa da aggiornare: agents-multi update"; en="Something can be updated: agents-multi update" ;;
     *)            it="$k"; en="$k" ;;
   esac
   # shellcheck disable=SC2059

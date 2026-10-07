@@ -140,12 +140,12 @@ w = await call("brain_write", { path: "concepts/x", body: "# X\n\nFrase." });
 ok(w.refused && /one of/.test(w.errors[0]), "a page outside the seven areas is refused");
 w = await call("brain_write", {
   path: "progetti/claude-multi",
-  body: "# claude-multi\n\nL'assistente globale di Alice: console, task e memoria.",
+  body: "# agents-multi\n\nL'assistente globale di Alice: console, task e memoria.",
 });
 ok(w.refused && /link at least one/.test(w.errors.join()), "a page without links is refused");
 w = await call("brain_write", {
   path: "progetti/claude-multi",
-  body: "# claude-multi\n\nL'assistente globale di Alice: console, task e memoria. Vedi [[persone/alice]].",
+  body: "# agents-multi\n\nL'assistente globale di Alice: console, task e memoria. Vedi [[persone/alice]].",
   base_rev: 0,
 });
 ok(w.rev === 1 && w.written === "progetti/claude-multi.md", "create a linked page");
@@ -158,7 +158,7 @@ const ap = await call("brain_append", { text: "Provato il cervello, vedi [[proge
 ok(/^diario\//.test(ap.added), "append to today's diary");
 w = await call("brain_write", {
   path: "progetti/claude-multi.md",
-  body: "# claude-multi\n\nAltro testo. Vedi [[persone/alice]].",
+  body: "# agents-multi\n\nAltro testo. Vedi [[persone/alice]].",
   base_rev: 0,
 });
 ok(!!w.error && /changed meanwhile/.test(w.error), "base_rev refuses to overwrite");
@@ -205,7 +205,7 @@ const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString("sv"); // 
 const t = await call("tasks_add", {
   title: "Provare il cervello dal telefono",
   due: tomorrow,
-  project: "claude-multi",
+  project: "agents-multi",
 });
 ok(/Provare il cervello/.test(t.added), "tasks_add in the brain");
 const st = await call("tasks_steps", { id: t.task.id, add: ["Collegare il connettore", "Provare la voce"] });

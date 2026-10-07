@@ -37,7 +37,7 @@ export async function probe(
           params: {
             protocolVersion: "2025-06-18",
             capabilities: {},
-            clientInfo: { name: "claude-multi", version: "probe" },
+            clientInfo: { name: "agents-multi", version: "probe" },
           },
         }) + "\n",
       ),

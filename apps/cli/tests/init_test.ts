@@ -1,4 +1,4 @@
-// Tests for `claude-multi init`: a configuration made from config.example/ and linked, never over
+// Tests for `agents-multi init`: a configuration made from config.example/ and linked, never over
 // something else.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 

@@ -107,7 +107,7 @@ Deno.test("briefText: evening looks at tomorrow; nothing to say is marked empty"
     at("2026-09-30T19:00:00"),
   );
   const t = briefText(evening, "it");
-  assertEquals(t.title, "claude-multi — Stasera");
+  assertEquals(t.title, "agents-multi — Stasera");
   assertEquals(t.body, "domani: 09:00 Dentista");
   assertEquals(briefText(T.brief([], at("2026-09-30T08:30:00")), "it").empty, true);
 });

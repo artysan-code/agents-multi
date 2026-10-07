@@ -10,7 +10,7 @@ export function App() {
   return (
     <div class="app">
       <aside class="rail">
-        <div class="brand">claude-multi</div>
+        <div class="brand">Agents Multi</div>
         <nav aria-label="Sections">
           <a href="#system" aria-current="page">
             <svg viewBox="0 0 24 24">

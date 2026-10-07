@@ -406,7 +406,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
     return await as(me, "web", () => boardRoute(req, u, me, html));
   }
 
-  // ---------------- claude-multi's site: the landing and the docs, built into apps/site/dist
+  // ---------------- agents-multi's site: the landing and the docs, built into apps/site/dist
   // (on the brain's address when the site has none of its own; otherwise a visitor is sent there)
   if (req.method === "GET" || req.method === "HEAD") {
     if (SITE_HOST && p === "/robots.txt") {

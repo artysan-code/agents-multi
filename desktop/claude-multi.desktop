@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=claude-multi
+Name=Agents Multi
 GenericName=Claude profiles
-Comment=Console, tray and Hey Claude for the claude-multi profiles
+Comment=Console, tray and Hey Claude for the Agents Multi profiles
 Exec=@BIN@/claude-multi-app
 Icon=claude-multi
 Terminal=false

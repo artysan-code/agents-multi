@@ -33,15 +33,15 @@ export async function vaultChecks(): Promise<Check[]> {
           ? "this machine is not paired with the secret vault: account-backed MCP servers cannot work"
           : "no secret vault yet: account-backed MCP servers cannot work",
         initialised
-          ? "claude-multi vault pair (in a terminal, with the recovery code)"
-          : "claude-multi vault init (in a terminal)",
+          ? "agents-multi vault pair (in a terminal, with the recovery code)"
+          : "agents-multi vault init (in a terminal)",
       );
     } else if (!(await keyMatches(key))) {
       add(
         "vault",
         "fail",
         "this machine's vault key does not open the vault",
-        "claude-multi vault pair (with the right recovery code)",
+        "agents-multi vault pair (with the right recovery code)",
       );
     } else {
       const l = await listSecrets(key);
@@ -54,7 +54,7 @@ export async function vaultChecks(): Promise<Check[]> {
           "vault.secrets",
           "warn",
           `no secret for ${missing.map((a) => `${a.service}/${a.name}`).join(", ")}`,
-          "console › Connections, or claude-multi vault set <service> <account>",
+          "console › Connections, or agents-multi vault set <service> <account>",
         );
       }
       if (l.conflicts) {
@@ -70,7 +70,7 @@ export async function vaultChecks(): Promise<Check[]> {
           "vault.unreadable",
           "fail",
           `${l.unreadable} vault entries this key cannot open`,
-          "claude-multi vault status",
+          "agents-multi vault status",
         );
       }
       if (!missing.length && !l.conflicts && !l.unreadable) {
@@ -104,7 +104,7 @@ export async function vaultChecks(): Promise<Check[]> {
           "vault.reach",
           "warn",
           `no answer to check the key of ${silent.map(name).join(", ")}`,
-          "claude-multi doctor (later)",
+          "agents-multi doctor (later)",
         );
       }
       if (checked.length && !refused.length && !silent.length) {
@@ -118,7 +118,7 @@ export async function vaultChecks(): Promise<Check[]> {
           "google.client",
           "warn",
           "Google accounts are listed but the OAuth client is not in the vault: none of them can connect",
-          "console › Connections › Import the JSON, or claude-multi google client <file.json>",
+          "console › Connections › Import the JSON, or agents-multi google client <file.json>",
         );
       }
     }
@@ -129,6 +129,8 @@ export async function vaultChecks(): Promise<Check[]> {
     const needed = [
       "Bash(secret-tool:*)",
       "Bash(kwallet-query:*)",
+      // the command answers to both names (claude-multi is the alias kept from before the rename)
+      "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",
       "Read(~/vault/claude-multi/**)",
       "Edit(~/vault/claude-multi/**)",
@@ -165,7 +167,7 @@ export async function vaultChecks(): Promise<Check[]> {
           "vault.wrangler",
           "warn",
           `wrangler is logged in outside the vault (${shortHome(f)})`,
-          "wrangler logout, then claude-multi vault run cloudflare -- wrangler …",
+          "wrangler logout, then agents-multi vault run cloudflare -- wrangler …",
         );
       }
     }

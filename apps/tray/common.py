@@ -8,8 +8,10 @@ import time
 from pathlib import Path
 
 # The app's identity in one place: desktop file, window class, socket and data directory all
-# derive from it, so renaming the project is a change here (plus the .desktop file's name).
+# derive from it, so renaming it is a change here (plus the .desktop file's name). It stays the old
+# name until the internal rename, which moves those files with a migration; TITLE is what people see.
 NAME = "claude-multi"
+TITLE = "Agents Multi"
 
 HOME = Path.home()
 BIN = HOME / ".local" / "bin"

@@ -1,8 +1,8 @@
-# Your claude-multi configuration
+# Your Agents Multi configuration
 
-This folder is yours: `claude-multi init <folder>` copied it here and linked `~/.claude-multi/config`
+This folder is yours: `agents-multi init <folder>` copied it here and linked `~/.claude-multi/config`
 to it. Keep it in step between your machines (Syncthing, or a private git repository); the code
-stays in the claude-multi repository.
+stays in the Agents Multi repository.
 
 - `owner.json` — who you are: `id` (the owner written in your tasks: choose it once), `name`,
   `language` (the one Claude answers in).
@@ -16,6 +16,6 @@ stays in the claude-multi repository.
   `accounts.json`, any other with `"<server>": { "_profiles": null }` here (every profile; or a list).
   Servers of your own go here too, `"<name>": { "command": …, "args": … }`, and stay yours.
 - `accounts.json` — the accounts those servers use (no secrets: those go in the vault,
-  `claude-multi vault set <service> <account>`).
+  `agents-multi vault set <service> <account>`).
 - `rules/` — your rules, imported by each profile's `CLAUDE.md`.
 - `icons/<size>/claude-desktop-<profile>.png` — the icon of a profile with its own Desktop.

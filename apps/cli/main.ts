@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
-// claude-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
+// agents-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
 //
 //   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.claude-multi/config
 //   install [--dry-run]     materialise ~/.claude-multi, ~/.local/bin, units and .desktop entries (idempotent)
@@ -124,7 +124,7 @@ switch (cmd) {
     }
     for (const c of changes) console.log(`  ${describe(c)}`);
     if (sub === "check" || flag("--dry-run")) {
-      console.log(`\n${changes.length} pending changes → claude-multi mcp sync (with Claude closed)`);
+      console.log(`\n${changes.length} pending changes → agents-multi mcp sync (with Claude closed)`);
       Deno.exit(1);
     }
     if (sub !== "sync") {
@@ -232,7 +232,7 @@ switch (cmd) {
   case "--help":
   case "-h":
   default:
-    console.log(`claude-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
+    console.log(`agents-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
 
   init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.claude-multi/config
   install [--dry-run]         materialise runtime, wrappers, units and desktop entries (idempotent)
@@ -241,8 +241,8 @@ switch (cmd) {
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
   mcp     check|sync|health [--probe]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop); --force ignores running instances; --probe really starts each server and waits for initialize
-  update  [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and claude-multi itself (--auto: what the timer runs)
-  self-update [--check [--json]] [--settle] [--quiet]   claude-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
+  update  [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and agents-multi itself (--auto: what the timer runs)
+  self-update [--check [--json]] [--settle] [--quiet]   agents-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
   vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
@@ -253,7 +253,9 @@ switch (cmd) {
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's new interface (apps/ui, pnpm) that serve shows under /next
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
-  version                     the version of claude-multi (also --version, -V)
+  version                     the version of agents-multi (also --version, -V)
+
+  claude-multi is another name for the same command (the project's name before Agents Multi).
 
   The console runs as a systemd user unit after install, so it is always there:
   systemctl --user status claude-multi-console.service`);

@@ -6,7 +6,7 @@ import { CACHE, HOME, REPO } from "./paths.ts";
 import { run } from "./proc.ts";
 
 /** What no repository on this machine ever commits, through git's global ignore: a project's
- *  binding of claude-multi's servers (shared/mcp/lib/launch.ts, BINDING_FILE). */
+ *  binding of agents-multi's servers (shared/mcp/lib/launch.ts, BINDING_FILE). */
 export const GIT_IGNORED = ["**/.claude/claude-multi.json"];
 
 /** Pure: the patterns of `want` that an ignore file's text does not list yet. */

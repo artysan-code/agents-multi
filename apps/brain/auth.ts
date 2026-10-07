@@ -11,7 +11,7 @@
 // runs two at a time with a short line, so a flood of attempts cannot take the CPU. Every code, token and
 // session belongs to one account. Every token is stored as its SHA-256, never as itself.
 //
-// One more way in goes through the same door: claude-multi on a machine asks for scope `machine`
+// One more way in goes through the same door: agents-multi on a machine asks for scope `machine`
 // and gets, once the person has signed in, a personal token named after it (no expiry, listed and
 // revoked on /account like the ones made there) and the account's backup key: its console signs a
 // machine in without anything being copied by hand.

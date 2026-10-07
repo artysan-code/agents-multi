@@ -3,7 +3,7 @@
 #   docker build -f apps/brain/Dockerfile .
 # Inside the image the files keep their repository paths under /app, so relative imports hold.
 
-# claude-multi's site (apps/site, Astro): built here, served by the brain from apps/site/dist
+# agents-multi's site (apps/site, Astro): built here, served by the brain from apps/site/dist
 # images pinned by digest: a tag can be moved, a digest cannot (refresh both together)
 FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS site
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-window no-control-regex -- browser scripts sharing one global scope (app.js, brain.js, tasks.js)
-/* claude-multi console — vanilla JS, no dependencies.
+/* agents-multi console — vanilla JS, no dependencies.
    Data from /api/*, live updates over /api/events (SSE), actions through /api/action.
    Text comes from i18n.js (`t`), loaded before this file. */
 
@@ -242,7 +242,7 @@ function renderTodayUpdates() {
   const pending = [
     u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code: ${t("up.next", { v: u.cli.latest })}` : null,
     m.desktopStaged ? `Claude Desktop: ${t("up.staged", { v: m.desktopStaged })}` : null,
-    r.isRepo && r.behind ? `claude-multi: ${t("up.self.behind", { n: r.behind })}` : null,
+    r.isRepo && r.behind ? `agents-multi: ${t("up.self.behind", { n: r.behind })}` : null,
   ].filter(Boolean);
   $("#today-up").textContent = pending.length ? pending.join(" · ") : t("up.uptodate");
 }
@@ -917,7 +917,7 @@ function renderAccounts() {
 }
 
 /* One block per service, its accounts inside, each with one state in plain words and one action;
-   brain and tasks — claude-multi's own — apart at the bottom. */
+   brain and tasks — agents-multi's own — apart at the bottom. */
 const SVC_NAMES = {
   n8n: "n8n",
   google: "Google",
@@ -1524,8 +1524,8 @@ document.addEventListener("click", (e) => {
 });
 
 /* ---------------- updates ---------------- */
-const COMPONENTS = { cli: "Claude Code", desktop: "Claude Desktop", "claude-multi": "claude-multi" };
-/** claude-multi itself: the repository is the program, so its state is the repository's. */
+const COMPONENTS = { cli: "Claude Code", desktop: "Claude Desktop", "agents-multi": "agents-multi" };
+/** agents-multi itself: the repository is the program, so its state is the repository's. */
 function selfCard(card) {
   const r = S.repo ?? {};
   if (!r.isRepo) return "";
@@ -1541,7 +1541,7 @@ function selfCard(card) {
   // the button only for an install waiting on Claude: not for an update skipped for another reason
   const close = S.selfInstall ? `<button class="btn sm" data-cc="open">${esc(t("cc.btn"))}</button>` : "";
   return card(
-    "claude-multi",
+    "agents-multi",
     (r.head ?? "").split(" ")[0],
     [state, S.selfInstall ? t("up.self.install") : null],
     null,
@@ -1655,7 +1655,7 @@ document.addEventListener("click", (e) => {
 });
 /* ---------------- update wizard ---------------- */
 // «Update now» as steps: what is out, the update with its live output, the console's restart when
-// claude-multi itself changed, the doctor, and what is new. The restart reloads this page, so the
+// agents-multi itself changed, the doctor, and what is new. The restart reloads this page, so the
 // wizard keeps its state in sessionStorage and opens again where it was. An update the timer made on
 // its own is told by a notice on the next visit (the version last seen is in localStorage).
 const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
@@ -1689,8 +1689,8 @@ function pendingUpdates() {
   return [
     u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code ${m.cliVersion ?? "—"} → ${u.cli.latest}` : null,
     m.desktopStaged ? `Claude Desktop ${m.desktopVersion ?? "—"} → ${m.desktopStaged}` : null,
-    r.isRepo && r.behind ? `claude-multi: ${t("up.self.behind", { n: r.behind })}` : null,
-    S?.selfInstall ? `claude-multi: ${t("up.self.install")}` : null,
+    r.isRepo && r.behind ? `agents-multi: ${t("up.self.behind", { n: r.behind })}` : null,
+    S?.selfInstall ? `agents-multi: ${t("up.self.install")}` : null,
   ].filter(Boolean);
 }
 /** A CHANGELOG section as HTML: its `###` headings and `- **scope**: change (hash)` lines. */
@@ -1728,7 +1728,7 @@ async function newsDrawer(since) {
   host.querySelector(".dbody").innerHTML = `<div class="rep uw-news">${newsHtml(n, since)}</div>`;
   if (n?.version) keep(localStorage, SEEN_KEY, n.version);
 }
-/** The console answers again, with other code than `old`: claude-multi's restart is over. */
+/** The console answers again, with other code than `old`: agents-multi's restart is over. */
 async function consoleBack(old, timeoutMs = 90000) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
@@ -1826,7 +1826,7 @@ function updateFlow(resume = null) {
     return r;
   };
   const finish = async () => {
-    // restart: only when claude-multi itself moved; the page may already be the new one
+    // restart: only when agents-multi itself moved; the page may already be the new one
     if (w.state[at("restart")] !== "done") {
       if (!w.self) set("restart", "skipped");
       else {
@@ -1877,7 +1877,7 @@ function updateFlow(resume = null) {
     proceed = null;
     set("update", "running");
     const u = await job("update-now");
-    // the stream ends early when claude-multi restarts the console under it: the restart step follows
+    // the stream ends early when agents-multi restarts the console under it: the restart step follows
     if (u.error && !w.self) {
       cause = u.error;
       return set("update", "failed");
@@ -2086,7 +2086,7 @@ function renderOverview() {
       ? upLine("Claude Desktop", m.desktopVersion, m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : null)
       : "") +
     (r.isRepo
-      ? upLine("claude-multi", (r.head ?? "").split(" ")[0], r.behind ? t("up.self.behind", { n: r.behind }) : null)
+      ? upLine("agents-multi", (r.head ?? "").split(" ")[0], r.behind ? t("up.self.behind", { n: r.behind }) : null)
       : "") +
     `<div class="ov-acts"><button class="btn sm" data-upwiz>${esc(t("up.now"))}</button></div>`;
 
@@ -2145,14 +2145,14 @@ function renderOverview() {
     otherwise it is shown as text to copy, because running arbitrary strings from here would
     quietly turn the console into a remote shell. */
 const FIX_ACTIONS = {
-  "claude-multi install": "install",
-  "claude-multi mcp sync": "mcp-sync",
-  "claude-multi doctor": "doctor",
-  "claude-multi sync --fetch": "sync-fetch",
-  "claude-multi usage ingest": "usage-ingest",
-  "claude-multi update --auto": "update-now",
-  "claude-multi update --check": "update-check",
-  "claude-multi ui build": "ui-build",
+  "agents-multi install": "install",
+  "agents-multi mcp sync": "mcp-sync",
+  "agents-multi doctor": "doctor",
+  "agents-multi sync --fetch": "sync-fetch",
+  "agents-multi usage ingest": "usage-ingest",
+  "agents-multi update --auto": "update-now",
+  "agents-multi update --check": "update-check",
+  "agents-multi ui build": "ui-build",
 };
 function actionButton(fix) {
   const act = FIX_ACTIONS[fix.trim()];

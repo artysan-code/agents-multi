@@ -109,7 +109,7 @@ export function authorizePage(client: string, params: URLSearchParams, totp: boo
   <p>${esc(client)} chiede di leggere e scrivere nel tuo cervello: memoria e task.</p>
   ${
       machine
-        ? `<p>Riceve un token che non scade e la chiave di backup, e li mette nel vault di claude-multi. Il token lo trovi e lo revochi nella pagina dell'account.</p>`
+        ? `<p>Riceve un token che non scade e la chiave di backup, e li mette nel vault di agents-multi. Il token lo trovi e lo revochi nella pagina dell'account.</p>`
         : ""
     }
   <form method="post" action="/authorize">${hidden}${signInFields(totp)}<button>Collega</button></form>
@@ -207,7 +207,7 @@ export function accountPage(
       ZONES.map((z) => `<option${z === tz ? " selected" : ""}>${esc(z)}</option>`).join("")
     }</select><button>Salva</button></form>
   <h2>Chiave delle copie</h2>
-  <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Arriva da sola nel vault quando una macchina accede dalla console (Connessioni › Accedi, o <code>claude-multi brain-login</code>).</p>
+  <p>Le tue macchine tengono copie cifrate del tuo cervello; questa chiave le apre. Arriva da sola nel vault quando una macchina accede dalla console (Connessioni › Accedi, o <code>agents-multi brain-login</code>).</p>
   ${
       backupKey
         ? `<div class="token">${esc(backupKey)}</div>`

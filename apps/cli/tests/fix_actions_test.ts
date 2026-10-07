@@ -1,17 +1,17 @@
-// Tests for the doctor's fixes on the console: a fix that is a bare `claude-multi …` command gets a
+// Tests for the doctor's fixes on the console: a fix that is a bare `agents-multi …` command gets a
 // button only when the page maps it to an allowlisted action (FIX_ACTIONS in app.js). The update
-// check once suggested `claude-multi update --auto` as text to copy, though the action existed.
+// check once suggested `agents-multi update --auto` as text to copy, though the action existed.
 import { assertEquals } from "jsr:@std/assert@1";
 import { ACTIONS } from "../console/actions.ts";
 
 /** Commands the console does not run on purpose: they need a terminal, or do more than repair. */
 const MANUAL = new Set([
-  "claude-multi brain-backup",
-  "claude-multi doctor --probe",
-  "claude-multi sync",
-  "claude-multi tasks migrate",
-  "claude-multi update --cli",
-  "claude-multi vault status",
+  "agents-multi brain-backup",
+  "agents-multi doctor --probe",
+  "agents-multi sync",
+  "agents-multi tasks migrate",
+  "agents-multi update --cli",
+  "agents-multi vault status",
 ]);
 
 async function fixActions(): Promise<Record<string, string>> {
@@ -26,7 +26,7 @@ async function doctorCommands(): Promise<string[]> {
   for await (const f of Deno.readDir(dir)) {
     const src = await Deno.readTextFile(new URL(f.name, dir));
     // only a whole literal that is a command: prose around it ("…, or remove the entry") stays text
-    for (const m of src.matchAll(/["`](claude-multi [a-z][\w-]*(?: [a-z][\w-]*)?(?: --[\w-]+)*)["`]/g)) out.add(m[1]);
+    for (const m of src.matchAll(/["`](agents-multi [a-z][\w-]*(?: [a-z][\w-]*)?(?: --[\w-]+)*)["`]/g)) out.add(m[1]);
   }
   return [...out].sort();
 }

@@ -1,6 +1,6 @@
 """tray.py — the tray icon: the setup's state at a glance, and a menu to act on it.
 
-The state is the console's `/api/summary` (a pure function of `claude-multi status`, tested in
+The state is the console's `/api/summary` (a pure function of `agents-multi status`, tested in
 apps/cli/tests/summary_test.ts): this module only draws it. It is refetched when the console says
 something changed (`state` on the `/api/events` stream the page also listens to) and when the menu
 opens — never on a timer. With the console down the icon turns grey and the stream reconnects with
@@ -20,7 +20,7 @@ from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-from common import CONSOLE_URL, NAME, manifests
+from common import CONSOLE_URL, TITLE, manifests
 
 DOTS = {"fail": "#d64545", "down": "#8a8f98"}
 HEADLINES = {"ok": "All good", "fail": "Something needs attention", "down": "Console not running"}
@@ -58,7 +58,7 @@ class Tray(QObject):
         self.menu = QMenu()
         self.menu.aboutToShow.connect(self.refresh)
         self.icon = QSystemTrayIcon(icon_for("down"))
-        self.icon.setToolTip(NAME)
+        self.icon.setToolTip(TITLE)
         self.icon.setContextMenu(self.menu)
         self.icon.activated.connect(self._activated)
         self._rebuild()
@@ -149,7 +149,7 @@ class Tray(QObject):
             # of "Open Claude Desktop" over the label when that is the widest line (issue #3)
             run = s["running"]
             lines.append(f"Running: {run['cli']} CLI · {run['desktop']} Desktop")
-        self.icon.setToolTip("\n".join([f"{NAME} — {HEADLINES[level]}", *lines]))
+        self.icon.setToolTip("\n".join([f"{TITLE} — {HEADLINES[level]}", *lines]))
 
         # the menu refetches as it opens: clearing it while it is on screen leaves Plasma a stale
         # layout, so it changes only when what it shows does
