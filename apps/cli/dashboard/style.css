@@ -717,6 +717,30 @@ kbd {
   color: var(--crit);
   background: var(--crit-wash);
 }
+.perm-rule[draggable="true"] {
+  cursor: grab;
+}
+.perm-rule.dragging {
+  opacity: .4;
+}
+.perm-list.over {
+  outline: 2px dashed var(--accent, currentColor);
+  outline-offset: -2px;
+}
+.perm-move {
+  flex: none;
+  width: 22px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.perm-move:focus-visible,
+.perm-move:hover {
+  width: auto;
+  color: var(--fg);
+}
 .perm-add {
   display: flex;
   gap: 6px;

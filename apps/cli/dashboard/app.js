@@ -1342,6 +1342,7 @@ async function saveProfile(e, host) {
 
 /* ---------------- permissions ---------------- */
 let PERM = null;
+let permDrag = null;
 async function loadPermissions() {
   PERM = await api("/api/permissions");
   renderPermissions();
@@ -1351,15 +1352,23 @@ function renderPermissions() {
   if (!PERM) return;
   $("#perm-mode").value = PERM.mode;
   $("#perm-lists").innerHTML = ["allow", "ask", "deny"].map((l) =>
-    `<section class="panel perm-list">
+    `<section class="panel perm-list" data-perm-drop="${l}">
       <div class="panel-h"><h3>${esc(t(`perm.${l}`))}</h3><span class="r">${PERM.rules[l].length}</span></div>
       <div class="panel-b">
         <span class="sub">${esc(t(`perm.${l}.what`))}</span>
         ${
       PERM.rules[l].map((r) =>
-        `<div class="perm-rule"><code>${esc(r)}</code><button data-perm-rm="${esc(l)}" data-rule="${
+        `<div class="perm-rule" draggable="true" data-perm-from="${l}" data-rule="${esc(r)}"><code>${
           esc(r)
-        }" aria-label="${esc(t("pl.remove"))}">×</button></div>`
+        }</code><select class="perm-move" data-perm-move="${l}" data-rule="${esc(r)}" aria-label="${
+          esc(t("perm.move"))
+        }"><option value="">${esc(t("perm.move"))}</option>${
+          ["allow", "ask", "deny"].filter((o) => o !== l).map((o) =>
+            `<option value="${o}">${esc(t(`perm.${o}`))}</option>`
+          ).join("")
+        }</select><button data-perm-rm="${esc(l)}" data-rule="${esc(r)}" aria-label="${
+          esc(t("pl.remove"))
+        }">×</button></div>`
       ).join("") || `<span class="sub">—</span>`
     }
       </div>
@@ -1410,6 +1419,46 @@ async function permOp(body) {
   toast(r.message, !r.ok);
   if (r.ok) await loadPermissions();
 }
+/** Moving a rule towards Allowed is the unsafe direction: it asks first. */
+function permMove(from, to, rule) {
+  if (from === to) return;
+  if (to === "allow" && !confirm(t("perm.move.confirm", { r: rule, l: t(`perm.${from}`) }))) return;
+  permOp({ op: "move", from, to, rule });
+}
+document.addEventListener("dragstart", (e) => {
+  const r = e.target.closest?.("[data-perm-from]");
+  if (!r) return;
+  e.dataTransfer.setData("text/plain", r.dataset.rule);
+  e.dataTransfer.effectAllowed = "move";
+  permDrag = { from: r.dataset.permFrom, rule: r.dataset.rule };
+  r.classList.add("dragging");
+});
+document.addEventListener("dragend", () => {
+  permDrag = null;
+  document.querySelectorAll(".perm-rule.dragging,.perm-list.over").forEach((x) =>
+    x.classList.remove("dragging", "over")
+  );
+});
+document.addEventListener("dragover", (e) => {
+  const col = e.target.closest?.("[data-perm-drop]");
+  if (!col || !permDrag) return;
+  e.preventDefault();
+  document.querySelectorAll(".perm-list.over").forEach((x) => x !== col && x.classList.remove("over"));
+  col.classList.toggle("over", col.dataset.permDrop !== permDrag.from);
+});
+document.addEventListener("drop", (e) => {
+  const col = e.target.closest?.("[data-perm-drop]");
+  if (!col || !permDrag) return;
+  e.preventDefault();
+  const d = permDrag;
+  permDrag = null;
+  col.classList.remove("over");
+  permMove(d.from, col.dataset.permDrop, d.rule);
+});
+document.addEventListener("change", (e) => {
+  const s = e.target.closest?.("[data-perm-move]");
+  if (s && s.value) permMove(s.dataset.permMove, s.value, s.dataset.rule);
+});
 $("#perm-mode").addEventListener("change", (e) => permOp({ op: "mode", mode: e.target.value }));
 document.addEventListener("submit", (e) => {
   const f = e.target.closest("[data-perm-add]");

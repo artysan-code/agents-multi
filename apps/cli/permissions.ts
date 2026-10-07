@@ -35,6 +35,19 @@ export function ruleDiff(shared: string[], own: string[] | undefined): { added: 
   return { added: own.filter((r) => !s.has(r)), dropped: shared.filter((r) => !o.has(r)) };
 }
 
+/** Pure: move a rule between two lists in one step. It leaves the source list and joins the destination
+ *  (once: a rule already there is just dropped from the source). Returns an error message, or null. */
+export function moveRule(perms: Partial<Rules>, from: List, to: List, rule: string): string | null {
+  if (!LISTS.includes(from) || !LISTS.includes(to)) return "unknown list";
+  if (from === to) return "same list";
+  const i = perms[from]?.indexOf(rule) ?? -1;
+  if (i < 0) return `${rule} is not in ${from}`;
+  const dest = perms[to] ??= [];
+  perms[from]!.splice(i, 1);
+  if (!dest.includes(rule)) dest.push(rule);
+  return null;
+}
+
 type Settings = { permissions?: Partial<Rules> & { defaultMode?: string } } & Record<string, unknown>;
 
 export async function permissionsView() {
@@ -63,6 +76,7 @@ async function write(path: string, data: unknown) {
 
 export type PermOp =
   | { op: "add" | "remove"; list: List; rule: string }
+  | { op: "move"; from: List; to: List; rule: string }
   | { op: "mode"; mode: string }
   | { op: "promote"; profile: string };
 
@@ -76,6 +90,12 @@ export async function permissionsOp(b: PermOp): Promise<{ ok: boolean; message: 
     perms.defaultMode = b.mode;
     await writeSharedLayer(shared as Obj);
     return { ok: true, message: `default mode: ${b.mode}` };
+  }
+  if (b.op === "move") {
+    const err = moveRule(perms, b.from, b.to, String(b.rule ?? "").trim());
+    if (err) return { ok: false, message: err };
+    await writeSharedLayer(shared as Obj);
+    return { ok: true, message: `${b.rule} moved from ${b.from} to ${b.to}` };
   }
   if (b.op === "add" || b.op === "remove") {
     if (!LISTS.includes(b.list)) return { ok: false, message: "unknown list" };

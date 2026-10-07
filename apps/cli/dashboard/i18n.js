@@ -285,6 +285,8 @@ const I18N = {
     "perm.own": "rules of its own (from “always allow” answers, or set here)",
     "perm.added": "adds",
     "perm.dropped": "leaves out",
+    "perm.move": "Move to…",
+    "perm.move.confirm": "Move “{r}” from {l} to Allowed? It will run without asking.",
     "perm.promote": "Move to every profile",
     "perm.promote.confirm":
       "Move {p}'s own rules into the shared ones?\n\nEvery profile gets them, and {p} goes back to the shared lists (including any shared rule it left out).",
@@ -835,6 +837,8 @@ const I18N = {
     "perm.own": "regole sue (dalle risposte «consenti sempre», o messe qui)",
     "perm.added": "aggiunge",
     "perm.dropped": "toglie",
+    "perm.move": "Sposta in…",
+    "perm.move.confirm": "Spostare «{r}» da {l} a Consentiti? Verrà eseguita senza chiedere.",
     "perm.promote": "Porta a tutti i profili",
     "perm.promote.confirm":
       "Portare le regole proprie di {p} in quelle condivise?\n\nTutti i profili le ricevono, e {p} torna alle liste condivise (comprese le regole condivise che aveva tolto).",
