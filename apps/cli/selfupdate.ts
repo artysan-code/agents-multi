@@ -78,6 +78,8 @@ const T = {
         ? "riavviate la console e l'app: giravano col codice vecchio"
         : `riavviata ${console ? "la console" : "l'app"}: girava col codice vecchio`,
     pullFail: "pull non riuscito: git pull --ff-only nel repo per vedere perché",
+    remoteGone: (url: string) =>
+      `il remote ${url} non esiste più (repository rinominato o spostato): git -C <repo> remote set-url origin <nuovo URL>`,
     notRepo: "non è un repository git: niente da aggiornare",
     notifyTitle: (v: string) => `agents-multi aggiornato${v ? ` alla ${v}` : ""}`,
     notifyMore: (n: number) => `…e ${n} ${n === 1 ? "altra novità" : "altre novità"}`,
@@ -106,6 +108,8 @@ const T = {
         [console && "the console", app && "the app"].filter(Boolean).join(" and ")
       }: it was running the old code`,
     pullFail: "pull failed: git pull --ff-only in the repository to see why",
+    remoteGone: (url: string) =>
+      `the remote ${url} is gone (the repository was renamed or moved): git -C <repo> remote set-url origin <new URL>`,
     notRepo: "not a git repository: nothing to update",
     notifyTitle: (v: string) => `agents-multi updated${v ? ` to ${v}` : ""}`,
     notifyMore: (n: number) => `…and ${n} more`,
@@ -231,7 +235,7 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
   if (plan.do === "nothing") {
     say(row("ok", from, T.latest));
     if (r.ahead) say(note(T.unpushed(r.ahead)));
-    if (fetched.code) say(note(T.offline));
+    if (fetched.code) say(note(await fetchFailure(fetched.err)));
     if (await Deno.stat(PENDING).catch(() => null)) return await settleInstall(from, say) ? 0 : 1;
     return 0;
   }
@@ -293,6 +297,18 @@ export async function selfCheckRow(): Promise<number> {
   console.log(row("ok", c.current, T.latest));
   if (r.ahead) console.log(note(T.unpushed(r.ahead)));
   return 0;
+}
+
+/** Pure: whether a failed fetch says the repository is not there (as opposed to the network being down). */
+export const remoteIsGone = (err: string) =>
+  /cannot find repository|repository .*not found|repository .*does not exist|does not appear to be a git repository/i
+    .test(err);
+
+/** Why a fetch failed: a remote that is gone (a renamed repository; SSH does not redirect) is not "offline". */
+async function fetchFailure(err: string): Promise<string> {
+  if (!remoteIsGone(err)) return T.offline;
+  const url = (await g("remote", "get-url", "origin")).out;
+  return T.remoteGone(url || "origin");
 }
 
 /** For `update --check`: how far behind the repository is after a fetch, without changing it. */

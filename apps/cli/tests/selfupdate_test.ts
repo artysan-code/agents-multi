@@ -1,6 +1,6 @@
 // Tests for agents-multi updating itself (selfupdate.ts): when it pulls, and what a pull makes stale.
 import { assertEquals } from "jsr:@std/assert@1";
-import { selfPlan } from "../selfupdate.ts";
+import { remoteIsGone, selfPlan } from "../selfupdate.ts";
 import { staleParts, staleUnits } from "../lib/stale.ts";
 
 const R = { upstream: "origin/release", branch: "release", ahead: 0, behind: 0, dirty: 0 };
@@ -33,4 +33,23 @@ Deno.test("self-update: the units to restart, the console last", () => {
     "claude-multi-console.service",
   ]);
   assertEquals(staleUnits(["CHANGELOG.md", "deno.json"]), []);
+});
+
+Deno.test("self-update: a renamed repository is told apart from a network that is down", () => {
+  // what git prints for the old SSH URL of a renamed Forgejo repository
+  assertEquals(
+    remoteIsGone(
+      "Forgejo: Cannot find repository: owner/claude-multi\n\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.",
+    ),
+    true,
+  );
+  assertEquals(remoteIsGone("remote: Repository not found.\nfatal: repository 'https://x/y.git/' not found"), true);
+  // the same closing lines follow a network failure too: they alone say nothing
+  assertEquals(
+    remoteIsGone(
+      "ssh: Could not resolve hostname git.example: Name or service not known\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.",
+    ),
+    false,
+  );
+  assertEquals(remoteIsGone("fatal: unable to access 'https://x/': Could not resolve host: x"), false);
 });
