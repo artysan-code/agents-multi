@@ -23,7 +23,7 @@ export interface Site {
 }
 
 /** When the notice last changed: bump it with every change of substance. */
-export const PRIVACY_UPDATED = "6 ottobre 2026";
+export const PRIVACY_UPDATED = "8 ottobre 2026";
 
 const GOOGLE_SCOPES: [string, string][] = [
   [
@@ -88,7 +88,7 @@ export function privacyPage(s: Site) {
   <p>L'uso e il trasferimento ad altre applicazioni delle informazioni ricevute dalle API di Google rispettano le <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, compresi i requisiti di Limited Use. Puoi togliere l'accesso in qualsiasi momento da <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
 
   <h2>Perché, e per quanto</h2>
-  <p>I dati servono a darti il servizio che hai chiesto (art. 6.1.b GDPR); i log a tenerlo sicuro (interesse legittimo, art. 6.1.f). Restano finché l'account esiste; i log per il tempo che serve a capire un problema.</p>
+  <p>I dati servono a darti il servizio che hai chiesto (art. 6.1.b GDPR); i log a tenerlo sicuro (interesse legittimo, art. 6.1.f). Restano finché l'account esiste; i log del server per un periodo limitato: hanno una dimensione massima, e i più vecchi vengono sovrascritti dai nuovi.</p>
 
   <h2>I tuoi diritti</h2>
   <p>Puoi chiedere di vedere, correggere, esportare o cancellare i tuoi dati, e opporti al trattamento, scrivendo a ${
