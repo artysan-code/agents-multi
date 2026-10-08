@@ -7,6 +7,7 @@
  *   deno task release                 the bump the commits call for (breaking → major, feat → minor, else patch)
  *   deno task release minor           an explicit major | minor | patch
  *   deno task release beta            the next beta pre-release of the coming version (X.Y.Z-beta.N)
+ *   deno task release beta major      the first beta of an explicit major | minor | patch (0.14.0 → 1.0.0-beta.1)
  *   deno task release --dry-run       print the version and the section, change nothing
  *   release.ts --lint                 every commit since the last tag is a Conventional Commit (CI)
  *   release.ts --lint-subject "<s>"   one subject (the commit-msg hook)
@@ -241,8 +242,11 @@ async function lint(args: string[]): Promise<number> {
 async function main(args: string[]) {
   if (args.some((a) => a.startsWith("--lint"))) Deno.exit(await lint(args));
   const dry = args.includes("--dry-run");
-  const kind = args.find((a) => !a.startsWith("--")) as Bump | undefined;
+  const [kind, aim] = args.filter((a) => !a.startsWith("--")) as [Bump?, string?];
   if (kind && !["major", "minor", "patch", "beta"].includes(kind)) throw new Error(`unknown bump: ${kind}`);
+  if (aim && (kind !== "beta" || !["major", "minor", "patch"].includes(aim))) {
+    throw new Error(`only a beta takes a target (beta major | minor | patch), not ${kind} ${aim}`);
+  }
 
   const root = await git("rev-parse", "--show-toplevel");
   Deno.chdir(root);
@@ -258,7 +262,7 @@ async function main(args: string[]) {
   const tags = (await git("tag", "--list", "v*", "--merged", "HEAD")).split("\n").filter(Boolean);
   const lastTag = baseTag(tags, kind === "beta");
   const changes = (await commitsSince(lastTag)).map(parseCommit).filter((c): c is Change => c !== null);
-  const target = impliedBump(changes, current);
+  const target = (aim as Exclude<Bump, "beta"> | undefined) ?? impliedBump(changes, current);
   const next = formatVersion(bump(current, kind ?? target, target));
   const date = new Date().toISOString().slice(0, 10);
   const section = changelogSection(next, date, changes);
