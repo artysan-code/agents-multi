@@ -57,7 +57,7 @@ const dayLabel = (d: string, today: string) => {
 const closed = (t: Task) => t.status === "done" || t.status === "dropped";
 
 /** Pure: the order inside a column — late first, then by day and time, then priority, then title. */
-export function boardOrder(a: Task, b: Task): number {
+function boardOrder(a: Task, b: Task): number {
   const da = a.due ?? "9999", db = b.due ?? "9999";
   return da.localeCompare(db) || (a.time ?? "99").localeCompare(b.time ?? "99") ||
     (a.priority ?? 2) - (b.priority ?? 2) || a.title.localeCompare(b.title);
@@ -119,7 +119,7 @@ function card(t: Task, all: Task[], me: string, today: string, back: string): st
 }
 
 /** The board: four columns, a filter by project and words, a line to add a task. */
-export function boardPage(
+function boardPage(
   name: string,
   me: string,
   all: Task[],
@@ -168,7 +168,7 @@ export function boardPage(
 }
 
 /** One task: its fields to change, its steps to tick, its decisions and log, what it is linked to. */
-export function taskPage(t: Task, all: Task[], now: Date, error = ""): string {
+function taskPage(t: Task, all: Task[], now: Date, error = ""): string {
   const today = dayOf(now);
   const rel = relations(all, t);
   const st = steps(t.notes);

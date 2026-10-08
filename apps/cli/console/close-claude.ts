@@ -146,7 +146,7 @@ export async function closePlan(d: Deps = real): Promise<Plan> {
   return { offer: closeOffer(pending, blockers), pending, blockers };
 }
 
-export interface Closed {
+interface Closed {
   ok: boolean;
   message?: string;
   /** Signalled and gone. */

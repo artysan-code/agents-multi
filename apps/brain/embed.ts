@@ -55,7 +55,7 @@ const toBlob = (v: number[]) => {
 const fromBlob = (b: Uint8Array) => new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
 
 /** How long a search waits for the model before answering with words alone. */
-export const SEARCH_TIMEOUT_MS = 4_000;
+const SEARCH_TIMEOUT_MS = 4_000;
 /** The indexers of every open brain, one document at a time: a brain being filled for the first
  *  time does not keep the model from the others, nor from the searches, which skip this line. */
 const indexing = new Gate(1, Infinity);
@@ -89,7 +89,7 @@ export async function embed(cfg: EmbedConfig, input: string[], timeoutMs = 120_0
 }
 
 /** Fills the chunks of every document that has none (new, changed, or embedded by another model). */
-export async function indexPending(store: Store, cfg: EmbedConfig, max = 50): Promise<number> {
+async function indexPending(store: Store, cfg: EmbedConfig, max = 50): Promise<number> {
   const stale = store.db.prepare(
     `select d.path, d.body from docs d where d.deleted = 0 and not exists (select 1 from chunks c where c.path = d.path and c.model = ?) limit ?`,
   ).all(cfg.model, max) as { path: string; body: string }[];

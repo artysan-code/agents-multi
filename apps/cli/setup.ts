@@ -21,7 +21,7 @@ import { readBuild } from "./appcopy.ts";
 import { getSecret, keyMatches, loadKey, vaultDir } from "../../shared/mcp/lib/vault.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
 
-export const SETUP_STEPS = [
+const SETUP_STEPS = [
   "welcome",
   "you",
   "folder",
@@ -38,7 +38,7 @@ export type SetupStep = typeof SETUP_STEPS[number];
 /** Steps the page may record as passed without a file of their own: the welcome, the profiles
  *  confirmed, Claude Code put off (installed some other way later), the recovery code saved (or the
  *  vault put off), the sign-ins and the brain put off. */
-export const PASSABLE: readonly SetupStep[] = ["welcome", "profiles", "claude", "vault", "logins", "brain"];
+const PASSABLE: readonly SetupStep[] = ["welcome", "profiles", "claude", "vault", "logins", "brain"];
 
 /** What the wizard keeps of its own, in `setup.json`. */
 export interface SetupRecord {
@@ -167,7 +167,7 @@ export function checkBrainUrl(url: unknown): { ok: true; url: string } | { ok: f
 }
 
 /** This machine's vault, without throwing: whether it exists, and whether this machine opens it. */
-export async function vaultState(): Promise<VaultState> {
+async function vaultState(): Promise<VaultState> {
   const exists = !!(await readText(`${vaultDir()}/key-check.json`));
   try {
     const key = await loadKey();
@@ -261,7 +261,7 @@ export async function setupFacts(
 
 /** The install the wizard runs: the app's (`install --app`, from the package's code, which carries a
  *  build.json) or a checkout's (`install`). Both are allowlisted actions of the console. */
-export async function installAction(repo = REPO): Promise<"install-app" | "install"> {
+async function installAction(repo = REPO): Promise<"install-app" | "install"> {
   return (await readBuild(repo)) ? "install-app" : "install";
 }
 

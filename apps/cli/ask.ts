@@ -271,7 +271,7 @@ export async function defaultLauncher() {
 
 const DEBRIEF = `${STATE}/debrief.json`;
 /** Today's debrief, if one was written under the calendars chosen now: another choice makes it out of date. */
-export async function cachedDebrief(): Promise<{ day: string; text: string } | null> {
+async function cachedDebrief(): Promise<{ day: string; text: string } | null> {
   const d = await readJson<{ day: string; text: string; calendars?: string }>(DEBRIEF);
   return d && d.day === dayOf(new Date()) && (d.calendars ?? "") === choiceSignature(await loadChoice()) ? d : null;
 }

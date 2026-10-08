@@ -227,7 +227,7 @@ export function unitsToRetire(mode: Mode, units: { name: string; target: string 
   ).map((u) => u.name);
 }
 /** Menu entries an older install wrote, now the package's own (its desktop file is the app's entry). */
-export const RETIRED_ENTRIES = ["claude-multi.desktop", "claude-update-gui.desktop"];
+const RETIRED_ENTRIES = ["claude-multi.desktop", "claude-update-gui.desktop"];
 /** The login entry that starts the app in the tray (XDG autostart). */
 export const AUTOSTART = "agents-multi.desktop";
 

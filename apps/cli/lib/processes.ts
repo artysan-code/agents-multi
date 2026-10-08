@@ -32,7 +32,7 @@ export interface CliProc {
 
 /** Claude Code stores a session at projects/<cwd with slashes turned into dashes>/<id>.jsonl, so
  *  the transcript can be addressed directly from what the process tells us — no directory walk. */
-export function transcriptPath(profile: string, cwd: string | null, session: string | null) {
+function transcriptPath(profile: string, cwd: string | null, session: string | null) {
   if (!cwd || !session) return null;
   return `${RUNTIME}/${profile}/projects/${cwd.replace(/\//g, "-")}/${session}.jsonl`;
 }

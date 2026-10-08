@@ -17,7 +17,7 @@ import { probeAccount } from "./vault.ts";
 type Done = (r: { ok: boolean; message: string }) => void;
 
 /** Pure: the brain's sign-in page for this request. */
-export function brainAuthUrl(base: string, client: string, redirect: string, challenge: string, state: string): string {
+function brainAuthUrl(base: string, client: string, redirect: string, challenge: string, state: string): string {
   const q = new URLSearchParams({
     response_type: "code",
     client_id: client,

@@ -15,10 +15,10 @@
 import type { Route } from "./server.ts";
 import { json } from "./http.ts";
 
-export const SOCKET_VAR = "AGENTS_MULTI_APP_SOCKET";
+const SOCKET_VAR = "AGENTS_MULTI_APP_SOCKET";
 export const NOT_RUNNING = "the desktop app is not running";
 const ACTIONS = ["check", "install", "dismiss"] as const;
-export type AppAction = typeof ACTIONS[number];
+type AppAction = typeof ACTIONS[number];
 const STATES = ["idle", "checking", "downloading", "ready", "installing", "restarting", "error"] as const;
 export type AppUpdateState = typeof STATES[number];
 

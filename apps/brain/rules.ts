@@ -27,10 +27,10 @@ export const areasOf = (store: Store): Areas => store.areas ?? AREAS_IT;
 /** Pure: the areas written by adding lines, not by rewriting. */
 export const logs = (a: Areas) => [a.diary, a.inbox];
 export const MAX_WORDS = 400;
-export const MAX_WORDS_LOG = 1000; // the inbox: what is said in passing waits there to be sorted, it does not pile up
+const MAX_WORDS_LOG = 1000; // the inbox: what is said in passing waits there to be sorted, it does not pile up
 export const MAX_ENTRY_WORDS = 40; // one diary line: what changed, in a sentence; the detail lives on the project page
 export const MAX_CODE_LINES = 15;
-export const DUPLICATE = 0.6; // title similarity from which a new page is taken for an existing one
+const DUPLICATE = 0.6; // title similarity from which a new page is taken for an existing one
 
 /** Pure: a path in the form the brain keeps — lower case, no accents, dashes for spaces. */
 export function slugPath(p: string): string {
@@ -61,7 +61,7 @@ export function similarity(a: string, b: string): number {
 export const areaOf = (path: string) => path.split("/")[0];
 
 /** Pure: the words of a diary entry, its [[links]] not counted. */
-export const entryWords = (s: string) => words(s.replace(/\[\[[^\]]*\]\]/g, ""));
+const entryWords = (s: string) => words(s.replace(/\[\[[^\]]*\]\]/g, ""));
 
 /** Pure: a diary entry too long to be one line of the record. */
 export function entryErrors(text: string): string[] {

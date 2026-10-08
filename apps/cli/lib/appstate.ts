@@ -8,7 +8,7 @@ import { STATE } from "./paths.ts";
 /** The result of the last `install --app`. */
 export const INSTALL_RECORD = `${STATE}/app-install.json`;
 /** The build the app carries, as it wrote it at its last start. */
-export const APP_BUILD = `${STATE}/app-build.json`;
+const APP_BUILD = `${STATE}/app-build.json`;
 
 export interface InstallRecord {
   at: string;

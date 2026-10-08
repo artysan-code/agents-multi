@@ -105,7 +105,7 @@ export function parseRun(argv: string[]): RunPlan {
 }
 
 /** The tool's executable: the project's own (node_modules/.bin, from here up), else on PATH. */
-export async function findTool(tool: string, from = Deno.cwd()): Promise<string | null> {
+async function findTool(tool: string, from = Deno.cwd()): Promise<string | null> {
   for (let dir = from;; dir = dirname(dir)) {
     const p = join(dir, "node_modules", ".bin", tool);
     if (await Deno.stat(p).then((s) => s.isFile, () => false)) return p;

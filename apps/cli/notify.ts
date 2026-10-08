@@ -42,14 +42,14 @@ export function notifyText(d: DoctorDiff): { title: string; body: string } | nul
   return null;
 }
 
-export async function loadLast(): Promise<string[]> {
+async function loadLast(): Promise<string[]> {
   try {
     return JSON.parse(await Deno.readTextFile(STATE_FILE)).fails ?? [];
   } catch {
     return [];
   }
 }
-export async function saveLast(current: Check[]) {
+async function saveLast(current: Check[]) {
   await Deno.mkdir(STATE, { recursive: true });
   await Deno.writeTextFile(
     STATE_FILE,
