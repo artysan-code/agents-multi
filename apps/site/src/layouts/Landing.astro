@@ -5,7 +5,6 @@
 import "../styles/fonts.css";
 import "../styles/site.css";
 import mark from "../assets/mark.svg?raw";
-import ConsoleMock from "../components/ConsoleMock.astro";
 import Orbit from "../components/Orbit.astro";
 import Icon from "../components/Icon.astro";
 import { dict, type Lang } from "../i18n";
@@ -88,16 +87,19 @@ const ld = {
           </div>
           <p class="meta">{t.meta}</p>
           <div class="stage">
-            <ConsoleMock t={t} />
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>127.0.0.1:7331</span></div>
+              <img class="shot" src="/console.webp" width="2880" height="1800" alt={t.shotAlt} />
+            </div>
             <div class="float term" aria-hidden="true">
-              <div><span class="pr">$</span> agents-multi {t.mock.doctor}</div>
+              <div><span class="pr">$</span> agents doctor</div>
               <div><span class="ok">✓</span> console on 127.0.0.1:7331</div>
               <div><span class="ok">✓</span> secret vault: every secret here</div>
               <div><span class="ok">✓</span> brain takes this machine's token</div>
-              <div class="dim">36 pass · 0 fail</div>
+              <div class="dim">44 pass · 0 fail</div>
             </div>
           </div>
-          <p class="demo">{t.mock.demo}</p>
+          <p class="demo">{t.demo}</p>
         </div>
       </section>
 

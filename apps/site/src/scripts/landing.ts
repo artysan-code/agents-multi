@@ -21,30 +21,6 @@ if (!still) {
     inView(el, () => { animate(el, rise(36), { duration: 0.9, ease }); }, { amount: 0.25 });
   }
 
-  // the console's views take turns; the classes change at once, only the entrance is animated, so a
-  // view and the rail can never disagree
-  const views = [...document.querySelectorAll<HTMLElement>("[data-view]")];
-  const tabs = [...document.querySelectorAll<HTMLElement>("[data-tab]")];
-  let shown = 0;
-  const show = (i: number) => {
-    views.forEach((v, k) => v.classList.toggle("on", k === i));
-    tabs.forEach((t, k) => t.classList.toggle("on", k === i));
-    const to = views[i];
-    animate(to, rise(10), { duration: 0.45, ease });
-    if (i === 1) animate(to.querySelectorAll(".kcard"), { opacity: [0, 1], transform: ["translateX(-12px)", "none"] }, { duration: 0.4, delay: stagger(0.08) });
-    if (i === 2) animate(to.querySelectorAll("circle"), { transform: ["scale(0)", "scale(1)"] }, { duration: 0.5, delay: stagger(0.04), ease: [0.3, 1.6, 0.5, 1] });
-    shown = i;
-  };
-  // only while the window is on screen
-  let timer: ReturnType<typeof setInterval> | undefined;
-  const mock = document.querySelector<HTMLElement>("[data-mock]");
-  if (mock && views.length) {
-    inView(mock, () => {
-      timer = setInterval(() => show((shown + 1) % views.length), 4800);
-      return () => clearInterval(timer);
-    }, { amount: 0.3 });
-  }
-
   // the terminal types itself, a line at a time, when it comes into view. Each line of the <pre>
   // closes its own spans (Landing.astro), so wrapping lines keeps the markup whole.
   const pre = document.querySelector<HTMLElement>("pre[data-type]");
