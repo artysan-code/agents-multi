@@ -40,28 +40,17 @@ const TOKENS: Rule[] = [
     re: /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/,
     make: (m) => <a href={m[2]} target="_blank" rel="noopener">{m[1]}</a>,
   },
-  {
-    re: /\[([^\]]+)\]\((?:<(.+?)>|([^)\s]+))\)/,
-    make: (m) => <span class="lnk" title={m[2] ?? m[3]}>{m[1]}</span>,
-  },
+  { re: /\[([^\]]+)\]\((?:<(.+?)>|([^)\s]+))\)/, make: (m) => <span class="lnk" title={m[2] ?? m[3]}>{m[1]}</span> },
 ];
 
 const EMPHASIS: Rule[] = [
   { re: /\*\*([^*]+)\*\*/, make: (m) => <b>{m[1]}</b> },
   { re: /~~([^~]+)~~/, make: (m) => <s>{m[1]}</s> },
-  {
-    re: /(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/,
-    make: (m) => [m[1], <i>{m[2]}</i>],
-  },
+  { re: /(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/, make: (m) => [m[1], <i>{m[2]}</i>] },
 ];
 
 /** Splits `s` on the earliest match of any rule, again and again; what no rule takes goes to `rest`. */
-function scan(
-  s: string,
-  rules: Rule[],
-  rest: (x: string) => ComponentChildren[],
-  onPage?: OnPage,
-): ComponentChildren[] {
+function scan(s: string, rules: Rule[], rest: (x: string) => ComponentChildren[], onPage?: OnPage): ComponentChildren[] {
   const out: ComponentChildren[] = [];
   while (s) {
     let best: { m: RegExpExecArray; r: Rule } | null = null;
@@ -78,9 +67,7 @@ function scan(
 }
 
 export function inline(s: string, onPage?: OnPage): ComponentChildren[] {
-  const emph = (
-    x: string,
-  ) => (x ? scan(x, EMPHASIS, (y) => (y ? [y] : [])) : []);
+  const emph = (x: string) => (x ? scan(x, EMPHASIS, (y) => (y ? [y] : [])) : []);
   return scan(s, TOKENS, emph, onPage);
 }
 
@@ -93,18 +80,8 @@ export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
   let table: VNode[] | null = null;
   let code: string[] | null = null;
   const flush = () => {
-    if (list) {
-      out.push(
-        list.kind === "ul" ? <ul>{list.items}</ul> : <ol>{list.items}</ol>,
-      );
-    }
-    if (table) {
-      out.push(
-        <table>
-          <tbody>{table}</tbody>
-        </table>,
-      );
-    }
+    if (list) out.push(list.kind === "ul" ? <ul>{list.items}</ul> : <ol>{list.items}</ol>);
+    if (table) out.push(<table><tbody>{table}</tbody></table>);
     list = null;
     table = null;
   };
@@ -142,10 +119,7 @@ export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
       }
       const box = li[3].match(/^\[([ xX])\]\s+(.*)/);
       // a nested item keeps its depth (two spaces a level), without building nested lists
-      const depth = Math.min(
-        Math.floor(line.match(/^\s*/)![0].replace(/\t/g, "  ").length / 2),
-        4,
-      );
+      const depth = Math.min(Math.floor(line.match(/^\s*/)![0].replace(/\t/g, "  ").length / 2), 4);
       const style = depth ? { "--lv": depth } : undefined;
       list!.items.push(
         box
@@ -165,33 +139,18 @@ export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
         flush();
         table = [];
       }
-      table.push(
-        <tr>
-          {line.trim().slice(1, -1).split("|").map((c) => (
-            <td>{inline(c.trim(), onPage)}</td>
-          ))}
-        </tr>,
-      );
+      table.push(<tr>{line.trim().slice(1, -1).split("|").map((c) => <td>{inline(c.trim(), onPage)}</td>)}</tr>);
       continue;
     }
     flush();
-    if (line.startsWith(">")) {
-      out.push(
-        <blockquote>{inline(line.replace(/^>\s?/, ""), onPage)}</blockquote>,
-      );
-    } else if (line.trim()) out.push(<p>{inline(line, onPage)}</p>);
+    if (line.startsWith(">")) out.push(<blockquote>{inline(line.replace(/^>\s?/, ""), onPage)}</blockquote>);
+    else if (line.trim()) out.push(<p>{inline(line, onPage)}</p>);
   }
   flush();
   if (code) out.push(<pre>{(code as string[]).join("\n")}</pre>);
   return out;
 }
 
-export function Markdown(
-  { src, onPage, class: cls = "md" }: {
-    src: string;
-    onPage?: OnPage;
-    class?: string;
-  },
-) {
+export function Markdown({ src, onPage, class: cls = "md" }: { src: string; onPage?: OnPage; class?: string }) {
   return <div class={cls}>{renderMarkdown(src, onPage)}</div>;
 }

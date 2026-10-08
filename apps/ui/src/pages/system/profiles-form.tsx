@@ -5,22 +5,14 @@ import { useState } from "preact/hooks";
 import { post } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
 import { t } from "../../i18n.ts";
-import {
-  closeDrawer,
-  openDrawer,
-  showOutput,
-  toast,
-  toastErr,
-} from "../../lib/ui.tsx";
+import { closeDrawer, openDrawer, showOutput, toast, toastErr } from "../../lib/ui.tsx";
 import { type ProfileFull, registryOf } from "./profiles-types.ts";
 
 export function openProfileForm(name: string | null): void {
   openDrawer(name ?? t("profile.new"), () => <ProfileForm name={name} />);
 }
 
-function Field(
-  { label, children }: { label: string; children: preact.ComponentChildren },
-) {
+function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
   return <label class="fld">{label}{children}</label>;
 }
 
@@ -30,9 +22,7 @@ function ProfileForm({ name }: { name: string | null }) {
   const p = isNew ? null : s.profiles[name] as ProfileFull;
   const m = p?.manifest ?? {};
   const registry = registryOf(s);
-  const [picked, setPicked] = useState<Set<string>>(() =>
-    new Set(isNew ? registry : p!.mcp)
-  );
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(isNew ? registry : p!.mcp));
   const [busy, setBusy] = useState(false);
 
   const toggle = (k: string) =>
@@ -45,8 +35,7 @@ function ProfileForm({ name }: { name: string | null }) {
   const submit = async (e: Event) => {
     e.preventDefault();
     const f = (e.currentTarget as HTMLFormElement).elements;
-    const val = (k: string) =>
-      (f.namedItem(k) as HTMLInputElement).value.trim();
+    const val = (k: string) => (f.namedItem(k) as HTMLInputElement).value.trim();
     const body = {
       name: name ?? val("name"),
       description: val("description"),
@@ -54,15 +43,11 @@ function ProfileForm({ name }: { name: string | null }) {
       alias: val("alias"),
       desktopDir: val("desktopDir"),
       mcp: registry.filter((k) => picked.has(k)),
-      disableAccountMcp:
-        (f.namedItem("disableAccountMcp") as HTMLInputElement).checked,
+      disableAccountMcp: (f.namedItem("disableAccountMcp") as HTMLInputElement).checked,
     };
     setBusy(true);
     try {
-      const r = await post<{ message?: string; output?: string }>(
-        "/api/profile",
-        body,
-      );
+      const r = await post<{ message?: string; output?: string }>("/api/profile", body);
       closeDrawer();
       await loadStatus();
       toast(r.message ?? t("profile.saved", { name: body.name }));
@@ -77,43 +62,20 @@ function ProfileForm({ name }: { name: string | null }) {
     <form class="pform" onSubmit={submit}>
       {isNew && (
         <Field label={t("profile.name")}>
-          <input
-            name="name"
-            required
-            pattern={"[a-z][a-z0-9_\\-]{1,30}"}
-            placeholder="research"
-            autofocus
-          />
+          <input name="name" required pattern={"[a-z][a-z0-9_\\-]{1,30}"} placeholder="research" autofocus />
         </Field>
       )}
       <Field label={t("profile.description")}>
-        <input
-          name="description"
-          defaultValue={m.description ?? ""}
-          placeholder={t("profile.description.ph")}
-        />
+        <input name="description" defaultValue={m.description ?? ""} placeholder={t("profile.description.ph")} />
       </Field>
       <Field label={t("profile.command")}>
-        <input
-          name="command"
-          defaultValue={m.command ?? ""}
-          placeholder={`claude-${name || "research"}`}
-        />
+        <input name="command" defaultValue={m.command ?? ""} placeholder={`claude-${name || "research"}`} />
       </Field>
       <Field label={t("profile.alias")}>
-        <input
-          name="alias"
-          defaultValue={m.alias ?? ""}
-          pattern={"[a-zA-Z_][a-zA-Z0-9_\\-]*"}
-          placeholder="cr"
-        />
+        <input name="alias" defaultValue={m.alias ?? ""} pattern={"[a-zA-Z_][a-zA-Z0-9_\\-]*"} placeholder="cr" />
       </Field>
       <Field label={t("profile.desktop")}>
-        <input
-          name="desktopDir"
-          defaultValue={m.desktopDir ?? ""}
-          placeholder="~/.config/Claude-Research"
-        />
+        <input name="desktopDir" defaultValue={m.desktopDir ?? ""} placeholder="~/.config/Claude-Research" />
       </Field>
       <div class="fld">
         MCP
@@ -134,22 +96,13 @@ function ProfileForm({ name }: { name: string | null }) {
         </div>
       </div>
       <label class="fld check">
-        <input
-          type="checkbox"
-          name="disableAccountMcp"
-          defaultChecked={!!m.disableAccountMcp}
-        />{" "}
-        {t("profile.disableAccountMcp")}
+        <input type="checkbox" name="disableAccountMcp" defaultChecked={!!m.disableAccountMcp} /> {t("profile.disableAccountMcp")}
       </label>
       <div class="pform-foot">
         <button class="btn primary" type="submit" disabled={busy}>
-          {busy
-            ? t("profile.working")
-            : t(isNew ? "profile.create" : "profile.save")}
+          {busy ? t("profile.working") : t(isNew ? "profile.create" : "profile.save")}
         </button>
-        <button class="btn ghost" type="button" onClick={closeDrawer}>
-          {t("profile.cancel")}
-        </button>
+        <button class="btn ghost" type="button" onClick={closeDrawer}>{t("profile.cancel")}</button>
         <span class="hint">{t("profile.hint")}</span>
       </div>
     </form>

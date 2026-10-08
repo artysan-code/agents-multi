@@ -15,13 +15,7 @@ const LISTS: List[] = ["allow", "ask", "deny"];
 interface Permissions {
   mode: string;
   rules: Record<List, string[]>;
-  profiles: Record<
-    string,
-    {
-      mode?: string;
-      lists: Record<string, { added: string[]; dropped: string[] }>;
-    }
-  >;
+  profiles: Record<string, { mode?: string; lists: Record<string, { added: string[]; dropped: string[] }> }>;
 }
 
 const MODES = ["default", "acceptEdits", "plan", "auto"];
@@ -41,10 +35,7 @@ export function Permissions() {
   useTopic(load, ["state"]);
 
   const op = async (body: Record<string, string>) => {
-    const r = await post<{ ok: boolean; message?: string }>(
-      "/api/permissions",
-      body,
-    ).catch((e: Error) => ({
+    const r = await post<{ ok: boolean; message?: string }>("/api/permissions", body).catch((e: Error) => ({
       ok: false,
       message: e.message,
     }));
@@ -54,26 +45,18 @@ export function Permissions() {
 
   const move = (from: List, to: List, rule: string) => {
     if (from === to) return;
-    if (
-      to === "allow" &&
-      !confirm(t("perm.move.confirm", { r: rule, l: t(`perm.${from}` as Key) }))
-    ) return;
+    if (to === "allow" && !confirm(t("perm.move.confirm", { r: rule, l: t(`perm.${from}` as Key) }))) return;
     void op({ op: "move", from, to, rule });
   };
 
   if (!perm) return <div class="sub-view" />;
-  const profs = Object.entries(perm.profiles).filter(([, v]) =>
-    v.mode || Object.keys(v.lists).length
-  );
+  const profs = Object.entries(perm.profiles).filter(([, v]) => v.mode || Object.keys(v.lists).length);
 
   return (
     <div class="sub-view">
       <p class="lede">{t("perm.lede")}</p>
       <div class="perm-mode" style={{ marginTop: "18px" }}>
-        <label
-          class="fld"
-          style={{ flexDirection: "row", alignItems: "center", gap: "10px" }}
-        >
+        <label class="fld" style={{ flexDirection: "row", alignItems: "center", gap: "10px" }}>
           <span>{t("perm.mode")}</span>
           <select
             class="sel"
@@ -81,9 +64,7 @@ export function Permissions() {
             value={perm.mode}
             onChange={(e) => op({ op: "mode", mode: e.currentTarget.value })}
           >
-            {MODES.map((m) => (
-              <option key={m} value={m}>{t(`perm.m.${m}` as Key)}</option>
-            ))}
+            {MODES.map((m) => <option key={m} value={m}>{t(`perm.m.${m}` as Key)}</option>)}
           </select>
         </label>
       </div>
@@ -122,16 +103,12 @@ export function Permissions() {
                       e.dataTransfer?.setData("text/plain", r);
                       if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
                       drag.current = { from: l, rule: r };
-                      (e.currentTarget as HTMLElement).classList.add(
-                        "dragging",
-                      );
+                      (e.currentTarget as HTMLElement).classList.add("dragging");
                     }}
                     onDragEnd={(e) => {
                       drag.current = null;
                       setOver(null);
-                      (e.currentTarget as HTMLElement).classList.remove(
-                        "dragging",
-                      );
+                      (e.currentTarget as HTMLElement).classList.remove("dragging");
                     }}
                   >
                     <code>{r}</code>
@@ -146,11 +123,7 @@ export function Permissions() {
                       }}
                     >
                       <option value="">{t("perm.move")}</option>
-                      {LISTS.filter((o) => o !== l).map((o) => (
-                        <option key={o} value={o}>
-                          {t(`perm.${o}` as Key)}
-                        </option>
-                      ))}
+                      {LISTS.filter((o) => o !== l).map((o) => <option key={o} value={o}>{t(`perm.${o}` as Key)}</option>)}
                     </select>
                     <button
                       type="button"
@@ -177,29 +150,19 @@ export function Permissions() {
                 <button
                   type="button"
                   class="btn sm"
-                  onClick={() =>
-                    confirm(t("perm.promote.confirm", { p })) &&
-                    op({ op: "promote", profile: p })}
+                  onClick={() => confirm(t("perm.promote.confirm", { p })) && op({ op: "promote", profile: p })}
                 >
                   {t("perm.promote")}
                 </button>
               )}
             </div>
             <div class="panel-b">
-              {v.mode && (
-                <div>
-                  {t("perm.mode")}: <code>{v.mode}</code>
-                </div>
-              )}
+              {v.mode && <div>{t("perm.mode")}: <code>{v.mode}</code></div>}
               {Object.entries(v.lists).map(([l, d]) => (
                 <div key={l}>
                   <b>{t(`perm.${l}` as Key)}</b>
-                  {d.added.length > 0 && (
-                    <Rules label={t("perm.added")} rules={d.added} />
-                  )}
-                  {d.dropped.length > 0 && (
-                    <Rules label={t("perm.dropped")} rules={d.dropped} />
-                  )}
+                  {d.added.length > 0 && <Rules label={t("perm.added")} rules={d.added} />}
+                  {d.dropped.length > 0 && <Rules label={t("perm.dropped")} rules={d.dropped} />}
                 </div>
               ))}
             </div>
@@ -213,12 +176,7 @@ export function Permissions() {
 function Rules({ label, rules }: { label: string; rules: string[] }) {
   return (
     <div class="sub">
-      {label}: {rules.map((r, i) => (
-        <Fragment key={r}>
-          {i > 0 && " · "}
-          <code>{r}</code>
-        </Fragment>
-      ))}
+      {label}: {rules.map((r, i) => <Fragment key={r}>{i > 0 && " · "}<code>{r}</code></Fragment>)}
     </div>
   );
 }

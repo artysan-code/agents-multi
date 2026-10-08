@@ -13,19 +13,13 @@ import { owner, touch } from "../../state.ts";
 import { type BoardTask, taskOp } from "../tasks/api.ts";
 import { board, refreshBoard } from "../tasks/model.ts";
 import { openTask } from "../tasks/sheet.tsx";
-import { daysBetween, type GroupName, GROUPS, groupTasks } from "./model.ts";
+import { daysBetween, GROUPS, type GroupName, groupTasks } from "./model.ts";
 
 type Filter = "all" | "me" | "claude" | "others";
 const FILTERS: Filter[] = ["all", "me", "claude", "others"];
 
-const shortDay = (d: string) =>
-  new Date(d + "T12:00").toLocaleDateString(lang(), {
-    weekday: "short",
-    day: "numeric",
-  });
-const where = (
-  x: BoardTask,
-) => (x.folder ? x.folder.split("/").pop()! : x.project ?? "");
+const shortDay = (d: string) => new Date(d + "T12:00").toLocaleDateString(lang(), { weekday: "short", day: "numeric" });
+const where = (x: BoardTask) => (x.folder ? x.folder.split("/").pop()! : x.project ?? "");
 const mine = (x: BoardTask) => !x.owner || x.owner === owner.value.id;
 
 function keep(x: BoardTask, f: Filter): boolean {
@@ -39,12 +33,7 @@ function keep(x: BoardTask, f: Filter): boolean {
 function stepsOf(x: BoardTask): { text: string; done: boolean }[] {
   if (x.steps?.length) return x.steps;
   const p = x.progress;
-  return p
-    ? Array.from(
-      { length: p.total },
-      (_, i) => ({ text: "", done: i < p.done }),
-    )
-    : [];
+  return p ? Array.from({ length: p.total }, (_, i) => ({ text: "", done: i < p.done })) : [];
 }
 
 /** The bar's colour: green when ready, red when late, amber waiting, the spark while Claude works. */
@@ -67,20 +56,14 @@ const SPK = (
   </svg>
 );
 
-function StepList(
-  { steps, max = 99 }: {
-    steps: { text: string; done: boolean }[];
-    max?: number;
-  },
-) {
+function StepList({ steps, max = 99 }: { steps: { text: string; done: boolean }[]; max?: number }) {
   const nx = steps.findIndex((s) => !s.done);
   // a long list: the done ones before the next step fold into one line
   const fold = steps.length > max && nx > 1 ? nx - 1 : 0;
   const shown = steps.slice(fold, fold + max);
   return (
     <>
-      {fold > 0 && <div class="st dn">{ICK}{t("steps.doneN", { n: fold })}
-      </div>}
+      {fold > 0 && <div class="st dn">{ICK}{t("steps.doneN", { n: fold })}</div>}
       {shown.map((s, j) => {
         const i = j + fold;
         return (
@@ -90,11 +73,7 @@ function StepList(
           </div>
         );
       })}
-      {fold + max < steps.length && (
-        <div class="st dn">
-          {t("steps.more", { n: steps.length - fold - max })}
-        </div>
-      )}
+      {fold + max < steps.length && <div class="st dn">{t("steps.more", { n: steps.length - fold - max })}</div>}
     </>
   );
 }
@@ -110,34 +89,24 @@ function Progress({ x, g, onHover }: {
   const pct = Math.round((done / n) * 100);
   const nx = steps.findIndex((s) => !s.done);
   const k = tone(x, g);
-  const next = (x.next_step ?? (nx >= 0 ? steps[nx].text : "")).replace(
-    /[`*_]/g,
-    "",
-  );
+  const next = (x.next_step ?? (nx >= 0 ? steps[nx].text : "")).replace(/[`*_]/g, "");
   // many steps make the segments too thin: one continuous bar then
   const segs = n <= 24;
   return (
     <div
       class={`pg ${k}`}
-      onMouseEnter={(e) =>
-        onHover({ id: x.id, r: e.currentTarget.getBoundingClientRect() })}
+      onMouseEnter={(e) => onHover({ id: x.id, r: e.currentTarget.getBoundingClientRect() })}
       onMouseLeave={() => onHover(null)}
     >
       <div class="pg-l">
         <span>
-          <b>{done}/{n}</b>{" "}
-          {nx < 0 ? t("steps.ready") : next ? <>· {next}</> : t("steps.word")}
+          <b>{done}/{n}</b> {nx < 0 ? t("steps.ready") : next ? <>· {next}</> : t("steps.word")}
         </span>
         <b>{pct}%</b>
       </div>
       <div class="pg-bar">
         {segs
-          ? steps.map((s, i) => (
-            <i
-              key={i}
-              class={s.done ? "d" : i === nx && k !== "wait" ? "n" : ""}
-            />
-          ))
+          ? steps.map((s, i) => <i key={i} class={s.done ? "d" : i === nx && k !== "wait" ? "n" : ""} />)
           : <i class="d" style={{ flex: `0 0 ${pct}%` }} />}
       </div>
     </div>
@@ -150,47 +119,28 @@ function Due({ x, g, today }: { x: BoardTask; g: GroupName; today: string }) {
     return (
       <div class="due late">
         {shortDay(x.due)}
-        <small>
-          {d === 1 ? t("due.yesterday") : t("due.daysAgo", { n: d })}
-        </small>
+        <small>{d === 1 ? t("due.yesterday") : t("due.daysAgo", { n: d })}</small>
       </div>
     );
   }
-  if (x.due === today) {
-    return <div class="due d0">{x.time ?? t("due.today")}</div>;
-  }
-  if (x.due) {
-    return (
-      <div class={`due${x.due < today ? " late" : ""}`}>
-        {shortDay(x.due)}
-        {x.time && <small>{x.time}</small>}
-      </div>
-    );
-  }
-  if (g === "wait" && x.updated) {
-    return (
-      <div class="due">
-        {t("due.since", { d: shortDay(x.updated.slice(0, 10)) })}
-      </div>
-    );
-  }
+  if (x.due === today) return <div class="due d0">{x.time ?? t("due.today")}</div>;
+  if (x.due) return <div class={`due${x.due < today ? " late" : ""}`}>{shortDay(x.due)}{x.time && <small>{x.time}</small>}</div>;
+  if (g === "wait" && x.updated) return <div class="due">{t("due.since", { d: shortDay(x.updated.slice(0, 10)) })}</div>;
   return <div class="due">—</div>;
 }
 
-function Row(
-  { x, g, today, sel, open, onSel, onToggle, onDone, onLater, onHover }: {
-    x: BoardTask;
-    g: GroupName;
-    today: string;
-    sel: boolean;
-    open: boolean;
-    onSel: () => void;
-    onToggle: () => void;
-    onDone: () => void;
-    onLater: () => void;
-    onHover: (h: { id: string; r: DOMRect } | null) => void;
-  },
-) {
+function Row({ x, g, today, sel, open, onSel, onToggle, onDone, onLater, onHover }: {
+  x: BoardTask;
+  g: GroupName;
+  today: string;
+  sel: boolean;
+  open: boolean;
+  onSel: () => void;
+  onToggle: () => void;
+  onDone: () => void;
+  onLater: () => void;
+  onHover: (h: { id: string; r: DOMRect } | null) => void;
+}) {
   const claude = x.owner === "claude";
   const waits = g === "wait" && !claude;
   const who = claude
@@ -198,13 +148,10 @@ function Row(
     : x.owner && x.owner !== owner.value.id
     ? <span class="who">{t("row.waits", { w: x.owner })}</span>
     : null;
-  const primary = who ??
-    (x.stage ? <span class="stage">{x.stage}</span> : null);
+  const primary = who ?? (x.stage ? <span class="stage">{x.stage}</span> : null);
   const secondary = [
     who && x.stage ? <span class="stage">{x.stage}</span> : null,
-    x.parts
-      ? <span>{t("row.parts", { d: x.parts.done, n: x.parts.total })}</span>
-      : null,
+    x.parts ? <span>{t("row.parts", { d: x.parts.done, n: x.parts.total })}</span> : null,
     x.blocked ? <span class="blk">{t("row.blocked")}</span> : null,
     x.ref ? <span class="mono ref">{x.ref}</span> : null,
   ].filter(Boolean);
@@ -218,9 +165,7 @@ function Row(
     <>
       <div
         ref={el}
-        class={`tr${sel ? " cur" : ""}${open ? " open" : ""}${
-          waits || claude ? " w" : ""
-        }`}
+        class={`tr${sel ? " cur" : ""}${open ? " open" : ""}${waits || claude ? " w" : ""}`}
         onClick={() => {
           onSel();
           onToggle();
@@ -238,7 +183,7 @@ function Row(
         />
         <div class="tt">
           <b title={x.title}>
-            {x.priority === 1 && <span class="pri">!</span>}
+            {x.priority === 1 && <span class="pri">! </span>}
             {x.title}
           </b>
           <div class="tm">
@@ -251,24 +196,14 @@ function Row(
         <Due x={x} g={g} today={today} />
         {g === "late" && (
           <div class="ra" onClick={(e) => e.stopPropagation()}>
-            <button type="button" class="bt sm" onClick={onLater}>
-              {t("row.tomorrow")}
-            </button>
-            <button type="button" class="bt sm" onClick={onDone}>
-              {t("row.done")}
-            </button>
+            <button type="button" class="bt sm" onClick={onLater}>{t("row.tomorrow")}</button>
+            <button type="button" class="bt sm" onClick={onDone}>{t("row.done")}</button>
           </div>
         )}
       </div>
       {open && (
         <div class="exp">
-          {steps.length > 0
-            ? (
-              <div class="exp-steps">
-                <StepList steps={steps} />
-              </div>
-            )
-            : <div class="exp-none">{t("steps.none")}</div>}
+          {steps.length > 0 ? <div class="exp-steps"><StepList steps={steps} /></div> : <div class="exp-none">{t("steps.none")}</div>}
           <div class="exp-r">
             {secondary.length > 0 && <div class="tm exp-meta">{secondary}</div>}
             <div class="exp-bt">
@@ -276,22 +211,12 @@ function Row(
                 <button
                   type="button"
                   class="bt sm pri"
-                  onClick={() =>
-                    void taskOp({ op: "step", id: x.id, index: nx, done: true })
-                      .then((r) => r && refresh())}
+                  onClick={() => void taskOp({ op: "step", id: x.id, index: nx, done: true }).then((r) => r && refresh())}
                 >
-                  {t("steps.tick", {
-                    s: short(steps[nx].text.replace(/[`*_]/g, ""), 36),
-                  })}
+                  {t("steps.tick", { s: short(steps[nx].text.replace(/[`*_]/g, ""), 36) })}
                 </button>
               )}
-              <button
-                type="button"
-                class="bt sm"
-                onClick={() => void openTask(x.id)}
-              >
-                {t("row.card")}
-              </button>
+              <button type="button" class="bt sm" onClick={() => void openTask(x.id)}>{t("row.card")}</button>
             </div>
           </div>
         </div>
@@ -312,11 +237,7 @@ export function TaskGroups() {
   const [hover, setHover] = useState<{ id: string; r: DOMRect } | null>(null);
   const b = board.value;
   const today = b?.today ?? new Date().toISOString().slice(0, 10);
-  const groups = groupTasks(
-    (b?.tasks ?? []).filter((x) => keep(x, filter)),
-    today,
-    owner.value.id,
-  );
+  const groups = groupTasks((b?.tasks ?? []).filter((x) => keep(x, filter)), today, owner.value.id);
   const flat = GROUPS.flatMap((g) => groups[g].map((x) => ({ x, g })));
 
   const done = async (x: BoardTask) => {
@@ -328,11 +249,7 @@ export function TaskGroups() {
   const later = async (x: BoardTask) => {
     const d = new Date(today + "T12:00");
     d.setDate(d.getDate() + 1);
-    const r = await taskOp({
-      op: "update",
-      id: x.id,
-      due: d.toISOString().slice(0, 10),
-    });
+    const r = await taskOp({ op: "update", id: x.id, due: d.toISOString().slice(0, 10) });
     if (r) refresh();
   };
 
@@ -340,20 +257,11 @@ export function TaskGroups() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || drawerOpen()) return;
-      if (
-        (e.target as Element)?.closest?.(
-          "input, textarea, select, [contenteditable], [role=listbox], [role=menu]",
-        )
-      ) return;
+      if ((e.target as Element)?.closest?.("input, textarea, select, [contenteditable], [role=listbox], [role=menu]")) return;
       const i = flat.findIndex((r) => r.x.id === sel);
       const k = e.key.toLowerCase();
       if (k === "j" || k === "k") {
-        const n = flat[
-          Math.max(
-            0,
-            Math.min(flat.length - 1, i < 0 ? 0 : i + (k === "j" ? 1 : -1)),
-          )
-        ];
+        const n = flat[Math.max(0, Math.min(flat.length - 1, i < 0 ? 0 : i + (k === "j" ? 1 : -1)))];
         if (n) setSel(n.x.id);
       } else if (e.key === "Enter" && sel) setOpen(open === sel ? null : sel);
       else if (k === "x" && i >= 0) void done(flat[i].x);
@@ -368,12 +276,7 @@ export function TaskGroups() {
   const hx = hover && flat.find((r) => r.x.id === hover.id);
   const hsteps = hx ? stepsOf(hx.x) : [];
   const stepSum = (xs: BoardTask[]) =>
-    xs.reduce(
-      (a, x) => (x.progress
-        ? { d: a.d + x.progress.done, n: a.n + x.progress.total }
-        : a),
-      { d: 0, n: 0 },
-    );
+    xs.reduce((a, x) => (x.progress ? { d: a.d + x.progress.done, n: a.n + x.progress.total } : a), { d: 0, n: 0 });
 
   return (
     <article class="card tq">
@@ -381,30 +284,19 @@ export function TaskGroups() {
         <h3>{t("nav.tasks")}</h3>
         <div class="sg tq-f" role="radiogroup" aria-label={t("tq.filter")}>
           {FILTERS.map((f) => (
-            <button
-              type="button"
-              role="radio"
-              key={f}
-              aria-checked={filter === f}
-              onClick={() => setFilter(f)}
-            >
+            <button type="button" role="radio" key={f} aria-checked={filter === f} onClick={() => setFilter(f)}>
               {t(`tq.f.${f}`)}
             </button>
           ))}
         </div>
         <span class="tq-hint">
           <kbd class="k2">J</kbd>
-          <kbd class="k2">K</kbd> {t("tq.move")} · <kbd class="k2">↵</kbd>{" "}
-          {t("tq.steps")} · <kbd class="k2">X</kbd> {t("tq.done")}
+          <kbd class="k2">K</kbd> {t("tq.move")} · <kbd class="k2">↵</kbd> {t("tq.steps")} · <kbd class="k2">X</kbd> {t("tq.done")}
         </span>
       </div>
       <div class="tq-list" tabindex={0} aria-label={t("nav.tasks")}>
         {!b && <div class="tq-empty" />}
-        {b && !flat.length && (
-          <div class="tq-empty">
-            {t("tq.empty")} <a href="#tasks">{t("tq.all")}</a>
-          </div>
-        )}
+        {b && !flat.length && <div class="tq-empty">{t("tq.empty")} <a href="#tasks">{t("tq.all")}</a></div>}
         {GROUPS.map((g) => {
           const xs = groups[g];
           if (!xs.length) return null;
@@ -414,9 +306,7 @@ export function TaskGroups() {
               <div class={`gh ${g}`}>
                 {t(`tq.g.${g}`)}
                 <span class="c">{xs.length}</span>
-                {g === "doing" && s.n > 0 && (
-                  <span class="r">{t("tq.stepsSum", { d: s.d, n: s.n })}</span>
-                )}
+                {g === "doing" && s.n > 0 && <span class="r">{t("tq.stepsSum", { d: s.d, n: s.n })}</span>}
               </div>
               {xs.map((x) => (
                 <Row
@@ -443,9 +333,7 @@ export function TaskGroups() {
           style={{
             left: `${Math.max(8, hover.r.right - 280)}px`,
             // above the bar, unless it is too near the top of the window
-            ...(hover.r.top > 280
-              ? { bottom: `${innerHeight - hover.r.top + 8}px` }
-              : { top: `${hover.r.bottom + 8}px` }),
+            ...(hover.r.top > 280 ? { bottom: `${innerHeight - hover.r.top + 8}px` } : { top: `${hover.r.bottom + 8}px` }),
           }}
           role="tooltip"
         >

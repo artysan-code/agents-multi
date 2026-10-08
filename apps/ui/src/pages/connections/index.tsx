@@ -40,12 +40,7 @@ function GoogleClientCard({ reload }: { reload: () => void }) {
       </div>
       <label class="btn">
         {t("google.client.import")}
-        <input
-          type="file"
-          accept=".json,application/json"
-          hidden
-          onChange={onFile}
-        />
+        <input type="file" accept=".json,application/json" hidden onChange={onFile} />
       </label>
     </div>
   );
@@ -78,12 +73,8 @@ export function Connections() {
   const accs = view.accounts.filter((a) => sees(a.profiles));
   const servers = view.servers.filter((sv) => sees(sv.profiles));
   // what a sync would still change: one notice for the whole page, not a word in every row
-  const pending =
-    [...view.accounts.map((a) => a.reach), ...view.servers].filter((r) =>
-      r.pending.length
-    ).length;
-  const wantsGoogle = view.services.includes("google") &&
-    view.vault.state === "ok" && !view.google.client;
+  const pending = [...view.accounts.map((a) => a.reach), ...view.servers].filter((r) => r.pending.length).length;
+  const wantsGoogle = view.services.includes("google") && view.vault.state === "ok" && !view.google.client;
 
   return (
     <div class="sub-view">
@@ -97,46 +88,23 @@ export function Connections() {
             <b>{t("conn.apply.title", { n: pending })}</b>
             <div class="sub">{t("conn.apply.how")}</div>
           </div>
-          <button
-            type="button"
-            class="btn"
-            onClick={() =>
-              runAction("mcp-sync")}
-          >
-            {t("conn.apply")}
-          </button>
+          <button type="button" class="btn" onClick={() => runAction("mcp-sync")}>{t("conn.apply")}</button>
         </div>
       )}
       <div class="conn-bar">
         <span class="sub">{t("conn.show")}</span>
         <div class="chips">
           {["", ...view.profiles].map((p) => (
-            <button
-              key={p}
-              type="button"
-              class={`chip pick${p === filter ? " on" : ""}`}
-              onClick={() => pick(p)}
-            >
+            <button key={p} type="button" class={`chip pick${p === filter ? " on" : ""}`} onClick={() => pick(p)}>
               {p || t("conn.all")}
             </button>
           ))}
         </div>
         <span class="r">{t("acc.sum", { n: accs.length })}</span>
-        <button
-          type="button"
-          class="btn ghost sm"
-          title={t("conn.check.title")}
-          onClick={() => runAction("mcp-check")}
-        >
+        <button type="button" class="btn ghost sm" title={t("conn.check.title")} onClick={() => runAction("mcp-check")}>
           {t("conn.check")}
         </button>
-        <button
-          type="button"
-          class="btn primary"
-          onClick={() => openAccountForm(view, null, load)}
-        >
-          {t("acc.add")}
-        </button>
+        <button type="button" class="btn primary" onClick={() => openAccountForm(view, null, load)}>{t("acc.add")}</button>
       </div>
       <Services view={view} accs={accs} servers={servers} reload={load} />
       <Calendars />

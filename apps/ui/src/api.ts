@@ -62,14 +62,7 @@ export interface StatusView {
     [more: string]: unknown;
   };
   update: { cli?: VersionState; desktop?: VersionState; checked_at?: number };
-  updateLog: {
-    at: string;
-    component: string;
-    event: string;
-    from?: string;
-    to?: string;
-    detail?: string;
-  }[];
+  updateLog: { at: string; component: string; event: string; from?: string; to?: string; detail?: string }[];
   shared: {
     skills: Record<string, unknown>;
     agents: Record<string, unknown>;
@@ -79,10 +72,7 @@ export interface StatusView {
     [more: string]: unknown;
   };
   profiles: Record<string, ProfileView>;
-  running: {
-    cli: RunningCli[];
-    desktop: { pid: number; variant: string; [more: string]: unknown }[];
-  };
+  running: { cli: RunningCli[]; desktop: { pid: number; variant: string; [more: string]: unknown }[] };
   brain: { url: string | null; [more: string]: unknown };
   doctor: Check[];
 }
@@ -113,9 +103,7 @@ export interface Result {
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, init);
-  if (!r.ok) {
-    throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
-  }
+  if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
   return r.json() as Promise<T>;
 }
 
@@ -138,10 +126,7 @@ export function post<T = Result>(path: string, body: unknown): Promise<T> {
 }
 
 /** Reads an NDJSON response line by line. */
-export async function ndjson<T>(
-  res: Response,
-  on: (line: T) => void,
-): Promise<void> {
+export async function ndjson<T>(res: Response, on: (line: T) => void): Promise<void> {
   if (!res.body) return;
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let rest = "";
@@ -156,9 +141,7 @@ export async function ndjson<T>(
 }
 
 export const api = {
-  status: (fresh = false) =>
-    get<StatusView>(`/api/status${fresh ? "?fresh" : ""}`),
-  summary: (fresh = false) =>
-    get<Summary>(`/api/summary${fresh ? "?fresh" : ""}`),
+  status: (fresh = false) => get<StatusView>(`/api/status${fresh ? "?fresh" : ""}`),
+  summary: (fresh = false) => get<Summary>(`/api/summary${fresh ? "?fresh" : ""}`),
   owner: () => get<Owner>("/api/owner"),
 };

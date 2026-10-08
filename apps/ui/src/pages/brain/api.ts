@@ -74,13 +74,10 @@ export const brainApi = {
   pages: () => get<PagesReply>("/api/brain/pages"),
   health: () => get<HealthReply>("/api/brain/health"),
   page: (path: string) => get<PageReply>(`/api/brain/page?path=${q(path)}`),
-  version: (path: string, rev: number) =>
-    get<VersionReply>(`/api/brain/page?path=${q(path)}&rev=${rev}`),
-  search: (text: string) =>
-    get<SearchReply>(`/api/brain/search?q=${q(text)}&limit=30`),
+  version: (path: string, rev: number) => get<VersionReply>(`/api/brain/page?path=${q(path)}&rev=${rev}`),
+  search: (text: string) => get<SearchReply>(`/api/brain/search?q=${q(text)}&limit=30`),
   archive: () => get<ArchiveReply>("/api/archive"),
-  archivePage: (path: string) =>
-    get<{ path: string; body: string }>(`/api/archive/page?path=${q(path)}`),
+  archivePage: (path: string) => get<{ path: string; body: string }>(`/api/archive/page?path=${q(path)}`),
 };
 
 /** The service's answer inside an error, without the status line. */

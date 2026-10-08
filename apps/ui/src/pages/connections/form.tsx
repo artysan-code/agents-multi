@@ -7,13 +7,7 @@ import { saveAccount } from "./api.ts";
 import { t } from "../../i18n.ts";
 import { closeDrawer, openDrawer, toast } from "../../lib/ui.tsx";
 
-function AccountForm(
-  { view, account: a, reload }: {
-    view: AccountsView;
-    account: Account | null;
-    reload: () => void;
-  },
-) {
+function AccountForm({ view, account: a, reload }: { view: AccountsView; account: Account | null; reload: () => void }) {
   const [service, setService] = useState(a?.service ?? view.services[0] ?? "");
   const [name, setName] = useState(a?.name ?? "");
   const [url, setUrl] = useState(a?.url ?? "");
@@ -23,14 +17,7 @@ function AccountForm(
   const isGoogle = service === "google";
 
   const send = async (op: "save" | "delete") => {
-    const body = {
-      op,
-      service,
-      name: name.trim(),
-      url: url.trim(),
-      profiles: picked,
-      secret,
-    };
+    const body = { op, service, name: name.trim(), url: url.trim(), profiles: picked, secret };
     setSecret("");
     const r = await saveAccount(body);
     toast(r.message ?? "", !r.ok || !!r.missing?.length);
@@ -39,10 +26,7 @@ function AccountForm(
       reload();
     }
   };
-  const pick = (p: string) =>
-    setPicked(
-      picked.includes(p) ? picked.filter((x) => x !== p) : [...picked, p],
-    );
+  const pick = (p: string) => setPicked(picked.includes(p) ? picked.filter((x) => x !== p) : [...picked, p]);
 
   return (
     <form
@@ -54,17 +38,19 @@ function AccountForm(
     >
       <label class="fld">
         {t("acc.service")}
-        {a ? <input name="service" value={a.service} readOnly /> : (
-          <select
-            name="service"
-            class="sel"
-            style={{ fontSize: "14px", padding: "8px" }}
-            value={service}
-            onChange={(e) => setService(e.currentTarget.value)}
-          >
-            {view.services.map((sv) => <option key={sv}>{sv}</option>)}
-          </select>
-        )}
+        {a
+          ? <input name="service" value={a.service} readOnly />
+          : (
+            <select
+              name="service"
+              class="sel"
+              style={{ fontSize: "14px", padding: "8px" }}
+              value={service}
+              onChange={(e) => setService(e.currentTarget.value)}
+            >
+              {view.services.map((sv) => <option key={sv}>{sv}</option>)}
+            </select>
+          )}
       </label>
       <label class="fld">
         {t("acc.name")} <small>{t("acc.name.hint")}</small>
@@ -80,12 +66,7 @@ function AccountForm(
       </label>
       <label class="fld">
         {t("acc.url")}
-        <input
-          name="url"
-          value={url}
-          placeholder="https://…"
-          onInput={(e) => setUrl(e.currentTarget.value)}
-        />
+        <input name="url" value={url} placeholder="https://…" onInput={(e) => setUrl(e.currentTarget.value)} />
       </label>
       <div class="fld">
         {t("conn.profiles")} <small>{t("acc.profiles.hint")}</small>
@@ -128,27 +109,19 @@ function AccountForm(
             class="btn ghost danger"
             type="button"
             onClick={() => {
-              if (
-                confirm(t("acc.confirmDelete", { a: `${a.service}/${a.name}` }))
-              ) void send("delete");
+              if (confirm(t("acc.confirmDelete", { a: `${a.service}/${a.name}` }))) void send("delete");
             }}
           >
             {t("conn.remove")}
           </button>
         )}
-        <button class="btn ghost" type="button" onClick={closeDrawer}>
-          {t("conn.cancel")}
-        </button>
+        <button class="btn ghost" type="button" onClick={closeDrawer}>{t("conn.cancel")}</button>
       </div>
     </form>
   );
 }
 
-export function openAccountForm(
-  view: AccountsView,
-  account: Account | null,
-  reload: () => void,
-): void {
+export function openAccountForm(view: AccountsView, account: Account | null, reload: () => void): void {
   openDrawer(
     account ? `${account.service}/${account.name}` : t("acc.new"),
     () => <AccountForm view={view} account={account} reload={reload} />,

@@ -14,14 +14,7 @@ import { Archive } from "./archive.tsx";
 import { Diary } from "./diary.tsx";
 import { GlobalGraph, LocalGraph } from "./graphs.tsx";
 import { BrainHealth } from "./health.tsx";
-import {
-  type Brain,
-  type Found,
-  healthIssues,
-  indexBrain,
-  matchSet,
-  resolvePage,
-} from "./model.ts";
+import { type Brain, type Found, healthIssues, indexBrain, matchSet, resolvePage } from "./model.ts";
 import { Links, type OldVersion, Reader } from "./reader.tsx";
 import { Results, Tree, TreeNote } from "./tree.tsx";
 
@@ -35,11 +28,7 @@ function stored(): { mode: Mode; open: Set<string> } {
     const m = localStorage.getItem(KEY_MODE) as Mode;
     return {
       mode: MODES.includes(m) ? m : "read",
-      open: new Set(
-        JSON.parse(
-          localStorage.getItem(KEY_OPEN) ?? '["progetti"]',
-        ) as string[],
-      ),
+      open: new Set(JSON.parse(localStorage.getItem(KEY_OPEN) ?? '["progetti"]') as string[]),
     };
   } catch {
     return { mode: "read", open: new Set(["progetti"]) }; // storage blocked: defaults
@@ -51,8 +40,7 @@ let lastSel: string | null = null;
 
 /** The page first shown: the latest changed one outside the diary, else the first. */
 function firstPage(b: Brain): string | null {
-  return (b.pages.find((p) => p.area !== "diario" && p.area !== "diary") ??
-    b.pages[0])?.path ?? null;
+  return (b.pages.find((p) => p.area !== "diario" && p.area !== "diary") ?? b.pages[0])?.path ?? null;
 }
 
 export function Brain() {
@@ -74,10 +62,7 @@ export function Brain() {
 
   const load = async () => {
     try {
-      const [pages, health] = await Promise.all([
-        brainApi.pages(),
-        brainApi.health().catch(() => null),
-      ]);
+      const [pages, health] = await Promise.all([brainApi.pages(), brainApi.health().catch(() => null)]);
       const b = indexBrain(pages, health);
       setBrain(b);
       setLoadError(null);
@@ -104,19 +89,14 @@ export function Brain() {
     if (ver && page?.path === sel) return;
     let live = true;
     setPageError(null);
-    brainApi.page(sel).then(
-      (p) => live && setPage(p),
-      (e) => live && setPageError(errText(e)),
-    );
+    brainApi.page(sel).then((p) => live && setPage(p), (e) => live && setPageError(errText(e)));
     return () => void (live = false);
   }, [sel, rev]);
 
   // the field below asks for changes to this page (or to the brain as a whole, off the reader)
   const title = sel ? brain?.byPath.get(sel)?.title : undefined;
   useEffect(() => {
-    if (ask.value.kind !== "newtask") {
-      askContext("brain", mode === "read" ? sel : null, title);
-    }
+    if (ask.value.kind !== "newtask") askContext("brain", mode === "read" ? sel : null, title);
   }, [mode, sel, title]);
 
   // the folders above the page on screen open, whichever way it was picked
@@ -124,24 +104,14 @@ export function Brain() {
     if (!sel) return;
     const parts = sel.replace(/\.md$/, "").split("/");
     setOpen((o) => {
-      const dirs = parts.slice(0, -1).map((_, i) =>
-        parts.slice(0, i + 1).join("/")
-      );
+      const dirs = parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join("/"));
       return dirs.every((d) => o.has(d)) ? o : new Set([...o, ...dirs]);
     });
   }, [sel]);
 
   useEffect(() => {
-    if (mode === "read" && sel) {
-      tree.current?.querySelector(`[data-page="${CSS.escape(sel)}"]`)
-        ?.scrollIntoView({ block: "nearest" });
-    }
-  }, [
-    sel,
-    mode,
-    brain,
-    sel ? open.has(sel.split("/").slice(0, -1).join("/")) : true,
-  ]);
+    if (mode === "read" && sel) tree.current?.querySelector(`[data-page="${CSS.escape(sel)}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel, mode, brain, sel ? open.has(sel.split("/").slice(0, -1).join("/")) : true]);
 
   const selectPage = (path: string) => {
     setSel(path);
@@ -177,13 +147,7 @@ export function Brain() {
     if (r === page.rev) return setVer(null);
     try {
       const v = await brainApi.version(page.path, r);
-      setVer((cur) => ({
-        rev: r,
-        body: v.body,
-        at: v.at,
-        by: v.by,
-        diff: cur?.diff ?? true,
-      }));
+      setVer((cur) => ({ rev: r, body: v.body, at: v.at, by: v.by, diff: cur?.diff ?? true }));
     } catch (e) {
       toast(errText(e), true);
     }
@@ -216,11 +180,7 @@ export function Brain() {
     setSearching(false);
   };
 
-  const match = useMemo(() => brain ? matchSet(brain, q, found) : null, [
-    brain,
-    q,
-    found,
-  ]);
+  const match = useMemo(() => brain ? matchSet(brain, q, found) : null, [brain, q, found]);
   const issues = healthIssues(brain?.health ?? null);
 
   const treeEl = !brain
@@ -228,45 +188,16 @@ export function Brain() {
     : searching
     ? <TreeNote text={t("brain.searching")} />
     : found && found.q === q.trim()
-    ? (
-      <Results
-        brain={brain}
-        found={found}
-        sel={sel}
-        onPick={selectPage}
-        onClear={clearSearch}
-      />
-    )
-    : (
-      <Tree
-        brain={brain}
-        hits={match}
-        sel={sel}
-        open={open}
-        onToggle={toggleDir}
-        onPick={selectPage}
-      />
-    );
+    ? <Results brain={brain} found={found} sel={sel} onPick={selectPage} onClear={clearSearch} />
+    : <Tree brain={brain} hits={match} sel={sel} open={open} onToggle={toggleDir} onPick={selectPage} />;
 
   return (
     <>
       <div class="tb-bar">
         <div class="seg" id="bn-modes" role="group">
           {MODES.map((m) => (
-            <button
-              type="button"
-              key={m}
-              aria-pressed={m === mode}
-              onClick={() => setMode(m)}
-            >
-              {m === "health"
-                ? (
-                  <>
-                    <span>{t("brain.m.health")}</span>
-                    {issues > 0 && <em class="n" id="bn-hn">{issues}</em>}
-                  </>
-                )
-                : t(`brain.m.${m}`)}
+            <button type="button" key={m} aria-pressed={m === mode} onClick={() => setMode(m)}>
+              {m === "health" ? <><span>{t("brain.m.health")}</span>{issues > 0 && <em class="n" id="bn-hn">{issues}</em>}</> : t(`brain.m.${m}`)}
             </button>
           ))}
         </div>
@@ -284,10 +215,7 @@ export function Brain() {
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") return clearSearch();
-            if (
-              e.key !== "Enter" || !brain || mode === "diary" ||
-              mode === "archive"
-            ) return;
+            if (e.key !== "Enter" || !brain || mode === "diary" || mode === "archive") return;
             const text = e.currentTarget.value.trim();
             if (!text) return;
             // a second Enter on the same results opens the first one
@@ -298,21 +226,13 @@ export function Brain() {
             void search(text);
           }}
         />
-        {brain && (
-          <span class="r sub" id="b-sum">
-            {t("brain.sum", { p: brain.pages.length, l: brain.edges.length })}
-          </span>
-        )}
+        {brain && <span class="r sub" id="b-sum">{t("brain.sum", { p: brain.pages.length, l: brain.edges.length })}</span>}
       </div>
 
       {loadError && !brain && (
         <div class="bn-read" id="bn-read">
           <nav class="bn-tree" id="bn-tree" aria-label="Pages" />
-          <article class="panel bn-page" id="bn-page">
-            <div class="bn-body">
-              <p class="sub">{t("brain.away", { e: loadError })}</p>
-            </div>
-          </article>
+          <article class="panel bn-page" id="bn-page"><div class="bn-body"><p class="sub">{t("brain.away", { e: loadError })}</p></div></article>
         </div>
       )}
 
@@ -334,59 +254,23 @@ export function Brain() {
               <div class="panel-h">
                 <h3>{t("brain.near")}</h3>
                 <label class="r sub bn-opt">
-                  <input
-                    type="checkbox"
-                    id="bn-d2"
-                    checked={depth2}
-                    onChange={(e) => setDepth2(e.currentTarget.checked)}
-                  />
+                  <input type="checkbox" id="bn-d2" checked={depth2} onChange={(e) => setDepth2(e.currentTarget.checked)} />
                   <span>{t("brain.depth2")}</span>
                 </label>
               </div>
-              {sel && (
-                <LocalGraph
-                  brain={brain}
-                  sel={sel}
-                  depth2={depth2}
-                  onSelect={selectPage}
-                />
-              )}
+              {sel && <LocalGraph brain={brain} sel={sel} depth2={depth2} onSelect={selectPage} />}
             </section>
-            <Links
-              brain={brain}
-              sel={sel}
-              page={page}
-              ver={ver}
-              onOpen={selectPage}
-              onVersion={showVersion}
-            />
+            <Links brain={brain} sel={sel} page={page} ver={ver} onOpen={selectPage} onVersion={showVersion} />
           </aside>
         </div>
       )}
 
       {brain && mode === "graph" && (
-        <GlobalGraph
-          brain={brain}
-          sel={sel}
-          match={match}
-          onPick={selectPage}
-          onRead={read}
-        />
+        <GlobalGraph brain={brain} sel={sel} match={match} onPick={selectPage} onRead={read} />
       )}
-      {brain && mode === "diary" && (
-        <Diary brain={brain} q={q} onPage={openTarget} onRead={read} />
-      )}
-      {brain && mode === "health" && (
-        <BrainHealth
-          brain={brain}
-          onPage={openTarget}
-          onOpen={read}
-          onFix={() => askClaude(t("brain.h.prompt"))}
-        />
-      )}
-      {mode === "archive" && (
-        <Archive q={q} onPage={openTarget} onBring={askClaude} />
-      )}
+      {brain && mode === "diary" && <Diary brain={brain} q={q} onPage={openTarget} onRead={read} />}
+      {brain && mode === "health" && <BrainHealth brain={brain} onPage={openTarget} onOpen={read} onFix={() => askClaude(t("brain.h.prompt"))} />}
+      {mode === "archive" && <Archive q={q} onPage={openTarget} onBring={askClaude} />}
     </>
   );
 }

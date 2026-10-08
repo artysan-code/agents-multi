@@ -95,19 +95,11 @@ export function Hey() {
     el.value = "";
     setNote(null);
     let acc = "", frame = 0;
-    let a: Answer = {
-      q: text,
-      text: "",
-      state: "thinking",
-      doing: t("ask.thinking"),
-      error: null,
-      done: false,
-      code: null,
-    };
+    let a: Answer = { q: text, text: "", state: "thinking", doing: t("ask.thinking"), error: null, done: false, code: null };
     setAnswer(a);
     const paint = () => {
       frame = 0;
-      setAnswer(a = { ...a, text: acc.replace(CODE, "") });
+      setAnswer((a = { ...a, text: acc.replace(CODE, "") }));
     };
     const ctl = busy.current = new AbortController();
     try {
@@ -115,16 +107,12 @@ export function Hey() {
         if (o.t === "session") session.current = o.id;
         else if (o.t === "text") {
           acc += o.d;
-          if (a.state !== "writing") setAnswer(a = { ...a, state: "writing" });
+          if (a.state !== "writing") setAnswer((a = { ...a, state: "writing" }));
           if (!frame) frame = requestAnimationFrame(paint);
-        } else if (o.t === "tool") {
-          setAnswer(
-            a = { ...a, state: "thinking", doing: tk(`ask.tool.${o.k}`) },
-          );
-        } else if (o.t === "done") {
-          if (o.error) {
-            setAnswer(a = { ...a, error: t("ask.failed", { e: o.error }) });
-          } else {
+        } else if (o.t === "tool") setAnswer((a = { ...a, state: "thinking", doing: tk(`ask.tool.${o.k}`) }));
+        else if (o.t === "done") {
+          if (o.error) setAnswer((a = { ...a, error: t("ask.failed", { e: o.error }) }));
+          else {
             acc = o.text;
             paint();
           }
@@ -132,32 +120,18 @@ export function Hey() {
         }
       });
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setAnswer(
-          a = { ...a, error: t("ask.failed", { e: (err as Error).message }) },
-        );
-      }
+      if ((err as Error).name !== "AbortError") setAnswer((a = { ...a, error: t("ask.failed", { e: (err as Error).message }) }));
     }
     if (busy.current !== ctl) return; // closed while it answered
     busy.current = null;
     if (frame) cancelAnimationFrame(frame);
-    setAnswer({
-      ...a,
-      text: acc.replace(CODE, "").trim(),
-      state: "",
-      done: true,
-    });
+    setAnswer({ ...a, text: acc.replace(CODE, "").trim(), state: "", done: true });
     el.focus();
   };
 
-  const handOver = async (
-    body: { resume: string } | { cwd: string; ask: string },
-  ) => {
+  const handOver = async (body: { resume: string } | { cwd: string; ask: string }) => {
     setNote(null);
-    const r = await heyApi.terminal(body).catch((err: Error) => ({
-      ok: false,
-      message: err.message,
-    }));
+    const r = await heyApi.terminal(body).catch((err: Error) => ({ ok: false, message: err.message }));
     if (r.ok) closeWindow();
     else setNote(r.message ?? "");
   };
@@ -190,38 +164,24 @@ export function Hey() {
         <section class="hey-body" aria-live="polite">
           <div class="hey-q">{answer.q}</div>
           <div class="hey-a md" ref={body}>
-            {answer.error
-              ? <p class="err">{answer.error}</p>
-              : renderMarkdown(answer.text, noPage)}
+            {answer.error ? <p class="err">{answer.error}</p> : renderMarkdown(answer.text, noPage)}
           </div>
           <div class="hey-f">
             <span class="hey-s" role="status">
-              {note
-                ? <span class="err">{note}</span>
-                : answer.done
-                ? <span>{t("ask.followup")}</span>
-                : (
-                  <>
-                    <Spark mode={answer.state} />
-                    <span>{answer.doing}</span>
-                  </>
-                )}
+              {note ? <span class="err">{note}</span> : answer.done ? <span>{t("ask.followup")}</span> : (
+                <>
+                  <Spark mode={answer.state} />
+                  <span>{answer.doing}</span>
+                </>
+              )}
             </span>
             {answer.done && session.current && (
-              <button
-                type="button"
-                class="btn sm"
-                onClick={() => handOver({ resume: session.current! })}
-              >
+              <button type="button" class="btn sm" onClick={() => handOver({ resume: session.current! })}>
                 {t("ask.terminal")}
               </button>
             )}
             {answer.done && answer.code && (
-              <button
-                type="button"
-                class="btn sm primary"
-                onClick={() => handOver({ cwd: answer.code!, ask: answer.q })}
-              >
+              <button type="button" class="btn sm primary" onClick={() => handOver({ cwd: answer.code!, ask: answer.q })}>
                 {t("ask.code", { p: folderName(answer.code) })}
               </button>
             )}

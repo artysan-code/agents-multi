@@ -16,10 +16,7 @@ const TITLES: [RegExp, Key][] = [
   [/^profile\.([^.]+)\.plugins(\.stale)?$/, "hc.profile.plugins"],
   [/^profile\.orphan$/, "hc.profile.orphan"],
   [/^profile\.([^.]+)/, "hc.profile"],
-  [
-    /^desktop\.(apt-key|shims|timer|urlhandler|userspace|entry\..+)$/,
-    "hc.desktop.setup",
-  ],
+  [/^desktop\.(apt-key|shims|timer|urlhandler|userspace|entry\..+)$/, "hc.desktop.setup"],
   [/^desktop\.(.+)$/, "hc.desktop"],
   [/^desktop-rebuild$/, "hc.desktop.setup"],
   [/^repo\.dirty$/, "hc.repo.dirty"],

@@ -38,10 +38,7 @@ export interface Vault {
 }
 
 export interface AccountsView {
-  google: {
-    client: boolean;
-    last: { account: string; ok: boolean; message: string; at: string } | null;
-  };
+  google: { client: boolean; last: { account: string; ok: boolean; message: string; at: string } | null };
   vault: Vault;
   services: string[];
   profiles: string[];
@@ -85,34 +82,24 @@ interface Login {
 }
 
 export const loadAccounts = () => get<AccountsView>("/api/accounts");
-export const loadCalendars = (fresh = false) =>
-  get<AccountCalendars[]>(`/api/calendars${fresh ? "?fresh" : ""}`);
+export const loadCalendars = (fresh = false) => get<AccountCalendars[]>(`/api/calendars${fresh ? "?fresh" : ""}`);
 
 /** Writes the account (or removes it). A failed request is a result with a message, as the form shows it. */
-export const saveAccount = (b: AccountBody) =>
-  post<Saved>("/api/accounts", b).catch(failed as (e: Error) => Saved);
+export const saveAccount = (b: AccountBody) => post<Saved>("/api/accounts", b).catch(failed as (e: Error) => Saved);
 
 export const setShown = (account: string, id: string, shown: boolean) =>
   post("/api/calendars", { account, id, shown }).catch(failed);
 
 /** Starts a consent page: Google's for an account, the brain's sign-in for the brain account. */
 export const startLogin = (kind: "google" | "brain", account: string) =>
-  post<Login>(kind === "google" ? "/api/google/connect" : "/api/brain/login", {
-    account,
-  })
+  post<Login>(kind === "google" ? "/api/google/connect" : "/api/brain/login", { account })
     .catch((e: Error): Login => ({ ok: false, message: e.message }));
 
 /** Sends the Google OAuth client file as it is (the server reads the JSON itself). */
 export async function importGoogleClient(text: string): Promise<Result> {
   try {
-    const r = await fetch("/api/google/client", {
-      method: "POST",
-      headers: { "x-claude-multi": "1" },
-      body: text,
-    });
-    if (!r.ok) {
-      throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
-    }
+    const r = await fetch("/api/google/client", { method: "POST", headers: { "x-claude-multi": "1" }, body: text });
+    if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
     return await r.json() as Result;
   } catch (e) {
     return failed(e as Error);

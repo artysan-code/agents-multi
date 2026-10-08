@@ -19,8 +19,7 @@ export const en = {
   "next.free": "Nothing else today",
   "next.tomorrow": "tomorrow",
   "next.prep": "Prepare me with Claude",
-  "next.prep.ask":
-    "Prepare me for «{t}» ({h}, {c}): what is it about, what do I need, and what should I have done first?",
+  "next.prep.ask": "Prepare me for «{t}» ({h}, {c}): what is it about, what do I need, and what should I have done first?",
   "next.open": "Open event",
   "next.openTask": "Open card",
   "day.doneN": "{n} done",
@@ -78,14 +77,12 @@ export const en = {
   "sc.fixed": "Fixed",
   "sc.details": "details",
   "sc.ask": "Ask Claude",
-  "sc.ask.text":
-    "The health check «{t}» says: {msg}. Suggested fix: {fix}. What is wrong, and how do I fix it?",
+  "sc.ask.text": "The health check «{t}» says: {msg}. Suggested fix: {fix}. What is wrong, and how do I fix it?",
   "sc.later": "Later",
   "sc.staged": "already downloaded",
   "sc.commits": "{n} new commits",
   "sc.note": "Claude Desktop restarts ({p}) to take its new version.",
-  "sc.note.busy":
-    "Claude Desktop restarts ({p}): {n} sessions are working there, it asks first.",
+  "sc.note.busy": "Claude Desktop restarts ({p}): {n} sessions are working there, it asks first.",
   "today.running": "Active now",
   "today.resume": "Pick up again",
   "today.resume.sub": "last 7 days",
@@ -150,8 +147,7 @@ export const it: Record<keyof typeof en, string> = {
   "next.free": "Per oggi non c'è altro",
   "next.tomorrow": "domani",
   "next.prep": "Preparami con Claude",
-  "next.prep.ask":
-    "Preparami per «{t}» ({h}, {c}): di cosa si tratta, cosa mi serve, e cosa dovrei aver fatto prima?",
+  "next.prep.ask": "Preparami per «{t}» ({h}, {c}): di cosa si tratta, cosa mi serve, e cosa dovrei aver fatto prima?",
   "next.open": "Apri evento",
   "next.openTask": "Apri scheda",
   "day.doneN": "{n} fatte",
@@ -209,14 +205,12 @@ export const it: Record<keyof typeof en, string> = {
   "sc.fixed": "Risolto",
   "sc.details": "dettagli",
   "sc.ask": "Chiedi a Claude",
-  "sc.ask.text":
-    "Il controllo di salute «{t}» dice: {msg}. Correzione suggerita: {fix}. Cosa non va, e come lo sistemo?",
+  "sc.ask.text": "Il controllo di salute «{t}» dice: {msg}. Correzione suggerita: {fix}. Cosa non va, e come lo sistemo?",
   "sc.later": "Più tardi",
   "sc.staged": "già scaricato",
   "sc.commits": "{n} commit nuovi",
   "sc.note": "Claude Desktop si riavvia ({p}) per passare alla versione nuova.",
-  "sc.note.busy":
-    "Claude Desktop si riavvia ({p}): {n} sessioni ci lavorano, ti chiede prima.",
+  "sc.note.busy": "Claude Desktop si riavvia ({p}): {n} sessioni ci lavorano, ti chiede prima.",
   "today.running": "Attivo ora",
   "today.resume": "Riprendi",
   "today.resume.sub": "ultimi 7 giorni",

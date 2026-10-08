@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { ago } from "../../lib/format.ts";
 import { t } from "../../i18n.ts";
-import { forceGraph, type GNode, type Graph } from "./graph.ts";
-import { areaOf, AREAS, bare, type Brain, groupLabel, who } from "./model.ts";
+import { type Graph, forceGraph, type GNode } from "./graph.ts";
+import { AREAS, areaOf, bare, type Brain, groupLabel, who } from "./model.ts";
 
 const nodeOf = (b: Brain, path: string): GNode | null => {
   const p = b.byPath.get(path);
@@ -49,23 +49,13 @@ export function LocalGraph({ brain, sel, depth2, onSelect }: {
     };
     grow();
     if (depth2) grow();
-    const nodes = [...ids].map((id) => nodeOf(brain, id)).filter((
-      n,
-    ): n is GNode => !!n);
+    const nodes = [...ids].map((id) => nodeOf(brain, id)).filter((n): n is GNode => !!n);
     g.setData(nodes, brain.edges.filter(([a, b]) => ids.has(a) && ids.has(b)));
     g.select(sel);
     g.resize();
   }, [brain, sel, depth2]);
 
-  return (
-    <canvas
-      ref={canvas}
-      id="bn-local"
-      class="bn-local"
-      role="img"
-      title={t("brain.graph")}
-    />
-  );
+  return <canvas ref={canvas} id="bn-local" class="bn-local" role="img" title={t("brain.graph")} />;
 }
 
 /** The whole graph: a legend that toggles the areas, fit, a card for the picked page, the help. */
@@ -98,25 +88,16 @@ export function GlobalGraph({ brain, sel, match, onPick, onRead }: {
     return () => graph.current?.destroy();
   }, []);
 
-  const shown = useMemo(
-    () => brain.pages.filter((p) => !off.has(areaOf(p.area))),
-    [brain, off],
-  );
+  const shown = useMemo(() => brain.pages.filter((p) => !off.has(areaOf(p.area))), [brain, off]);
   const visible = useMemo(() => new Set(shown.map((p) => p.path)), [shown]);
 
   useEffect(() => {
     const g = graph.current!;
-    g.setData(
-      shown.map((p) => nodeOf(brain, p.path)!),
-      brain.edges.filter(([a, b]) => visible.has(a) && visible.has(b)),
-    );
+    g.setData(shown.map((p) => nodeOf(brain, p.path)!), brain.edges.filter(([a, b]) => visible.has(a) && visible.has(b)));
     g.resize();
   }, [brain, shown]);
   useEffect(() => graph.current?.setMatch(match), [match, brain, shown]);
-  useEffect(
-    () => graph.current?.select(card && visible.has(card) ? card : null),
-    [card, brain, shown],
-  );
+  useEffect(() => graph.current?.select(card && visible.has(card) ? card : null), [card, brain, shown]);
 
   const present = new Set(brain.pages.map((p) => areaOf(p.area)));
   const flip = (g: string) => {
@@ -131,52 +112,22 @@ export function GlobalGraph({ brain, sel, match, onPick, onRead }: {
       <div class="bn-gtools">
         <div class="bn-legend" id="bn-legend">
           {[...AREAS, "other"].filter((g) => present.has(g)).map((g) => (
-            <button
-              type="button"
-              key={g}
-              class={`lg${off.has(g) ? " off" : ""}`}
-              onClick={() => flip(g)}
-            >
+            <button type="button" key={g} class={`lg${off.has(g) ? " off" : ""}`} onClick={() => flip(g)}>
               <i style={{ background: `var(--g-${g})` }} />
               {groupLabel(g)}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          class="btn sm"
-          onClick={() => graph.current?.refit()}
-        >
-          {t("brain.fit")}
-        </button>
+        <button type="button" class="btn sm" onClick={() => graph.current?.refit()}>{t("brain.fit")}</button>
       </div>
-      <canvas
-        ref={canvas}
-        id="bn-canvas"
-        class="bn-canvas"
-        role="img"
-        title={t("brain.graph")}
-      />
+      <canvas ref={canvas} id="bn-canvas" class="bn-canvas" role="img" title={t("brain.graph")} />
       {p && (
         <div class="bn-card" id="bn-card">
           <div class="sub">{bare(p.path)}</div>
           <b>{p.title}</b>
-          <div class="sub">
-            {t("brain.updatedBy", { d: ago(p.updated), w: who(p.by) })}
-          </div>
-          <div class="sub">
-            {t("brain.linkCount", {
-              i: brain.in.get(p.path)?.size ?? 0,
-              o: brain.out.get(p.path)?.size ?? 0,
-            })}
-          </div>
-          <button
-            type="button"
-            class="btn primary sm"
-            onClick={() => onRead(p.path)}
-          >
-            {t("brain.read")}
-          </button>
+          <div class="sub">{t("brain.updatedBy", { d: ago(p.updated), w: who(p.by) })}</div>
+          <div class="sub">{t("brain.linkCount", { i: brain.in.get(p.path)?.size ?? 0, o: brain.out.get(p.path)?.size ?? 0 })}</div>
+          <button type="button" class="btn primary sm" onClick={() => onRead(p.path)}>{t("brain.read")}</button>
         </div>
       )}
       <p class="bn-help sub">{t("brain.help")}</p>

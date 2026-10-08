@@ -995,8 +995,7 @@ tbody tr[aria-selected="true"] {
 /* ---------------- profiles: one row each, edited in the drawer ---------------- */
 .plist-row {
   display: grid;
-  grid-template-columns: minmax(200px,1.3fr) minmax(150px,1fr) minmax(170px,1fr)
-    minmax(200px,1.6fr) auto;
+  grid-template-columns: minmax(200px,1.3fr) minmax(150px,1fr) minmax(170px,1fr) minmax(200px,1.6fr) auto;
   gap: 18px;
   align-items: center;
   padding: 14px 20px;

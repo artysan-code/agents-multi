@@ -23,11 +23,7 @@ export function Logo({ service }: { service: string }) {
   return (
     <span class="svc-logo">
       {d
-        ? (
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d={d} />
-          </svg>
-        )
+        ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg>
         : svcName(service).slice(0, 1).toUpperCase()}
     </span>
   );

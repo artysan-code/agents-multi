@@ -6,12 +6,7 @@ import type { ComponentChildren } from "preact";
 import { status } from "../../state.ts";
 import { lang, t, tk } from "../../i18n.ts";
 import { runAction } from "../../lib/ui.tsx";
-import {
-  COMPONENTS,
-  type MachineExtra,
-  type RepoExtra,
-  type Report,
-} from "./updates-lib.tsx";
+import { COMPONENTS, type MachineExtra, type RepoExtra, type Report } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
 
 function Card({ name, current, lines, rollback, extra }: {
@@ -30,15 +25,7 @@ function Card({ name, current, lines, rollback, extra }: {
         {lines.filter(Boolean).map((l) => <div class="sub" key={l}>{l}</div>)}
       </div>
       {extra}
-      {rollback && (
-        <button
-          type="button"
-          class="btn sm"
-          onClick={() => void runAction(rollback)}
-        >
-          {t("up.rollback")}
-        </button>
-      )}
+      {rollback && <button type="button" class="btn sm" onClick={() => void runAction(rollback)}>{t("up.rollback")}</button>}
     </div>
   );
 }
@@ -62,36 +49,20 @@ function SelfCard({ S }: { S: Report }) {
       current={(r.head ?? "").split(" ")[0]}
       lines={[state, S.selfInstall ? t("up.self.install") : null]}
       // the button only for an install waiting on Claude: not for an update skipped for another reason
-      extra={S.selfInstall
-        ? (
-          <button
-            type="button"
-            class="btn sm"
-            onClick={() => void openCloseClaude()}
-          >
-            {t("cc.btn")}
-          </button>
-        )
-        : null}
+      extra={S.selfInstall ? <button type="button" class="btn sm" onClick={() => void openCloseClaude()}>{t("cc.btn")}</button> : null}
     />
   );
 }
 
 const when = (iso: string): string =>
-  new Date(iso).toLocaleString(lang(), {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function Updates() {
   const S = status.value as Report | null;
   if (!S) return <div class="sub-view" />;
   const m = S.machine as Report["machine"] & MachineExtra;
   const u = S.update ?? {};
-  const cliPrev = (m.cliVersions ?? []).filter((v) => v !== m.cliVersion).sort()
-    .pop();
+  const cliPrev = (m.cliVersions ?? []).filter((v) => v !== m.cliVersion).sort().pop();
   const log = S.updateLog ?? [];
   return (
     <div class="sub-view">
@@ -101,9 +72,7 @@ export function Updates() {
           name="Claude Code"
           current={m.cliVersion}
           lines={[
-            u.cli?.latest && u.cli.latest !== m.cliVersion
-              ? t("up.next", { v: u.cli.latest })
-              : t("up.uptodate"),
+            u.cli?.latest && u.cli.latest !== m.cliVersion ? t("up.next", { v: u.cli.latest }) : t("up.uptodate"),
             cliPrev ? t("up.previous", { v: cliPrev }) : null,
           ]}
           rollback={cliPrev ? "rollback-cli" : null}
@@ -112,13 +81,9 @@ export function Updates() {
           name="Claude Desktop"
           current={m.desktopVersion}
           lines={[
-            m.desktopStaged
-              ? t("up.staged", { v: m.desktopStaged })
-              : t("up.uptodate"),
+            m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : t("up.uptodate"),
             m.desktopSystem ? t("up.system") : null,
-            m.desktopPrevious
-              ? t("up.previous", { v: m.desktopPrevious })
-              : null,
+            m.desktopPrevious ? t("up.previous", { v: m.desktopPrevious }) : null,
           ]}
           rollback={m.desktopPrevious ? "rollback-desktop" : null}
         />
@@ -126,12 +91,7 @@ export function Updates() {
       </div>
       <p class="note">
         {Object.entries(m.embeddedCode ?? {})
-          .map(([v, vs]) =>
-            t("up.embedded", {
-              v,
-              vs: Array.isArray(vs) ? vs.join(", ") : String(vs ?? ""),
-            })
-          )
+          .map(([v, vs]) => t("up.embedded", { v, vs: Array.isArray(vs) ? vs.join(", ") : String(vs ?? "") }))
           .join(" · ")}
       </p>
       <div class="panel" style={{ marginTop: "20px" }}>
@@ -147,10 +107,7 @@ export function Updates() {
                   <span class="when">{when(e.at)}</span>
                   <span>{COMPONENTS[e.component] ?? e.component}</span>
                   <span>{e.from || "—"} → {e.to || "—"}</span>
-                  <span>
-                    {tk(`up.ev.${e.event}`)}
-                    {e.detail ? ` · ${e.detail}` : ""}
-                  </span>
+                  <span>{tk(`up.ev.${e.event}`)}{e.detail ? ` · ${e.detail}` : ""}</span>
                 </div>
               );
             })

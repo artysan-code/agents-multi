@@ -21,8 +21,8 @@ import {
   isOpen,
   NONE,
   openCount,
-  type OwnerFilter,
   ownerFilter,
+  type OwnerFilter,
   projectLabel,
   projectValue,
   query,
@@ -37,8 +37,7 @@ const OWNERS: OwnerFilter[] = ["all", "me", "claude", "others"];
 
 function Head() {
   const p = currentProject();
-  const xs = (board.value?.tasks ?? []).filter((x) => !p || inProject(x, p))
-    .filter(isOpen);
+  const xs = (board.value?.tasks ?? []).filter((x) => !p || inProject(x, p)).filter(isOpen);
   const s = stepsOf(xs);
   const isFolder = !!p && !p.startsWith("~");
   return (
@@ -48,15 +47,10 @@ function Head() {
         {isFolder && (
           <>
             <span>~/{p}</span>
-            <button type="button" onClick={() => openPath(`~/${p}`)}>
-              {t("ts.openFolder")}
-            </button>
+            <button type="button" onClick={() => openPath(`~/${p}`)}>{t("ts.openFolder")}</button>
           </>
         )}
-        <span>
-          {openCount(xs.length)}
-          {s.n > 0 && `, ${t("tb.steps", { d: s.d, n: s.n })}`}
-        </span>
+        <span>{openCount(xs.length)}{s.n > 0 && `, ${t("tb.steps", { d: s.d, n: s.n })}`}</span>
       </div>
     </div>
   );
@@ -81,9 +75,7 @@ export function Tasks() {
   return (
     <div class="tk-frame">
       <section class="pane tk-projects">
-        <div class="pane-h">
-          <h3>{t("tb.projects")}</h3>
-        </div>
+        <div class="pane-h"><h3>{t("tb.projects")}</h3></div>
         <Folders />
       </section>
       <section class="pane tk-main">
@@ -104,19 +96,12 @@ export function Tasks() {
             />
             <div class="seg" role="group">
               {OWNERS.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  aria-pressed={ownerFilter.value === o}
-                  onClick={() => ownerFilter.value = o}
-                >
+                <button key={o} type="button" aria-pressed={ownerFilter.value === o} onClick={() => ownerFilter.value = o}>
                   {t(`tb.owner.${o}`)}
                 </button>
               ))}
             </div>
-            <button type="button" class="btn primary" onClick={newTask}>
-              {t("tb.new")}
-            </button>
+            <button type="button" class="btn primary" onClick={newTask}>{t("tb.new")}</button>
           </div>
         </header>
         <div class="tk-body">

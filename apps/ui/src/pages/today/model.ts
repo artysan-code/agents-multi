@@ -16,16 +16,11 @@ export interface GroupTask {
 export type GroupName = "late" | "today" | "doing" | "wait";
 export const GROUPS: GroupName[] = ["late", "today", "doing", "wait"];
 
-const open = (x: GroupTask) =>
-  x.status === "todo" || x.status === "doing" || x.status === "waiting";
+const open = (x: GroupTask) => x.status === "todo" || x.status === "doing" || x.status === "waiting";
 
 /** The group of a task, or null when Today does not show it (done, or open with nothing pressing):
  *  waiting, or someone else's (Claude's included) → wait; then late, due today, in progress. */
-export function groupOf(
-  x: GroupTask,
-  today: string,
-  me: string,
-): GroupName | null {
+export function groupOf(x: GroupTask, today: string, me: string): GroupName | null {
   if (!open(x)) return null;
   if (x.status === "waiting" || (x.owner && x.owner !== me)) return "wait";
   if (x.due && x.due < today) return "late";
@@ -35,25 +30,14 @@ export function groupOf(
 }
 
 const byDue = (a: GroupTask, b: GroupTask) =>
-  (a.due ?? "9999").localeCompare(b.due ?? "9999") ||
-  (a.time ?? "99").localeCompare(b.time ?? "99") ||
+  (a.due ?? "9999").localeCompare(b.due ?? "9999") || (a.time ?? "99").localeCompare(b.time ?? "99") ||
   (a.priority ?? 2) - (b.priority ?? 2);
 const byRecent = (a: GroupTask, b: GroupTask) =>
-  (a.priority ?? 2) - (b.priority ?? 2) ||
-  (b.updated ?? "").localeCompare(a.updated ?? "");
+  (a.priority ?? 2) - (b.priority ?? 2) || (b.updated ?? "").localeCompare(a.updated ?? "");
 
 /** The four groups, each in its order: by when it was due, by the time today, the rest most recent first. */
-export function groupTasks<T extends GroupTask>(
-  tasks: T[],
-  today: string,
-  me: string,
-): Record<GroupName, T[]> {
-  const out: Record<GroupName, T[]> = {
-    late: [],
-    today: [],
-    doing: [],
-    wait: [],
-  };
+export function groupTasks<T extends GroupTask>(tasks: T[], today: string, me: string): Record<GroupName, T[]> {
+  const out: Record<GroupName, T[]> = { late: [], today: [], doing: [], wait: [] };
   for (const x of tasks) {
     const g = groupOf(x, today, me);
     if (g) out[g].push(x);
@@ -62,10 +46,7 @@ export function groupTasks<T extends GroupTask>(
   out.today.sort(byDue);
   out.doing.sort(byRecent);
   // Claude's first: its work moves on its own
-  out.wait.sort((a, b) =>
-    Number(b.owner === "claude") - Number(a.owner === "claude") ||
-    byDue(a, b) || byRecent(a, b)
-  );
+  out.wait.sort((a, b) => Number(b.owner === "claude") - Number(a.owner === "claude") || byDue(a, b) || byRecent(a, b));
   return out;
 }
 
@@ -77,9 +58,7 @@ export function minutes(hm: string | null | undefined): number | null {
 
 /** Calendar days from `a` to `b` (YYYY-MM-DD). */
 export function daysBetween(a: string, b: string): number {
-  return Math.round(
-    (Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000,
-  );
+  return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
 }
 
 export interface Span {
@@ -100,10 +79,7 @@ export function lanes(items: Span[], n = 3): number[] {
 }
 
 /** The first two items starting after `now` (minutes), in time order. */
-export function upNext<T extends { time?: string | null }>(
-  items: T[],
-  now: number,
-): T[] {
+export function upNext<T extends { time?: string | null }>(items: T[], now: number): T[] {
   return items
     .filter((x) => (minutes(x.time) ?? -1) > now)
     .sort((a, b) => minutes(a.time)! - minutes(b.time)!)
@@ -111,14 +87,9 @@ export function upNext<T extends { time?: string | null }>(
 }
 
 /** "in 50 min", "in 2 h 10": the countdown's number and the rest. */
-export function countdown(
-  from: number,
-  to: number,
-): { n: number; unit: "min" | "h"; rest: number } {
+export function countdown(from: number, to: number): { n: number; unit: "min" | "h"; rest: number } {
   const d = Math.max(0, to - from);
-  return d < 60
-    ? { n: d, unit: "min", rest: 0 }
-    : { n: Math.floor(d / 60), unit: "h", rest: d % 60 };
+  return d < 60 ? { n: d, unit: "min", rest: 0 } : { n: Math.floor(d / 60), unit: "h", rest: d % 60 };
 }
 
 /** The debrief in one sentence: its first, without Markdown, cut at `max` characters on a word. */
@@ -132,10 +103,7 @@ export function firstSentence(text: string, max = 180): string {
   const s = m ? m[1] : plain;
   if (s.length <= max) return s;
   const cut = s.slice(0, max - 1);
-  return cut.slice(0, Math.max(cut.lastIndexOf(" "), max / 2)).replace(
-    /[\s,;:]+$/,
-    "",
-  ) + "…";
+  return cut.slice(0, Math.max(cut.lastIndexOf(" "), max / 2)).replace(/[\s,;:]+$/, "") + "…";
 }
 
 /** The window of the day's line: 08–21, widened to what is planned outside it. */

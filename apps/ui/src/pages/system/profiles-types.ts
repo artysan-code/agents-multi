@@ -13,11 +13,7 @@ export interface Manifest {
 
 export interface ProfileFull extends ProfileView {
   manifest: Manifest;
-  mounted: {
-    skills: Record<string, unknown>;
-    agents: Record<string, unknown>;
-    commands: Record<string, unknown>;
-  };
+  mounted: { skills: Record<string, unknown>; agents: Record<string, unknown>; commands: Record<string, unknown> };
 }
 
 export const profilesOf = (s: StatusView): [string, ProfileFull][] =>

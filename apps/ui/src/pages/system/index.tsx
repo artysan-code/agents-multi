@@ -25,14 +25,7 @@ export function System() {
     <>
       <div class="tabs" role="tablist">
         {TABS.map((x) => (
-          <a
-            key={x}
-            href={`#system/${x}`}
-            role="tab"
-            aria-selected={x === tab.value}
-          >
-            {t(`sys.${x}`)}
-          </a>
+          <a key={x} href={`#system/${x}`} role="tab" aria-selected={x === tab.value}>{t(`sys.${x}`)}</a>
         ))}
         <UpdateNow cls="btn sm tabs-r" />
       </div>

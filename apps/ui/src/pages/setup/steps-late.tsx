@@ -12,21 +12,10 @@ import { Nav, type StepProps } from "./index.tsx";
 import { JobStep, useSend } from "./steps.tsx";
 
 /** «Later»: the step is recorded as put off, and the wizard moves on. */
-function Later(
-  { p, step, label = "su.later" }: {
-    p: StepProps;
-    step: Step;
-    label?: "su.later" | "su.skip";
-  },
-) {
+function Later({ p, step, label = "su.later" }: { p: StepProps; step: Step; label?: "su.later" | "su.skip" }) {
   const s = useSend(p);
   return (
-    <button
-      type="button"
-      class="bt ghost"
-      disabled={s.running}
-      onClick={() => void s.run(() => send("pass", { step, later: true }))}
-    >
+    <button type="button" class="bt ghost" disabled={s.running} onClick={() => void s.run(() => send("pass", { step, later: true }))}>
       {t(label)}
     </button>
   );
@@ -38,12 +27,7 @@ export function Claude(p: StepProps) {
       p={p}
       action="claude-code"
       done={p.v.facts.claudeCode}
-      keys={{
-        h: "su.claude.h",
-        sub: "su.claude.sub",
-        row: "su.claude.row",
-        go: "su.claude.go",
-      }}
+      keys={{ h: "su.claude.h", sub: "su.claude.sub", row: "su.claude.row", go: "su.claude.go" }}
       extra={<Later p={p} step="claude" />}
     />
   );
@@ -55,9 +39,7 @@ export function Vault(p: StepProps) {
   const [code, setCode] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [pairing, setPairing] = useState(
-    state === "locked" || state === "wrong-key",
-  );
+  const [pairing, setPairing] = useState(state === "locked" || state === "wrong-key");
   const [given, setGiven] = useState("");
   const pass = () => s.run(() => send("pass", { step: "vault" }));
 
@@ -71,34 +53,18 @@ export function Vault(p: StepProps) {
           <button
             type="button"
             class="bt sm"
-            onClick={() =>
-              void navigator.clipboard?.writeText(code).then(
-                () => setCopied(true),
-                () => {},
-              )}
+            onClick={() => void navigator.clipboard?.writeText(code).then(() => setCopied(true), () => {})}
           >
             {t(copied ? "su.vault.copied" : "su.vault.copy")}
           </button>
         </div>
         <p class="su-warn">{t("su.vault.keep")}</p>
         <label class="fld check su-saved">
-          <input
-            type="checkbox"
-            checked={saved}
-            onChange={(e) => setSaved(e.currentTarget.checked)}
-          />{" "}
-          {t("su.vault.saved")}
+          <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.currentTarget.checked)} /> {t("su.vault.saved")}
         </label>
         {s.cause && <p class="uw-cause">{s.cause}</p>}
         <Nav back={null}>
-          <button
-            type="button"
-            class="bt pri"
-            disabled={!saved || s.running}
-            onClick={() => void pass()}
-          >
-            {t("su.next")}
-          </button>
+          <button type="button" class="bt pri" disabled={!saved || s.running} onClick={() => void pass()}>{t("su.next")}</button>
         </Nav>
       </>
     );
@@ -114,37 +80,21 @@ export function Vault(p: StepProps) {
           <p class="su-note">{t("su.vault.lost")}</p>
         </>
       )}
-      {state === "unavailable" && (
-        <p class="uw-cause">{t("su.vault.unavailable")}</p>
-      )}
-      {state === "locked" && (
-        <p class="su-note">{t("su.vault.locked", { d: dir })}</p>
-      )}
-      {state === "wrong-key" && (
-        <p class="uw-cause">{t("su.vault.wrong", { d: dir })}</p>
-      )}
+      {state === "unavailable" && <p class="uw-cause">{t("su.vault.unavailable")}</p>}
+      {state === "locked" && <p class="su-note">{t("su.vault.locked", { d: dir })}</p>}
+      {state === "wrong-key" && <p class="uw-cause">{t("su.vault.wrong", { d: dir })}</p>}
       {state === "none" && !pairing && (
         <div class="su-choice">
           <button
             type="button"
             class="su-opt"
             disabled={s.running}
-            onClick={() =>
-              void s.run(() =>
-                send<{ ok: boolean; message?: string; code?: string }>(
-                  "vault",
-                  { mode: "init" },
-                ), (r) => setCode(r.code ?? ""))}
+            onClick={() => void s.run(() => send<{ ok: boolean; message?: string; code?: string }>("vault", { mode: "init" }), (r) => setCode(r.code ?? ""))}
           >
             <b>{t("su.vault.create")}</b>
             <span>{dir}</span>
           </button>
-          <button
-            type="button"
-            class="su-opt"
-            onClick={() =>
-              setPairing(true)}
-          >
+          <button type="button" class="su-opt" onClick={() => setPairing(true)}>
             <b>{t("su.vault.have")}</b>
             <span>{t("su.vault.code")}</span>
           </button>
@@ -161,43 +111,16 @@ export function Vault(p: StepProps) {
           <p class="su-note">{t("su.vault.pairSub")}</p>
           <label class="fld">
             {t("su.vault.code")}
-            <input
-              class="mono"
-              type="password"
-              value={given}
-              onInput={(e) =>
-                setGiven(e.currentTarget.value)}
-              required
-              autocomplete="off"
-              autofocus
-            />
+            <input class="mono" type="password" value={given} onInput={(e) => setGiven(e.currentTarget.value)} required autocomplete="off" autofocus />
           </label>
         </form>
       )}
       {s.cause && <p class="uw-cause">{s.cause}</p>}
-      <Nav
-        back={pairing && state === "none" ? () => setPairing(false) : p.back}
-      >
+      <Nav back={pairing && state === "none" ? () => setPairing(false) : p.back}>
         {state !== "ok" && <Later p={p} step="vault" />}
-        {state === "ok" && (
-          <button
-            type="button"
-            class="bt pri"
-            disabled={s.running}
-            onClick={() => void pass()}
-          >
-            {t("su.next")}
-          </button>
-        )}
+        {state === "ok" && <button type="button" class="bt pri" disabled={s.running} onClick={() => void pass()}>{t("su.next")}</button>}
         {pairing && state !== "ok" && state !== "unavailable" && (
-          <button
-            type="submit"
-            form="su-pair"
-            class="bt pri"
-            disabled={s.running || !given.trim()}
-          >
-            {t("su.vault.pair")}
-          </button>
+          <button type="submit" form="su-pair" class="bt pri" disabled={s.running || !given.trim()}>{t("su.vault.pair")}</button>
         )}
       </Nav>
     </>
@@ -213,51 +136,32 @@ export function Logins(p: StepProps) {
     <>
       <h2>{t("su.logins.h")}</h2>
       <p class="su-sub">{t("su.logins.sub")}</p>
-      {!f.claudeCode && (
-        <p class="su-note">
-          {t("su.logins.noCode", { c: f.profiles[0]?.command ?? "claude" })}
-        </p>
-      )}
+      {!f.claudeCode && <p class="su-note">{t("su.logins.noCode", { c: f.profiles[0]?.command ?? "claude" })}</p>}
       <ul class="su-list">
         {f.profiles.map((x) => (
           <li key={x.profile} class={x.signedIn ? "in" : ""}>
             <span class="su-dot" />
             <b>{x.profile}</b>
             <code>{x.command}</code>
-            <span class="su-state">
-              {t(x.signedIn ? "su.logins.in" : "su.logins.out")}
-            </span>
+            <span class="su-state">{t(x.signedIn ? "su.logins.in" : "su.logins.out")}</span>
             <button
               type="button"
               class={`bt sm${x.signedIn ? " ghost" : ""}`}
               disabled={s.running || !f.claudeCode}
-              onClick={() =>
-                void s.run(() =>
-                  send("login", { profile: x.profile }), () =>
-                  setOpened(x.profile))}
+              onClick={() => void s.run(() => send("login", { profile: x.profile }), () => setOpened(x.profile))}
             >
               {t(x.signedIn ? "su.logins.again" : "su.logins.go")}
             </button>
           </li>
         ))}
       </ul>
-      {opened && !f.profiles.find((x) => x.profile === opened)?.signedIn && (
-        <p class="su-sub">{t("su.logins.opened", { p: opened })}</p>
-      )}
+      {opened && !f.profiles.find((x) => x.profile === opened)?.signedIn && <p class="su-sub">{t("su.logins.opened", { p: opened })}</p>}
       {s.cause && <p class="uw-cause">{s.cause}</p>}
       <Nav back={p.back}>
         {!all && <Later p={p} step="logins" />}
         {all
-          ? (
-            <button type="button" class="bt pri" onClick={() => void p.next()}>
-              {t("su.next")}
-            </button>
-          )
-          : (
-            <button type="button" class="bt" onClick={() => void p.next()}>
-              {t("su.check")}
-            </button>
-          )}
+          ? <button type="button" class="bt pri" onClick={() => void p.next()}>{t("su.next")}</button>
+          : <button type="button" class="bt" onClick={() => void p.next()}>{t("su.check")}</button>}
       </Nav>
     </>
   );
@@ -273,14 +177,9 @@ export function Brain(p: StepProps) {
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        void s.run(() =>
-          send<{ ok: boolean; message?: string; url?: string }>("brain", {
-            url,
-          }), (r) => {
+        void s.run(() => send<{ ok: boolean; message?: string; url?: string }>("brain", { url }), (r) => {
           // the brain's sign-in page: the app opens it in the system browser
-          if (r.url) {
-            window.open(r.url, "_blank", "noopener");
-          }
+          if (r.url) window.open(r.url, "_blank", "noopener");
           setWaiting(true);
         });
       }}
@@ -295,43 +194,17 @@ export function Brain(p: StepProps) {
         ? (
           <label class="fld">
             {t("su.brain.url")}
-            <input
-              class="mono"
-              type="url"
-              value={url}
-              onInput={(e) => setUrl(e.currentTarget.value)}
-              placeholder="https://brain.example.org"
-              required
-              spellcheck={false}
-            />
+            <input class="mono" type="url" value={url} onInput={(e) => setUrl(e.currentTarget.value)} placeholder="https://brain.example.org" required spellcheck={false} />
           </label>
         )
         : <p class="su-note">{t("su.brain.noVault")}</p>}
-      {waiting && !f.brain.connected && (
-        <p class="su-sub">{t("su.brain.wait")}</p>
-      )}
+      {waiting && !f.brain.connected && <p class="su-sub">{t("su.brain.wait")}</p>}
       {s.cause && <p class="uw-cause">{s.cause}</p>}
       <Nav back={p.back}>
         {!f.brain.connected && <Later p={p} step="brain" label="su.skip" />}
         {f.brain.connected
-          ? (
-            <button
-              type="button"
-              class="bt pri"
-              onClick={() => void p.next()}
-            >
-              {t("su.next")}
-            </button>
-          )
-          : vault && (
-            <button
-              type="submit"
-              class="bt pri"
-              disabled={s.running || !url.trim()}
-            >
-              {t("su.brain.go")}
-            </button>
-          )}
+          ? <button type="button" class="bt pri" onClick={() => void p.next()}>{t("su.next")}</button>
+          : vault && <button type="submit" class="bt pri" disabled={s.running || !url.trim()}>{t("su.brain.go")}</button>}
       </Nav>
     </form>
   );
@@ -344,9 +217,7 @@ export function Done(p: StepProps) {
   // the MCP servers, once everything they read is in place (profiles signed in, accounts, the brain)
   useEffect(() => {
     p.busy(true);
-    void runJob("mcp-sync", undefined, () => {}).catch((e: Error) => ({
-      error: e.message,
-    })).then((r) => {
+    void runJob("mcp-sync", undefined, () => {}).catch((e: Error) => ({ error: e.message })).then((r) => {
       p.busy(false);
       setMcp("error" in r || r.code ? "failed" : "done");
     });
@@ -362,10 +233,7 @@ export function Done(p: StepProps) {
   const rows: StepRow[] = [
     row("you", f.owner?.name ?? ""),
     row("folder", f.folder ?? ""),
-    row(
-      "profiles",
-      n === 1 ? t("su.done.profile") : t("su.done.profiles", { n }),
-    ),
+    row("profiles", n === 1 ? t("su.done.profile") : t("su.done.profiles", { n })),
     row("install", ""),
     row("claude", ""),
     row("vault", p.v.vaultDir),
@@ -378,13 +246,7 @@ export function Done(p: StepProps) {
       <h2>{t("su.done.h")}</h2>
       <p class="su-sub">{t("su.done.sub", { n: f.owner?.name ?? "" })}</p>
       <StepRows rows={rows} />
-      {later.length > 0 && (
-        <p class="su-note">
-          {t("su.done.later", {
-            l: later.map((x) => tk(`su.s.${x}`)).join(", "),
-          })}
-        </p>
-      )}
+      {later.length > 0 && <p class="su-note">{t("su.done.later", { l: later.map((x) => tk(`su.s.${x}`)).join(", ") })}</p>}
       {mcp === "failed" && <p class="uw-cause">{t("su.done.mcpFail")}</p>}
       {s.cause && <p class="uw-cause">{s.cause}</p>}
       <Nav back={mcp === "running" ? null : p.back}>

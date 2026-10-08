@@ -26,10 +26,7 @@ export const topics = {
 } satisfies Record<Topic, unknown>;
 
 /** The sessions the last usage event named: they are writing right now. */
-export const working = signal<{ ids: string[]; at: number }>({
-  ids: [],
-  at: 0,
-});
+export const working = signal<{ ids: string[]; at: number }>({ ids: [], at: 0 });
 
 /** Bumps a topic from the page itself: after an action that changed it, without waiting for the event. */
 export function touch(topic: Topic): void {
@@ -37,11 +34,7 @@ export function touch(topic: Topic): void {
 }
 
 /** Runs `load` now and again each time one of the topics moves; the latest call wins. */
-export function useTopic(
-  load: () => unknown,
-  on: Topic[],
-  deps: unknown[] = [],
-): void {
+export function useTopic(load: () => unknown, on: Topic[], deps: unknown[] = []): void {
   // reading the counters here subscribes the component: their values are the effect's dependency
   const seq = on.map((t) => topics[t].value).join(",");
   useEffect(() => {
@@ -63,9 +56,7 @@ export async function loadOwner(): Promise<void> {
 /** A reload, but not under someone's fingers: while a field has focus, or a drawer with a form is
  *  open, it waits and asks again. */
 function reloadWhenIdle(): void {
-  const busy = document.activeElement?.matches?.(
-    "input, textarea, select, [contenteditable]",
-  ) ||
+  const busy = document.activeElement?.matches?.("input, textarea, select, [contenteditable]") ||
     document.querySelector(".drawer form, dialog[open]");
   if (busy) setTimeout(reloadWhenIdle, 5000);
   else location.reload();
@@ -111,9 +102,7 @@ export function connect(): void {
       last = Date.now();
       let code = "";
       try {
-        code =
-          (JSON.parse((e as MessageEvent).data || "{}") as { code?: string })
-            .code ?? "";
+        code = (JSON.parse((e as MessageEvent).data || "{}") as { code?: string }).code ?? "";
       } catch { /* an old console says nothing */ }
       if (!boot) boot = code;
       else if (code && code !== boot) reloadWhenIdle();
@@ -121,9 +110,7 @@ export function connect(): void {
     es.addEventListener("usage", (e) => {
       last = Date.now();
       try {
-        const ids =
-          (JSON.parse((e as MessageEvent).data) as { sessions?: string[] })
-            .sessions ?? [];
+        const ids = (JSON.parse((e as MessageEvent).data) as { sessions?: string[] }).sessions ?? [];
         if (ids.length) working.value = { ids, at: Date.now() };
       } catch { /* an event without a body is still a change */ }
       coalesce("usage");

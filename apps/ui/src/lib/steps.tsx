@@ -19,30 +19,14 @@ export function StepRows({ rows }: { rows: StepRow[] }) {
       {rows.map(({ key, label, state: st, detail, pct }) => (
         <li key={key} class={`uw-${st}`}>
           <span class="uw-ic">
-            {st === "running"
-              ? <span class="spin2" />
-              : st === "done"
-              ? "✓"
-              : st === "failed"
-              ? "!"
-              : st === "skipped"
-              ? "–"
-              : ""}
+            {st === "running" ? <span class="spin2" /> : st === "done" ? "✓" : st === "failed" ? "!" : st === "skipped" ? "–" : ""}
           </span>
           <span class="uw-n">{label}</span>
           <span class="uw-d">{detail ?? ""}</span>
           <span class="uw-bar">
             <i
               class={st === "running" && pct == null ? "ind" : ""}
-              style={{
-                width: st === "done" || st === "skipped"
-                  ? "100%"
-                  : pct != null
-                  ? `${pct}%`
-                  : st === "running"
-                  ? "40%"
-                  : "0",
-              }}
+              style={{ width: st === "done" || st === "skipped" ? "100%" : pct != null ? `${pct}%` : st === "running" ? "40%" : "0" }}
             />
           </span>
         </li>

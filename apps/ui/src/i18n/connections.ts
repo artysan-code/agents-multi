@@ -2,8 +2,7 @@
 // conn.edit/save/cancel/remove are this page's own copies of the old profile.* and pl.remove labels.
 
 export const en = {
-  "conn.lede":
-    "The services Claude can work with, and the accounts each profile sees. Every account says in a word whether it is ready.",
+  "conn.lede": "The services Claude can work with, and the accounts each profile sees. Every account says in a word whether it is ready.",
   "conn.profiles": "Profiles",
   "conn.show": "Show",
   "conn.all": "all",
@@ -13,8 +12,7 @@ export const en = {
   "cal.primary": "main",
   "cal.readonly": "read only",
   "cal.noisy": "off by default",
-  "cal.disconnected":
-    "Not connected, or the connection predates the calendar list: connect it again above.",
+  "cal.disconnected": "Not connected, or the connection predates the calendar list: connect it again above.",
   "cal.error": "Could not read the calendars ({m}).",
   "cal.saved": "Saved. The day and the debrief use these calendars.",
   "conn.ours": "Agents Multi",
@@ -27,8 +25,7 @@ export const en = {
   "conn.brainOff": "this machine is not signed in",
   "conn.noBrain": "No brain account in accounts.json.",
   "conn.apply.title": "Not applied to Claude yet: {n}",
-  "conn.apply.how":
-    "Close every Claude (Code and Desktop), then apply: each profile gets its servers.",
+  "conn.apply.how": "Close every Claude (Code and Desktop), then apply: each profile gets its servers.",
   "conn.apply": "Apply",
   "svc.n8n": "automations",
   "svc.google": "Gmail, Calendar and Drive",
@@ -42,8 +39,7 @@ export const en = {
   "svc.syncthing-status": "file sync between machines",
   "svc.brain": "memory and tasks, on every Claude",
   "conn.check": "Check",
-  "conn.noDesktop":
-    "{p}: Claude Desktop never opened, it applies at the first launch",
+  "conn.noDesktop": "{p}: Claude Desktop never opened, it applies at the first launch",
   "acc.sum": "{n} accounts",
   "acc.add": "Add an account",
   "acc.new": "New account",
@@ -52,8 +48,7 @@ export const en = {
   "acc.name.hint": "short, lowercase: what a tool call names",
   "acc.url": "Address",
   "acc.secret": "Secret",
-  "acc.secret.hint":
-    "checked against the service, then stored encrypted in the vault; it never comes back to this page",
+  "acc.secret.hint": "checked against the service, then stored encrypted in the vault; it never comes back to this page",
   "acc.secret.ph": "API token or key",
   "acc.secret.keep": "leave empty to keep the current one",
   "acc.profiles.hint": "none selected = every profile",
@@ -62,11 +57,9 @@ export const en = {
   "acc.noSecret": "no key on this machine",
   "acc.oauth": "signed in from Claude, with /mcp",
   "acc.none": "no accounts yet",
-  "acc.confirmDelete":
-    "Remove {a} and its secret?\n\nThe servers of this service stop seeing it on every machine.",
+  "acc.confirmDelete": "Remove {a} and its secret?\n\nThe servers of this service stop seeing it on every machine.",
   "google.client": "Google: the OAuth client is missing",
-  "google.client.how":
-    "From your Google Cloud project, download the OAuth client (type Desktop app) as JSON and import it here. It is stored in the vault; then delete the file.",
+  "google.client.how": "From your Google Cloud project, download the OAuth client (type Desktop app) as JSON and import it here. It is stored in the vault; then delete the file.",
   "google.client.import": "Import the JSON",
   "google.connect": "Connect",
   "google.reconnect": "Reconnect",
@@ -74,19 +67,13 @@ export const en = {
   "google.notConnected": "to connect",
   "google.finish": "Finish in the browser: grant access, then come back here.",
   "brain.login": "Sign in",
-  "brain.finish":
-    "Sign in on the brain's page (account, passphrase, code), then come back here.",
-  "google.form.hint":
-    "No secret to paste: save the account, then press Connect on its row and grant access in the browser.",
+  "brain.finish": "Sign in on the brain's page (account, passphrase, code), then come back here.",
+  "google.form.hint": "No secret to paste: save the account, then press Connect on its row and grant access in the browser.",
   "vault.title": "Secret vault",
-  "vault.init":
-    "No vault yet. In a terminal, run: agents vault init — and keep the recovery code it prints.",
-  "vault.pair":
-    "This machine is not paired. In a terminal, run: agents vault pair — with the recovery code.",
-  "vault.wrongKey":
-    "This machine's key does not open the vault: pair it again with the right recovery code.",
-  "vault.conflicts":
-    "{n} Syncthing conflict copies in the vault: tell Claude, they need a look.",
+  "vault.init": "No vault yet. In a terminal, run: agents vault init — and keep the recovery code it prints.",
+  "vault.pair": "This machine is not paired. In a terminal, run: agents vault pair — with the recovery code.",
+  "vault.wrongKey": "This machine's key does not open the vault: pair it again with the right recovery code.",
+  "vault.conflicts": "{n} Syncthing conflict copies in the vault: tell Claude, they need a look.",
   "conn.edit": "Edit",
   "conn.save": "Save",
   "conn.cancel": "Cancel",
@@ -94,8 +81,7 @@ export const en = {
 } as const;
 
 export const it: Record<keyof typeof en, string> = {
-  "conn.lede":
-    "I servizi con cui Claude può lavorare, e gli account che ogni profilo vede. Ogni account dice in una parola se è pronto.",
+  "conn.lede": "I servizi con cui Claude può lavorare, e gli account che ogni profilo vede. Ogni account dice in una parola se è pronto.",
   "conn.profiles": "Profili",
   "conn.show": "Mostra",
   "conn.all": "tutti",
@@ -105,8 +91,7 @@ export const it: Record<keyof typeof en, string> = {
   "cal.primary": "principale",
   "cal.readonly": "sola lettura",
   "cal.noisy": "spento di default",
-  "cal.disconnected":
-    "Non collegato, o collegato prima dell'elenco dei calendari: ricollegalo qui sopra.",
+  "cal.disconnected": "Non collegato, o collegato prima dell'elenco dei calendari: ricollegalo qui sopra.",
   "cal.error": "Non riesco a leggere i calendari ({m}).",
   "cal.saved": "Salvato. La giornata e il debrief usano questi calendari.",
   "conn.ours": "Agents Multi",
@@ -119,8 +104,7 @@ export const it: Record<keyof typeof en, string> = {
   "conn.brainOff": "questa macchina non è collegata",
   "conn.noBrain": "Nessun account brain in accounts.json.",
   "conn.apply.title": "Da applicare a Claude: {n}",
-  "conn.apply.how":
-    "Chiudi ogni Claude (Code e Desktop), poi applica: ogni profilo riceve i suoi server.",
+  "conn.apply.how": "Chiudi ogni Claude (Code e Desktop), poi applica: ogni profilo riceve i suoi server.",
   "conn.apply": "Applica",
   "svc.n8n": "automazioni",
   "svc.google": "Gmail, Calendar e Drive",
@@ -134,8 +118,7 @@ export const it: Record<keyof typeof en, string> = {
   "svc.syncthing-status": "sincronizzazione dei file tra le macchine",
   "svc.brain": "memoria e task, su ogni Claude",
   "conn.check": "Verifica",
-  "conn.noDesktop":
-    "{p}: Claude Desktop mai aperto, si applica alla prima apertura",
+  "conn.noDesktop": "{p}: Claude Desktop mai aperto, si applica alla prima apertura",
   "acc.sum": "{n} account",
   "acc.add": "Aggiungi un account",
   "acc.new": "Nuovo account",
@@ -144,8 +127,7 @@ export const it: Record<keyof typeof en, string> = {
   "acc.name.hint": "breve, minuscolo: è il nome che si usa nelle chiamate",
   "acc.url": "Indirizzo",
   "acc.secret": "Secret",
-  "acc.secret.hint":
-    "viene provato sul servizio, poi salvato cifrato nell'archivio; a questa pagina non torna mai",
+  "acc.secret.hint": "viene provato sul servizio, poi salvato cifrato nell'archivio; a questa pagina non torna mai",
   "acc.secret.ph": "token o chiave API",
   "acc.secret.keep": "lascia vuoto per tenere quello attuale",
   "acc.profiles.hint": "nessuno selezionato = tutti i profili",
@@ -154,11 +136,9 @@ export const it: Record<keyof typeof en, string> = {
   "acc.noSecret": "manca la chiave su questa macchina",
   "acc.oauth": "si accede da Claude, con /mcp",
   "acc.none": "ancora nessun account",
-  "acc.confirmDelete":
-    "Rimuovere {a} e il suo secret?\n\nI server di questo servizio smettono di vederlo, su tutte le macchine.",
+  "acc.confirmDelete": "Rimuovere {a} e il suo secret?\n\nI server di questo servizio smettono di vederlo, su tutte le macchine.",
   "google.client": "Google: manca il client OAuth",
-  "google.client.how":
-    "Dal tuo progetto Google Cloud scarica il client OAuth (tipo Desktop app) come JSON e importalo qui. Finisce nell'archivio; poi cancella il file.",
+  "google.client.how": "Dal tuo progetto Google Cloud scarica il client OAuth (tipo Desktop app) come JSON e importalo qui. Finisce nell'archivio; poi cancella il file.",
   "google.client.import": "Importa il JSON",
   "google.connect": "Collega",
   "google.reconnect": "Ricollega",
@@ -166,19 +146,13 @@ export const it: Record<keyof typeof en, string> = {
   "google.notConnected": "da collegare",
   "google.finish": "Completa nel browser: concedi l'accesso, poi torna qui.",
   "brain.login": "Accedi",
-  "brain.finish":
-    "Accedi nella pagina del brain (account, passphrase, codice), poi torna qui.",
-  "google.form.hint":
-    "Nessun secret da incollare: salva l'account, poi premi Collega sulla sua riga e concedi l'accesso nel browser.",
+  "brain.finish": "Accedi nella pagina del brain (account, passphrase, codice), poi torna qui.",
+  "google.form.hint": "Nessun secret da incollare: salva l'account, poi premi Collega sulla sua riga e concedi l'accesso nel browser.",
   "vault.title": "Archivio dei secret",
-  "vault.init":
-    "Non c'è ancora un archivio. In un terminale: agents vault init — e conserva il codice di recupero che stampa.",
-  "vault.pair":
-    "Questa macchina non è abbinata. In un terminale: agents vault pair — con il codice di recupero.",
-  "vault.wrongKey":
-    "La chiave di questa macchina non apre l'archivio: abbinala di nuovo con il codice di recupero giusto.",
-  "vault.conflicts":
-    "{n} copie di conflitto di Syncthing nell'archivio: dillo a Claude, vanno guardate.",
+  "vault.init": "Non c'è ancora un archivio. In un terminale: agents vault init — e conserva il codice di recupero che stampa.",
+  "vault.pair": "Questa macchina non è abbinata. In un terminale: agents vault pair — con il codice di recupero.",
+  "vault.wrongKey": "La chiave di questa macchina non apre l'archivio: abbinala di nuovo con il codice di recupero giusto.",
+  "vault.conflicts": "{n} copie di conflitto di Syncthing nell'archivio: dillo a Claude, vanno guardate.",
   "conn.edit": "Modifica",
   "conn.save": "Salva",
   "conn.cancel": "Annulla",

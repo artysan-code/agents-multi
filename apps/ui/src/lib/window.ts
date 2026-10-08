@@ -10,7 +10,5 @@ export function closeWindow(): void {
 /** Tells the app the page's height, and whether an answer is on screen (the window then stays open
  *  when the focus leaves it). */
 export function sizeWindow(height: number, answer: boolean): void {
-  document.title = `agents-multi:size=${Math.ceil(height)}${
-    answer ? ",answer" : ""
-  }`;
+  document.title = `agents-multi:size=${Math.ceil(height)}${answer ? ",answer" : ""}`;
 }

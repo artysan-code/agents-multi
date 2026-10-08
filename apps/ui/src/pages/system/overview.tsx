@@ -11,14 +11,7 @@ import { UpdateNow } from "./updates-close.tsx";
 
 const SYM = { ok: "✓", warn: "!", fail: "✕" } as const;
 
-function Card(
-  { title, href, cls = "", children }: {
-    title: string;
-    href: string;
-    cls?: string;
-    children: ComponentChildren;
-  },
-) {
+function Card({ title, href, cls = "", children }: { title: string; href: string; cls?: string; children: ComponentChildren }) {
   return (
     <section class={`ov-card ${cls}`}>
       <div class="ov-h">
@@ -30,13 +23,7 @@ function Card(
   );
 }
 
-function Line(
-  { st, children, extra }: {
-    st: Check["status"];
-    children: ComponentChildren;
-    extra?: ComponentChildren;
-  },
-) {
+function Line({ st, children, extra }: { st: Check["status"]; children: ComponentChildren; extra?: ComponentChildren }) {
   return (
     <div class="ov-line">
       <span class={`ic ${st}`}>{SYM[st]}</span>
@@ -52,12 +39,7 @@ interface BrainView {
 }
 
 const when = (iso: string): string =>
-  new Date(iso).toLocaleString(lang(), {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function Overview() {
   const s = status.value;
@@ -73,13 +55,9 @@ export function Overview() {
     ? (
       <>
         {todo.slice(0, 5).map((c) => (
-          <Line key={c.id} st={c.status} extra={<FixControl c={c} />}>
-            {c.msg}
-          </Line>
+          <Line key={c.id} st={c.status} extra={<FixControl c={c} />}>{c.msg}</Line>
         ))}
-        {todo.length > 5 && (
-          <div class="sub">{t("ov.more", { n: todo.length - 5 })}</div>
-        )}
+        {todo.length > 5 && <div class="sub">{t("ov.more", { n: todo.length - 5 })}</div>}
       </>
     )
     : <Line st="ok">{t("health.allGood", { n: checks.length })}</Line>;
@@ -88,31 +66,15 @@ export function Overview() {
   const m = s.machine, u = s.update ?? {}, r = s.repo;
   const upLine = (name: string, v: string | null, pending: string | null) => (
     <Line key={name} st={pending ? "warn" : "ok"}>
-      <b>{name}</b> <code>{v ?? "—"}</code>{" "}
-      <span class="sub">{pending ?? t("ov.upToDate")}</span>
+      <b>{name}</b> <code>{v ?? "—"}</code> <span class="sub">{pending ?? t("ov.upToDate")}</span>
     </Line>
   );
   const updates = (
     <>
-      {upLine(
-        "Claude Code",
-        m.cliVersion,
-        u.cli?.latest && u.cli.latest !== m.cliVersion
-          ? t("ov.upNext", { v: u.cli.latest })
-          : null,
-      )}
+      {upLine("Claude Code", m.cliVersion, u.cli?.latest && u.cli.latest !== m.cliVersion ? t("ov.upNext", { v: u.cli.latest }) : null)}
       {m.desktopVersion &&
-        upLine(
-          "Claude Desktop",
-          m.desktopVersion,
-          m.desktopStaged ? t("ov.upStaged", { v: m.desktopStaged }) : null,
-        )}
-      {r?.isRepo &&
-        upLine(
-          "agents-multi",
-          (r.head ?? "").split(" ")[0],
-          r.behind ? t("ov.upBehind", { n: r.behind }) : null,
-        )}
+        upLine("Claude Desktop", m.desktopVersion, m.desktopStaged ? t("ov.upStaged", { v: m.desktopStaged }) : null)}
+      {r?.isRepo && upLine("agents-multi", (r.head ?? "").split(" ")[0], r.behind ? t("ov.upBehind", { n: r.behind }) : null)}
       <div class="ov-acts">
         <UpdateNow cls="btn sm" />
       </div>
@@ -122,30 +84,23 @@ export function Overview() {
   // brain: whether this machine reaches it, and the last copy kept here
   const b = s.brain as BrainView | null;
   const tok = byId("brain.token"), store = byId("tasks.store");
-  const brain = !b ? <p class="sub">{t("ov.noBrain")}</p> : (
-    <>
-      <Line
-        st={tok?.status ?? "warn"}
-        extra={tok?.fix ? <ActionButton fix={tok.fix} /> : undefined}
-      >
-        {tok?.status === "ok"
-          ? t("ov.brain.on", { u: (b.url ?? "").replace(/^https?:\/\//, "") })
-          : tok?.msg ?? t("ov.brainOff")}
-      </Line>
-      <Line st={store?.status ?? "warn"}>
-        {t(store?.status === "ok" ? "ov.tasks.on" : "ov.tasks.off")}
-      </Line>
-      {b.lastCopy
-        ? (
-          <Line st={b.lastCopy.verified ? "ok" : "warn"}>
-            {t(b.lastCopy.verified ? "ov.copy" : "ov.copyUnchecked", {
-              d: when(b.lastCopy.checked),
-            })}
-          </Line>
-        )
-        : <Line st="warn">{t("ov.noCopy")}</Line>}
-    </>
-  );
+  const brain = !b
+    ? <p class="sub">{t("ov.noBrain")}</p>
+    : (
+      <>
+        <Line st={tok?.status ?? "warn"} extra={tok?.fix ? <ActionButton fix={tok.fix} /> : undefined}>
+          {tok?.status === "ok" ? t("ov.brain.on", { u: (b.url ?? "").replace(/^https?:\/\//, "") }) : tok?.msg ?? t("ov.brainOff")}
+        </Line>
+        <Line st={store?.status ?? "warn"}>{t(store?.status === "ok" ? "ov.tasks.on" : "ov.tasks.off")}</Line>
+        {b.lastCopy
+          ? (
+            <Line st={b.lastCopy.verified ? "ok" : "warn"}>
+              {t(b.lastCopy.verified ? "ov.copy" : "ov.copyUnchecked", { d: when(b.lastCopy.checked) })}
+            </Line>
+          )
+          : <Line st="warn">{t("ov.noCopy")}</Line>}
+      </>
+    );
 
   // profiles: who each one is and what is open now
   const live = new Set(s.running.cli.map((c) => c.profile));
@@ -158,11 +113,7 @@ export function Overview() {
       <code>{p.manifest.command ?? `claude-${n}`}</code>
       <span class="sub">
         {[
-          live.has(n)
-            ? t("ov.cliOpen", {
-              n: s.running.cli.filter((c) => c.profile === n).length,
-            })
-            : null,
+          live.has(n) ? t("ov.cliOpen", { n: s.running.cli.filter((c) => c.profile === n).length }) : null,
           deskOpen.has(n) ? t("ov.deskOpen") : null,
         ].filter(Boolean).join(" · ")}
       </span>
@@ -175,19 +126,13 @@ export function Overview() {
         <Card
           title={t("sys.health")}
           href="#system/health"
-          cls={todo.some((c) => c.status === "fail")
-            ? "fail"
-            : todo.length
-            ? "warn"
-            : ""}
+          cls={todo.some((c) => c.status === "fail") ? "fail" : todo.length ? "warn" : ""}
         >
           {health}
         </Card>
         <Card title={t("sys.updates")} href="#system/updates">{updates}</Card>
         <Card title={t("ov.brainTitle")} href="#connections">{brain}</Card>
-        <Card title={t("sys.profiles")} href="#system/profiles">
-          {profiles}
-        </Card>
+        <Card title={t("sys.profiles")} href="#system/profiles">{profiles}</Card>
       </div>
     </div>
   );
