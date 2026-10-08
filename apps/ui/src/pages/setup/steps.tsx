@@ -1,10 +1,10 @@
 // steps.tsx — the first-run wizard's first steps: welcome and language, you, the configuration folder,
-// the profiles, install. Each sends its answer to its endpoint and moves on when the server took it;
+// the profiles, install, and the job step that install and Claude Code share. Each sends its answer to its endpoint and moves on when the server took it;
 // a refusal stays on the step, its reason under the fields.
 
-import { Fragment } from "preact";
+import { type ComponentChildren, Fragment } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { lang, setLangPref, t } from "../../i18n.ts";
+import { type Key, lang, setLangPref, t } from "../../i18n.ts";
 import { runJob } from "../../lib/ui.tsx";
 import { StepRows } from "../../lib/steps.tsx";
 import { post } from "../../api.ts";
@@ -216,8 +216,18 @@ export function Profiles(p: StepProps) {
 
 const lastLine = (out: string) => out.trim().split("\n").filter(Boolean).pop() ?? "";
 
-export function Install(p: StepProps) {
-  const [st, setSt] = useState<"todo" | "running" | "done" | "failed">(p.v.facts.installed ? "done" : "todo");
+/** A step that is one streamed job of the console (install, Claude Code): its row, its output on
+ *  demand, cancel while it runs, «Try again» after a failure; `extra` sits beside the main button. */
+export function JobStep(
+  { p, action, done, keys, extra }: {
+    p: StepProps;
+    action: string;
+    done: boolean;
+    keys: { h: Key; sub: Key; row: Key; go: Key };
+    extra?: ComponentChildren;
+  },
+) {
+  const [st, setSt] = useState<"todo" | "running" | "done" | "failed">(done ? "done" : "todo");
   const [out, setOut] = useState("");
   const [cause, setCause] = useState("");
   const [showOut, setShowOut] = useState(false);
@@ -228,7 +238,7 @@ export function Install(p: StepProps) {
     setOut("");
     p.busy(true);
     let text = "";
-    const r = await runJob(p.v.install, undefined, (o) => setOut(text += o), setJobId).catch((e: Error) => ({ error: e.message }));
+    const r = await runJob(action, undefined, (o) => setOut(text += o), setJobId).catch((e: Error) => ({ error: e.message }));
     setJobId(null);
     p.busy(false);
     if ("error" in r) return (setSt("failed"), setCause(r.error === "lost" ? t("rep.lost") : r.error));
@@ -239,9 +249,9 @@ export function Install(p: StepProps) {
   };
   return (
     <>
-      <h2>{t("su.install.h")}</h2>
-      <p class="su-sub">{t("su.install.sub")}</p>
-      {st !== "todo" && <StepRows rows={[{ key: "install", label: t("su.install.row"), state: st }]} />}
+      <h2>{t(keys.h)}</h2>
+      <p class="su-sub">{t(keys.sub)}</p>
+      {st !== "todo" && <StepRows rows={[{ key: action, label: t(keys.row), state: st }]} />}
       {cause && <p class="uw-cause">{cause}</p>}
       <Nav back={st === "running" ? null : p.back}>
         {out && (
@@ -249,6 +259,7 @@ export function Install(p: StepProps) {
             {t(showOut ? "su.install.hideOut" : "su.install.showOut")}
           </button>
         )}
+        {st !== "running" && st !== "done" && extra}
         {st === "running"
           ? (
             <button type="button" class="bt" onClick={() => jobId && void post("/api/job/cancel", { id: jobId }).catch(() => {})}>
@@ -257,9 +268,20 @@ export function Install(p: StepProps) {
           )
           : st === "done"
           ? <button type="button" class="bt pri" onClick={() => void p.next()}>{t("su.next")}</button>
-          : <button type="button" class="bt pri" onClick={() => void go()}>{t(st === "failed" ? "su.retry" : "su.install.go")}</button>}
+          : <button type="button" class="bt pri" onClick={() => void go()}>{t(st === "failed" ? "su.retry" : keys.go)}</button>}
       </Nav>
       {out && showOut && <pre class="out uw-out">{out}</pre>}
     </>
+  );
+}
+
+export function Install(p: StepProps) {
+  return (
+    <JobStep
+      p={p}
+      action={p.v.install}
+      done={p.v.facts.installed}
+      keys={{ h: "su.install.h", sub: "su.install.sub", row: "su.install.row", go: "su.install.go" }}
+    />
   );
 }

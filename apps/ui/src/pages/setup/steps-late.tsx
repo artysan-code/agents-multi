@@ -1,4 +1,5 @@
-// steps-late.tsx — the first-run wizard's last steps: the vault (made here, or opened with another
+// steps-late.tsx — the first-run wizard's last steps: Claude Code (Anthropic's installer, when the
+// machine has none), the vault (made here, or opened with another
 // machine's recovery code), each profile's sign-in, the brain, and done (the MCP servers registered,
 // a summary, and the console).
 
@@ -8,7 +9,7 @@ import { runJob } from "../../lib/ui.tsx";
 import { type StepRow, StepRows } from "../../lib/steps.tsx";
 import { send, type Step } from "./api.ts";
 import { Nav, type StepProps } from "./index.tsx";
-import { useSend } from "./steps.tsx";
+import { JobStep, useSend } from "./steps.tsx";
 
 /** «Later»: the step is recorded as put off, and the wizard moves on. */
 function Later({ p, step, label = "su.later" }: { p: StepProps; step: Step; label?: "su.later" | "su.skip" }) {
@@ -17,6 +18,18 @@ function Later({ p, step, label = "su.later" }: { p: StepProps; step: Step; labe
     <button type="button" class="bt ghost" disabled={s.running} onClick={() => void s.run(() => send("pass", { step, later: true }))}>
       {t(label)}
     </button>
+  );
+}
+
+export function Claude(p: StepProps) {
+  return (
+    <JobStep
+      p={p}
+      action="claude-code"
+      done={p.v.facts.claudeCode}
+      keys={{ h: "su.claude.h", sub: "su.claude.sub", row: "su.claude.row", go: "su.claude.go" }}
+      extra={<Later p={p} step="claude" />}
+    />
   );
 }
 
@@ -222,6 +235,7 @@ export function Done(p: StepProps) {
     row("folder", f.folder ?? ""),
     row("profiles", n === 1 ? t("su.done.profile") : t("su.done.profiles", { n })),
     row("install", ""),
+    row("claude", ""),
     row("vault", p.v.vaultDir),
     row("logins", `${f.profiles.filter((x) => x.signedIn).length}/${n}`),
     row("brain", f.brain.url ?? ""),

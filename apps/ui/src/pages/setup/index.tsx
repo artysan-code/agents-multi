@@ -1,7 +1,7 @@
 // index.tsx — the first-run wizard: on a machine with no configuration (or a setup started and not
 // finished) the console opens on this screen instead of Today (main.tsx). It takes a new person from
 // nothing to a working setup, a step at a time, in the update screen's language (lib/screen.css,
-// lib/steps.tsx): welcome, you, the configuration folder, the profiles, install, the vault, each
+// lib/steps.tsx): welcome, you, the configuration folder, the profiles, install, Claude Code, the vault, each
 // profile's sign-in, the brain, done.
 //
 // Every step is the server's (/api/setup/*, apps/cli/setup.ts), which also says where the setup is,
@@ -16,7 +16,7 @@ import { t, tk } from "../../i18n.ts";
 import { Overlays } from "../../lib/ui.tsx";
 import { loadSetup, type SetupView, type Step, STEPS } from "./api.ts";
 import { Folder, Install, Profiles, Welcome, You } from "./steps.tsx";
-import { Brain, Done, Logins, Vault } from "./steps-late.tsx";
+import { Brain, Claude, Done, Logins, Vault } from "./steps-late.tsx";
 import "../../lib/screen.css";
 import "./setup.css";
 
@@ -35,6 +35,7 @@ const BODIES: Record<Step, (p: StepProps) => ComponentChildren> = {
   folder: Folder,
   profiles: Profiles,
   install: Install,
+  claude: Claude,
   vault: Vault,
   logins: Logins,
   brain: Brain,

@@ -29,10 +29,12 @@ cm_t() {
     title)        it="Aggiornamento di Claude Code, Claude Desktop e agents-multi"; en="Updating Claude Code, Claude Desktop and agents-multi" ;;
     checking)     it="controllo…"; en="checking…" ;;
     latest)       it="già all'ultima versione"; en="already the latest" ;;
+    installed)    it="installata"; en="installed" ;;
     updated)      it="aggiornata dalla %s"; en="updated from %s" ;;
     available)    it="c'è la %s"; en="%s is out" ;;
     keep)         it="la %s resta per tornare indietro (agents update --rollback)"; en="%s is kept to roll back to (agents update --rollback)" ;;
     pruned)       it="tolte le versioni vecchie: %s"; en="old versions removed: %s" ;;
+    bootstrap)    it="Claude Code non c'è: lo installa l'installer di Anthropic"; en="no Claude Code yet: Anthropic's installer puts it in place" ;;
     wrapper)      it="il comando claude passa di nuovo da agents-multi"; en="the claude command goes through agents-multi again" ;;
     handler)      it="i link claude-cli:// aprono di nuovo claude-bin"; en="claude-cli:// links open claude-bin again" ;;
     failed)       it="aggiornamento non riuscito"; en="update failed" ;;

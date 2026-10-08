@@ -27,6 +27,7 @@ export const SETUP_STEPS = [
   "folder",
   "profiles",
   "install",
+  "claude",
   "vault",
   "logins",
   "brain",
@@ -35,8 +36,9 @@ export const SETUP_STEPS = [
 export type SetupStep = typeof SETUP_STEPS[number];
 
 /** Steps the page may record as passed without a file of their own: the welcome, the profiles
- *  confirmed, the recovery code saved (or the vault put off), the sign-ins and the brain put off. */
-export const PASSABLE: readonly SetupStep[] = ["welcome", "profiles", "vault", "logins", "brain"];
+ *  confirmed, Claude Code put off (installed some other way later), the recovery code saved (or the
+ *  vault put off), the sign-ins and the brain put off. */
+export const PASSABLE: readonly SetupStep[] = ["welcome", "profiles", "claude", "vault", "logins", "brain"];
 
 /** What the wizard keeps of its own, in `setup.json`. */
 export interface SetupRecord {
@@ -103,6 +105,7 @@ export function nextStep(f: SetupFacts): SetupStep {
   if (!f.configured) return "folder";
   if (!f.profiles.length || (!f.installed && !passed.has("profiles"))) return "profiles";
   if (!f.installed) return "install";
+  if (!f.claudeCode && !passed.has("claude")) return "claude";
   if (!passed.has("vault")) return "vault";
   if (!passed.has("logins") && f.profiles.some((p) => !p.signedIn)) return "logins";
   if (!passed.has("brain") && !f.brain.connected) return "brain";

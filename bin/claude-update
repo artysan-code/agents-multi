@@ -39,6 +39,7 @@ BIN_DIR="$HOME/.local/bin"
 # "update available"/"already up to date" results compared with what then happens.
 # (The URLs can be overridden via env, to test an update without waiting for a real release.)
 CLI_CHANNEL_URL="${CLAUDE_CLI_CHANNEL_URL:-https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest}"
+CLI_INSTALLER_URL="${CLAUDE_CLI_INSTALLER_URL:-https://claude.ai/install.sh}"
 APT_INDEX_URL="${CLAUDE_APT_INDEX_URL:-https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages}"
 NET_TIMEOUT="${CLAUDE_UPDATE_TIMEOUT:-8}"
 CACHE_DIR="$HOME/.cache/claude-update"
@@ -93,7 +94,7 @@ do_cli() (
   # flag stripped, so the explicit update always runs. The binary is shared: updating it once
   # covers every profile.
   local cbin="$BIN_DIR/claude-bin"
-  [[ -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(semver_dirs "$VERSIONS_DIR" | tail -n1)"
+  [[ -f "$cbin" && -x "$cbin" ]] || cbin="$VERSIONS_DIR/$(semver_dirs "$VERSIONS_DIR" | tail -n1)"
 
   # Throwaway CLAUDE_CONFIG_DIR: `update` only downloads the binary and needs no profile state,
   # and writing into a real profile directory would dirty it (a fixed path would also be
@@ -107,8 +108,17 @@ do_cli() (
   # FAIL) and is not masked. `|| rc=$?` keeps `set -e` from aborting on the non-zero before it is
   # captured; `|| true` covers the (theoretical) case where grep filters everything out and
   # returns 1 under pipefail.
+  #
+  # No Claude Code yet (a new machine, the first-run wizard): Anthropic's own installer puts the
+  # native build in $VERSIONS_DIR, which is all the rest of this function needs.
   local out rc=0
-  out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" "$cbin" update 2>&1)" || rc=$?
+  if [[ ! -f "$cbin" ]]; then
+    note "$(cm_t bootstrap)"
+    out="$(curl -fsSL --max-time 60 "$CLI_INSTALLER_URL" |
+      env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" bash 2>&1)" || rc=$?
+  else
+    out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" "$cbin" update 2>&1)" || rc=$?
+  fi
   if [[ $rc -ne 0 ]]; then
     printf '%s\n' "$out" | grep -vE '^\s*$|was not created by the native installer|If you put a launcher wrapper there on purpose' | tail -n 4 >> "$NOTES" || true
     exit $rc
@@ -180,7 +190,7 @@ newer() {
   [[ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n1)" == "$b" ]]
 }
 
-cli_current()  { basename "$(readlink -f "$BIN_DIR/claude-bin" 2>/dev/null)" 2>/dev/null || true; }
+cli_current()  { [[ -e "$BIN_DIR/claude-bin" ]] && basename "$(readlink -f "$BIN_DIR/claude-bin")" || true; }
 cli_latest()   { curl -fsSL --max-time "$NET_TIMEOUT" "$CLI_CHANNEL_URL" 2>/dev/null | tr -d '[:space:]'; }
 # the version in use in user space; before the migration, the system package's version
 desk_current() {
@@ -295,7 +305,8 @@ if [[ "$scope" == "all" || "$scope" == "cli" ]]; then
     cm_row fail "Claude Code" "$CLI_FROM" "$(cm_t failed)"; failed=1
     cm_update_log cli failed "$CLI_FROM" "" "manual update failed"
   elif [[ "$CLI_FROM" != "$now" ]]; then
-    cm_row new "Claude Code" "$now" "$(cm_t updated "$CLI_FROM")"
+    if [[ -n "$CLI_FROM" ]]; then cm_row new "Claude Code" "$now" "$(cm_t updated "$CLI_FROM")"
+    else cm_row new "Claude Code" "$now" "$(cm_t installed)"; fi
     cm_update_log cli installed "$CLI_FROM" "$now" ""
   else
     cm_row ok "Claude Code" "$now" "$(cm_t latest)"

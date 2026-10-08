@@ -4,7 +4,7 @@
 
 import { get, postInit, type Result } from "../../api.ts";
 
-export const STEPS = ["welcome", "you", "folder", "profiles", "install", "vault", "logins", "brain", "done"] as const;
+export const STEPS = ["welcome", "you", "folder", "profiles", "install", "claude", "vault", "logins", "brain", "done"] as const;
 export type Step = typeof STEPS[number];
 export type VaultState = "ok" | "none" | "locked" | "wrong-key" | "unavailable";
 

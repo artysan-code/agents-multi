@@ -71,6 +71,12 @@ Deno.test("nextStep: from nothing to done, each step by what it leaves behind", 
   );
   const inst = { ...configured, installed: true, profiles: [prof()] };
   assertEquals(nextStep(facts({ ...inst, record: rec(["welcome", "profiles"]) })), "vault");
+  // no Claude Code yet: its step, until it is there or put off
+  assertEquals(nextStep(facts({ ...inst, claudeCode: false, record: rec(["welcome", "profiles"]) })), "claude");
+  assertEquals(
+    nextStep(facts({ ...inst, claudeCode: false, record: rec(["welcome", "profiles", "claude"]) })),
+    "vault",
+  );
   // the vault step passes only by a confirmation (code saved, paired, later), even with a vault there
   assertEquals(nextStep(facts({ ...inst, vault: "ok", record: rec(["welcome", "profiles"]) })), "vault");
   assertEquals(nextStep(facts({ ...inst, record: rec(["welcome", "profiles", "vault"]) })), "logins");
@@ -257,7 +263,11 @@ Deno.test("setup steps in a throwaway home: owner, folder (init), profiles, pass
   await Deno.symlink("app/current/shared", `${p.runtime}/shared`);
   for (const c of ["claude", "claude-work"]) await Deno.symlink("/nowhere", `${p.bin}/${c}`);
   f = await setupFacts(p, io);
-  assertEquals([f.installed, f.claudeCode, nextStep(f)], [true, false, "vault"]);
+  assertEquals([f.installed, f.claudeCode, nextStep(f)], [true, false, "claude"]);
+  // Claude Code in place (the job's result): the step is done by what it left
+  await Deno.writeTextFile(`${p.bin}/claude-bin`, "");
+  f = await setupFacts(p, io);
+  assertEquals([f.claudeCode, nextStep(f)], [true, "vault"]);
   await passStep({ step: "vault" }, p);
   await Deno.writeTextFile(`${p.runtime}/home/.credentials.json`, "{}");
   f = await setupFacts(p, io);

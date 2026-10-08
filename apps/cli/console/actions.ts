@@ -28,6 +28,8 @@ export const ACTIONS: Record<string, ActionDef> = {
   "install": { args: ["install"], timeoutMs: 300000 },
   // the desktop app's code into the runtime, then install (appinstall.ts): the first-run wizard's step
   "install-app": { args: ["install", "--app"], timeoutMs: 300000 },
+  // Claude Code itself, Anthropic's installer on a new machine (bin/claude-update): the wizard's step
+  "claude-code": { args: ["update", "--cli"], timeoutMs: 600000 },
   "ui-build": { args: ["ui", "build"], timeoutMs: 300000 },
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
   "update-check": { args: ["update", "--check"], timeoutMs: 40000 },
