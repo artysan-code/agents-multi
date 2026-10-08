@@ -168,16 +168,17 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
     if (!DRY) await Deno.remove(dir);
   }
   await ensureDir(dir);
+  // the shared items the profile links resolve to: the mounted code's (CODE), which also holds the
+  // links to ~/.agents/skills; the code being run (SRC) is the package's during `migrate app`
+  const shared = (await stat(`${CODE}/shared/${kind}`)) ? `${CODE}/shared/${kind}` : `${SRC}/shared/${kind}`;
   // "all" mounts what really is an item of that kind, exactly like sharedInventory() counts them:
   // a skill is a directory with a SKILL.md, an agent or a command is a .md file — and AGENTS.md is
   // the catalog of the directory, not an agent. Anything else (a sync bucket, a stray file) is left
   // alone. The doctor still reports it: not mounting it is not the same as condoning it.
   const sharedNames = spec === "all"
     ? (await Promise.all(
-      (await listDir(`${SRC}/shared/${kind}`)).map(async (n) =>
-        (kind === "skills"
-            ? !!(await lstat(`${SRC}/shared/${kind}/${n}/SKILL.md`))
-            : n.endsWith(".md") && n !== "AGENTS.md")
+      (await listDir(shared)).map(async (n) =>
+        (kind === "skills" ? !!(await lstat(`${shared}/${n}/SKILL.md`)) : n.endsWith(".md") && n !== "AGENTS.md")
           ? n
           : null
       ),
@@ -186,7 +187,7 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
     : spec.map((n) => kind === "skills" || n.endsWith(".md") ? n : `${n}.md`);
   const expected = new Set<string>();
   for (const n of sharedNames) {
-    if (!(await lstat(`${SRC}/shared/${kind}/${n}`))) {
+    if (!(await lstat(`${shared}/${n}`))) {
       say(`${ANSI.r}!${ANSI.x} ${p}/${kind}: "${n}" does not exist in shared/${kind} (fix the manifest)`);
       continue;
     }
@@ -289,12 +290,12 @@ export async function install(
   await ensureDir(AGENTS_SKILLS);
   for (const s of await listDir(AGENTS_SKILLS)) {
     if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
-    if (!(await lstat(`${SRC}/shared/skills/${s}`))) {
+    if (!(await lstat(`${CODE}/shared/skills/${s}`))) {
       await ensureSymlink(`${AGENTS_SKILLS}/${s}`, `${CODE}/shared/skills/${s}`, `shared/skills/${s} (da ~/.agents)`);
     }
   }
   // broken links in shared/skills (old relative paths, uninstalled skills)
-  for (const s of await listDir(`${SRC}/shared/skills`)) {
+  for (const s of await listDir(`${CODE}/shared/skills`)) {
     const p = `${CODE}/shared/skills/${s}`;
     const st = await lstat(p);
     if (st?.isSymlink && !(await lstat(`${p}/SKILL.md`))) {
