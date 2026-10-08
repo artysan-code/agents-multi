@@ -509,7 +509,11 @@ function Screen(
                   <button
                     type="button"
                     class="bt"
-                    onClick={() => void openCloseClaude()}
+                    onClick={() => {
+                      // the screen covers the drawer: it goes first
+                      close();
+                      void openCloseClaude();
+                    }}
                   >
                     {t("cc.btn")}
                   </button>
