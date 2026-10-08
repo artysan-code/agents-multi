@@ -16,6 +16,7 @@
 //   usage   [...]           tokens and list-price estimate per profile/model/project/agent/skill/command (SQLite)
 //   serve   [--no-open]     local console on http://127.0.0.1:7331 (today, connections, profiles, plugins, updates, health)
 //   tasks   [...]           the task list, its brief and the desktop reminders
+//   agent   [...]           the hub's children: sessions at work in a project, their permissions answered here
 //   vault   [...]           the MCP servers' secrets: encrypted in ~/vault/claude-multi, key in the keyring
 //   version                 the version (deno.json), also --version / -V
 //
@@ -26,6 +27,7 @@
 
 import { vaultCommand } from "./vault.ts";
 import { tasksCommand } from "./tasks.ts";
+import { agentCommand } from "./agent.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
 import { ANSI, printDoctor } from "./lib/output.ts";
@@ -252,6 +254,9 @@ switch (cmd) {
   case "tasks":
     Deno.exit(await tasksCommand(rest));
     break;
+  case "agent":
+    Deno.exit(await agentCommand(rest));
+    break;
   case "brain-backup":
     Deno.exit(await brainBackup(flag("--force")));
     break;
@@ -315,6 +320,8 @@ switch (cmd) {
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs
+  agent   start|list|status|say|answer|stop|wait   Claude sessions of any profile at work in a project, every
+          permission they need answered here (agents agent, alone, says how)
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows

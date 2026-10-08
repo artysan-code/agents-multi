@@ -87,6 +87,26 @@
       "_service": "brain",
       "_note": "Le task stanno nel brain (shared/mcp/lib/brain-tasks.ts): _service brain dà l'host e il profilo, il token personale sta nel vault (brain/brain). ~/brains/tasks resta per settings.json e i file allegati dalla console. Un profilo di lavoro (brainScope nel manifest) riceve CLAUDE_MULTI_BRAIN_SCOPE e vede solo le task di quei progetti."
     },
+    "agents": {
+      "type": "stdio",
+      "command": "deno",
+      "args": [
+        "run",
+        "--quiet",
+        "--allow-read=${HOME}",
+        "--allow-write=${HOME}/.local/state/agents-multi/agents",
+        "--allow-run=setsid,mkfifo",
+        "--allow-env=HOME,XDG_STATE_HOME,AGENTS_MULTI_CONFIG,CLAUDE_MULTI_CONFIG",
+        "--no-config",
+        "--lock=${HOME}/.agents-multi/shared/mcp/agents/deno.lock",
+        "${HOME}/.agents-multi/shared/mcp/agents/server.ts"
+      ],
+      "_profiles": [],
+      "_surfaces": [
+        "cli"
+      ],
+      "_note": "The hub's children for a coordinator (shared/mcp/lib/agents.ts): sessions of any profile at work in a project, every permission they need answered by the owner. No profile by default: a person's servers.json names the coordinator's (_profiles). Starting a child of another profile uses that profile's account."
+    },
     "google": {
       "_service": "google",
       "type": "stdio",
