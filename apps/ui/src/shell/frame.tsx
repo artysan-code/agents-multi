@@ -13,6 +13,7 @@ import { board, isOpen } from "../pages/tasks/model.ts";
 import { paletteOpen } from "./palette.tsx";
 import { setTheme, type Theme, theme } from "./prefs.ts";
 import { sys } from "./sysstate.ts";
+import { Mark } from "./mark.tsx";
 
 const MAIN = ["today", "tasks", "brain"] as const;
 /** Languages by their own names: the same in every interface language. */
@@ -221,11 +222,7 @@ export function Header() {
   return (
     <header class="hd">
       <div class="hd-brand">
-        <span class="mark2" aria-hidden="true">
-          <svg viewBox="0 0 16 16">
-            <path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" />
-          </svg>
-        </span>
+        <Mark />
         Agents Multi
       </div>
       <nav class="hd-tabs" aria-label={t("menu.sections")}>

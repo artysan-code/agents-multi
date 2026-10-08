@@ -18,11 +18,16 @@ import type { DayItem } from "../today/api.ts";
 import { countdown, upNext } from "../today/model.ts";
 import { type Launcher, pickApi, type PickStatus } from "./api.ts";
 import "./pick.css";
+import { Mark } from "../../shell/mark.tsx";
 
 const label = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
 /** The checks that say a profile's sign-in no longer works (doctor: logins, profiles). */
 const expired = (s: PickStatus | null, p: string) =>
-  !!s?.doctor.some((c) => c.status !== "ok" && (c.id === `login.${p}` || c.id === `profile.${p}.login` || c.id === `profile.${p}.creds`));
+  !!s?.doctor.some((c) =>
+    c.status !== "ok" &&
+    (c.id === `login.${p}` || c.id === `profile.${p}.login` ||
+      c.id === `profile.${p}.creds`)
+  );
 
 const SPK = (
   <svg viewBox="0 0 14 14">
@@ -32,8 +37,15 @@ const SPK = (
 
 function Next({ x }: { x: DayItem }) {
   const now = new Date();
-  const cd = countdown(now.getHours() * 60 + now.getMinutes(), Number(x.time!.slice(0, 2)) * 60 + Number(x.time!.slice(3, 5)));
-  const when = cd.unit === "min" ? `${cd.n} min` : cd.rest ? `${cd.n} h ${cd.rest}` : `${cd.n} h`;
+  const cd = countdown(
+    now.getHours() * 60 + now.getMinutes(),
+    Number(x.time!.slice(0, 2)) * 60 + Number(x.time!.slice(3, 5)),
+  );
+  const when = cd.unit === "min"
+    ? `${cd.n} min`
+    : cd.rest
+    ? `${cd.n} h ${cd.rest}`
+    : `${cd.n} h`;
   return (
     <div class="pick-next">
       <i style={{ background: x.color ?? "var(--accent)" }} />
@@ -75,7 +87,9 @@ export function Pick() {
     }).catch(() => {/* a nicety: the names are enough */});
     pickApi.day().then((d) => {
       const now = new Date();
-      const items = [...(d.earlier ?? []), ...d.today].filter((x) => x.time && x.status !== "done");
+      const items = [...(d.earlier ?? []), ...d.today].filter((x) =>
+        x.time && x.status !== "done"
+      );
       setNext(upNext(items, now.getHours() * 60 + now.getMinutes())[0] ?? null);
     }).catch(() => {/* the strip is optional */});
   }, []);
@@ -87,7 +101,10 @@ export function Pick() {
       if (!r.ok) throw new Error(r.message ?? "");
       close();
     } catch (e) {
-      setNote({ text: t("pick.failed", { p: label(p), e: (e as Error).message }), err: true });
+      setNote({
+        text: t("pick.failed", { p: label(p), e: (e as Error).message }),
+        err: true,
+      });
     }
   };
 
@@ -97,10 +114,13 @@ export function Pick() {
       if (e.key === "Escape") close();
       else if (!n) return;
       else if (e.key === "Enter") void choose(profiles![current].profile);
-      else if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) setCurrent((current + 1) % n);
-      else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) setCurrent((current - 1 + n) % n);
-      else if (/^[1-9]$/.test(e.key) && Number(e.key) <= n) void choose(profiles![Number(e.key) - 1].profile);
-      else return;
+      else if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+        setCurrent((current + 1) % n);
+      } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+        setCurrent((current - 1 + n) % n);
+      } else if (/^[1-9]$/.test(e.key) && Number(e.key) <= n) {
+        void choose(profiles![Number(e.key) - 1].profile);
+      } else return;
       e.preventDefault();
     };
     addEventListener("keydown", onKey);
@@ -109,7 +129,8 @@ export function Pick() {
 
   const names = (profiles ?? []).map((l) => l.profile);
   const open = new Set(status?.running.desktop.map((d) => d.variant) ?? []);
-  const cli = (p: string) => status?.running.cli.filter((c) => c.profile === p).length ?? 0;
+  const cli = (p: string) =>
+    status?.running.cli.filter((c) => c.profile === p).length ?? 0;
   const cur = profiles?.[current]?.profile;
   // what choosing the selected row will do
   const hint = !cur || !status
@@ -123,17 +144,18 @@ export function Pick() {
   return (
     <main class="pick" ref={main}>
       <header>
-        <span class="mark2" aria-hidden="true">
-          <svg viewBox="0 0 16 16"><path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" /></svg>
-        </span>
+        <Mark />
         <h1>{t("pick.title")}</h1>
         <kbd class="k2">Esc</kbd>
       </header>
-      {profiles && !profiles.length && <p class="pick-note">{t("pick.none")}</p>}
+      {profiles && !profiles.length && <p class="pick-note">{t("pick.none")}
+      </p>}
       <ul role="listbox" aria-label={t("pick.title")}>
         {profiles?.map(({ profile, command }, i) => {
           const account = status?.profiles[profile]?.account;
-          const on = open.has(profile), sessions = cli(profile), exp = expired(status, profile);
+          const on = open.has(profile),
+            sessions = cli(profile),
+            exp = expired(status, profile);
           return (
             <li
               key={profile}
@@ -143,7 +165,9 @@ export function Pick() {
               onMouseEnter={() => setCurrent(i)}
               onClick={() => void choose(profile)}
             >
-              <span class={`pick-av${on ? " on" : ""}`} aria-hidden="true">{label(profile).charAt(0)}</span>
+              <span class={`pick-av${on ? " on" : ""}`} aria-hidden="true">
+                {label(profile).charAt(0)}
+              </span>
               <span class="pick-t">
                 <b>
                   {label(profile)}
@@ -152,16 +176,32 @@ export function Pick() {
                 {account && <small>{account}</small>}
               </span>
               <span class="pick-st">
-                {sessions > 0 && <span class="run">{SPK}{t("pick.sessions", { n: sessions })}</span>}
+                {sessions > 0 && (
+                  <span class="run">
+                    {SPK}
+                    {t("pick.sessions", { n: sessions })}
+                  </span>
+                )}
                 {sessions > 0 && (on || exp) && " · "}
-                {exp ? <span class="warn">{t("pick.expired")}</span> : on ? <span class="on">{t("pick.open")}</span> : !sessions && status ? t("pick.closed") : ""}
+                {exp
+                  ? <span class="warn">{t("pick.expired")}</span>
+                  : on
+                  ? <span class="on">{t("pick.open")}</span>
+                  : !sessions && status
+                  ? t("pick.closed")
+                  : ""}
               </span>
               {i < 9 ? <kbd class="k2">{i + 1}</kbd> : <span />}
             </li>
           );
         })}
       </ul>
-      <p class={`pick-note${note?.err ? " err" : note ? " busy" : ""}`} role="status">{note ? note.text : hint}</p>
+      <p
+        class={`pick-note${note?.err ? " err" : note ? " busy" : ""}`}
+        role="status"
+      >
+        {note ? note.text : hint}
+      </p>
       {next && room > 0 && <Next x={next} />}
       <footer hidden={room < 2}>
         <kbd class="k2">↑</kbd>
