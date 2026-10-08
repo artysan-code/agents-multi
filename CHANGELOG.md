@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.14.3] - 2026-10-08
+
+### Fixed
+
+- **ci**: the release job installs libayatana-appindicator3-dev, which the AppImage bundler requires (72989bc)
+
 ## [0.14.2] - 2026-10-08
 
 ### Fixed
