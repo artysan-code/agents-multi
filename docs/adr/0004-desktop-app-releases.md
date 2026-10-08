@@ -50,9 +50,14 @@ everything it runs, then says what changed.
    asset: a version's files do not change.
 5. `app-release.ts channels` moves the site's manifests, `apps/site/public/updates/<channel>.json`, to
    the version, and for a stable version `scripts/aur.ts render` writes `pkg/agents-multi-bin/`. They
-   are committed on `release` (`chore(updates): vX.Y.Z on its update channels`) and pushed; that push
-   redeploys the brain's image, which builds the site and serves them. Then the AUR package is pushed
-   when the AUR key is there.
+   are committed on `release` (`chore(updates): vX.Y.Z on its update channels`) and pushed. Then the
+   AUR package is pushed when the AUR key is there.
+6. `brain-image` builds the brain's image, which carries the site and so the manifests, from that
+   commit and pushes it to GHCR (`ghcr.io/artysan-code/agents-multi-brain`: `:latest`, and `:X.Y.Z`,
+   `:X.Y` for a stable version; a beta's own code as `:beta` and `:X.Y.Z-beta.N`). It uses kaniko, since
+   the runner gives jobs no Docker socket and no privileges, and reads the repository from git with the
+   job's token. `brain-deploy` then has Coolify pull `:latest`. Secrets: `GHCR_TOKEN` (write:packages
+   on artysan-code), `COOLIFY_DEPLOY_URL` and `COOLIFY_TOKEN`; without them the step says so and stops.
 
 **The runner image** is still `node:22-bookworm`; the job installs WebKitGTK's headers, `patchelf` and
 `file` from apt and Rust with rustup at a pinned version (`RUST_VERSION`), and caches Cargo's target.

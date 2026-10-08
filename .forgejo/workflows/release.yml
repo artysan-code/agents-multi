@@ -3,6 +3,8 @@
 # `publish`: a Forgejo release for each tag that has none yet, with its CHANGELOG section as the notes
 # (scripts/publish-releases.ts). The job's own token is enough.
 #
+# `brain-image`: the brain's image on GHCR, after `app` (below).
+#
 # `app`: the desktop app. The gate, then the Linux bundles (deb, rpm, AppImage) signed for the updater,
 # uploaded to the GitHub release of the tag, then the site's update manifests moved to the version and
 # committed on `release`, whose push redeploys the site (the brain's image) that serves them. A stable
@@ -46,6 +48,8 @@ jobs:
   app:
     runs-on: docker
     timeout-minutes: 120
+    outputs:
+      site: ${{ steps.channels.outputs.sha }}
     defaults:
       run:
         shell: bash
@@ -133,6 +137,7 @@ jobs:
         run: deno run --allow-read --allow-env --allow-net=api.github.com,uploads.github.com scripts/app-release.ts publish dist-app
 
       - name: update channels
+        id: channels
         run: |
           git config user.name "Agents Multi release"
           git config user.email "release@agents-multi.invalid"
@@ -150,9 +155,10 @@ jobs:
             fi
             git add apps/site/public/updates
             if [[ -d pkg/agents-multi-bin ]]; then git add pkg/agents-multi-bin; fi
-            git diff --cached --quiet && exit 0
+            # the commit the brain's image is built from: the site with these manifests (brain-image)
+            if git diff --cached --quiet; then echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"; exit 0; fi
             git commit --quiet -m "chore(updates): v$VERSION on its update channels"
-            git push --quiet origin release && exit 0
+            git push --quiet origin release && { echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"; exit 0; }
             git reset --quiet --hard origin/release # someone pushed meanwhile: again on top
           done
           exit 1
@@ -169,3 +175,70 @@ jobs:
           ssh-keyscan -t ed25519 aur.archlinux.org >~/.ssh/known_hosts 2>/dev/null
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes" \
             deno run --allow-read --allow-write --allow-run=git --allow-env scripts/aur.ts push pkg/agents-multi-bin
+
+  # The brain's image on GHCR, built by kaniko: the runner gives jobs no Docker socket and no
+  # privileges, and kaniko needs neither. It builds from git (the job token reads the repository):
+  #   - from the commit with the new manifests on `release` → :latest, which the production brain
+  #     runs and whose site serves the update channels; for a stable version also :X.Y.Z and :X.Y;
+  #   - for a beta, from its tag as well → :beta and :X.Y.Z-beta.N (the beta's code).
+  # Then brain-deploy has Coolify redeploy :latest. Without GHCR_TOKEN (a GitHub token with
+  # write:packages on artysan-code) nothing is built; without COOLIFY_DEPLOY_URL and COOLIFY_TOKEN
+  # nothing is redeployed.
+  brain-image:
+    needs: app
+    runs-on: docker
+    timeout-minutes: 40
+    container:
+      image: ghcr.io/osscontainertools/kaniko:v1.28.5-debug@sha256:d6d74217dc077acfd3094992e917c357080a2d3fdd1042a49e34e29a7e57c572
+    outputs:
+      built: ${{ steps.build.outputs.built }}
+    env:
+      IMAGE: ghcr.io/artysan-code/agents-multi-brain
+      SOURCE: https://github.com/artysan-code/agents-multi
+    steps:
+      - name: build and push
+        id: build
+        env:
+          GIT_USERNAME: oauth2
+          GIT_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          SITE: ${{ needs.app.outputs.site }}
+        run: |
+          [ -n "$GHCR_TOKEN" ] || { echo "no GHCR_TOKEN: the brain's image is not built"; exit 0; }
+          mkdir -p /kaniko/.docker
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$(printf 'x:%s' "$GHCR_TOKEN" | base64 -w0)" \
+            >/kaniko/.docker/config.json
+          version="${GITHUB_REF_NAME#v}"
+          repo="git://git.artysan.me/${GITHUB_REPOSITORY}.git"
+          build() { # <ref> <commit> <tag>...
+            ctx="$repo#$1#$2"; shift 2
+            dest=""; for t in "$@"; do dest="$dest --destination $IMAGE:$t"; done
+            /kaniko/executor --context "$ctx" --dockerfile apps/brain/Dockerfile $dest \
+              --label "org.opencontainers.image.source=$SOURCE" \
+              --label "org.opencontainers.image.version=$version" --verbosity warn
+          }
+          case "$version" in
+            *-beta.*)
+              build refs/heads/release "$SITE" latest
+              build "refs/tags/$GITHUB_REF_NAME" "$GITHUB_SHA" beta "$version" ;;
+            *) build refs/heads/release "$SITE" latest "$version" "${version%.*}" ;;
+          esac
+          echo "built=true" >>"$GITHUB_OUTPUT"
+
+  # Coolify pulls :latest again. Its own job: busybox's wget in kaniko's image does not check TLS
+  # certificates, and the request carries a token.
+  brain-deploy:
+    needs: brain-image
+    if: ${{ needs.brain-image.outputs.built == 'true' }}
+    runs-on: docker
+    timeout-minutes: 10
+    steps:
+      - name: redeploy
+        env:
+          COOLIFY_DEPLOY_URL: ${{ secrets.COOLIFY_DEPLOY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          [ -n "$COOLIFY_DEPLOY_URL" ] && [ -n "$COOLIFY_TOKEN" ] ||
+            { echo "no Coolify deploy hook: nothing redeployed"; exit 0; }
+          curl -fsS -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_DEPLOY_URL"
+
