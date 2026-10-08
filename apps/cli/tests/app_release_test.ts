@@ -84,7 +84,7 @@ const PKG: Package = {
   version: "1.0.0",
   sha256: "a".repeat(64),
   github: "owner/agents-multi",
-  license: "AGPL-3.0-only AND LicenseRef-Commons-Clause",
+  license: "AGPL-3.0-only",
   identifier: "me.artysan.agents",
 };
 
@@ -105,9 +105,9 @@ Deno.test("aur: the PKGBUILD repackages the release's deb with the updater off, 
   );
   assertStringIncludes(b, `sha256sums_x86_64=('${"a".repeat(64)}')`);
   assertStringIncludes(b, `> "$pkgdir/usr/lib/me.artysan.agents/package-manager"`);
-  assertStringIncludes(b, "license=('AGPL-3.0-only AND LicenseRef-Commons-Clause')");
-  assertStringIncludes(s, "\tlicense = AGPL-3.0-only AND LicenseRef-Commons-Clause\n");
-  // a LicenseRef- licence ships its text: the deb carries it in the repository's copy
+  assertStringIncludes(b, "license=('AGPL-3.0-only')");
+  assertStringIncludes(s, "\tlicense = AGPL-3.0-only\n");
+  // the licence (with its additional terms) and the notices ship with the package, from the deb's copy
   assertStringIncludes(b, `"$pkgdir/usr/lib/me.artysan.agents/repo/$f" "$pkgdir/usr/share/licenses/$pkgname/$f"`);
   assertStringIncludes(
     s,

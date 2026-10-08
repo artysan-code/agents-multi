@@ -24,7 +24,7 @@
     "active": true,
     "targets": ["deb", "appimage"],
     "category": "DeveloperTool",
-    "license": "AGPL-3.0-only AND LicenseRef-Commons-Clause",
+    "license": "AGPL-3.0-only",
     "licenseFile": "../../../LICENSE",
     "icon": [
       "../../../desktop/icons/256x256/claude-multi.png",

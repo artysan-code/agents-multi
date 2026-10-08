@@ -46,11 +46,12 @@ be rolled back. See [Updates](/docs/updates/).
 
 ## What is the licence?
 
-The GNU AGPL-3.0 with the Commons Clause: source-available. You may use it, modify it, fork it and
-share it, for yourself or inside a company; you may not sell it, or a product or service whose value
-comes substantially from it. It is not open source in the OSI's sense. See the
-[LICENSE](https://github.com/artysan-code/agents-multi/blob/release/LICENSE) and the
-[README](https://github.com/artysan-code/agents-multi/blob/release/README.md#license).
+The GNU AGPL-3.0: open source. You may use it, study it, modify it and share it, also inside a
+company. Whoever distributes it, or offers a modified version to others over a network, gives them
+the source under the same licence and keeps the line «Based on Agents Multi by Samuel Tagliacozzo».
+The name and the logo are not part of the licence. See the
+[LICENSE](https://github.com/artysan-code/agents-multi/blob/release/LICENSE) and
+[TRADEMARKS.md](https://github.com/artysan-code/agents-multi/blob/release/TRADEMARKS.md).
 
 ## Does it work with other AI providers?
 

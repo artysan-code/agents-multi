@@ -2,5 +2,5 @@
   "site": "https://agents-multi.artysan.me",
   "github": "artysan-code/agents-multi",
   "aur": "agents-multi-bin",
-  "license": "AGPL-3.0-only AND LicenseRef-Commons-Clause"
+  "license": "AGPL-3.0-only"
 }

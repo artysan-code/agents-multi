@@ -16,7 +16,7 @@ and the agreement that covers what you contribute.
 
 ## Contributor licence agreement
 
-The project is source-available under the AGPL-3.0 with the Commons Clause ([LICENSE](LICENSE)). So
+The project is open source under the AGPL-3.0 ([LICENSE](LICENSE)). So
 that its owner can keep maintaining it, and change its licence later if needed, every contribution is
 made under this agreement.
 

@@ -669,16 +669,15 @@ deno task test    # usage (rates, dedupe, turns), notifications,
 The variables are `AGENTS_MULTI_<NAME>` (`ROOT`, `CONFIG`, `PORT`, `VAULT`, `TASKS`, `BRAIN`, `ACCOUNTS`,
 `PROFILE`, `BRAIN_SCOPE`, `OWNER_ID`, `OWNER_NAME`, `LANGUAGE`, `REPO`, `FETCH_TTL`, `FETCH_TIMEOUT`,
 `NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` is still read when the new one is not set, and the
-MCP servers get both until 1.0; the brain's `compose.yaml` keeps the old names for the owner variables
-until its Coolify settings are renamed.
+MCP servers get both until 1.0.
 
 ## License
 
-Agents Multi is **source-available**: the [GNU AGPL-3.0](LICENSE) with the
-[Commons Clause](https://commonsclause.com/) on top. You may use it, modify it, fork it and share it,
-for yourself or inside a company; you may not sell it, nor a product or service (hosting and support
-included) whose value comes substantially from it. Forks and copies keep the same terms. Because of
-the Commons Clause it is not open source in the OSI's sense.
+Agents Multi is **open source** under the [GNU AGPL-3.0](LICENSE). Copyright © 2026 Samuel
+Tagliacozzo. You may use it, study it, modify it and share it; whoever conveys it, or lets people use
+a modified version over a network, gives them its source under the same licence and keeps the line
+«Based on Agents Multi by Samuel Tagliacozzo» (the licence's additional terms). The name and the logo
+are not part of the licence: [TRADEMARKS.md](TRADEMARKS.md).
 
 Files taken from other projects keep their own licences: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 Contributions are welcome under the contributor licence agreement in [CONTRIBUTING.md](CONTRIBUTING.md).

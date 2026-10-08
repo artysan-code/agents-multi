@@ -8,7 +8,7 @@ const en = {
   htmlTitle: "Agents Multi — every Claude you use, one setup",
   description: "Run several Claude Code and Claude Desktop accounts on one Linux machine, isolated, sharing one memory and one task list. Independent and unofficial.",
   nav: { features: "Features", brain: "Brain", how: "How it works", docs: "Docs" },
-  pill: ["Open source soon", "Unofficial · for Linux"],
+  pill: ["Open source", "Unofficial · for Linux"],
   h1: "Every Claude you use. <em>One setup.</em>",
   lead: "Agents Multi keeps each of your Claude Code and Claude Desktop accounts isolated on one Linux machine, and gives them all the same memory, the same tasks and the same tools.",
   ctaDownload: "Download for Linux",
@@ -67,11 +67,11 @@ const en = {
     ["Nothing behind your back", "Sending mail asks first; destructive commands are refused inside a session and handed to you instead."],
     ["Plain, and offline", "The console comes built in the app, its libraries bundled, bash on the launch path. It starts on a machine that has never been online."],
   ] as [string, string][],
-  callTitle: "Open source, <em>soon.</em>",
-  callText: "The code is being readied for a public release. Want to know more, or try it early? Write to me.",
+  callTitle: "Open source, <em>AGPL.</em>",
+  callText: "The code is public: read it, try it, change it. Questions, or want a hand setting it up? Write to me.",
   callContact: "Write to me",
   callDocs: "Read the docs",
-  footer: { made: "Made by", privacy: "Privacy", docs: "Docs", signin: "Sign in", license: "Source-available under the AGPL-3.0 with the Commons Clause: free to use, modify, fork and share, not to sell.", legal: "Agents Multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC." },
+  footer: { made: "Made by", privacy: "Privacy", docs: "Docs", signin: "Sign in", license: "Open source under the GNU AGPL-3.0.", legal: "Agents Multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC." },
 };
 
 export type Dict = typeof en;
@@ -80,7 +80,7 @@ const it: Dict = {
   htmlTitle: "Agents Multi — tutti i tuoi Claude, un solo setup",
   description: "Più account di Claude Code e Claude Desktop sulla stessa macchina Linux, isolati, con una memoria e una lista di task in comune. Indipendente e non ufficiale.",
   nav: { features: "Cosa fa", brain: "Brain", how: "Come funziona", docs: "Documentazione" },
-  pill: ["Presto open source", "Non ufficiale · per Linux"],
+  pill: ["Open source", "Non ufficiale · per Linux"],
   h1: "Tutti i tuoi Claude. <em>Un solo setup.</em>",
   lead: "Agents Multi tiene separati i tuoi account di Claude Code e Claude Desktop sulla stessa macchina Linux, e dà a tutti la stessa memoria, le stesse task e gli stessi strumenti.",
   ctaDownload: "Scarica per Linux",
@@ -139,11 +139,11 @@ const it: Dict = {
     ["Niente alle tue spalle", "Mandare una mail chiede prima; i comandi distruttivi vengono rifiutati nella sessione e passati a te."],
     ["Semplice, e offline", "La console arriva già pronta nell'app, con le sue librerie, bash sul percorso di avvio. Parte anche su una macchina che non è mai stata online."],
   ],
-  callTitle: "Open source, <em>presto.</em>",
-  callText: "Il codice si sta preparando per uscire pubblico. Vuoi saperne di più, o provarlo prima? Scrivimi.",
+  callTitle: "Open source, <em>AGPL.</em>",
+  callText: "Il codice è pubblico: leggilo, provalo, cambialo. Domande, o vuoi una mano a installarlo? Scrivimi.",
   callContact: "Scrivimi",
   callDocs: "Leggi la documentazione (EN)",
-  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", license: "Codice disponibile sotto AGPL-3.0 con la Commons Clause: libero da usare, modificare, forkare e condividere, non da vendere.", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
+  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", license: "Open source sotto GNU AGPL-3.0.", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
 };
 
 export const dict: Record<Lang, Dict> = { en, it };
