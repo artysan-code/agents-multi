@@ -5,6 +5,25 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.18.0] - 2026-10-08
+
+### Added
+
+- **ci**: the release builds the brain's image with kaniko and pushes it to GHCR (df80a54)
+
+### Fixed
+
+- **ui**: «Close Claude and update» on the update screen opens its dialog in front, not behind it (dd82aec)
+- **ui**: with only the install left, the update button closes Claude instead of opening the wizard (87c4805)
+
+### Changed
+
+- **ui**: «Close Claude and update» is a screen like the update's, no longer a drawer (432225e)
+
+### Documentation
+
+- **site**: configuration, self-hosting the brain, security, troubleshooting and FAQ pages (9144bfd)
+
 ## [0.17.0] - 2026-10-08
 
 ### Breaking changes
