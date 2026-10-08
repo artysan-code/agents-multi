@@ -72,8 +72,10 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
           "ok",
           `brain: last copy ${b.file}, checked ${dayOf(new Date(b.checked))} ${hhmm(new Date(b.checked))}`,
         );}
+      // in app mode the app runs the backup itself (no units), and the copy's date above says it does
       if (
-        m.systemd && (await run("systemctl", ["--user", "is-enabled", "claude-brain-backup.timer"])).out !== "enabled"
+        ctx.mode === "dev" && m.systemd &&
+        (await run("systemctl", ["--user", "is-enabled", "claude-brain-backup.timer"])).out !== "enabled"
       ) {
         add(
           "brain.timer",
