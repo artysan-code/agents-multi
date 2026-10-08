@@ -1,5 +1,9 @@
 # Onboarding — setting up Agents Multi for a new person
 
+> Most people want the desktop app and its first-run wizard: [README › Getting started](README.md#getting-started).
+> This guide sets a machine up from a checkout (dev mode), with a Claude Code session doing the work,
+> for someone who joins a brain that somebody else runs.
+
 For the Claude Code session that guides someone through their first setup. Speak to them in their
 language; this file is in English like the rest of the repository. Do the work yourself where you
 can, ask before anything hard to undo, and follow the rules below without exception.
@@ -28,10 +32,9 @@ Ask the person, one question at a time:
    window (a separate app, icon and login).
 3. Whether they keep their configuration in step between **several machines** (Syncthing, or a
    private git repository) or use one machine.
-4. From the administrator who gave them access (not from you): the repository URL, their **brain's
-   address**, and — privately, never in chat — the brain's passphrase and TOTP secret.
+4. If they join someone else's brain, from its administrator (not from you): its **address**, and — privately, never in chat — the brain's passphrase and TOTP secret.
 
-## 1. Requirements (Arch Linux, KDE)
+## 1. Requirements (Arch Linux here; other distributions have the same packages)
 
 ```bash
 sudo pacman -S --needed git deno python jq gnupg binutils libarchive base-devel nodejs npm
@@ -43,7 +46,7 @@ sudo npm install -g @electron/asar
 ## 2. The repository
 
 ```bash
-git clone <repository URL> ~/.local/src/agents-multi
+git clone https://github.com/artysan-code/agents-multi ~/.local/src/agents-multi
 ```
 
 Read access is enough: the person never commits here (`prelaunch` pulls the updates at every

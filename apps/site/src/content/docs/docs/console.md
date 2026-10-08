@@ -3,13 +3,14 @@ title: The console
 description: A local web app that shows what every profile is doing.
 ---
 
-`agents install` enables the console as a systemd user unit, so it is always at
-<http://127.0.0.1:7331> — over an ssh tunnel it works the same, which is the point on a headless box.
+The desktop app runs the console, so it is at <http://127.0.0.1:7331> while the app is open; its
+window shows it. On a headless box `agents serve` runs it alone, and over an ssh tunnel it works the
+same.
 
 Updates are **pushed, not polled**: the server watches the transcripts and the shared configuration,
 asks the brain whether its tasks or pages moved, and the page redraws the view you are looking at. It
-is Preact and TypeScript, built on the machine with pnpm when Agents Multi is installed or updated,
-never downloaded; nothing is loaded from elsewhere, so it renders on a machine that has never been
+is Preact and TypeScript, built once with the release and carried by the app (from a checkout, built
+with pnpm on the machine); nothing is loaded from elsewhere, so it renders on a machine that has never been
 online. English or Italian, following the machine's locale.
 
 ## Sections

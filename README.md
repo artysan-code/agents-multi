@@ -4,8 +4,8 @@ Run several **Claude Code** and **Claude Desktop** accounts on one Linux machine
 seeing each other. A desktop app carries it all and keeps itself up to date, a local console shows
 what every profile is doing, and an optional brain keeps your memory and tasks across machines.
 
-**This repository is the source of truth** for the code; `~/.agents-multi/` is runtime materialised
-by `agents install`, and what is yours — profiles, accounts, rules — lives in a folder of yours. That
+**This repository is the source of truth** for the code, which the app carries and installs into
+`~/.agents-multi/`, the runtime (profiles, logins, sessions); what is yours — profiles, accounts, rules — lives in a folder of yours. That
 folder may travel between your machines (Syncthing, a private git repository); the runtime never
 does, because it holds credentials.
 
@@ -21,11 +21,15 @@ that runs both, and installs everything else itself. Each version is on the proj
 and Windows come with 1.x):
 
 - **Debian, Ubuntu** — `sudo apt install ./agents-multi_<version>_amd64.deb`
-- **Arch** — the AUR package `agents-multi-bin` (`paru -S agents-multi-bin`); pacman updates it, so the
-  app's own updater is off there
+- **Arch** — the AUR package `agents-multi-bin` (`paru -S agents-multi-bin`), not published yet: take
+  the AppImage meanwhile. pacman will update it, so the app's own updater is off there
 - **Anywhere else** (Fedora and openSUSE too) — the AppImage: put it where it will stay (for example
-  `~/Applications/`), `chmod +x` it and run it. Updates replace that file in place, and the install
+  `~/Applications/`), `chmod +x` it and run it. Updates replace that file in place, and the first run
   writes its menu entry. It needs WebKitGTK on the system (`webkit2gtk-4.1`).
+
+It needs python3 (some hooks), a Secret Service keyring (KWallet, GNOME Keyring: it holds the vault's
+key), a system tray (GNOME: the AppIndicator extension) and `~/.local/bin` on the `PATH`, where the
+install puts the commands.
 
 The app updates itself from then on: it looks for a new version every day and downloads it in the
 background, and **System › Updates** in the console installs it and restarts the app; a deb asks for
@@ -50,10 +54,11 @@ agents doctor   # every invariant, each with a fix
 
 Without the wizard (or guided by a Claude Code session following [ONBOARDING.md](ONBOARDING.md)):
 
-1. `agents init <folder> --name Ann --language Italian` — your configuration, from `config.example/`
-   (the app's command is `~/.agents-multi/app/current/bin/agents` until the install links it).
-2. Start the app — it installs its code and runs `agents install --app`: the runtime, the launchers
-   and its own autostart entry.
+1. Start the app once: it copies its code into `~/.agents-multi/app/current` (leave its wizard).
+2. `agents init <folder> --name Ann --language Italian` — your configuration, from `config.example/`
+   (the command is `~/.agents-multi/app/current/bin/agents` until the install links it into
+   `~/.local/bin`), then `agents install --app`: the runtime, the launchers and the app's autostart
+   entry.
 3. `agents vault init` — the secret vault; keep the recovery code somewhere safe. Then each
    account's secret: `agents vault set <service> <account>`, or the console's Connections.
 4. `claude` (and each profile's command) — sign in with `/login`.
@@ -277,7 +282,7 @@ the globe button in the rail overrides it per browser.
   neighbourhood as a live graph. **Graph**: the whole brain, laid out by d3-force with each area in
   its own region (drag, pan, zoom, filter by area). **Diary**: the days as a timeline. **Health**:
   what `brain_check` finds, with "Fix with Claude". **Archive**: the old wiki (`~/brains/claude`,
-  `AGENTS_MULTI_BRAIN`), read only since 2026-10-02, with "Bring into the brain". The page does not
+  `AGENTS_MULTI_BRAIN`), read only, with "Bring into the brain". The page does not
   edit: the field at the bottom asks Claude for a change (ask kind `brain`), with the brain's tools
   and nothing else, never deletion, running inside the old wiki so the only files it can read are
   there.
@@ -472,7 +477,7 @@ token goes to the vault and the address next to the account's name.
 The owner's tasks live in their brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
-are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`), as they were until 2026-10-02;
+are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`), as they were before the brain held them;
 `agents tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
 `settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:

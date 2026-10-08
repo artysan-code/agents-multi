@@ -22,7 +22,9 @@ one link, no near copies, no secrets.
 
 ## Who gets in
 
-Accounts exist only by invitation. Signing in takes the account, a passphrase and a TOTP code. Claude
+Accounts exist only by invitation. On a brain you run yourself you are its administrator, and you
+invite the others: how to deploy one and manage its accounts is in the brain's
+[README](https://github.com/artysan-code/agents-multi/tree/release/apps/brain#readme). Signing in takes the account, a passphrase and a TOTP code. Claude
 connects through OAuth 2.1 with PKCE; machines get a personal token by signing in. Tokens are stored
 as hashes; TOTP secrets and backup keys are encrypted with a key that exists only on the server.
 

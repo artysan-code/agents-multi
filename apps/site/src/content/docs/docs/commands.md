@@ -10,11 +10,11 @@ Most of Agents Multi happens in the desktop app and its console: the first-run w
 
 | Command | What it does |
 | --- | --- |
-| `claude` | Claude Code on the default profile |
+| `claude` | Claude Code on the default profile, the one whose command is plain `claude` ([Profiles](/docs/profiles/)) |
 | `claude-<profile>` | Claude Code on another profile: each profile declares its own command in its `profile.json` |
 
 Claude Desktop starts from each profile's entry in your application menu, or from the app's
-profile picker («Which Claude?», in the tray).
+profile picker: the app's tray icon opens a window asking which profile to start.
 
 ## Checking and fixing
 
@@ -24,6 +24,8 @@ profile picker («Which Claude?», in the tray).
 | `agents status` | versions, available updates, what each profile has mounted, what is running |
 | `agents install --dry-run` | shows what an install would change; without `--dry-run` it does it (idempotent, never deletes real content) |
 | `agents mcp sync` | applies the MCP servers to every profile, with Claude closed |
+| `agents init <folder>` | makes your configuration folder, when not using the wizard |
+| `agents serve` | runs the console without the app, on a headless box |
 
 ## Updates
 
@@ -31,7 +33,7 @@ profile picker («Which Claude?», in the tray).
 | --- | --- |
 | `agents update` | updates Claude Code, Claude Desktop and Agents Multi (the console's **System › Updates** does the same) |
 | `agents update --check` | only says what is new |
-| `agents update --rollback` | goes back to the previous Claude Code |
+| `agents update --rollback` | goes back to the previous Claude Code (`--desktop`: the previous Claude Desktop) |
 
 ## Secrets, tasks and usage
 
@@ -39,6 +41,7 @@ profile picker («Which Claude?», in the tray).
 | --- | --- |
 | `agents vault status` | the secret vault the MCP servers read their credentials from |
 | `agents vault set <service> <account>` | stores an account's secret (or use the console's Connections) |
+| `agents brain-login` | signs this machine in to your brain (or Sign in, in the console's Connections) |
 | `agents tasks brief` | today's tasks from the terminal |
 | `agents usage --since 7d` | tokens and a list-price estimate by profile, model, project, skill… (not a bill) |
 
