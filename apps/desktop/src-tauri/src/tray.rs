@@ -458,18 +458,15 @@ pub fn host_available() -> bool {
 }
 
 /// Notes for the doctor whether this session has a tray (its `app.tray` check reads the same file the
-/// tray app writes: `$XDG_STATE_HOME/claude-multi/app.json`); a development instance does not.
+/// tray app writes: `$XDG_STATE_HOME/agents-multi/app.json`); a development instance does not.
 pub fn record(tray: bool) {
     if crate::instance::dev().is_some() {
         return; // the session's app speaks for it
     }
-    let Some(dir) = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
-    else {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let Some(dir) = crate::install::state_dir(&|n| std::env::var(n).ok(), home.as_deref()) else {
         return;
     };
-    let dir = dir.join("claude-multi");
     let at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());

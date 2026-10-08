@@ -2,11 +2,11 @@
 # updates.sh — what the updaters share: the log every update result lands in, the one desktop
 # notification they may raise, and the question "is any Claude Desktop running?".
 #
-# The log is JSON lines in $CM_UPDATE_LOG (~/.local/state/claude-multi/updates.jsonl): the console's
+# The log is JSON lines in $CM_UPDATE_LOG (~/.local/state/agents-multi/updates.jsonl): the console's
 # Updates tab and the doctor read it. Events: installed (cli), staged / applied (desktop),
 # rollback, waiting (desktop staged while an instance runs), failed, verify-failed.
 
-CM_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-multi"
+CM_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/agents-multi"
 CM_UPDATE_LOG="${CM_UPDATE_LOG:-$CM_STATE_DIR/updates.jsonl}"
 CM_DESKTOP_ROOT="${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}"
 

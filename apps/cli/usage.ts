@@ -19,11 +19,11 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { amEnv } from "../../shared/mcp/lib/env.ts";
-import { runtimeRoot } from "./lib/runtime-root.ts";
+import { runtimeRoot, XDG_NAME, xdgBases } from "./lib/runtime-root.ts";
 
 const HOME = Deno.env.get("HOME") ?? "";
 const RUNTIME = amEnv("ROOT") ?? runtimeRoot(HOME);
-const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
+const DATA = `${xdgBases((n) => Deno.env.get(n), HOME).data}/${XDG_NAME}`;
 export const DB_PATH = `${DATA}/usage.db`;
 
 /** Profiles to ingest: every runtime directory that actually holds transcripts. Discovered rather

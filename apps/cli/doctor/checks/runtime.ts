@@ -1,8 +1,8 @@
 // runtime.ts — The runtime's folder and its `shared` link into the repository.
 
 import { lstat, readlink } from "../../lib/fs.ts";
-import { HOME, REPO, RUNTIME, shortHome } from "../../lib/paths.ts";
-import { LEGACY_RUNTIME_NAME, RUNTIME_NAME } from "../../lib/runtime-root.ts";
+import { HOME, REPO, RUNTIME, shortHome, XDG } from "../../lib/paths.ts";
+import { LEGACY_RUNTIME_NAME, LEGACY_XDG_NAME, RUNTIME_NAME, XDG_NAME } from "../../lib/runtime-root.ts";
 import { COPY_SHARED } from "../../lib/mode.ts";
 import { type Check } from "../../lib/output.ts";
 import { amEnv } from "../../../../shared/mcp/lib/env.ts";
@@ -55,6 +55,14 @@ export async function runtimeChecks(ctx: DoctorCtx): Promise<Check[]> {
     const r = runtimeName(now === "link" ? "link-old" : now, old === "link" ? "link-new" : old);
     add(r.id, r.status, r.msg, r.fix);
   }
+  // --- the XDG folders under the new name, the old one a link to it (moveXdgDirs, at every command)
+  const stuck = [];
+  for (const base of [XDG.cache, XDG.state, XDG.data]) {
+    if ((await lstat(`${base}/${LEGACY_XDG_NAME}`))?.isDirectory) stuck.push(shortHome(`${base}/${LEGACY_XDG_NAME}`));
+  }
+  if (stuck.length) {
+    add("runtime.xdg", "warn", `still under the old name: ${stuck.join(", ")}`, `move it to ${XDG_NAME} by hand`);
+  } else add("runtime.xdg", "ok", `cache, state and data under ${XDG_NAME}`);
   // --- runtime shared → the installed code (ctx.installed), which need not be the running code (a
   // development checkout, the app's package: repo.running says so)
   const where = `${shortHome(RUNTIME)}/shared`;

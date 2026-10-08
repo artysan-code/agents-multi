@@ -171,7 +171,7 @@ config/profiles/<p>/profile.json     what the manifest implies (disableAccountMc
 It has to be per profile because of plugins: Claude Code installs every plugin `enabledPlugins`
 marks true when a session starts, so a plugin is off for one profile only if that profile's own
 file says so. Claude Code also writes into this file (`/plugin`, `/config`): before regenerating,
-the difference from the last generated copy (kept in `~/.local/state/claude-multi/settings/`) is
+the difference from the last generated copy (kept in `~/.local/state/agents-multi/settings/`) is
 **adopted** into `config/profiles/<p>/settings.json`, so nothing is lost and the change stays with
 the profile it was made in. To give it to every profile, move it into `config/settings.json`.
 
@@ -386,7 +386,7 @@ Per server, `_profiles` (default: all) and `_surfaces`:
 `agents mcp sync` applies the registry to every surface with a non-destructive merge: only
 registry-managed servers are touched, hand-added ones survive. It refuses to run while an instance
 that would rewrite the file is open (`--force` overrides), backs up into
-`~/.local/state/claude-multi/`, and keeps its per-machine state out of the repository.
+`~/.local/state/agents-multi/`, and keeps its per-machine state out of the repository.
 
 `mcp health` checks binaries, files, lock files and dependencies. `mcp health --probe` actually
 starts each server and waits for its `initialize` reply, which catches what static checks cannot —
@@ -580,7 +580,7 @@ In app mode the code travels with the app's updates; what follows is dev mode's.
 - On every launch, `bin/lib/prelaunch.sh` fetches if the last fetch is over 12 h old (3 s timeout),
   and pulls `--ff-only` when the tree is clean and behind. Claude then starts with the new config —
   no restart needed. Offline, or with diverged history, it starts anyway and touches nothing.
-- The result lands in `~/.cache/claude-multi/sync.json` and in the statusline: `cfg ↓3` behind,
+- The result lands in `~/.cache/agents-multi/sync.json` and in the statusline: `cfg ↓3` behind,
   `cfg ↑1` unpushed, `cfg ✎2` uncommitted, `cfg ≠` diverged, `cfg offline`.
 - `agents sync --fetch` forces a fetch — useful on a laptop before starting.
 
@@ -617,7 +617,7 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   runs. A release (tag → CI → signed bundles on GitHub → the manifests on the site) is
   [ADR 0004](docs/adr/0004-desktop-app-releases.md).
 - **Rollback**: `agents update --rollback [--desktop]`, or the button in System › Updates.
-- **Log**: every result is a line in `~/.local/state/claude-multi/updates.jsonl`, shown in
+- **Log**: every result is a line in `~/.local/state/agents-multi/updates.jsonl`, shown in
   System › Updates. The doctor turns a failed last attempt into a warning, a failed verification
   into a failure.
 - **Supply chain**: the apt repository key is pinned in `pkg/claude-desktop/anthropic-apt.asc`.

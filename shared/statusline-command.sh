@@ -109,7 +109,7 @@ fi
 # --- agents-multi: config repo state + available updates ---
 # Reads only local caches written by prelaunch.sh and claude-update --check: no network.
 cm_part=""
-cm_sync="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi/sync.json"
+cm_sync="${XDG_CACHE_HOME:-$HOME/.cache}/agents-multi/sync.json"
 if [ -f "$cm_sync" ]; then
   cm=$(jq -r '[.behind,.ahead,.dirty,.fetch_ok,.upstream] | @tsv' "$cm_sync" 2>/dev/null)
   cm_behind=$(echo "$cm" | cut -f1); cm_ahead=$(echo "$cm" | cut -f2); cm_dirty=$(echo "$cm" | cut -f3)

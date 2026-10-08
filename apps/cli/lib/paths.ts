@@ -2,7 +2,7 @@
 // directories and the console's port. Every path is derived from the environment once, at import.
 
 import { amEnv } from "../../../shared/mcp/lib/env.ts";
-import { runtimeRoot } from "./runtime-root.ts";
+import { runtimeRoot, XDG_NAME, xdgBases } from "./runtime-root.ts";
 
 export const HOME = Deno.env.get("HOME") ?? "";
 /** The repository this file is in: a checkout, or the desktop app's copy in its resources, which mirrors
@@ -15,9 +15,11 @@ export const CONFIG = amEnv("CONFIG") ?? `${RUNTIME}/config`;
 export const PROFILES = `${CONFIG}/profiles`;
 export const BIN = `${HOME}/.local/bin`;
 export const LIB = `${HOME}/.local/lib`;
-export const CACHE = `${Deno.env.get("XDG_CACHE_HOME") ?? `${HOME}/.cache`}/claude-multi`;
-export const STATE = `${Deno.env.get("XDG_STATE_HOME") ?? `${HOME}/.local/state`}/claude-multi`;
-export const DATA = `${Deno.env.get("XDG_DATA_HOME") ?? `${HOME}/.local/share`}/claude-multi`;
+/** The XDG bases; ours is the `agents-multi` folder in each (the old name, a link to it: moveXdgDirs). */
+export const XDG = xdgBases((n) => Deno.env.get(n), HOME);
+export const CACHE = `${XDG.cache}/${XDG_NAME}`;
+export const STATE = `${XDG.state}/${XDG_NAME}`;
+export const DATA = `${XDG.data}/${XDG_NAME}`;
 /** The local console's port on 127.0.0.1 (`agents serve`). */
 export const PORT = Number(amEnv("PORT") ?? 7331);
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.

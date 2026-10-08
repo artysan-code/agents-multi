@@ -15,7 +15,7 @@
 #   claude-update --check      # does NOT update: only reports what is outdated (--json for scripts)
 #   claude-update --rollback [--desktop]   # back to the previous version (Code, or Desktop)
 #
-# Every outcome goes to the log (~/.local/state/claude-multi/updates.jsonl, bin/lib/updates.sh).
+# Every outcome goes to the log (~/.local/state/agents-multi/updates.jsonl, bin/lib/updates.sh).
 # The only notification is a failed verification: everything else is read in the console.
 #
 # The components run ISOLATED: one failing does NOT block the other.

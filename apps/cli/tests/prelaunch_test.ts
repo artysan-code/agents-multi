@@ -49,7 +49,7 @@ Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when
   // 1. allineato: nessun pull, stato tutto a zero
   let r = await sh(`bash "${PRELAUNCH}"`, undefined, env);
   assertEquals(r.code, 0);
-  let st = JSON.parse(await Deno.readTextFile(`${cache}/claude-multi/sync.json`));
+  let st = JSON.parse(await Deno.readTextFile(`${cache}/agents-multi/sync.json`));
   assertEquals([st.behind, st.ahead, st.dirty, st.pulled, st.upstream, st.fetch_ok], [0, 0, 0, 0, true, true]);
 
   // 2. l'altra macchina pusha 2 commit → qui: behind 2, tree pulito → pull ff-only, pulled=2, behind=0
@@ -59,7 +59,7 @@ Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when
   r = await sh(`bash "${PRELAUNCH}"`, undefined, env);
   assertEquals(r.code, 0);
   assert(r.err.includes("config updated (+2 commits)"), `stderr: ${r.err}`);
-  st = JSON.parse(await Deno.readTextFile(`${cache}/claude-multi/sync.json`));
+  st = JSON.parse(await Deno.readTextFile(`${cache}/agents-multi/sync.json`));
   assertEquals([st.behind, st.pulled], [0, 2]);
   assertEquals((await sh(`git -C "${mine}" log --oneline | wc -l`)).out, "3");
 
@@ -68,7 +68,7 @@ Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when
   await Deno.writeTextFile(`${mine}/a`, "modifica locale");
   r = await sh(`bash "${PRELAUNCH}"`, undefined, env);
   assertEquals(r.code, 0);
-  st = JSON.parse(await Deno.readTextFile(`${cache}/claude-multi/sync.json`));
+  st = JSON.parse(await Deno.readTextFile(`${cache}/agents-multi/sync.json`));
   assertEquals([st.behind, st.dirty, st.pulled], [1, 1, 0]);
   assertEquals((await sh(`git -C "${mine}" log --oneline | wc -l`)).out, "3");
 
@@ -76,7 +76,7 @@ Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when
   await sh(`git -C "${mine}" remote set-url origin /nonexistent/remote.git`);
   r = await sh(`bash "${PRELAUNCH}"`, undefined, env);
   assertEquals(r.code, 0);
-  st = JSON.parse(await Deno.readTextFile(`${cache}/claude-multi/sync.json`));
+  st = JSON.parse(await Deno.readTextFile(`${cache}/agents-multi/sync.json`));
   assertEquals(st.fetch_ok, false);
   await Deno.remove(tmp, { recursive: true });
 });

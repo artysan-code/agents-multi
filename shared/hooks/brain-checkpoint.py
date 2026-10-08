@@ -9,7 +9,7 @@
 # minutes of the previous reminder.
 #
 # State (how far the transcript was already scanned, per session) lives in
-# ~/.local/state/claude-multi/brain-checkpoint/.
+# ~/.local/state/agents-multi/brain-checkpoint/.
 # Robustness: always exit 0; on any error it decides nothing.
 import json, os, re, sys, time
 
@@ -71,7 +71,7 @@ def main():
     transcript, session = data.get("transcript_path"), str(data.get("session_id", ""))
     if not transcript or not os.path.isfile(transcript) or not re.fullmatch(r"[\w-]+", session):
         return
-    state_dir = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "claude-multi", "brain-checkpoint")
+    state_dir = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "agents-multi", "brain-checkpoint")
     state_file = os.path.join(state_dir, f"{session}.json")
     try:
         with open(state_file) as f:

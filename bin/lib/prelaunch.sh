@@ -12,13 +12,13 @@
 #     timeout; offline, it carries on with what is there
 #   - pull is fast-forward ONLY and ONLY on a clean working tree; otherwise it touches nothing
 #   - never pushes
-#   - state goes to ~/.cache/claude-multi/sync.json, read by the statusline (cfg segment)
+#   - state goes to ~/.cache/agents-multi/sync.json, read by the statusline (cfg segment)
 #   - locking: two profiles may start at the same time
 set -uo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/profiles.sh"
 
 REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$(cm_repo)}}"
-CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-multi"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agents-multi"
 STATE="$CACHE/sync.json"
 STAMP="$CACHE/fetch.stamp"
 LOCK="$CACHE/sync.lock"

@@ -46,3 +46,49 @@ export async function ensureRuntimeLink(home: string): Promise<boolean> {
   await Deno.symlink(LEGACY_RUNTIME_NAME, now);
   return true;
 }
+
+/** The folder of ours under each XDG base (cache, state, data); before Agents Multi it was the old name. */
+export const XDG_NAME = "agents-multi";
+export const LEGACY_XDG_NAME = "claude-multi";
+
+/** The XDG bases, from the environment as the XDG spec gives them. */
+export function xdgBases(get: (n: string) => string | undefined, home: string) {
+  return {
+    cache: get("XDG_CACHE_HOME") || `${home}/.cache`,
+    state: get("XDG_STATE_HOME") || `${home}/.local/state`,
+    data: get("XDG_DATA_HOME") || `${home}/.local/share`,
+  };
+}
+
+/**
+ * Moves each base's folder under the old name to the new one, and leaves the old name as a relative
+ * link to it, for the code that still says it (a build before the move, a session's hooks, a rollback).
+ * When both are folders — something wrote under the new name first — what only the old one has moves
+ * over, and the rest stays aside in `claude-multi.pre-agents-multi`, never deleted. Says what it moved.
+ */
+export async function moveXdgDirs(bases: string[]): Promise<string[]> {
+  const moved: string[] = [];
+  const has = (p: string) => Deno.lstat(p).then(() => true, () => false);
+  for (const base of bases) {
+    const old = `${base}/${LEGACY_XDG_NAME}`;
+    const now = `${base}/${XDG_NAME}`;
+    if (!(await Deno.lstat(old).catch(() => null))?.isDirectory) continue; // absent, or already the link
+    try {
+      if (!(await has(now))) await Deno.rename(old, now);
+      else {
+        let left = 0;
+        for await (const e of Deno.readDir(old)) {
+          if (await has(`${now}/${e.name}`)) left++;
+          else await Deno.rename(`${old}/${e.name}`, `${now}/${e.name}`);
+        }
+        if (left) await Deno.rename(old, `${old}.pre-${XDG_NAME}`);
+        else await Deno.remove(old);
+      }
+      await Deno.symlink(XDG_NAME, old);
+      moved.push(old);
+    } catch {
+      // another process moved it at the same moment, or the base is not ours to write: the next run retries
+    }
+  }
+  return moved;
+}

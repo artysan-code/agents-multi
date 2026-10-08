@@ -6,7 +6,7 @@
 //! (it refuses a checkout installation, leaves install waiting while a Claude is open) and records the
 //! result for the doctor, which the health page shows; the app logs it in `install.log`.
 //!
-//! At every start it also writes the build it carries to `$XDG_STATE_HOME/claude-multi/app-build.json`,
+//! At every start it also writes the build it carries to `$XDG_STATE_HOME/agents-multi/app-build.json`,
 //! which the doctor compares with the copy's. A development build, or one pointed at a checkout
 //! (`AGENTS_MULTI_REPO`), does neither: its code is not the package's.
 
@@ -109,13 +109,14 @@ pub fn runtime_root(get: &impl Fn(&str) -> Option<String>, home: Option<&Path>) 
         .or_else(|| home.map(|h| h.join(".agents-multi")))
 }
 
-/// Pure: `$XDG_STATE_HOME/claude-multi`, the CLI's STATE.
+/// Pure: `$XDG_STATE_HOME/agents-multi`, the CLI's STATE (the old name, `claude-multi`, is a link to it
+/// once the CLI has moved it: apps/cli/lib/runtime-root.ts).
 pub fn state_dir(get: &impl Fn(&str) -> Option<String>, home: Option<&Path>) -> Option<PathBuf> {
     get("XDG_STATE_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
         .or_else(|| home.map(|h| h.join(".local/state")))
-        .map(|d| d.join("claude-multi"))
+        .map(|d| d.join("agents-multi"))
 }
 
 fn package_deno() -> Option<PathBuf> {
@@ -243,12 +244,12 @@ mod tests {
         assert_eq!(runtime_root(&root, Some(home)), Some(PathBuf::from("/rt")));
         assert_eq!(
             state_dir(&none, Some(home)),
-            Some(PathBuf::from("/h/.local/state/claude-multi"))
+            Some(PathBuf::from("/h/.local/state/agents-multi"))
         );
         let xdg = |n: &str| (n == "XDG_STATE_HOME").then(|| "/s".to_string());
         assert_eq!(
             state_dir(&xdg, Some(home)),
-            Some(PathBuf::from("/s/claude-multi"))
+            Some(PathBuf::from("/s/agents-multi"))
         );
         assert_eq!(state_dir(&none, None), None);
     }

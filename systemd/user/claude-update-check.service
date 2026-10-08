@@ -12,9 +12,9 @@ Type=oneshot
 # session reads no login shell
 Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/.local/share/pnpm/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
 # Code is installed as soon as it is out; Desktop is staged and switches once no instance runs.
-# Every result goes to ~/.local/state/claude-multi/updates.jsonl (the console's System › Updates).
+# Every result goes to ~/.local/state/agents-multi/updates.jsonl (the console's System › Updates).
 ExecStart=-%h/.local/bin/claude-update --auto
-# Doctor as a watchdog: notifies only when a NEW failure appears (state in ~/.local/state/claude-multi)
+# Doctor as a watchdog: notifies only when a NEW failure appears (state in ~/.local/state/agents-multi)
 ExecStart=-%h/.local/bin/claude-multi doctor --notify
 # a Desktop download is a few hundred MB: room for a slow line, but never an hour
 TimeoutStartSec=1200

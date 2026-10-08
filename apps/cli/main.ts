@@ -29,8 +29,8 @@ import { tasksCommand } from "./tasks.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
 import { ANSI, printDoctor } from "./lib/output.ts";
-import { CACHE, HOME, PORT, REPO, STAMP, STATE } from "./lib/paths.ts";
-import { ensureRuntimeLink } from "./lib/runtime-root.ts";
+import { CACHE, HOME, PORT, REPO, STAMP, STATE, XDG } from "./lib/paths.ts";
+import { ensureRuntimeLink, moveXdgDirs } from "./lib/runtime-root.ts";
 import { migrate } from "./migrate.ts";
 import { migrateApp } from "./migrate-app.ts";
 import { installApp } from "./appinstall.ts";
@@ -65,6 +65,8 @@ const opt = (name: string, def?: string) => {
 // A machine whose runtime has not moved yet gets ~/.agents-multi as a link to ~/.claude-multi,
 // before anything here (settings, servers, install) writes a path with the new name.
 if (!amEnv("ROOT")) await ensureRuntimeLink(HOME).catch(() => false);
+// the same for the XDG folders, before anything here reads or writes under the new name
+await moveXdgDirs([XDG.cache, XDG.state, XDG.data]);
 
 switch (cmd) {
   case "migrate": {

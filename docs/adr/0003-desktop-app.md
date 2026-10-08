@@ -224,7 +224,7 @@ development only; nothing in app mode depends on systemd (macOS and Windows come
   copied is exactly what the servers' locks pin. `bin/agents` runs on the same Deno in app mode, so a
   terminal needs none.
 - **Install is run by the app** (`src-tauri/src/install.rs`): a release build running the package's
-  code writes the build it carries (`$XDG_STATE_HOME/claude-multi/app-build.json`) and, when the
+  code writes the build it carries (`$XDG_STATE_HOME/agents-multi/app-build.json`) and, when the
   copy's build differs, runs `agents install --app` (`apps/cli/appinstall.ts`) from its package, with
   its Deno and module cache, before its backend starts — after an update, then, before the console
   is shown. `install --app` is idempotent: it installs the copy, links the package's programs, seeds
@@ -267,7 +267,7 @@ wiring them.
   tray host (at login it can come up after the app), then says so and exits; any other launch looks
   once. On Linux a tray host is a StatusNotifier watcher on the session bus — the one kind the app's
   tray speaks — asked with `zbus` (already in the tree through the single-instance plugin). The
-  answer goes to `$XDG_STATE_HOME/claude-multi/app.json`, the file the doctor's `app.tray` check reads.
+  answer goes to `$XDG_STATE_HOME/agents-multi/app.json`, the file the doctor's `app.tray` check reads.
   The tray app's other habit — destroying a window hidden for twenty minutes to free the web engine —
   is not carried over.
 - **The tray reads the console from Rust**, over HTTP on 127.0.0.1 (`http.rs`: a GET, a chunked or
