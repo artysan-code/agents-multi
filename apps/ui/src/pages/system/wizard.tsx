@@ -15,10 +15,26 @@ import { loadStatus, status, useTopic } from "../../state.ts";
 import { type Key, t, tk } from "../../i18n.ts";
 import { intent, useIntent } from "../../router.ts";
 import { openDrawer, runJob } from "../../lib/ui.tsx";
-import { appUpdate, appUpdateAction, appUpdater, loadAppUpdate, notePoints } from "../../shell/app-update.ts";
-import { cmpVer, COMPONENTS, fetchNews, keep, kept, News, pendingUpdates, type Report, type Whatsnew } from "./updates-lib.tsx";
+import {
+  appUpdate,
+  appUpdateAction,
+  appUpdater,
+  loadAppUpdate,
+  notePoints,
+} from "../../shell/app-update.ts";
+import {
+  cmpVer,
+  COMPONENTS,
+  fetchNews,
+  keep,
+  kept,
+  News,
+  pendingUpdates,
+  type Report,
+  type Whatsnew,
+} from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
-import { type StepState, StepRows } from "../../lib/steps.tsx";
+import { StepRows, type StepState } from "../../lib/steps.tsx";
 import "../../lib/screen.css";
 
 const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
@@ -48,7 +64,13 @@ const fresh = (): Run => {
     self: false,
     app: null,
     at: new Date().toISOString(),
-    state: { check: "todo", update: "todo", download: "todo", restart: "todo", verify: "todo" },
+    state: {
+      check: "todo",
+      update: "todo",
+      download: "todo",
+      restart: "todo",
+      verify: "todo",
+    },
     pending: [],
   };
 };
@@ -57,10 +79,23 @@ const fresh = (): Run => {
  *  from the app's note (an update started from the tray, or the run's storage gone). */
 function relaunched(u: { from: string; to: string }): Run {
   const kept_ = kept<Run>(localStorage, UW_KEY);
-  const base = kept_ ?? { ...fresh(), from: u.from, self: true, app: { version: u.to, notes: "" }, pending: [`Agents Multi ${u.from} → ${u.to}`] };
+  const base = kept_ ??
+    {
+      ...fresh(),
+      from: u.from,
+      self: true,
+      app: { version: u.to, notes: "" },
+      pending: [`Agents Multi ${u.from} → ${u.to}`],
+    };
   return {
     ...base,
-    state: { ...base.state, check: "done", download: "done", restart: "done", update: base.state.update === "todo" ? "skipped" : base.state.update },
+    state: {
+      ...base.state,
+      check: "done",
+      download: "done",
+      restart: "done",
+      update: base.state.update === "todo" ? "skipped" : base.state.update,
+    },
   };
 }
 
@@ -98,11 +133,25 @@ interface Health {
   msg: string;
 }
 
-function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; close: () => void }) {
+function Screen(
+  { resume, auto, close }: {
+    resume: Run | null;
+    auto: boolean;
+    close: () => void;
+  },
+) {
   const [, force] = useState(0);
   const draw = () => force((n) => n + 1);
   const run = useRef<Run>(resume ?? fresh()).current;
-  const v = useRef({ out: "", cause: "", running: false, jobId: null as string | null, news: null as Whatsnew | null, health: null as Health | null, showOut: false }).current;
+  const v = useRef({
+    out: "",
+    cause: "",
+    running: false,
+    jobId: null as string | null,
+    news: null as Whatsnew | null,
+    health: null as Health | null,
+    showOut: false,
+  }).current;
   const outEl = useRef<HTMLPreElement>(null);
   const S = status.value as Report | null;
   const app = appUpdater();
@@ -116,7 +165,10 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
     v.cause = why;
     set(step, "failed");
   };
-  const logSince = () => (status.value?.updateLog ?? []).filter((e) => e.at >= run.at.replace(/\.\d+Z$/, "Z"));
+  const logSince = () =>
+    (status.value?.updateLog ?? []).filter((e) =>
+      e.at >= run.at.replace(/\.\d+Z$/, "Z")
+    );
 
   useEffect(() => {
     if (outEl.current) outEl.current.scrollTop = outEl.current.scrollHeight;
@@ -138,7 +190,15 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
   /** After the update: the restart when agents-multi moved, the doctor, and what is new. */
   const finish = async () => {
     if (run.state.restart !== "done") {
-      if (!run.self) set("restart", "skipped");
+      // an install still waiting for every Claude to be closed restarts nothing: the result offers
+      // «Close Claude and update» instead of waiting for a restart that does not come
+      const waiting = run.self && !run.app && await loadStatus(true).then(
+        () =>
+          !!(status.value as Report | null)?.selfInstall &&
+          !status.value?.repo.behind,
+        () => false,
+      );
+      if (!run.self || waiting) set("restart", "skipped");
       else {
         set("restart", "running");
         const back = await consoleBack(run.code);
@@ -153,33 +213,59 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
     await loadAppUpdate();
     const doctor = status.value?.doctor ?? [];
     const fails = doctor.filter((c) => c.status === "fail");
-    v.health = { n: doctor.length, fails: fails.length, msg: fails[0]?.msg ?? "" };
-    const bad = logSince().find((e) => e.event === "failed" || e.event === "verify-failed");
-    if (bad && !v.cause) v.cause = `${COMPONENTS[bad.component] ?? bad.component}: ${bad.detail || tk("up.ev.failed")}`;
+    v.health = {
+      n: doctor.length,
+      fails: fails.length,
+      msg: fails[0]?.msg ?? "",
+    };
+    const bad = logSince().find((e) =>
+      e.event === "failed" || e.event === "verify-failed"
+    );
+    if (bad && !v.cause) {
+      v.cause = `${COMPONENTS[bad.component] ?? bad.component}: ${
+        bad.detail || tk("up.ev.failed")
+      }`;
+    }
     v.news = await fetchNews(run.from);
-    const now = appUpdate.value?.current ?? v.news?.version ?? status.value?.repo.version;
+    const now = appUpdate.value?.current ?? v.news?.version ??
+      status.value?.repo.version;
     if (now) keep(localStorage, SEEN_KEY, now);
     set("verify", fails.length || bad ? "failed" : "done");
   };
 
   const start = async () => {
     v.cause = "";
-    run.code = (await get<{ code?: string }>("/api/code").catch(() => ({ code: "" }))).code ?? "";
+    run.code =
+      (await get<{ code?: string }>("/api/code").catch(() => ({ code: "" })))
+        .code ?? "";
     set("check", "running");
     // the console's check, and the app's when there is an app to update
     const [r] = await Promise.all([
       job("update-check"),
-      appUpdater() ? appUpdateAction("check").then(() => appLeaves(["checking"], 60000)) : Promise.resolve(),
+      appUpdater()
+        ? appUpdateAction("check").then(() => appLeaves(["checking"], 60000))
+        : Promise.resolve(),
     ]);
     if ("error" in r || r.code) {
-      return fail("check", "error" in r ? why(r.error) : lastLine(v.out) ?? t("uw.exit", { c: r.code }));
+      return fail(
+        "check",
+        "error" in r
+          ? why(r.error)
+          : lastLine(v.out) ?? t("uw.exit", { c: r.code }),
+      );
     }
     await loadStatus().catch(() => null);
     const a = appUpdater()?.available;
     run.app = a ? { version: a.version, notes: a.notes } : null;
     const ours = pendingUpdates(status.value as Report | null);
-    run.pending = [...(a ? [`Agents Multi ${appUpdate.value?.current ?? "—"} → ${a.version}`] : []), ...ours];
-    run.self = !!(status.value?.repo.behind || (status.value as Report | null)?.selfInstall || a);
+    run.pending = [
+      ...(a
+        ? [`Agents Multi ${appUpdate.value?.current ?? "—"} → ${a.version}`]
+        : []),
+      ...ours,
+    ];
+    run.self = !!(status.value?.repo.behind ||
+      (status.value as Report | null)?.selfInstall || a);
     v.out = "";
     set("check", "done");
     if (!run.pending.length) {
@@ -194,8 +280,12 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
       const u = await job("update-now");
       // the stream ends early when agents-multi restarts the console under it: the restart step follows
       if ("error" in u && !run.self) return fail("update", why(u.error));
-      if ("cancelled" in u && u.cancelled) return fail("update", t("uw.cancelled"));
-      if (!("error" in u) && u.code) return fail("update", lastLine(v.out) ?? t("uw.exit", { c: u.code }));
+      if ("cancelled" in u && u.cancelled) {
+        return fail("update", t("uw.cancelled"));
+      }
+      if (!("error" in u) && u.code) {
+        return fail("update", lastLine(v.out) ?? t("uw.exit", { c: u.code }));
+      }
       set("update", "done");
     } else set("update", "skipped");
 
@@ -203,9 +293,13 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
     if (run.app) {
       set("download", "running");
       const r = await appUpdateAction("install");
-      if (!r.ok) return fail("download", r.message ?? appUpdate.value?.error ?? "");
+      if (!r.ok) {
+        return fail("download", r.message ?? appUpdate.value?.error ?? "");
+      }
       await appLeaves(["checking", "downloading", "ready"], 15 * 60000);
-      if (appUpdate.value?.state === "error") return fail("download", appUpdate.value.error ?? "");
+      if (appUpdate.value?.state === "error") {
+        return fail("download", appUpdate.value.error ?? "");
+      }
       set("download", "done");
     } else set("download", "skipped");
     await finish();
@@ -221,16 +315,20 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
   }, []);
 
   // the steps on screen: the download only when the app has a new version
-  const shown = STEPS.filter((s) => s !== "download" || run.app || run.state.download === "running");
+  const shown = STEPS.filter((s) =>
+    s !== "download" || run.app || run.state.download === "running"
+  );
   const step = shown.find((s) => run.state[s] === "running");
   const failed = shown.find((s) => run.state[s] === "failed");
   const begun = shown.some((s) => run.state[s] !== "todo");
-  const finished = run.state.verify === "done" || (run.state.verify === "failed" && !!v.health);
+  const finished = run.state.verify === "done" ||
+    (run.state.verify === "failed" && !!v.health);
   const busy = (S?.running.cli ?? []).length;
   const log = finished ? logSince() : [];
   const notes = run.app?.notes ? notePoints(run.app.notes, 6) : [];
   const h = v.health;
-  const nowVersion = appUpdate.value?.current ?? v.news?.version ?? S?.repo.version ?? "";
+  const nowVersion = appUpdate.value?.current ?? v.news?.version ??
+    S?.repo.version ?? "";
 
   const title: Key = finished
     ? (run.pending.length ? "uw.h.done" : "uw.h.current")
@@ -244,15 +342,41 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
   const stepState = (s: Step): StepState => run.state[s];
 
   return (
-    <div class="uw-screen" role="dialog" aria-modal="true" aria-label={t("uw.title")}>
+    <div
+      class="uw-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("uw.title")}
+    >
       <div class="uw-card">
-        <button type="button" class="ib uw-x" title={t("close")} aria-label={t("close")} onClick={close}>
-          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        <button
+          type="button"
+          class="ib uw-x"
+          title={t("close")}
+          aria-label={t("close")}
+          onClick={close}
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
         </button>
-        <div class={`uw-mark${step ? " on" : ""}${finished && !failed ? " ok" : ""}${failed ? " bad" : ""}`} aria-hidden="true">
+        <div
+          class={`uw-mark${step ? " on" : ""}${
+            finished && !failed ? " ok" : ""
+          }${failed ? " bad" : ""}`}
+          aria-hidden="true"
+        >
           {finished && !failed
-            ? <svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg>
-            : <svg viewBox="0 0 16 16"><path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" /></svg>}
+            ? (
+              <svg viewBox="0 0 16 16">
+                <path d="M3.5 8.5l3 3 6-7" />
+              </svg>
+            )
+            : (
+              <svg viewBox="0 0 16 16">
+                <path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" />
+              </svg>
+            )}
         </div>
         <h2>{t(title, { v: nowVersion })}</h2>
         {!begun && (
@@ -260,7 +384,12 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
             {pendingUpdates(S).length || app?.available
               ? (
                 <ul class="uw-pend">
-                  {app?.available && <li>Agents Multi {app.current ?? "—"} → {app.available.version}</li>}
+                  {app?.available && (
+                    <li>
+                      Agents Multi {app.current ?? "—"} →{" "}
+                      {app.available.version}
+                    </li>
+                  )}
                   {pendingUpdates(S).map((p) => <li key={p}>{p}</li>)}
                 </ul>
               )
@@ -272,8 +401,17 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
           <StepRows
             rows={shown.map((s) => {
               const st = stepState(s);
-              const pct = s === "download" && st === "running" && app?.progress != null ? Math.round(app.progress * 100) : null;
-              const detail = st === "skipped" ? t("uw.st.skipped") : pct != null ? `${pct}%` : s === "download" && run.app ? run.app.version : "";
+              const pct =
+                s === "download" && st === "running" && app?.progress != null
+                  ? Math.round(app.progress * 100)
+                  : null;
+              const detail = st === "skipped"
+                ? t("uw.st.skipped")
+                : pct != null
+                ? `${pct}%`
+                : s === "download" && run.app
+                ? run.app.version
+                : "";
               return { key: s, label: t(`uw.s.${s}`), state: st, detail, pct };
             })}
           />
@@ -281,13 +419,21 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
 
         {step === "restart" && <p class="uw-sub">{t("uw.restartNote")}</p>}
         {v.cause && <p class="uw-cause">{v.cause}</p>}
-        {h && <p class={h.fails ? "uw-cause" : "uw-sub"}>{h.fails ? t("uw.fails", { n: h.fails, msg: h.msg }) : t("uw.healthy", { n: h.n })}</p>}
+        {h && (
+          <p class={h.fails ? "uw-cause" : "uw-sub"}>
+            {h.fails
+              ? t("uw.fails", { n: h.fails, msg: h.msg })
+              : t("uw.healthy", { n: h.n })}
+          </p>
+        )}
 
         {finished && (notes.length > 0 || v.news?.releases?.length)
           ? (
             <div class="uw-news">
               <h3>{t("uw.news")}</h3>
-              {notes.length ? <ul>{notes.map((l) => <li key={l}>{l}</li>)}</ul> : <News news={v.news} since={run.from} />}
+              {notes.length
+                ? <ul>{notes.map((l) => <li key={l}>{l}</li>)}</ul>
+                : <News news={v.news} since={run.from} />}
             </div>
           )
           : null}
@@ -295,27 +441,46 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
           <div class="uw-log">
             {log.map((e, i) => (
               <div key={`${e.at}${i}`}>
-                {COMPONENTS[e.component] ?? e.component} · {tk(`up.ev.${e.event}`)}
+                {COMPONENTS[e.component] ?? e.component} ·{" "}
+                {tk(`up.ev.${e.event}`)}
                 {e.detail ? ` · ${e.detail}` : ""}
               </div>
             ))}
           </div>
         )}
 
-        {!begun && busy > 0 && <p class="uw-sub">{t("uw.busy", { n: busy })}</p>}
+        {!begun && busy > 0 && <p class="uw-sub">{t("uw.busy", { n: busy })}
+        </p>}
 
         <div class="uw-go">
           {v.running
             ? (
-              <button type="button" class="bt" onClick={() => v.jobId && void post("/api/job/cancel", { id: v.jobId }).catch(() => {})}>
+              <button
+                type="button"
+                class="bt"
+                onClick={() => v.jobId &&
+                  void post("/api/job/cancel", { id: v.jobId }).catch(() => {})}
+              >
                 {t("uw.cancel")}
               </button>
             )
             : !begun
             ? (
               <>
-                <button type="button" class="bt pri" onClick={() => void start()}>{t(pendingUpdates(S).length || app?.available ? "up.now" : "uw.start")}</button>
-                <button type="button" class="bt ghost" onClick={close}>{t("sc.later")}</button>
+                <button
+                  type="button"
+                  class="bt pri"
+                  onClick={() => void start()}
+                >
+                  {t(
+                    pendingUpdates(S).length || app?.available
+                      ? "up.now"
+                      : "uw.start",
+                  )}
+                </button>
+                <button type="button" class="bt ghost" onClick={close}>
+                  {t("sc.later")}
+                </button>
               </>
             )
             : failed && failed !== "verify"
@@ -332,26 +497,45 @@ function Screen({ resume, auto, close }: { resume: Run | null; auto: boolean; cl
                 >
                   {t("uw.retry")}
                 </button>
-                <button type="button" class="bt ghost" onClick={close}>{t("close")}</button>
+                <button type="button" class="bt ghost" onClick={close}>
+                  {t("close")}
+                </button>
               </>
             )
             : finished
             ? (
               <>
                 {S?.selfInstall && log.length > 0 && (
-                  <button type="button" class="bt" onClick={() => void openCloseClaude()}>{t("cc.btn")}</button>
+                  <button
+                    type="button"
+                    class="bt"
+                    onClick={() => void openCloseClaude()}
+                  >
+                    {t("cc.btn")}
+                  </button>
                 )}
-                <button type="button" class="bt pri" onClick={close}>{t("uw.done")}</button>
+                <button type="button" class="bt pri" onClick={close}>
+                  {t("uw.done")}
+                </button>
               </>
             )
             : null}
           {v.out && (
-            <button type="button" class="bt ghost uw-more" onClick={() => (v.showOut = !v.showOut, draw())}>
+            <button
+              type="button"
+              class="bt ghost uw-more"
+              onClick={() => (v.showOut = !v.showOut, draw())}
+            >
               {t(v.showOut ? "uw.hideOut" : "uw.showOut")}
             </button>
           )}
         </div>
-        {v.out && v.showOut && <pre class="out uw-out" ref={outEl}>{v.out}</pre>}
+        {v.out && v.showOut && (
+          <pre
+            class="out uw-out"
+            ref={outEl}
+          >{v.out}</pre>
+        )}
       </div>
     </div>
   );
@@ -368,13 +552,17 @@ function NewsDrawer({ since }: { since: string | null }) {
   }, []);
   return (
     <div class="rep uw-news">
-      {news === undefined ? <p class="sub">{t("uw.loading")}</p> : <News news={news} since={since} />}
+      {news === undefined
+        ? <p class="sub">{t("uw.loading")}</p>
+        : <News news={news} since={since} />}
     </div>
   );
 }
 
 export function UpdateWizardHost() {
-  const [open, setOpen] = useState<{ resume: Run | null; auto: boolean; at: number } | null>(null);
+  const [open, setOpen] = useState<
+    { resume: Run | null; auto: boolean; at: number } | null
+  >(null);
   const [note, setNote] = useState<{ v: string; seen: string } | null>(null);
   const booted = useRef(false);
   const ready = status.value !== null;
@@ -382,7 +570,10 @@ export function UpdateWizardHost() {
   // the desktop app's update, from the start and on each of its events
   useTopic(() => loadAppUpdate(), ["app-update"]);
 
-  useIntent("update.wizard", (arg) => setOpen({ resume: null, auto: arg === "auto", at: Date.now() }));
+  useIntent(
+    "update.wizard",
+    (arg) => setOpen({ resume: null, auto: arg === "auto", at: Date.now() }),
+  );
 
   // At start: a run that the restart interrupted opens again; otherwise a version newer than the last
   // one seen here (the timer updated in the background) gets a notice.
@@ -392,8 +583,13 @@ export function UpdateWizardHost() {
     booted.current = true;
     const w = kept<Run>(localStorage, UW_KEY);
     // only a run that got as far as the update resumes; one still asking is simply closed
-    const past = w?.state && ["running", "done"].some((x) => x === w.state.update || x === w.state.download);
-    if (w && past && Date.now() - Date.parse(w.at) < 30 * 60000) return setOpen({ resume: w, auto: false, at: Date.now() });
+    const past = w?.state &&
+      ["running", "done"].some((x) =>
+        x === w.state.update || x === w.state.download
+      );
+    if (w && past && Date.now() - Date.parse(w.at) < 30 * 60000) {
+      return setOpen({ resume: w, auto: false, at: Date.now() });
+    }
     keep(localStorage, UW_KEY);
     const v = S.repo.version, seen = kept<string>(localStorage, SEEN_KEY);
     if (!v) return;
@@ -404,12 +600,20 @@ export function UpdateWizardHost() {
   // the app relaunched from an update: say so, once (closing the screen dismisses the app's note)
   const updated = appUpdate.value?.updated;
   useEffect(() => {
-    if (updated && !open) setOpen({ resume: relaunched(updated), auto: false, at: Date.now() });
+    if (updated && !open) {
+      setOpen({ resume: relaunched(updated), auto: false, at: Date.now() });
+    }
   }, [updated?.to]);
 
   // a request that came before the shell drew this host
   useEffect(() => {
-    if (intent.value?.name === "update.wizard") setOpen({ resume: null, auto: intent.value.arg === "auto", at: Date.now() });
+    if (intent.value?.name === "update.wizard") {
+      setOpen({
+        resume: null,
+        auto: intent.value.arg === "auto",
+        at: Date.now(),
+      });
+    }
   }, []);
 
   return (
