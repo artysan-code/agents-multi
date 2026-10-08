@@ -1,0 +1,54 @@
+name: Something does not work
+description: A bug in the app, the console, a command or an MCP server.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: `agents doctor` often says what is wrong and how to fix it, and
+        [Troubleshooting](https://agents-multi.artysan.me/docs/troubleshooting/) has the usual cases.
+        A security problem goes through [Report a vulnerability](https://github.com/artysan-code/agents-multi/security/advisories/new), never here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. …
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: Agents Multi version
+      description: System › Updates in the console, or `agents status`.
+      placeholder: "0.18.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed as
+      options:
+        - AppImage
+        - deb
+        - AUR
+        - From a checkout (dev mode)
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and desktop
+      placeholder: "Fedora 42, GNOME"
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `agents doctor`
+      description: Remove anything private (account names, paths you do not want to share).
+      render: text

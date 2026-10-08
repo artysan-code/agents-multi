@@ -16,7 +16,7 @@ export default defineConfig({
       favicon: "/favicon.svg",
       customCss: ["./src/styles/fonts.css", "./src/styles/docs.css"],
       sidebar: [
-        { label: "Start here", items: ["docs", "docs/getting-started"] },
+        { label: "Start here", items: ["docs", "docs/getting-started", "docs/setup-with-claude"] },
         { label: "Concepts", items: ["docs/profiles", "docs/configuration", "docs/console", "docs/brain", "docs/self-hosting", "docs/mcp-and-vault", "docs/updates", "docs/security"] },
         { label: "Reference", items: ["docs/commands", "docs/troubleshooting", "docs/faq", "docs/changelog"] },
       ],

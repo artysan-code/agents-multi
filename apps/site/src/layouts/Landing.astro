@@ -125,6 +125,16 @@ const ld = {
         </div>
       </section>
 
+      <section class="block">
+        <div class="wrap">
+          <div class="kicker">{t.forKicker}</div>
+          <h2>{t.forTitle}</h2>
+          <div class="principles">
+            {t.forWho.map(([h, p]) => <div class="reveal"><h3>{h}</h3><p>{p}</p></div>)}
+          </div>
+        </div>
+      </section>
+
       <section class="block alt" id="brain">
         <div class="wrap split">
           <div>
@@ -147,12 +157,11 @@ const ld = {
             <ol>{t.steps.map(([b, text]) => <li class="reveal"><span><b>{b}</b><span set:html={text} /></span></li>)}</ol>
             <div class="terminal reveal">
               <div class="titlebar"><i></i><i></i><i></i><span>~</span></div>
-              <pre data-type><span class="c"># 1 · your configuration</span>
-<span class="pr">$</span> agents init ~/claude-multi-config --name Ann
-<span class="c"># 2 · install: launchers, settings, console, tray</span>
-<span class="pr">$</span> agents install
+              <pre data-type><span class="c"># 1 · the app, from the releases</span>
+<span class="pr">$</span> chmod +x agents-multi_amd64.AppImage
+<span class="pr">$</span> ./agents-multi_amd64.AppImage
+<span class="c"># 2 · the wizard: you, your folder, profiles, install</span>
 <span class="c"># 3 · sign in to each profile, then check</span>
-<span class="pr">$</span> claude          <span class="c"># → /login</span>
 <span class="pr">$</span> agents doctor
   <span class="ok">✓</span> profiles: personal, work, research
   <span class="ok">✓</span> console on http://127.0.0.1:7331

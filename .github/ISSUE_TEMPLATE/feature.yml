@@ -1,0 +1,15 @@
+name: An idea
+description: Something Agents Multi could do, or do better.
+labels: [idea]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: The situation and what is missing today, more than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work

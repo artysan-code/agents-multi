@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/artysan-code/agents-multi/security/advisories/new
+    about: Privately, never in a public issue (SECURITY.md).
+  - name: Documentation
+    url: https://agents-multi.artysan.me/docs/
+    about: Getting started, configuration, troubleshooting and the FAQ.
