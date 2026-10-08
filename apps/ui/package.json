@@ -1,6 +1,6 @@
 {
   "version": "0.15.0",
-  "name": "claude-multi-ui",
+  "name": "agents-multi-ui",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.18.0",

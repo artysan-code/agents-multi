@@ -307,8 +307,6 @@ export function createHandler(
       // the old console, kept one release as a fallback; its page links its files relatively
       if (u.pathname === "/old") return Response.redirect(`${u.origin}/old/`, 301);
       if (u.pathname.startsWith("/old/")) return await staticFile(DASH, u.pathname.slice(4));
-      // where the new interface lived while its pages moved over
-      if (u.pathname === "/next" || u.pathname.startsWith("/next/")) return Response.redirect(`${u.origin}/`, 301);
       return await uiFile(uiDist, u.pathname);
     } catch (e) {
       return json({ error: (e as Error).message }, 500);

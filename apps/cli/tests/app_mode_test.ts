@@ -3,7 +3,7 @@
 // what install points where and removes, the autostart entry, the doctor's app-mode checks, the MCP
 // servers' Deno and the jobs the backend schedules. Files are made in throwaway folders.
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { buildId, installCopy, keepBy, keepProgram, readBuild, rollbackCopy, seedCache } from "../appcopy.ts";
+import { buildId, installCopy, keepBy, keepProgram, readBuild, seedCache } from "../appcopy.ts";
 import { personDenoDir } from "../appinstall.ts";
 import { appImageEntry, autostartEntry, codeFor, unitsToRetire } from "../install.ts";
 import { COPY_SHARED, modeOf } from "../lib/mode.ts";
@@ -98,15 +98,7 @@ Deno.test("installCopy: a build beside the others, swapped in; previous kept; ol
   for await (const e of Deno.readDir(`${rt}/app`)) kept.push(e.name);
   assertEquals(kept.sort(), ["current", idB, idC, "previous"].sort(), "the build before previous goes");
 
-  assertEquals(await rollbackCopy(rt), { changed: true, from: idC, to: idB });
-  assertEquals(await Deno.readLink(`${rt}/app/current`), idB);
-  assertEquals(await Deno.readLink(`${rt}/app/previous`), idC);
-  // and back again: the build is still there, nothing to copy
-  assertEquals((await installCopy(c, rt)).to, idC);
-  assertEquals(await Deno.readLink(`${rt}/app/current`), idC);
-
   await assertRejects(() => installCopy(`${tmp}/rt`, `${tmp}/rt2`), Error, "build.json");
-  await assertRejects(() => rollbackCopy(`${tmp}/nothing`), Error, "no previous build");
   await Deno.remove(tmp, { recursive: true });
 });
 

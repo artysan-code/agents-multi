@@ -123,16 +123,6 @@ async function prune(app: string) {
   }
 }
 
-/** Puts the previous build back in use; the one it replaces becomes previous. */
-export async function rollbackCopy(root: string): Promise<CopyResult> {
-  const app = `${root}/${APP_DIR}`;
-  const [cur, prev] = [await readlink(`${app}/current`), await readlink(`${app}/previous`)];
-  if (!prev || !(await readBuild(`${app}/${prev}`))) throw new Error(`no previous build in ${app}`);
-  await swapLink(`${app}/current`, prev);
-  if (cur) await swapLink(`${app}/previous`, cur);
-  return { changed: true, from: cur, to: prev };
-}
-
 /** Pure: how a program of the package reaches the runtime's bin/: a link where the package's path
  *  outlives the run (a deb, an rpm, a folder), a copy out of an AppImage, whose mount goes with it. */
 export const keepBy = (appimage: boolean): "link" | "copy" => appimage ? "copy" : "link";

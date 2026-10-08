@@ -5,7 +5,7 @@
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
-import { lstat, readJson, readText } from "../lib/fs.ts";
+import { lstat, readJson } from "../lib/fs.ts";
 import { REPO, RUNTIME, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
@@ -153,8 +153,4 @@ export function describe(c: Change) {
 /** Whether the old in-repo sync state file still exists. */
 export async function legacyStatePresent() {
   return !!(await lstat(LEGACY_STATE));
-}
-/** The text of a target's config file, or null when it is missing. */
-export async function readTargetRaw(t: Target) {
-  return await readText(t.path);
 }
