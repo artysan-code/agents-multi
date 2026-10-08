@@ -69,5 +69,7 @@ are the ones you can see: updates, and your own brain and services.
 
 ## Reporting a vulnerability
 
-Write privately to the maintainer; a `SECURITY.md` with the address comes with the first public
-release.
+Report it privately through GitHub:
+[Report a vulnerability](https://github.com/artysan-code/agents-multi/security/advisories/new). Please
+do not open a public issue. More in
+[SECURITY.md](https://github.com/artysan-code/agents-multi/blob/release/SECURITY.md).
