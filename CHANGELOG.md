@@ -5,6 +5,21 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.17.0] - 2026-10-08
+
+### Breaking changes
+
+- cache, state and data move to agents-multi folders, the old name a link (c52d1f9)
+
+### Fixed
+
+- **console**: «Close Claude and update» goes on when Claude was closed by hand (30f9334)
+- **desktop**: programs the AppImage starts no longer inherit its libraries and Python (03514ca)
+
+### Documentation
+
+- the site and the README read right for someone who starts from the app (7a85c35)
+
 ## [0.16.0] - 2026-10-08
 
 ### Breaking changes
