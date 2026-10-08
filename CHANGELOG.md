@@ -5,6 +5,17 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.15.1] - 2026-10-08
+
+### Fixed
+
+- **ci**: the release build starts without bundles, which an older cache brought (7c0ffb5)
+
+### Performance
+
+- **release**: no rpm for now, Fedora and openSUSE take the AppImage (98cfcdb)
+- **ci**: the rpm is compressed with zstd, the cache leaves the bundles out, only dev runs the gate (4932824)
+
 ## [0.15.0] - 2026-10-08
 
 ### Added
