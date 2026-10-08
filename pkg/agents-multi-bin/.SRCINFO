@@ -1,6 +1,6 @@
 pkgbase = agents-multi-bin
 	pkgdesc = Several Claude Code and Claude Desktop accounts on one machine, one console for all
-	pkgver = 0.15.1
+	pkgver = 0.16.0
 	pkgrel = 1
 	url = https://github.com/artysan-code/agents-multi
 	arch = x86_64
@@ -12,7 +12,7 @@ pkgbase = agents-multi-bin
 	conflicts = agents-multi
 	options = !strip
 	options = !debug
-	source_x86_64 = https://github.com/artysan-code/agents-multi/releases/download/v0.15.1/agents-multi_0.15.1_amd64.deb
-	sha256sums_x86_64 = 43748aff965949848ab14b49e97b1303a45781a482c386a527c6d9daf3cc1476
+	source_x86_64 = https://github.com/artysan-code/agents-multi/releases/download/v0.16.0/agents-multi_0.16.0_amd64.deb
+	sha256sums_x86_64 = a90bf49b93859db125756c0c57f563412ea899aaba5f10c31f97a2f08df4b894
 
 pkgname = agents-multi-bin
