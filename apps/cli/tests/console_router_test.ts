@@ -14,7 +14,10 @@ const table: Record<string, Route> = {
   },
   "/api/both": { get: () => new Response("got"), post: () => new Response("posted") },
 };
-const handle = createHandler(table);
+// the interface's build is not in the repository (apps/ui/dist): the tests serve one of their own
+const dist = Deno.makeTempDirSync();
+Deno.writeTextFileSync(`${dist}/index.html`, "<!doctype html>");
+const handle = createHandler(table, dist);
 const req = (path: string, init: RequestInit & { host?: string } = {}) =>
   new Request(`http://127.0.0.1:7331${path}`, {
     ...init,
@@ -48,4 +51,9 @@ Deno.test("console router: unknown paths fall to the page's files, which refuse 
   assertEquals((await handle(req("/../../etc/passwd"))).status, 404);
   assertEquals((await handle(req("/vendor/../../x.js"))).status, 404);
   assertEquals((await handle(req("/index.html"))).status, 200);
+});
+
+Deno.test("console router: an interface that is not built says so, with 503", async () => {
+  const unbuilt = createHandler(table, `${dist}/missing`);
+  assertEquals((await unbuilt(req("/"))).status, 503);
 });

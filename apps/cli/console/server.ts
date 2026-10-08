@@ -280,9 +280,13 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
 /**
  * The request handler over a route table: the local-host guard, then the table (POST handlers
  * behind the anti-CSRF header, 405 for a POST-only path), then the feature modules, then the
- * page's files. An exception becomes a 500 with its message (the console is local).
+ * page's files (from `uiDist`, the interface's build). An exception becomes a 500 with its message
+ * (the console is local).
  */
-export function createHandler(table: Record<string, Route>): (req: Request) => Promise<Response> {
+export function createHandler(
+  table: Record<string, Route>,
+  uiDist: string = UI_DIST,
+): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     if (!isLocalHost(req)) return new Response("forbidden host", { status: 403 });
     const u = new URL(req.url);
@@ -305,7 +309,7 @@ export function createHandler(table: Record<string, Route>): (req: Request) => P
       if (u.pathname.startsWith("/old/")) return await staticFile(DASH, u.pathname.slice(4));
       // where the new interface lived while its pages moved over
       if (u.pathname === "/next" || u.pathname.startsWith("/next/")) return Response.redirect(`${u.origin}/`, 301);
-      return await uiFile(UI_DIST, u.pathname);
+      return await uiFile(uiDist, u.pathname);
     } catch (e) {
       return json({ error: (e as Error).message }, 500);
     }
