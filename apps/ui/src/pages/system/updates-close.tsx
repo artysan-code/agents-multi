@@ -23,6 +23,8 @@ interface Blocker {
 }
 interface Plan {
   offer: boolean;
+  /** the build or commit an install is waiting with; null when none is */
+  pending: string | null;
   blockers: Blocker[];
 }
 interface StepResult extends Result {
@@ -67,6 +69,20 @@ type Phase =
   | { k: "stuck"; remaining: Blocker[] }
   | { k: "done"; out: string };
 
+/** The install that waited, run now: what the screen does once every Claude is closed. */
+async function runSettle(): Promise<Settled> {
+  const r = await post<Settled>("/api/action", { action: "settle-install", opts: [] }).catch((e: Error) => (
+    { code: 1, ms: 0, output: e.message }
+  ));
+  const s = (r.ms / 1000).toFixed(1);
+  toast(
+    r.code ? t("act.doneExit", { a: "settle-install", c: r.code, s }) : t("act.done", { a: "settle-install", s }),
+    r.code !== 0,
+  );
+  await loadStatus().catch(() => {});
+  return r;
+}
+
 function CloseClaude({ plan }: { plan: Plan }) {
   const [phase, setPhase] = useState<Phase>({ k: "plan" });
   const [reopen, setReopen] = useState<string[]>([]);
@@ -75,17 +91,9 @@ function CloseClaude({ plan }: { plan: Plan }) {
 
   const settle = async (profiles: string[]) => {
     setPhase({ k: "text", msg: t("cc.updating") });
-    const r = await post<Settled>("/api/action", { action: "settle-install", opts: [] }).catch((e: Error) => (
-      { code: 1, ms: 0, output: e.message }
-    ));
+    const r = await runSettle();
     setPhase({ k: "done", out: r.output || t("act.noOutput") });
-    const s = (r.ms / 1000).toFixed(1);
-    toast(
-      r.code ? t("act.doneExit", { a: "settle-install", c: r.code, s }) : t("act.done", { a: "settle-install", s }),
-      r.code !== 0,
-    );
     setReopen(profiles);
-    await loadStatus().catch(() => {});
   };
 
   const step = async (kind: "term" | "kill") => {
@@ -156,7 +164,8 @@ function CloseClaude({ plan }: { plan: Plan }) {
 
 const open = signal<{ plan: Plan; at: number } | null>(null);
 
-/** Asks the server who holds the install, and opens the screen with the plan (or says there is nothing to do). */
+/** Asks the server who holds the install, and opens the screen with the plan. With nothing left to close
+ *  (every Claude closed by hand since) the install runs at once; with none waiting, it says so. */
 export async function openCloseClaude(): Promise<void> {
   let plan: Plan;
   try {
@@ -164,7 +173,10 @@ export async function openCloseClaude(): Promise<void> {
   } catch (e) {
     return toastErr(e);
   }
-  if (!plan.offer) return toast(t("cc.none"));
+  if (!plan.offer) {
+    if (plan.pending) return void await runSettle();
+    return toast(t("cc.none"));
+  }
   open.value = { plan, at: Date.now() };
 }
 
