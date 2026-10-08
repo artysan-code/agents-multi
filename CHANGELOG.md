@@ -5,6 +5,67 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.14.0] - 2026-10-08
+
+### Breaking changes
+
+- **desktop**: the bundle identifier is me.artysan.agents, final (6f7df35)
+- remove the PySide6 tray app, replaced by the desktop app (0aaada9)
+- **cli**: app mode — the installation runs the desktop app's copy of the code (4958de7)
+
+### Added
+
+- **release**: a beta can name the version it is for (`release beta major` → 1.0.0-beta.1) (90a6c53)
+- **console**: the first-run wizard installs Claude Code when the machine has none (1596aec)
+- **console**: the first-run wizard, from nothing to a working setup (6097e11)
+- **ui**: the update screen follows the app's status, and says «Updated» after a relaunch (3954c0a)
+- **ui**: the picker in Today's language: the profile's colour, its state, what a choice does (e05529e)
+- **ui**: one update screen updates everything, the desktop app included (90e111a)
+- **ui**: Today as a board: what is next, the line of the day, tasks in groups, system and sessions (2e0f678)
+- **desktop**: signed app updates, relayed by the console on /api/app/update (1bf0ce1)
+- **desktop**: the app installs its code before its backend starts, when the copy is another build (da45429)
+- **ui**: Hey chooses its model from the same picker, opened inside its window (3a9248f)
+- **ui**: a header with three tabs and a menu, the ask bar on top and its model picker (ec547a0)
+- **console**: data for the new Today page: board steps, event end and link, model effort (4dfd9ec)
+- **desktop**: Hey Claude in the app, and windows that appear with the console loaded (2f47102)
+- **ask**: light work on Haiku: the default model and the debrief's, each model with its effort (e2ed5d0)
+- **desktop**: AGENTS_MULTI_DEV_INSTANCE runs a debug build beside the installed app (ac85058)
+- **desktop**: the package carries Deno, the console's source and its modules, and runs it (c561b1c)
+- **cli**: the console runs from the desktop app's bundled copy, on the app's Deno and module cache (6451a2f)
+- **desktop**: a tray icon from the console's summary, the tray app's flags, and the picker window (79464cd)
+- **ui**: «Which Claude?», the profile picker at /#pick, without the console's frame (66fb68d)
+- **console**: /api/launch lists the profiles and opens one's Claude Desktop, for the picker (8005cc4)
+- **desktop**: the app starts the console as a compiled sidecar, supervises and stops it (c965a73)
+- **cli**: AGENTS_MULTI_REPO names the repository, for a compiled CLI that cannot find it (de97fad)
+- **ci**: the static gate checks the desktop app's Rust, and releases bump its version (35b5e9d)
+- **desktop**: a Tauri 2 shell whose window shows the local console (9eacc96)
+- **ci**: a check that the brain image copies every file the brain imports (e6ea10e)
+
+### Fixed
+
+- **update**: Anthropic's installer runs in a throwaway home, since install keeps ~/.claude read-only (9ab7f07)
+- **ui**: the picker's style stays on the picker, the Connections filter is a chip again (dff0b91)
+- **desktop**: the updater plugin is registered by the builder; release docs (ADR 0004) (f06f67f)
+- **doctor**: the app's copy reached through its link is not another checkout (dfa82e8)
+- **cli**: a first install --app does not wait for a Claude; the build stamp ignores untracked files (47c68ce)
+- **ui**: a running Desktop is named by its variant, as the server sends it (922e684)
+- **desktop**: the Linux tray is a StatusNotifierItem of its own; a left click toggles the console (25a20ba)
+- **doctor**: links are checked against the installed repository; a development checkout is a note (06998a3)
+- **desktop**: the window's app_id and the bundles' desktop file are the bundle identifier (ce11098)
+- **desktop**: a second launch raises the window on Wayland with the launcher's activation token (7b60d8b)
+
+### Documentation
+
+- **site**: download first — the releases, each package's install, the wizard and updates (3563973)
+- third-party notices for the agents, commands and skill taken from other projects (2cf6457)
+- the replacement step — app and dev modes, the copy, no systemd in app mode, the migration (3fcfc27)
+- **desktop**: the Linux tray, development instances, and the doctor from another checkout (fee240e)
+- **desktop**: 1.0 ships everything in the app, the bundled backend, and the replacement step (079bc2a)
+- **desktop**: the window's identity on Linux, and why the desktop file is named after it (e17960b)
+- **desktop**: tray, flags and picker in ADR 0003, and what replacing the tray app changes (191a433)
+- **desktop**: what raises the window on a second launch, on Wayland and X11 (32e03dc)
+- **desktop**: ADR 0003 on the desktop app, and apps/desktop in the layout and AGENTS.md (a475d8d)
+
 ## [0.13.4] - 2026-10-07
 
 ### Fixed
