@@ -109,13 +109,22 @@ do_cli() (
   # captured; `|| true` covers the (theoretical) case where grep filters everything out and
   # returns 1 under pipefail.
   #
-  # No Claude Code yet (a new machine, the first-run wizard): Anthropic's own installer puts the
-  # native build in $VERSIONS_DIR, which is all the rest of this function needs.
+  # No Claude Code yet (a new machine, the first-run wizard): Anthropic's own installer, in a
+  # throwaway HOME — it downloads into ~/.claude, which install leaves read-only on purpose (the
+  # tripwire) — and its native build moved into $VERSIONS_DIR, which is all the rest needs.
   local out rc=0
   if [[ ! -f "$cbin" ]]; then
     note "$(cm_t bootstrap)"
+    local tmphome; tmphome="$(mktemp -d)"
+    trap 'rm -rf -- "$tmpcfg" "$tmphome"' EXIT
     out="$(curl -fsSL --max-time 60 "$CLI_INSTALLER_URL" |
-      env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" bash 2>&1)" || rc=$?
+      env -u DISABLE_AUTOUPDATER HOME="$tmphome" CLAUDE_CONFIG_DIR="$tmpcfg" bash 2>&1)" || rc=$?
+    if [[ $rc -eq 0 ]]; then
+      mkdir -p "$VERSIONS_DIR"
+      local built; built="$(semver_dirs "$tmphome/.local/share/claude/versions" | tail -n1)"
+      if [[ -n "$built" ]]; then mv -- "$tmphome/.local/share/claude/versions/$built" "$VERSIONS_DIR/$built"
+      else out="no version in the installer's folder"; rc=1; fi
+    fi
   else
     out="$(env -u DISABLE_AUTOUPDATER CLAUDE_CONFIG_DIR="$tmpcfg" "$cbin" update 2>&1)" || rc=$?
   fi
