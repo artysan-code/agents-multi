@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { forgetBackendOnly } from "../console/server.ts";
+import { claudeSessionVars, forgetBackendOnly } from "../console/server.ts";
 
 Deno.test("REPO: the folder the code is in, decoded: the app's bundled copy sits under «Agents Multi»", async () => {
   // REPO is computed at import: a copy of paths.ts and what it imports, in a folder with a space
@@ -28,4 +28,32 @@ Deno.test("forgetBackendOnly: the variables the app named, and the list itself, 
   const none = new Map([["DENO_DIR", "/mine"]]);
   forgetBackendOnly({ get: (k) => none.get(k), delete: (k) => void none.delete(k) });
   assertEquals([...none.keys()], ["DENO_DIR"], "without the list, nothing is forgotten");
+});
+
+Deno.test("claudeSessionVars: a Claude session's variables, not Agents Multi's or the desktop's", () => {
+  assertEquals(
+    claudeSessionVars([
+      "CLAUDECODE",
+      "CLAUDE_CODE_SESSION_ID",
+      "CLAUDE_CODE_MESSAGING_SOCKET",
+      "CLAUDE_AGENT_SDK_VERSION",
+      "CLAUDE_PREVIEW_CLASSIFIER_FLOOR",
+      "CLAUDE_CONFIG_DIR",
+      "CLAUDE_PID",
+      "CLAUDE_EFFORT",
+      "CLAUDE_MULTI_NO_ASSISTANT_TRAILER",
+      "DBUS_SESSION_BUS_ADDRESS",
+      "HOME",
+    ]),
+    [
+      "CLAUDECODE",
+      "CLAUDE_CODE_SESSION_ID",
+      "CLAUDE_CODE_MESSAGING_SOCKET",
+      "CLAUDE_AGENT_SDK_VERSION",
+      "CLAUDE_PREVIEW_CLASSIFIER_FLOOR",
+      "CLAUDE_CONFIG_DIR",
+      "CLAUDE_PID",
+      "CLAUDE_EFFORT",
+    ],
+  );
 });

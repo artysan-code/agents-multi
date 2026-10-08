@@ -324,9 +324,21 @@ export function forgetBackendOnly(env: Pick<typeof Deno.env, "get" | "delete"> =
   for (const n of [...names, "AGENTS_MULTI_BACKEND_ONLY"]) env.delete(n);
 }
 
+/** Pure: the variables a Claude Code session sets for what it runs. An app started from inside one (a
+ *  terminal in Claude, a tool call) inherits them, and the Claudes the console starts then took that
+ *  session's profile, permissions and sandbox for theirs: no keyring, no brain. Agents Multi's own
+ *  (CLAUDE_MULTI_*) stay. */
+export function claudeSessionVars(names: string[]): string[] {
+  return names.filter((n) =>
+    n === "CLAUDECODE" || n === "CLAUDE_CONFIG_DIR" || n === "CLAUDE_PID" || n === "CLAUDE_EFFORT" ||
+    /^CLAUDE_(CODE|AGENT_SDK|PREVIEW)_/.test(n)
+  );
+}
+
 /** Starts the console and resolves when it stops. `open` opens it in the default browser. */
 export async function serve(opts: { open?: boolean } = { open: true }) {
   forgetBackendOnly();
+  for (const n of claudeSessionVars(Object.keys(Deno.env.toObject()))) Deno.env.delete(n);
   const url = `http://127.0.0.1:${PORT}`;
   const code = await codeVersion();
   const status = new StatusCache();
