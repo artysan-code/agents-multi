@@ -23,6 +23,9 @@
   "bundle": {
     "active": true,
     "targets": ["deb", "rpm", "appimage"],
+    "linux": {
+      "rpm": { "compression": { "type": "zstd", "level": 3 } }
+    },
     "category": "DeveloperTool",
     "license": "AGPL-3.0-only AND LicenseRef-Commons-Clause",
     "licenseFile": "../../../LICENSE",

@@ -4,10 +4,14 @@
 # denoland/deno: actions/checkout is a JavaScript action and needs node inside the job container.
 # Deno comes from setup-deno; the linters the gate requires in CI come from apt and from a pinned,
 # checksummed gitleaks release.
+#
+# Only `dev` is gated here: `beta` and `release` move by fast-forward to commits `dev` already passed,
+# and what is committed on `release` itself (the version bump, the update manifests) is gated by the
+# release job of its tag. Gating the same commit on three branches tripled the runner's queue.
 name: ci
 on:
   push:
-    branches: [release, beta, dev]
+    branches: [dev]
   pull_request:
 
 concurrency:

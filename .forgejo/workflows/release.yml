@@ -104,6 +104,7 @@ jobs:
             ~/.local/share/pnpm/store
             ~/.cargo/registry
             apps/desktop/src-tauri/target
+            !apps/desktop/src-tauri/target/release/bundle
           key: app-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock') }}
           restore-keys: app-
 
