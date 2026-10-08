@@ -180,7 +180,7 @@ jobs:
   # privileges, and kaniko needs neither. It builds from git (the job token reads the repository):
   #   - from the commit with the new manifests on `release` → :latest, which the production brain
   #     runs and whose site serves the update channels; for a stable version also :X.Y.Z and :X.Y;
-  #   - for a beta, from its tag as well → :beta and :X.Y.Z-beta.N (the beta's code).
+  #   - for a beta, from its tagged commit as well → :beta and :X.Y.Z-beta.N (the beta's code).
   # Then brain-deploy has Coolify redeploy :latest. Without GHCR_TOKEN (a GitHub token with
   # write:packages on artysan-code) nothing is built; without COOLIFY_DEPLOY_URL and COOLIFY_TOKEN
   # nothing is redeployed.
@@ -213,14 +213,16 @@ jobs:
           build() { # <ref> <commit> <tag>...
             ctx="$repo#$1#$2"; shift 2
             dest=""; for t in "$@"; do dest="$dest --destination $IMAGE:$t"; done
-            /kaniko/executor --context "$ctx" --dockerfile apps/brain/Dockerfile $dest \
+            # --cleanup: kaniko builds in this container's own filesystem, and a beta builds twice
+            /kaniko/executor --context "$ctx" --dockerfile apps/brain/Dockerfile $dest --cleanup \
               --label "org.opencontainers.image.source=$SOURCE" \
               --label "org.opencontainers.image.version=$version" --verbosity warn
           }
           case "$version" in
             *-beta.*)
               build refs/heads/release "$SITE" latest
-              build "refs/tags/$GITHUB_REF_NAME" "$GITHUB_SHA" beta "$version" ;;
+              # from `beta`, which holds the tagged commit: the tag is annotated, the commit is not
+              build refs/heads/beta "$GITHUB_SHA" beta "$version" ;;
             *) build refs/heads/release "$SITE" latest "$version" "${version%.*}" ;;
           esac
           echo "built=true" >>"$GITHUB_OUTPUT"
