@@ -496,7 +496,13 @@ export async function install(
         for (const u of gone) await Deno.remove(`${ud}/${u}`).catch(() => {});
         if (m.systemd) {
           await run("systemctl", ["--user", "daemon-reload"]);
-          await run("systemctl", ["--user", "--no-block", "stop", ...gone]);
+          // one unit per call: systemctl enqueues nothing when any unit it is given is not loaded (a
+          // service whose file is gone and that was not running), and the running ones kept going
+          for (const u of gone) {
+            await run("systemctl", ["--user", "--no-block", "stop", u]);
+            // a timer whose service vanished is left «failed»
+            await run("systemctl", ["--user", "reset-failed", u]);
+          }
         }
       }
     }
