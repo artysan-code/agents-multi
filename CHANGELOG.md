@@ -5,6 +5,18 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.15.0] - 2026-10-08
+
+### Added
+
+- **install**: an AppImage gets a menu entry, which its package does not bring (90cf2bc)
+
+### Fixed
+
+- **doctor**: the brain backup timer is checked in dev mode only (84d3248)
+- **install**: profiles mount the skills of the installed code, links to ~/.agents/skills included (808cf4e)
+- **install**: retired units are stopped one by one, so the running ones stop (2b65a1c)
+
 ## [0.14.3] - 2026-10-08
 
 ### Fixed
