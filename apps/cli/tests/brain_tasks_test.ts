@@ -1,7 +1,14 @@
 // The tasks in the brain (shared/mcp/lib/brain-tasks.ts): which profiles use it, and what the
 // store says when the brain refuses or is away. The HTTP side runs end to end in apps/brain/tests/e2e.ts.
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { brainAccount, brainStore, lazyStore, scoped } from "../../../shared/mcp/lib/brain-tasks.ts";
+import {
+  brainAccount,
+  brainStore,
+  lazyStore,
+  retriable,
+  RETRY_MS,
+  scoped,
+} from "../../../shared/mcp/lib/brain-tasks.ts";
 import { toPrune } from "../brain-backup.ts";
 import { StaleError, toFile } from "../../../shared/mcp/lib/tasks.ts";
 
@@ -127,4 +134,35 @@ Deno.test("toPrune: the oldest brain copies beyond the ones to keep, nothing els
   ];
   assertEquals(toPrune(names, 2), ["brain-2026-09-30T09-00.brn"]);
   assertEquals(toPrune(names, 5), []);
+});
+
+Deno.test("brainStore: a brain restarting is waited for, an offline one is said at once", async () => {
+  const waits: number[] = [];
+  const pause = (ms: number) => (waits.push(ms), Promise.resolve());
+  let n = 0;
+  const flaky = () => Promise.resolve(++n < 3 ? new Response("", { status: 502 }) : new Response('{"tasks":[]}'));
+  assertEquals(await brainStore("https://b", "t", flaky, pause).list(), []);
+  assertEquals(waits, RETRY_MS.slice(0, 2));
+  // always down: every wait, then the error
+  waits.length = 0;
+  await assertRejects(
+    () => brainStore("https://b", "t", () => Promise.resolve(new Response("", { status: 503 })), pause).list(),
+    Error,
+    "answered 503",
+  );
+  assertEquals(waits, RETRY_MS);
+  // no answer at all: no wait
+  let puts = 0;
+  const t = { id: "t-20260101-aaaaaa", title: "x", status: "todo" as const, created: "c", updated: "u" };
+  await assertRejects(
+    () => brainStore("https://b", "t", () => (puts++, Promise.reject(new TypeError("reset"))), pause).write(t),
+    Error,
+    "not answering",
+  );
+  assertEquals(puts, 1);
+  assertEquals([
+    retriable(null),
+    retriable(new Response("", { status: 502 })),
+    retriable(new Response("", { status: 500 })),
+  ], [false, true, false]);
 });

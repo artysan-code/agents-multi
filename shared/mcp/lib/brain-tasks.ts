@@ -11,20 +11,44 @@ import { fromFile, StaleError, type Task, type TaskStore, toFile, useTaskStore }
 import { getSecret } from "./vault.ts";
 import { amEnv } from "./env.ts";
 
+/** How long to wait before each new try while the brain restarts (a deploy takes it away for seconds). */
+export const RETRY_MS = [1_000, 2_000, 4_000, 8_000];
+
+/** Pure: whether a failed try is worth another. The proxy answers 502 or 503 while the brain is not
+ *  up, so the request never reached it and a write is safe to send again. No answer at all means this
+ *  machine or the server is offline, which seconds do not fix: that error comes at once. */
+export const retriable = (r: Response | null) => r?.status === 502 || r?.status === 503;
+
 /** The TaskStore on a brain at `url`, signed in with a personal token. */
-export function brainStore(url: string, token: string, fetcher: typeof fetch = fetch): TaskStore {
+export function brainStore(
+  url: string,
+  token: string,
+  fetcher: typeof fetch = fetch,
+  pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms)),
+): TaskStore {
   const base = url.replace(/\/+$/, "");
   async function call(path: string, init: RequestInit = {}): Promise<Record<string, unknown> | null> {
-    let r: Response;
-    try {
-      r = await fetcher(`${base}${path}`, {
-        ...init,
-        headers: { authorization: `Bearer ${token}`, ...init.headers },
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch (e) {
-      throw new Error(`the brain at ${base} is not answering (${(e as Error).message}): the tasks are there`);
+    let r: Response | null = null;
+    for (let i = 0;; i++) {
+      let err: Error | null = null;
+      try {
+        r = await fetcher(`${base}${path}`, {
+          ...init,
+          headers: { authorization: `Bearer ${token}`, ...init.headers },
+          signal: AbortSignal.timeout(10_000),
+        });
+      } catch (e) {
+        r = null;
+        err = e as Error;
+      }
+      if (i >= RETRY_MS.length || !retriable(r)) {
+        if (err) throw new Error(`the brain at ${base} is not answering (${err.message}): the tasks are there`);
+        break;
+      }
+      await r?.body?.cancel();
+      await pause(RETRY_MS[i]);
     }
+    r = r!;
     if (r.status === 404 && !init.method) {
       await r.body?.cancel();
       return null;
