@@ -33,7 +33,7 @@ import {
   SIGNED_OUT_ERROR,
   signInPage,
 } from "./pages.ts";
-import { loadSite, privacyPage, type Site, siteFile, siteMoved, siteSize } from "./public.ts";
+import { loadSite, privacyPage, type Site, siteAnswer, siteFile, siteMoved, siteSize } from "./public.ts";
 import { log, logRequest } from "./log.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
@@ -243,11 +243,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
       headers: { "retry-after": String(wait), "content-type": "text/plain", ...CORS },
     });
   }
-  if (SITE_HOST && u.host === SITE_HOST) {
-    if (p === "/privacy") return html(privacyPage(SITE), 200, { "x-robots-tag": "all" });
-    const r = req.method === "GET" || req.method === "HEAD" ? siteFile(SITE_FILES, p, req.headers) : null;
-    return r ?? siteFile(SITE_FILES, "/404.html", req.headers, 404) ?? new Response("not found", { status: 404 });
-  }
+  if (SITE_HOST && u.host === SITE_HOST) return siteAnswer(SITE_FILES, SITE, req);
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,

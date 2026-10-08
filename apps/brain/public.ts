@@ -7,7 +7,7 @@
 // the environment (BRAIN_OPERATOR, BRAIN_CONTACT, BRAIN_HOSTING): nothing about one person is written
 // here or in the site, which carries placeholders the brain fills when it serves a page.
 
-import { esc, page } from "./pages.ts";
+import { esc, html, page } from "./pages.ts";
 
 export interface Site {
   /** the brain's address */
@@ -240,6 +240,15 @@ export function siteFile(files: SiteFiles, pathname: string, req: Headers, statu
     return new Response(null, { status: 304, headers });
   }
   return new Response(f.bytes, { status, headers });
+}
+
+/** What the site's own address answers, from the brain or from site.ts alone: the privacy notice, a
+ *  file of the site to a GET or HEAD, its 404 page for anything else. */
+export function siteAnswer(files: SiteFiles, s: Site, req: Request): Response {
+  const p = new URL(req.url).pathname;
+  if (p === "/privacy") return html(privacyPage(s), 200, { "x-robots-tag": "all" });
+  const r = req.method === "GET" || req.method === "HEAD" ? siteFile(files, p, req.headers) : null;
+  return r ?? siteFile(files, "/404.html", req.headers, 404) ?? new Response("not found", { status: 404 });
 }
 
 /** Where a request on the brain's address goes when the site has an address of its own: the same

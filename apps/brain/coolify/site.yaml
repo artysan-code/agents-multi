@@ -1,0 +1,32 @@
+# agents-multi's site on its own Coolify resource (apps/brain/site.ts): the brain's image with another
+# command, holding no account and no data. A release redeploys it for the new update manifests
+# without touching the brain. Coolify puts the site's domain in front of `site`.
+services:
+  site:
+    image: ${BRAIN_IMAGE:-ghcr.io/artysan-code/agents-multi-brain:latest}
+    command: ["run", "--allow-net", "--allow-env", "--allow-read=/app,/deno-dir", "apps/brain/site.ts"]
+    environment:
+      - SERVICE_URL_SITE_8080
+      - BRAIN_SITE_URL=${BRAIN_SITE_URL:-${SERVICE_URL_SITE:-}}
+      # the brain's address: the links to it and the privacy notice
+      - BRAIN_URL=${BRAIN_URL}
+      - BRAIN_OPERATOR=${BRAIN_OPERATOR:-}
+      - BRAIN_CONTACT=${BRAIN_CONTACT:-}
+      - BRAIN_HOSTING=${BRAIN_HOSTING:-}
+      - AGENTS_MULTI_OWNER_NAME=${AGENTS_MULTI_OWNER_NAME:-}
+      - BRAIN_LOG_LEVEL=${BRAIN_LOG_LEVEL:-warn}
+      - PORT=8080
+    healthcheck:
+      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/health'); if (!r.ok) Deno.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 2s
+    mem_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

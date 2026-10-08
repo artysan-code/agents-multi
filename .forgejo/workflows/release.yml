@@ -181,9 +181,10 @@ jobs:
   #   - from the commit with the new manifests on `release` → :latest, which the production brain
   #     runs and whose site serves the update channels; for a stable version also :X.Y.Z and :X.Y;
   #   - for a beta, from its tagged commit as well → :beta and :X.Y.Z-beta.N (the beta's code).
-  # Then brain-deploy has Coolify redeploy :latest. Without GHCR_TOKEN (a GitHub token with
-  # write:packages on artysan-code) nothing is built; without COOLIFY_DEPLOY_URL and COOLIFY_TOKEN
-  # nothing is redeployed.
+  # Then brain-deploy has Coolify redeploy :latest: COOLIFY_DEPLOY_URL is Coolify's deploy endpoint
+  # with every resource that runs the image (`/api/v1/deploy?uuid=<brain>,<site>`, apps/brain/coolify/).
+  # Without GHCR_TOKEN (a GitHub token with write:packages on artysan-code) nothing is built; without
+  # COOLIFY_DEPLOY_URL and COOLIFY_TOKEN nothing is redeployed.
   brain-image:
     needs: app
     runs-on: docker

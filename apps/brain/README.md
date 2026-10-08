@@ -166,6 +166,14 @@ which does not carry SSH. The secrets are made and typed in by the owner, never 
 through a chat. Behind Cloudflare, set `BRAIN_CLIENT_IP_HEADER=cf-connecting-ip` too, and let only
 Cloudflare reach the server.
 
+Or as three resources, so that redeploying one never restarts the others (the files in `coolify/`,
+same base directory): `ollama.yaml` (the model, on Coolify's network as `agents-multi-ollama`, no
+domain), `brain.yaml` (the service alone: the same service and volume names as `compose.yaml`, so the
+application that ran the whole stack keeps its data when it switches to it) and `site.yaml` (the site
+from `site.ts`, the brain's image with another command, with the site's domain and `BRAIN_URL`). A
+release then redeploys the site for its update manifests and the brain for its code; the model only
+when its version changes.
+
 `/health` says the process answers; `/ready` that its accounts database does too (the container's
 healthcheck, checked every two seconds while it starts, so the proxy sends traffic to a new
 container seconds after it boots). Neither says more, to anyone. On SIGTERM the service stops taking

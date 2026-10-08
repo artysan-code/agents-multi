@@ -1,0 +1,54 @@
+# The brain on its own Coolify resource: ../compose.yaml without the model and the site, which are
+# resources of their own (ollama.yaml, site.yaml). The service, the volume and their names are the
+# same as there, so the resource that ran the whole stack keeps its data when it switches to this file.
+# BRAIN_SITE_URL stays set: the brain's address sends a visitor of a page of the site there.
+services:
+  brain:
+    image: ${BRAIN_IMAGE:-ghcr.io/artysan-code/agents-multi-brain:latest}
+    environment:
+      - SERVICE_URL_BRAIN_8080
+      - BRAIN_URL=${BRAIN_URL:-${SERVICE_URL_BRAIN:-}}
+      - BRAIN_MASTER_KEY=${BRAIN_MASTER_KEY}
+      - BRAIN_ADMIN_ID=${BRAIN_ADMIN_ID:-}
+      - AGENTS_MULTI_OWNER_ID=${AGENTS_MULTI_OWNER_ID}
+      - AGENTS_MULTI_OWNER_NAME=${AGENTS_MULTI_OWNER_NAME}
+      - AGENTS_MULTI_LANGUAGE=${AGENTS_MULTI_LANGUAGE}
+      - BRAIN_OPERATOR=${BRAIN_OPERATOR:-}
+      - BRAIN_CONTACT=${BRAIN_CONTACT:-}
+      - BRAIN_HOSTING=${BRAIN_HOSTING:-}
+      - BRAIN_SITE_URL=${BRAIN_SITE_URL:-}
+      - BRAIN_CLIENT_IP_HEADER=${BRAIN_CLIENT_IP_HEADER:-}
+      - BRAIN_LOG_LEVEL=${BRAIN_LOG_LEVEL:-info}
+      # the model's own resource (ollama.yaml), by its alias on Coolify's network
+      - BRAIN_EMBED_URL=${BRAIN_EMBED_URL:-http://agents-multi-ollama:11434}
+      - BRAIN_EMBED_MODEL=${BRAIN_EMBED_MODEL:-bge-m3}
+      - BRAIN_BACKUP_KEY=${BRAIN_BACKUP_KEY:-}
+      - BRAIN_BACKUP_KEEP=${BRAIN_BACKUP_KEEP:-7}
+      - BRAIN_DATA=/data
+      - PORT=8080
+      - TZ=${BRAIN_TIMEZONE:-Europe/Rome}
+    volumes:
+      - brain-data:/data
+    networks:
+      - coolify
+    healthcheck:
+      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/ready'); if (!r.ok) Deno.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
+    stop_grace_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  brain-data:
+
+networks:
+  coolify:
+    external: true

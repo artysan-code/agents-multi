@@ -8,6 +8,7 @@ import {
   fillSite,
   loadSite,
   privacyPage,
+  siteAnswer,
   siteCache,
   siteFile,
   siteMoved,
@@ -182,4 +183,26 @@ Deno.test("public: without a contact the notice points to the administrator, nev
   const h = privacyPage({ ...site, contact: "" });
   assert(!h.includes("mailto:"));
   assertStringIncludes(h, "l'amministratore del servizio");
+});
+
+Deno.test("public: the site's own address answers the notice, its files to GET and HEAD, its 404 to the rest", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(`${dir}/index.html`, "<body>home</body>");
+    await Deno.writeTextFile(`${dir}/404.html`, "<body>lost</body>");
+    const files = await loadSite(dir, site);
+    const at = (p: string, method = "GET") => siteAnswer(files, site, new Request(`https://s.test${p}`, { method }));
+    const notice = at("/privacy");
+    assertEquals(notice.status, 200);
+    assertStringIncludes(await notice.text(), "Ann &lt;x&gt;");
+    assertStringIncludes(await at("/").text(), "home");
+    assertEquals(at("/", "HEAD").status, 200);
+    for (const [p, m] of [["/", "POST"], ["/nope/", "GET"], ["/mcp", "GET"], ["/account", "GET"]]) {
+      const r = at(p, m);
+      assertEquals(r.status, 404, `${m} ${p}`);
+      assertStringIncludes(await r.text(), "lost");
+    }
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });

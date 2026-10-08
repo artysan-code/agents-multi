@@ -1,0 +1,36 @@
+# The embedding model on its own Coolify resource, so a deploy of the brain never reloads it. The
+# three files of this folder split ../compose.yaml (the brain, its model and the site in one stack,
+# which stays the way to run it anywhere else): each is a resource of its own, all on Coolify's
+# network, where the brain finds this one by the alias below. Never published: no domain.
+services:
+  ollama:
+    image: ollama/ollama:0.35.0
+    entrypoint: [
+      "/bin/sh",
+      "-c",
+      "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$$BRAIN_EMBED_MODEL\"; wait",
+    ]
+    environment:
+      - OLLAMA_KEEP_ALIVE=10m
+      # the same name as the brain's BRAIN_EMBED_MODEL
+      - BRAIN_EMBED_MODEL=${BRAIN_EMBED_MODEL:-bge-m3}
+    volumes:
+      - brain-models:/root/.ollama
+    networks:
+      coolify:
+        aliases: [agents-multi-ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
+    restart: unless-stopped
+
+volumes:
+  brain-models:
+
+networks:
+  coolify:
+    external: true
