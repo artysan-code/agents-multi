@@ -5,6 +5,26 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.19.0] - 2026-10-08
+
+### Added
+
+- **console**: the ask field creates and moves calendar events, with reminders (ad8dd1b)
+- Agents Multi is open source, under the AGPL-3.0 without the Commons Clause (730ded0)
+- **brain**: the compose runs the image each release publishes, not a build on the server (8249eed)
+
+### Fixed
+
+- **brain**: the service's log is rotated by size, and the privacy notice says how long it lasts (384fef5)
+- **doctor**: skills linked by install are read from the installed code, not the running package (3d3e4d3)
+- **ci**: the brain's redeploy asks Coolify with a POST, as its API wants (d8dc7c6)
+
+### Documentation
+
+- **site**: the landing shows the real console, with invented data, instead of a drawn one (f3550be)
+- **site**: who it is for, setup with Claude, and issue templates (8f942f6)
+- SECURITY.md, vulnerabilities reported privately through GitHub (d268565)
+
 ## [0.18.0] - 2026-10-08
 
 ### Added
