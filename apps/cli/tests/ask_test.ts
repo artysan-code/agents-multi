@@ -9,6 +9,9 @@ Deno.test("askArgs: the tools are a fixed list per kind, and anything else is re
   assertEquals(a[a.indexOf("--tools") + 1], "");
   assertEquals(a.slice(a.indexOf("--allowedTools") + 1, a.indexOf("--append-system-prompt")), TOOLS.ask);
   assert(!askArgs("debrief", "debrief", "now").includes("mcp__google__gmail_search"));
+  // events are created and moved from the field, never deleted, and no mail goes out
+  assert(TOOLS.ask.includes("mcp__google__calendar_create") && TOOLS.ask.includes("mcp__google__calendar_update"));
+  assert(!TOOLS.ask.some((t) => /calendar_delete|gmail_send|gmail_draft|calendar_respond/.test(t)));
   assert(!a.includes("--resume"));
   // a change from the Brain page writes only in the brain, and never deletes
   assert(TOOLS.brain.every((t) => t.startsWith("mcp__claude_ai_Brain__brain_") || /^Read\(\/\/.+\/\*\*\)$/.test(t)));

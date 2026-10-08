@@ -5,8 +5,9 @@
 // The answer comes from `claude -p` in the machine's default profile, as Hey's does, and streams
 // back to the page as NDJSON on the response of the POST that asked: one request, one answer, no
 // polling. The tools are a fixed list per kind of request and `--permission-mode dontAsk` refuses
-// everything else, whatever the profile's own mode: from here Claude reads and keeps the tasks; it
-// never sends mail or creates events. A change asked from the Brain page gets the brain's tools and
+// everything else, whatever the profile's own mode: from here Claude reads and keeps the tasks, and
+// creates or moves calendar events (the server sends no invitation unless asked: the prompt forbids
+// asking without the owner's word); it never sends mail or deletes. A change asked from the Brain page gets the brain's tools and
 // nothing else: it writes only there.
 
 import { readJson } from "./lib/fs.ts";
@@ -41,6 +42,8 @@ const BRAIN_WRITE = [
   "brain_restore",
 ]
   .map((t) => `mcp__claude_ai_Brain__${t}`);
+// Events created or moved from the field: never deleted, never with an invitation sent unless asked (the prompt)
+const CALENDAR_WRITE = ["mcp__google__calendar_create", "mcp__google__calendar_update"];
 const READ = [
   "mcp__google__calendar_list",
   "mcp__google__calendar_events",
@@ -51,7 +54,7 @@ const READ = [
   ...BRAIN_READ,
 ];
 export const TOOLS: Record<AskKind, string[]> = {
-  ask: ["mcp__tasks", ...READ],
+  ask: ["mcp__tasks", ...READ, ...CALENDAR_WRITE],
   newtask: ["mcp__tasks", ...BRAIN_READ],
   debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
   // and the old wiki, read only, for what is brought over from the Archive
@@ -114,7 +117,9 @@ export function promptFor(
         : "");
   }
   return `${base}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when they say ` +
-    `something to do, add it), their calendar, mail and Drive read only, their brain (memory: projects, people, notes) read only. Never send mail or create events from ` +
+    `something to do, add it), their calendar (read it, and create or move events they ask for), mail and Drive read ` +
+    `only, their brain (memory: projects, people, notes) read only. An event gets no attendees and sendUpdates "none" ` +
+    `unless they explicitly ask to invite someone; a reminder they ask for goes in reminders (minutes before). Never send mail or delete an event from ` +
     `here: say it is for a conversation. When the request needs work inside a project's files (code, changes, looking ` +
     `through a repository), do not start it here: say in one line what you would do, then end with a line of its own ` +
     `[[code:PATH]] where PATH is the project's folder under ~ (for example ~/work/acme/site) if you know it or can find ` +

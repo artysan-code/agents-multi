@@ -371,9 +371,20 @@ const eventFields = {
   sendUpdates: z.enum(["none", "all", "externalOnly"]).optional().describe(
     "invitations by mail: default none; 'all' only when the user asks",
   ),
+  reminders: z.array(z.number().int().min(0).max(40320)).max(5).optional().describe(
+    "pop-up reminders, in minutes before the start ([30] is half an hour before); [] for none; omitted, the calendar's own",
+  ),
 };
 const eventBody = (
-  a: { title?: string; start?: string; end?: string; description?: string; location?: string; attendees?: string[] },
+  a: {
+    title?: string;
+    start?: string;
+    end?: string;
+    description?: string;
+    location?: string;
+    attendees?: string[];
+    reminders?: number[];
+  },
 ) => ({
   ...(a.title !== undefined ? { summary: a.title } : {}),
   ...(a.start ? { start: slot(a.start) } : {}),
@@ -381,6 +392,9 @@ const eventBody = (
   ...(a.description !== undefined ? { description: a.description } : {}),
   ...(a.location !== undefined ? { location: a.location } : {}),
   ...(a.attendees ? { attendees: a.attendees.map((email) => ({ email })) } : {}),
+  ...(a.reminders
+    ? { reminders: { useDefault: false, overrides: a.reminders.map((minutes) => ({ method: "popup", minutes })) } }
+    : {}),
 });
 
 server.registerTool("calendar_create", {
