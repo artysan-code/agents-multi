@@ -99,7 +99,8 @@ asks for your password to install. Betas are a channel of their own: a beta buil
 **With the desktop app**, there is nothing to type: on a machine with no configuration the console
 opens on the first-run wizard, which does the steps below one screen at a time — your name and
 language, the configuration folder (`agents init`; a folder that already holds one, synced from another
-machine, is only linked), the profiles, `agents install --app` with its output, the vault (made there,
+machine, is only linked), the profiles, `agents install --app` with its output, Claude Code when the machine has none
+(Anthropic's installer, through `agents update --cli`), the vault (made there,
 its recovery code shown once, or opened with another machine's code), each profile's sign-in
 (`<command> auth login` in a terminal), the brain (optional) and `agents mcp sync`. It resumes where it
 stopped: each step is done when its result is on disk (`apps/cli/setup.ts`).
