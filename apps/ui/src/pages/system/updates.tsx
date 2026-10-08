@@ -1,11 +1,13 @@
 // updates.tsx — System › Updates: the version of each component with what is waiting or staged and its
-// rollback, the note on the Claude Code Desktop carries, and the update log. «Update now» (in the tab
-// bar) starts the wizard.
+// rollback, the desktop app with its channel, the note on the Claude Code Desktop carries, and the
+// update log. «Update now» (in the tab bar) starts the wizard.
 
 import type { ComponentChildren } from "preact";
 import { status } from "../../state.ts";
 import { lang, t, tk } from "../../i18n.ts";
-import { runAction } from "../../lib/ui.tsx";
+import { runAction, toast } from "../../lib/ui.tsx";
+import { appUpdate, appUpdateAction, appUpdateChannel } from "../../shell/app-update.ts";
+import { appState } from "./app-state.ts";
 import { COMPONENTS, type MachineExtra, type RepoExtra, type Report } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
 
@@ -54,6 +56,43 @@ function SelfCard({ S }: { S: Report }) {
   );
 }
 
+/** The desktop app: its version, where its update stands, and the channel it follows. */
+function AppCard() {
+  const a = appUpdate.value;
+  if (!a?.app) return null;
+  const busy = ["checking", "downloading", "installing", "restarting"].includes(a.state);
+  const line = appState(a);
+  const choose = async (c: "stable" | "beta") => {
+    if (c === a.channel) return;
+    const r = await appUpdateChannel(c);
+    if (!r.ok) toast(r.message ?? (typeof r.error === "string" ? r.error : t("up.app.refused")), true);
+  };
+  return (
+    <Card
+      name="Agents Multi"
+      current={a.current}
+      lines={[
+        tk(line.key, line.vars),
+        a.checkedAt ? t("up.app.checked", { when: when(new Date(a.checkedAt * 1000).toISOString()) }) : null,
+      ]}
+      extra={a.off ? null : (
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div class="seg" role="group" aria-label={t("up.app.channel")}>
+            {(["stable", "beta"] as const).map((c) => (
+              <button type="button" key={c} aria-pressed={a.channel === c} disabled={busy} onClick={() => void choose(c)}>
+                {t(`up.app.${c}`)}
+              </button>
+            ))}
+          </div>
+          <button type="button" class="btn sm" disabled={busy} onClick={() => void appUpdateAction("check")}>
+            {t("up.app.check")}
+          </button>
+        </div>
+      )}
+    />
+  );
+}
+
 const when = (iso: string): string =>
   new Date(iso).toLocaleString(lang(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -66,7 +105,7 @@ export function Updates() {
   const log = S.updateLog ?? [];
   return (
     <div class="sub-view">
-      <p class="lede">{t("up.lede")}</p>
+      <p class="lede">{appUpdate.value?.app ? t("up.lede.app") : t("up.lede")}</p>
       <div class="vcards" style={{ marginTop: "20px" }}>
         <Card
           name="Claude Code"
@@ -87,6 +126,7 @@ export function Updates() {
           ]}
           rollback={m.desktopPrevious ? "rollback-desktop" : null}
         />
+        <AppCard />
         <SelfCard S={S} />
       </div>
       <p class="note">

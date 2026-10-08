@@ -1,7 +1,7 @@
 // app-update.ts — the desktop app's own update, as the console's backend relays it
 // (apps/cli/console/app-update.ts): GET /api/app/update says what runs, what is available and where an
-// update stands; POST starts a check, the install (download if needed, install, relaunch), or
-// dismisses the «Updated» screen a relaunch opens. The state moves on the "app-update" topic of the
+// update stands; POST starts a check, the install (download if needed, install, relaunch), changes the
+// channel the app follows, or dismisses the «Updated» screen a relaunch opens. The state moves on the "app-update" topic of the
 // server's events, never by polling. Where no app answers (`app` false: a console run by hand), where
 // the app does not update itself (`off`), or where the backend has no such endpoint (an older one),
 // the update screen does the console's own steps only.
@@ -42,6 +42,14 @@ export async function loadAppUpdate(): Promise<void> {
 
 export async function appUpdateAction(action: "check" | "install" | "dismiss"): Promise<Result> {
   const r = await post("/api/app/update", { action }).catch((e: Error): Result => ({ ok: false, message: e.message }));
+  await loadAppUpdate();
+  return r;
+}
+
+/** Follows `channel` from now on: the app writes it down and looks at once. */
+export async function appUpdateChannel(channel: "stable" | "beta"): Promise<Result> {
+  const r = await post("/api/app/update", { action: "channel", channel })
+    .catch((e: Error): Result => ({ ok: false, message: e.message }));
   await loadAppUpdate();
   return r;
 }

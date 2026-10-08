@@ -4,6 +4,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   AppLink,
+  appRequest,
   appSocket,
   appUpdateRoute,
   backoff,
@@ -43,11 +44,25 @@ function fakeApp(answer: (request: string) => string[]) {
   return { dial, written, push: (l: string) => push!(l), end: () => end!() };
 }
 
-const STATUS = JSON.stringify({ current: "1.0.0", channel: "stable", state: "idle", available: null });
+const STATUS = JSON.stringify({
+  current: "1.0.0",
+  channel: "stable",
+  state: "idle",
+  available: null,
+});
 
 Deno.test("app update: the socket is the app's word, else the runtime folder's", () => {
-  assertEquals(appSocket({ AGENTS_MULTI_APP_SOCKET: "/run/x.sock", XDG_RUNTIME_DIR: "/run/u" }), "/run/x.sock");
-  assertEquals(appSocket({ XDG_RUNTIME_DIR: "/run/user/1000" }), "/run/user/1000/agents-multi-app.sock");
+  assertEquals(
+    appSocket({
+      AGENTS_MULTI_APP_SOCKET: "/run/x.sock",
+      XDG_RUNTIME_DIR: "/run/u",
+    }),
+    "/run/x.sock",
+  );
+  assertEquals(
+    appSocket({ XDG_RUNTIME_DIR: "/run/user/1000" }),
+    "/run/user/1000/agents-multi-app.sock",
+  );
   assertEquals(appSocket({}), "/tmp/agents-multi-app.sock");
 });
 
@@ -63,7 +78,11 @@ Deno.test("app update: a status line is checked field by field", () => {
     current: "1.0.0",
     channel: "beta",
     state: "downloading",
-    available: { version: "1.1.0-beta.1", notes: "### Added", date: "2026-10-07 10:00:00.0 +00:00:00" },
+    available: {
+      version: "1.1.0-beta.1",
+      notes: "### Added",
+      date: "2026-10-07 10:00:00.0 +00:00:00",
+    },
     progress: 1.7,
     error: "x",
     off: "package-manager:pacman",
@@ -76,7 +95,11 @@ Deno.test("app update: a status line is checked field by field", () => {
     current: "1.0.0",
     channel: "beta",
     state: "downloading",
-    available: { version: "1.1.0-beta.1", notes: "### Added", date: "2026-10-07 10:00:00.0 +00:00:00" },
+    available: {
+      version: "1.1.0-beta.1",
+      notes: "### Added",
+      date: "2026-10-07 10:00:00.0 +00:00:00",
+    },
     progress: 1,
     error: "x",
     off: "package-manager:pacman",
@@ -84,13 +107,23 @@ Deno.test("app update: a status line is checked field by field", () => {
     checkedAt: 42,
   });
   assertEquals(parseStatus("not json"), null);
-  assertEquals(parseStatus(JSON.stringify({ current: "1.0.0", state: "exploded" })), null);
+  assertEquals(
+    parseStatus(JSON.stringify({ current: "1.0.0", state: "exploded" })),
+    null,
+  );
   assertEquals(parseStatus(JSON.stringify({ state: "idle" })), null);
   assertEquals(parseStatus("null"), null);
 });
 
 Deno.test("app update: following the app again waits 2 s doubling to 30 s", () => {
-  assertEquals([0, 1, 2, 3, 4, 9].map(backoff), [2000, 4000, 8000, 16000, 30000, 30000]);
+  assertEquals([0, 1, 2, 3, 4, 9].map(backoff), [
+    2000,
+    4000,
+    8000,
+    16000,
+    30000,
+    30000,
+  ]);
 });
 
 Deno.test("app update: the link follows the app's status and forgets it when the app goes", async () => {
@@ -102,8 +135,19 @@ Deno.test("app update: the link follows the app's status and forgets it when the
   const following = link.follow(ac.signal);
   await new Promise((r) => setTimeout(r, 10));
   assertEquals(app.written, ['{"op":"watch"}']);
-  assertEquals([link.view().app, link.view().state, changes], [true, "idle", 1]);
-  app.push(JSON.stringify({ current: "1.0.0", channel: "stable", state: "checking", available: null }));
+  assertEquals([link.view().app, link.view().state, changes], [
+    true,
+    "idle",
+    1,
+  ]);
+  app.push(
+    JSON.stringify({
+      current: "1.0.0",
+      channel: "stable",
+      state: "checking",
+      available: null,
+    }),
+  );
   app.push("garbage"); // ignored
   await new Promise((r) => setTimeout(r, 10));
   assertEquals([link.view().state, changes], ["checking", 2]);
@@ -119,11 +163,24 @@ Deno.test("app update: an action is passed on and the app's answer comes back", 
     r.includes("install") ? ['{"ok":false,"error":"updates are off: not-packaged"}'] : ['{"ok":true}']
   );
   const link = new AppLink(app.dial, () => {});
-  assertEquals(await link.send("check"), { ok: true });
-  assertEquals(await link.send("install"), { ok: false, error: "updates are off: not-packaged" });
-  assertEquals(app.written, ['{"op":"check"}', '{"op":"install"}']);
+  assertEquals(await link.send({ op: "check" }), { ok: true });
+  assertEquals(await link.send({ op: "install" }), {
+    ok: false,
+    error: "updates are off: not-packaged",
+  });
+  assertEquals(await link.send({ op: "channel", channel: "beta" }), {
+    ok: true,
+  });
+  assertEquals(app.written, [
+    '{"op":"check"}',
+    '{"op":"install"}',
+    '{"op":"channel","channel":"beta"}',
+  ]);
   const none = new AppLink(() => Promise.reject(new Error("ENOENT")), () => {});
-  assertEquals(await none.send("check"), { ok: false, error: NOT_RUNNING });
+  assertEquals(await none.send({ op: "check" }), {
+    ok: false,
+    error: NOT_RUNNING,
+  });
 });
 
 Deno.test("app update: the route gives the status and passes the page's actions on, behind the header", async () => {
@@ -136,9 +193,9 @@ Deno.test("app update: the route gives the status and passes the page's actions 
   const handle = createHandler({
     "/api/app/update": appUpdateRoute({
       view: () => NO_APP,
-      send: (a) => {
-        sent.push(a);
-        return Promise.resolve(answers[a]);
+      send: (r) => {
+        sent.push(r.op === "channel" ? `channel:${r.channel}` : r.op);
+        return Promise.resolve(answers[r.op] ?? { ok: true });
       },
     }),
   });
@@ -150,7 +207,11 @@ Deno.test("app update: the route gives the status and passes the page's actions 
       }),
     );
   const post = (body: unknown, csrf = true) =>
-    req({ method: "POST", body: JSON.stringify(body), headers: csrf ? { "x-claude-multi": "1" } : {} });
+    req({
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: csrf ? { "x-claude-multi": "1" } : {},
+    });
 
   assertEquals(await (await req()).json(), NO_APP);
   assertEquals((await post({ action: "check" }, false)).status, 403);
@@ -160,5 +221,25 @@ Deno.test("app update: the route gives the status and passes the page's actions 
   assertEquals([ok.status, await ok.json()], [200, { ok: true }]);
   assertEquals((await post({ action: "install" })).status, 409);
   assertEquals((await post({ action: "dismiss" })).status, 503);
-  assertEquals(sent, ["check", "install", "dismiss"]);
+  assertEquals(
+    (await post({ action: "channel", channel: "nightly" })).status,
+    400,
+  );
+  assertEquals(
+    (await post({ action: "channel", channel: "beta" })).status,
+    200,
+  );
+  assertEquals(sent, ["check", "install", "dismiss", "channel:beta"]);
+});
+
+Deno.test("app update: a page's body becomes a request only with a known action and channel", () => {
+  assertEquals(appRequest({ action: "check" }), { op: "check" });
+  assertEquals(appRequest({ action: "channel", channel: "stable" }), {
+    op: "channel",
+    channel: "stable",
+  });
+  assertEquals(appRequest({ action: "channel" }), null);
+  assertEquals(appRequest({ action: "channel", channel: "../x" }), null);
+  assertEquals(appRequest({ action: "watch" }), null);
+  assertEquals(appRequest({}), null);
 });

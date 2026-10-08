@@ -63,7 +63,7 @@ const EVERY: Duration = Duration::from_secs(24 * 3600);
 /// Release notes longer than this are cut.
 const NOTES_MAX: usize = 8000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Channel {
     Stable,
@@ -325,6 +325,8 @@ pub trait Ops: Send + Sync {
     fn check(&self) -> Result<(), String>;
     fn install(&self) -> Result<(), String>;
     fn dismiss(&self);
+    /// Follows `channel` from now on (CHANNEL_FILE), and looks at once.
+    fn set_channel(&self, channel: Channel) -> Result<(), String>;
 }
 
 // ---------------------------------------------------------------- the tray
@@ -522,6 +524,9 @@ mod imp {
         fn dismiss(&self) {
             self.0.update(|s| s.updated.take().is_some());
         }
+        fn set_channel(&self, _channel: Channel) -> Result<(), String> {
+            Err("this build has no updater".into())
+        }
     }
 
     pub fn start(app: &AppHandle) -> Arc<dyn Ops> {
@@ -564,7 +569,8 @@ mod imp {
     pub struct Engine {
         app: AppHandle,
         hub: Arc<Hub>,
-        endpoint: Option<Url>,
+        /// The channel's manifest: changes when the person chooses another channel.
+        endpoint: Mutex<Option<Url>>,
         pending: Mutex<Option<Pending>>,
         /// An install was asked for before the version was downloaded.
         install_wanted: AtomicBool,
@@ -620,7 +626,7 @@ mod imp {
         let engine = Arc::new(Engine {
             app: app.clone(),
             hub,
-            endpoint,
+            endpoint: Mutex::new(endpoint),
             pending: Mutex::new(None),
             install_wanted: AtomicBool::new(false),
         });
@@ -665,10 +671,11 @@ mod imp {
                 return;
             }
             let have = self.have();
+            let endpoint = self.endpoint.lock().ok().and_then(|e| e.clone());
             let found = self
                 .app
                 .updater_builder()
-                .endpoints(self.endpoint.iter().cloned().collect())
+                .endpoints(endpoint.into_iter().collect())
                 .and_then(|b| b.build())
                 .map(|u| tauri::async_runtime::block_on(u.check()));
             let update = match found {
@@ -817,6 +824,46 @@ mod imp {
 
         fn dismiss(&self) {
             self.hub.update(|s| s.updated.take().is_some());
+        }
+
+        fn set_channel(&self, channel: Channel) -> Result<(), String> {
+            let s = self.hub.get();
+            if let Some(off) = s.off {
+                return Err(format!("updates are off: {off}"));
+            }
+            if std::env::var_os(CHANNEL_VAR).is_some() {
+                return Err(format!("the channel is set by {CHANNEL_VAR}"));
+            }
+            if s.busy() {
+                return Err("an update is under way".into());
+            }
+            let dir = self
+                .app
+                .path()
+                .app_config_dir()
+                .map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(&dir)
+                .and_then(|_| {
+                    std::fs::write(dir.join(CHANNEL_FILE), format!("{}\n", channel.name()))
+                })
+                .map_err(|e| e.to_string())?;
+            if let Ok(mut e) = self.endpoint.lock() {
+                *e = endpoint(SITE, channel);
+            }
+            // what was found or downloaded on the other channel is not this one's
+            if let Ok(mut p) = self.pending.lock() {
+                *p = None;
+            }
+            self.hub.update(|s| {
+                s.channel = channel;
+                s.available = None;
+                s.error = None;
+                s.state = Phase::Idle;
+                true
+            });
+            let e = Arc::clone(self);
+            std::thread::spawn(move || e.run_check());
+            Ok(())
         }
     }
 

@@ -1,13 +1,15 @@
 // app-update.ts — the desktop app's own updates, relayed (docs/adr/0004). The app owns the updater
 // (apps/desktop/src-tauri/src/updater.rs); the console reaches it over the app's unix socket, never
 // from the page: it follows the app's status on one long connection and says `app-update` on the event
-// stream when it changes, and passes the page's `check`, `install` and `dismiss` on.
+// stream when it changes, and passes the page's `check`, `install`, `dismiss` and `channel` on.
 //
 //   GET  /api/app/update   the status: { app, current, channel, state, available, progress?, error?,
 //                          off?, updated?, checkedAt? }; `app` is false where no app answers (a
 //                          headless `agents serve`, the app not running)
-//   POST /api/app/update   { action: "check" | "install" | "dismiss" }, behind the anti-CSRF header;
-//                          `install` downloads when needed, installs and relaunches the app
+//   POST /api/app/update   { action: "check" | "install" | "dismiss" } or { action: "channel",
+//                          channel: "stable" | "beta" }, behind the anti-CSRF header; `install` downloads
+//                          when needed, installs and relaunches the app; `channel` follows that channel
+//                          from now on and looks at once
 //
 // The socket is AGENTS_MULTI_APP_SOCKET, which the app sets for the backend it starts, else the
 // app's default in the runtime folder; bin/agents allows both.
@@ -17,9 +19,21 @@ import { json } from "./http.ts";
 
 const SOCKET_VAR = "AGENTS_MULTI_APP_SOCKET";
 export const NOT_RUNNING = "the desktop app is not running";
-const ACTIONS = ["check", "install", "dismiss"] as const;
-type AppAction = typeof ACTIONS[number];
-const STATES = ["idle", "checking", "downloading", "ready", "installing", "restarting", "error"] as const;
+const ACTIONS = ["check", "install", "dismiss", "channel"] as const;
+const CHANNELS = ["stable", "beta"] as const;
+/** A request to the app, as its socket reads it (updater/socket.rs). */
+export type AppRequest =
+  | { op: "check" | "install" | "dismiss" }
+  | { op: "channel"; channel: typeof CHANNELS[number] };
+const STATES = [
+  "idle",
+  "checking",
+  "downloading",
+  "ready",
+  "installing",
+  "restarting",
+  "error",
+] as const;
 export type AppUpdateState = typeof STATES[number];
 
 export interface AppUpdate {
@@ -39,11 +53,20 @@ export interface AppUpdate {
   checkedAt?: number;
 }
 
-export const NO_APP: AppUpdate = { app: false, current: null, channel: null, state: "idle", available: null };
+export const NO_APP: AppUpdate = {
+  app: false,
+  current: null,
+  channel: null,
+  state: "idle",
+  available: null,
+};
 
 /** The socket's path: the app's word, else its default (updater/socket.rs). */
-export function appSocket(env: Record<string, string | undefined> = Deno.env.toObject()): string {
-  return env[SOCKET_VAR] || `${env.XDG_RUNTIME_DIR || "/tmp"}/agents-multi-app.sock`;
+export function appSocket(
+  env: Record<string, string | undefined> = Deno.env.toObject(),
+): string {
+  return env[SOCKET_VAR] ||
+    `${env.XDG_RUNTIME_DIR || "/tmp"}/agents-multi-app.sock`;
 }
 
 const str = (v: unknown): v is string => typeof v === "string";
@@ -56,7 +79,10 @@ export function parseStatus(line: string): AppUpdate | null {
   } catch {
     return null;
   }
-  if (!raw || typeof raw !== "object" || !str(raw.current) || !STATES.includes(raw.state as AppUpdateState)) {
+  if (
+    !raw || typeof raw !== "object" || !str(raw.current) ||
+    !STATES.includes(raw.state as AppUpdateState)
+  ) {
     return null;
   }
   const a = raw.available as Record<string, unknown> | null;
@@ -67,10 +93,16 @@ export function parseStatus(line: string): AppUpdate | null {
     channel: raw.channel === "beta" ? "beta" : "stable",
     state: raw.state as AppUpdateState,
     available: a && str(a.version)
-      ? { version: a.version, notes: str(a.notes) ? a.notes : "", date: str(a.date) ? a.date : null }
+      ? {
+        version: a.version,
+        notes: str(a.notes) ? a.notes : "",
+        date: str(a.date) ? a.date : null,
+      }
       : null,
   };
-  if (typeof raw.progress === "number") out.progress = Math.min(1, Math.max(0, raw.progress));
+  if (typeof raw.progress === "number") {
+    out.progress = Math.min(1, Math.max(0, raw.progress));
+  }
   if (str(raw.error)) out.error = raw.error;
   if (str(raw.off)) out.off = raw.off;
   if (u && str(u.from) && str(u.to)) out.updated = { from: u.from, to: u.to };
@@ -114,14 +146,17 @@ async function writeLine(c: Conn, line: string) {
 export class AppLink {
   #last: AppUpdate | null = null;
 
-  constructor(private readonly dial: Dial, private readonly onChange: () => void) {}
+  constructor(
+    private readonly dial: Dial,
+    private readonly onChange: () => void,
+  ) {}
 
   view(): AppUpdate {
     return this.#last ?? NO_APP;
   }
 
   /** One action, and the app's answer to it. */
-  async send(action: AppAction): Promise<{ ok: boolean; error?: string }> {
+  async send(request: AppRequest): Promise<{ ok: boolean; error?: string }> {
     let c: Conn;
     try {
       c = await this.dial();
@@ -129,7 +164,7 @@ export class AppLink {
       return { ok: false, error: NOT_RUNNING };
     }
     try {
-      await writeLine(c, JSON.stringify({ op: action }));
+      await writeLine(c, JSON.stringify(request));
       for await (const line of lines(c.readable)) {
         const r = JSON.parse(line) as { ok?: unknown; error?: unknown };
         return r.ok === true ? { ok: true } : { ok: false, error: str(r.error) ? r.error : "refused" };
@@ -188,15 +223,29 @@ export class AppLink {
   }
 }
 
+/** Pure: the request a page's body asks for, or null for anything else. */
+export function appRequest(
+  b: { action?: unknown; channel?: unknown },
+): AppRequest | null {
+  const action = ACTIONS.find((a) => a === b.action);
+  if (action !== "channel") return action ? { op: action } : null;
+  const channel = CHANNELS.find((c) => c === b.channel);
+  return channel ? { op: "channel", channel } : null;
+}
+
 /** The route: the status, and the page's actions passed on. */
 export function appUpdateRoute(link: Pick<AppLink, "view" | "send">): Route {
   return {
     get: () => json(link.view()),
     post: async ({ req }) => {
-      const b = await req.json().catch(() => ({})) as { action?: unknown };
-      const action = ACTIONS.find((a) => a === b.action);
-      if (!action) return json({ ok: false, error: `action is ${ACTIONS.join(", ")}` }, 400);
-      const r = await link.send(action);
+      const request = appRequest(await req.json().catch(() => ({})));
+      if (!request) {
+        return json({
+          ok: false,
+          error: `action is ${ACTIONS.join(", ")}; a channel is ${CHANNELS.join(" or ")}`,
+        }, 400);
+      }
+      const r = await link.send(request);
       return json(r, r.ok ? 200 : r.error === NOT_RUNNING ? 503 : 409);
     },
   };

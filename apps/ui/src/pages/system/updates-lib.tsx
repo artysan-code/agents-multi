@@ -11,7 +11,9 @@ import { inline } from "../../lib/markdown.tsx";
 export const COMPONENTS: Record<string, string> = {
   cli: "Claude Code",
   desktop: "Claude Desktop",
-  "agents-multi": "agents-multi",
+  "agents-multi": "Agents Multi",
+  // the log of an installation from before the rename
+  "claude-multi": "Agents Multi",
 };
 
 /** The fields of /api/status the update pages read beyond the typed part. */

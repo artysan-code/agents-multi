@@ -4,8 +4,8 @@
 //!
 //! One request per connection, a JSON line: `{"op":"status"}` answers the status (`Status`) and closes;
 //! `{"op":"watch"}` answers it and then a line on every change, for as long as the backend keeps the
-//! connection; `check`, `install` and `dismiss` answer `{"ok":true}` or `{"ok":false,"error":…}` and
-//! close, what they started being told through the status. Unix only for now: Windows (1.x) gets a
+//! connection; `check`, `install`, `dismiss` and `{"op":"channel","channel":"beta"|"stable"}` answer
+//! `{"ok":true}` or `{"ok":false,"error":…}` and close, what they started being told through the status. Unix only for now: Windows (1.x) gets a
 //! named pipe.
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use super::{Hub, Ops};
+use super::{Channel, Hub, Ops};
 
 /// The longest request line read.
 const MAX_LINE: u64 = 1024;
@@ -31,6 +31,7 @@ pub enum Request {
     Check,
     Install,
     Dismiss,
+    Channel { channel: Channel },
 }
 
 /// The socket's path: the runtime folder (the backend's default is the same, apps/cli/console/
@@ -87,6 +88,7 @@ fn handle(stream: std::os::unix::net::UnixStream, hub: &Hub, ops: &dyn Ops) {
             ops.dismiss();
             answer(Ok(()))
         }
+        Ok(Request::Channel { channel }) => answer(ops.set_channel(channel)),
         Err(_) => answer(Err("unknown request".into())),
     };
     let _ = writeln!(out, "{reply}");
@@ -168,6 +170,14 @@ mod tests {
         fn dismiss(&self) {
             self.asked.lock().unwrap().push("dismiss");
         }
+        fn set_channel(&self, channel: Channel) -> Result<(), String> {
+            self.asked.lock().unwrap().push("channel");
+            self.hub.update(|s| {
+                s.channel = channel;
+                true
+            });
+            Ok(())
+        }
     }
 
     fn ask(path: &std::path::Path, line: &str) -> BufReader<UnixStream> {
@@ -195,6 +205,16 @@ mod tests {
             serde_json::from_str::<Request>(r#"{"op":"install"}"#).unwrap(),
             Request::Install
         );
+        assert_eq!(
+            serde_json::from_str::<Request>(r#"{"op":"channel","channel":"beta"}"#).unwrap(),
+            Request::Channel {
+                channel: Channel::Beta
+            }
+        );
+        assert!(
+            serde_json::from_str::<Request>(r#"{"op":"channel","channel":"nightly"}"#).is_err()
+        );
+        assert!(serde_json::from_str::<Request>(r#"{"op":"channel"}"#).is_err());
         assert!(serde_json::from_str::<Request>(r#"{"op":"rm -rf"}"#).is_err());
         assert!(serde_json::from_str::<Request>("install").is_err());
     }
@@ -243,8 +263,13 @@ mod tests {
         );
         assert_eq!(read(&mut ask(&path, r#"{"op":"dismiss"}"#))["ok"], true);
         assert_eq!(
+            read(&mut ask(&path, r#"{"op":"channel","channel":"beta"}"#))["ok"],
+            true
+        );
+        assert_eq!(hub.get().channel, Channel::Beta);
+        assert_eq!(
             *fake.asked.lock().unwrap(),
-            vec!["check", "install", "dismiss"]
+            vec!["check", "install", "dismiss", "channel"]
         );
 
         // a watcher that left is dropped at the next change
