@@ -5,6 +5,17 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.3] - 2026-10-08
+
+### Added
+
+- **console**: Updates shows the app, its update and its channel, which can change there (0934930)
+
+### Fixed
+
+- **console**: on the line of the day an item keeps its lane until its title ends (7112bf7)
+- **update**: after a Claude Code update, claude points at the app's code, not the AppImage's mount (5044472)
+
 ## [1.0.0-beta.2] - 2026-10-08
 
 ### Added
