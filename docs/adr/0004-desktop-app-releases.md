@@ -68,7 +68,8 @@ a container).
 
 ### Why the manifests are committed on `release`
 
-The site is the brain's image, rebuilt by Coolify on every push to `release`. Three ways for a manifest
+The site is in the brain's image, which the release builds once the manifests are committed and Coolify
+then pulls (step 6 above). Three ways for a manifest
 to reach it were weighed:
 
 - **Committed by CI** (chosen): a static file, its history the release history, a rollback a commit;
@@ -178,8 +179,8 @@ built with it must be reinstalled by hand from a release, and the release notes 
 
 ## Consequences
 
-- The site's redeploy is on the path of every release: an update reaches the apps once Coolify has
-  rebuilt the brain's image.
+- The site's redeploy is on the path of every release: an update reaches the apps once the brain's
+  image is built and Coolify runs it.
 - `release` receives a commit from the workflow after each tag; `deno task release` wants a clean tree
   on an up-to-date branch, so the owner pulls first.
 - The release job is long (the gate, a Rust release build, three bundles) and needs about 2 GB of

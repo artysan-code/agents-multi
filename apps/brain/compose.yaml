@@ -1,15 +1,16 @@
 # The brain on Coolify: the service, for every account, and the embedding model next to it on a
 # private network.
-# Coolify builds this from the repository (base directory /apps/brain, compose file /compose.yaml:
-# the build context is the repository root) and puts the domain in front of `brain`: SERVICE_URL_BRAIN_8080
-# tells its proxy the port, and SERVICE_URL_BRAIN is that domain. Anywhere else, `docker compose up`
-# from this folder with BRAIN_URL (the public address) and the secrets in a .env next to it, and a
-# proxy with TLS in front of port 8080. The secrets are never written here.
+# The image is the one each release publishes (.forgejo/workflows/release.yml, brain-image): :latest
+# follows the stable versions, :X.Y.Z and :X.Y stay put. Coolify reads this file from the repository
+# (base directory /apps/brain, compose file /compose.yaml) and puts the domain in front of `brain`:
+# SERVICE_URL_BRAIN_8080 tells its proxy the port, and SERVICE_URL_BRAIN is that domain; the release
+# has it pull the new image. Anywhere else, `docker compose up` from this folder with BRAIN_URL (the
+# public address) and the secrets in a .env next to it, and a proxy with TLS in front of port 8080.
+# To build from the source instead: `docker build -f apps/brain/Dockerfile -t <name> .` from the
+# repository's root, and BRAIN_IMAGE=<name>. The secrets are never written here.
 services:
   brain:
-    build:
-      context: ../..
-      dockerfile: apps/brain/Dockerfile
+    image: ${BRAIN_IMAGE:-ghcr.io/artysan-code/agents-multi-brain:latest}
     environment:
       - SERVICE_URL_BRAIN_8080
       - BRAIN_URL=${BRAIN_URL:-${SERVICE_URL_BRAIN:-}}

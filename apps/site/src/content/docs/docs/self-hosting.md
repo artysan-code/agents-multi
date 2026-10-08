@@ -6,10 +6,8 @@ description: Run your own brain on a server with Docker, create the first accoun
 The [brain](/docs/brain/) is optional. If you want memory and tasks shared by every Claude you use,
 you run it on a server of yours; nobody else holds your data.
 
-:::note
-A prebuilt image is planned on GHCR (`ghcr.io/artysan-code/agents-multi-brain`) starting with an
-upcoming release. It is not available yet: today you build the image from the repository.
-:::
+Each release publishes the brain's image, `ghcr.io/artysan-code/agents-multi-brain`: `:latest` follows
+the stable versions, `:X.Y.Z` and `:X.Y` stay where they are.
 
 ## What you need
 
@@ -21,11 +19,11 @@ upcoming release. It is not available yet: today you build the image from the re
 
 ## Start it
 
-Get the repository, go to the brain's folder and put the settings in a `.env` next to the compose file:
+Take the compose file from the repository, and put the settings in a `.env` next to it:
 
 ```bash
-git clone https://github.com/artysan-code/agents-multi
-cd agents-multi/apps/brain
+mkdir brain && cd brain
+curl -fsSLO https://raw.githubusercontent.com/artysan-code/agents-multi/release/apps/brain/compose.yaml
 ```
 
 ```bash
@@ -43,8 +41,10 @@ BRAIN_BACKUP_KEY=<head -c32 /dev/urandom | base64>
 docker compose up -d
 ```
 
-The first start builds the image and pulls the embedding model into its own volume, so it takes a
-while. `/ready` answers when the service is up. The secrets are made and typed by you, never kept in
+The first start pulls the image and the embedding model, which goes into its own volume, so it takes
+a while. To pin a version, set `BRAIN_IMAGE=ghcr.io/artysan-code/agents-multi-brain:0.18` in the
+`.env`; to build from the source, `docker build -f apps/brain/Dockerfile -t brain .` from a clone's root
+and `BRAIN_IMAGE=brain`. `/ready` answers when the service is up. The secrets are made and typed by you, never kept in
 the repository.
 
 ## The variables

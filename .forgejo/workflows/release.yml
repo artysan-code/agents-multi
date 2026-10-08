@@ -7,7 +7,7 @@
 #
 # `app`: the desktop app. The gate, then the Linux bundles (deb, rpm, AppImage) signed for the updater,
 # uploaded to the GitHub release of the tag, then the site's update manifests moved to the version and
-# committed on `release`, whose push redeploys the site (the brain's image) that serves them. A stable
+# committed on `release`; the site that serves them is in the brain's image (`brain-image`). A stable
 # version also renders the AUR package there, and pushes it when the AUR key is set.
 #
 # The runner's image (node:22-bookworm) has neither Rust nor WebKitGTK: this job installs them, the
