@@ -51,6 +51,19 @@ async function pkg(dir: string, version: string, digest: string, extra: Record<s
   return dir;
 }
 
+Deno.test("installCopy: a package writable by all becomes the user's alone", async () => {
+  const tmp = await Deno.makeTempDir();
+  const a = await pkg(`${tmp}/a`, "1.0.0", "a".repeat(64));
+  await Deno.chmod(`${a}/shared`, 0o777);
+  await Deno.chmod(`${a}/bin/agents`, 0o777);
+  const { to } = await installCopy(a, `${tmp}/rt`);
+  for (const p of ["shared", "bin/agents"]) {
+    const mode = (await Deno.stat(`${tmp}/rt/app/${to}/${p}`)).mode!;
+    assertEquals(mode & 0o022, 0, `${p} is not writable by others`);
+    assert((mode & 0o100) !== 0, `${p} keeps its execute bit`);
+  }
+});
+
 Deno.test("installCopy: a build beside the others, swapped in; previous kept; older pruned; rollback", async () => {
   const tmp = await Deno.makeTempDir();
   const rt = `${tmp}/rt`;

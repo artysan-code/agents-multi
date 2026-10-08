@@ -86,6 +86,13 @@ export async function installCopy(
       await Deno.remove(tmp, { recursive: true }).catch(() => {});
       throw new Error(`copying ${src}: ${cp.err}`);
     }
+    // the code runs as this user: nobody else writes it, whatever modes the package carried (the
+    // AppImage built in CI brings its files writable by all)
+    const ch = await run("chmod", ["-R", "go-w", tmp]);
+    if (ch.code !== 0) {
+      await Deno.remove(tmp, { recursive: true }).catch(() => {});
+      throw new Error(`securing ${tmp}: ${ch.err}`);
+    }
     if (from) await carrySkillLinks(`${app}/${from}/shared/skills`, `${tmp}/shared/skills`);
     await Deno.rename(tmp, `${app}/${id}`);
   }
