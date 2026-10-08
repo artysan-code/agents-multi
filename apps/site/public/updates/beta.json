@@ -1,19 +1,19 @@
 {
-  "version": "1.0.0-beta.2",
-  "notes": "### Added\n\n- **brain**: the site runs on its own, and Coolify can run brain, model and site apart (934df53)\n\n### Fixed\n\n- **tasks**: a brain restarting for a deploy is waited for, not reported as down (bc04ae3)\n- **ci**: a beta's brain image builds twice, so kaniko cleans up and builds from beta (e381999)",
-  "pub_date": "2026-10-08T19:51:09Z",
+  "version": "1.0.0-beta.3",
+  "notes": "### Added\n\n- **console**: Updates shows the app, its update and its channel, which can change there (0934930)\n\n### Fixed\n\n- **console**: on the line of the day an item keeps its lane until its title ends (7112bf7)\n- **update**: after a Claude Code update, claude points at the app's code, not the AppImage's mount (5044472)",
+  "pub_date": "2026-10-08T21:33:05Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.2/agents-multi_1.0.0-beta.2_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjZua1pybktJODFhUWNyRFdEbG9IMW90c2RlV01yRFh0UXV4Z1dVUXFWMUgzYzRMT0hTdC9nNm5QWUcxNURFZ0hWSEFUQUVlN1RFbFE3SkpnZTRZM1FjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDg5MDY4CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4yX2FtZDY0LmRlYgl2ZXJzaW9uOjEuMC4wLWJldGEuMgpaZUVMd1luNnJtdEJhZDlhL2tBNmdFbTQxdXM4cFd2VUFsOHpRbjZ3WXFpWHVEZVRpTFl3RG9UZW5WOTVwN3ZlbmdXckxma01sVFRtTk92Szl0RmhBZz09Cg=="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.3/agents-multi_1.0.0-beta.3_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjhXV3prc09YczJtR2h2b05LaUtLSGI0T0l4SWl5eWhzeVdSaGszc2xEUFgzSjM4TVM3VmswcFJYc2Z0S2FwT1ZlQUdRbHd2RGxWaVQ1R3g4RDZzR2dnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDk1MTg0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4zX2FtZDY0LmRlYgl2ZXJzaW9uOjEuMC4wLWJldGEuMwptVHJ1R1pDTVpzMkQzL0I0RnZJbW5Zeld3OEk3RkpaZjlUeDRyZkRUTWpHR080aXVxN0xTam45NXVuTUY1T0E5cUV6RXRmNnNlUnZ6ZjFWdFhQcUhCUT09Cg=="
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.2/agents-multi_1.0.0-beta.2_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjVNaGFmVW05M2xnOFpNNVk4M3FrRFpqS3BMVlFCUEphOFVKSEl2Q1R0TCtDTGs5YkpJOCttSm83ZWF3eUg3WW5vSzFXMnhqZkxySG5lSC9YRldkMGdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDg5MDY4CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4yX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4wLjAtYmV0YS4yClcrdGd6VE9oM0dYOFNFUFRnTTJES1QyLzNFd3ZGdURvb0wrQUltbmdCMDk5RVBvOEVHZEZyM0srREhGRHVxbWt2T3E3Y2lwTlNKZlpzQURic3VCZ0JnPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.3/agents-multi_1.0.0-beta.3_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJxdVlLaFI2YzdFaTVITzlQOURwc0JBSFdOUmtQeSt1dEN1NisvT2dGZklURXZ5VnR5eW5NUmR0T2NSUVl4NStZS25pa253Tkg2R2plamlFR0p4Q2c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDk1MTg0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4zX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4wLjAtYmV0YS4zCkt3UHd0RXQ3NzB5aGtBRmQzNXY3K0E3Z3poRm5MYldQM0ZOWTRhQU8ybFZEVzBzd01sUGl2UU9EWHZDVjNvZmlEU0Z5ZitmaTgyNzVDa0JmNlBRZkJBPT0K"
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.2/agents-multi_1.0.0-beta.2_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjVNaGFmVW05M2xnOFpNNVk4M3FrRFpqS3BMVlFCUEphOFVKSEl2Q1R0TCtDTGs5YkpJOCttSm83ZWF3eUg3WW5vSzFXMnhqZkxySG5lSC9YRldkMGdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDg5MDY4CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4yX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4wLjAtYmV0YS4yClcrdGd6VE9oM0dYOFNFUFRnTTJES1QyLzNFd3ZGdURvb0wrQUltbmdCMDk5RVBvOEVHZEZyM0srREhGRHVxbWt2T3E3Y2lwTlNKZlpzQURic3VCZ0JnPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.3/agents-multi_1.0.0-beta.3_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJxdVlLaFI2YzdFaTVITzlQOURwc0JBSFdOUmtQeSt1dEN1NisvT2dGZklURXZ5VnR5eW5NUmR0T2NSUVl4NStZS25pa253Tkg2R2plamlFR0p4Q2c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDk1MTg0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4zX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4wLjAtYmV0YS4zCkt3UHd0RXQ3NzB5aGtBRmQzNXY3K0E3Z3poRm5MYldQM0ZOWTRhQU8ybFZEVzBzd01sUGl2UU9EWHZDVjNvZmlEU0Z5ZitmaTgyNzVDa0JmNlBRZkJBPT0K"
     }
   }
 }
