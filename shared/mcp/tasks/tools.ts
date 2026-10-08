@@ -202,7 +202,8 @@ export function registerTaskTools(server: McpServer) {
   server.registerTool("tasks_add", {
     description:
       'Add a task. Use it whenever the owner says there is something to do ("I need to…", "remind me…", "by Friday…", in whatever language they speak), in any conversation, ' +
-      "and say in one line what you added. Put a time only when they gave one. A task of a project that names its tasks gets their `ref`, " +
+      "and say in one line what you added. The title names the thing in a few words, like a commit's subject (at most 80 characters): " +
+      "what is to be done, defined enough to recognise it, never the how or the why, which go in `notes`. Put a time only when they gave one. A task of a project that names its tasks gets their `ref`, " +
       "and `detail` when the full story lives in the project (its TASKS.md, a decision file).",
     inputSchema: { title: z.string(), ...fields },
   }, async (input: TaskInput & { title: string }) => {

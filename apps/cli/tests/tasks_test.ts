@@ -42,6 +42,8 @@ Deno.test("nextDue: daily, weekly, monthly clamped to the month's end, weekdays 
 Deno.test("applyInput: checks what it is given, null clears", () => {
   const now = at("2026-09-30T10:00:00");
   assertThrows(() => T.applyInput(task({}), { due: "2026-02-30" }, now), Error, "due");
+  assertThrows(() => T.applyInput(task({}), { title: "x".repeat(T.MAX_TITLE + 1) }, now), Error, "at most 80");
+  assertEquals(T.applyInput(task({}), { title: `  ${"x".repeat(T.MAX_TITLE)}  ` }, now).title.length, T.MAX_TITLE);
   assertThrows(() => T.applyInput(task({}), { time: "25:00", due: "2026-10-01" }, now), Error, "time");
   assertThrows(() => T.applyInput(task({}), { time: "10:00" }, now), Error, "needs a day");
   assertEquals(T.applyInput(task({ due: "2026-10-01" }), { due: null }, now).due, undefined);

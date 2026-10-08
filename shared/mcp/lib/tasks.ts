@@ -337,12 +337,23 @@ const words = (
   lower = false,
 ) => [...new Set(xs.map((x) => (lower ? x.toLowerCase() : x).trim().replace(/\s+/g, " ")).filter(Boolean))];
 
+/** A task's title names the thing, like a commit's subject: what is to be done, not how or why, which
+ *  go in the notes. Longer titles crowd the owner's board and stop reading as a name. */
+export const MAX_TITLE = 80;
+
 /** Pure: an input checked and applied onto a task (null clears a field). Throws with what is wrong. */
 export function applyInput(base: Task, input: TaskInput, now: Date): Task {
   const t: Task = { ...base };
   if (input.title !== undefined) {
     if (!input.title.trim()) throw new Error("a task needs a title");
-    t.title = input.title.trim().replace(/\s+/g, " ").slice(0, 200);
+    const title = input.title.trim().replace(/\s+/g, " ");
+    if (title.length > MAX_TITLE) {
+      throw new Error(
+        `a task's title is ${title.length} characters, at most ${MAX_TITLE}: name the thing in a few words ` +
+          "(what is to be done) and put the how, the why and the details in the notes",
+      );
+    }
+    t.title = title;
   }
   if (input.status !== undefined) {
     if (!STATUSES.includes(input.status)) throw new Error(`status is one of ${STATUSES.join(", ")}`);
