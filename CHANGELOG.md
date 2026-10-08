@@ -5,6 +5,43 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [0.16.0] - 2026-10-08
+
+### Breaking changes
+
+- the old console page is gone; its styles and faces move into apps/ui (55d4589)
+
+### Added
+
+- **tasks**: a task's title names the thing, at most 80 characters (2ec500c)
+
+### Fixed
+
+- **desktop**: an AppImage relaunched by its update leaves no old process behind (576db63)
+- **ui**: Claude at work is shown with Agents Multi's mark, not Anthropic's spark (bcf6d26)
+- **ui**: the projects overview breathes — wider cards, room around them, next item on two lines (f236331)
+- **ui**: the header and the picker show the logo, the five drops on their stems (7755591)
+- **console**: the backend drops a Claude session's variables it inherited (b2e5306)
+- **ui**: the Next card shortens the title, never the time (ffa4fe7)
+- **ui**: «Close Claude to finish» instead of «Update ready» when only the install waits (b0aee33)
+- **ui**: the update wizard does not wait for a restart when the install waits for Claude (2457883)
+- **app**: the copy of the app's code is writable by the user alone (a1febec)
+
+### Performance
+
+- **ci**: the release job installs zstd, which actions/cache compresses with (0bf590c)
+
+### Changed
+
+- the gate checks the shared agents; a personal alias and an old wiki linter leave (32e0e4c)
+- names used only in their own module are no longer exported (c7fdc93)
+- remove dead code — an unused reader, an unwired rollback, a stale redirect, unused strings (ce2d11f)
+
+### Documentation
+
+- getting started in a newcomer's order, and the everyday commands on the site (e070267)
+- **agents**: AGENTS.md keeps the rules that last, under the size sessions load (d75b613)
+
 ## [0.15.1] - 2026-10-08
 
 ### Fixed
