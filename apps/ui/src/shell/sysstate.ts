@@ -19,6 +19,9 @@ export interface SysState {
   total: number;
   /** what an update would take now, one line per component */
   pending: string[];
+  /** the pill's word for an update: «Update ready», or «Close Claude to finish» when all that is left
+   *  is the install of code already here, waiting for every Claude to be closed */
+  upWord: "pill.up" | "pill.settle";
 }
 
 const ORDER: Record<string, number> = { fail: 0, warn: 1 };
@@ -26,12 +29,17 @@ const ORDER: Record<string, number> = { fail: 0, warn: 1 };
 export const sys = computed<SysState>(() => {
   const s = status.value;
   const checks = s?.doctor ?? [];
-  const problems = checks.filter((c) => c.status !== "ok").sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  const problems = checks.filter((c) => c.status !== "ok").sort((a, b) =>
+    ORDER[a.status] - ORDER[b.status]
+  );
   const app = appUpdater();
   const pending = [
-    ...(app?.available ? [`Agents Multi ${app.current ?? "—"} → ${app.available.version}`] : []),
+    ...(app?.available
+      ? [`Agents Multi ${app.current ?? "—"} → ${app.available.version}`]
+      : []),
     ...pendingUpdates(s as Report | null),
   ];
+  const settling = !!(s as Report | null)?.selfInstall && pending.length === 1;
   const fails = problems.some((c) => c.status === "fail");
   const level: Level = live.value === "down" && s
     ? "down"
@@ -42,7 +50,14 @@ export const sys = computed<SysState>(() => {
     : problems.length
     ? "warn"
     : "ok";
-  return { level, problems, ok: checks.length - problems.length, total: checks.length, pending };
+  return {
+    level,
+    problems,
+    ok: checks.length - problems.length,
+    total: checks.length,
+    pending,
+    upWord: settling ? "pill.settle" : "pill.up",
+  };
 });
 
 /* «Later» on the update card: the card folds into the header's pill until something new is pending. */
@@ -57,7 +72,9 @@ const stored = (): string => {
 };
 const laterFor = signal(stored());
 
-export const updateLater = computed(() => sys.value.pending.length > 0 && laterFor.value === sys.value.pending.join("|"));
+export const updateLater = computed(() =>
+  sys.value.pending.length > 0 && laterFor.value === sys.value.pending.join("|")
+);
 
 export function setUpdateLater(on: boolean): void {
   laterFor.value = on ? sys.value.pending.join("|") : "";

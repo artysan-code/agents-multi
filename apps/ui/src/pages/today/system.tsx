@@ -35,7 +35,11 @@ function useFix(c: Check) {
     setRunning(true);
     setCause("");
     let last = "";
-    const r = await runJob(act, undefined, (o) => (last = o.trim().split("\n").filter(Boolean).pop() ?? last))
+    const r = await runJob(
+      act,
+      undefined,
+      (o) => (last = o.trim().split("\n").filter(Boolean).pop() ?? last),
+    )
       .catch((e: Error) => ({ error: e.message }));
     setRunning(false);
     if ("error" in r || r.code) {
@@ -53,7 +57,9 @@ function useFix(c: Check) {
   return { act, running, cause, start };
 }
 
-function Problem({ c, fixed, onFixed }: { c: Check; fixed: boolean; onFixed: () => void }) {
+function Problem(
+  { c, fixed, onFixed }: { c: Check; fixed: boolean; onFixed: () => void },
+) {
   const steps = c.repair ?? [];
   const rep = useRepair(c.id, steps);
   const fix = useFix(c);
@@ -63,7 +69,9 @@ function Problem({ c, fixed, onFixed }: { c: Check; fixed: boolean; onFixed: () 
   const waiting = at >= 0 && rep.state[at] === "waiting";
   const running = rep.running || fix.running;
   const cause = rep.cause || fix.cause;
-  const detail = waiting && steps[at].kind === "user" ? steps[at].text : cause || c.msg;
+  const detail = waiting && steps[at].kind === "user"
+    ? steps[at].text
+    : cause || c.msg;
 
   const go = async () => {
     const ok = n ? await rep.start() : await fix.start();
@@ -72,8 +80,13 @@ function Problem({ c, fixed, onFixed }: { c: Check; fixed: boolean; onFixed: () 
 
   let button;
   if (fixed) button = <span class="bt sm ok">{t("sc.fixed")}</span>;
-  else if (waiting) button = <button type="button" class="bt sm pri" onClick={rep.userDone}>{t("rep.userDone")}</button>;
-  else if (running) {
+  else if (waiting) {
+    button = (
+      <button type="button" class="bt sm pri" onClick={rep.userDone}>
+        {t("rep.userDone")}
+      </button>
+    );
+  } else if (running) {
     button = (
       <button type="button" class="bt sm" disabled>
         <span class="spin2" />
@@ -82,13 +95,26 @@ function Problem({ c, fixed, onFixed }: { c: Check; fixed: boolean; onFixed: () 
     );
   } else if (n || fix.act) {
     button = (
-      <button type="button" class={`bt sm${c.status === "fail" ? " pri" : ""}`} onClick={() => void go()}>
-        {cause ? t("sc.retry") : n > 1 ? t("sc.repairN", { n }) : t("sc.repair")}
+      <button
+        type="button"
+        class={`bt sm${c.status === "fail" ? " pri" : ""}`}
+        onClick={() => void go()}
+      >
+        {cause
+          ? t("sc.retry")
+          : n > 1
+          ? t("sc.repairN", { n })
+          : t("sc.repair")}
       </button>
     );
   } else {
     button = (
-      <button type="button" class="bt sm" onClick={() => askNow(t("sc.ask.text", { t: title, msg: c.msg, fix: c.fix ?? "—" }))}>
+      <button
+        type="button"
+        class="bt sm"
+        onClick={() =>
+          askNow(t("sc.ask.text", { t: title, msg: c.msg, fix: c.fix ?? "—" }))}
+      >
         {t("sc.ask")}
       </button>
     );
@@ -103,7 +129,9 @@ function Problem({ c, fixed, onFixed }: { c: Check; fixed: boolean; onFixed: () 
         {cause && !fixed && n > 0 && (
           <>
             {" · "}
-            <button type="button" class="lnk" onClick={() => openRepair(c.id)}>{t("sc.details")}</button>
+            <button type="button" class="lnk" onClick={() => openRepair(c.id)}>
+              {t("sc.details")}
+            </button>
           </>
         )}
       </p>
@@ -123,7 +151,9 @@ function Versions() {
   return (
     <div class="calm">
       <i class="still" />
-      <span><b>{t("sc.current")}</b></span>
+      <span>
+        <b>{t("sc.current")}</b>
+      </span>
       <span class="v">{[...parts, t("sc.license")].join(" · ")}</span>
     </div>
   );
@@ -133,7 +163,9 @@ function Health({ n }: { n: number }) {
   return (
     <div class="calm">
       <i />
-      <span><b>{t("pill.ok")}</b> · {t("sc.checks", { n })}</span>
+      <span>
+        <b>{t("pill.ok")}</b> · {t("sc.checks", { n })}
+      </span>
       <span class="v">{status.value ? ago(status.value.generatedAt) : ""}</span>
     </div>
   );
@@ -143,12 +175,29 @@ function Health({ n }: { n: number }) {
 function UpdateRows() {
   const S = status.value, app = appUpdater();
   const rows: [string, string][] = [];
-  if (app?.available) rows.push(["Agents Multi", `${app.current ?? "—"} → ${app.available.version}`]);
+  if (app?.available) {
+    rows.push([
+      "Agents Multi",
+      `${app.current ?? "—"} → ${app.available.version}`,
+    ]);
+  }
   if (S) {
     const m = S.machine, u = S.update ?? {}, r = S.repo;
-    if (r.isRepo && r.behind) rows.push(["agents-multi", `${r.version} → ${t("sc.commits", { n: r.behind })}`]);
-    if (u.cli?.latest && u.cli.latest !== m.cliVersion) rows.push(["Claude Code", `${m.cliVersion ?? "—"} → ${u.cli.latest}`]);
-    if (m.desktopStaged) rows.push(["Claude Desktop", `${m.desktopVersion ?? "—"} → ${m.desktopStaged} · ${t("sc.staged")}`]);
+    if (r.isRepo && r.behind) {
+      rows.push([
+        "agents-multi",
+        `${r.version} → ${t("sc.commits", { n: r.behind })}`,
+      ]);
+    }
+    if (u.cli?.latest && u.cli.latest !== m.cliVersion) {
+      rows.push(["Claude Code", `${m.cliVersion ?? "—"} → ${u.cli.latest}`]);
+    }
+    if (m.desktopStaged) {
+      rows.push([
+        "Claude Desktop",
+        `${m.desktopVersion ?? "—"} → ${m.desktopStaged} · ${t("sc.staged")}`,
+      ]);
+    }
   }
   return (
     <div class="vv">
@@ -171,19 +220,43 @@ function UpdateCard() {
   return (
     <div class="upd">
       <h4>
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
           <path d="M8 13V3M4 7l4-4 4 4" />
         </svg>
-        {t("pill.up")}
+        {t(sys.value.upWord)}
       </h4>
       <UpdateRows />
       {news.length > 0 && <ul>{news.map((l) => <li key={l}>{l}</li>)}</ul>}
       <div class="go">
-        <button type="button" class="bt pri" onClick={() => request("update.wizard", undefined, "auto")}>{t("up.now")}</button>
-        <button type="button" class="bt ghost" onClick={() => setUpdateLater(true)}>{t("sc.later")}</button>
+        <button
+          type="button"
+          class="bt pri"
+          onClick={() => request("update.wizard", undefined, "auto")}
+        >
+          {t("up.now")}
+        </button>
+        <button
+          type="button"
+          class="bt ghost"
+          onClick={() => setUpdateLater(true)}
+        >
+          {t("sc.later")}
+        </button>
       </div>
       {S?.machine.desktopStaged && desk.length > 0 && (
-        <div class="note">{busy ? t("sc.note.busy", { p: desk.join(", "), n: busy }) : t("sc.note", { p: desk.join(", ") })}</div>
+        <div class="note">
+          {busy
+            ? t("sc.note.busy", { p: desk.join(", "), n: busy })
+            : t("sc.note", { p: desk.join(", ") })}
+        </div>
       )}
     </div>
   );
@@ -219,7 +292,13 @@ export function SystemCard() {
     setRechecking(false);
   };
   const rc = (
-    <button type="button" class={`sc-rc${rechecking ? " on" : ""}`} title={t("sc.recheck")} aria-label={t("sc.recheck")} onClick={recheck}>
+    <button
+      type="button"
+      class={`sc-rc${rechecking ? " on" : ""}`}
+      title={t("sc.recheck")}
+      aria-label={t("sc.recheck")}
+      onClick={recheck}
+    >
       {RECHECK}
     </button>
   );
@@ -233,11 +312,22 @@ export function SystemCard() {
         ? (
           <>
             <div class="sc-h">
-              <span class={`lbl ${open.some((c) => c.status === "fail") ? "crit" : open.length ? "warn" : "ok"}`}>
-                {open.length ? t("sc.toFix", { n: open.length }) : t("sc.allFixed")}
+              <span
+                class={`lbl ${
+                  open.some((c) => c.status === "fail")
+                    ? "crit"
+                    : open.length
+                    ? "warn"
+                    : "ok"
+                }`}
+              >
+                {open.length
+                  ? t("sc.toFix", { n: open.length })
+                  : t("sc.allFixed")}
               </span>
               <span class="r">
-                {t("health.okN", { n: s.ok })} · {status.value ? ago(status.value.generatedAt) : ""} {rc}
+                {t("health.okN", { n: s.ok })} ·{" "}
+                {status.value ? ago(status.value.generatedAt) : ""} {rc}
               </span>
             </div>
             {update && <UpdateCard />}
