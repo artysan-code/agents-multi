@@ -191,7 +191,8 @@ pub fn on_tray(app: &AppHandle, action: Action) {
 /// Runs `program` detached from the app (its own process group, no terminal), and reaps it.
 fn spawn(program: &str, args: &[&str]) {
     let mut cmd = Command::new(program);
-    cmd.args(args)
+    crate::childenv::apply(&mut cmd)
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());

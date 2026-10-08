@@ -824,7 +824,8 @@ mod imp {
     fn notify_ready(s: &Status) {
         let Some(a) = &s.available else { return };
         let mut cmd = std::process::Command::new("notify-send");
-        cmd.args(["-u", "normal", "-t", "8000", "-a", "Agents Multi"])
+        crate::childenv::apply(&mut cmd)
+            .args(["-u", "normal", "-t", "8000", "-a", "Agents Multi"])
             .arg(format!("Agents Multi {} is available", a.version))
             .arg("Update it from the console: System › Updates.")
             .stdin(std::process::Stdio::null())

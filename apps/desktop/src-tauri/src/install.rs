@@ -191,14 +191,14 @@ fn run(
         None => (Stdio::inherit(), Stdio::inherit()),
     };
     let mut command = Command::new(&cmd.program);
-    command
+    crate::childenv::apply(&mut command)
         .args(&cmd.args)
         .current_dir(&cmd.dir)
         .envs(cmd.env.iter().map(|(k, v)| (k, v)))
         .stdin(Stdio::null())
         .stdout(out)
         .stderr(err);
-    if let Some(path) = child_path(home, std::env::var_os("PATH")) {
+    if let Some(path) = child_path(home, crate::childenv::path()) {
         command.env("PATH", path);
     }
     let mut child = command.spawn()?;

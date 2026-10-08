@@ -11,6 +11,7 @@
 
 mod activation;
 mod backend;
+mod childenv;
 mod console;
 mod controller;
 mod flags;

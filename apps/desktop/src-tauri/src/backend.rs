@@ -426,9 +426,10 @@ fn spawn(launch: &Launch, port: u16, log_path: Option<&PathBuf>) -> std::io::Res
         None => (Stdio::inherit(), Stdio::inherit()),
     };
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    let path = child_path(home.as_deref(), std::env::var_os("PATH"));
+    let path = child_path(home.as_deref(), crate::childenv::path());
     let mut cmd = Command::new(&launch.program);
-    cmd.args(&launch.args)
+    crate::childenv::apply(&mut cmd)
+        .args(&launch.args)
         .current_dir(&launch.dir)
         .envs(launch.env.iter().map(|(k, v)| (k, v)))
         .env("AGENTS_MULTI_PORT", port.to_string())
