@@ -15,6 +15,7 @@ import { Brain } from "./pages/brain/index.tsx";
 import { Connections } from "./pages/connections/index.tsx";
 import { System } from "./pages/system/index.tsx";
 import { UpdateWizardHost } from "./pages/system/wizard.tsx";
+import { CloseClaudeHost } from "./pages/system/updates-close.tsx";
 
 const PAGES: Record<View, () => ComponentChildren> = {
   today: Today,
@@ -44,6 +45,7 @@ export function App() {
       <Overlays />
       <PaletteHost />
       <UpdateWizardHost />
+      <CloseClaudeHost />
     </div>
   );
 }

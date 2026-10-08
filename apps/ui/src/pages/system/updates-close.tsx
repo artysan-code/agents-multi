@@ -1,12 +1,14 @@
 // updates-close.tsx — «Close Claude and update»: the server lists who holds the install (it alone knows
 // the PIDs), the person confirms, then TERM; KILL only as a second, explicit confirmation; then the
-// install. A drawer, opened from the Updates tab and from the wizard.
+// install. A screen like the update's (lib/screen.css), opened from the Updates tab, the update screen
+// and the buttons that stand for «Update now» while only the install is left.
 
+import { signal } from "@preact/signals";
 import { useState } from "preact/hooks";
 import { get, post, type Result } from "../../api.ts";
 import { loadStatus } from "../../state.ts";
 import { t } from "../../i18n.ts";
-import { Pf, openDrawer, toast, toastErr } from "../../lib/ui.tsx";
+import { Pf, toast, toastErr } from "../../lib/ui.tsx";
 import { request } from "../../router.ts";
 import { sys } from "../../shell/sysstate.ts";
 
@@ -114,10 +116,10 @@ function CloseClaude({ plan }: { plan: Plan }) {
         <p>{t("cc.stuck")}</p>
         <BlockerList list={phase.remaining} />
         <p class="sub">{t("cc.forceWarn")}</p>
-        <p>
-          <button type="button" class="btn" onClick={() => void step("kill")}>{t("cc.force")}</button>{" "}
-          <button type="button" class="btn ghost" onClick={() => void step("term")}>{t("cc.retry")}</button>
-        </p>
+        <div class="uw-go">
+          <button type="button" class="bt" onClick={() => void step("kill")}>{t("cc.force")}</button>
+          <button type="button" class="bt pri" onClick={() => void step("term")}>{t("cc.retry")}</button>
+        </div>
       </>
     );
   }
@@ -126,13 +128,13 @@ function CloseClaude({ plan }: { plan: Plan }) {
       <>
         <pre class="out">{phase.out}</pre>
         {reopen.length > 0 && (
-          <p>
+          <div class="uw-go">
             {reopen.map((p) => (
-              <button type="button" class="btn" key={p} disabled={reopened.includes(p)} onClick={() => void reopenOne(p)}>
+              <button type="button" class="bt" key={p} disabled={reopened.includes(p)} onClick={() => void reopenOne(p)}>
                 {t("cc.reopen", { p })}
               </button>
             ))}
-          </p>
+          </div>
         )}
       </>
     );
@@ -142,13 +144,19 @@ function CloseClaude({ plan }: { plan: Plan }) {
       <p>{t("cc.intro")}</p>
       <BlockerList list={plan.blockers} />
       {todo.length
-        ? <p><button type="button" class="btn" onClick={() => void step("term")}>{t("cc.go")}</button></p>
+        ? (
+          <div class="uw-go">
+            <button type="button" class="bt pri" onClick={() => void step("term")}>{t("cc.go")}</button>
+          </div>
+        )
         : <p class="sub">{t("cc.onlyProtected")}</p>}
     </>
   );
 }
 
-/** Asks the server who holds the install, and opens the drawer with the plan (or says there is nothing to do). */
+const open = signal<{ plan: Plan; at: number } | null>(null);
+
+/** Asks the server who holds the install, and opens the screen with the plan (or says there is nothing to do). */
 export async function openCloseClaude(): Promise<void> {
   let plan: Plan;
   try {
@@ -157,7 +165,27 @@ export async function openCloseClaude(): Promise<void> {
     return toastErr(e);
   }
   if (!plan.offer) return toast(t("cc.none"));
-  openDrawer(t("cc.btn"), () => <CloseClaude plan={plan} />);
+  open.value = { plan, at: Date.now() };
+}
+
+/** The screen, drawn by the shell beside the update screen. */
+export function CloseClaudeHost() {
+  const o = open.value;
+  if (!o) return null;
+  const close = () => open.value = null;
+  return (
+    <div class="uw-screen" role="dialog" aria-modal="true" aria-label={t("cc.btn")}>
+      <div class="uw-card">
+        <button type="button" class="ib uw-x" title={t("close")} aria-label={t("close")} onClick={close}>
+          <svg viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+        <h2>{t("cc.btn")}</h2>
+        <CloseClaude key={o.at} plan={o.plan} />
+      </div>
+    </div>
+  );
 }
 
 /** «Update now», or «Close Claude and update» when all that is left is the install waiting for every
