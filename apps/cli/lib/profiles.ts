@@ -2,8 +2,9 @@
 // directories, what install mounted into each runtime directory, and the shared inventory.
 
 import { listDir, lstat, mode, readJson, readlink, stat } from "./fs.ts";
-import { AGENTS_SKILLS, CONFIG, expandHome, HOME, NON_PROFILE_DIRS, PROFILES, REPO, RUNTIME } from "./paths.ts";
+import { AGENTS_SKILLS, CONFIG, expandHome, HOME, NON_PROFILE_DIRS, PROFILES, RUNTIME } from "./paths.ts";
 import { type PluginRecord, pluginRecordState, syncedPlugins } from "./plugins.ts";
+import { installation } from "./mode.ts";
 
 export type Profile = string;
 
@@ -164,12 +165,15 @@ export async function profileInfo(p: Profile) {
   };
 }
 
-export async function sharedInventory() {
+export async function sharedInventory(code?: string) {
+  // the installed code, which the profiles mount (in app mode the copy, where install links the skills
+  // of ~/.agents/skills), not the running one: the package's own code has none of those links
+  const base = code ?? (await installation()).code;
   const items = async (kind: Kind) => {
     const out: Record<string, { link: string | null; broken: boolean }> = {};
-    for (const n of await listDir(`${REPO}/shared/${kind}`)) {
+    for (const n of await listDir(`${base}/shared/${kind}`)) {
       if (kind !== "skills" && (!n.endsWith(".md") || n === "AGENTS.md")) continue;
-      const path = `${REPO}/shared/${kind}/${n}`;
+      const path = `${base}/shared/${kind}/${n}`;
       out[kind === "skills" ? n : n.slice(0, -3)] = {
         link: await readlink(path),
         broken: !(await stat(kind === "skills" ? `${path}/SKILL.md` : path)),
@@ -181,7 +185,7 @@ export async function sharedInventory() {
     skills: await items("skills"),
     agents: await items("agents"),
     commands: await items("commands"),
-    hooks: (await listDir(`${REPO}/shared/hooks`)).filter((f) => /\.(sh|js|py)$/.test(f)),
+    hooks: (await listDir(`${base}/shared/hooks`)).filter((f) => /\.(sh|js|py)$/.test(f)),
     rules: (await listDir(`${CONFIG}/rules`)).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, "")),
     agentsSkills: await listDir(AGENTS_SKILLS),
   };
