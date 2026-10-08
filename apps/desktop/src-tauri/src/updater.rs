@@ -487,7 +487,9 @@ pub fn after_relaunch(app: &AppHandle, request: Request) -> Request {
 /// helper never saw the app go and kept the old mount, and its process, running for good.
 #[cfg(target_os = "linux")]
 pub fn close_on_exec_all() {
-    let Ok(dir) = std::fs::read_dir("/proc/self/fd") else { return };
+    let Ok(dir) = std::fs::read_dir("/proc/self/fd") else {
+        return;
+    };
     let fds: Vec<i32> = dir
         .filter_map(|e| e.ok()?.file_name().to_str()?.parse().ok())
         .filter(|fd| *fd > 2)
@@ -873,7 +875,10 @@ mod tests {
         assert!(!cloexec(fds[1]));
         close_on_exec_all();
         assert!(cloexec(fds[0]) && cloexec(fds[1]));
-        assert!(!cloexec(0) && !cloexec(1) && !cloexec(2), "stdio is left as it is");
+        assert!(
+            !cloexec(0) && !cloexec(1) && !cloexec(2),
+            "stdio is left as it is"
+        );
         unsafe {
             libc::close(fds[0]);
             libc::close(fds[1]);
