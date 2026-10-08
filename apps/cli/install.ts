@@ -389,6 +389,11 @@ export async function install(
   if ((await lstat(`${BIN}/claude-distiller`))?.isSymlink) {
     await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
   }
+  // claude-personal, an alias that named one person's profile, is gone: each profile's command comes
+  // from its manifest (a profile whose command is claude-personal still gets it, linked to bin/claude)
+  if ((await readlink(`${BIN}/claude-personal`))?.endsWith("/bin/claude-personal")) {
+    await removeLink(`${BIN}/claude-personal`, "an alias of the personal profile, now its manifest's command");
+  }
   await ensureDir(LIB);
   // The update GUI became the desktop app (bin/claude-multi-app finds its code through the repo).
   for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) {

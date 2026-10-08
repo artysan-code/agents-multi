@@ -25,6 +25,10 @@ deno run --quiet --allow-read --allow-run=deno --allow-env scripts/brain-image.t
 step test
 deno task --quiet test
 
+step agents
+# the shared agents' frontmatter: a broken one is skipped by Claude Code without a word
+python3 shared/scripts/validate_agents.py shared/agents >/dev/null
+
 step "mcp servers"
 deno run --quiet --allow-read --allow-run=deno --allow-env scripts/mcp-probe.ts
 

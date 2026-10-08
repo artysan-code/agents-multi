@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# claude-personal: backward-compatible alias. The personal profile is the default and its command
-# is `claude`; this wrapper just forwards to it.
-HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-exec "$HERE/claude" "$@"
