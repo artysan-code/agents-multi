@@ -21,6 +21,7 @@ import {
   firstSentence,
   lanes,
   minutes,
+  seenEnd,
   upNext,
 } from "./model.ts";
 
@@ -286,17 +287,28 @@ function marks(day: Day): Mark[] {
 function Timeline({ day, next }: { day: Day; next: DayItem | undefined }) {
   const now = nowMin(minute.value);
   const ms = marks(day);
-  const lane = lanes(ms);
   // the window widens to now too, from the early morning on: the line for now is always there by day
   const { from, to } = dayWindow(
     now >= 5 * 60 ? [...ms, { start: now, end: now }] : ms,
   );
   const x = (m: number) => ((m - from) / (to - from)) * 100;
+  // the line's width, so that an item takes its lane up to where its title ends, not its time
+  const box = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const perMin = width / (to - from);
+  const lane = lanes(ms.map((m) => ({ start: m.start, end: seenEnd(m, m.x.title.length, perMin) })));
   const hours: number[] = [];
   for (let h = from / 60; h <= to / 60; h++) hours.push(h);
   const inDay = now >= from && now <= to;
   return (
-    <div class="tl">
+    <div class="tl" ref={box}>
       {hours.map((h) => (
         <div class="tl-hr" key={h} style={{ left: `${x(h * 60)}%` }}>
           {(!inDay || Math.abs(h * 60 - now) > 25) && (

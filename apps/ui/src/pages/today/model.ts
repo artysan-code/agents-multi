@@ -68,6 +68,13 @@ export interface Span {
 
 /** One lane per item, so that items in a lane do not overlap: the first lane free at its start, else
  *  the one that frees up first (it overlaps there, but stays on the line). Items in start order. */
+/** Pure: where an item ends on the line as it is seen, its title included: a short item's title runs
+ *  past its end, and the next one on the same lane would be drawn over it. `perMin` is pixels per
+ *  minute; a character of the 11.5px label is about 6.4px, plus the padding and the tick. */
+export function seenEnd(x: Span, chars: number, perMin: number): number {
+  return perMin > 0 ? Math.max(x.end, x.start + (34 + chars * 6.4) / perMin) : x.end;
+}
+
 export function lanes(items: Span[], n = 3): number[] {
   const ends: number[] = Array(n).fill(-Infinity);
   return items.map((x) => {

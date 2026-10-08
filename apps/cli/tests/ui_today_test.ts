@@ -10,6 +10,7 @@ import {
   groupTasks,
   lanes,
   minutes,
+  seenEnd,
   upNext,
 } from "../../ui/src/pages/today/model.ts";
 
@@ -97,4 +98,14 @@ Deno.test("dayWindow: 08–21, widened to what lies outside", () => {
     from: 420,
     to: 1380,
   });
+});
+
+Deno.test("seenEnd: a short item keeps its lane until its title ends, so the next one goes below", () => {
+  // 2 px a minute: a 60-minute event with a 30-character title is seen until 0 + (34 + 192) / 2 = 113
+  const a = { start: 0, end: 60 }, b = { start: 90, end: 150 };
+  assertEquals(seenEnd(a, 30, 2), 113);
+  assertEquals(seenEnd(a, 2, 2), 60); // a title that fits ends with the item
+  assertEquals(seenEnd(a, 30, 0), 60); // not measured yet: the time alone
+  assertEquals(lanes([a, b]), [0, 0]);
+  assertEquals(lanes([{ ...a, end: seenEnd(a, 30, 2) }, b]), [0, 1]);
 });
