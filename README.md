@@ -16,7 +16,7 @@ credentials.
 The repository is code; what is yours — profiles, accounts, rules, preferences — lives in a folder
 of yours that `~/.agents-multi/config` links to (see [Your configuration](#your-configuration)).
 
-Every machine runs the **Agents Multi** desktop app (a deb, an rpm, an AppImage): it carries the code,
+Every machine runs the **Agents Multi** desktop app (a deb, an AppImage): it carries the code,
 the console and the Deno that runs both, and installs the code into your runtime itself. With your
 configuration in place (`agents init`, below), start the app once: it copies its code to
 `~/.agents-multi/app/` and runs `agents install --app`, which materialises everything else, and from
@@ -84,13 +84,12 @@ the console, its backend and the Deno that runs it. Each version is on the proje
 (Linux x86_64 for now; macOS and Windows come with 1.x):
 
 - **Debian, Ubuntu** — `sudo apt install ./agents-multi_<version>_amd64.deb`
-- **Fedora, openSUSE** — `sudo dnf install ./agents-multi-<version>-1.x86_64.rpm`
 - **Arch** — the AUR package `agents-multi-bin` (`paru -S agents-multi-bin`); pacman updates it, so the
   app's own updater is off there
-- **Anywhere else** — the AppImage: `chmod +x` it and run it
+- **Anywhere else** (Fedora and openSUSE too) — the AppImage: `chmod +x` it and run it
 
 The app updates itself from then on: it looks for a new version every day and downloads it in the
-background, and **System › Updates** in the console installs it and restarts the app; a deb or an rpm
+background, and **System › Updates** in the console installs it and restarts the app; a deb
 asks for your password to install. Betas are a channel of their own: a beta build stays on it (see
 [ADR 0004](docs/adr/0004-desktop-app-releases.md)).
 

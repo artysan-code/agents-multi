@@ -24,8 +24,9 @@ everything it runs, then says what changed.
   `requireSignedVersion`: the signature's trusted comment carries the version (the Tauri CLI writes
   `version:` there), so a tampered manifest cannot pair a version number with another release's file.
 - **The bundle identifier** stays where ADR 0003 put it. Nothing here repeats it: the assets are named
-  `agents-multi_<version>_amd64.deb`, `agents-multi-<version>-1.x86_64.rpm` (a beta's `~beta.N`) and
-  `agents-multi_<version>_amd64.AppImage` whatever the identifier, and the AUR script reads it from
+  `agents-multi_<version>_amd64.deb` and `agents-multi_<version>_amd64.AppImage` whatever the
+  identifier (an rpm, `agents-multi-<version>-1.x86_64.rpm` with a beta's `~beta.N`, is left out for
+  now: Tauri's rpm writer took 13 of the release build's 21 minutes), and the AUR script reads it from
   `tauri.conf.json`. Changing it before 1.0 is still that one change (ADR 0003); after 1.0 it moves the
   app's folders and package names, so it does not change.
 

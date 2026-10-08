@@ -44,6 +44,9 @@ export interface ReleaseConfig {
 }
 
 export type Kind = "deb" | "rpm" | "appimage";
+/** The kinds a release publishes: the rpm is left out until Tauri's rpm writer stops taking most of
+ *  the release build (13 of 21 minutes on the runner); Fedora and openSUSE take the AppImage. */
+export const PUBLISHED: Kind[] = ["deb", "appimage"];
 
 /** One platform of an update manifest (Tauri's static format). */
 export interface Platform {
@@ -181,7 +184,7 @@ async function prepare(bundle: string, out: string) {
   }
   await Deno.mkdir(out, { recursive: true });
   const assets: Partial<Record<Kind, Platform>> = {};
-  for (const kind of ["deb", "rpm", "appimage"] as Kind[]) {
+  for (const kind of PUBLISHED) {
     const f = found[kind];
     if (!f?.file) throw new Error(`no ${kind} bundle in ${bundle}`);
     if (!f.sig) throw new Error(`the ${kind} bundle is not signed (TAURI_SIGNING_PRIVATE_KEY, createUpdaterArtifacts)`);
