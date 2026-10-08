@@ -10,7 +10,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { t, tk } from "../../i18n.ts";
-import { loadClaude, Spark, type SparkMode } from "../../lib/claude.tsx";
+import { Spark, type SparkMode } from "../../lib/claude.tsx";
 import { renderMarkdown } from "../../lib/markdown.tsx";
 import { ModelPicker, useAskModel } from "../../lib/model-picker.tsx";
 import { closeWindow, sizeWindow } from "../../lib/window.ts";
@@ -50,7 +50,6 @@ export function Hey() {
   shown.current = answer !== null;
 
   useEffect(() => {
-    void loadClaude();
     heyApi.status().then((s) => {
       machineLang.value = s.language;
     }, () => {/* the browser's language, then */});

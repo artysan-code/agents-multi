@@ -3485,7 +3485,7 @@ body.plbusy #mk-add button {
   color: var(--fg);
 }
 
-/* the spark: Claude's mark, and what moves while Claude works */
+/* the spark: the console's mark for Claude at work, still or pulsing */
 .spark {
   display: inline-block;
   position: relative;
@@ -3496,38 +3496,29 @@ body.plbusy #mk-add button {
   color: var(--spark);
   vertical-align: -.15em;
 }
-.spark svg {
+.spark img {
   width: 100%;
   height: 100%;
   display: block;
-  fill: currentColor;
 }
-/* an animation: the frames stacked in one tall strip, moved up one frame at a time */
-.spark .strip {
-  position: absolute;
-  inset: 0 0 auto 0;
-  display: block;
+.spark[data-spark] img {
+  animation: spark-pulse 1.4s ease-in-out infinite;
+}
+@keyframes spark-pulse {
+  50% {
+    transform: scale(.82) rotate(14deg);
+    opacity: .7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spark[data-spark] img {
+    animation: none;
+  }
 }
 .ses .mark .spark,
 .debrief-f .spark {
   width: 16px;
   height: 16px;
-}
-
-/* Anthropicons, when Claude Desktop is here: a glyph per code point, weight from its size */
-.ai {
-  font-family: "Anthropicons-Variable";
-  font-style: normal;
-  font-weight: 450;
-  font-feature-settings: "liga" 0;
-  font-optical-sizing: auto;
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  line-height: 1;
-  font-size: 19px;
-  text-align: center;
-  flex: none;
 }
 
 @media (max-width: 1100px) {

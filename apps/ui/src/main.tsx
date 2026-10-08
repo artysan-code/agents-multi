@@ -12,7 +12,6 @@ import { Hey } from "./pages/hey/index.tsx";
 import { Setup } from "./pages/setup/index.tsx";
 import { loadSetup } from "./pages/setup/api.ts";
 import { connect, loadOwner, loadStatus } from "./state.ts";
-import { loadClaude } from "./lib/claude.tsx";
 import { go } from "./router.ts";
 import { t } from "./i18n.ts";
 import { toast } from "./lib/ui.tsx";
@@ -37,7 +36,6 @@ if (location.hash === "#pick") {
     render(<Setup initial={setup} />, document.getElementById("root")!);
   } else {
     go(location.hash.slice(1));
-    void loadClaude();
     await loadOwner();
     render(<App />, document.getElementById("root")!);
     loadStatus().catch((e: Error) => toast(t("err.server", { e: e.message }), true));
