@@ -240,4 +240,4 @@ jobs:
         run: |
           [ -n "$COOLIFY_DEPLOY_URL" ] && [ -n "$COOLIFY_TOKEN" ] ||
             { echo "no Coolify deploy hook: nothing redeployed"; exit 0; }
-          curl -fsS -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_DEPLOY_URL"
+          curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_DEPLOY_URL"
