@@ -10,137 +10,92 @@
 
 ## What this is
 
-A multi-profile setup for Claude Code and Claude Desktop: several accounts isolated on one machine.
-**This repository is the source of truth**; `~/.agents-multi/` is runtime materialised by
-`agents install`. Operational detail lives in the [README](README.md).
+A multi-profile setup for Claude Code and Claude Desktop: several accounts isolated on one machine,
+a console, and a desktop app that carries it all. **This repository is the source of truth**;
+`~/.agents-multi/` is runtime materialised by `agents install`. Operational detail is in the
+[README](README.md), decisions in [docs/adr](docs/adr/).
 
 ## Rules for working here
 
 - **Never edit `~/.agents-multi/shared` by hand**: in app mode it is the desktop app's copy of the
   code (`~/.agents-multi/app/current`, replaced at the next update), in dev mode a link to a
-  checkout's `shared/`. Change it here, commit, push; it reaches machines with the app's release (or,
-  in dev mode, on the next Claude launch: `bin/lib/prelaunch.sh`).
+  checkout's `shared/`. Change it here; it reaches machines with the next release.
 - **Two modes, decided in one place** (`apps/cli/lib/mode.ts`, `cm_mode` in `bin/lib/profiles.sh`):
   app (every machine: the package's code, copied into the runtime) and dev (a checkout, for
   development). Nothing in app mode depends on systemd or git: a scheduled job is the backend's
-  (`apps/cli/console/schedule.ts`), never a unit ([ADR 0003](docs/adr/0003-desktop-app.md), the
-  replacement step).
+  (`apps/cli/console/schedule.ts`), never a unit ([ADR 0003](docs/adr/0003-desktop-app.md)).
 - **Runtime never enters the repository**: credentials, `.claude.json`, sessions, plugin cache,
-  marketplaces. A file containing `oauthAccount` or a token must never be committed. `.gitignore`
-  covers the backups (`*.bak*`, `*.backup`).
-- **Every new invariant goes in `apps/cli/doctor/`**, not in the README. The README describes, the
-  doctor verifies. Those two have already drifted apart once.
+  marketplaces. A file containing `oauthAccount` or a token must never be committed.
+- **Every new invariant goes in `apps/cli/doctor/`**, not in the README: the README describes, the
+  doctor verifies.
 - **The repository is code; what is a person's is in their configuration** (`~/.agents-multi/config`,
-  a link to a folder of theirs, made by `agents init` from `config.example/`): profiles,
-  `accounts.json`, rules, their settings and server choices (merge patches over `shared/settings.json`
-  and `shared/mcp/servers.json`), `owner.json`. Nothing personal goes back into the repository —
-  no names, clients, accounts or preferences; the repository is shared by everyone who uses it.
+  made by `agents init` from `config.example/`): profiles, `accounts.json`, rules, settings and server
+  choices (merge patches over `shared/settings.json` and `shared/mcp/servers.json`), `owner.json`.
+  Nothing personal comes back into the repository — no names, clients, accounts, preferences.
 - **No per-profile constants.** Profiles are discovered from `config/profiles/*/profile.json`
-  (`profileNames()`), the Desktop directory comes from the manifest (`desktopDir()`), and the
-  launcher name from `commandOf()` / `launchers()`. A check that names "work" or "personal" is a
-  bug: derive it from the manifests instead. This holds for materialising a profile too, not just
-  reading one — `install` links one launcher per manifest and builds the `~/.zshrc` block from
-  them; there is a single launcher script (`bin/claude`) that identifies its profile from the name
-  it was invoked as.
-- **No home folder written out** (`/home/<name>`): the repository is shared by everyone who uses
-  it. Shell commands (hooks, statusline) say `"$HOME"`, CLAUDE.md imports `@~/`, servers.json
-  `${HOME}` (filled in by `loadRegistry()`); the doctor's `repo.homes` check finds the rest.
-- **The cost in `usage` is a list-price equivalent, not a charge**, and nothing in this repository
-  monitors billing: the budget module was removed on purpose (2026-09-30). Do not bring back
-  thresholds or notifications on spending.
-- **The console is the desktop app's backend** (`agents serve` by hand on a headless box). UI updates arrive over SSE on
-  `/api/events`: a page reloads its data when its topic's counter moves (`useTopic` in
-  `apps/ui/src/state.ts`), never from a polling loop of its own.
-- **The console's page is `apps/ui/`** (Preact + TSX, Vite, pnpm), served at the root. Each page lives
-  in `src/pages/<page>/`; its strings in `src/i18n/<area>.ts`, whose type makes Italian carry every
-  English key (`t()`; `tk()` for a key built at run time). Its data comes through `src/api.ts` (a page
-  declares the extra types it reads beside itself), its live updates through the signals in
-  `src/state.ts`, and its markup is JSX — never `innerHTML`; Markdown goes through `src/lib/markdown.tsx`.
-  A page asks another to do something through an intent (`request`/`useIntent` in `src/router.ts`),
-  never by reaching into its markup. Drawers, toasts, actions and jobs are in `src/lib/ui.tsx`.
-  Types come from the server's modules only when those have no Deno imports (`apps/cli/lib/output.ts`).
-  Libraries are welcome when they make the page better: pinned in `apps/ui/package.json` and bundled,
-  never loaded from a CDN (the console works offline). The build is not committed: `agents ui
-  build` makes it (install and self-update run it when `apps/ui` changed, the doctor's `console.ui`
-  says when it is missing or stale), and a failed build leaves the previous one. `pnpm dev` in
-  `apps/ui` serves it with hot reload against the running console.
-- **The previous page (`apps/cli/dashboard`) is served under `/old/` for one release**, then removed:
-  do not add to it. Its `style.css` and `fonts/` are the new page's style sheet too, until they move
-  into `apps/ui` with that removal.
-- **The public site has its own build** (`apps/site/`, Astro + Starlight, pnpm): the
-  landing and the docs, built into `apps/site/dist` by the brain's image and served by the brain
-  (`apps/brain/public.ts`) on an address of its own, another origin than the brain's. Nothing of one
-  instance in it: its address, the contact and the operator are placeholders the brain fills from its
-  environment. Its facts come from the README — when one changes, change both.
+  (`profileNames()`, `desktopDir()`, `commandOf()` / `launchers()`). A check that names "work" or
+  "personal" is a bug. One launcher script (`bin/claude`) knows its profile from the name it was
+  invoked as.
+- **No home folder written out** (`/home/<name>`): shell says `"$HOME"`, CLAUDE.md imports `@~/`,
+  servers.json `${HOME}`; the doctor's `repo.homes` check finds the rest.
+- **The cost in `usage` is a list-price equivalent, not a charge**, and nothing here monitors
+  billing (removed on purpose, 2026-09-30): no thresholds or notifications on spending.
+- **The console is the desktop app's backend** (`agents serve` by hand on a headless box). Pages
+  reload their data when their topic moves on `/api/events` (SSE, `useTopic` in `apps/ui/src/state.ts`),
+  never from a polling loop of their own. It drops the variables of a Claude session it inherited
+  (`claudeSessionVars`), so the Claudes it starts never run as another session's children.
+- **The console's page is `apps/ui/`** (Preact + TSX, Vite, pnpm). A page lives in `src/pages/<page>/`,
+  its strings in `src/i18n/<area>.ts` (Italian carries every English key; `t()`, `tk()` for a key built
+  at run time), its data comes through `src/api.ts`, its markup is JSX — never `innerHTML`; Markdown
+  goes through `src/lib/markdown.tsx`. Pages talk through intents (`request`/`useIntent` in
+  `src/router.ts`). Libraries are pinned and bundled, never from a CDN (the console works offline). The
+  build is not committed: `agents ui build` makes it; `pnpm dev` in `apps/ui` serves it with hot reload
+  against the running console.
+- **The previous page (`apps/cli/dashboard`) is served under `/old/` until it is removed**: do not add
+  to it. Its `style.css` and `fonts/` are still the new page's style sheet, until they move into
+  `apps/ui`.
+- **Anthropic's marks are not ours to show**: the console uses Agents Multi's logo
+  (`apps/ui/src/assets/mark.svg`) for itself and for Claude at work. From the installed Claude Desktop
+  it reads only the text faces (`apps/cli/claude-assets.ts`), never copied into the repository.
+- **The public site is `apps/site/`** (Astro + Starlight), built by the brain's image and served by the
+  brain on its own origin. Nothing of one instance in it: address, contact and operator are filled
+  from the brain's environment. Its facts come from the README — when one changes, change both.
 - **MCP credentials live in the vault, nowhere else** (`shared/mcp/lib/vault.ts`, `agents vault`):
-  never in `servers.json`, `accounts.json`, an env file, a command-line argument or a tool result.
-  A server that needs one is registered with `_service` and reads it through `lib/service.ts`. A
-  server that returns data masks it (`lib/mask.ts`), and one that writes whole objects back refuses
-  payloads carrying the mask marker. No deletion tools on external services — one exception, decided
-  with the owner (2026-10-06): `calendar_delete` in the google server, since a deleted event stays
-  thirty days in the calendar's bin, and it is in the shared `ask` permissions like `gmail_send`. The vault key is in
-  the keyring, where any process of the user can ask for it: the shared deny rules on
-  `secret-tool`, `kwallet-query`, `vault recovery-code` and `~/vault/claude-multi` are what keeps a
-  session out (the doctor checks they are there).
+  never in `servers.json`, `accounts.json`, an env file, an argument or a tool result. A server that
+  needs one is registered with `_service` and reads it through `lib/service.ts`; one that returns data
+  masks it (`lib/mask.ts`). No deletion tools on external services — one exception (2026-10-06):
+  `calendar_delete`, in the shared `ask` permissions like `gmail_send`. The shared deny rules on
+  `secret-tool`, `kwallet-query`, `vault recovery-code` and the vault folder keep a session away from
+  the keyring's vault key (the doctor checks they are there).
 - **Notifications go through `desktopNotify()`** (`apps/cli/notify.ts`): normal urgency, eight seconds,
-  once per event. Never `-u critical` — on KDE it ignores the expiry and stays on screen.
-- **The desktop app is a view**: what it shows comes from the console's API, what it does is a CLI
-  command. A colour or a rule the tray applies is TypeScript (`summarize()` in `apps/cli/status.ts`,
-  with its test), not Rust.
-- **The desktop app is `apps/desktop/`** (Tauri 2, Rust in `src-tauri/`; [ADR 0003](docs/adr/0003-desktop-app.md)),
-  replacing the tray and the console's unit piece by piece. Its window loads the console by URL
-  (`http://127.0.0.1:<port>`), never a bundled copy of `apps/ui`; a bundled local page (`src/`, no
-  build step) waits for the console to answer. No page gets IPC: the app has no capabilities, and one
-  added for the local page never lists the console's origin (`remote.urls`). Navigation stays on the local
-  page and the console (`navigation.rs`); other links go to the system browser. The bundle
-  identifier is `me.artysan.agents` (final since 2026-10-07: it never changes); on Linux it is also the
-  window's app_id and the desktop file's name (`tauri.linux.conf.json`, kept equal by `build.rs`), or
-  Wayland shows a generic icon. A second launch carries
-  the launcher's activation token in its arguments (`activation.rs`): the single-instance plugin forwards
-  nothing else, and without it Wayland does not raise the window. `check.sh` runs
-  `cargo fmt` and `clippy -D warnings` where cargo and WebKitGTK are installed.
+  once per event. Never `-u critical` — on KDE it ignores the expiry.
+- **The desktop app is a view** (`apps/desktop/`, Tauri 2; [ADR 0003](docs/adr/0003-desktop-app.md)):
+  what it shows comes from the console's API, what it does is a CLI command; a rule it applies is
+  TypeScript, not Rust. Its window loads the console by URL; no page gets IPC. The bundle identifier
+  `me.artysan.agents` is final, and on Linux it is also the window's app_id and the desktop file's name.
+  `check.sh` runs `cargo fmt --check` and `clippy -D warnings` where cargo and WebKitGTK are installed.
 - **Launching stays pure bash** (`bin/claude`, `bin/claude-launch`, `bin/lib/`): no Deno on the hot
-  path, so a wrapper still works on a machine without it. The manifests are read from bash through
-  `bin/lib/profiles.sh` (`cm_command`, `cm_desktop_dir`, `cm_desktop_appid`) — one place, no jq.
-  Careful there: `set -o pipefail` plus `grep -q` reports failure even on a match, because grep
-  exits first and the producer dies of SIGPIPE. Use `cm_has_profile`, not a pipe into `grep -q`.
-- **A profile with its own `desktopDir` gets its own Desktop build.** The official binary
-  self-assigns its app_id, so a second icon needs a patched executable
-  (`bin/claude-desktop-rebuild <profile>`), and `install` writes its `.desktop` from
-  `desktop/entry.desktop.in`. Never add a per-profile `.desktop` or rebuild script by hand.
-  Three things have to be set per profile or the instances are indistinguishable: the app_id
-  (`setDesktopName`, taskbar icon and grouping), the tray tooltip (the argument of `setToolTip` is
-  rewritten in the bundle), and the tray PNGs, which ship monochrome — the rebuild replaces those
-  two symlinks with copies tinted from the profile's application icon.
-  **Never call `app.setName()`**: Electron keys the system keyring on the application name, so
-  renaming the app makes the stored token unreachable and the user is asked to sign in again. That
-  happened once, to get a per-profile tooltip; the tooltip is now changed at its call site instead,
-  leaving the app's identity alone.
-- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `agents doctor`.
-  If you touched `install`, run `agents install --dry-run` first. A new pure function gets a
-  new test in `apps/cli/tests/`. Careful: `deno task check | grep` swallows the exit code — read the
-  output, not just the filter.
-- **Changing `~/.agents-multi` while a Claude session is open moves the ground under that session.**
-  Run `install` and `agents mcp sync` from a terminal with Claude closed.
-- **Branches and versions.** Work lands on `dev`; `beta` and `release` only move by merge from the
-  branch before them. Installations follow `release` (self-update pulls the checkout's upstream),
-  so a machine whose runtime is a checkout keeps that checkout on `release` and develops in a
-  worktree on `dev` (`git worktree add ../claude-multi-dev dev`). A version is cut with
-  `deno task release` — stable on `release`, `beta` on `beta` — which bumps every manifest in
-  `MANIFESTS` (`scripts/release.ts`), writes the CHANGELOG section and tags `vX.Y.Z`.
-  The CHANGELOG is the only place notes are written: pushing the tag makes the Forgejo release
-  from its section (`.forgejo/workflows/release.yml`, `scripts/publish-releases.ts`), the site's
-  Changelog page is generated from it at build, and the console shows it as «What's new».
-- **The desktop app's releases** ([ADR 0004](docs/adr/0004-desktop-app-releases.md)): the same tag builds
-  the signed bundles in CI, puts them on the GitHub release and commits the site's update manifests
-  (`apps/site/public/updates/`) on `release` — pull before the next `deno task release`. Those
-  manifests are written by `scripts/app-release.ts`, by hand only for a rollback. The site, the GitHub
-  repository and the AUR package are named once, in `apps/desktop/release.json`; the updater's public
-  key in `tauri.conf.json`. The app's update is the console's to show (`/api/app/update`), the app's to
-  do: the backend reaches it over its unix socket, never the page.
-- **Commit subjects are Conventional Commits**: `<type>(<scope>)!: <description>`, types in
-  `TYPES` of `scripts/release.ts`. The CHANGELOG and the bump come from them; the `commit-msg`
-  hook and CI (`release.ts --lint`) reject anything else since the last tag.
-- **The gate is `scripts/ci.sh`**, run by CI and by the pre-push hook alike; a new check goes
-  there, never only in the workflow file.
-- Commits carry no attribution trailer (`commit-trailer-guard` hook).
+  path. Manifests are read from bash through `bin/lib/profiles.sh`. With `set -o pipefail`, a pipe into
+  `grep -q` fails even on a match (SIGPIPE): use `cm_has_profile`.
+- **A profile with its own `desktopDir` gets its own Desktop build** (`bin/claude-desktop-rebuild`):
+  the patched executable sets the app_id, the tray tooltip and tinted tray icons, and `install` writes
+  its `.desktop` from `desktop/entry.desktop.in` — never by hand. **Never call `app.setName()`**:
+  Electron keys the keyring on the app name, and the stored token would become unreachable.
+- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `agents doctor`; for
+  `install`, `agents install --dry-run` first. A new pure function gets a test in `apps/cli/tests/`.
+  Read the gate's exit code, not its last line: a filter or `tail` hides a failure.
+- **Changing `~/.agents-multi` while a Claude session is open moves the ground under it**: run
+  `install` and `agents mcp sync` with Claude closed.
+- **Branches and versions** ([ADR 0002](docs/adr/0002-versions-branches-releases.md)): work lands on
+  `dev`; `beta` and `release` move only by fast-forward to commits the branch before already has. A
+  version is cut with `deno task release` (stable on `release`, beta on `beta`): it bumps every manifest
+  in `MANIFESTS` (`scripts/release.ts`), writes the CHANGELOG section and tags. The CHANGELOG is the
+  only place release notes are written. Commit subjects are Conventional Commits (types in `TYPES`);
+  the `commit-msg` hook and CI reject anything else. No attribution trailer (`commit-trailer-guard`).
+- **Releases are built in CI only** ([ADR 0004](docs/adr/0004-desktop-app-releases.md)): the tag builds
+  the signed bundles on the runner (Debian bookworm, so they run on older systems than a workstation's),
+  puts them on the GitHub release and commits the site's update manifests on `release` — pull before
+  the next release. The kinds published are `PUBLISHED` in `scripts/app-release.ts` (deb and AppImage
+  for now). A workstation build is for trying the app, never for a release.
+- **The gate is `scripts/ci.sh`**, run by CI on `dev` and by the pre-push hook; a new check goes there,
+  never only in a workflow file.
