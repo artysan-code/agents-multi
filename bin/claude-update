@@ -160,8 +160,8 @@ do_cli() (
   [[ -n "$prev" && "${CLI_FROM:-}" != "$latest" ]] && note "$(cm_t keep "$prev")"
 
   # The native updater rewrites ~/.local/bin/claude as a symlink to the new version: restore it
-  # to the repo wrapper (the default profile). Other launchers are untouched.
-  local repo; repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+  # to the wrapper (the default profile) of the installed code (cm_code). Other launchers are untouched.
+  local repo; repo="$(cm_code)"
   if [[ "$(readlink "$BIN_DIR/claude")" != "$repo/bin/claude" ]]; then
     ln -sfn "$repo/bin/claude" "$BIN_DIR/claude"
     note "$(cm_t wrapper)"

@@ -25,6 +25,13 @@ cm_mode() {
   if [[ "$link" == "app/current/shared" || "$link" == "$rt/app/current/shared" ]]; then echo app; else echo dev; fi
 }
 
+# The code that links in ~/.local/bin point at: the app's copy in app mode (app/current, which stays
+# put across updates), the checkout otherwise. Never this file's own folder in app mode: run from an
+# AppImage, that is its mount under /tmp, gone when the app stops.
+cm_code() {
+  if [[ "$(cm_mode)" == app ]]; then printf '%s\n' "$(cm_runtime)/app/current"; else cm_repo; fi
+}
+
 # The person's configuration (profiles, accounts, rules): ~/.agents-multi/config, a link to their folder.
 cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$(cm_runtime)/config}}"; }
 
