@@ -1733,7 +1733,7 @@ body.plbusy #mk-add button {
   height: 100%;
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr);
-  gap: 16px;
+  gap: 24px;
 }
 .tk-projects .pane-b {
   padding: 0 8px 10px;
@@ -1743,7 +1743,7 @@ body.plbusy #mk-add button {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px 6px calc(8px + var(--d, 0) * 14px);
+  padding: 8px 10px 8px calc(10px + var(--d, 0) * 14px);
   border-radius: 8px;
   font-size: 13.5px;
   color: var(--fg-dim);
@@ -2073,17 +2073,20 @@ body.plbusy #mk-add button {
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  /* a scrolling grid of a fixed height sized its rows by the cards' minimum, cutting what they hold */
+  grid-auto-rows: max-content;
   align-content: start;
-  gap: 10px;
-  padding: 2px 4px 10px;
+  gap: 18px;
+  padding: 4px 4px 16px;
 }
 .pcard {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 12px;
+  gap: 10px;
+  min-height: 150px;
+  padding: 20px 22px;
+  border-radius: 14px;
   background: var(--raised);
   text-align: left;
   transition: box-shadow .15s;
@@ -2112,15 +2115,35 @@ body.plbusy #mk-add button {
   font-size: 12px;
   color: var(--fg-faint);
 }
+/* the card grows with what it holds instead of squeezing it */
+.pcard > * {
+  flex-shrink: 0;
+}
+.pcard .tbar {
+  max-width: none;
+  background: var(--line);
+}
+/* what comes next, at the foot of the card: its day above, its title on up to two lines */
 .pcard .pc-next {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   font-size: 13px;
+  line-height: 1.4;
   color: var(--fg-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.pcard .pc-next small {
+  font-size: 11.5px;
+  color: var(--fg-faint);
 }
 .pcard .pc-next span {
-  color: var(--fg-faint);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .pcard.doing {
   box-shadow: inset 2px 0 0 var(--spark);
