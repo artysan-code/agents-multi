@@ -150,8 +150,8 @@ with `BRAIN_BACKUP_KEY` is refused.
 | `BRAIN_DEV=1`                                      | local only: signing in without TOTP                                                                                                                                                                            |
 
 **The first account** is made on the first start, when there is none: the administrator, with the
-id `BRAIN_ADMIN_ID` (or `CLAUDE_MULTI_OWNER_ID`) and the name and language of `CLAUDE_MULTI_OWNER_NAME`
-and `CLAUDE_MULTI_LANGUAGE`, as an invitation like everyone else's: its link is written to the log (on
+id `BRAIN_ADMIN_ID` (or `AGENTS_MULTI_OWNER_ID`) and the name and language of `AGENTS_MULTI_OWNER_NAME`
+and `AGENTS_MULTI_LANGUAGE`, as an invitation like everyone else's: its link is written to the log (on
 Coolify, the application's logs), and a new one on every start until it is accepted. No passphrase or
 TOTP secret sits in the environment. (`BRAIN_PASSPHRASE` and `BRAIN_TOTP_SECRET`, where given, make a
 ready account at once instead: a local run, the end-to-end test.) A service that kept one person's

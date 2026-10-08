@@ -17,8 +17,8 @@ export default defineConfig({
       customCss: ["./src/styles/fonts.css", "./src/styles/docs.css"],
       sidebar: [
         { label: "Start here", items: ["docs", "docs/getting-started"] },
-        { label: "Concepts", items: ["docs/profiles", "docs/console", "docs/brain", "docs/mcp-and-vault", "docs/updates"] },
-        { label: "Reference", items: ["docs/commands", "docs/changelog"] },
+        { label: "Concepts", items: ["docs/profiles", "docs/configuration", "docs/console", "docs/brain", "docs/self-hosting", "docs/mcp-and-vault", "docs/updates", "docs/security"] },
+        { label: "Reference", items: ["docs/commands", "docs/troubleshooting", "docs/faq", "docs/changelog"] },
       ],
       head: [
         { tag: "meta", attrs: { property: "og:image", content: "https://site.invalid/og.jpg" } },
