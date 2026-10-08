@@ -237,6 +237,23 @@ export async function appExecutable(): Promise<string | null> {
   return (await stat(own)) ? own : await which("agents-multi-desktop");
 }
 
+/** The app's menu entry, named after its window's app_id so the panel groups the two. */
+export const APP_ENTRY = "me.artysan.agents.desktop";
+/** Pure: the menu entry install writes for an AppImage, which brings none (a deb or an rpm does). */
+export const appImageEntry = (app: string) =>
+  [
+    "[Desktop Entry]",
+    "Type=Application",
+    "Name=Agents Multi",
+    `Exec=${app}`,
+    "Icon=claude-multi",
+    "StartupWMClass=me.artysan.agents",
+    "StartupNotify=true",
+    "Terminal=false",
+    "Categories=Development;",
+    "",
+  ].join("\n");
+
 /** Pure: the autostart entry, from desktop/autostart.desktop.in. */
 export const autostartEntry = (template: string, bin: string) =>
   template.slice(template.indexOf("[Desktop Entry]")).replaceAll("@BIN@", bin);
@@ -565,6 +582,25 @@ export async function install(
       }
     } else if (tpl !== null && dev) {
       console.log(`  ${ANSI.d}the desktop app is not installed: no autostart entry${ANSI.x}`);
+    }
+    // an AppImage has no menu entry until someone writes one: the runtime's link to it, and its icon
+    const app = await appExecutable();
+    if (app && /\.AppImage$/i.test(await Deno.realPath(app).catch(() => app))) {
+      const apps = `${HOME}/.local/share/applications`;
+      const text = appImageEntry(app);
+      if ((await readText(`${apps}/${APP_ENTRY}`)) !== text) {
+        say(`${ANSI.g}+${ANSI.x} ${shortHome(`${apps}/${APP_ENTRY}`)} (the AppImage in the menu)`);
+        if (!DRY) {
+          await Deno.mkdir(apps, { recursive: true });
+          await Deno.writeTextFile(`${apps}/${APP_ENTRY}`, text);
+        }
+      }
+      for (const size of await listDir(`${SRC}/desktop/icons`)) {
+        const icon = `${SRC}/desktop/icons/${size}/claude-multi.png`;
+        if (await stat(icon)) {
+          await ensureCopy(icon, `${HOME}/.local/share/icons/hicolor/${size}/apps/claude-multi.png`);
+        }
+      }
     }
   }
 

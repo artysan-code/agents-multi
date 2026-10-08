@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { buildId, installCopy, keepBy, keepProgram, readBuild, rollbackCopy, seedCache } from "../appcopy.ts";
 import { personDenoDir } from "../appinstall.ts";
-import { autostartEntry, codeFor, unitsToRetire } from "../install.ts";
+import { appImageEntry, autostartEntry, codeFor, unitsToRetire } from "../install.ts";
 import { COPY_SHARED, modeOf } from "../lib/mode.ts";
 import { managerHome } from "../lib/machine.ts";
 import { appCodeChecks, runningFrom } from "../doctor/checks/repo.ts";
@@ -156,6 +156,14 @@ Deno.test("autostartEntry: the app in the tray, through the launcher in ~/.local
   assert(text.startsWith("[Desktop Entry]\n"), "the template's comment is not copied");
   assert(text.includes("\nExec=/h/.local/bin/claude-multi-app --tray\n"));
   assert(!text.includes("@"), "every placeholder filled");
+});
+
+Deno.test("appImageEntry: the AppImage in the menu, grouped with the app's window", () => {
+  const text = appImageEntry("/h/.agents-multi/bin/agents-multi-desktop");
+  assert(text.startsWith("[Desktop Entry]\n"));
+  assert(text.includes("\nExec=/h/.agents-multi/bin/agents-multi-desktop\n"));
+  assert(text.includes("\nStartupWMClass=me.artysan.agents\n"), "the window's app_id");
+  assert(!text.includes("NoDisplay"), "shown in the menu");
 });
 
 Deno.test("managerHome: the user manager's HOME from show-environment", () => {
