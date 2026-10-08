@@ -481,6 +481,29 @@ pub fn after_relaunch(app: &AppHandle, request: Request) -> Request {
 }
 
 /// A build without the updater: the status says so, and the socket answers with it.
+/// Marks every descriptor past stdio close-on-exec, before the app relaunches itself. The AppImage
+/// runtime hands the app the write end of the pipe its mount helper watches, and a descriptor of the
+/// mount, both without close-on-exec: the relaunch carried them into the new version, so the old
+/// helper never saw the app go and kept the old mount, and its process, running for good.
+#[cfg(target_os = "linux")]
+pub fn close_on_exec_all() {
+    let Ok(dir) = std::fs::read_dir("/proc/self/fd") else { return };
+    let fds: Vec<i32> = dir
+        .filter_map(|e| e.ok()?.file_name().to_str()?.parse().ok())
+        .filter(|fd| *fd > 2)
+        .collect();
+    for fd in fds {
+        // SAFETY: F_GETFD/F_SETFD only read and set the descriptor's flags; a descriptor closed
+        // meanwhile (the listing's own) answers -1 and is left alone.
+        unsafe {
+            let flags = libc::fcntl(fd, libc::F_GETFD);
+            if flags >= 0 {
+                libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+            }
+        }
+    }
+}
+
 #[cfg(not(feature = "updater"))]
 mod imp {
     use super::*;
@@ -745,6 +768,8 @@ mod imp {
                         true
                     });
                     std::thread::sleep(RESTART_PAUSE);
+                    #[cfg(target_os = "linux")]
+                    close_on_exec_all();
                     self.app.restart();
                 }
                 Err(e) => {
@@ -837,6 +862,23 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn close_on_exec_all_marks_inherited_descriptors() {
+        let mut fds = [0i32; 2];
+        // SAFETY: a plain pipe, without O_CLOEXEC, as the AppImage runtime leaves its own
+        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        let cloexec = |fd: i32| unsafe { libc::fcntl(fd, libc::F_GETFD) } & libc::FD_CLOEXEC != 0;
+        assert!(!cloexec(fds[1]));
+        close_on_exec_all();
+        assert!(cloexec(fds[0]) && cloexec(fds[1]));
+        assert!(!cloexec(0) && !cloexec(1) && !cloexec(2), "stdio is left as it is");
+        unsafe {
+            libc::close(fds[0]);
+            libc::close(fds[1]);
+        }
+    }
 
     fn available(v: &str) -> Option<Available> {
         Some(Available {
