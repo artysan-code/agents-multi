@@ -1,19 +1,19 @@
 {
-  "version": "0.18.0",
-  "notes": "### Added\n\n- **ci**: the release builds the brain's image with kaniko and pushes it to GHCR (df80a54)\n\n### Fixed\n\n- **ui**: «Close Claude and update» on the update screen opens its dialog in front, not behind it (dd82aec)\n- **ui**: with only the install left, the update button closes Claude instead of opening the wizard (87c4805)\n\n### Changed\n\n- **ui**: «Close Claude and update» is a screen like the update's, no longer a drawer (432225e)\n\n### Documentation\n\n- **site**: configuration, self-hosting the brain, security, troubleshooting and FAQ pages (9144bfd)",
-  "pub_date": "2026-10-08T14:04:50Z",
+  "version": "0.19.0",
+  "notes": "### Added\n\n- **console**: the ask field creates and moves calendar events, with reminders (ad8dd1b)\n- Agents Multi is open source, under the AGPL-3.0 without the Commons Clause (730ded0)\n- **brain**: the compose runs the image each release publishes, not a build on the server (8249eed)\n\n### Fixed\n\n- **brain**: the service's log is rotated by size, and the privacy notice says how long it lasts (384fef5)\n- **doctor**: skills linked by install are read from the installed code, not the running package (3d3e4d3)\n- **ci**: the brain's redeploy asks Coolify with a POST, as its API wants (d8dc7c6)\n\n### Documentation\n\n- **site**: the landing shows the real console, with invented data, instead of a drawn one (f3550be)\n- **site**: who it is for, setup with Claude, and issue templates (8f942f6)\n- SECURITY.md, vulnerabilities reported privately through GitHub (d268565)",
+  "pub_date": "2026-10-08T15:31:20Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v0.18.0/agents-multi_0.18.0_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjNmZ2NUOEhvd3lsQ0pYNGlDWklQR3dIZUN2b2dBT3BVYWF3Q0s2eWlVLzlJd3NvMWRGQ1dWQ2pNNFVqNjM1RWJXUWF5QWxoUXZWTVhYZys0M0RRbVFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDY4Mjg5CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMC4xOC4wX2FtZDY0LmRlYgl2ZXJzaW9uOjAuMTguMApUME1zSkw3UXRuY1lpdFMxOWszMm1uMm1Ydjh4QkFuMzZWbEhHbHVDWGFaakU3U0pVS21qM2ZpZDlHMm9pQjh2TUdHL3ZYSVZha2xLUVZpbEp3bUtDUT09Cg=="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v0.19.0/agents-multi_0.19.0_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnlRNENtU1hKRkZrUjlOZFpNZ2R2N1J3c0VZTjBZZ2pCejhtZXdKbXRXSGFyN29kbFZuRWJKVHVKMWdtYU1zSmFTNmJ5YkxiM0JkMGd4QUNpcEJxd3dRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDczNDc5CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMC4xOS4wX2FtZDY0LmRlYgl2ZXJzaW9uOjAuMTkuMAo0Z1d5dkg1a01JSjNNVXg1K3RZb21lak5FSXBxYWdTZ0ozMC83SThBMm55ano2UlVFT3pPcW5uUE5uL1dncy82bDV1cDVVU3Z5d2RDTDhzQjYzRlBEdz09Cg=="
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v0.18.0/agents-multi_0.18.0_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnlodFRNVUpUay9tTFFsNlhJeGUxdWlHdlNQT09oOFg1blovY2c0SGlzM0p1eitjc0hsQTdsOHJCNk5WNVBUd1J1dU1Wc1d6NzdyeUpncGxvN3BDc2d3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDY4Mjg5CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMC4xOC4wX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4xOC4wCmZwQkNWYitZMlh2VEJRVUNRc2NCbmcrRnRuYmU3c0drbVJmRkhMWFlCUUw5WEY0MkRDM3c4V1Bjc09PekREL3JTdVpma0VvajJZcDBZZS9kMFgwdEFBPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v0.19.0/agents-multi_0.19.0_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tjd3M1pvQVpCaHE1NzhuaUVrYkR1cFFjL0Z2aFVHZi9WTjR3Z3pVOWtxTnhiamExK1p0dzB1VTZXRFByckJoZTJLdFlOU2V2QnJtaVlYMy8wc3VoOHdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDczNDc5CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMC4xOS4wX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4xOS4wCjYzMm5LT1RMallPZ2JzdXF4M2xYc3hGeEJFSFhWcUV6RC9JRXlML2hTVW5CcnNBVUQvUW40c0VMa2J3aVdYWDZRNDI0NE1mekpnS3ZuS2hxNHd3REFnPT0K"
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v0.18.0/agents-multi_0.18.0_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnlodFRNVUpUay9tTFFsNlhJeGUxdWlHdlNQT09oOFg1blovY2c0SGlzM0p1eitjc0hsQTdsOHJCNk5WNVBUd1J1dU1Wc1d6NzdyeUpncGxvN3BDc2d3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDY4Mjg5CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMC4xOC4wX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4xOC4wCmZwQkNWYitZMlh2VEJRVUNRc2NCbmcrRnRuYmU3c0drbVJmRkhMWFlCUUw5WEY0MkRDM3c4V1Bjc09PekREL3JTdVpma0VvajJZcDBZZS9kMFgwdEFBPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v0.19.0/agents-multi_0.19.0_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tjd3M1pvQVpCaHE1NzhuaUVrYkR1cFFjL0Z2aFVHZi9WTjR3Z3pVOWtxTnhiamExK1p0dzB1VTZXRFByckJoZTJLdFlOU2V2QnJtaVlYMy8wc3VoOHdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDczNDc5CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMC4xOS4wX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4xOS4wCjYzMm5LT1RMallPZ2JzdXF4M2xYc3hGeEJFSFhWcUV6RC9JRXlML2hTVW5CcnNBVUQvUW40c0VMa2J3aVdYWDZRNDI0NE1mekpnS3ZuS2hxNHd3REFnPT0K"
     }
   }
 }

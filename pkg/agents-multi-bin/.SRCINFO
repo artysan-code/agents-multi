@@ -1,10 +1,10 @@
 pkgbase = agents-multi-bin
 	pkgdesc = Several Claude Code and Claude Desktop accounts on one machine, one console for all
-	pkgver = 0.18.0
+	pkgver = 0.19.0
 	pkgrel = 1
 	url = https://github.com/artysan-code/agents-multi
 	arch = x86_64
-	license = AGPL-3.0-only AND LicenseRef-Commons-Clause
+	license = AGPL-3.0-only
 	depends = webkit2gtk-4.1
 	depends = gtk3
 	depends = hicolor-icon-theme
@@ -12,7 +12,7 @@ pkgbase = agents-multi-bin
 	conflicts = agents-multi
 	options = !strip
 	options = !debug
-	source_x86_64 = https://github.com/artysan-code/agents-multi/releases/download/v0.18.0/agents-multi_0.18.0_amd64.deb
-	sha256sums_x86_64 = 0ea2e0ae1e7044d5d12100c1f07e1c19b56127eea57370dd0bdeee1541d32208
+	source_x86_64 = https://github.com/artysan-code/agents-multi/releases/download/v0.19.0/agents-multi_0.19.0_amd64.deb
+	sha256sums_x86_64 = b6639b45e568867a52319cc920b7abb814a4cd70291e7fe7daff7b07784fcb5e
 
 pkgname = agents-multi-bin
