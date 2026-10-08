@@ -159,11 +159,14 @@ interface Closed {
 
 /**
  * SIGTERM (or, as the second step, SIGKILL) to every blocker outside the console's own tree, then
- * wait up to `waitMs` for them to be gone. Refuses when no install is waiting.
+ * wait up to `waitMs` for them to be gone. Refuses when no install is waiting; with nothing left to
+ * close (the person closed them by hand while the dialog was open) it succeeds at once, so the
+ * install goes on.
  */
 export async function closeSessions(signal: "SIGTERM" | "SIGKILL", waitMs = 15000, d: Deps = real): Promise<Closed> {
   const pending = await d.pending();
   const before = await current(d);
+  if (pending && !before.length) return { ok: true, closed: [], remaining: [], reopen: [] };
   if (!closeOffer(pending, before)) {
     return {
       ok: false,

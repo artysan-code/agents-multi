@@ -107,6 +107,12 @@ Deno.test("close claude: nothing is signalled when no install is waiting", async
   assertEquals([r.ok, sent], [false, []]);
 });
 
+Deno.test("close claude: closed by hand while the dialog was open, the step succeeds and the install goes on", async () => {
+  const { d, sent } = deps({ running: () => Promise.resolve({ cli: [], desktop: [] }) });
+  const r = await closeSessions("SIGKILL", 1000, d);
+  assertEquals([r.ok, r.remaining, sent], [true, [], []]);
+});
+
 Deno.test("close claude: reopen starts only profiles the manifests declare, through the one launcher", async () => {
   const started: string[][] = [];
   const known = (await launchers())[0].profile;

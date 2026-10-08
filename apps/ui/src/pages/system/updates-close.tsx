@@ -112,7 +112,10 @@ function CloseClaude({ plan }: { plan: Plan }) {
         <p>{t("cc.stuck")}</p>
         <BlockerList list={phase.remaining} />
         <p class="sub">{t("cc.forceWarn")}</p>
-        <p><button type="button" class="btn" onClick={() => void step("kill")}>{t("cc.force")}</button></p>
+        <p>
+          <button type="button" class="btn" onClick={() => void step("kill")}>{t("cc.force")}</button>{" "}
+          <button type="button" class="btn ghost" onClick={() => void step("term")}>{t("cc.retry")}</button>
+        </p>
       </>
     );
   }
