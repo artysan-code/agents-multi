@@ -19,7 +19,8 @@ Each version is on the [GitHub releases](https://github.com/artysan-code/agents-
 | Anywhere else (Fedora, openSUSE too) | `agents-multi_<version>_amd64.AppImage` | `chmod +x` it and run it |
 
 The deb brings WebKitGTK as a dependency; the AppImage needs it on the system
-(`webkit2gtk-4.1`).
+(`webkit2gtk-4.1`). Put the AppImage where it will stay, for example `~/Applications/`: updates
+replace that file in place, and the install adds it to your application menu.
 
 ## First run
 
@@ -46,7 +47,8 @@ from a terminal:
 agents doctor
 ```
 
-The doctor checks every invariant and prints the fix for whatever is off.
+The doctor checks every invariant and prints the fix for whatever is off. The commands you will use
+day to day are in [Everyday commands](/docs/commands/).
 
 ## Updates
 

@@ -18,7 +18,7 @@ export default defineConfig({
       sidebar: [
         { label: "Start here", items: ["docs", "docs/getting-started"] },
         { label: "Concepts", items: ["docs/profiles", "docs/console", "docs/brain", "docs/mcp-and-vault", "docs/updates"] },
-        { label: "Reference", items: ["docs/changelog"] },
+        { label: "Reference", items: ["docs/commands", "docs/changelog"] },
       ],
       head: [
         { tag: "meta", attrs: { property: "og:image", content: "https://site.invalid/og.jpg" } },

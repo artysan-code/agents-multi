@@ -1,125 +1,72 @@
 # Agents Multi
 
 Run several **Claude Code** and **Claude Desktop** accounts on one Linux machine, without them
-seeing each other. Shared configuration is versioned in git, updates need explicit approval, and a
-local console shows what every profile is doing.
+seeing each other. A desktop app carries it all and keeps itself up to date, a local console shows
+what every profile is doing, and an optional brain keeps your memory and tasks across machines.
 
-**This repository is the source of truth.** `~/.agents-multi/` is runtime materialised by
-`agents install`; `~/.local/bin/claude*` are symlinks into `bin/`. Configuration travels
-between machines over **git** — never over a file-sync tool, because the runtime directories hold
-credentials.
+**This repository is the source of truth** for the code; `~/.agents-multi/` is runtime materialised
+by `agents install`, and what is yours — profiles, accounts, rules — lives in a folder of yours. That
+folder may travel between your machines (Syncthing, a private git repository); the runtime never
+does, because it holds credentials.
 
 ---
 
 ## Getting started
 
-The repository is code; what is yours — profiles, accounts, rules, preferences — lives in a folder
-of yours that `~/.agents-multi/config` links to (see [Your configuration](#your-configuration)).
+### 1. Install the desktop app
 
-Every machine runs the **Agents Multi** desktop app (a deb, an AppImage): it carries the code,
-the console and the Deno that runs both, and installs the code into your runtime itself. With your
-configuration in place (`agents init`, below), start the app once: it copies its code to
-`~/.agents-multi/app/` and runs `agents install --app`, which materialises everything else, and from
-then on it starts in the tray at login. A git checkout is for development only (dev mode, below).
-
-```bash
-agents init ~/agents-multi-config --name Ann --language Italian   # from the app's code: ~/.agents-multi/app/current/bin/agents
-```
-
-Two modes, decided by what `~/.agents-multi/shared` links to (`apps/cli/lib/mode.ts`):
-
-- **app** — `shared` → `app/current/shared`, the copy of the build in use (`app/<version>-<digest>`,
-  the one before kept as `app/previous`). The launchers in `~/.local/bin`, the MCP servers (on
-  `~/.agents-multi/bin/deno`, a link to the package's Deno) and the jobs on a schedule (run by the
-  app's backend, no systemd unit) all go through it. Updated with the app; no git anywhere.
-- **dev** — `shared` → a checkout, as `bin/agents install` from that checkout makes it: the launch
-  pulls (`prelaunch.sh`), the systemd timers run the jobs, and `claude-multi-app` runs the app on the
-  checkout's code (`AGENTS_MULTI_REPO`).
-
-A machine installed from a checkout moves to the app with `agents migrate app` (below).
-
-Over SSH (dev mode), the repository's host name must reach the server directly, not through a proxy
-that does not forward the SSH port: otherwise `git fetch` hangs until it times out, and so does the
-self-update (see [ONBOARDING.md](ONBOARDING.md#2-the-repository)).
-
-The project was called claude-multi: `claude-multi` still works as another name for the command, and
-the folders, services and settings keep that name until they move with a migration of their own.
-
-On a second machine of yours, `init` the same folder once it is there (Syncthing, a private git
-repository): it only links it. `install` is idempotent and reversible: it never deletes real content, it moves it aside to
-`*.pre-repo-<stamp>` and says so. Run `install --dry-run` first if you want to read the plan.
-
-Then sign in to each profile and check the result:
-
-```bash
-claude              # the default profile → /login
-agents doctor # every invariant, each with a fix
-```
-
-The console is the app's: its backend serves it on <http://127.0.0.1:7331> while the app runs (it
-starts in the tray at login), and the app shows it in a window of its own. On a headless box,
-`agents serve` runs it by hand.
-
-Requirements: the app's package (it brings Deno and WebKitGTK as its dependency). In dev mode also
-`deno`, `git`, and `pnpm` for the console's interface. For Claude Desktop also `gnupg`, `binutils` (`ar`), `libarchive`
-(`bsdtar`) and `@electron/asar` (the profile variants), plus `base-devel` once, for the shims
-package. OAuth credentials are per-machine and never leave it.
-
-### Moving a machine from a checkout to the app
-
-`agents migrate app` (with every Claude closed, from a terminal, after installing the app's package):
-the package's code becomes the runtime's copy, `shared`, the launchers and the stignore-gen template
-point into it, the systemd units go (the app runs their jobs) together with the old console and tray
-units, the app's autostart entry is written, and the MCP servers are placed again on the package's
-Deno. Your configuration, the vault, the brain login, the profiles and their sessions do not move.
-`--dry-run` shows the plan; `--from <dir>` names the package's code when it is not beside the
-installed app (an AppImage: its mount's `usr/lib/me.artysan.agents/repo`). The checkout is
-recorded and left as it is: `agents migrate app --rollback` points the runtime back at it and runs
-its own `install` and `mcp sync`.
-
-### Installing the desktop app
-
-The desktop app (`apps/desktop/`, [ADR 0003](docs/adr/0003-desktop-app.md)) carries everything it runs:
-the console, its backend and the Deno that runs it. Each version is on the project's GitHub releases
-(Linux x86_64 for now; macOS and Windows come with 1.x):
+Every machine runs the **Agents Multi** desktop app: it carries the console, its backend and the Deno
+that runs both, and installs everything else itself. Each version is on the project's
+[GitHub releases](https://github.com/artysan-code/agents-multi/releases) (Linux x86_64 for now; macOS
+and Windows come with 1.x):
 
 - **Debian, Ubuntu** — `sudo apt install ./agents-multi_<version>_amd64.deb`
 - **Arch** — the AUR package `agents-multi-bin` (`paru -S agents-multi-bin`); pacman updates it, so the
   app's own updater is off there
-- **Anywhere else** (Fedora and openSUSE too) — the AppImage: `chmod +x` it and run it
+- **Anywhere else** (Fedora and openSUSE too) — the AppImage: put it where it will stay (for example
+  `~/Applications/`), `chmod +x` it and run it. Updates replace that file in place, and the install
+  writes its menu entry. It needs WebKitGTK on the system (`webkit2gtk-4.1`).
 
 The app updates itself from then on: it looks for a new version every day and downloads it in the
-background, and **System › Updates** in the console installs it and restarts the app; a deb
-asks for your password to install. Betas are a channel of their own: a beta build stays on it (see
+background, and **System › Updates** in the console installs it and restarts the app; a deb asks for
+your password to install. Betas are a channel of their own (see
 [ADR 0004](docs/adr/0004-desktop-app-releases.md)).
 
-### First run
+### 2. First run
 
-**With the desktop app**, there is nothing to type: on a machine with no configuration the console
-opens on the first-run wizard, which does the steps below one screen at a time — your name and
-language, the configuration folder (`agents init`; a folder that already holds one, synced from another
-machine, is only linked), the profiles, `agents install --app` with its output, Claude Code when the machine has none
-(Anthropic's installer, through `agents update --cli`), the vault (made there,
-its recovery code shown once, or opened with another machine's code), each profile's sign-in
-(`<command> auth login` in a terminal), the brain (optional) and `agents mcp sync`. It resumes where it
-stopped: each step is done when its result is on disk (`apps/cli/setup.ts`).
+Start the app. On a machine with no configuration the console opens on the **first-run wizard**,
+which does everything one screen at a time: your name and language, the configuration folder
+(`agents init`; a folder that already holds one, synced from another machine, is only linked), the
+profiles, `agents install --app` with its output, Claude Code when the machine has none (Anthropic's
+installer, through `agents update --cli`), the vault (made there, its recovery code shown once, or
+opened with another machine's code), each profile's sign-in, the brain (optional) and
+`agents mcp sync`. It resumes where it stopped: each step is done when its result is on disk
+(`apps/cli/setup.ts`). From then on the app starts in the tray at login, and its console is on
+<http://127.0.0.1:7331> while it runs. Check the result:
 
-From a checkout, or for someone guided by a Claude Code session following
-[ONBOARDING.md](ONBOARDING.md):
+```bash
+agents doctor   # every invariant, each with a fix
+```
 
-1. `agents init <folder>` — your configuration, from `config.example/`; edit `owner.json` and
-   `profiles/` (one folder per Claude account).
+Without the wizard (or guided by a Claude Code session following [ONBOARDING.md](ONBOARDING.md)):
+
+1. `agents init <folder> --name Ann --language Italian` — your configuration, from `config.example/`
+   (the app's command is `~/.agents-multi/app/current/bin/agents` until the install links it).
 2. Start the app — it installs its code and runs `agents install --app`: the runtime, the launchers
    and its own autostart entry.
 3. `agents vault init` — the secret vault; keep the recovery code somewhere safe. Then each
    account's secret: `agents vault set <service> <account>`, or the console's Connections.
 4. `claude` (and each profile's command) — sign in with `/login`.
-5. Optionally your own brain: an instance of `apps/brain/` on your server (`apps/brain/README.md`), its address
-   as a `brain` account in `accounts.json`, then `agents brain-login` (or Sign in, console ›
+5. Optionally your own brain: an instance of `apps/brain/` on your server (`apps/brain/README.md`), its
+   address as a `brain` account in `accounts.json`, then `agents brain-login` (or Sign in, console ›
    Connections) puts its token and backup key in the vault.
 6. `agents mcp sync` with Claude closed, then `agents doctor`.
 
-### Your configuration
+`install` is idempotent and reversible: it never deletes real content, it moves it aside to
+`*.pre-repo-<stamp>` and says so; `install --dry-run` shows the plan. OAuth credentials are
+per-machine and never leave it.
+
+### 3. Your configuration
 
 ```
 ~/.agents-multi/config → your folder
@@ -135,6 +82,38 @@ From a checkout, or for someone guided by a Claude Code session following
 Keep it in step between your machines; Syncthing leaves a `.sync-conflict-` copy when two edits
 collide, and the doctor reports it. Everything under `apps/cli/`, `bin/`, `systemd/`, `lib/` and
 `shared/` is the machinery, the same for everyone who uses the repository.
+
+### App mode and dev mode
+
+Two modes, decided by what `~/.agents-multi/shared` links to (`apps/cli/lib/mode.ts`):
+
+- **app** — `shared` → `app/current/shared`, the copy of the build in use (`app/<version>-<digest>`,
+  the one before kept as `app/previous`). The launchers in `~/.local/bin`, the MCP servers (on
+  `~/.agents-multi/bin/deno`, the package's Deno) and the jobs on a schedule (run by the app's
+  backend, no systemd unit) all go through it. Updated with the app; no git anywhere.
+- **dev** — `shared` → a checkout, as `bin/agents install` from that checkout makes it, for working on
+  Agents Multi itself: the launch pulls (`prelaunch.sh`), the systemd timers run the jobs, and
+  `claude-multi-app` runs the app on the checkout's code (`AGENTS_MULTI_REPO`). It needs `deno`, `git`
+  and `pnpm`. Over SSH, the repository's host name must reach the server directly, not through a
+  proxy that does not forward the SSH port (see [ONBOARDING.md](ONBOARDING.md#2-the-repository)).
+
+For Claude Desktop profile variants also `gnupg`, `binutils` (`ar`), `libarchive` (`bsdtar`) and
+`@electron/asar`, plus `base-devel` once, for the shims package.
+
+The project was called claude-multi: `claude-multi` still works as another name for the command, and
+some folders, services and settings keep that name until they move with a migration of their own.
+
+### Moving a machine from a checkout to the app
+
+`agents migrate app` (with every Claude closed, from a terminal, after installing the app's package):
+the package's code becomes the runtime's copy, `shared`, the launchers and the stignore-gen template
+point into it, the systemd units are stopped and removed (the app runs their jobs) together with the
+old console and tray units, the app's autostart entry is written, and the MCP servers are placed again
+on the package's Deno. Your configuration, the vault, the brain login, the profiles and their sessions
+do not move. `--dry-run` shows the plan; `--from <dir>` names the package's code when it is not beside
+the installed app (an AppImage: its mount's `usr/lib/me.artysan.agents/repo`). The checkout is
+recorded and left as it is: `agents migrate app --rollback` points the runtime back at it and runs its
+own `install` and `mcp sync`.
 
 ---
 
