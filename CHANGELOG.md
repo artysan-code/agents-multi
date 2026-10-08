@@ -5,6 +5,17 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.2] - 2026-10-08
+
+### Added
+
+- **brain**: the site runs on its own, and Coolify can run brain, model and site apart (934df53)
+
+### Fixed
+
+- **tasks**: a brain restarting for a deploy is waited for, not reported as down (bc04ae3)
+- **ci**: a beta's brain image builds twice, so kaniko cleans up and builds from beta (e381999)
+
 ## [1.0.0-beta.1] - 2026-10-08
 
 No user-facing changes.
