@@ -18,7 +18,19 @@ import * as pick from "./i18n/pick.ts";
 import * as hey from "./i18n/hey.ts";
 import * as setup from "./i18n/setup.ts";
 
-const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en, ...plugins.en, ...updates.en, ...pick.en, ...hey.en, ...setup.en };
+const en = {
+  ...shell.en,
+  ...today.en,
+  ...tasks.en,
+  ...brain.en,
+  ...connections.en,
+  ...system.en,
+  ...plugins.en,
+  ...updates.en,
+  ...pick.en,
+  ...hey.en,
+  ...setup.en,
+};
 
 export type Key = keyof typeof en;
 
@@ -65,11 +77,20 @@ export function lang(): string {
   return DICTS[nav] ? nav : "en";
 }
 
-export function t(key: Key, vars: Record<string, string | number> = {}): string {
-  return DICTS[lang()][key].replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
+export function t(
+  key: Key,
+  vars: Record<string, string | number> = {},
+): string {
+  return DICTS[lang()][key].replace(
+    /\{(\w+)\}/g,
+    (m, k: string) => (k in vars ? String(vars[k]) : m),
+  );
 }
 
 /** A key built at run time (`health.area.${a}`): checked against the dictionary, else shown as is. */
-export function tk(key: string, vars: Record<string, string | number> = {}): string {
+export function tk(
+  key: string,
+  vars: Record<string, string | number> = {},
+): string {
   return key in en ? t(key as Key, vars) : key;
 }

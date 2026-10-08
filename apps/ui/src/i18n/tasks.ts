@@ -48,7 +48,8 @@ export const en = {
   "ts.refPh": "ref or id",
   "ts.refsPh": "refs or ids, comma separated",
   "ts.detail": "Where the detail lives",
-  "ts.detailPh": "TASKS.md#task-1 (in the project's folder), a URL, [[a brain page]]",
+  "ts.detailPh":
+    "TASKS.md#task-1 (in the project's folder), a URL, [[a brain page]]",
   "ts.openDetail": "Open the detail",
   "ts.decisions": "Decisions",
   "ts.decPh": "what was decided, and by whom; Enter to add…",
@@ -61,17 +62,20 @@ export const en = {
   "ts.desc": "Description",
   "ts.edit": "Edit",
   "ts.preview": "Read",
-  "ts.descPh": "What it is, what matters, where things are. Markdown; [[wiki pages]] link into the brain.",
+  "ts.descPh":
+    "What it is, what matters, where things are. Markdown; [[wiki pages]] link into the brain.",
   "ts.att": "Attachments",
   "ts.attPh": "a link, a path on this computer (~/…) or a wiki page ([[…]])",
-  "ts.drop": "Drop files here to keep a copy with the task (synced), or click to choose",
+  "ts.drop":
+    "Drop files here to keep a copy with the task (synced), or click to choose",
   "ts.openFolder": "Open folder",
   "ts.remove": "Remove",
   "ts.done": "Mark done",
   "ts.reopen": "Reopen",
   "ts.drop2": "Drop it",
   "ts.created": "created {a} · changed {b}",
-  "ts.stale": "It changed meanwhile (a chat or another machine): this is the current version.",
+  "ts.stale":
+    "It changed meanwhile (a chat or another machine): this is the current version.",
   "ts.uploading": "uploading {n}…",
   "mk.add": "Add",
   "tb.projects": "Projects",
@@ -130,7 +134,8 @@ export const it: Record<keyof typeof en, string> = {
   "ts.refPh": "ref o id",
   "ts.refsPh": "ref o id, separati da virgole",
   "ts.detail": "Dove sta il dettaglio",
-  "ts.detailPh": "TASKS.md#task-1 (nella cartella del progetto), un URL, [[una pagina del brain]]",
+  "ts.detailPh":
+    "TASKS.md#task-1 (nella cartella del progetto), un URL, [[una pagina del brain]]",
   "ts.openDetail": "Apri il dettaglio",
   "ts.decisions": "Decisioni",
   "ts.decPh": "cosa si è deciso, e chi; Invio per aggiungere…",
@@ -143,23 +148,28 @@ export const it: Record<keyof typeof en, string> = {
   "ts.desc": "Descrizione",
   "ts.edit": "Modifica",
   "ts.preview": "Leggi",
-  "ts.descPh": "Di cosa si tratta, cosa conta, dove sono le cose. Markdown; le [[pagine della wiki]] portano al brain.",
+  "ts.descPh":
+    "Di cosa si tratta, cosa conta, dove sono le cose. Markdown; le [[pagine della wiki]] portano al brain.",
   "ts.att": "Allegati",
-  "ts.attPh": "un link, un percorso su questo computer (~/…) o una pagina della wiki ([[…]])",
-  "ts.drop": "Trascina qui dei file per tenerne una copia con la task (sincronizzata), o clicca per sceglierli",
+  "ts.attPh":
+    "un link, un percorso su questo computer (~/…) o una pagina della wiki ([[…]])",
+  "ts.drop":
+    "Trascina qui dei file per tenerne una copia con la task (sincronizzata), o clicca per sceglierli",
   "ts.openFolder": "Apri cartella",
   "ts.remove": "Togli",
   "ts.done": "Segna fatta",
   "ts.reopen": "Riapri",
   "ts.drop2": "Scarta",
   "ts.created": "creata {a} · modificata {b}",
-  "ts.stale": "È cambiata nel frattempo (da una chat o da un'altra macchina): questa è la versione attuale.",
+  "ts.stale":
+    "È cambiata nel frattempo (da una chat o da un'altra macchina): questa è la versione attuale.",
   "ts.uploading": "carico {n}…",
   "mk.add": "Aggiungi",
   "tb.projects": "Progetti",
   "tb.allProjects": "Tutti i progetti",
   "tb.steps": "{d} passi su {n}",
   "tb.attN": "{n} allegati",
-  "tb.emptyTodo": "Niente da fare qui. Spiega una nuova task a Claude qui sotto.",
+  "tb.emptyTodo":
+    "Niente da fare qui. Spiega una nuova task a Claude qui sotto.",
   "tb.sum1": "1 aperta",
 };

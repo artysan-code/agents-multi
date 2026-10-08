@@ -4,9 +4,9 @@
 
 import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
-import { view, type View } from "./router.ts";
+import { type View, view } from "./router.ts";
 import { Overlays } from "./lib/ui.tsx";
-import { ask, askContext, AskBar } from "./shell/ask.tsx";
+import { ask, AskBar, askContext } from "./shell/ask.tsx";
 import { Header } from "./shell/frame.tsx";
 import { PaletteHost } from "./shell/palette.tsx";
 import { Today } from "./pages/today/index.tsx";
@@ -30,7 +30,9 @@ export function App() {
   // the bar asks for a new task in a project only on Tasks, and for changes to the brain only on Brain
   useEffect(() => {
     const k = ask.value.kind;
-    if ((k === "newtask" && v !== "tasks") || (k === "brain" && v !== "brain")) askContext("ask");
+    if (
+      (k === "newtask" && v !== "tasks") || (k === "brain" && v !== "brain")
+    ) askContext("ask");
   }, [v]);
   return (
     <div class="v2">

@@ -98,7 +98,13 @@ export interface Item {
 }
 
 export type OpBody =
-  | { op: "update"; id: string; status?: string; base?: string; [field: string]: unknown }
+  | {
+    op: "update";
+    id: string;
+    status?: string;
+    base?: string;
+    [field: string]: unknown;
+  }
   | { op: "step"; id: string; index: number; done: boolean }
   | { op: "addstep"; id: string; text: string }
   | { op: "note"; id: string; section: "log" | "decisions"; text: string }
@@ -109,12 +115,18 @@ export type Answer = Item & { ok: true };
 type Refused = { ok: false; message?: string; stale?: boolean } & Partial<Item>;
 
 export const loadBoard = () => get<Board>("/api/tasks/board");
-export const loadItem = (id: string) => get<Item>(`/api/tasks/item?id=${encodeURIComponent(id)}`);
+export const loadItem = (id: string) =>
+  get<Item>(`/api/tasks/item?id=${encodeURIComponent(id)}`);
 
 /** One write. A refusal is a toast and `null`; a stale one (it changed meanwhile) hands the current
  *  version to `onStale`. */
-export async function taskOp(body: OpBody, onStale?: (current: Item) => void): Promise<Answer | null> {
-  const r = await post<Answer | Refused>("/api/tasks/op", body).catch((e: Error): Refused => ({
+export async function taskOp(
+  body: OpBody,
+  onStale?: (current: Item) => void,
+): Promise<Answer | null> {
+  const r = await post<Answer | Refused>("/api/tasks/op", body).catch((
+    e: Error,
+  ): Refused => ({
     ok: false,
     message: e.message,
   }));
@@ -127,14 +139,25 @@ export async function taskOp(body: OpBody, onStale?: (current: Item) => void): P
 }
 
 /** Uploads one file to a task's folder (the request body is the file itself). */
-export async function uploadFile(id: string, f: File): Promise<Answer | Refused> {
+export async function uploadFile(
+  id: string,
+  f: File,
+): Promise<Answer | Refused> {
   try {
     const res = await fetch("/api/tasks/file", {
       method: "POST",
-      headers: { "x-claude-multi": "1", "x-task-id": id, "x-filename": encodeURIComponent(f.name) },
+      headers: {
+        "x-claude-multi": "1",
+        "x-task-id": id,
+        "x-filename": encodeURIComponent(f.name),
+      },
       body: f,
     });
-    if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => "")}`.trim());
+    if (!res.ok) {
+      throw new Error(
+        `${res.status} ${await res.text().catch(() => "")}`.trim(),
+      );
+    }
     return await res.json() as Answer | Refused;
   } catch (e) {
     return { ok: false, message: (e as Error).message };
@@ -143,6 +166,8 @@ export async function uploadFile(id: string, f: File): Promise<Answer | Refused>
 
 /** Opens a path on this computer with the desktop's own program. */
 export async function openPath(target: string): Promise<void> {
-  const r = await post<Result>("/api/open", { target }).catch((e: Error): Result => ({ ok: false, message: e.message }));
+  const r = await post<Result>("/api/open", { target }).catch((
+    e: Error,
+  ): Result => ({ ok: false, message: e.message }));
   if (!r.ok) toast(r.message ?? "", true);
 }

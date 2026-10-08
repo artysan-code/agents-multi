@@ -10,7 +10,8 @@ export const en = {
   "pl.sumBroken": " · {b} broken",
   "pl.none": "no plugins",
   "pl.loading": "loading…",
-  "pl.foot": "A cell cycles <b>inherit → on → off</b>. <b>All</b> writes <code>shared/settings.json</code>, a profile cell writes <code>profiles/&lt;p&gt;/settings.json</code>. Claude installs what is on when a session starts; turning a plugin on here installs it right away. ● installed · ○ not installed · ⚠ installed but broken.",
+  "pl.foot":
+    "A cell cycles <b>inherit → on → off</b>. <b>All</b> writes <code>shared/settings.json</code>, a profile cell writes <code>profiles/&lt;p&gt;/settings.json</code>. Claude installs what is on when a session starts; turning a plugin on here installs it right away. ● installed · ○ not installed · ⚠ installed but broken.",
   "pl.details": "Details",
   "pl.update": "Update",
   "pl.remove": "Remove",
@@ -25,9 +26,11 @@ export const en = {
   "pl.on": "on",
   "pl.off": "off",
   "pl.busy": "another plugin operation is still running",
-  "pl.confirmCmd": "{msg}\n\nThe marketplace declares this command, which would run on this machine:\n\n{cmd}\n\nRun it?",
+  "pl.confirmCmd":
+    "{msg}\n\nThe marketplace declares this command, which would run on this machine:\n\n{cmd}\n\nRun it?",
   "pl.notAccepted": "not installed: the command was not accepted",
-  "pl.confirmRemove": "Remove {id} from every profile?\n\nIt is uninstalled everywhere and taken out of shared and per-profile settings.",
+  "pl.confirmRemove":
+    "Remove {id} from every profile?\n\nIt is uninstalled everywhere and taken out of shared and per-profile settings.",
   "pl.opSet": "{id}: {state} for {t}",
   "pl.opInherit": "inherit",
   "pl.opOutOfShared": "out of shared",
@@ -55,7 +58,8 @@ export const en = {
   "mk.add": "Add",
   "mk.source.ph": "owner/repo, git URL or path",
   "mk.none": "no marketplaces",
-  "mk.confirmRemove": "Remove the marketplace {n}?\n\nIts plugins go with it, in every profile.",
+  "mk.confirmRemove":
+    "Remove the marketplace {n}?\n\nIts plugins go with it, in every profile.",
   "mk.opUpdateAll": "updating every marketplace",
   "mk.opAdding": "adding {s}",
   "acct.title": "From the account",
@@ -63,7 +67,8 @@ export const en = {
   "acct.plugins": "Plugins the organisation syncs",
   "acct.skills": "claude.ai skills synced into each profile",
   "acct.skillsN": "{n} skills",
-  "acct.note": "The organisation's plugins follow <b>Account MCP</b> (Profiles → Edit). Synced skills come with the claude.ai account and load into every session.",
+  "acct.note":
+    "The organisation's plugins follow <b>Account MCP</b> (Profiles → Edit). Synced skills come with the claude.ai account and load into every session.",
   "shared.title": "Shared",
   "shared.skills": "skills",
   "shared.agents": "agents",
@@ -82,7 +87,8 @@ export const it: Record<keyof typeof en, string> = {
   "pl.sumBroken": " · {b} rotti",
   "pl.none": "nessun plugin",
   "pl.loading": "caricamento…",
-  "pl.foot": "Una cella gira su <b>eredita → on → off</b>. <b>Tutti</b> scrive <code>shared/settings.json</code>, la cella di un profilo scrive <code>profiles/&lt;p&gt;/settings.json</code>. Claude installa ciò che è attivo all'avvio della sessione; attivare un plugin qui lo installa subito. ● installato · ○ non installato · ⚠ installato ma rotto.",
+  "pl.foot":
+    "Una cella gira su <b>eredita → on → off</b>. <b>Tutti</b> scrive <code>shared/settings.json</code>, la cella di un profilo scrive <code>profiles/&lt;p&gt;/settings.json</code>. Claude installa ciò che è attivo all'avvio della sessione; attivare un plugin qui lo installa subito. ● installato · ○ non installato · ⚠ installato ma rotto.",
   "pl.details": "Dettagli",
   "pl.update": "Aggiorna",
   "pl.remove": "Rimuovi",
@@ -97,9 +103,11 @@ export const it: Record<keyof typeof en, string> = {
   "pl.on": "on",
   "pl.off": "off",
   "pl.busy": "c'è ancora un'altra operazione sui plugin in corso",
-  "pl.confirmCmd": "{msg}\n\nIl marketplace dichiara questo comando, che verrebbe eseguito su questa macchina:\n\n{cmd}\n\nLo eseguo?",
+  "pl.confirmCmd":
+    "{msg}\n\nIl marketplace dichiara questo comando, che verrebbe eseguito su questa macchina:\n\n{cmd}\n\nLo eseguo?",
   "pl.notAccepted": "non installato: il comando non è stato accettato",
-  "pl.confirmRemove": "Rimuovere {id} da tutti i profili?\n\nViene disinstallato ovunque e tolto dalle impostazioni condivise e da quelle dei profili.",
+  "pl.confirmRemove":
+    "Rimuovere {id} da tutti i profili?\n\nViene disinstallato ovunque e tolto dalle impostazioni condivise e da quelle dei profili.",
   "pl.opSet": "{id}: {state} per {t}",
   "pl.opInherit": "eredita",
   "pl.opOutOfShared": "fuori da shared",
@@ -121,13 +129,15 @@ export const it: Record<keyof typeof en, string> = {
   "mk.title": "Marketplace",
   "mk.shared": "condiviso",
   "mk.local": "locale",
-  "mk.localTitle": "noto a un profilo, non dichiarato nelle impostazioni condivise",
+  "mk.localTitle":
+    "noto a un profilo, non dichiarato nelle impostazioni condivise",
   "mk.known": "profili che lo hanno registrato",
   "mk.updateAll": "Aggiorna tutti",
   "mk.add": "Aggiungi",
   "mk.source.ph": "owner/repo, URL git o percorso",
   "mk.none": "nessun marketplace",
-  "mk.confirmRemove": "Rimuovere il marketplace {n}?\n\nI suoi plugin se ne vanno con lui, in tutti i profili.",
+  "mk.confirmRemove":
+    "Rimuovere il marketplace {n}?\n\nI suoi plugin se ne vanno con lui, in tutti i profili.",
   "mk.opUpdateAll": "aggiorno tutti i marketplace",
   "mk.opAdding": "aggiungo {s}",
   "acct.title": "Dall'account",
@@ -135,7 +145,8 @@ export const it: Record<keyof typeof en, string> = {
   "acct.plugins": "Plugin sincronizzati dall'organizzazione",
   "acct.skills": "Skill di claude.ai sincronizzate in ogni profilo",
   "acct.skillsN": "{n} skill",
-  "acct.note": "I plugin dell'organizzazione seguono <b>MCP dell'account</b> (Profili → Modifica). Le skill sincronizzate arrivano con l'account claude.ai e si caricano in ogni sessione.",
+  "acct.note":
+    "I plugin dell'organizzazione seguono <b>MCP dell'account</b> (Profili → Modifica). Le skill sincronizzate arrivano con l'account claude.ai e si caricano in ogni sessione.",
   "shared.title": "Condiviso",
   "shared.skills": "skill",
   "shared.agents": "agenti",

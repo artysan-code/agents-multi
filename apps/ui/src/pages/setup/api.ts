@@ -4,7 +4,18 @@
 
 import { get, postInit, type Result } from "../../api.ts";
 
-export const STEPS = ["welcome", "you", "folder", "profiles", "install", "claude", "vault", "logins", "brain", "done"] as const;
+export const STEPS = [
+  "welcome",
+  "you",
+  "folder",
+  "profiles",
+  "install",
+  "claude",
+  "vault",
+  "logins",
+  "brain",
+  "done",
+] as const;
 export type Step = typeof STEPS[number];
 export type VaultState = "ok" | "none" | "locked" | "wrong-key" | "unavailable";
 
@@ -45,10 +56,16 @@ export interface SetupView {
 export const loadSetup = () => get<SetupView | { active: false }>("/api/setup");
 
 /** One step's POST: its answer, a refusal included. */
-export async function send<T extends Result = Result>(path: string, body: unknown): Promise<T> {
+export async function send<T extends Result = Result>(
+  path: string,
+  body: unknown,
+): Promise<T> {
   try {
     const r = await fetch(`/api/setup/${path}`, postInit(body));
-    const j = await r.json().catch(() => ({ ok: false, message: String(r.status) }));
+    const j = await r.json().catch(() => ({
+      ok: false,
+      message: String(r.status),
+    }));
     return j as T;
   } catch (e) {
     return { ok: false, message: (e as Error).message } as T;

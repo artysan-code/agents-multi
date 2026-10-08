@@ -4,14 +4,26 @@
 // at the end. The steps come from the doctor; the server checks every action again.
 
 import { useRef, useState } from "preact/hooks";
-import { post, type Check, type RepairStep } from "../../api.ts";
+import { type Check, post, type RepairStep } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
 import { t } from "../../i18n.ts";
 import { short } from "../../lib/format.ts";
-import { FIX_ACTIONS, openDrawer, runAction, runJob, toast } from "../../lib/ui.tsx";
+import {
+  FIX_ACTIONS,
+  openDrawer,
+  runAction,
+  runJob,
+  toast,
+} from "../../lib/ui.tsx";
 
 /** Actions that only read or check: a repair made of these starts without asking. */
-const READ_ONLY_ACTIONS = ["doctor", "update-check", "mcp-check", "install-dry", "sync-fetch"];
+const READ_ONLY_ACTIONS = [
+  "doctor",
+  "update-check",
+  "mcp-check",
+  "install-dry",
+  "sync-fetch",
+];
 
 type StepState = "todo" | "running" | "waiting" | "done" | "failed";
 
@@ -21,11 +33,20 @@ type StepState = "todo" | "running" | "waiting" | "done" | "failed";
 export function ActionButton({ fix }: { fix: string }) {
   const act = FIX_ACTIONS[fix.trim()];
   return act
-    ? <button type="button" class="fix" onClick={() => runAction(act)}>{fix}</button>
+    ? (
+      <button type="button" class="fix" onClick={() => runAction(act)}>
+        {fix}
+      </button>
+    )
     : (
       <code
         class="fix"
-        style={{ cursor: "text", background: "none", borderColor: "var(--line)", color: "var(--fg-faint)" }}
+        style={{
+          cursor: "text",
+          background: "none",
+          borderColor: "var(--line)",
+          color: "var(--fg-faint)",
+        }}
         title={fix}
       >
         {short(fix, 40)}
@@ -36,7 +57,11 @@ export function ActionButton({ fix }: { fix: string }) {
 /** What a check offers: its repair when it has steps, else the fix as before. */
 export function FixControl({ c }: { c: Pick<Check, "id" | "fix" | "repair"> }) {
   if (c.repair?.length) {
-    return <button type="button" class="fix" onClick={() => openRepair(c.id)}>{t("rep.btn")}</button>;
+    return (
+      <button type="button" class="fix" onClick={() => openRepair(c.id)}>
+        {t("rep.btn")}
+      </button>
+    );
   }
   return c.fix ? <ActionButton fix={c.fix} /> : null;
 }
@@ -44,13 +69,18 @@ export function FixControl({ c }: { c: Pick<Check, "id" | "fix" | "repair"> }) {
 export function openRepair(id: string): void {
   const check = (status.value?.doctor ?? []).find((c) => c.id === id);
   if (!check?.repair?.length) return;
-  openDrawer(t("rep.title"), () => <Repair id={id} check={check} steps={check.repair!} />);
+  openDrawer(
+    t("rep.title"),
+    () => <Repair id={id} check={check} steps={check.repair!} />,
+  );
 }
 
 /** A repair's run, for the drawer and for Today's system card: the steps' state, the running step's
  *  output, the cause of a failure, and the controls. */
 export function useRepair(id: string, steps: RepairStep[]) {
-  const [state, setState] = useState<StepState[]>(() => steps.map(() => "todo"));
+  const [state, setState] = useState<StepState[]>(() =>
+    steps.map(() => "todo")
+  );
   const [running, setRunning] = useState(false);
   const [cause, setCause] = useState("");
   const [out, setOut] = useState("");
@@ -85,13 +115,24 @@ export function useRepair(id: string, steps: RepairStep[]) {
           text += o;
           setOut(text);
           requestAnimationFrame(() => {
-            if (outEl.current) outEl.current.scrollTop = outEl.current.scrollHeight;
+            if (outEl.current) {
+              outEl.current.scrollTop = outEl.current.scrollHeight;
+            }
           });
-        }, (j) => jobId.current = j).catch((e: Error) => ({ error: e.message }));
+        }, (j) => jobId.current = j).catch((e: Error) => ({
+          error: e.message,
+        }));
         jobId.current = null;
-        if ("error" in r) return fail(r.error === "lost" ? t("rep.lost") : r.error);
+        if ("error" in r) {
+          return fail(r.error === "lost" ? t("rep.lost") : r.error);
+        }
         if (r.cancelled) return fail(t("rep.cancelled"));
-        if (r.code) return fail(text.trim().split("\n").filter(Boolean).pop() ?? t("rep.exit", { c: r.code }));
+        if (r.code) {
+          return fail(
+            text.trim().split("\n").filter(Boolean).pop() ??
+              t("rep.exit", { c: r.code }),
+          );
+        }
       } else if (s.kind === "user") {
         mark(i, "waiting");
         await new Promise<void>((res) => userGo.current = res);
@@ -99,7 +140,9 @@ export function useRepair(id: string, steps: RepairStep[]) {
       } else {
         await loadStatus(true);
         const now = status.value?.doctor.find((c) => c.id === id);
-        if (now && now.status !== "ok") return fail(t("rep.still", { msg: now.msg }));
+        if (now && now.status !== "ok") {
+          return fail(t("rep.still", { msg: now.msg }));
+        }
       }
       mark(i, "done");
     }
@@ -110,8 +153,14 @@ export function useRepair(id: string, steps: RepairStep[]) {
   /** Starts (or retries) the repair, asking first when a step changes something. */
   const start = async (): Promise<boolean> => {
     if (running) return false;
-    const changes = steps.filter((s) => s.kind === "action" && !READ_ONLY_ACTIONS.includes(s.action));
-    if (changes.length && !confirm(t("rep.confirm", { cmds: changes.map((s) => (s as { cmd: string }).cmd).join("\n") }))) {
+    const changes = steps.filter((s) =>
+      s.kind === "action" && !READ_ONLY_ACTIONS.includes(s.action)
+    );
+    if (
+      changes.length && !confirm(t("rep.confirm", {
+        cmds: changes.map((s) => (s as { cmd: string }).cmd).join("\n"),
+      }))
+    ) {
       return false;
     }
     cur.current = cur.current.map((s) => s === "failed" ? "todo" : s);
@@ -124,16 +173,33 @@ export function useRepair(id: string, steps: RepairStep[]) {
   };
 
   const cancel = async () => {
-    if (jobId.current) await post("/api/job/cancel", { id: jobId.current }).catch(() => {});
+    if (jobId.current) {
+      await post("/api/job/cancel", { id: jobId.current }).catch(() => {});
+    }
   };
 
-  return { state, running, cause, out, outEl, start, cancel, userDone: () => userGo.current?.() };
+  return {
+    state,
+    running,
+    cause,
+    out,
+    outEl,
+    start,
+    cancel,
+    userDone: () => userGo.current?.(),
+  };
 }
 
-function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairStep[] }) {
-  const { state, running, cause, out, outEl, start, cancel, userDone } = useRepair(id, steps);
-  const go = !running && (state.includes("failed") || state.every((s) => s === "todo"));
-  const manual = steps.filter((s) => s.kind !== "verify").map((s) => s.kind === "action" ? s.cmd : s.text).join("\n");
+function Repair(
+  { id, check, steps }: { id: string; check: Check; steps: RepairStep[] },
+) {
+  const { state, running, cause, out, outEl, start, cancel, userDone } =
+    useRepair(id, steps);
+  const go = !running &&
+    (state.includes("failed") || state.every((s) => s === "todo"));
+  const manual = steps.filter((s) => s.kind !== "verify").map((s) =>
+    s.kind === "action" ? s.cmd : s.text
+  ).join("\n");
 
   return (
     <div class="rep">
@@ -142,9 +208,18 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
         {steps.map((s, i) => (
           <li key={i} class={`rep-${state[i]}`}>
             <span class="rep-st">{t(`rep.${state[i]}`)}</span>{" "}
-            {s.kind === "action" ? <code>{s.cmd}</code> : s.kind === "user" ? s.text : t("rep.verifyStep")}
+            {s.kind === "action"
+              ? <code>{s.cmd}</code>
+              : s.kind === "user"
+              ? s.text
+              : t("rep.verifyStep")}
             {state[i] === "waiting" && (
-              <>{" "}<button type="button" class="btn sm" onClick={userDone}>{t("rep.userDone")}</button></>
+              <>
+                {" "}
+                <button type="button" class="btn sm" onClick={userDone}>
+                  {t("rep.userDone")}
+                </button>
+              </>
             )}
           </li>
         ))}
@@ -153,9 +228,17 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
       {out && <pre class="out rep-out" ref={outEl}>{out}</pre>}
       <p>
         {running
-          ? <button type="button" class="btn sm" onClick={cancel}>{t("rep.cancel")}</button>
+          ? (
+            <button type="button" class="btn sm" onClick={cancel}>
+              {t("rep.cancel")}
+            </button>
+          )
           : go
-          ? <button type="button" class="btn" onClick={() => void start()}>{t("rep.start")}</button>
+          ? (
+            <button type="button" class="btn" onClick={() => void start()}>
+              {t("rep.start")}
+            </button>
+          )
           : null}
       </p>
       <details>
@@ -165,4 +248,3 @@ function Repair({ id, check, steps }: { id: string; check: Check; steps: RepairS
     </div>
   );
 }
-

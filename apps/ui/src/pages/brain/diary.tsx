@@ -18,7 +18,10 @@ export function Diary({ brain, q, onPage, onRead }: {
 }) {
   const [days, setDays] = useState(STEP);
   const [, bump] = useState(0);
-  const all = brain.pages.filter((p) => areaOf(p.area) === "diario").sort((a, b) => b.path.localeCompare(a.path));
+  const all = brain.pages.filter((p) => areaOf(p.area) === "diario").sort((
+    a,
+    b,
+  ) => b.path.localeCompare(a.path));
   const shown = all.slice(0, days);
   const stale = shown.filter((p) => dayCache.get(p.path)?.rev !== p.rev);
 
@@ -31,20 +34,34 @@ export function Diary({ brain, q, onPage, onRead }: {
     return () => void (live = false);
   }, [stale.map((p) => `${p.path}@${p.rev}`).join(",")]);
 
-  if (!all.length) return <div class="bn-diary" id="bn-diary"><p class="sub">{t("brain.d.empty")}</p></div>;
+  if (!all.length) {
+    return (
+      <div class="bn-diary" id="bn-diary">
+        <p class="sub">{t("brain.d.empty")}</p>
+      </div>
+    );
+  }
   const needle = q.trim().toLowerCase();
   const sections = shown.map((p) => {
-    const entries = diaryEntries(dayCache.get(p.path)?.body ?? "").reverse().filter((e) => !needle || e.text.toLowerCase().includes(needle));
+    const entries = diaryEntries(dayCache.get(p.path)?.body ?? "").reverse()
+      .filter((e) => !needle || e.text.toLowerCase().includes(needle));
     if (needle && !entries.length) return null;
     const day = bare(p.path).split("/").pop()!;
     const label = /^\d{4}-\d{2}-\d{2}$/.test(day)
-      ? new Date(`${day}T12:00`).toLocaleDateString(lang(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      ? new Date(`${day}T12:00`).toLocaleDateString(lang(), {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
       : p.title;
     return (
       <section class="dy-day" key={p.path}>
         <div class="dy-h">
           <h3>{label}</h3>
-          <button type="button" class="btn sm" onClick={() => onRead(p.path)}>{t("brain.d.open")}</button>
+          <button type="button" class="btn sm" onClick={() => onRead(p.path)}>
+            {t("brain.d.open")}
+          </button>
         </div>
         {entries.map((e, i) => (
           <div class="dy-e" key={i}>
@@ -58,7 +75,15 @@ export function Diary({ brain, q, onPage, onRead }: {
   return (
     <div class="bn-diary" id="bn-diary">
       {sections.length ? sections : <p class="sub">{t("brain.d.none")}</p>}
-      {all.length > days && <button type="button" class="btn" onClick={() => setDays(days + STEP)}>{t("brain.d.more")}</button>}
+      {all.length > days && (
+        <button
+          type="button"
+          class="btn"
+          onClick={() => setDays(days + STEP)}
+        >
+          {t("brain.d.more")}
+        </button>
+      )}
     </div>
   );
 }

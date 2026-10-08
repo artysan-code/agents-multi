@@ -20,9 +20,15 @@ export type AskKind = "ask" | "newtask" | "brain";
 
 /** What the field asks for. `project`: for a new task a folder, "~none" or null (Claude picks); for the
  *  brain a page's path or null (the brain as a whole). `label` is the name the chip shows for it. */
-export const ask = signal<{ kind: AskKind; project: string | null; label?: string }>({ kind: "ask", project: null });
+export const ask = signal<
+  { kind: AskKind; project: string | null; label?: string }
+>({ kind: "ask", project: null });
 
-export function askContext(kind: AskKind, project: string | null = null, label?: string): void {
+export function askContext(
+  kind: AskKind,
+  project: string | null = null,
+  label?: string,
+): void {
   ask.value = { kind, project, label };
 }
 
@@ -38,10 +44,17 @@ export function askNow(text: string): void {
 
 function ctxLabel(): string {
   const { kind, project, label } = ask.value;
-  if (kind === "brain") return project ? t("ask.ctx.brain", { p: label ?? project }) : t("ask.ctx.brainAll");
+  if (kind === "brain") {
+    return project
+      ? t("ask.ctx.brain", { p: label ?? project })
+      : t("ask.ctx.brainAll");
+  }
   if (kind !== "newtask") return "";
   if (project === null) return t("tb.new");
-  return t("ask.ctx.newtask", { p: label ?? (project === "~none" ? t("tb.noProject") : project.split("/").pop()!) });
+  return t("ask.ctx.newtask", {
+    p: label ??
+      (project === "~none" ? t("tb.noProject") : project.split("/").pop()!),
+  });
 }
 
 interface Answer {
@@ -86,7 +99,11 @@ export function AskBar() {
         return;
       }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
-      if ((e.target as Element)?.closest?.("input, textarea, select, [contenteditable]")) return;
+      if (
+        (e.target as Element)?.closest?.(
+          "input, textarea, select, [contenteditable]",
+        )
+      ) return;
       e.preventDefault();
       ta.current?.focus();
     };
@@ -122,33 +139,65 @@ export function AskBar() {
     last.current = text;
     const { kind, project } = ask.value;
     let acc = "", tools = false, code: string | null = null, frame = 0;
-    let a: Answer = { q: text, text: "", state: "thinking", doing: t("ask.thinking"), error: null, done: false, code: null };
+    let a: Answer = {
+      q: text,
+      text: "",
+      state: "thinking",
+      doing: t("ask.thinking"),
+      error: null,
+      done: false,
+      code: null,
+    };
     setAnswer(a);
     const paint = () => {
       frame = 0;
-      setAnswer((a = { ...a, text: acc.replace(/\[\[code:[^\]]*\]\]/g, "") }));
+      setAnswer(a = { ...a, text: acc.replace(/\[\[code:[^\]]*\]\]/g, "") });
     };
     busy.current = new AbortController();
     try {
       const where = project === "~none" ? { noProject: true } : { project };
-      const res = await fetch("/api/ask", postInit({ text, kind, ...where, session: session.current }, busy.current.signal));
+      const res = await fetch(
+        "/api/ask",
+        postInit(
+          { text, kind, ...where, session: session.current },
+          busy.current.signal,
+        ),
+      );
       if (!res.ok || !res.body) {
-        throw new Error((await res.json().catch(() => ({})) as { error?: string }).error ?? `HTTP ${res.status}`);
+        throw new Error(
+          (await res.json().catch(() => ({})) as { error?: string }).error ??
+            `HTTP ${res.status}`,
+        );
       }
-      await ndjson<{ t: string; d?: string; id?: string; k?: string; text?: string; error?: string; code?: string }>(
+      await ndjson<
+        {
+          t: string;
+          d?: string;
+          id?: string;
+          k?: string;
+          text?: string;
+          error?: string;
+          code?: string;
+        }
+      >(
         res,
         (o) => {
           if (o.t === "session") session.current = o.id ?? null;
           else if (o.t === "text") {
             acc += o.d ?? "";
-            if (a.state !== "writing") setAnswer((a = { ...a, state: "writing" }));
+            if (a.state !== "writing") {
+              setAnswer(a = { ...a, state: "writing" });
+            }
             if (!frame) frame = requestAnimationFrame(paint);
           } else if (o.t === "tool") {
             tools = true;
-            setAnswer((a = { ...a, state: "thinking", doing: tk(`ask.tool.${o.k}`) }));
+            setAnswer(
+              a = { ...a, state: "thinking", doing: tk(`ask.tool.${o.k}`) },
+            );
           } else if (o.t === "done") {
-            if (o.error) setAnswer((a = { ...a, error: t("ask.failed", { e: o.error }) }));
-            else {
+            if (o.error) {
+              setAnswer(a = { ...a, error: t("ask.failed", { e: o.error }) });
+            } else {
               acc = o.text ?? acc;
               paint();
             }
@@ -157,11 +206,15 @@ export function AskBar() {
         },
       );
     } catch (err) {
-      if ((err as Error).name !== "AbortError") setAnswer((a = { ...a, error: t("ask.failed", { e: (err as Error).message }) }));
+      if ((err as Error).name !== "AbortError") {
+        setAnswer(
+          a = { ...a, error: t("ask.failed", { e: (err as Error).message }) },
+        );
+      }
     }
     if (!busy.current) return; // closed while it answered
     busy.current = null;
-    setAnswer((a = { ...a, state: "", done: true, code }));
+    setAnswer(a = { ...a, state: "", done: true, code });
     // a new task is one thing: the next request is a plain one again
     if (kind === "newtask") askContext("ask");
     if (tools) touch("tasks");
@@ -171,14 +224,23 @@ export function AskBar() {
   };
 
   const terminal = async (body: Record<string, unknown>) => {
-    const r = await post("/api/terminal", body).catch((err: Error): Result => ({ ok: false, message: err.message }));
+    const r = await post("/api/terminal", body).catch((err: Error): Result => ({
+      ok: false,
+      message: err.message,
+    }));
     if (!r.ok) toast(r.message ?? "", true);
   };
 
   const kind = ask.value.kind;
   const ctx = kind !== "ask" && ask.value.project !== null ? ctxLabel() : "";
-  const ph = kind === "newtask" ? "ask.ph.newtask" : kind === "brain" ? "ask.ph.brain" : "ask.ph";
-  const codeName = answer?.code ? answer.code.replace(/\/+$/, "").split("/").pop() || "~" : "";
+  const ph = kind === "newtask"
+    ? "ask.ph.newtask"
+    : kind === "brain"
+    ? "ask.ph.brain"
+    : "ask.ph";
+  const codeName = answer?.code
+    ? answer.code.replace(/\/+$/, "").split("/").pop() || "~"
+    : "";
   const working = !!answer && !answer.done;
 
   return (
@@ -232,30 +294,61 @@ export function AskBar() {
             </button>
           ))}
         </div>
-        {models && <ModelPicker state={models} onPick={(m) => void pick(m)} onDone={() => ta.current?.focus()} />}
+        {models && (
+          <ModelPicker
+            state={models}
+            onPick={(m) => void pick(m)}
+            onDone={() => ta.current?.focus()}
+          />
+        )}
         <kbd class="k2 ab-slash">/</kbd>
-        <button class="ab-send" type="submit" title={t("ask.send")} aria-label={t("ask.send")}>
-          <svg viewBox="0 0 20 20"><path d="M10 16V4M5 9l5-5 5 5" /></svg>
+        <button
+          class="ab-send"
+          type="submit"
+          title={t("ask.send")}
+          aria-label={t("ask.send")}
+        >
+          <svg viewBox="0 0 20 20">
+            <path d="M10 16V4M5 9l5-5 5 5" />
+          </svg>
         </button>
       </form>
       {answer && (
-        <section class="ab-sheet" role="dialog" aria-label={t("ask.sheet")} aria-live="polite">
+        <section
+          class="ab-sheet"
+          role="dialog"
+          aria-label={t("ask.sheet")}
+          aria-live="polite"
+        >
           <div class="ab-q">
             <Spark mode={working ? answer.state : ""} />
             <span>{answer.q}</span>
           </div>
           <div class="ab-a md" ref={body}>
-            {answer.error ? <p class="err">{answer.error}</p> : renderMarkdown(answer.text)}
+            {answer.error
+              ? <p class="err">{answer.error}</p>
+              : renderMarkdown(answer.text)}
           </div>
           <div class="ab-f">
             <span class="ab-s" role="status">
               {answer.done ? t("ask.followup") : answer.doing}
             </span>
             {answer.done && session.current && (
-              <button type="button" class="bt sm ghost" onClick={() => terminal({ resume: session.current })}>{t("ask.terminal")}</button>
+              <button
+                type="button"
+                class="bt sm ghost"
+                onClick={() => terminal({ resume: session.current })}
+              >
+                {t("ask.terminal")}
+              </button>
             )}
             {answer.done && answer.code && (
-              <button type="button" class="bt sm pri" onClick={() => terminal({ cwd: answer.code, ask: last.current })}>
+              <button
+                type="button"
+                class="bt sm pri"
+                onClick={() =>
+                  terminal({ cwd: answer.code, ask: last.current })}
+              >
                 {t("ask.code", { p: codeName })}
               </button>
             )}
@@ -263,8 +356,16 @@ export function AskBar() {
               {models ? `${tk(`ask.model.${models.model}`)} · ` : ""}
               <kbd class="k2">Esc</kbd> {t("ask.esc")}
             </span>
-            <button type="button" class="ib ab-x" title={t("ask.close")} aria-label={t("ask.close")} onClick={close}>
-              <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            <button
+              type="button"
+              class="ib ab-x"
+              title={t("ask.close")}
+              aria-label={t("ask.close")}
+              onClick={close}
+            >
+              <svg viewBox="0 0 24 24">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           </div>
         </section>

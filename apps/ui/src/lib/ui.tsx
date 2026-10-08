@@ -25,7 +25,8 @@ export function toast(msg: string, err = false): void {
 }
 
 /** The usual catch of a page's load: the message as an error toast. */
-export const toastErr = (e: unknown): void => toast(e instanceof Error ? e.message : String(e), true);
+export const toastErr = (e: unknown): void =>
+  toast(e instanceof Error ? e.message : String(e), true);
 
 /* ---------------- drawer ---------------- */
 
@@ -39,7 +40,11 @@ const drawerSig = signal<DrawerState | null>(null);
 
 /** Opens the drawer on the right; `body` is called on each redraw, so it may read signals. One drawer
  *  at a time: opening another replaces it. */
-export function openDrawer(title: string, body: () => ComponentChildren, opts: { wide?: boolean; onClose?: () => void } = {}): void {
+export function openDrawer(
+  title: string,
+  body: () => ComponentChildren,
+  opts: { wide?: boolean; onClose?: () => void } = {},
+): void {
   drawerSig.value = { title, body, ...opts };
 }
 
@@ -66,10 +71,21 @@ function Drawer({ d }: { d: DrawerState }) {
   return (
     <div>
       <div class="scrim" onClick={closeDrawer} />
-      <div class={`drawer${d.wide ? " wide" : ""}`} role="dialog" aria-label={d.title}>
+      <div
+        class={`drawer${d.wide ? " wide" : ""}`}
+        role="dialog"
+        aria-label={d.title}
+      >
         <div class="dh">
           <h3>{d.title}</h3>
-          <button type="button" class="x" aria-label={t("close")} onClick={closeDrawer}>×</button>
+          <button
+            type="button"
+            class="x"
+            aria-label={t("close")}
+            onClick={closeDrawer}
+          >
+            ×
+          </button>
         </div>
         <div class="dbody">{d.body()}</div>
       </div>
@@ -96,19 +112,31 @@ export function pcolor(name: string): string {
 }
 
 export function Pf({ name, label }: { name: string; label?: string }) {
-  return <span class="pf" style={{ "--c": pcolor(name) }}>{label ?? name}</span>;
+  return <span class="pf" style={{ "--c": pcolor(name) }}>{label ?? name}
+  </span>;
 }
 
 /* ---------------- actions and jobs ---------------- */
 
 /** Runs an allowlisted action (/api/action) and shows its output; the report is reloaded after. */
-export async function runAction(action: string, opts: string[] = []): Promise<void> {
+export async function runAction(
+  action: string,
+  opts: string[] = [],
+): Promise<void> {
   toast(t("act.running", { a: action }));
   try {
-    const r = await post<{ output?: string; code: number; ms: number }>("/api/action", { action, opts });
+    const r = await post<{ output?: string; code: number; ms: number }>(
+      "/api/action",
+      { action, opts },
+    );
     showOutput(action, r.output || t("act.noOutput"));
     const s = (r.ms / 1000).toFixed(1);
-    toast(r.code ? t("act.doneExit", { a: action, c: r.code, s }) : t("act.done", { a: action, s }), r.code !== 0);
+    toast(
+      r.code
+        ? t("act.doneExit", { a: action, c: r.code, s })
+        : t("act.done", { a: action, s }),
+      r.code !== 0,
+    );
     await loadStatus();
   } catch (e) {
     toastErr(e);
@@ -138,14 +166,20 @@ export async function runJob(
   track: (id: string) => void = () => {},
 ): Promise<JobEnd> {
   const r = await fetch("/api/job", postInit({ action, params }));
-  const j = await r.json().catch(() => ({})) as { ok?: boolean; id?: string; message?: string };
+  const j = await r.json().catch(() => ({})) as {
+    ok?: boolean;
+    id?: string;
+    message?: string;
+  };
   if (!j.ok || !j.id) return { error: j.message ?? String(r.status) };
   track(j.id);
   const res = await fetch(`/api/job?id=${encodeURIComponent(j.id)}`);
   let end: JobEnd | null = null;
   await ndjson<{ o?: string; done?: number; cancelled?: boolean }>(res, (m) => {
     if (m.o !== undefined) onOut(m.o);
-    else if (m.done !== undefined) end = { code: m.done, cancelled: m.cancelled };
+    else if (m.done !== undefined) {
+      end = { code: m.done, cancelled: m.cancelled };
+    }
   });
   return end ?? { error: "lost" };
 }

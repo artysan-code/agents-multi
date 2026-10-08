@@ -43,10 +43,19 @@ const BODIES: Record<Step, (p: StepProps) => ComponentChildren> = {
 };
 
 /** The footer of a step: «Back» first when there is somewhere to go back to, then the step's buttons. */
-export function Nav({ back, children }: { back: (() => void) | null; children?: ComponentChildren }) {
+export function Nav(
+  { back, children }: {
+    back: (() => void) | null;
+    children?: ComponentChildren;
+  },
+) {
   return (
     <div class="uw-go su-go">
-      {back && <button type="button" class="bt ghost" onClick={back}>{t("su.back")}</button>}
+      {back && (
+        <button type="button" class="bt ghost" onClick={back}>
+          {t("su.back")}
+        </button>
+      )}
       <span class="su-fill" />
       {children}
     </div>
@@ -84,20 +93,45 @@ export function Setup({ initial }: { initial: SetupView }) {
   const done = step === "done" && !working;
 
   return (
-    <div class="uw-screen su-screen" role="dialog" aria-modal="true" aria-label={t("su.title")}>
+    <div
+      class="uw-screen su-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("su.title")}
+    >
       <div class="uw-card su-card">
         <div class="su-top">
-          <span class="su-of">{t("su.of", { n: i + 1, m: STEPS.length })} · {tk(`su.s.${step}`)}</span>
+          <span class="su-of">
+            {t("su.of", { n: i + 1, m: STEPS.length })} · {tk(`su.s.${step}`)}
+          </span>
           <div class="su-rail" aria-hidden="true">
             {STEPS.map((s, k) => (
-              <i key={s} class={k === i ? "on" : k < frontier || v.step === "done" ? "ok" : ""} />
+              <i
+                key={s}
+                class={k === i
+                  ? "on"
+                  : k < frontier || v.step === "done"
+                  ? "ok"
+                  : ""}
+              />
             ))}
           </div>
         </div>
-        <div class={`uw-mark${working ? " on" : ""}${done ? " ok" : ""}`} aria-hidden="true">
+        <div
+          class={`uw-mark${working ? " on" : ""}${done ? " ok" : ""}`}
+          aria-hidden="true"
+        >
           {done
-            ? <svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg>
-            : <svg viewBox="0 0 16 16"><path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" /></svg>}
+            ? (
+              <svg viewBox="0 0 16 16">
+                <path d="M3.5 8.5l3 3 6-7" />
+              </svg>
+            )
+            : (
+              <svg viewBox="0 0 16 16">
+                <path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" />
+              </svg>
+            )}
         </div>
         <Body key={step} v={v} next={next} back={back} busy={setWorking} />
       </div>

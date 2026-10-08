@@ -6,7 +6,9 @@ import mark from "../assets/mark.svg";
 export type SparkMode = "" | "thinking" | "writing" | string;
 
 /** The mark: still, or moving while Claude is at work (any mode). */
-export function Spark({ mode = "", class: cls = "spark" }: { mode?: SparkMode; class?: string }) {
+export function Spark(
+  { mode = "", class: cls = "spark" }: { mode?: SparkMode; class?: string },
+) {
   return (
     <span class={cls} data-spark={mode || undefined}>
       <img src={mark} alt="" />

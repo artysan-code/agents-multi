@@ -2,7 +2,8 @@
 // English key.
 
 export const en = {
-  "up.lede": "Updates install themselves. Claude Code as soon as it is out; Claude Desktop is downloaded and verified in the background, and switches when no instance is open; Agents Multi updates from its repository (fast-forward only, on a clean tree) and restarts what needs it. You are told only if a verification fails.",
+  "up.lede":
+    "Updates install themselves. Claude Code as soon as it is out; Claude Desktop is downloaded and verified in the background, and switches when no instance is open; Agents Multi updates from its repository (fast-forward only, on a clean tree) and restarts what needs it. You are told only if a verification fails.",
   "up.log": "Log",
   "up.rollback": "Previous version",
   "up.uptodate": "up to date",
@@ -21,24 +22,29 @@ export const en = {
   "up.ev.rebuilt": "variant rebuilt",
   "up.ev.skipped": "not updated",
   "up.self.behind": "{n} new commits: taken at the next round",
-  "up.self.dirty": "{n} new commits, not taken: {d} files changed here and not committed",
+  "up.self.dirty":
+    "{n} new commits, not taken: {d} files changed here and not committed",
   "up.self.diverged": "diverged (↓{n} ↑{m}): a rebase by hand",
   "up.self.noUpstream": "branch {b} follows no remote branch: not updated",
   "up.self.install": "install waits for every Claude to be closed",
   "up.ev.closed": "Claude closed",
   "up.ev.force-closed": "Claude force-closed",
   "cc.btn": "Close Claude and update",
-  "cc.intro": "The install is waiting for these to be closed. Closing interrupts them: whatever they have not saved is lost.",
+  "cc.intro":
+    "The install is waiting for these to be closed. Closing interrupts them: whatever they have not saved is lost.",
   "cc.busy": "looks busy",
   "cc.idle": "looks idle",
   "cc.age": "open {a}",
   "cc.embedded": "inside Desktop",
   "cc.protected": "not closed: part of the console's own process tree",
-  "cc.onlyProtected": "Only the console's own process tree is left: close it by hand, then update.",
+  "cc.onlyProtected":
+    "Only the console's own process tree is left: close it by hand, then update.",
   "cc.go": "Close and update",
   "cc.closing": "Closing…",
-  "cc.stuck": "Still open after waiting 15 seconds (Claude Desktop stays in the tray: quit it from there, or force it):",
-  "cc.forceWarn": "Force closing (SIGKILL) gives them no time to save anything.",
+  "cc.stuck":
+    "Still open after waiting 15 seconds (Claude Desktop stays in the tray: quit it from there, or force it):",
+  "cc.forceWarn":
+    "Force closing (SIGKILL) gives them no time to save anything.",
   "cc.force": "Force close and update",
   "cc.retry": "I closed them: update",
   "cc.updating": "Updating…",
@@ -50,7 +56,8 @@ export const en = {
   "uw.news": "What's new",
   "uw.st.skipped": "not needed",
   "uw.start": "Check for updates",
-  "uw.noRestart": "The console did not come back on the new code within two minutes: close Agents Multi and open it again.",
+  "uw.noRestart":
+    "The console did not come back on the new code within two minutes: close Agents Multi and open it again.",
   "uw.healthy": "Health: {n} checks, no failures.",
   "uw.fails": "Health: {n} failing — {msg}",
   "uw.noRelease": "No new version since {f}: you are on {v}.",
@@ -66,14 +73,17 @@ export const en = {
   "uw.s.restart": "Restarting",
   "uw.s.verify": "Verifying",
   "uw.h.ready": "Update",
-  "uw.h.readySub": "Agents Multi, Claude Code and Claude Desktop, checked and updated in one go.",
+  "uw.h.readySub":
+    "Agents Multi, Claude Code and Claude Desktop, checked and updated in one go.",
   "uw.h.running": "Updating…",
   "uw.h.restarting": "Restarting…",
   "uw.h.done": "Updated to {v}",
   "uw.h.current": "Already up to date",
   "uw.h.failed": "The update stopped",
-  "uw.restartNote": "Agents Multi restarts with everything it runs: this screen comes back by itself.",
-  "uw.busy": "{n} Claude Code sessions are open: none is closed without asking.",
+  "uw.restartNote":
+    "Agents Multi restarts with everything it runs: this screen comes back by itself.",
+  "uw.busy":
+    "{n} Claude Code sessions are open: none is closed without asking.",
   "uw.retry": "Try again",
   "uw.done": "Done",
   "uw.showOut": "Details",
@@ -81,13 +91,15 @@ export const en = {
 } as const;
 
 export const it: Record<keyof typeof en, string> = {
-  "up.lede": "Gli aggiornamenti si installano da soli. Claude Code appena esce; Claude Desktop viene scaricato e verificato in background ed entra in uso quando nessuna istanza è aperta; Agents Multi si aggiorna dal suo repo (solo in avanti, a working tree pulito) e si riavvia dove serve. Ti avviso solo se una verifica fallisce.",
+  "up.lede":
+    "Gli aggiornamenti si installano da soli. Claude Code appena esce; Claude Desktop viene scaricato e verificato in background ed entra in uso quando nessuna istanza è aperta; Agents Multi si aggiorna dal suo repo (solo in avanti, a working tree pulito) e si riavvia dove serve. Ti avviso solo se una verifica fallisce.",
   "up.log": "Registro",
   "up.rollback": "Versione precedente",
   "up.uptodate": "aggiornato",
   "up.next": "è uscita la {v}: si installa al prossimo giro",
   "up.staged": "{v} pronta: entra in uso alla prossima apertura",
-  "up.system": "è ancora il pacchetto di sistema: esegui una volta claude-desktop-migrate",
+  "up.system":
+    "è ancora il pacchetto di sistema: esegui una volta claude-desktop-migrate",
   "up.previous": "{v} tenuta per il rollback",
   "up.noLog": "ancora niente",
   "up.ev.installed": "installato",
@@ -100,24 +112,30 @@ export const it: Record<keyof typeof en, string> = {
   "up.ev.rebuilt": "variante ricostruita",
   "up.ev.skipped": "non aggiornato",
   "up.self.behind": "{n} commit nuovi: si prendono al prossimo giro",
-  "up.self.dirty": "{n} commit nuovi, non presi: {d} file modificati qui e non committati",
+  "up.self.dirty":
+    "{n} commit nuovi, non presi: {d} file modificati qui e non committati",
   "up.self.diverged": "divergente (↓{n} ↑{m}): serve un rebase a mano",
-  "up.self.noUpstream": "il branch {b} non segue un branch remoto: non si aggiorna",
+  "up.self.noUpstream":
+    "il branch {b} non segue un branch remoto: non si aggiorna",
   "up.self.install": "install aspetta che ogni Claude sia chiuso",
   "up.ev.closed": "Claude chiuso",
   "up.ev.force-closed": "Claude chiuso con la forza",
   "cc.btn": "Chiudi Claude e aggiorna",
-  "cc.intro": "L'install aspetta che questi siano chiusi. Chiuderli li interrompe: quello che non hanno salvato va perso.",
+  "cc.intro":
+    "L'install aspetta che questi siano chiusi. Chiuderli li interrompe: quello che non hanno salvato va perso.",
   "cc.busy": "sembra al lavoro",
   "cc.idle": "sembra fermo",
   "cc.age": "aperto da {a}",
   "cc.embedded": "dentro Desktop",
   "cc.protected": "non chiuso: fa parte dell'albero di processi della console",
-  "cc.onlyProtected": "Resta solo l'albero di processi della console: chiudilo a mano, poi aggiorna.",
+  "cc.onlyProtected":
+    "Resta solo l'albero di processi della console: chiudilo a mano, poi aggiorna.",
   "cc.go": "Chiudi e aggiorna",
   "cc.closing": "Chiudo…",
-  "cc.stuck": "Ancora aperti dopo 15 secondi (Claude Desktop resta nella tray: chiudilo da lì, o forzalo):",
-  "cc.forceWarn": "Chiuderli con la forza (SIGKILL) non lascia loro il tempo di salvare nulla.",
+  "cc.stuck":
+    "Ancora aperti dopo 15 secondi (Claude Desktop resta nella tray: chiudilo da lì, o forzalo):",
+  "cc.forceWarn":
+    "Chiuderli con la forza (SIGKILL) non lascia loro il tempo di salvare nulla.",
   "cc.force": "Chiudi con la forza e aggiorna",
   "cc.retry": "Li ho chiusi io: aggiorna",
   "cc.updating": "Aggiorno…",
@@ -129,7 +147,8 @@ export const it: Record<keyof typeof en, string> = {
   "uw.news": "Novità",
   "uw.st.skipped": "non serve",
   "uw.start": "Cerca aggiornamenti",
-  "uw.noRestart": "La console non è tornata col codice nuovo entro due minuti: chiudi Agents Multi e riaprilo.",
+  "uw.noRestart":
+    "La console non è tornata col codice nuovo entro due minuti: chiudi Agents Multi e riaprilo.",
   "uw.healthy": "Salute: {n} controlli, nessun errore.",
   "uw.fails": "Salute: {n} in errore — {msg}",
   "uw.noRelease": "Nessuna versione nuova dalla {f}: sei sulla {v}.",
@@ -145,14 +164,17 @@ export const it: Record<keyof typeof en, string> = {
   "uw.s.restart": "Riavvio",
   "uw.s.verify": "Verifico",
   "uw.h.ready": "Aggiornamento",
-  "uw.h.readySub": "Agents Multi, Claude Code e Claude Desktop, controllati e aggiornati in un colpo solo.",
+  "uw.h.readySub":
+    "Agents Multi, Claude Code e Claude Desktop, controllati e aggiornati in un colpo solo.",
   "uw.h.running": "Aggiorno…",
   "uw.h.restarting": "Riavvio…",
   "uw.h.done": "Aggiornato a {v}",
   "uw.h.current": "È già tutto aggiornato",
   "uw.h.failed": "L'aggiornamento si è fermato",
-  "uw.restartNote": "Agents Multi si riavvia con tutto quello che fa girare: questa schermata torna da sola.",
-  "uw.busy": "{n} sessioni di Claude Code sono aperte: nessuna viene chiusa senza chiedere.",
+  "uw.restartNote":
+    "Agents Multi si riavvia con tutto quello che fa girare: questa schermata torna da sola.",
+  "uw.busy":
+    "{n} sessioni di Claude Code sono aperte: nessuna viene chiusa senza chiedere.",
   "uw.retry": "Riprova",
   "uw.done": "Fatto",
   "uw.showOut": "Dettagli",

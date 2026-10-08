@@ -19,19 +19,30 @@ export interface ModelState {
   default?: string;
 }
 
-const COLOR: Record<string, string> = { haiku: "green", sonnet: "blue", opus: "violet" };
+const COLOR: Record<string, string> = {
+  haiku: "green",
+  sonnet: "blue",
+  opus: "violet",
+};
 const TICKS: Record<string, number> = { low: 1, medium: 2, high: 3 };
-const color = (m: string) => (COLOR[m] ? `var(--c-${COLOR[m]})` : "var(--faint)");
+const color = (
+  m: string,
+) => (COLOR[m] ? `var(--c-${COLOR[m]})` : "var(--faint)");
 
 /** The server's model and a way to change it; a refused change reloads what the server keeps. */
-export function useAskModel(onError: (msg: string) => void): { state: ModelState | null; pick: (m: string) => Promise<void> } {
+export function useAskModel(
+  onError: (msg: string) => void,
+): { state: ModelState | null; pick: (m: string) => Promise<void> } {
   const [state, setState] = useState<ModelState | null>(null);
-  const load = () => get<ModelState>("/api/ask/model").then(setState, () => setState(null));
+  const load = () =>
+    get<ModelState>("/api/ask/model").then(setState, () => setState(null));
   useEffect(() => void load(), []);
   const pick = async (model: string) => {
     if (!state || model === state.model) return;
     setState({ ...state, model });
-    const r = await post("/api/ask/model", { model }).catch((e: Error): Result => ({ ok: false, message: e.message }));
+    const r = await post("/api/ask/model", { model }).catch((
+      e: Error,
+    ): Result => ({ ok: false, message: e.message }));
     if (!r.ok) {
       onError(r.message ?? "");
       void load();
@@ -44,22 +55,29 @@ function Effort({ level, k }: { level?: string; k: string }) {
   const n = level ? TICKS[level] ?? 0 : 0;
   if (!n) return null;
   return (
-    <span class="mpk-ef" style={{ "--k": k }} title={tk(`mp.effort.${level}`)} aria-label={tk(`mp.effort.${level}`)}>
+    <span
+      class="mpk-ef"
+      style={{ "--k": k }}
+      title={tk(`mp.effort.${level}`)}
+      aria-label={tk(`mp.effort.${level}`)}
+    >
       {[1, 2, 3].map((i) => <i key={i} class={i <= n ? "on" : ""} />)}
     </span>
   );
 }
 
-export function ModelPicker({ state, onPick, onDone, host, shared = "mp.shared" }: {
-  state: ModelState;
-  onPick: (model: string) => void;
-  /** after a choice or Esc: where the focus goes back (the field) */
-  onDone?: () => void;
-  /** where the list goes, in the page's flow; without it the list opens over the page */
-  host?: HTMLElement | null;
-  /** the footer's note on where else the choice applies */
-  shared?: Key;
-}) {
+export function ModelPicker(
+  { state, onPick, onDone, host, shared = "mp.shared" }: {
+    state: ModelState;
+    onPick: (model: string) => void;
+    /** after a choice or Esc: where the focus goes back (the field) */
+    onDone?: () => void;
+    /** where the list goes, in the page's flow; without it the list opens over the page */
+    host?: HTMLElement | null;
+    /** the footer's note on where else the choice applies */
+    shared?: Key;
+  },
+) {
   const [open, setOpen] = useState(false);
   const [hl, setHl] = useState(0);
   const root = useRef<HTMLDivElement>(null);
@@ -93,7 +111,9 @@ export function ModelPicker({ state, onPick, onDone, host, shared = "mp.shared" 
     };
     const onDown = (e: MouseEvent) => {
       const n = e.target as Node;
-      if (!root.current?.contains(n) && !list.current?.contains(n)) setOpen(false);
+      if (!root.current?.contains(n) && !list.current?.contains(n)) {
+        setOpen(false);
+      }
     };
     addEventListener("keydown", onKey);
     addEventListener("mousedown", onDown);
@@ -108,8 +128,9 @@ export function ModelPicker({ state, onPick, onDone, host, shared = "mp.shared" 
     if (e.key === "ArrowDown") setHl((hl + 1) % n);
     else if (e.key === "ArrowUp") setHl((hl - 1 + n) % n);
     else if (e.key === "Enter" || e.key === " ") choose(hl);
-    else if (/^[1-9]$/.test(e.key) && Number(e.key) <= n) choose(Number(e.key) - 1);
-    else if (e.key === "Escape" || e.key === "Tab") {
+    else if (/^[1-9]$/.test(e.key) && Number(e.key) <= n) {
+      choose(Number(e.key) - 1);
+    } else if (e.key === "Escape" || e.key === "Tab") {
       show(false);
       if (e.key === "Escape") trigger.current?.focus();
     } else return;
@@ -119,7 +140,14 @@ export function ModelPicker({ state, onPick, onDone, host, shared = "mp.shared" 
 
   const def = state.default;
   const pop = open && (
-    <div class={`mpk-pop${host ? " flow" : ""}`} role="listbox" aria-label={t("mp.title")} tabindex={-1} ref={list} onKeyDown={onKey}>
+    <div
+      class={`mpk-pop${host ? " flow" : ""}`}
+      role="listbox"
+      aria-label={t("mp.title")}
+      tabindex={-1}
+      ref={list}
+      onKeyDown={onKey}
+    >
       <h6>{t("mp.title")}</h6>
       {models.map((m, i) => (
         <button
@@ -151,7 +179,8 @@ export function ModelPicker({ state, onPick, onDone, host, shared = "mp.shared" 
       ))}
       <div class="mpk-ft">
         <kbd class="k2">↑</kbd>
-        <kbd class="k2">↓</kbd> {t("mp.choose")} · <kbd class="k2">↵</kbd> {t("mp.confirm")} · {t(shared)}
+        <kbd class="k2">↓</kbd> {t("mp.choose")} · <kbd class="k2">↵</kbd>{" "}
+        {t("mp.confirm")} · {t(shared)}
       </div>
     </div>
   );
@@ -169,7 +198,14 @@ export function ModelPicker({ state, onPick, onDone, host, shared = "mp.shared" 
       >
         <i class="mpk-dot" />
         <span>{tk(`ask.model.${model}`)}</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6">
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+        >
           <path d="M2 4l3 3 3-3" />
         </svg>
       </button>

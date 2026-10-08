@@ -11,13 +11,14 @@ import type { Check } from "../../api.ts";
 import { t } from "../../i18n.ts";
 import { ago } from "../../lib/format.ts";
 import { FIX_ACTIONS, runJob, toastErr } from "../../lib/ui.tsx";
-import { request, useIntent } from "../../router.ts";
+import { useIntent } from "../../router.ts";
 import { loadStatus, status } from "../../state.ts";
 import { askNow } from "../../shell/ask.tsx";
 import { appUpdater, notePoints } from "../../shell/app-update.ts";
 import { setUpdateLater, sys, updateLater } from "../../shell/sysstate.ts";
 import { openRepair, useRepair } from "../system/health-repair.tsx";
 import { checkTitle } from "./health-title.ts";
+import { UpdateNow } from "../system/updates-close.tsx";
 
 const RECHECK = (
   <svg viewBox="0 0 16 16">
@@ -236,13 +237,7 @@ function UpdateCard() {
       <UpdateRows />
       {news.length > 0 && <ul>{news.map((l) => <li key={l}>{l}</li>)}</ul>}
       <div class="go">
-        <button
-          type="button"
-          class="bt pri"
-          onClick={() => request("update.wizard", undefined, "auto")}
-        >
-          {t("up.now")}
-        </button>
+        <UpdateNow cls="bt pri" auto />
         <button
           type="button"
           class="bt ghost"

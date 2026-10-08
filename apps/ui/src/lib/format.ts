@@ -34,17 +34,28 @@ export const ago = (iso: string | null | undefined): string => {
 /** A compact duration ("40s", "12m", "3h"): the same in every language. */
 export const dur = (iso: string): string => {
   const s = Math.max(1, (Date.now() - new Date(iso).getTime()) / 1000);
-  return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`;
+  return s < 90
+    ? `${Math.round(s)}s`
+    : s < 5400
+    ? `${Math.round(s / 60)}m`
+    : `${Math.round(s / 3600)}h`;
 };
 
 /** Model ids are long and repetitive: keep the family and the version. */
 export const modelShort = (m: string): string =>
-  String(m).replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(/-(\d)-(\d)$/, "-$1.$2");
+  String(m).replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(
+    /-(\d)-(\d)$/,
+    "-$1.$2",
+  );
 
-export const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+export const cap = (s: string): string =>
+  s.charAt(0).toUpperCase() + s.slice(1);
 
 export const hhmm = (d = new Date()): string =>
-  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  `${String(d.getHours()).padStart(2, "0")}:${
+    String(d.getMinutes()).padStart(2, "0")
+  }`;
 
 /** A path under the home folder as ~/…, whatever the home is called. */
-export const shortHome = (p: string): string => p.replace(/^\/(home|Users)\/[^/]+/, "~");
+export const shortHome = (p: string): string =>
+  p.replace(/^\/(home|Users)\/[^/]+/, "~");

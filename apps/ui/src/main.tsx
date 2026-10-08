@@ -38,7 +38,9 @@ if (location.hash === "#pick") {
     go(location.hash.slice(1));
     await loadOwner();
     render(<App />, document.getElementById("root")!);
-    loadStatus().catch((e: Error) => toast(t("err.server", { e: e.message }), true));
+    loadStatus().catch((e: Error) =>
+      toast(t("err.server", { e: e.message }), true)
+    );
   }
   connect();
 }

@@ -38,7 +38,9 @@ export function keep(store: Storage, key: string, value?: unknown): void {
   try {
     if (value === undefined) store.removeItem(key);
     else store.setItem(key, JSON.stringify(value));
-  } catch { /* private window or blocked storage: the wizard still works, it just cannot resume */ }
+  } catch {
+    /* private window or blocked storage: the wizard still works, it just cannot resume */
+  }
 }
 
 export function kept<T>(store: Storage, key: string): T | null {
@@ -53,7 +55,9 @@ export function kept<T>(store: Storage, key: string): T | null {
 export function cmpVer(a: unknown, b: unknown): number {
   const p = (v: unknown) => {
     const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(String(v ?? ""));
-    return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? Infinity : +m[4]] : [0, 0, 0, 0];
+    return m
+      ? [+m[1], +m[2], +m[3], m[4] === undefined ? Infinity : +m[4]]
+      : [0, 0, 0, 0];
   };
   const x = p(a), y = p(b);
   for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
@@ -65,15 +69,23 @@ export function pendingUpdates(S: Report | null): string[] {
   if (!S) return [];
   const m = S.machine, u = S.update ?? {}, r = S.repo;
   return [
-    u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code ${m.cliVersion ?? "—"} → ${u.cli.latest}` : null,
-    m.desktopStaged ? `Claude Desktop ${m.desktopVersion ?? "—"} → ${m.desktopStaged}` : null,
-    r.isRepo && r.behind ? `agents-multi: ${t("up.self.behind", { n: r.behind })}` : null,
+    u.cli?.latest && u.cli.latest !== m.cliVersion
+      ? `Claude Code ${m.cliVersion ?? "—"} → ${u.cli.latest}`
+      : null,
+    m.desktopStaged
+      ? `Claude Desktop ${m.desktopVersion ?? "—"} → ${m.desktopStaged}`
+      : null,
+    r.isRepo && r.behind
+      ? `agents-multi: ${t("up.self.behind", { n: r.behind })}`
+      : null,
     S.selfInstall ? `agents-multi: ${t("up.self.install")}` : null,
   ].filter((x): x is string => !!x);
 }
 
 export const fetchNews = (since: string | null): Promise<Whatsnew | null> =>
-  get<Whatsnew>(`/api/whatsnew?since=${encodeURIComponent(since ?? "")}`).catch(() => null);
+  get<Whatsnew>(`/api/whatsnew?since=${encodeURIComponent(since ?? "")}`).catch(
+    () => null,
+  );
 
 /** A CHANGELOG section: its `###` headings and `- **scope**: change (hash)` lines. */
 export function Changelog({ body }: { body: string }) {
@@ -85,7 +97,9 @@ export function Changelog({ body }: { body: string }) {
   };
   for (const l of body.split("\n")) {
     if (l.startsWith("- ")) {
-      items.push(<li>{inline(l.slice(2).replace(/\s*\(([0-9a-f]{7,})\)$/, ""))}</li>);
+      items.push(
+        <li>{inline(l.slice(2).replace(/\s*\(([0-9a-f]{7,})\)$/, ""))}</li>,
+      );
       continue;
     }
     flush();
@@ -96,9 +110,15 @@ export function Changelog({ body }: { body: string }) {
   return <>{out}</>;
 }
 
-export function News({ news, since }: { news: Whatsnew | null; since: string | null }) {
+export function News(
+  { news, since }: { news: Whatsnew | null; since: string | null },
+) {
   if (!news?.releases?.length) {
-    return <p class="sub">{t("uw.noRelease", { v: news?.version ?? "—", f: since ?? "—" })}</p>;
+    return (
+      <p class="sub">
+        {t("uw.noRelease", { v: news?.version ?? "—", f: since ?? "—" })}
+      </p>
+    );
   }
   return (
     <>

@@ -13,35 +13,62 @@ export function BrainHealth({ brain, onPage, onOpen, onFix }: {
   onFix: () => void;
 }) {
   const h = brain.health;
-  if (!h) return <div class="bn-health" id="bn-health"><p class="sub">{t("brain.away", { e: "/api/brain/health" })}</p></div>;
+  if (!h) {
+    return (
+      <div class="bn-health" id="bn-health">
+        <p class="sub">{t("brain.away", { e: "/api/brain/health" })}</p>
+      </div>
+    );
+  }
 
   const page = (path: string, extra?: ComponentChildren) => {
     const p = brain.byPath.get(path);
     return (
-      <button type="button" class="bl" key={path + String(extra)} onClick={() => onOpen(path)}>
+      <button
+        type="button"
+        class="bl"
+        key={path + String(extra)}
+        onClick={() => onOpen(path)}
+      >
         <i class="gdot" style={{ background: `var(--g-${areaOf(p?.area)})` }} />
         <span>{p?.title ?? bare(path)}</span>
         {extra}
       </button>
     );
   };
-  const group = (key: "orphans" | "broken" | "long" | "inbox" | "outside", rows: ComponentChildren[]) =>
+  const group = (
+    key: "orphans" | "broken" | "long" | "inbox" | "outside",
+    rows: ComponentChildren[],
+  ) =>
     rows.length
       ? (
         <section class="panel hl-g" key={key}>
-          <div class="panel-h"><h3>{t(`brain.h.${key}`)}</h3><span class="r">{rows.length}</span></div>
+          <div class="panel-h">
+            <h3>{t(`brain.h.${key}`)}</h3>
+            <span class="r">{rows.length}</span>
+          </div>
           <div class="bl-list">{rows}</div>
         </section>
       )
       : null;
   const groups = [
     group("orphans", h.orphans.map((x) => page(x))),
-    group("broken", h.broken_links.map((b) => page(b.page, <em class="hl-x">→ {b.link}</em>))),
-    group("long", h.too_long.map((x) => page(x.page, <em class="hl-x">{t("brain.h.words", { n: x.words })}</em>))),
+    group(
+      "broken",
+      h.broken_links.map((b) => page(b.page, <em class="hl-x">→ {b.link}</em>)),
+    ),
+    group(
+      "long",
+      h.too_long.map((x) =>
+        page(x.page, <em class="hl-x">{t("brain.h.words", { n: x.words })}</em>)
+      ),
+    ),
     group(
       "inbox",
       h.inbox_older_than_a_week.map((l, i) => (
-        <div class="hl-line" key={i}>{renderMarkdown(l.replace(/^- /, ""), onPage)}</div>
+        <div class="hl-line" key={i}>
+          {renderMarkdown(l.replace(/^- /, ""), onPage)}
+        </div>
       )),
     ),
     group("outside", h.outside_the_areas.map((x) => page(x))),
@@ -53,13 +80,22 @@ export function BrainHealth({ brain, onPage, onOpen, onFix }: {
         ? (
           <>
             <div class="hl-top">
-              <span>{t("brain.sum", { p: h.pages, l: brain.edges.length })}</span>
-              <button type="button" class="btn primary sm" onClick={onFix}>{t("brain.h.fix")}</button>
+              <span>
+                {t("brain.sum", { p: h.pages, l: brain.edges.length })}
+              </span>
+              <button type="button" class="btn primary sm" onClick={onFix}>
+                {t("brain.h.fix")}
+              </button>
             </div>
             {groups}
           </>
         )
-        : <div class="status-card ok"><i /><div>{t("brain.h.ok")}</div></div>}
+        : (
+          <div class="status-card ok">
+            <i />
+            <div>{t("brain.h.ok")}</div>
+          </div>
+        )}
     </div>
   );
 }

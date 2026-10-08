@@ -6,8 +6,21 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 
-export const VIEWS = ["today", "tasks", "brain", "connections", "system"] as const;
-export const TABS = ["overview", "profiles", "permissions", "plugins", "updates", "health"] as const;
+export const VIEWS = [
+  "today",
+  "tasks",
+  "brain",
+  "connections",
+  "system",
+] as const;
+export const TABS = [
+  "overview",
+  "profiles",
+  "permissions",
+  "plugins",
+  "updates",
+  "health",
+] as const;
 export type View = typeof VIEWS[number];
 export type Tab = typeof TABS[number];
 
@@ -17,9 +30,13 @@ export const tab = signal<Tab>("overview");
 export function go(hash: string): void {
   const [v, s] = String(hash).replace(/^#/, "").split("/");
   view.value = (VIEWS as readonly string[]).includes(v) ? v as View : "today";
-  if (view.value === "system" && (TABS as readonly string[]).includes(s)) tab.value = s as Tab;
+  if (view.value === "system" && (TABS as readonly string[]).includes(s)) {
+    tab.value = s as Tab;
+  }
   const want = view.value === "system" ? `system/${tab.value}` : view.value;
-  if (location.hash.slice(1) !== want) history.replaceState(null, "", `#${want}`);
+  if (location.hash.slice(1) !== want) {
+    history.replaceState(null, "", `#${want}`);
+  }
 }
 
 addEventListener("hashchange", () => go(location.hash.slice(1)));
@@ -32,7 +49,9 @@ export type IntentName =
   | "brain.open" // read a page of the brain (arg: its path or a [[target]])
   | "system.show"; // bring Today's system card to the eye (the header's pill)
 
-export const intent = signal<{ name: IntentName; at: number; arg?: string } | null>(null);
+export const intent = signal<
+  { name: IntentName; at: number; arg?: string } | null
+>(null);
 
 /** Goes to `hash` (when given) and asks the page there to do `name`. */
 export function request(name: IntentName, hash?: string, arg?: string): void {

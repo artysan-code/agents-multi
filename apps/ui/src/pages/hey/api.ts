@@ -14,15 +14,27 @@ export type AskLine =
 export const heyApi = {
   /** Asks, continuing `session` when given; `on` gets each line as it comes. Aborting `signal` stops
    *  claude -p on the server. */
-  async ask(text: string, session: string | null, signal: AbortSignal, on: (l: AskLine) => void): Promise<void> {
-    const res = await fetch("/api/ask", postInit({ text, kind: "ask", session }, signal));
+  async ask(
+    text: string,
+    session: string | null,
+    signal: AbortSignal,
+    on: (l: AskLine) => void,
+  ): Promise<void> {
+    const res = await fetch(
+      "/api/ask",
+      postInit({ text, kind: "ask", session }, signal),
+    );
     if (!res.ok || !res.body) {
-      throw new Error((await res.json().catch(() => ({})) as { error?: string }).error ?? `HTTP ${res.status}`);
+      throw new Error(
+        (await res.json().catch(() => ({})) as { error?: string }).error ??
+          `HTTP ${res.status}`,
+      );
     }
     await ndjson<AskLine>(res, on);
   },
   /** Claude Code in a terminal: resuming the conversation, or in a folder on a request. */
-  terminal: (body: { resume: string } | { cwd: string; ask: string }) => post<Result>("/api/terminal", body),
+  terminal: (body: { resume: string } | { cwd: string; ask: string }) =>
+    post<Result>("/api/terminal", body),
   /** The part of /api/status the page reads: the machine's interface language. */
   status: () => get<{ language: string }>("/api/status"),
 };

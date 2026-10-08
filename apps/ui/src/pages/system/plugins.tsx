@@ -65,8 +65,11 @@ const CAT_FIRST = 10, CAT_PAGE = 20;
 function rich(s: string): ComponentChildren[] {
   return s.split(/(<b>.*?<\/b>|<code>.*?<\/code>)/).map((p) => {
     const m = /^<(b|code)>(.*)<\/\1>$/.exec(p);
-    const text = (x: string) => x.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-    return m ? (m[1] === "b" ? <b>{text(m[2])}</b> : <code>{text(m[2])}</code>) : text(p);
+    const text = (x: string) =>
+      x.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    return m
+      ? (m[1] === "b" ? <b>{text(m[2])}</b> : <code>{text(m[2])}</code>)
+      : text(p);
   });
 }
 
@@ -75,7 +78,11 @@ let busy = false;
 
 /** Runs one operation. A marketplace-declared command comes back as `confirm`: it is shown, and runs
  *  only if accepted here — the server never accepts one on its own. */
-async function plOp(body: Body, label: string, reload: () => Promise<unknown>): Promise<void> {
+async function plOp(
+  body: Body,
+  label: string,
+  reload: () => Promise<unknown>,
+): Promise<void> {
   if (busy) return toast(t("pl.busy"), true);
   busy = true;
   document.body.classList.add("plbusy");
@@ -83,7 +90,9 @@ async function plOp(body: Body, label: string, reload: () => Promise<unknown>): 
   try {
     let r = await post<OpResult>("/api/plugins", body);
     if (r.confirm) {
-      if (!confirm(t("pl.confirmCmd", { msg: r.message, cmd: r.confirm.command }))) return toast(t("pl.notAccepted"));
+      if (
+        !confirm(t("pl.confirmCmd", { msg: r.message, cmd: r.confirm.command }))
+      ) return toast(t("pl.notAccepted"));
       const retry = body.op === "set"
         ? {
           op: "install",
@@ -127,16 +136,33 @@ function Toggle({ id, target, value, cell, run }: {
     : cell.broken
     ? <span class="inst bad" title={t("pl.broken")}>⚠</span>
     : cell.installed
-    ? <span class="inst" title={t("pl.installed") + (cell.version ? ` · ${cell.version}` : "")}>●</span>
+    ? (
+      <span
+        class="inst"
+        title={t("pl.installed") + (cell.version ? ` · ${cell.version}` : "")}
+      >
+        ●
+      </span>
+    )
     : <span class="inst no" title={t("pl.notInstalled")}>○</span>;
   const click = () => {
     // inherit → on → off → inherit
     const next = own ? (value ? false : null) : true;
-    const st = next === null ? t(target === "shared" ? "pl.opOutOfShared" : "pl.opInherit") : state(next);
-    run({ op: "set", id, target, value: next }, t("pl.opSet", { id, state: st, t: target }));
+    const st = next === null
+      ? t(target === "shared" ? "pl.opOutOfShared" : "pl.opInherit")
+      : state(next);
+    run(
+      { op: "set", id, target, value: next },
+      t("pl.opSet", { id, state: st, t: target }),
+    );
   };
   return (
-    <button type="button" class={`tg ${own ? "own" : "inh"} ${on ? "on" : "off"}`} title={title} onClick={click}>
+    <button
+      type="button"
+      class={`tg ${own ? "own" : "inh"} ${on ? "on" : "off"}`}
+      title={title}
+      onClick={click}
+    >
       {mark}
       {label}
     </button>
@@ -150,7 +176,12 @@ function details(id: string): void {
     .then((r) => showOutput(id, r.text || t("pl.noDetails")));
 }
 
-function PluginTable({ pl, run }: { pl: PluginsView | null; run: (b: Body, label: string) => void }) {
+function PluginTable(
+  { pl, run }: {
+    pl: PluginsView | null;
+    run: (b: Body, label: string) => void;
+  },
+) {
   const profs = pl?.profiles ?? [];
   const rows = (pl?.plugins ?? []).filter((r) => !r.synced);
   return (
@@ -165,23 +196,48 @@ function PluginTable({ pl, run }: { pl: PluginsView | null; run: (b: Body, label
       </thead>
       <tbody>
         {!pl
-          ? <tr><td class="empty">{t("pl.loading")}</td></tr>
+          ? (
+            <tr>
+              <td class="empty">{t("pl.loading")}</td>
+            </tr>
+          )
           : rows.length
           ? rows.map((r) => (
             <tr key={r.id}>
               <td>
-                <span class="pname">{r.name}</span> <span class="dim">{r.marketplace}</span>
+                <span class="pname">{r.name}</span>{" "}
+                <span class="dim">{r.marketplace}</span>
               </td>
-              <td><Toggle id={r.id} target="shared" value={r.shared} run={run} /></td>
+              <td>
+                <Toggle id={r.id} target="shared" value={r.shared} run={run} />
+              </td>
               {profs.map((p) => (
-                <td key={p}><Toggle id={r.id} target={p} value={r.profiles[p].override} cell={r.profiles[p]} run={run} /></td>
+                <td key={p}>
+                  <Toggle
+                    id={r.id}
+                    target={p}
+                    value={r.profiles[p].override}
+                    cell={r.profiles[p]}
+                    run={run}
+                  />
+                </td>
               ))}
               <td class="acts">
-                <button type="button" class="btn ghost sm" onClick={() => details(r.id)}>{t("pl.details")}</button>
                 <button
                   type="button"
                   class="btn ghost sm"
-                  onClick={() => run({ op: "update", id: r.id }, t("pl.opUpdating", { id: r.id }))}
+                  onClick={() => details(r.id)}
+                >
+                  {t("pl.details")}
+                </button>
+                <button
+                  type="button"
+                  class="btn ghost sm"
+                  onClick={() =>
+                    run(
+                      { op: "update", id: r.id },
+                      t("pl.opUpdating", { id: r.id }),
+                    )}
                 >
                   {t("pl.update")}
                 </button>
@@ -190,7 +246,10 @@ function PluginTable({ pl, run }: { pl: PluginsView | null; run: (b: Body, label
                   class="btn ghost sm danger"
                   onClick={() => {
                     if (confirm(t("pl.confirmRemove", { id: r.id }))) {
-                      run({ op: "uninstall", id: r.id, profiles: "all" }, t("pl.opRemoving", { id: r.id }));
+                      run(
+                        { op: "uninstall", id: r.id, profiles: "all" },
+                        t("pl.opRemoving", { id: r.id }),
+                      );
                     }
                   }}
                 >
@@ -199,7 +258,11 @@ function PluginTable({ pl, run }: { pl: PluginsView | null; run: (b: Body, label
               </td>
             </tr>
           ))
-          : <tr><td class="empty" colSpan={profs.length + 3}>{t("pl.none")}</td></tr>}
+          : (
+            <tr>
+              <td class="empty" colSpan={profs.length + 3}>{t("pl.none")}</td>
+            </tr>
+          )}
       </tbody>
     </table>
   );
@@ -209,15 +272,26 @@ function sumOf(pl: PluginsView | null): string {
   if (!pl) return "";
   const profs = pl.profiles;
   const rows = pl.plugins.filter((r) => !r.synced);
-  const inst = rows.filter((r) => profs.some((p) => r.profiles[p].installed)).length;
-  const broken = rows.filter((r) => profs.some((p) => r.profiles[p].broken)).length;
-  return t("pl.sum", { n: rows.length, i: inst }) + (broken ? t("pl.sumBroken", { b: broken }) : "");
+  const inst =
+    rows.filter((r) => profs.some((p) => r.profiles[p].installed)).length;
+  const broken =
+    rows.filter((r) => profs.some((p) => r.profiles[p].broken)).length;
+  return t("pl.sum", { n: rows.length, i: inst }) +
+    (broken ? t("pl.sumBroken", { b: broken }) : "");
 }
 
-function CatalogRow({ c, pl, run }: { c: CatEntry; pl: PluginsView | null; run: (b: Body, label: string) => void }) {
+function CatalogRow(
+  { c, pl, run }: {
+    c: CatEntry;
+    pl: PluginsView | null;
+    run: (b: Body, label: string) => void;
+  },
+) {
   const [scope, setScope] = useState("all");
   const profs = pl?.profiles ?? [];
-  const w = profs.filter((p) => pl?.plugins.find((r) => r.id === c.id)?.profiles[p]?.installed);
+  const w = profs.filter((p) =>
+    pl?.plugins.find((r) => r.id === c.id)?.profiles[p]?.installed
+  );
   return (
     <tr>
       <td class="cdesc">
@@ -229,11 +303,30 @@ function CatalogRow({ c, pl, run }: { c: CatEntry; pl: PluginsView | null; run: 
         <div class="desc">{short(c.description, 220)}</div>
       </td>
       <td>
-        {w.length > 0 && <span class="chip on" title={t("cat.installedOn", { p: w.join(", ") })}>{w.length}/{profs.length}</span>}
+        {w.length > 0 && (
+          <span
+            class="chip on"
+            title={t("cat.installedOn", { p: w.join(", ") })}
+          >
+            {w.length}/{profs.length}
+          </span>
+        )}
       </td>
       <td class="acts">
-        {w.length > 0 && <button type="button" class="btn ghost sm" onClick={() => details(c.id)}>{t("pl.details")}</button>}
-        <select class="sel" value={scope} onChange={(e) => setScope((e.target as HTMLSelectElement).value)}>
+        {w.length > 0 && (
+          <button
+            type="button"
+            class="btn ghost sm"
+            onClick={() => details(c.id)}
+          >
+            {t("pl.details")}
+          </button>
+        )}
+        <select
+          class="sel"
+          value={scope}
+          onChange={(e) => setScope((e.target as HTMLSelectElement).value)}
+        >
           <option value="all">{t("cat.allProfiles")}</option>
           {profs.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -242,8 +335,15 @@ function CatalogRow({ c, pl, run }: { c: CatEntry; pl: PluginsView | null; run: 
           class="btn sm"
           onClick={() =>
             run(
-              { op: "install", id: c.id, profiles: scope === "all" ? "all" : [scope] },
-              t("pl.opInstalling", { id: c.id, where: scope === "all" ? t("pl.everyProfile") : scope }),
+              {
+                op: "install",
+                id: c.id,
+                profiles: scope === "all" ? "all" : [scope],
+              },
+              t("pl.opInstalling", {
+                id: c.id,
+                where: scope === "all" ? t("pl.everyProfile") : scope,
+              }),
             )}
         >
           {t("pl.install")}
@@ -257,7 +357,9 @@ function Account({ pl }: { pl: PluginsView | null }) {
   if (!pl) return null;
   const profs = pl.profiles;
   // only what an account really syncs today: shared keeps `false` entries for plugins long gone
-  const synced = pl.plugins.filter((r) => r.synced && profs.some((p) => r.profiles[p].installed));
+  const synced = pl.plugins.filter((r) =>
+    r.synced && profs.some((p) => r.profiles[p].installed)
+  );
   return (
     <>
       <div class="acct-h">{t("acct.plugins")}</div>
@@ -270,7 +372,9 @@ function Account({ pl }: { pl: PluginsView | null }) {
                 <span
                   key={p}
                   class={`chip${r.profiles[p].enabled ? " on" : ""}`}
-                  title={`${p}: ${t(r.profiles[p].enabled ? "pl.on" : "pl.off")}`}
+                  title={`${p}: ${
+                    t(r.profiles[p].enabled ? "pl.on" : "pl.off")
+                  }`}
                 >
                   {p}
                 </span>
@@ -339,7 +443,9 @@ export function Plugins() {
     setPl(await get<PluginsView>("/api/plugins" + (fresh ? "?fresh" : "")));
   };
   /** Ask for a page: from the start (a new search or marketplace, or `fresh`) or the one after what is shown. */
-  const loadCatalog = async (opts: { fresh?: boolean; more?: boolean; q?: string; mk?: string } = {}) => {
+  const loadCatalog = async (
+    opts: { fresh?: boolean; more?: boolean; q?: string; mk?: string } = {},
+  ) => {
     const n = ++seq.current, cur = catRef.current;
     const offset = opts.more && cur ? cur.entries.length : 0;
     const qs = new URLSearchParams({
@@ -353,7 +459,9 @@ export function Plugins() {
     try {
       const r = await get<Catalog>("/api/plugins/catalog?" + qs);
       if (n !== seq.current) return; // a newer request owns the table
-      const next = opts.more && cur ? { ...r, entries: [...cur.entries, ...r.entries] } : r;
+      const next = opts.more && cur
+        ? { ...r, entries: [...cur.entries, ...r.entries] }
+        : r;
       catRef.current = next;
       setCat(next);
       setCatLoading(null);
@@ -372,9 +480,15 @@ export function Plugins() {
   // leaving the page while an operation runs must not leave the lock class behind
   useEffect(() => () => document.body.classList.remove("plbusy"), []);
 
-  const reloadAll = (fresh: boolean) => Promise.all([loadPlugins(true), fresh ? loadCatalog({ fresh: true }) : null]);
-  const run = (body: Body, label: string) => plOp(body, label, () => loadPlugins(true));
-  const runMk = (body: Body, label: string) => plOp(body, label, () => reloadAll(true));
+  const reloadAll = (fresh: boolean) =>
+    Promise.all([
+      loadPlugins(true),
+      fresh ? loadCatalog({ fresh: true }) : null,
+    ]);
+  const run = (body: Body, label: string) =>
+    plOp(body, label, () => loadPlugins(true));
+  const runMk = (body: Body, label: string) =>
+    plOp(body, label, () => reloadAll(true));
 
   const page = cat?.entries ?? [];
   const total = cat?.total ?? 0;
@@ -385,7 +499,13 @@ export function Plugins() {
         <div class="panel-h">
           <h3>{t("pl.title")}</h3>
           <span class="r">{sumOf(pl)}</span>
-          <button type="button" class="btn" onClick={() => void reloadAll(true).catch(toastErr)}>{t("pl.refresh")}</button>
+          <button
+            type="button"
+            class="btn"
+            onClick={() => void reloadAll(true).catch(toastErr)}
+          >
+            {t("pl.refresh")}
+          </button>
         </div>
         <div class="scroll">
           <PluginTable pl={pl} run={run} />
@@ -404,39 +524,62 @@ export function Plugins() {
             value={q}
             onInput={(e) => setQ((e.target as HTMLInputElement).value)}
           />
-          <select class="sel" value={mk} onChange={(e) => setMk((e.target as HTMLSelectElement).value)}>
+          <select
+            class="sel"
+            value={mk}
+            onChange={(e) => setMk((e.target as HTMLSelectElement).value)}
+          >
             <option value="">{t("cat.allMk")}</option>
-            {(cat?.marketplaces ?? []).map((m) => <option key={m} value={m}>{m}</option>)}
+            {(cat?.marketplaces ?? []).map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
           </select>
           <span class="r">
-            {catLoading !== null ? t("cat.loadingN", { n: catLoading }) : cat ? t("cat.sum", { n: page.length, t: total }) : ""}
+            {catLoading !== null
+              ? t("cat.loadingN", { n: catLoading })
+              : cat
+              ? t("cat.sum", { n: page.length, t: total })
+              : ""}
           </span>
         </div>
         <div class="scroll">
           <table class="cat">
             <tbody>
               {!cat
-                ? <tr><td class="empty">{t("cat.loading")}</td></tr>
+                ? (
+                  <tr>
+                    <td class="empty">{t("cat.loading")}</td>
+                  </tr>
+                )
                 : page.length || total > page.length
                 ? (
                   <>
-                    {page.map((c) => <CatalogRow key={c.id} c={c} pl={pl} run={run} />)}
+                    {page.map((c) => (
+                      <CatalogRow key={c.id} c={c} pl={pl} run={run} />
+                    ))}
                     {total > page.length && (
                       <tr>
                         <td class="empty" colSpan={3}>
                           <button
                             type="button"
                             class="btn ghost sm"
-                            onClick={() => loadCatalog({ more: true }).catch(toastErr)}
+                            onClick={() =>
+                              loadCatalog({ more: true }).catch(toastErr)}
                           >
-                            {t("cat.more", { n: Math.min(CAT_PAGE, total - page.length) })}
+                            {t("cat.more", {
+                              n: Math.min(CAT_PAGE, total - page.length),
+                            })}
                           </button>
                         </td>
                       </tr>
                     )}
                   </>
                 )
-                : <tr><td class="empty">{t("cat.nothing")}</td></tr>}
+                : (
+                  <tr>
+                    <td class="empty">{t("cat.nothing")}</td>
+                  </tr>
+                )}
             </tbody>
           </table>
         </div>
@@ -446,8 +589,15 @@ export function Plugins() {
         <div class="panel">
           <div class="panel-h">
             <h3>{t("mk.title")}</h3>
-            <span class="r"><code>extraKnownMarketplaces</code></span>
-            <button type="button" class="btn" onClick={() => void runMk({ op: "marketplace-update" }, t("mk.opUpdateAll"))}>
+            <span class="r">
+              <code>extraKnownMarketplaces</code>
+            </span>
+            <button
+              type="button"
+              class="btn"
+              onClick={() =>
+                void runMk({ op: "marketplace-update" }, t("mk.opUpdateAll"))}
+            >
               {t("mk.updateAll")}
             </button>
           </div>
@@ -458,19 +608,30 @@ export function Plugins() {
                   ? pl.marketplaces.map((m) => (
                     <tr key={m.name}>
                       <td>
-                        <span class="pname">{m.name}</span> <span class="dim">{m.source}</span>
+                        <span class="pname">{m.name}</span>{" "}
+                        <span class="dim">{m.source}</span>
                       </td>
                       <td class="txt">
                         {m.declared
                           ? <span class="chip on">{t("mk.shared")}</span>
-                          : <span class="chip" title={t("mk.localTitle")}>{t("mk.local")}</span>}
+                          : (
+                            <span class="chip" title={t("mk.localTitle")}>
+                              {t("mk.local")}
+                            </span>
+                          )}
                       </td>
-                      <td title={t("mk.known")}>{m.known.length}/{profs.length}</td>
+                      <td title={t("mk.known")}>
+                        {m.known.length}/{profs.length}
+                      </td>
                       <td class="acts">
                         <button
                           type="button"
                           class="btn ghost sm"
-                          onClick={() => void runMk({ op: "marketplace-update", name: m.name }, t("pl.opUpdating", { id: m.name }))}
+                          onClick={() =>
+                            void runMk({
+                              op: "marketplace-update",
+                              name: m.name,
+                            }, t("pl.opUpdating", { id: m.name }))}
                         >
                           {t("pl.update")}
                         </button>
@@ -479,7 +640,10 @@ export function Plugins() {
                           class="btn ghost sm danger"
                           onClick={() => {
                             if (confirm(t("mk.confirmRemove", { n: m.name }))) {
-                              void runMk({ op: "marketplace-remove", name: m.name }, t("pl.opRemoving", { id: m.name }));
+                              void runMk({
+                                op: "marketplace-remove",
+                                name: m.name,
+                              }, t("pl.opRemoving", { id: m.name }));
                             }
                           }}
                         >
@@ -489,7 +653,11 @@ export function Plugins() {
                     </tr>
                   ))
                   : pl
-                  ? <tr><td class="empty">{t("mk.none")}</td></tr>
+                  ? (
+                    <tr>
+                      <td class="empty">{t("mk.none")}</td>
+                    </tr>
+                  )
                   : null}
               </tbody>
             </table>
@@ -500,7 +668,10 @@ export function Plugins() {
               e.preventDefault();
               const s = source.trim();
               if (!s) return;
-              void runMk({ op: "marketplace-add", source: s }, t("mk.opAdding", { s })).then(() => setSource(""));
+              void runMk(
+                { op: "marketplace-add", source: s },
+                t("mk.opAdding", { s }),
+              ).then(() => setSource(""));
             }}
           >
             <input

@@ -1,7 +1,7 @@
 // prefs.ts — the viewer's theme and language, kept in this browser (the same keys as the old console).
 
 import { effect, signal } from "@preact/signals";
-import { LANGS, langPref, setLangPref } from "../i18n.ts";
+import { langPref, LANGS, setLangPref } from "../i18n.ts";
 
 export type Theme = "auto" | "dark" | "light";
 
@@ -26,7 +26,11 @@ effect(() => {
 });
 
 export function cycleTheme(): void {
-  theme.value = theme.value === "auto" ? "dark" : theme.value === "dark" ? "light" : "auto";
+  theme.value = theme.value === "auto"
+    ? "dark"
+    : theme.value === "dark"
+    ? "light"
+    : "auto";
 }
 
 export function cycleLang(): void {

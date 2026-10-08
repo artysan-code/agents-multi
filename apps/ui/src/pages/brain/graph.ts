@@ -4,7 +4,14 @@
 // Drawn on a canvas, imperatively: d3 only moves the points. The components own the canvas element
 // and call `destroy()` when it goes.
 
-import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from "d3-force";
+import {
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  forceX,
+  forceY,
+} from "d3-force";
 import { AREAS } from "./model.ts";
 
 export interface GNode {
@@ -45,26 +52,55 @@ export interface Graph {
   destroy(): void;
 }
 
-export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Graph {
-  const { onClick, onOpen, charge = 260, distance = 60, labelRoom = 0, cluster = .05 } = opts;
+export function forceGraph(
+  canvas: HTMLCanvasElement,
+  opts: GraphOpts = {},
+): Graph {
+  const {
+    onClick,
+    onOpen,
+    charge = 260,
+    distance = 60,
+    labelRoom = 0,
+    cluster = .05,
+  } = opts;
   const ctx = canvas.getContext("2d")!;
-  let nodes: Node[] = [], links: Link[] = [], byId = new Map<string, Node>(), adj = new Map<string, Set<string>>();
+  let nodes: Node[] = [],
+    links: Link[] = [],
+    byId = new Map<string, Node>(),
+    adj = new Map<string, Set<string>>();
   let top = new Set<string>();
-  let tf = { k: 1, x: 0, y: 0 }, raf = 0, W = 0, H = 0, dpr = 1, moved = false, fitted = false;
-  let hover: Node | null = null, drag: Node | null = null, pan: { x: number; y: number } | null = null;
-  let selected: Node | null = null, match: Set<string> | null = null, colorsAt = 0, dead = false;
+  let tf = { k: 1, x: 0, y: 0 },
+    raf = 0,
+    W = 0,
+    H = 0,
+    dpr = 1,
+    moved = false,
+    fitted = false;
+  let hover: Node | null = null,
+    drag: Node | null = null,
+    pan: { x: number; y: number } | null = null;
+  let selected: Node | null = null,
+    match: Set<string> | null = null,
+    colorsAt = 0,
+    dead = false;
   const colors: Record<string, string> = {};
 
   const readColors = () => {
     const cs = getComputedStyle(document.documentElement);
-    for (const g of [...AREAS, "other"]) colors[g] = cs.getPropertyValue(`--g-${g}`).trim() || "#888";
+    for (const g of [...AREAS, "other"]) {
+      colors[g] = cs.getPropertyValue(`--g-${g}`).trim() || "#888";
+    }
     for (const k of ["line", "fg", "fg-dim", "fg-faint", "accent", "surface"]) {
       colors[k] = cs.getPropertyValue(`--${k}`).trim();
     }
     colorsAt = Date.now();
   };
   const radius = (n: Node) => 3.5 + Math.sqrt(n.deg) * 1.9;
-  const world = (sx: number, sy: number) => ({ x: (sx - tf.x) / tf.k, y: (sy - tf.y) / tf.k });
+  const world = (sx: number, sy: number) => ({
+    x: (sx - tf.x) / tf.k,
+    y: (sy - tf.y) / tf.k,
+  });
   const nodeAt = (sx: number, sy: number): Node | null => {
     const p = world(sx, sy);
     let best: Node | null = null, bd = Infinity;
@@ -92,16 +128,29 @@ export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Gra
   function fit(pad = 40) {
     if (!nodes.length || !W) return;
     const xs = nodes.map((n) => n.x), ys = nodes.map((n) => n.y);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const x0 = Math.min(...xs),
+      x1 = Math.max(...xs),
+      y0 = Math.min(...ys),
+      y1 = Math.max(...ys);
     const room = Math.min(labelRoom, W / 3);
-    const k = Math.min((W - pad * 2 - room) / Math.max(x1 - x0, 1), (H - pad * 2) / Math.max(y1 - y0, 1), 2.2);
-    tf = { k, x: (W - room) / 2 - (x0 + x1) / 2 * k, y: H / 2 - (y0 + y1) / 2 * k };
+    const k = Math.min(
+      (W - pad * 2 - room) / Math.max(x1 - x0, 1),
+      (H - pad * 2) / Math.max(y1 - y0, 1),
+      2.2,
+    );
+    tf = {
+      k,
+      x: (W - room) / 2 - (x0 + x1) / 2 * k,
+      y: H / 2 - (y0 + y1) / 2 * k,
+    };
   }
 
   // where each area gathers: points on a circle, in the order of AREAS
   const anchors = new Map<string, { x: number; y: number }>();
   const place = () => {
-    const groups = [...AREAS, "other"].filter((g) => nodes.some((n) => n.group === g));
+    const groups = [...AREAS, "other"].filter((g) =>
+      nodes.some((n) => n.group === g)
+    );
     const R = groups.length > 1 ? 30 + Math.sqrt(nodes.length) * 16 : 0;
     groups.forEach((g, i) => {
       const a = i / groups.length * Math.PI * 2 - Math.PI / 2;
@@ -110,13 +159,16 @@ export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Gra
   };
   const anchor = (n: Node) => anchors.get(n.group) ?? { x: 0, y: 0 };
   type SimLink = { source: Node; target: Node };
-  const linkForce = forceLink<Node, SimLink>().distance(distance).strength((l) =>
-    0.9 / Math.min(l.source.deg, l.target.deg)
-  );
+  const linkForce = forceLink<Node, SimLink>().distance(distance).strength((
+    l,
+  ) => 0.9 / Math.min(l.source.deg, l.target.deg));
   // a page with no links would drift to the edge and shrink the picture: it is held closer
   const pull = (n: Node) => n.deg ? cluster : cluster * 3;
   const sim = forceSimulation<Node>()
-    .force("charge", forceManyBody<Node>().strength(-charge / 4).distanceMax(600))
+    .force(
+      "charge",
+      forceManyBody<Node>().strength(-charge / 4).distanceMax(600),
+    )
     .force("link", linkForce)
     .force("collide", forceCollide<Node>((n) => radius(n) + 10))
     .force("x", forceX<Node>((n) => anchor(n).x).strength(pull))
@@ -139,7 +191,8 @@ export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Gra
     ctx.lineCap = "round";
     for (const l of links) {
       const hot = !!focus && (l.s === focus || l.t === focus);
-      const dim = (match && !(match.has(l.s.id) && match.has(l.t.id))) || (focus && !hot);
+      const dim = (match && !(match.has(l.s.id) && match.has(l.t.id))) ||
+        (focus && !hot);
       ctx.globalAlpha = hot ? .95 : dim ? .08 : .32;
       ctx.strokeStyle = hot ? colors.accent : colors["fg-faint"];
       ctx.lineWidth = (hot ? 1.8 : 1) / tf.k;
@@ -170,7 +223,8 @@ export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Gra
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
     for (const n of nodes) {
-      const show = n === focus || (near && near.has(n.id)) || (match && match.has(n.id) && match.size <= 40) ||
+      const show = n === focus || (near && near.has(n.id)) ||
+        (match && match.has(n.id) && match.size <= 40) ||
         (!focus && !match && (tf.k > 1.25 || top.has(n.id)));
       if (!show) continue;
       const label = n.title.length > 38 ? n.title.slice(0, 37) + "…" : n.title;
@@ -201,7 +255,8 @@ export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Gra
   };
 
   // pointer: a node drags, the background pans; a press without a move is a click
-  let down: { sx: number; sy: number; n: Node | null; far: boolean } | null = null;
+  let down: { sx: number; sy: number; n: Node | null; far: boolean } | null =
+    null;
   const at = (e: MouseEvent) => {
     const r = canvas.getBoundingClientRect();
     return { sx: e.clientX - r.left, sy: e.clientY - r.top };
@@ -289,22 +344,34 @@ export function forceGraph(canvas: HTMLCanvasElement, opts: GraphOpts = {}): Gra
         const o = old.get(n.id);
         if (o) return Object.assign(o, n);
         const a = i * 2.4; // a spiral start settles faster than noise
-        return { ...n, x: Math.cos(a) * (8 + i * 2.2), y: Math.sin(a) * (8 + i * 2.2), vx: 0, vy: 0, deg: 0 };
+        return {
+          ...n,
+          x: Math.cos(a) * (8 + i * 2.2),
+          y: Math.sin(a) * (8 + i * 2.2),
+          vx: 0,
+          vy: 0,
+          deg: 0,
+        };
       });
       byId = new Map(nodes.map((n) => [n.id, n]));
-      links = ls.map(([a, b]) => ({ s: byId.get(a)!, t: byId.get(b)! })).filter((l) => l.s && l.t && l.s !== l.t);
+      links = ls.map(([a, b]) => ({ s: byId.get(a)!, t: byId.get(b)! })).filter(
+        (l) => l.s && l.t && l.s !== l.t,
+      );
       adj = new Map(nodes.map((n) => [n.id, new Set<string>()]));
       for (const l of links) {
         adj.get(l.s.id)!.add(l.t.id);
         adj.get(l.t.id)!.add(l.s.id);
       }
       for (const n of nodes) n.deg = adj.get(n.id)!.size;
-      top = new Set([...nodes].sort((a, b) => b.deg - a.deg).slice(0, 8).map((n) => n.id));
+      top = new Set(
+        [...nodes].sort((a, b) => b.deg - a.deg).slice(0, 8).map((n) => n.id),
+      );
       // d3 reads the anchors, the degrees and the links when it is handed the nodes
       place();
       sim.nodes(nodes);
       linkForce.links(links.map((l) => ({ source: l.s, target: l.t })));
-      const fresh = nodes.some((n) => !old.has(n.id)) || nodes.length !== old.size;
+      const fresh = nodes.some((n) => !old.has(n.id)) ||
+        nodes.length !== old.size;
       if (fresh) {
         // most of the settling happens before the first frame: the graph opens in order, and
         // keeps moving only when touched

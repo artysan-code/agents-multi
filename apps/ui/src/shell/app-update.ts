@@ -9,7 +9,14 @@
 import { signal } from "@preact/signals";
 import { get, post, type Result } from "../api.ts";
 
-export type AppUpdateState = "idle" | "checking" | "downloading" | "ready" | "installing" | "restarting" | "error";
+export type AppUpdateState =
+  | "idle"
+  | "checking"
+  | "downloading"
+  | "ready"
+  | "installing"
+  | "restarting"
+  | "error";
 
 export interface AppUpdate {
   /** whether an app answers */
@@ -40,8 +47,12 @@ export async function loadAppUpdate(): Promise<void> {
   appUpdate.value = await get<AppUpdate>("/api/app/update").catch(() => null);
 }
 
-export async function appUpdateAction(action: "check" | "install" | "dismiss"): Promise<Result> {
-  const r = await post("/api/app/update", { action }).catch((e: Error): Result => ({ ok: false, message: e.message }));
+export async function appUpdateAction(
+  action: "check" | "install" | "dismiss",
+): Promise<Result> {
+  const r = await post("/api/app/update", { action }).catch((
+    e: Error,
+  ): Result => ({ ok: false, message: e.message }));
   await loadAppUpdate();
   return r;
 }
@@ -50,6 +61,14 @@ export async function appUpdateAction(action: "check" | "install" | "dismiss"): 
 export function notePoints(notes: string, n = 3): string[] {
   const lines = notes.split("\n").map((l) => l.trim()).filter(Boolean);
   const items = lines.filter((l) => /^[-*] /.test(l)).map((l) => l.slice(2));
-  return (items.length ? items : lines.filter((l) => !l.startsWith("#"))).slice(0, n)
-    .map((l) => l.replace(/\*\*([^*]+)\*\*:?\s*/g, "$1: ").replace(/\s*\([0-9a-f]{7,}\)$/, ""));
+  return (items.length ? items : lines.filter((l) => !l.startsWith("#"))).slice(
+    0,
+    n,
+  )
+    .map((l) =>
+      l.replace(/\*\*([^*]+)\*\*:?\s*/g, "$1: ").replace(
+        /\s*\([0-9a-f]{7,}\)$/,
+        "",
+      )
+    );
 }
