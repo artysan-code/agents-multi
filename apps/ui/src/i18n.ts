@@ -1,6 +1,6 @@
 // i18n.ts — the strings of the new interface, English and Italian, one dictionary per area in ./i18n/
 // (the frame, then each page). The type makes Italian carry every English key: a string added in one
-// language only does not compile. Keys move here from apps/cli/dashboard/i18n.js as their page moves.
+// language only does not compile.
 // The language: the viewer's pick (the same localStorage key as the old console), else the machine's,
 // else the browser's, else English. Both are signals, so a page redraws when either changes.
 

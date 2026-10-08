@@ -1,5 +1,5 @@
 /* v2.css — the console's look since the «Today» redesign (docs: the design is the person's; the tokens
-   are derived from apps/cli/dashboard/style.css). Loaded after that sheet: it sets the design's tokens
+   are derived from base.css). Loaded after that sheet: it sets the design's tokens
    under the old names too, so the pages not yet redrawn take the same palette. The faces are bundled
    (SIL OFL, licences beside them): DM Sans for the interface, Source Serif for dates and Claude's
    voice, JetBrains Mono for numbers and paths. Nothing is fetched from the network. */

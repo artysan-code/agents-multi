@@ -1,6 +1,5 @@
 // server.ts — the local console: `agents serve` listens on http://127.0.0.1:7331 and serves
-// the interface built from apps/ui, its API, and for one release the old page in apps/cli/dashboard/
-// under /old.
+// the interface built from apps/ui, and its API.
 //
 // Routes are a table: each path has a GET handler, a POST handler, or both. A POST handler runs only
 // with the anti-CSRF header; a path with only a POST handler answers 405 to anything else. The
@@ -27,7 +26,7 @@ import { catalog, catalogPage, details, inventory, type PluginOp, pluginOp } fro
 import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
 import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
-import { hasCsrfHeader, isLocalHost, json, jsonText, staticFile, uiFile } from "./http.ts";
+import { hasCsrfHeader, isLocalHost, json, jsonText, uiFile } from "./http.ts";
 import { broadcast, eventStream, onTopic, watchBrain, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
@@ -42,8 +41,6 @@ import { jobsFor, startSchedule } from "./schedule.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
-
-const DASH = `${REPO}/apps/cli/dashboard`;
 
 interface Ctx {
   req: Request;
@@ -304,9 +301,6 @@ export function createHandler(
         await taskApi(req, u, json, () => broadcast("tasks")) ??
         (req.method === "GET" ? await memoryApi(u) : null);
       if (delegated) return delegated;
-      // the old console, kept one release as a fallback; its page links its files relatively
-      if (u.pathname === "/old") return Response.redirect(`${u.origin}/old/`, 301);
-      if (u.pathname.startsWith("/old/")) return await staticFile(DASH, u.pathname.slice(4));
       return await uiFile(uiDist, u.pathname);
     } catch (e) {
       return json({ error: (e as Error).message }, 500);

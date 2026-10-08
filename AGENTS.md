@@ -51,9 +51,8 @@ a console, and a desktop app that carries it all. **This repository is the sourc
   `src/router.ts`). Libraries are pinned and bundled, never from a CDN (the console works offline). The
   build is not committed: `agents ui build` makes it; `pnpm dev` in `apps/ui` serves it with hot reload
   against the running console.
-- **The previous page (`apps/cli/dashboard`) is served under `/old/` until it is removed**: do not add
-  to it. Its `style.css` and `fonts/` are still the new page's style sheet, until they move into
-  `apps/ui`.
+- **The console's styles are `apps/ui/src/styles/`**: `base.css` (palette, faces, components) and
+  `v2.css` over it; the faces are in `apps/ui/src/fonts/`, licences included.
 - **Anthropic's marks are not ours to show**: the console uses Agents Multi's logo
   (`apps/ui/src/assets/mark.svg`) for itself and for Claude at work. From the installed Claude Desktop
   it reads only the text faces (`apps/cli/claude-assets.ts`), never copied into the repository.

@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn new_windows_never_stay_in_the_app() {
         assert_eq!(
-            external(&u("http://127.0.0.1:7331/old/")),
+            external(&u("http://127.0.0.1:7331/other/")),
             Decision::OpenExternally
         );
         assert_eq!(external(&u("data:text/html,hi")), Decision::Block);

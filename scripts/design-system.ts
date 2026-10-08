@@ -1,5 +1,5 @@
 // design-system.ts — keeps the console's design system (a claude.ai "Design System" artifact) the
-// same as the console: its colours and its stylesheet come from cli/dashboard/style.css.
+// same as the console: its colours and its stylesheet come from apps/ui/src/styles/base.css.
 //
 //   deno run --allow-read --allow-write scripts/design-system.ts <dir>
 //
@@ -9,7 +9,7 @@
 // console's stylesheet without its @font-face, token blocks and full-window shell. Publishing the
 // two files back to the artifact is a separate step (the Artifact tool).
 
-const CSS = new URL("../apps/cli/dashboard/style.css", import.meta.url);
+const CSS = new URL("../apps/ui/src/styles/base.css", import.meta.url);
 
 /** Pure: `--name: value;` of the first block opened by `selector`, as a map. */
 export function cssVars(css: string, selector: string): Record<string, string> {
@@ -35,7 +35,7 @@ export function bundleCss(css: string): string {
   const a = b.indexOf("/* one colour per area"), z = b.indexOf(".md {", a);
   if (a >= 0 && z > a) b = b.slice(0, a) + b.slice(z);
   if (/<\/style/i.test(b)) throw new Error("style.css holds </style: it would end the preview's <style>");
-  return "/* agents-multi — the console's stylesheet (cli/dashboard/style.css) without its @font-face and token blocks:\n" +
+  return "/* agents-multi — the console's stylesheet (apps/ui/src/styles/base.css) without its @font-face and token blocks:\n" +
     "   tokens.css carries those. The console reads --sans/--serif/--mono; here they point at the system's families. */\n" +
     ":root { --sans: var(--font-sans); --serif: var(--font-serif); --mono: var(--font-mono); }\n\n" + b;
 }

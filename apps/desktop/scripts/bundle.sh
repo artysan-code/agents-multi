@@ -38,7 +38,7 @@ install -m 755 "$(command -v deno)" "$TAURI/binaries/agents-multi-deno-$target$e
 
 # The source: the CLI's module graph (it imports a few of the brain's modules), and what it reads at run
 # time — shared/ (settings, hooks, the MCP registry and servers), bin/ (the commands the console runs and
-# the launchers), the old page (apps/cli/dashboard), what install, init and the doctor read (desktop/,
+# the launchers), what install, init and the doctor read (desktop/,
 # config.example/, pkg/), the manifest, the lock, the changelog and the licences — as tracked by git, and
 # the built page. Not the tests, and not systemd/: app mode installs no units (the app runs their jobs).
 stage="$TAURI/bundle"

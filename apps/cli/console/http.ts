@@ -40,28 +40,6 @@ const MIME: Record<string, string> = {
 };
 
 /**
- * A file of the page under `dir`: the fonts as immutable bytes, the rest as text revalidated on
- * each load. Only flat names (and vendor/) are served; anything else is a 404.
- */
-export async function staticFile(dir: string, pathname: string): Promise<Response> {
-  const font = pathname.match(/^\/fonts\/([a-z0-9-]+\.woff2)$/);
-  if (font) {
-    const bytes = await Deno.readFile(`${dir}/fonts/${font[1]}`).catch(() => null);
-    if (!bytes) return new Response("not found", { status: 404 });
-    return new Response(bytes, {
-      headers: { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" },
-    });
-  }
-  const path = pathname === "/" ? "/index.html" : pathname;
-  // the page's files, and the libraries it carries in vendor/ (no CDN: the console works offline)
-  if (!/^\/(vendor\/)?[a-z0-9_.-]+$/i.test(path)) return new Response("not found", { status: 404 });
-  const ext = path.slice(path.lastIndexOf("."));
-  const body = await readText(`${dir}${path}`);
-  if (body === null || !MIME[ext]) return new Response("not found", { status: 404 });
-  return new Response(body, { headers: { "content-type": MIME[ext], "cache-control": "no-cache" } });
-}
-
-/**
  * A file of the console's interface, from its build in `dist`: the page itself revalidated on each
  * load, its hashed assets immutable. A console whose interface is not built says how to build it, and
  * where the old one still is.
@@ -72,7 +50,7 @@ export async function uiFile(dist: string, pathname: string): Promise<Response> 
     const page = await readText(`${dist}/index.html`);
     if (page === null) {
       return new Response(
-        "The console's interface is not built: run `agents ui build`. The old one is at /old/.",
+        "The console's interface is not built: run `agents ui build`.",
         {
           status: 503,
           headers: { "content-type": "text/plain; charset=utf-8" },

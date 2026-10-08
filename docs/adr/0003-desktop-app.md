@@ -46,8 +46,7 @@ shell's.
   - **The source mirrors the repository's layout**, so every `REPO`-relative path keeps working:
     `REPO` (`apps/cli/lib/paths.ts`) is still the folder the code is in, now decoded (a macOS bundle
     sits under `Agents Multi.app`). It is the CLI's module graph (with the four brain modules it
-    imports), and, as git tracks them, `apps/cli` without its tests (the old page under `/old/` is
-    there), `shared/` (settings, hooks, the MCP registry and servers), `bin/` (the commands the
+    imports), and, as git tracks them, `apps/cli` without its tests, `shared/` (settings, hooks, the MCP registry and servers), `bin/` (the commands the
     console runs), `deno.json`, `deno.lock`, `CHANGELOG.md` («What's new»), plus the built
     `apps/ui/dist`; since the replacement step also what install, init and the doctor read
     (`desktop/`, `config.example/`, `pkg/`), and `build.json` (the version, the commit and a digest of

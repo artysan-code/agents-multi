@@ -1,4 +1,4 @@
-/* The landing of agents-multi. The console's palette and faces (cli/dashboard/style.css, fonts.css);
+/* The landing of agents-multi. The console's palette and faces (apps/ui/src/styles/base.css, fonts.css);
    what moves on load moves in CSS, what moves on scroll is motion (src/scripts/landing.ts), and
    everything stops for reduced motion. */
 

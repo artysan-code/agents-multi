@@ -259,9 +259,6 @@ the machine and never committed: `install` and every update that changed `apps/u
 `agents ui build`, a failed build keeps the previous one, and the doctor says when it is missing or
 behind. It needs pnpm.
 
-The previous page (`apps/cli/dashboard/`, HTML and vanilla JS with no build step) stays at
-<http://127.0.0.1:7331/old/> for one release, as a fallback, and goes in the next.
-
 Five sections, in English or Italian. The language follows the machine's locale — the regional
 format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
 the globe button in the rail overrides it per browser.
@@ -551,7 +548,6 @@ bin/            wrappers and scripts: claude, agents-multi, claude-multi-app, cl
 bin/lib/        prelaunch.sh — repository sync before every launch, dev mode only (pure bash, never blocking)
 apps/cli/            the agents-multi CLI (Deno, zero dependencies)
 apps/ui/             the console page (Preact + TSX, Vite, pnpm)
-apps/cli/dashboard/  the previous console page, under /old for one release; its style.css and fonts are the UI's too
 shared/         what every profile gets: agents, commands, hooks, skills, the MCP catalogue, base settings.json
 config.example/ the configuration `agents init` starts from
 apps/desktop/   the desktop app (Tauri): console window, tray, picker, the backend and the post-update install

@@ -101,9 +101,8 @@ SOFTWARE.
 
 ## Fonts, scripts and marks with their licence beside them
 
-- DM Sans and Source Serif 4: SIL Open Font License 1.1 — `apps/cli/dashboard/fonts/OFL-*.txt`,
+- DM Sans and Source Serif 4: SIL Open Font License 1.1 — `apps/ui/src/fonts/OFL-*.txt`,
   `apps/site/public/fonts/OFL-*.txt`
 - JetBrains Mono: SIL Open Font License 1.1 — `apps/ui/src/fonts/OFL-JetBrainsMono.txt`
-- d3-force: ISC — `apps/cli/dashboard/vendor/LICENSE-d3.txt`
 - Service logos: Simple Icons 16.34.0, CC0-1.0 (<https://simpleicons.org>) — noted in
-  `apps/ui/src/pages/connections/logos.ts` and `apps/cli/dashboard/logos.js`
+  `apps/ui/src/pages/connections/logos.ts`

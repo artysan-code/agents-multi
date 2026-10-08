@@ -4,7 +4,7 @@
 // the first-run wizard.
 
 import { render } from "preact";
-import "../../cli/dashboard/style.css";
+import "./styles/base.css";
 import "./styles/v2.css";
 import { App } from "./app.tsx";
 import { Pick } from "./pages/pick/index.tsx";

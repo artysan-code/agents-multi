@@ -21,7 +21,6 @@
       "apps/site/",
       "apps/ui/",
       "apps/desktop/pnpm-lock.yaml",
-      "apps/cli/dashboard/vendor/",
       "shared/skills/graphify/",
       "desktop/icons/",
       "**/*.svg"
@@ -29,7 +28,6 @@
   },
   "lint": {
     "exclude": [
-      "apps/cli/dashboard/vendor/",
       "apps/site/",
       "apps/ui/"
     ],
