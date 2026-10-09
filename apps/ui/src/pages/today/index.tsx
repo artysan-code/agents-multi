@@ -1,7 +1,7 @@
-// today/index.tsx — the Today page, a board in three bands under the ask bar: plan (what is next and the
-// line of the day), then the tasks that matter now, and beside them Claude at work (sessions). The
+// today/index.tsx — the Today page, under the ask bar: the day first, a tall card with what is next and
+// the agenda; beside it the tasks that matter now, and under them Claude at work (sessions). The
 // machine's health is the rail's.
-// Nothing on the page scrolls but the task list. Each part is its own module; this one loads the day
+// Nothing on the page scrolls but the agenda and the task list. Each part is its own module; this one loads the day
 // and the board, and redraws them on each "tasks" event.
 
 import { useState } from "preact/hooks";
@@ -9,7 +9,7 @@ import { get } from "../../api.ts";
 import { useTopic } from "../../state.ts";
 import { refreshBoard } from "../tasks/model.ts";
 import type { Day } from "./api.ts";
-import { DayCard, NextCard } from "./day.tsx";
+import { DayCard } from "./day.tsx";
 import { TaskGroups } from "./groups.tsx";
 import { SessionsCard } from "./sessions.tsx";
 import "./today.css";
@@ -22,16 +22,11 @@ export function Today() {
   }, ["tasks"]);
   return (
     <div class="today2">
-      <section class="dayband">
-        <NextCard day={day} />
-        <DayCard day={day} />
-      </section>
-      <section class="lower">
+      <DayCard day={day} />
+      <aside class="side">
         <TaskGroups />
-        <aside class="side">
-          <SessionsCard />
-        </aside>
-      </section>
+        <SessionsCard />
+      </aside>
     </div>
   );
 }

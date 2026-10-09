@@ -1,7 +1,8 @@
-// day.tsx — the day band of Today: «Next», the next appointment with a countdown (an event or a task
-// with a time), and the line of the day: 08–21 on three lanes, events filled with their calendar's
-// colour, timed tasks outlined (ticked when done), the past hatched, a line for now. Above the line,
-// the counts, the all-day events and Claude's debrief in one sentence.
+// day.tsx — the day, Today's main card: «Next», the next appointment with a countdown (an event or a
+// task with a time), in one row; the counts, the all-day events, Claude's debrief in one sentence and
+// the day's tasks without a time; then the agenda, the hours down the card as a calendar draws them:
+// events filled with their calendar's colour, timed tasks outlined (ticked when done), side by side
+// when they overlap, the past hatched, a line for now.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { get, ndjson, postInit } from "../../api.ts";
@@ -15,15 +16,7 @@ import { askNow } from "../../shell/ask.tsx";
 import { board } from "../tasks/model.ts";
 import { openTask } from "../tasks/sheet.tsx";
 import type { Day, DayItem, DebriefDone } from "./api.ts";
-import {
-  countdown,
-  dayWindow,
-  firstSentence,
-  lanes,
-  minutes,
-  seenEnd,
-  upNext,
-} from "./model.ts";
+import { columns, countdown, dayWindow, firstSentence, minutes, upNext } from "./model.ts";
 
 const isEvent = (x: DayItem) => x.source === "calendar";
 const nowMin = (d: Date) => d.getHours() * 60 + d.getMinutes();
@@ -46,112 +39,64 @@ const span = (x: DayItem) => (x.end ? `${x.time}–${x.end}` : x.time ?? "");
 
 /* ---------------- next ---------------- */
 
-export function NextCard({ day }: { day: Day | null }) {
+function Next({ day }: { day: Day }) {
   const now = nowMin(minute.value);
-  const [next, then] = day ? upNext(timed(day), now) : [];
-  if (!day) return <article class="card nx" />;
+  const [next, then] = upNext(timed(day), now);
   if (!next) {
-    const tomorrow = day.tomorrow.filter((x) =>
-      x.time
-    ).sort((a, b) => a.time!.localeCompare(b.time!))[0];
+    const tomorrow = day.tomorrow.filter((x) => x.time).sort((a, b) => a.time!.localeCompare(b.time!))[0];
     return (
-      <article class="card nx">
-        <div class="lbl nx-l">{t("next.label")}</div>
-        <h3 class="nx-free">{t("next.free")}</h3>
+      <div class="nx">
+        <span class="lbl nx-l">{t("next.label")}</span>
+        <b class="nx-free">{t("next.free")}</b>
         {tomorrow && (
-          <div class="nx-then">
-            {t("next.tomorrow")}{" "}
-            <i
-              class="dot2"
-              style={{ "--k": tomorrow.color ?? "var(--accent)" }}
-            />
+          <span class="nx-then">
+            {t("next.tomorrow")} <i class="dot2" style={{ "--k": tomorrow.color ?? "var(--accent)" }} />
             <span>{tomorrow.title}</span>
             <time>· {tomorrow.time}</time>
-          </div>
+          </span>
         )}
-      </article>
+      </div>
     );
   }
   const cd = countdown(now, minutes(next.time)!);
   const ev = isEvent(next);
   return (
-    <article class="card nx">
-      <div class="lbl nx-l">{t("next.label")}</div>
-      <div class="nx-cd">
-        <span class="nx-in">{t("next.in")}</span>
-        <b>{cd.n}</b>
-        <span>
-          {cd.unit === "min"
-            ? t("next.min")
-            : cd.rest
-            ? t("next.hm", { m: cd.rest })
-            : t("next.h")}
+    <div class="nx">
+      <span class="lbl nx-l">{t("next.label")}</span>
+      <span class="nx-cd">
+        {t("next.in")} <b>{cd.n}</b>{" "}
+        {cd.unit === "min" ? t("next.min") : cd.rest ? t("next.hm", { m: cd.rest }) : t("next.h")}
+      </span>
+      <span class="nx-what">
+        <b title={next.title}>{next.title}</b>
+        <span class="nx-meta">
+          <i class="dot2" style={{ "--k": ev ? next.color ?? "var(--c-blue)" : "var(--accent)" }} />
+          {span(next)} · {ev ? t("next.cal", { c: next.calendar ?? "" }) : next.project ?? t("next.task")}
+          {then && <>{" · "}{t("next.then")} {then.title} {then.time}</>}
         </span>
-      </div>
-      <h3 title={next.title}>{next.title}</h3>
-      <div class="nx-meta">
-        <i
-          class="dot2"
-          style={{
-            "--k": ev ? next.color ?? "var(--c-blue)" : "var(--accent)",
-          }}
-        />
-        {span(next)} · {ev
-          ? t("next.cal", { c: next.calendar ?? "" })
-          : next.project ?? t("next.task")}
-      </div>
-      {then && (
-        <div class="nx-then">
-          {t("next.then")}{" "}
-          <i
-            class="dot2"
-            style={{
-              "--k": isEvent(then)
-                ? then.color ?? "var(--c-blue)"
-                : "var(--accent)",
-            }}
-          />
-          <span>{then.title}</span>
-          <time>· {then.time}</time>
-        </div>
-      )}
-      <div class="nx-act">
+      </span>
+      <span class="nx-act">
         <button
           type="button"
           class="bt sm pri"
           onClick={() =>
-            askNow(
-              t("next.prep.ask", {
-                t: next.title,
-                h: span(next),
-                c: next.calendar ?? next.project ?? "",
-              }),
-            )}
+            askNow(t("next.prep.ask", { t: next.title, h: span(next), c: next.calendar ?? next.project ?? "" }))}
         >
           {t("next.prep")}
         </button>
         {ev
           ? next.link && (
-            <a
-              class="bt sm ghost"
-              href={next.link}
-              target="_blank"
-              rel="noopener"
-            >
+            <a class="bt sm ghost" href={next.link} target="_blank" rel="noopener">
               {t("next.open")}
             </a>
           )
           : (
-            <button
-              type="button"
-              class="bt sm ghost"
-              onClick={() => void openTask(next.id)}
-            >
+            <button type="button" class="bt sm ghost" onClick={() => void openTask(next.id)}>
               {t("next.openTask")}
             </button>
           )}
-      </div>
-    </article>
+      </span>
+    </div>
   );
 }
 
@@ -243,7 +188,7 @@ function Debrief() {
   );
 }
 
-/* ---------------- the line of the day ---------------- */
+/* ---------------- the agenda ---------------- */
 
 interface Mark {
   x: DayItem;
@@ -284,88 +229,82 @@ function marks(day: Day): Mark[] {
   return out.sort((a, b) => a.start - b.start || b.end - a.end);
 }
 
-function Timeline({ day, next }: { day: Day; next: DayItem | undefined }) {
+/** Pixels a minute: 48 an hour. */
+const PX = 0.8;
+
+function Agenda({ day, next }: { day: Day; next: DayItem | undefined }) {
   const now = nowMin(minute.value);
   const ms = marks(day);
   // the window widens to now too, from the early morning on: the line for now is always there by day
-  const { from, to } = dayWindow(
-    now >= 5 * 60 ? [...ms, { start: now, end: now }] : ms,
-  );
-  const x = (m: number) => ((m - from) / (to - from)) * 100;
-  // the line's width, so that an item takes its lane up to where its title ends, not its time
-  const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const perMin = width / (to - from);
-  const lane = lanes(ms.map((m) => ({ start: m.start, end: seenEnd(m, m.x.title.length, perMin) })));
+  const { from, to } = dayWindow(now >= 5 * 60 ? [...ms, { start: now, end: now }] : ms);
+  const y = (m: number) => (m - from) * PX;
+  const cols = columns(ms);
   const hours: number[] = [];
   for (let h = from / 60; h <= to / 60; h++) hours.push(h);
   const inDay = now >= from && now <= to;
+  // opened on the hour before now, or on the first item when the day has not begun
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const at = inDay ? now - 60 : ms[0]?.start ?? from;
+    el.scrollTop = Math.max(0, y(at));
+  }, []);
   return (
-    <div class="tl" ref={box}>
-      {hours.map((h) => (
-        <div class="tl-hr" key={h} style={{ left: `${x(h * 60)}%` }}>
-          {(!inDay || Math.abs(h * 60 - now) > 25) && (
-            <span>{String(h).padStart(2, "0")}</span>
-          )}
-        </div>
-      ))}
-      <div
-        class="tl-past"
-        style={{ width: `${Math.min(100, Math.max(0, x(now)))}%` }}
-      />
-      {ms.map((m, i) => {
-        const ev = isEvent(m.x);
-        const past = m.end <= now;
-        const left = x(m.start), width = Math.max(x(m.end) - left, 1.2);
-        const cls = [
-          "tl-ev",
-          ev ? "" : "task",
-          ev ? "" : m.done ? "done" : "todo",
-          past ? "past" : "",
-          next && m.x.id === next.id ? "nx" : "",
-          left > 80 ? "flip" : "",
-        ].filter(Boolean).join(" ");
-        return (
-          <button
-            type="button"
-            key={m.x.id}
-            class={cls}
-            style={{
-              left: `${left}%`,
-              width: `${width}%`,
-              top: `${lane[i] * 28}px`,
-              ...(ev ? { "--k": m.x.color ?? "var(--c-blue)" } : {}),
-            }}
-            title={`${span(m.x)} ${m.x.title}`}
-            onClick={() => openItem(m.x)}
-          >
-            {!ev && (m.done
-              ? (
-                <svg viewBox="0 0 14 14">
-                  <path d="M3 7.5l2.6 2.5L11 4.5" />
-                </svg>
-              )
-              : (
-                <svg viewBox="0 0 14 14">
-                  <circle cx="7" cy="7" r="4.5" />
-                </svg>
-              ))}
-            <span class="t">{m.x.title}</span>
-          </button>
-        );
-      })}
-      {inDay && (
-        <div class="tl-now" style={{ left: `${x(now)}%` }}>
-          <span>{hhmm(minute.value)}</span>
-        </div>
-      )}
+    <div class="ag" ref={box}>
+      <div class="ag-in" style={{ height: `${y(to) + 8}px` }}>
+        {hours.map((h) => (
+          <div class="ag-hr" key={h} style={{ top: `${y(h * 60)}px` }}>
+            {(!inDay || Math.abs(h * 60 - now) > 12) && <span>{String(h).padStart(2, "0")}:00</span>}
+          </div>
+        ))}
+        {inDay && <div class="ag-past" style={{ height: `${y(now)}px` }} />}
+        {ms.map((m, i) => {
+          const ev = isEvent(m.x);
+          const { col, cols: n } = cols[i];
+          const h = Math.max((m.end - m.start) * PX - 2, 20);
+          const cls = [
+            "ag-ev",
+            ev ? "" : "task",
+            ev ? "" : m.done ? "done" : "todo",
+            m.end <= now ? "past" : "",
+            next && m.x.id === next.id ? "nx-on" : "",
+            h < 34 ? "short" : "",
+          ].filter(Boolean).join(" ");
+          return (
+            <button
+              type="button"
+              key={m.x.id}
+              class={cls}
+              style={{
+                top: `${y(m.start) + 1}px`,
+                height: `${h}px`,
+                left: `calc(var(--gut) + (100% - var(--gut)) * ${col / n})`,
+                width: `calc((100% - var(--gut)) / ${n} - 4px)`,
+                ...(ev ? { "--k": m.x.color ?? "var(--c-blue)" } : {}),
+              }}
+              title={`${span(m.x)} ${m.x.title}`}
+              onClick={() => openItem(m.x)}
+            >
+              {/* placed, not laid out: WebKitGTK centres what a button holds */}
+              <span class="in">
+                {!ev && (
+                  <svg viewBox="0 0 14 14">
+                    {m.done ? <path d="M3 7.5l2.6 2.5L11 4.5" /> : <circle cx="7" cy="7" r="4.5" />}
+                  </svg>
+                )}
+                <span class="t">{m.x.title}</span>
+                <time>{span(m.x) || m.x.time}</time>
+              </span>
+            </button>
+          );
+        })}
+        {inDay && (
+          <div class="ag-now" style={{ top: `${y(now)}px` }}>
+            <span>{hhmm(minute.value)}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -412,6 +351,7 @@ export function DayCard({ day }: { day: Day | null }) {
         ))}
         {allDay.length > 2 && <span class="dc-chip">+{allDay.length - 2}</span>}
       </div>
+      <Next day={day} />
       <Debrief />
       {looseItems.some((x) => x.status !== "done") && (
         <div class="dc-loose" aria-label={t("day.loose")}>
@@ -423,7 +363,7 @@ export function DayCard({ day }: { day: Day | null }) {
           ))}
         </div>
       )}
-      <Timeline day={day} next={upNext(timed(day), now)[0]} />
+      <Agenda day={day} next={upNext(timed(day), now)[0]} />
     </article>
   );
 }

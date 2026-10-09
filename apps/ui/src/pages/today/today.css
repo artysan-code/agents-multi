@@ -1,10 +1,10 @@
-/* today.css — the Today page (pages/today/*): the day band, the task groups, the system and sessions
-   cards. Scoped under .today2: some short names are taken by the shared sheet. */
+/* today.css — the Today page (pages/today/*): the day with its agenda, the task groups, the sessions
+   card. Scoped under .today2: some short names are taken by the shared sheet. */
 
 .today2 {
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
 .today2 .lnk {
@@ -17,67 +17,68 @@
   color: var(--fg);
 }
 
-/* ---------------- day band ---------------- */
-.dayband {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 14px;
-  min-height: 0;
-}
-.nx {
-  padding: 14px 18px;
+.dc {
+  padding: 14px 20px 0;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
+}
+
+/* next, a row under the date */
+.nx {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+  min-width: 0;
 }
 .nx-l {
   color: var(--accent);
+  flex: none;
 }
 .nx-cd {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-top: 2px;
+  flex: none;
+  font-size: 12.5px;
+  color: var(--dim);
+  white-space: nowrap;
 }
 .nx-cd b {
-  font: 600 38px/1 var(--sans);
-  letter-spacing: -.025em;
+  font: 600 22px/1 var(--sans);
+  letter-spacing: -.02em;
   color: var(--accent);
 }
-.nx-cd span {
-  font-size: 15px;
-  color: var(--dim);
-  font-weight: 500;
+.nx-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
-.nx-cd .nx-in {
-  font-size: 13px;
-}
-.nx h3 {
-  margin: 6px 0 2px;
-  font: 500 15px/1.3 var(--sans);
+.nx-what > b,
+.nx-free {
+  font: 500 14px/1.3 var(--sans);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.nx .nx-free {
-  margin-top: 10px;
-  font: 500 19px/1.3 var(--serif);
-  white-space: normal;
+.nx-free {
+  flex: 1;
 }
 .nx-meta,
 .nx-then {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--faint);
   display: flex;
   gap: 6px;
   align-items: center;
   white-space: nowrap;
   overflow: hidden;
+  min-width: 0;
 }
-.nx-then {
-  margin-top: 4px;
-}
-/* the title gives way, the time never does */
 .nx-then span {
   min-width: 0;
   overflow: hidden;
@@ -87,24 +88,174 @@
   flex-shrink: 0;
 }
 .nx-act {
-  margin-top: auto;
   display: flex;
   gap: 6px;
+  flex: none;
 }
 .nx-act a {
   text-decoration: none;
 }
 
-.dc {
-  padding: 14px 20px 10px;
+/* the agenda: the hours down the card, scrolled on its own */
+.ag {
+  --gut: 46px;
+  flex: 1;
+  min-height: 160px;
+  margin: 10px -20px 0 -20px;
+  padding: 6px 20px 12px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line-soft);
+}
+.ag-in {
+  position: relative;
+}
+.ag-hr {
+  position: absolute;
+  left: var(--gut);
+  right: 0;
+  border-top: 1px solid var(--line-soft);
+}
+.ag-hr span {
+  position: absolute;
+  left: calc(-1 * var(--gut));
+  top: -7px;
+  font: 10.5px var(--mono);
+  color: var(--faint);
+}
+.ag-past {
+  position: absolute;
+  left: var(--gut);
+  right: 0;
+  top: 0;
+  background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--line-soft) 5px 6px);
+  opacity: .5;
+}
+.ag-now {
+  position: absolute;
+  left: calc(var(--gut) - 6px);
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 3;
+  pointer-events: none;
+}
+.ag-now::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.ag-now span {
+  position: absolute;
+  left: calc(-1 * var(--gut) + 6px);
+  top: -8px;
+  font: 600 10.5px var(--mono);
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.ag-ev {
+  position: absolute;
+  border-radius: 7px;
+  overflow: hidden;
+  z-index: 2;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--k);
+  isolation: isolate;
+}
+.ag-ev::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--k);
+  opacity: .18;
+  z-index: -1;
+}
+.ag-ev:hover::before {
+  opacity: .32;
+}
+.ag-ev .in {
+  position: absolute;
+  inset: 0;
+  padding: 4px 8px 4px 10px;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
   min-width: 0;
+}
+.ag-ev .t {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-ev time {
+  font: 10.5px var(--mono);
+  color: var(--dim);
+  white-space: nowrap;
+}
+/* a short item: title and time on one line */
+.ag-ev.short .in {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.ag-ev.short .t {
+  flex: 0 1 auto;
+}
+.ag-ev.task {
+  --k: var(--faint);
+  box-shadow: inset 0 0 0 1.5px var(--k);
+}
+.ag-ev.task::before {
+  opacity: .06;
+}
+.ag-ev.task.todo {
+  --k: var(--accent);
+}
+.ag-ev.task .in {
+  padding-left: 24px;
+}
+.ag-ev.task svg {
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  width: 11px;
+  height: 11px;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  fill: none;
+}
+.ag-ev.task.short svg {
+  top: 50%;
+  margin-top: -5.5px;
+}
+.ag-ev.past {
+  opacity: .5;
+}
+.ag-ev.done .t {
+  text-decoration: line-through;
+}
+.ag-ev.nx-on {
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--k), 0 0 0 1.5px var(--k);
 }
 .dc-h {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
+  gap: 4px 12px;
   min-width: 0;
 }
 .dc-h h2 {
@@ -161,129 +312,6 @@ button.deb:hover {
   font: 400 15px/1.6 var(--serif);
 }
 
-/* the line of the day */
-.tl {
-  position: relative;
-  flex: 1;
-  /* three lanes of events (28px each): the band grows to hold them, never squeezes them */
-  min-height: 84px;
-  margin: 12px 0 18px;
-}
-.tl-hr {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-left: 1px solid var(--line-soft);
-}
-.tl-hr span {
-  position: absolute;
-  bottom: -18px;
-  left: -8px;
-  font: 10.5px var(--mono);
-  color: var(--faint);
-}
-.tl-past {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: repeating-linear-gradient(-45deg, transparent 0 5px,
-    var(--line-soft) 5px 6px);
-  opacity: .55;
-  border-radius: 4px 0 0 4px;
-}
-/* under the events (z-index 2): a title it crosses stays readable */
-.tl-now {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  background: var(--accent);
-  border-radius: 1px;
-  z-index: 1;
-}
-.tl-now span {
-  position: absolute;
-  bottom: -16px;
-  left: -19px;
-  font: 600 10.5px var(--mono);
-  color: var(--on-accent);
-  background: var(--accent);
-  border-radius: 4px;
-  padding: 1px 4px;
-}
-.tl-ev {
-  position: absolute;
-  height: 23px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 0 0 7px;
-  font-size: 11.5px;
-  font-weight: 500;
-  white-space: nowrap;
-  z-index: 2;
-  color: var(--fg);
-  box-shadow: inset 3px 0 0 var(--k);
-  isolation: isolate;
-  /* a button: WebKit centres and clips what it holds, so a short event cut its title on both sides */
-  justify-content: flex-start;
-  text-align: left;
-  overflow: visible;
-}
-.tl-ev::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 6px;
-  background: var(--k);
-  opacity: .16;
-  z-index: -1;
-}
-.tl-ev:hover::before {
-  opacity: .3;
-}
-.tl-ev.task {
-  box-shadow: inset 0 0 0 1.5px var(--k);
-  --k: var(--faint);
-}
-.tl-ev.task::before {
-  opacity: 0;
-}
-.tl-ev.task svg {
-  width: 11px;
-  height: 11px;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  fill: none;
-  flex: none;
-}
-.tl-ev.task.todo {
-  --k: var(--accent);
-}
-.tl-ev.past {
-  opacity: .5;
-}
-.tl-ev.done .t {
-  text-decoration: line-through;
-}
-.tl-ev .t {
-  position: relative;
-  padding-right: 8px;
-}
-.tl-ev.nx {
-  font-weight: 600;
-}
-.tl-ev.nx::before {
-  opacity: .38;
-}
-.tl-ev.flip .t {
-  position: absolute;
-  right: 100%;
-  padding: 0 6px 0 0;
-}
-
 /* the day's tasks without a time, as a strip over the line of the day */
 .dc-loose {
   display: flex;
@@ -316,22 +344,25 @@ button.deb:hover {
   background: var(--hover);
 }
 
-/* ---------------- lower band ---------------- */
-.lower {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 392px;
-  gap: 14px;
-  min-height: 0;
-}
 .side {
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-height: 0;
 }
+.side > .tq {
+  flex: 1;
+  min-height: 0;
+}
+.side > :last-child:not(.tq) {
+  flex: none;
+  max-height: 45%;
+  overflow: auto;
+}
 
 /* tasks */
 .tq {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -963,14 +994,18 @@ button.deb:hover {
   padding: 4px 0;
 }
 
-@media (max-width: 1100px) {
-  .lower {
-    grid-template-columns: minmax(0, 1fr) 340px;
-  }
+/* the task list sized by its card, not the window: a narrow card gives the title the room */
+@container (max-width: 560px) {
   .tq .tr {
-    grid-template-columns: 22px minmax(0, 1fr) 110px 76px;
+    grid-template-columns: 22px minmax(0, 1fr) 64px 64px;
+    gap: 0 10px;
   }
   .tq-hint {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .nx-act .ghost {
     display: none;
   }
 }
@@ -978,13 +1013,12 @@ button.deb:hover {
 @media (max-width: 900px) {
   .today2 {
     height: auto;
-    grid-template-rows: auto auto;
-  }
-  .dayband,
-  .lower {
     grid-template-columns: minmax(0, 1fr);
   }
-  .tq .tr {
-    grid-template-columns: 22px minmax(0, 1fr) 120px 72px;
+  .ag {
+    max-height: 480px;
+  }
+  .side > .tq {
+    max-height: 600px;
   }
 }

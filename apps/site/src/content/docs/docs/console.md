@@ -19,8 +19,9 @@ A rail on the left holds every page: its icons open into names while the pointer
 foot, the machine's health (green, yellow or red, it opens the Health page), the update when one is
 waiting, the commands and the preferences.
 
-- **Today** — the bar to ask Claude, the day's appointments and the tasks with a time on one line
-  (those due today without a time in a strip above it), the tasks as a plain list, and **Claude now**:
+- **Today** — the bar to ask Claude; the day as the main card, an agenda with the hours down the card
+  for the appointments and the tasks with a time (those due today without a time in a strip above it);
+  beside it the tasks as a plain list, and **Claude now**:
   each account's usage limits (the five hours and the week) with today's tokens, and how much context
   each running session uses, then the last sessions per directory with the command that reopens each one.
 - **Tasks** — a board, a sortable list, a month calendar with the Google events, a board per project.

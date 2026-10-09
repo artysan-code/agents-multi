@@ -68,13 +68,6 @@ export interface Span {
 
 /** One lane per item, so that items in a lane do not overlap: the first lane free at its start, else
  *  the one that frees up first (it overlaps there, but stays on the line). Items in start order. */
-/** Pure: where an item ends on the line as it is seen, its title included: a short item's title runs
- *  past its end, and the next one on the same lane would be drawn over it. `perMin` is pixels per
- *  minute; a character of the 11.5px label is about 6.4px, plus the padding and the tick. */
-export function seenEnd(x: Span, chars: number, perMin: number): number {
-  return perMin > 0 ? Math.max(x.end, x.start + (34 + chars * 6.4) / perMin) : x.end;
-}
-
 export function lanes(items: Span[], n = 3): number[] {
   const ends: number[] = Array(n).fill(-Infinity);
   return items.map((x) => {
@@ -83,6 +76,29 @@ export function lanes(items: Span[], n = 3): number[] {
     ends[i] = Math.max(ends[i], x.end);
     return i;
   });
+}
+
+/** Pure: the agenda's columns, as a calendar draws them side by side: items that overlap, directly
+ *  or through others, share the width; each gets its column and how many there are in its group.
+ *  Items in start order. */
+export function columns(items: Span[]): { col: number; cols: number }[] {
+  const out = items.map(() => ({ col: 0, cols: 1 }));
+  let first = 0, end = -Infinity;
+  const close = (to: number) => {
+    const group = items.slice(first, to);
+    const l = lanes(group, group.length);
+    const cols = Math.max(...l) + 1;
+    l.forEach((col, k) => (out[first + k] = { col, cols }));
+  };
+  items.forEach((x, i) => {
+    if (i > first && x.start >= end) {
+      close(i);
+      first = i;
+    }
+    end = i === first ? x.end : Math.max(end, x.end);
+  });
+  if (items.length) close(items.length);
+  return out;
 }
 
 /** The first two items starting after `now` (minutes), in time order. */

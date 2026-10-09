@@ -2,6 +2,7 @@
 // the day's line, what comes next and the debrief in one sentence.
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  columns,
   countdown,
   daysBetween,
   dayWindow,
@@ -10,7 +11,6 @@ import {
   groupTasks,
   lanes,
   minutes,
-  seenEnd,
   upNext,
 } from "../../ui/src/pages/today/model.ts";
 
@@ -100,12 +100,13 @@ Deno.test("dayWindow: 08–21, widened to what lies outside", () => {
   });
 });
 
-Deno.test("seenEnd: a short item keeps its lane until its title ends, so the next one goes below", () => {
-  // 2 px a minute: a 60-minute event with a 30-character title is seen until 0 + (34 + 192) / 2 = 113
-  const a = { start: 0, end: 60 }, b = { start: 90, end: 150 };
-  assertEquals(seenEnd(a, 30, 2), 113);
-  assertEquals(seenEnd(a, 2, 2), 60); // a title that fits ends with the item
-  assertEquals(seenEnd(a, 30, 0), 60); // not measured yet: the time alone
-  assertEquals(lanes([a, b]), [0, 0]);
-  assertEquals(lanes([{ ...a, end: seenEnd(a, 30, 2) }, b]), [0, 1]);
+Deno.test("columns: overlapping items share the width, a group ends where nothing overlaps", () => {
+  const c = columns([
+    { start: 600, end: 615 },
+    { start: 600, end: 630 },
+    { start: 620, end: 660 },
+    { start: 700, end: 760 },
+  ]);
+  assertEquals(c, [{ col: 0, cols: 2 }, { col: 1, cols: 2 }, { col: 0, cols: 2 }, { col: 0, cols: 1 }]);
+  assertEquals(columns([]), []);
 });

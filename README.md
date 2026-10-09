@@ -270,9 +270,10 @@ one is waiting, the commands and the preferences. The language follows the machi
 regional format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian —
 and the preferences override it per browser.
 
-- **Today** (`#today`) — the bar to ask Claude; the day's appointments and tasks with a time on one
-  line, the day's tasks without a time in a strip above it; the tasks as a plain list (project,
-  progress, due); and **Claude now**: each account's limits (five hours, week) with today's tokens,
+- **Today** (`#today`) — the bar to ask Claude; the day as the main card: what is next, then an
+  agenda with the hours down the card (appointments and tasks with a time, side by side when they
+  overlap) and the day's tasks without a time in a strip above it; beside it the tasks as a plain
+  list (project, progress, due) and **Claude now**: each account's limits (five hours, week) with today's tokens,
   each running session's context, and the last sessions per directory with the command that reopens
   each one. The limits and the context come from the status line (`apps/cli/live.ts`); its refresh
   button asks Anthropic with each profile's login, read for that request only.

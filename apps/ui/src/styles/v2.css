@@ -373,6 +373,30 @@ body {
   white-space: nowrap;
   cursor: pointer;
 }
+/* icon, name and sign are placed, not laid out: WebKitGTK centres a button's content when it is
+   wider than the button, so while the rail opens the icons of Commands or Preferences slid about */
+.rl-i > svg {
+  position: absolute;
+  left: 10px;
+  top: 8.5px;
+}
+.rl-i > .rl-t {
+  position: absolute;
+  left: 41px;
+  right: 10px;
+  top: 0;
+  line-height: 36px;
+  white-space: nowrap;
+}
+.rl-i > .rl-s {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.rl-i:has(> .rl-s:not(.dot)) > .rl-t {
+  right: 44px;
+}
 .rl-i:hover {
   background: var(--raised);
   color: var(--fg);
@@ -392,7 +416,6 @@ body {
   stroke-linejoin: round;
 }
 .rl-t {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -478,7 +501,7 @@ body {
 .rl-health .rl-t {
   color: var(--fg);
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 .rl-health small {
