@@ -48,6 +48,8 @@ let DRY = false;
 let CODE = REPO;
 let SRC = REPO;
 const actions: string[] = [];
+/** What the last run did, or on a dry run would do: one line per change. */
+export const installActions = (): readonly string[] => [...actions];
 function say(s: string) {
   actions.push(s);
   console.log(`  ${DRY ? `${ANSI.d}(dry)${ANSI.x} ` : ""}${s}`);

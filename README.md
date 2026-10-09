@@ -327,7 +327,8 @@ dev mode: task reminders every five minutes, the brain backup, Claude Code and D
   request to the first and exits.
 - **Its code** — when the app starts with a build its copy in the runtime is not (after an update),
   it runs `agents install --app` before its backend starts: the new copy is swapped in, and the rest
-  of install runs then, or — with a Claude open — waits for the console's «Close Claude and update».
+  of install runs then. Only when that rest would change something an open Claude reads (its settings,
+  its links) does it wait for every Claude to be closed — the update screen's «Close Claude» step.
   The result is on the Health page (`app.install`, `app.version`).
 
 - **Claude in the menu** — one entry, _Claude_, for every profile: it runs `claude-multi-app --pick`,

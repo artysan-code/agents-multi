@@ -10,7 +10,7 @@
 
 import { buildId, installCopy, keepProgram, readBuild, seedCache } from "./appcopy.ts";
 import { forgetBackendOnly } from "./console/server.ts";
-import { install } from "./install.ts";
+import { install, installActions } from "./install.ts";
 import { stat } from "./lib/fs.ts";
 import { INSTALL_RECORD, type InstallRecord } from "./lib/appstate.ts";
 import { installation } from "./lib/mode.ts";
@@ -87,9 +87,12 @@ export async function installApp(o: { dry: boolean }): Promise<number> {
       say("the app's code is current");
       return 0;
     }
-    // a Claude open holds files of an installation; a first install has none of ours in use
+    // a Claude open holds files of an installation (its settings, its links); a first install has none
+    // of ours in use, and an install that would change none of them need not wait for it to close
     const open = inst.fresh ? [] : Object.keys(await blockers());
-    if (open.length && !o.dry) {
+    const touches = open.length > 0 && !o.dry &&
+      (await install(true, { as: { ...inst, fresh: false }, diagnose: false }), installActions().length > 0);
+    if (touches) {
       await Deno.writeTextFile(PENDING, copy.to);
       await record({ build: copy.to, ok: true, pending: true });
       say(`install waits for Claude to be closed (${open.join(", ")})`);

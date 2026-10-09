@@ -16,9 +16,12 @@ shows the same checks with their fixes.
 
 ## The install or update waits for Claude to close
 
-Installing code and applying a new Claude Desktop only happen when no Claude is running. The console
-says **Close Claude to finish**; close every Claude, or use **System › Updates › Close Claude and
-update**. Claude Desktop stays in the system tray when you close its window: quit it from there.
+An install that would change what an open Claude reads (its settings, its links) waits until no
+Claude is running; one that changes none of it goes on at once. The rail's update button then says
+**Close Claude to finish**: it opens the update screen at its last step, which lists the sessions to
+close and closes them when you say so, or leaves the install for later — it finishes on its own once
+every Claude is closed. A new Claude Desktop already downloaded takes its version the next time it
+opens. Claude Desktop stays in the system tray when you close its window: quit it from there.
 
 ## `agents` is not found
 
