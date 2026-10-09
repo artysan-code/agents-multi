@@ -63,12 +63,6 @@
   font-size: 14px;
   line-height: 1;
 }
-.ab-modes {
-  flex: none;
-}
-.ab-modes button {
-  padding: 5px 10px;
-}
 .ab-send {
   width: 40px;
   height: 40px;
@@ -105,6 +99,61 @@
   display: flex;
   flex-direction: column;
   max-height: min(460px, calc(100vh - 170px));
+}
+/* what Claude changed, one chip per call, as a tool call shows in Claude Code */
+.ab-acts {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ab-act {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--raised);
+  font-size: 12.5px;
+  animation: ab-act-in .25s ease both;
+}
+.ab-act::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  align-self: center;
+}
+.ab-act.brain::before {
+  background: var(--c-violet);
+}
+.ab-act.calendar::before {
+  background: var(--c-blue);
+}
+.ab-act-n {
+  flex: none;
+  font-weight: 600;
+  color: var(--fg);
+}
+.ab-act-d {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+@keyframes ab-act-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
 }
 .ab-q {
   color: var(--faint);
@@ -154,9 +203,4 @@
 .ab-x svg {
   width: 15px;
   height: 15px;
-}
-@media (max-width: 900px) {
-  .ab-slash {
-    display: none;
-  }
 }

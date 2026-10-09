@@ -1,5 +1,6 @@
 // today/index.tsx — the Today page, a board in three bands under the ask bar: plan (what is next and the
-// line of the day), then the tasks that matter now, and beside them the state (system, sessions).
+// line of the day), then the tasks that matter now, and beside them Claude at work (sessions). The
+// machine's health is the rail's.
 // Nothing on the page scrolls but the task list. Each part is its own module; this one loads the day
 // and the board, and redraws them on each "tasks" event.
 
@@ -11,7 +12,6 @@ import type { Day } from "./api.ts";
 import { DayCard, NextCard } from "./day.tsx";
 import { TaskGroups } from "./groups.tsx";
 import { SessionsCard } from "./sessions.tsx";
-import { SystemCard } from "./system.tsx";
 import "./today.css";
 
 export function Today() {
@@ -29,7 +29,6 @@ export function Today() {
       <section class="lower">
         <TaskGroups />
         <aside class="side">
-          <SystemCard />
           <SessionsCard />
         </aside>
       </section>

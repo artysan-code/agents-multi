@@ -190,6 +190,7 @@ button.deb:hover {
   opacity: .55;
   border-radius: 4px 0 0 4px;
 }
+/* under the events (z-index 2): a title it crosses stays readable */
 .tl-now {
   position: absolute;
   top: -4px;
@@ -197,7 +198,7 @@ button.deb:hover {
   width: 2px;
   background: var(--accent);
   border-radius: 1px;
-  z-index: 3;
+  z-index: 1;
 }
 .tl-now span {
   position: absolute;
@@ -224,6 +225,10 @@ button.deb:hover {
   color: var(--fg);
   box-shadow: inset 3px 0 0 var(--k);
   isolation: isolate;
+  /* a button: WebKit centres and clips what it holds, so a short event cut its title on both sides */
+  justify-content: flex-start;
+  text-align: left;
+  overflow: visible;
 }
 .tl-ev::before {
   content: "";
@@ -665,148 +670,6 @@ button.deb:hover {
   gap: 6px;
 }
 
-/* system */
-.sc {
-  padding: 14px 18px;
-  flex: none;
-  max-height: 62%;
-  overflow: auto;
-}
-.today2 .sc-h {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.today2 .sc-h .r {
-  margin-left: auto;
-  font-size: 11.5px;
-  color: var(--faint);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.today2 .sc-h .r.on {
-  color: var(--spark);
-}
-.lbl.crit {
-  color: var(--crit);
-}
-.lbl.warn {
-  color: var(--warn);
-}
-.lbl.ok {
-  color: var(--ok);
-}
-.sc-rc {
-  color: var(--faint);
-  display: grid;
-}
-.sc-rc:hover {
-  color: var(--fg);
-}
-.sc-rc svg {
-  width: 13px;
-  height: 13px;
-  stroke: currentColor;
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-}
-.sc-rc.on svg {
-  animation: rot2 .9s linear infinite;
-}
-.calm {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 13px;
-  color: var(--dim);
-}
-.calm i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ok);
-  flex: none;
-  box-shadow: 0 0 0 3px var(--ok-wash);
-}
-.calm i.still {
-  background: var(--faint);
-  box-shadow: 0 0 0 3px var(--raised);
-}
-.calm b {
-  font-weight: 500;
-  color: var(--fg);
-}
-.calm .v {
-  margin-left: auto;
-  font: 11px var(--mono);
-  color: var(--faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.prob {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  gap: 3px 10px;
-  align-items: center;
-  padding: 9px 0;
-  border-top: 1px solid var(--line-soft);
-}
-.prob:first-child {
-  border-top: 0;
-}
-.prob .ic {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  display: grid;
-  place-items: center;
-  font: 700 11px var(--sans);
-  background: var(--warn-wash);
-  color: var(--warn);
-  margin: 0;
-}
-.prob.fail .ic {
-  background: var(--crit-wash);
-  color: var(--crit);
-}
-.prob.fixed .ic {
-  background: var(--ok-wash);
-  color: var(--ok);
-}
-.prob b {
-  font-weight: 500;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.prob p {
-  grid-column: 2;
-  margin: 0;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--faint);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.prob p.bad {
-  color: var(--crit);
-}
-.prob > .bt {
-  grid-row: 1 / 3;
-  grid-column: 3;
-}
-.prob.fixed b {
-  color: var(--faint);
-  text-decoration: line-through;
-}
 /* active now */
 .ac {
   padding: 14px 18px 8px;

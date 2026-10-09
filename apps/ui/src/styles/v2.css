@@ -464,6 +464,27 @@ body {
 .rl-b.up {
   background: var(--accent);
 }
+/* the machine's health, at the bottom: the icon takes the colour of the worst check */
+.rl-health.ok {
+  color: var(--ok);
+}
+.rl-health.warn {
+  color: var(--warn);
+}
+.rl-health.crit {
+  color: var(--crit);
+  background: var(--crit-wash);
+}
+.rl-health .rl-t {
+  color: var(--fg);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.rl-health small {
+  font: 500 11px var(--mono);
+  color: var(--faint);
+}
 .rl-sp {
   flex: 1;
 }

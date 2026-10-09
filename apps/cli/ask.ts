@@ -42,6 +42,8 @@ const BRAIN_WRITE = [
   "brain_restore",
 ]
   .map((t) => `mcp__claude_ai_Brain__${t}`);
+// what the field may write in the brain on its own: a line in the diary, a page changed or added; never a move or a deletion
+const BRAIN_KEEP = ["brain_append", "brain_edit", "brain_write"].map((t) => `mcp__claude_ai_Brain__${t}`);
 // Events created or moved from the field: never deleted, never with an invitation sent unless asked (the prompt)
 const CALENDAR_WRITE = ["mcp__google__calendar_create", "mcp__google__calendar_update"];
 const READ = [
@@ -54,7 +56,7 @@ const READ = [
   ...BRAIN_READ,
 ];
 export const TOOLS: Record<AskKind, string[]> = {
-  ask: ["mcp__tasks", ...READ, ...CALENDAR_WRITE],
+  ask: ["mcp__tasks", ...READ, ...CALENDAR_WRITE, ...BRAIN_KEEP],
   newtask: ["mcp__tasks", ...BRAIN_READ],
   debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
   // and the old wiki, read only, for what is brought over from the Archive
@@ -90,8 +92,9 @@ export function promptFor(
       : `project: the folder under ~ it belongs to (work/acme/site, ` +
         `personal/blog: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
     return `${base}\n${who} is describing a new task for ${where}. Create it with tasks_add: a short, clear title in their ` +
-      `words, ${set}, a day and time only if they gave them (resolve "tomorrow", "Friday" ` +
-      `from today), and in notes what they explained, as a short description. If it takes more than one action, add the steps ` +
+      `words, ${set}, the day (resolve "tomorrow", "Friday" from today) and a time: theirs when they gave one, else a ` +
+      `plausible slot that day that does not overlap their calendar (say which), and in notes what they explained, as a ` +
+      `short description. If it takes more than one action, add the steps ` +
       `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what they wrote is too ` +
       `vague to be a task, ask one short question instead of creating it.`;
   }
@@ -116,9 +119,15 @@ export function promptFor(
           `calendarId), and never mention any other: ${calendars}.`
         : "");
   }
-  return `${base}\nBe brief: one to four lines. Use the tools: tasks (add, close, move, the day's brief: when they say ` +
-    `something to do, add it), their calendar (read it, and create or move events they ask for), mail and Drive read ` +
-    `only, their brain (memory: projects, people, notes) read only. An event gets no attendees and sendUpdates "none" ` +
+  return `${base}\nBe brief: one to four lines. You keep ${who}'s tasks and memory without being asked to: work out ` +
+    `from what they write what it is, and act. Something to do, even said in passing (no need for "add a task"): create ` +
+    `it with tasks_add, with the project (the folder under ~, from tasks_list or the brain) when you can tell, the day, ` +
+    `and a time whenever one fits: theirs if they gave it, else a plausible slot that day that does not overlap their ` +
+    `calendar. Done, moved or waiting on someone: tasks_done or tasks_update. A durable fact worth remembering (a ` +
+    `decision, a person, a preference, how something works): into the brain, a line in the diary with brain_append or ` +
+    `the right page with brain_edit (search first; never invent, never delete). A question: answer it, reading what you ` +
+    `need. Then say what you did, one short line per action (the time you chose included). Tools: tasks; their calendar ` +
+    `(read it, create or move events they ask for); mail and Drive read only; their brain. An event gets no attendees and sendUpdates "none" ` +
     `unless they explicitly ask to invite someone; a reminder they ask for goes in reminders (minutes before). Never send mail or delete an event from ` +
     `here: say it is for a conversation. When the request needs work inside a project's files (code, changes, looking ` +
     `through a repository), do not start it here: say in one line what you would do, then end with a line of its own ` +
@@ -188,7 +197,14 @@ export function askArgs(
 export type Out =
   | { t: "session"; id: string }
   | { t: "text"; d: string }
-  | { t: "tool"; k: "tasks" | "calendar" | "mail" | "drive" | "brain" | "work" }
+  | {
+    t: "tool";
+    k: "tasks" | "calendar" | "mail" | "drive" | "brain" | "work";
+    /** the tool's own name, without its server (tasks_add) */
+    n: string;
+    /** what it was called on, for a call that changes something: the task's title, the page, the event */
+    d?: string;
+  }
   | { t: "done"; text: string; code: string | null; error?: string };
 
 export const toolKind = (name: string): Extract<Out, { t: "tool" }>["k"] =>
@@ -203,6 +219,30 @@ export const toolKind = (name: string): Extract<Out, { t: "tool" }>["k"] =>
     : /brain_/.test(name)
     ? "brain"
     : "work";
+
+/** The calls that change something, and what each was called on, as the page shows them. */
+const WRITES: Record<string, (i: Record<string, unknown>) => unknown> = {
+  tasks_add: (i) => i.title,
+  tasks_done: (i) => i.id,
+  tasks_update: (i) => i.title ?? i.id,
+  tasks_steps: (i) => i.id,
+  tasks_note: (i) => i.text,
+  tasks_edit: (i) => i.id,
+  tasks_attach: (i) => i.id,
+  brain_append: (i) => i.text,
+  brain_edit: (i) => i.path,
+  brain_write: (i) => i.path,
+  calendar_create: (i) => i.summary,
+  calendar_update: (i) => i.summary ?? i.eventId,
+};
+
+/** Pure: a tool call as the page shows it — what kind, which tool, and for a change what it was on. */
+export function toolCall(name: string, input: Record<string, unknown> = {}): Extract<Out, { t: "tool" }> {
+  const n = name.replace(/^mcp__.+?__/, "");
+  const on = WRITES[n]?.(input);
+  const d = typeof on === "string" && on.trim() ? on.trim().replace(/\s+/g, " ").slice(0, 90) : undefined;
+  return d ? { t: "tool", k: toolKind(name), n, d } : { t: "tool", k: toolKind(name), n };
+}
 
 const CODE = /\[\[code:([^\]]+)\]\]/;
 
@@ -240,10 +280,12 @@ export class AskStream {
         add(d.text ?? "");
       }
     } else if (ev.type === "assistant") {
-      const blocks = ((ev.message as { content?: { type: string; name?: string; text?: string }[] })?.content) ?? [];
+      const blocks = ((ev.message as {
+        content?: { type: string; name?: string; text?: string; input?: Record<string, unknown> }[];
+      })?.content) ?? [];
       for (const b of blocks) {
         if (b.type === "tool_use") {
-          out.push({ t: "tool", k: toolKind(b.name ?? "") });
+          out.push(toolCall(b.name ?? "", b.input));
           // text before a tool call and text after it are separate paragraphs
           if (this.text && !this.text.endsWith("\n\n")) add("\n\n");
         } else if (b.type === "text" && !this.streamed) add(b.text ?? "");

@@ -1,8 +1,9 @@
-// ask.tsx — the bar to ask Claude, at the top of Today, Tasks and Brain: the first thing under the
-// header. A plain question, a new task (in the project on screen, in none, or wherever Claude finds it
-// belongs) or a change to the brain: the bar's modes choose, and the page on screen sets a project
-// through `askContext`. The answer streams into a panel over the page (Esc closes it); what Claude
-// changed with its tools shows at once, through the topics, not at the next event.
+// ask.tsx — the bar to ask Claude, at the top of Today, Tasks and Brain. Nothing to choose: Claude
+// works out from what is written whether it is a question, something to do (a task, with a time when
+// one fits) or something to remember (the brain), and acts. The page on screen may set a context
+// through `askContext` (the project of a new task, the brain page in view). The answer streams into a
+// panel over the page (Esc closes it), with each change Claude made as a chip, as a tool call; what it
+// changed shows at once, through the topics, not at the next event.
 
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -44,8 +45,17 @@ function ctxLabel(): string {
   return t("ask.ctx.newtask", { p: label ?? (project === "~none" ? t("tb.noProject") : project.split("/").pop()!) });
 }
 
+/** A change Claude made with a tool: which tool, and what it was on. */
+interface Act {
+  k: string;
+  n: string;
+  d?: string;
+}
+
 interface Answer {
   q: string;
+  /** the changes made, in order */
+  acts: Act[];
   text: string;
   state: SparkMode;
   /** what the status line says while Claude works */
@@ -54,8 +64,6 @@ interface Answer {
   done: boolean;
   code: string | null;
 }
-
-const MODES: AskKind[] = ["ask", "newtask", "brain"];
 
 export function AskBar() {
   const [answer, setAnswer] = useState<Answer | null>(null);
@@ -121,8 +129,18 @@ export function AskBar() {
     autosize();
     last.current = text;
     const { kind, project } = ask.value;
-    let acc = "", tools = false, code: string | null = null, frame = 0;
-    let a: Answer = { q: text, text: "", state: "thinking", doing: t("ask.thinking"), error: null, done: false, code: null };
+    let acc = "", code: string | null = null, frame = 0;
+    const used = new Set<string>();
+    let a: Answer = {
+      q: text,
+      acts: [],
+      text: "",
+      state: "thinking",
+      doing: t("ask.thinking"),
+      error: null,
+      done: false,
+      code: null,
+    };
     setAnswer(a);
     const paint = () => {
       frame = 0;
@@ -135,7 +153,9 @@ export function AskBar() {
       if (!res.ok || !res.body) {
         throw new Error((await res.json().catch(() => ({})) as { error?: string }).error ?? `HTTP ${res.status}`);
       }
-      await ndjson<{ t: string; d?: string; id?: string; k?: string; text?: string; error?: string; code?: string }>(
+      await ndjson<
+        { t: string; d?: string; id?: string; k?: string; n?: string; text?: string; error?: string; code?: string }
+      >(
         res,
         (o) => {
           if (o.t === "session") session.current = o.id ?? null;
@@ -144,8 +164,9 @@ export function AskBar() {
             if (a.state !== "writing") setAnswer((a = { ...a, state: "writing" }));
             if (!frame) frame = requestAnimationFrame(paint);
           } else if (o.t === "tool") {
-            tools = true;
-            setAnswer((a = { ...a, state: "thinking", doing: tk(`ask.tool.${o.k}`) }));
+            used.add(o.k ?? "");
+            const acts = o.d ? [...a.acts, { k: o.k ?? "", n: o.n ?? "", d: o.d }] : a.acts;
+            setAnswer((a = { ...a, acts, state: "thinking", doing: tk(`ask.tool.${o.k}`) }));
           } else if (o.t === "done") {
             if (o.error) setAnswer((a = { ...a, error: t("ask.failed", { e: o.error }) }));
             else {
@@ -164,9 +185,9 @@ export function AskBar() {
     setAnswer((a = { ...a, state: "", done: true, code }));
     // a new task is one thing: the next request is a plain one again
     if (kind === "newtask") askContext("ask");
-    if (tools) touch("tasks");
+    if (used.has("tasks")) touch("tasks");
     // what Claude changed in the brain shows at once
-    if (kind === "brain" && tools) touch("brain");
+    if (used.has("brain")) touch("brain");
     el.focus();
   };
 
@@ -216,24 +237,7 @@ export function AskBar() {
             if (e.key === "Escape" && !answer) e.currentTarget.blur();
           }}
         />
-        <div class="sg ab-modes" role="radiogroup" aria-label={t("ask.mode")}>
-          {MODES.map((m) => (
-            <button
-              type="button"
-              key={m}
-              role="radio"
-              aria-checked={kind === m}
-              onClick={() => {
-                if (kind !== m) askContext(m, null);
-                ta.current?.focus();
-              }}
-            >
-              {t(`ask.mode.${m}`)}
-            </button>
-          ))}
-        </div>
         {models && <ModelPicker state={models} onPick={(m) => void pick(m)} onDone={() => ta.current?.focus()} />}
-        <kbd class="k2 ab-slash">/</kbd>
         <button class="ab-send" type="submit" title={t("ask.send")} aria-label={t("ask.send")}>
           <svg viewBox="0 0 20 20"><path d="M10 16V4M5 9l5-5 5 5" /></svg>
         </button>
@@ -244,6 +248,16 @@ export function AskBar() {
             <Spark mode={working ? answer.state : ""} />
             <span>{answer.q}</span>
           </div>
+          {answer.acts.length > 0 && (
+            <ul class="ab-acts">
+              {answer.acts.map((x, i) => (
+                <li key={i} class={`ab-act ${x.k}`}>
+                  <span class="ab-act-n">{tk(`ask.act.${x.n}`)}</span>
+                  <span class="ab-act-d">{x.d}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div class="ab-a md" ref={body}>
             {answer.error ? <p class="err">{answer.error}</p> : renderMarkdown(answer.text)}
           </div>

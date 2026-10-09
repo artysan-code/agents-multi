@@ -1,6 +1,6 @@
 // Tests for apps/cli/ask.ts: what the console asks `claude -p`, and how its stream becomes the page's.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { ancestry, asArg, askArgs, AskStream, promptFor, sessionEnv, toolKind, TOOLS } from "../ask.ts";
+import { ancestry, asArg, askArgs, AskStream, promptFor, sessionEnv, toolCall, toolKind, TOOLS } from "../ask.ts";
 
 Deno.test("askArgs: the tools are a fixed list per kind, and anything else is refused", () => {
   const a = askArgs("ask", "cosa ho domani?", "now");
@@ -142,4 +142,23 @@ Deno.test("askArgs: the chosen model goes with every request, with its effort; t
     "low",
   ]);
   assertEquals(askArgs("ask", "ciao", "now").includes("--model"), false);
+});
+
+Deno.test("toolCall: a change says what it was on, a read only which tool; the field keeps the brain but never deletes", () => {
+  assertEquals(toolCall("mcp__tasks__tasks_add", { title: "  Chiamare   Marco " }), {
+    t: "tool",
+    k: "tasks",
+    n: "tasks_add",
+    d: "Chiamare Marco",
+  });
+  assertEquals(toolCall("mcp__claude_ai_Brain__brain_edit", { path: "persone/marco.md" }).d, "persone/marco.md");
+  assertEquals(toolCall("mcp__google__calendar_events", { calendarId: "x" }), {
+    t: "tool",
+    k: "calendar",
+    n: "calendar_events",
+  });
+  assertEquals(toolCall("mcp__tasks__tasks_add"), { t: "tool", k: "tasks", n: "tasks_add" });
+  const ask = TOOLS.ask.join(" ");
+  assert(ask.includes("brain_append") && ask.includes("brain_edit"));
+  assert(!ask.includes("brain_delete") && !ask.includes("brain_move"));
 });

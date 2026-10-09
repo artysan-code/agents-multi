@@ -206,7 +206,6 @@ const SYSTEM: Tab[] = [
   "permissions",
   "plugins",
   "updates",
-  "health",
 ];
 const SYS_ICON: Record<Tab, string> = {
   overview: "overview",
@@ -317,6 +316,24 @@ export function Rail() {
             >
               <Ic name="down" />
               <span class="rl-t">{t("state.down")}</span>
+            </a>
+          )}
+          {!down && status.value && (
+            <a
+              href="#system/health"
+              class={`rl-i rl-health ${s.problems.length ? (fails ? "crit" : "warn") : "ok"}`}
+              aria-current={v === "system" && tab.value === "health" ? "page" : undefined}
+              title={t("sys.health")}
+            >
+              <Ic name="health" />
+              <span class="rl-t">
+                {t("sys.health")}
+                <small>
+                  {s.problems.length
+                    ? t(fails ? "rail.health.fix" : "rail.health.look", { n: s.problems.length })
+                    : t("health.okN", { n: s.ok })}
+                </small>
+              </span>
             </a>
           )}
           {!down && s.pending.length > 0 && (
