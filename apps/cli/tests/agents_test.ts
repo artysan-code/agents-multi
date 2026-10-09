@@ -10,6 +10,7 @@ import {
   type ChildState,
   listChildren,
   readChild,
+  runsBy,
   sayTo,
   startChild,
   stateOf,
@@ -124,4 +125,16 @@ Deno.test("agents: a whole round with a stand-in for Claude, detached, through i
   } finally {
     await Deno.remove(home, { recursive: true });
   }
+});
+
+Deno.test("agents: a process runs when ps lists it and it is not a zombie", () => {
+  assertEquals([runsBy("S"), runsBy(" Ss+\n"), runsBy("R"), runsBy("Z"), runsBy("Z+"), runsBy(""), runsBy("\n")], [
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+  ]);
 });

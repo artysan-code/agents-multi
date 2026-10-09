@@ -166,13 +166,17 @@ export function answerLine(p: Pending, allow: boolean, message?: string): string
 
 // ---------------------------------------------------------------- the files
 
-// `kill -0`: whether the process is there, no signal sent. Not /proc: Deno lets only --allow-all read it.
+/** Pure: whether `ps -o stat=` says a process runs: a line, and not a zombie (Z), which is an ended
+ *  child nobody has reaped yet (a container whose first process does not reap orphans). */
+export const runsBy = (stat: string) => stat.trim() !== "" && !stat.trim().startsWith("Z");
+
+// `ps` on the one pid, not /proc: Deno lets only --allow-all read /proc
 const alive = async (pidFile: string) => {
   const pid = Number((await Deno.readTextFile(pidFile).catch(() => "")).trim());
   if (!(pid > 0)) return false;
-  const r = await new Deno.Command("kill", { args: ["-0", String(pid)], stdout: "null", stderr: "null" }).output()
-    .catch(() => null);
-  return !!r?.success;
+  const r = await new Deno.Command("ps", { args: ["-o", "stat=", "-p", String(pid)], stdout: "piped", stderr: "null" })
+    .output().catch(() => null);
+  return !!r?.success && runsBy(new TextDecoder().decode(r.stdout));
 };
 
 async function lines(file: string): Promise<string[]> {

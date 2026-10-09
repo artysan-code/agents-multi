@@ -95,7 +95,7 @@
         "--quiet",
         "--allow-read=${HOME}",
         "--allow-write=${HOME}/.local/state/agents-multi/agents",
-        "--allow-run=setsid,mkfifo,kill",
+        "--allow-run=setsid,mkfifo,kill,ps",
         "--allow-env=HOME,XDG_STATE_HOME,AGENTS_MULTI_CONFIG,CLAUDE_MULTI_CONFIG",
         "--no-config",
         "--lock=${HOME}/.agents-multi/shared/mcp/agents/deno.lock",
