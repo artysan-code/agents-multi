@@ -5,6 +5,18 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.13] - 2026-10-09
+
+### Added
+
+- **agents**: workflow runs with hand-offs per step and a team channel, run by their own process (cc8df94)
+- **agents**: children's questions reach the owner as native questions, followed live (e898d62)
+
+### Documentation
+
+- **adr**: 0005 adds the team channel of a run (42d9500)
+- **adr**: 0005 agent workflows, run by their own process and answered with native questions (7794d9b)
+
 ## [1.0.0-beta.12] - 2026-10-09
 
 ### Added
