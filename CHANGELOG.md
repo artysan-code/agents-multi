@@ -5,6 +5,16 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.7] - 2026-10-09
+
+### Added
+
+- **agents**: children keep their profile's mode; an answer can allow the like for the session (e8f9965)
+
+### Fixed
+
+- **agents**: the hub reads only the variables it is allowed, not the whole environment (64aeefc)
+
 ## [1.0.0-beta.6] - 2026-10-09
 
 ### Fixed
