@@ -127,8 +127,8 @@
   left: var(--gut);
   right: 0;
   top: 0;
-  background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--line-soft) 5px 6px);
-  opacity: .5;
+  /* a flat shade: a hatch, or anything with opacity, is tiled into stripes by WebKitGTK */
+  background: color-mix(in srgb, var(--fg) 3%, transparent);
 }
 .ag-now {
   position: absolute;
@@ -159,7 +159,11 @@
   border-radius: 4px;
   padding: 1px 4px;
 }
+/* an item is opaque, its tint mixed into the card's surface: nothing behind it (the hours, the shade
+ * of the past) shows through, and no opacity makes a layer of its own */
 .ag-ev {
+  --a: 18%;
+  --bar: var(--k);
   position: absolute;
   border-radius: 7px;
   overflow: hidden;
@@ -167,19 +171,11 @@
   color: var(--fg);
   font-size: 12px;
   font-weight: 500;
-  box-shadow: inset 3px 0 0 var(--k);
-  isolation: isolate;
+  background: color-mix(in srgb, var(--k) var(--a), var(--surface));
+  box-shadow: inset 3px 0 0 var(--bar);
 }
-.ag-ev::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--k);
-  opacity: .18;
-  z-index: -1;
-}
-.ag-ev:hover::before {
-  opacity: .32;
+.ag-ev:hover {
+  --a: 32%;
 }
 .ag-ev .in {
   position: absolute;
@@ -216,10 +212,11 @@
 }
 .ag-ev.task {
   --k: var(--faint);
-  box-shadow: inset 0 0 0 1.5px var(--k);
+  --a: 6%;
+  box-shadow: inset 0 0 0 1.5px var(--bar);
 }
-.ag-ev.task::before {
-  opacity: .06;
+.ag-ev.task:hover {
+  --a: 14%;
 }
 .ag-ev.task.todo {
   --k: var(--accent);
@@ -242,14 +239,25 @@
   margin-top: -5.5px;
 }
 .ag-ev.past {
-  opacity: .5;
+  --a: 8%;
+  --bar: color-mix(in srgb, var(--k) 45%, var(--surface));
+  color: var(--faint);
+}
+.ag-ev.past:hover {
+  --a: 16%;
+}
+.ag-ev.past time {
+  color: var(--faint);
+}
+.ag-ev.task.past {
+  --a: 3%;
 }
 .ag-ev.done .t {
   text-decoration: line-through;
 }
 .ag-ev.nx-on {
   font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--k), 0 0 0 1.5px var(--k);
+  box-shadow: inset 3px 0 0 var(--bar), 0 0 0 1.5px var(--bar);
 }
 .dc-h {
   display: flex;
