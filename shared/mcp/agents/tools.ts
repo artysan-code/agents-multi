@@ -29,9 +29,10 @@ const view = (c: Child, full = false) => ({
   mode: c.meta.mode ?? "default",
   waiting_for: c.state.pending.map((p) => ({
     request: p.request,
+    kind: p.kind,
     what: p.what,
     description: p.description,
-    session: p.session,
+    ...(p.kind === "question" ? { questions: p.questions } : { session: p.session }),
   })),
   said: full ? c.state.said : c.state.said.slice(-1).map((s) => s.slice(0, 400)),
   turns: c.state.turns,
@@ -90,18 +91,20 @@ export function registerAgentTools(server: McpServer) {
   });
 
   server.registerTool("agent_answer", {
-    description: "Answer one of a child's permission requests — only with what the owner decided for that request. " +
-      "`allow` lets it do exactly what it asked; `session` also allows the request's `session` rule until the child " +
-      "ends; `deny` carries `reason`, which the child reads.",
+    description: "Answer one of a child's permission requests or questions — only with what the owner decided. " +
+      "A request: `allow` lets it do exactly what it asked; `session` also allows the request's `session` rule " +
+      "until the child ends; `deny` carries `reason`, which the child reads. A question: `allow` with `answers`, " +
+      'each of its questions to the label the owner chose (several joined by ", "); `deny` leaves it unanswered.',
     inputSchema: {
       id: z.string(),
-      request: z.string().describe("the request's id, from agent_status"),
+      request: z.string().describe("the request's id, from the event or agent_status"),
       answer: z.enum(["allow", "session", "deny"]),
+      answers: z.record(z.string(), z.string()).optional().describe("a question's answers: question text → label"),
       reason: z.string().optional(),
     },
-  }, async (i: { id: string; request: string; answer: Verdict; reason?: string }) => {
+  }, async (i: { id: string; request: string; answer: Verdict; answers?: Record<string, string>; reason?: string }) => {
     try {
-      await answer(i.id, i.request, i.answer, i.reason);
+      await answer(i.id, i.request, i.answer, i.reason, undefined, i.answers);
       return text({ answered: i.request, answer: i.answer });
     } catch (e) {
       return fail(e);

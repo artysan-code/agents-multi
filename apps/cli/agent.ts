@@ -1,10 +1,13 @@
 // agent.ts — `agents agent`: the hub's children from a terminal (shared/mcp/lib/agents.ts). The same
 // operations the coordinator's MCP server gives a Claude: start one in a project's folder with a
-// profile, see them, talk to one, answer its permission requests, stop it, wait for what needs you.
+// profile, see them, talk to one, answer its permission requests and questions, stop it, follow what
+// needs you.
 
 import {
   answer,
+  attentionOf,
   type Child,
+  followAttention,
   listChildren,
   readChild,
   sayTo,
@@ -18,9 +21,13 @@ const USAGE = `agents agent start <profile> <folder> <task…> [--model m]   a c
 agents agent list                                   every child: phase, what it waits for
 agents agent status <id>                            what it said last, its requests
 agents agent say <id> <text…>                       a message, taken between two of its steps
-agents agent answer <id> <request> allow|session|deny [why…]   one of its requests (session: and the like, until it ends)
+agents agent answer <id> <request> allow|session|deny [why…] [--answers json]
+                                                    one of its requests (session: and the like, until it ends),
+                                                    or a question (--answers: {"question": "label"})
 agents agent stop <id> [--force]                    ends after its turn (--force: now)
-agents agent wait [--timeout s]                     returns when something needs you`;
+agents agent wait [--timeout s]                     returns when something needs you
+agents agent events [--follow]                      what needs you, one JSON line each: what waits now
+                                                    (--follow: then everything new, until stopped)`;
 
 function line(c: Child): string {
   const s = c.state;
@@ -73,9 +80,11 @@ export async function agentCommand(args: string[]): Promise<number> {
         return 0;
       }
       case "answer": {
+        const json = opt("--answers");
         const [id, request, verdict, ...why] = rest;
         if (!id || !request || !["allow", "session", "deny"].includes(verdict)) break;
-        await answer(id, request, verdict as Verdict, why.join(" ") || undefined);
+        const answers = json === undefined ? undefined : JSON.parse(json) as Record<string, string>;
+        await answer(id, request, verdict as Verdict, why.join(" ") || undefined, undefined, answers);
         console.log(`${verdict} → ${id}`);
         return 0;
       }
@@ -90,6 +99,18 @@ export async function agentCommand(args: string[]): Promise<number> {
         const s = Number(opt("--timeout") ?? "3600");
         const found = await waitForAttention((Number.isFinite(s) && s > 0 ? s : 3600) * 1000);
         console.log(JSON.stringify(found, null, 2));
+        return 0;
+      }
+      case "events": {
+        const follow = has("--follow");
+        if (!follow) {
+          for (const c of await listChildren()) {
+            if (c.state.phase === "ended") continue;
+            for (const p of c.state.pending) console.log(JSON.stringify(attentionOf(c.meta.id, p)));
+          }
+          return 0;
+        }
+        for await (const a of followAttention()) console.log(JSON.stringify(a));
         return 0;
       }
     }

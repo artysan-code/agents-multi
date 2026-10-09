@@ -63,17 +63,36 @@ export function sessionRule(tool: string, input: Record<string, unknown>): Rule 
 /** Pure: a rule as a person reads it, `Bash(curl:*)`. */
 export const ruleText = (r: Rule) => r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName;
 
-/** A permission the child is waiting for. */
+/** A question a child asks with `AskUserQuestion`, as Claude Code writes it. */
+export interface Question {
+  question: string;
+  header?: string;
+  options: { label: string; description?: string }[];
+  multiSelect?: boolean;
+}
+
+/** What a child is waiting for: a permission its mode did not grant, or the owner's answers to the
+ *  questions it asked (`AskUserQuestion` reaches the hub as a permission request for that tool). */
 export interface Pending {
   request: string;
+  kind: "request" | "question";
   tool: string;
   /** what it wants to do, in a line: the command, the file, the URL */
   what: string;
   description?: string;
   input: Record<string, unknown>;
-  /** what "yes for this session" would allow from now on */
+  /** what "yes for this session" would allow from now on; empty for a question */
   session: string;
+  /** a question's questions, with their options */
+  questions?: Question[];
   at: number;
+}
+
+/** Pure: the questions of an `AskUserQuestion` input, or null when it is not one. */
+export function questionsOf(tool: string, input: Record<string, unknown>): Question[] | null {
+  if (tool !== "AskUserQuestion" || !Array.isArray(input.questions)) return null;
+  const qs = (input.questions as Record<string, unknown>[]).filter((q) => typeof q?.question === "string");
+  return qs.length ? qs as unknown as Question[] : null;
 }
 
 export type Phase = "working" | "waiting" | "idle" | "ended";
@@ -149,13 +168,16 @@ export function stateOf(lines: string[], answered: Set<string>, alive: boolean, 
       if (r?.subtype === "can_use_tool" && id && !answered.has(id)) {
         const input = (r.input ?? {}) as Record<string, unknown>;
         const tool = String(r.tool_name ?? "?");
+        const questions = questionsOf(tool, input);
         open.set(id, {
           request: id,
+          kind: questions ? "question" : "request",
           tool,
-          what: whatOf(tool, input),
+          what: questions ? `Question: ${questions.map((q) => q.question).join(" / ")}` : whatOf(tool, input),
           description: typeof r.description === "string" ? r.description : undefined,
           input,
-          session: ruleText(sessionRule(tool, input)),
+          session: questions ? "" : ruleText(sessionRule(tool, input)),
+          ...(questions ? { questions } : {}),
           at: now,
         });
       }
@@ -174,12 +196,23 @@ export function stateOf(lines: string[], answered: Set<string>, alive: boolean, 
   return st;
 }
 
-/** What needs the owner: a request to answer, a turn finished, a child gone. */
+/** What needs the owner: a request or a question to answer, a turn finished, a child gone. */
 export interface Attention {
   id: string;
-  kind: "request" | "done" | "ended";
+  kind: "request" | "question" | "done" | "ended";
   detail: string;
+  /** for a request or a question: its id, to answer it with */
+  request?: string;
+  /** for a request: the rule "yes for the session" would add */
+  session?: string;
+  questions?: Question[];
 }
+
+/** Pure: a pending request as something that needs the owner. */
+export const attentionOf = (id: string, p: Pending): Attention =>
+  p.kind === "question"
+    ? { id, kind: "question", detail: p.what, request: p.request, questions: p.questions }
+    : { id, kind: "request", detail: p.what, request: p.request, session: p.session };
 
 /** Pure: what changed for the worse or the finished between two looks at the same children. */
 export function attentionBetween(
@@ -190,7 +223,7 @@ export function attentionBetween(
   for (const [id, now] of after) {
     const was = before.get(id);
     const known = new Set(was?.pending.map((p) => p.request) ?? []);
-    for (const p of now.pending) if (!known.has(p.request)) out.push({ id, kind: "request", detail: p.what });
+    for (const p of now.pending) if (!known.has(p.request)) out.push(attentionOf(id, p));
     if (now.turns > (was?.turns ?? 0)) out.push({ id, kind: "done", detail: (now.lastResult ?? "").slice(0, 300) });
     if (now.phase === "ended" && was && was.phase !== "ended") out.push({ id, kind: "ended", detail: now.error ?? "" });
   }
@@ -204,10 +237,23 @@ export const userLine = (text: string) => JSON.stringify({ type: "user", message
 export type Verdict = "allow" | "session" | "deny";
 
 /** Pure: the line that answers a permission request. "session" adds `sessionRule` to the child's
- *  session only: it ends with the child, nothing is written in a settings file. */
-export function answerLine(p: Pending, verdict: Verdict, message?: string): string {
+ *  session only: it ends with the child, nothing is written in a settings file. A question is answered
+ *  by allowing it with the owner's `answers` (question → chosen label, several joined by ", "), which
+ *  Claude Code hands back to the child as the tool's result; "deny" leaves it unanswered. */
+export function answerLine(
+  p: Pending,
+  verdict: Verdict,
+  message?: string,
+  answers?: Record<string, string>,
+): string {
+  if (p.kind === "question" && verdict !== "deny") {
+    const missing = (p.questions ?? []).filter((q) => !answers?.[q.question]?.trim()).map((q) => q.question);
+    if (missing.length) throw new Error(`no answer for: ${missing.join(" / ")}`);
+  }
   const response = verdict === "deny"
     ? { behavior: "deny", message: message?.trim() || "The owner said no." }
+    : p.kind === "question"
+    ? { behavior: "allow", updatedInput: { ...p.input, answers } }
     : verdict === "session"
     ? {
       behavior: "allow",
@@ -376,17 +422,31 @@ export async function sayTo(id: string, text: string, runs = runsDir()): Promise
   await send(`${runs}/${id}`, userLine(text));
 }
 
-/** Answers one of a child's requests; refused when it is not one it is waiting on. */
-export async function answer(id: string, request: string, verdict: Verdict, message?: string, runs = runsDir()) {
+/** Answers one of a child's requests or questions; refused when it is not one it is waiting on. */
+export async function answer(
+  id: string,
+  request: string,
+  verdict: Verdict,
+  message?: string,
+  runs = runsDir(),
+  answers?: Record<string, string>,
+) {
   const c = await readChild(id, runs);
   if (!c) throw new Error(`no child ${id}`);
   const p = c.state.pending.find((x) => x.request === request);
   if (!p) throw new Error(`${id} is not waiting on ${request}`);
-  await send(`${runs}/${id}`, answerLine(p, verdict, message));
-  const rule = verdict === "session" ? p.session : null;
+  await send(`${runs}/${id}`, answerLine(p, verdict, message, answers));
+  const rule = verdict === "session" && p.kind === "request" ? p.session : null;
   await Deno.writeTextFile(
     `${runs}/${id}/answers.jsonl`,
-    JSON.stringify({ request, verdict, rule, message: message ?? null, at: new Date().toISOString() }) + "\n",
+    JSON.stringify({
+      request,
+      verdict,
+      rule,
+      answers: answers ?? null,
+      message: message ?? null,
+      at: new Date().toISOString(),
+    }) + "\n",
     { append: true },
   );
 }
@@ -405,14 +465,34 @@ export async function stopChild(id: string, force = false, runs = runsDir()): Pr
   }
 }
 
+const look = async (runs: string) => new Map((await listChildren(runs)).map((c) => [c.meta.id, c.state] as const));
+
 /** Waits until something needs the owner (a request, a finished turn, a child gone), or `timeoutMs`. */
 export async function waitForAttention(timeoutMs: number, runs = runsDir(), everyMs = 2000): Promise<Attention[]> {
-  const look = async () => new Map((await listChildren(runs)).map((c) => [c.meta.id, c.state] as const));
-  const before = await look();
+  const before = await look(runs);
   for (let t = 0; t < timeoutMs; t += everyMs) {
     await new Promise((r) => setTimeout(r, everyMs));
-    const found = attentionBetween(before, await look());
+    const found = attentionBetween(before, await look(runs));
     if (found.length) return found;
   }
   return [];
+}
+
+/** What needs the owner, as it happens: first every request and question still waiting (so a watch
+ *  started again loses none), then each new one, finished turn and child gone, until `signal`. */
+export async function* followAttention(
+  runs = runsDir(),
+  everyMs = 1000,
+  signal?: AbortSignal,
+): AsyncGenerator<Attention> {
+  let before = await look(runs);
+  for (const [id, st] of before) {
+    if (st.phase !== "ended") { for (const p of st.pending) yield attentionOf(id, p); }
+  }
+  while (!signal?.aborted) {
+    await new Promise((r) => setTimeout(r, everyMs));
+    const now = await look(runs);
+    yield* attentionBetween(before, now);
+    before = now;
+  }
 }

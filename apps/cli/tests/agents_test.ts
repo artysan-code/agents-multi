@@ -1,15 +1,18 @@
 // Tests for the hub's children (shared/mcp/lib/agents.ts): a child's state from its events, what needs
 // the owner between two looks, the lines written on its stdin, and a whole round with a stand-in for
 // Claude — started detached, a permission asked, answered, the turn ended, a message, the stop.
-import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import {
   answer,
   answerLine,
   attentionBetween,
+  attentionOf,
   childId,
   childMode,
   type ChildState,
+  followAttention,
   listChildren,
+  questionsOf,
   readChild,
   runsBy,
   sayTo,
@@ -60,6 +63,7 @@ Deno.test("agents: what needs the owner between two looks — new requests, fini
   });
   const p = (request: string) => ({
     request,
+    kind: "request" as const,
     tool: "Bash",
     what: `Bash: ${request}`,
     input: {},
@@ -73,16 +77,24 @@ Deno.test("agents: what needs the owner between two looks — new requests, fini
     ["c", s({ pending: [p("r9")] })],
   ]);
   assertEquals(attentionBetween(before, after), [
-    { id: "a", kind: "request", detail: "Bash: r2" },
+    { id: "a", kind: "request", detail: "Bash: r2", request: "r2", session: "Bash" },
     { id: "b", kind: "done", detail: "ok" },
     { id: "b", kind: "ended", detail: "" },
-    { id: "c", kind: "request", detail: "Bash: r9" },
+    { id: "c", kind: "request", detail: "Bash: r9", request: "r9", session: "Bash" },
   ]);
   assertEquals(attentionBetween(after, after), []);
 });
 
 Deno.test("agents: the lines on a child's stdin, ids and a request in one line", () => {
-  const p = { request: "r1", tool: "Bash", what: "", input: { command: "ls -la" }, session: "Bash(ls:*)", at: 0 };
+  const p = {
+    request: "r1",
+    kind: "request" as const,
+    tool: "Bash",
+    what: "",
+    input: { command: "ls -la" },
+    session: "Bash(ls:*)",
+    at: 0,
+  };
   assertEquals(JSON.parse(answerLine(p, "allow")).response.response, {
     behavior: "allow",
     updatedInput: { command: "ls -la" },
@@ -105,6 +117,73 @@ Deno.test("agents: the lines on a child's stdin, ids and a request in one line",
   assertEquals(id, "otacon-lead-qualificator-10091020-ab12");
   assert(validId(id));
   for (const bad of ["../x", "A-b", "x", "a b", ""]) assert(!validId(bad), bad);
+});
+
+Deno.test("agents: a child's AskUserQuestion waits as a question, answered with the owner's labels", () => {
+  const questions = [
+    { question: "Which color?", header: "Color", options: [{ label: "Red" }, { label: "Blue" }], multiSelect: false },
+  ];
+  const line = ev({
+    type: "control_request",
+    request_id: "q1",
+    request: { subtype: "can_use_tool", tool_name: "AskUserQuestion", input: { questions } },
+  });
+  const st = stateOf([line], new Set(), true);
+  const q = st.pending[0];
+  assertEquals([st.phase, q.kind, q.what, q.session, q.questions], [
+    "waiting",
+    "question",
+    "Question: Which color?",
+    "",
+    questions,
+  ]);
+  assertEquals(attentionOf("a", q), { id: "a", kind: "question", detail: q.what, request: "q1", questions });
+  assertEquals(JSON.parse(answerLine(q, "allow", undefined, { "Which color?": "Blue" })).response.response, {
+    behavior: "allow",
+    updatedInput: { questions, answers: { "Which color?": "Blue" } },
+  });
+  // "session" on a question answers it the same way: there is no rule to add
+  assertEquals(
+    JSON.parse(answerLine(q, "session", undefined, { "Which color?": "Red" })).response.response.updatedPermissions,
+    undefined,
+  );
+  assertThrows(() => answerLine(q, "allow"), Error, "no answer for: Which color?");
+  assertThrows(() => answerLine(q, "allow", undefined, { "Which color?": " " }), Error, "no answer");
+  assertEquals(JSON.parse(answerLine(q, "deny")).response.response.behavior, "deny");
+  assertEquals(questionsOf("AskUserQuestion", { questions: [] }), null);
+  assertEquals(questionsOf("Bash", { questions }), null);
+});
+
+Deno.test("agents: the events follow what waits now, then what happens, and skip a child that ended", async () => {
+  const runs = await Deno.makeTempDir();
+  const child = async (id: string, pid: number, lines: string[]) => {
+    await Deno.mkdir(`${runs}/${id}`);
+    await Deno.writeTextFile(`${runs}/${id}/meta.json`, JSON.stringify({ id, started: id }));
+    await Deno.writeTextFile(`${runs}/${id}/claude.pid`, String(pid));
+    await Deno.writeTextFile(`${runs}/${id}/out.jsonl`, lines.join("\n") + "\n");
+  };
+  await child("live-one", Deno.pid, [ask("r1")]);
+  await child("gone-one", 0, [ask("r2")]);
+  const stop = new AbortController();
+  const it = followAttention(runs, 50, stop.signal);
+  assertEquals((await it.next()).value, {
+    id: "live-one",
+    kind: "request",
+    detail: "Bash: git push",
+    request: "r1",
+    session: "Bash(git:*)",
+  });
+  await Deno.writeTextFile(
+    `${runs}/live-one/out.jsonl`,
+    ev({ type: "result", subtype: "success", result: "ok" }) + "\n",
+    {
+      append: true,
+    },
+  );
+  assertEquals((await it.next()).value, { id: "live-one", kind: "done", detail: "ok" });
+  stop.abort();
+  await it.return(undefined);
+  await Deno.remove(runs, { recursive: true });
 });
 
 Deno.test("agents: a whole round with a stand-in for Claude, detached, through its fifo", async () => {
