@@ -563,6 +563,12 @@ kbd {
   width: auto;
   color: var(--fg);
 }
+/* a select's list is drawn by the system, which does not always follow color-scheme: its options take
+   the theme's colours themselves, or a faint select gave pale text on a white list in the dark theme */
+select option {
+  background: var(--surface);
+  color: var(--fg);
+}
 .perm-add {
   display: flex;
   gap: 6px;
