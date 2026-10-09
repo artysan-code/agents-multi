@@ -391,7 +391,8 @@ export function DayCard({ day }: { day: Day | null }) {
   const all = [...(day.earlier ?? []), ...day.today];
   const allDay = all.filter((x) => isEvent(x) && !x.time);
   const coming = timed(day).filter((x) => minutes(x.time)! > now).length;
-  const loose = day.today.filter((x) => !isEvent(x) && !x.time).length;
+  const looseItems = day.today.filter((x) => !isEvent(x) && !x.time);
+  const loose = looseItems.length;
   const counts = [
     day.doneToday ? t("day.doneN", { n: day.doneToday }) : "",
     t("day.comingN", { n: coming }),
@@ -412,6 +413,16 @@ export function DayCard({ day }: { day: Day | null }) {
         {allDay.length > 2 && <span class="dc-chip">+{allDay.length - 2}</span>}
       </div>
       <Debrief />
+      {looseItems.some((x) => x.status !== "done") && (
+        <div class="dc-loose" aria-label={t("day.loose")}>
+          <span class="lbl">{t("day.loose")}</span>
+          {looseItems.filter((x) => x.status !== "done").map((x) => (
+            <button type="button" class="dc-lt" key={x.id} title={x.title} onClick={() => openItem(x)}>
+              {x.title}
+            </button>
+          ))}
+        </div>
+      )}
       <Timeline day={day} next={upNext(timed(day), now)[0]} />
     </article>
   );

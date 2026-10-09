@@ -4,7 +4,7 @@
 .today2 {
   height: 100%;
   display: grid;
-  grid-template-rows: 196px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
 }
 .today2 .lnk {
@@ -165,6 +165,8 @@ button.deb:hover {
 .tl {
   position: relative;
   flex: 1;
+  /* three lanes of events (28px each): the band grows to hold them, never squeezes them */
+  min-height: 84px;
   margin: 12px 0 18px;
 }
 .tl-hr {
@@ -282,6 +284,38 @@ button.deb:hover {
   padding: 0 6px 0 0;
 }
 
+/* the day's tasks without a time, as a strip over the line of the day */
+.dc-loose {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  min-width: 0;
+  overflow: hidden;
+  flex: none;
+}
+.dc-loose .lbl {
+  flex: none;
+  margin-right: 2px;
+}
+.dc-lt {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 11.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.dc-lt:hover {
+  background: var(--hover);
+}
+
 /* ---------------- lower band ---------------- */
 .lower {
   display: grid;
@@ -375,7 +409,7 @@ button.deb:hover {
 }
 .tq .tr {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 210px 92px;
+  grid-template-columns: 22px minmax(0, 1fr) 150px 84px;
   gap: 0 14px;
   align-items: center;
   padding: 10px 12px;
@@ -519,48 +553,31 @@ button.deb:hover {
   background: var(--raised);
 }
 
-/* the progress bar */
+/* the progress: a thin bar and the count */
 .pg {
   min-width: 0;
-}
-.pg-l {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--faint);
-  margin-bottom: 5px;
-  white-space: nowrap;
+  align-items: center;
+  gap: 10px;
 }
-.pg-l span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pg-l b {
-  font-weight: 600;
+.pg > b {
+  flex: none;
+  font: 500 11px var(--mono);
   color: var(--dim);
 }
 .pg-bar {
-  display: flex;
-  gap: 3px;
-  height: 7px;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
 }
 .pg-bar i {
-  flex: 1;
+  display: block;
+  height: 100%;
   border-radius: 2px;
-  background: var(--line);
-}
-.pg-bar i.d {
   background: var(--k, var(--accent));
-}
-.pg-bar i.n {
-  background: linear-gradient(90deg, var(--k, var(--accent)) 0 30%, var(--line)
-    30%);
-  box-shadow: 0 0 0 1px var(--k, var(--accent)) inset;
-}
-.pg-bar:has(> i.d:only-child) {
-  background: var(--line);
-  border-radius: 2px;
+  transition: width .4s ease;
 }
 .pg.ok {
   --k: var(--ok);
@@ -574,7 +591,7 @@ button.deb:hover {
 .pg.cl {
   --k: var(--spark);
 }
-.pg.cl .pg-bar i.n {
+.pg.cl .pg-bar i {
   animation: sh 1.6s ease-in-out infinite;
 }
 @keyframes sh {
@@ -842,7 +859,7 @@ button.deb:hover {
     grid-template-columns: minmax(0, 1fr) 340px;
   }
   .tq .tr {
-    grid-template-columns: 22px minmax(0, 1fr) 150px 80px;
+    grid-template-columns: 22px minmax(0, 1fr) 110px 76px;
   }
   .tq-hint {
     display: none;

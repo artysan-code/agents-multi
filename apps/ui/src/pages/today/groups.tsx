@@ -86,29 +86,17 @@ function Progress({ x, g, onHover }: {
   const steps = stepsOf(x);
   if (!steps.length) return <div class="pg" />;
   const done = steps.filter((s) => s.done).length, n = steps.length;
-  const pct = Math.round((done / n) * 100);
-  const nx = steps.findIndex((s) => !s.done);
-  const k = tone(x, g);
-  const next = (x.next_step ?? (nx >= 0 ? steps[nx].text : "")).replace(/[`*_]/g, "");
-  // many steps make the segments too thin: one continuous bar then
-  const segs = n <= 24;
+  // one plain bar and the count: the steps themselves are in the hover and in the open row
   return (
     <div
-      class={`pg ${k}`}
+      class={`pg ${tone(x, g)}`}
       onMouseEnter={(e) => onHover({ id: x.id, r: e.currentTarget.getBoundingClientRect() })}
       onMouseLeave={() => onHover(null)}
     >
-      <div class="pg-l">
-        <span>
-          <b>{done}/{n}</b> {nx < 0 ? t("steps.ready") : next ? <>· {next}</> : t("steps.word")}
-        </span>
-        <b>{pct}%</b>
-      </div>
       <div class="pg-bar">
-        {segs
-          ? steps.map((s, i) => <i key={i} class={s.done ? "d" : i === nx && k !== "wait" ? "n" : ""} />)
-          : <i class="d" style={{ flex: `0 0 ${pct}%` }} />}
+        <i class="d" style={{ width: `${Math.round((done / n) * 100)}%` }} />
       </div>
+      <b>{done}/{n}</b>
     </div>
   );
 }
@@ -148,9 +136,10 @@ function Row({ x, g, today, sel, open, onSel, onToggle, onDone, onLater, onHover
     : x.owner && x.owner !== owner.value.id
     ? <span class="who">{t("row.waits", { w: x.owner })}</span>
     : null;
-  const primary = who ?? (x.stage ? <span class="stage">{x.stage}</span> : null);
+  // the row says the project; who has it, the stage and the rest are in the open row
   const secondary = [
-    who && x.stage ? <span class="stage">{x.stage}</span> : null,
+    who,
+    x.stage ? <span class="stage">{x.stage}</span> : null,
     x.parts ? <span>{t("row.parts", { d: x.parts.done, n: x.parts.total })}</span> : null,
     x.blocked ? <span class="blk">{t("row.blocked")}</span> : null,
     x.ref ? <span class="mono ref">{x.ref}</span> : null,
@@ -186,11 +175,11 @@ function Row({ x, g, today, sel, open, onSel, onToggle, onDone, onLater, onHover
             {x.priority === 1 && <span class="pri">! </span>}
             {x.title}
           </b>
-          <div class="tm">
-            {where(x) && <span class="proj">{where(x)}</span>}
-            {primary}
-            {secondary.length > 0 && <span class="sec">{secondary}</span>}
-          </div>
+          {where(x) && (
+            <div class="tm">
+              <span class="proj">{where(x)}</span>
+            </div>
+          )}
         </div>
         <Progress x={x} g={g} onHover={onHover} />
         <Due x={x} g={g} today={today} />
