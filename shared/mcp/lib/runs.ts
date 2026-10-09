@@ -260,8 +260,13 @@ export async function listRuns(runs = runsDir()): Promise<Run[]> {
 export const runEvents = (id: string, runs = runsDir()) =>
   lines(`${runsRoot(runs)}/${id}/events.jsonl`) as Promise<RunEvent[]>;
 
-/** The command that runs a run: this code's own CLI (bin/agents), in app mode and in a checkout alike. */
-const agentsBin = () => new URL("../../../bin/agents", import.meta.url).pathname;
+/** The command that runs a run: this code's own CLI (bin/agents), in app mode and in a checkout alike.
+ *  From the real folder of this file: in app mode the server is loaded through ~/.agents-multi/shared, a
+ *  link into the app's code, and three folders up from the link there is no bin/agents. */
+const agentsBin = () =>
+  decodeURIComponent(
+    new URL("../../../bin/agents", `file://${Deno.realPathSync(new URL(".", import.meta.url).pathname)}/`).pathname,
+  );
 
 /** Starts the runner of a run, detached from whoever asked. */
 export async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
