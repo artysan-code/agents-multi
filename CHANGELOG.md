@@ -5,6 +5,17 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.8] - 2026-10-09
+
+### Added
+
+- **console**: «Check» on Claude Code and Claude Desktop too, as on the app (1648e85)
+- **console**: a rail for every page, a start screen, and closing Claude as a step of the update (bc51fd1)
+
+### Fixed
+
+- **app**: the install waits for Claude only when it would change what an open Claude reads (b9dfd61)
+
 ## [1.0.0-beta.7] - 2026-10-09
 
 ### Added
