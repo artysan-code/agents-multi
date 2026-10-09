@@ -55,7 +55,13 @@ const ID = /^[a-z0-9][a-z0-9-]{2,60}$/;
 export const validId = (id: string) => ID.test(id);
 
 /** Where the children live: the runtime's state folder. */
-export function runsDir(env: Record<string, string | undefined> = Deno.env.toObject()): string {
+// only the variables it reads: the server may read no others (servers.json, --allow-env)
+export function runsDir(
+  env: Record<string, string | undefined> = {
+    HOME: Deno.env.get("HOME"),
+    XDG_STATE_HOME: Deno.env.get("XDG_STATE_HOME"),
+  },
+): string {
   const state = env.XDG_STATE_HOME || `${env.HOME}/.local/state`;
   return `${state}/agents-multi/agents`;
 }
