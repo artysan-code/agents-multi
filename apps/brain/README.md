@@ -170,9 +170,11 @@ Or as three resources, so that redeploying one never restarts the others (the fi
 same base directory): `ollama.yaml` (the model, on Coolify's network as `agents-multi-ollama`, no
 domain), `brain.yaml` (the service alone: the same service and volume names as `compose.yaml`, so the
 application that ran the whole stack keeps its data when it switches to it) and `site.yaml` (the site
-from `site.ts`, the brain's image with another command, with the site's domain and `BRAIN_URL`). A
-release then redeploys the site for its update manifests and the brain for its code; the model only
-when its version changes.
+from `site.ts`, the brain's image with another command, with the site's domain and `BRAIN_URL`). The
+site reads the update manifests from the `release` branch at a request (`BRAIN_UPDATES_URL`, kept a
+minute, its own copy when the source does not answer), so no release redeploys anything for them: a
+stable version redeploys the brain for its code (`COOLIFY_DEPLOY_URL`), a beta the resources on
+`:beta` (`COOLIFY_DEPLOY_BETA_URL`); the model only when its version changes.
 
 `/health` says the process answers; `/ready` that its accounts database does too (the container's
 healthcheck, checked every two seconds while it starts, so the proxy sends traffic to a new

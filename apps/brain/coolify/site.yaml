@@ -1,6 +1,8 @@
 # agents-multi's site on its own Coolify resource (apps/brain/site.ts): the brain's image with another
-# command, holding no account and no data. A release redeploys it for the new update manifests
-# without touching the brain. Coolify puts the site's domain in front of `site`.
+# command, holding no account and no data. The update manifests are read from `release` at a request
+# (BRAIN_UPDATES_URL, apps/brain/manifests.ts), so a release does not redeploy it for them; a release
+# that changes the site's pages does, without touching the brain. Coolify puts the site's domain in
+# front of `site`. Until 1.0.0 it runs :beta (BRAIN_IMAGE), the first image with site.ts in it.
 services:
   site:
     image: ${BRAIN_IMAGE:-ghcr.io/artysan-code/agents-multi-brain:latest}
@@ -10,6 +12,7 @@ services:
       - BRAIN_SITE_URL=${BRAIN_SITE_URL:-${SERVICE_URL_SITE:-}}
       # the brain's address: the links to it and the privacy notice
       - BRAIN_URL=${BRAIN_URL}
+      - BRAIN_UPDATES_URL=${BRAIN_UPDATES_URL:-https://raw.githubusercontent.com/artysan-code/agents-multi/release/apps/site/public/updates}
       - BRAIN_OPERATOR=${BRAIN_OPERATOR:-}
       - BRAIN_CONTACT=${BRAIN_CONTACT:-}
       - BRAIN_HOSTING=${BRAIN_HOSTING:-}

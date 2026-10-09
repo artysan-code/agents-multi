@@ -6,11 +6,14 @@
 //
 //   BRAIN_SITE_URL   the site's address (required)
 //   BRAIN_URL        the brain's address, for the links to it and the notice (required)
+//   BRAIN_UPDATES_URL where the update manifests are read at a request (manifests.ts), the folder of
+//                    stable.json and beta.json on `release`; unset, the copy built into the image
 //   BRAIN_OPERATOR, BRAIN_CONTACT, BRAIN_HOSTING, PORT, HOST: as for the brain
 
 import { fromFileUrl } from "jsr:@std/path@1/from-file-url";
 import { loadSite, type Site, siteAnswer, siteSize } from "./public.ts";
 import { log, logRequest } from "./log.ts";
+import { liveManifests } from "./manifests.ts";
 import { hardened } from "./guard.ts";
 import { owner } from "../../shared/mcp/lib/owner.ts";
 
@@ -32,14 +35,18 @@ for (const [k, v] of [["BRAIN_URL", SITE.url], ["BRAIN_SITE_URL", SITE.siteUrl]]
 const HTTPS = SITE.siteUrl.startsWith("https:");
 const FILES = await loadSite(env("BRAIN_SITE", fromFileUrl(new URL("../site/dist", import.meta.url)))!, SITE);
 log.info("site loaded", { files: FILES.size, bytes: siteSize(FILES) });
+const UPDATES = env("BRAIN_UPDATES_URL");
+const live = UPDATES ? liveManifests(UPDATES) : null;
 
 const server = Deno.serve(
   { port: Number(env("PORT", "8080")), hostname: env("HOST", "0.0.0.0") },
-  (req) => {
+  async (req) => {
     const t0 = performance.now();
     const p = new URL(req.url).pathname;
     // the files are in memory from the start: answering is being ready
-    const r = p === "/health" || p === "/ready" ? Response.json({ ok: true }) : siteAnswer(FILES, SITE, req);
+    const r = p === "/health" || p === "/ready"
+      ? Response.json({ ok: true })
+      : (await live?.(p, req.method)) ?? siteAnswer(FILES, SITE, req);
     logRequest(log, req, r.status, performance.now() - t0, "-");
     return hardened(r, HTTPS);
   },

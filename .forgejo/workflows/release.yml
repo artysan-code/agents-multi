@@ -181,10 +181,13 @@ jobs:
   #   - from the commit with the new manifests on `release` → :latest, which the production brain
   #     runs and whose site serves the update channels; for a stable version also :X.Y.Z and :X.Y;
   #   - for a beta, from its tagged commit as well → :beta and :X.Y.Z-beta.N (the beta's code).
-  # Then brain-deploy has Coolify redeploy :latest: COOLIFY_DEPLOY_URL is Coolify's deploy endpoint
-  # with every resource that runs the image (`/api/v1/deploy?uuid=<brain>,<site>`, apps/brain/coolify/).
+  # Then brain-deploy has Coolify pull again the resources on the tag that moved: Coolify's deploy
+  # endpoint (`/api/v1/deploy?uuid=<a>,<b>`, apps/brain/coolify/) in COOLIFY_DEPLOY_URL for those on
+  # :latest (the brain), redeployed by a stable version, and in COOLIFY_DEPLOY_BETA_URL for those on
+  # :beta (the site, until 1.0.0), by a beta. The site reads the update manifests from `release` on
+  # its own (apps/brain/manifests.ts): no resource is redeployed for them.
   # Without GHCR_TOKEN (a GitHub token with write:packages on artysan-code) nothing is built; without
-  # COOLIFY_DEPLOY_URL and COOLIFY_TOKEN nothing is redeployed.
+  # the URL and COOLIFY_TOKEN nothing is redeployed.
   brain-image:
     needs: app
     runs-on: docker
@@ -228,7 +231,7 @@ jobs:
           esac
           echo "built=true" >>"$GITHUB_OUTPUT"
 
-  # Coolify pulls :latest again. Its own job: busybox's wget in kaniko's image does not check TLS
+  # Coolify pulls the moved tag again. Its own job: busybox's wget in kaniko's image does not check TLS
   # certificates, and the request carries a token.
   brain-deploy:
     needs: brain-image
@@ -238,9 +241,11 @@ jobs:
     steps:
       - name: redeploy
         env:
-          COOLIFY_DEPLOY_URL: ${{ secrets.COOLIFY_DEPLOY_URL }}
+          STABLE_URL: ${{ secrets.COOLIFY_DEPLOY_URL }}
+          BETA_URL: ${{ secrets.COOLIFY_DEPLOY_BETA_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          [ -n "$COOLIFY_DEPLOY_URL" ] && [ -n "$COOLIFY_TOKEN" ] ||
-            { echo "no Coolify deploy hook: nothing redeployed"; exit 0; }
-          curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_DEPLOY_URL"
+          case "$GITHUB_REF_NAME" in *-beta.*) url="$BETA_URL" ;; *) url="$STABLE_URL" ;; esac
+          [ -n "$url" ] && [ -n "$COOLIFY_TOKEN" ] ||
+            { echo "no Coolify deploy hook for this channel: nothing redeployed"; exit 0; }
+          curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$url"
