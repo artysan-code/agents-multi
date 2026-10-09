@@ -6,8 +6,125 @@
     <title>Agents Multi</title>
     <link rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23a94a24'/><text x='16' y='22' font-size='16' font-family='monospace' font-weight='700' text-anchor='middle' fill='%23ffffff'>am</text></svg>">
+    <script>
+    // the theme before the first paint (shell/prefs.ts keeps it), so the start screen is already right
+    try {
+      var th = localStorage.getItem("cm-theme");
+      if (th === "dark" || th === "light") document.documentElement.setAttribute("data-theme", th);
+    } catch (e) {}
+    </script>
+    <style>
+    /* the start screen (shell/boot.tsx takes it away): drawn before any script, the same as the
+       desktop app's waiting page, so a restart goes from one to the other without a flash */
+    .boot {
+      --b-bg: #f6f5f1;
+      --b-fg: #151514;
+      --b-line: #e4e2dc;
+      --b-accent: #ad4e2c;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      background: var(--b-bg);
+      color: var(--b-fg);
+      font: 600 15px/1.4 "DM Sans", ui-sans-serif, system-ui, sans-serif;
+      transition: opacity .38s ease, visibility 0s linear .38s;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .boot {
+        --b-bg: #121211;
+        --b-fg: #f0efeb;
+        --b-line: #2e2e2b;
+        --b-accent: #e0805f;
+      }
+    }
+    :root[data-theme="dark"] .boot {
+      --b-bg: #121211;
+      --b-fg: #f0efeb;
+      --b-line: #2e2e2b;
+      --b-accent: #e0805f;
+    }
+    .boot.cover {
+      z-index: 65;
+    }
+    .boot-msg {
+      max-width: 26rem;
+      padding: 0 16px;
+      text-align: center;
+      font-weight: 400;
+      font-size: 12.5px;
+      opacity: .7;
+    }
+    .boot-msg code {
+      font: 500 12px ui-monospace, monospace;
+    }
+    .boot.out {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .boot.out .boot-in {
+      transform: scale(1.04);
+    }
+    .boot-in {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      transition: transform .38s ease;
+    }
+    .boot-in img {
+      width: 56px;
+      height: 56px;
+      animation: boot-breathe 2.4s ease-in-out infinite;
+    }
+    .boot-bar {
+      width: 120px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--b-line);
+      overflow: hidden;
+      position: relative;
+    }
+    .boot-bar::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 40%;
+      border-radius: 2px;
+      background: var(--b-accent);
+      animation: boot-slide 1.3s ease-in-out infinite;
+    }
+    @keyframes boot-breathe {
+      50% {
+        transform: scale(.94);
+        opacity: .8;
+      }
+    }
+    @keyframes boot-slide {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(250%);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .boot-in img,
+      .boot-bar::after {
+        animation: none;
+      }
+    }
+    </style>
   </head>
   <body>
+    <div id="boot" class="boot" role="status" aria-label="Agents Multi">
+      <div class="boot-in">
+        <img src="./src/assets/mark.svg" alt="">
+        <div>Agents Multi</div>
+        <div class="boot-bar"></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

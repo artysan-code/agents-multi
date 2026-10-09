@@ -1188,11 +1188,6 @@ tbody tr[aria-selected="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ov-acts {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 6px;
-}
 .ov-prof {
   display: grid;
   grid-template-columns: 10px auto minmax(0,1fr) auto;

@@ -1,10 +1,16 @@
-// The local page: shown while the console does not answer. It asks GET /api/code on the console's
-// port (given by the app in ?port=) and navigates there once it answers, to the view in ?view= (a
-// fragment: #system/health, #pick); until then it says so and
-// keeps trying. The request is no-cors: the console sends no CORS headers, and an opaque answer is
-// enough to know it is up. The page has no IPC: it needs nothing from the app.
+// The local page: shown while the console does not answer — at a relaunch, while the console starts. It
+// looks like the console's start screen (apps/ui/index.html), so the window passes from one to the other
+// without a change of scene. It asks GET /api/code on the console's port (given by the app in ?port=)
+// and navigates there once it answers, to the view in ?view= (a fragment: #system/health, #pick). A
+// console starting is normal: the page says nothing for a while, then that it is slow, and only later
+// that it does not answer, with how to start it. The request is no-cors: the console sends no CORS
+// headers, and an opaque answer is enough to know it is up. The page has no IPC: it needs nothing from
+// the app.
 
-const INTERVAL_MS = 2000;
+const INTERVAL_MS = 1000;
+/** When the page says the console is slow, and when that it does not answer. */
+const SLOW_MS = 15000, LOST_MS = 40000;
+const started = Date.now();
 const TIMEOUT_MS = 1500;
 
 function code(s) {
@@ -16,7 +22,7 @@ function code(s) {
 const it = navigator.language.toLowerCase().startsWith("it");
 const text = it
   ? {
-    checking: "Connessione alla console…",
+    slow: "La console ci mette più del solito ad avviarsi…",
     unreachable: "La console non risponde.",
     noAnswer: "Nessuna risposta da",
     startWith: "Avviala con",
@@ -24,7 +30,7 @@ const text = it
     retry: "Riprova",
   }
   : {
-    checking: "Connecting to the console…",
+    slow: "The console is taking longer than usual to start…",
     unreachable: "The console is not reachable.",
     noAnswer: "No answer from",
     startWith: "Start it with",
@@ -45,7 +51,6 @@ const status = document.getElementById("status");
 const hint = document.getElementById("hint");
 const retry = document.getElementById("retry");
 retry.textContent = text.retry;
-status.textContent = text.checking;
 
 let timer = 0;
 let busy = false;
@@ -72,6 +77,15 @@ async function check() {
     location.replace(view ? `${consoleUrl}#${view}` : consoleUrl);
     return;
   }
+  const waited = Date.now() - started;
+  busy = false;
+  timer = setTimeout(check, INTERVAL_MS);
+  if (waited < SLOW_MS) return;
+  status.hidden = false;
+  if (waited < LOST_MS) {
+    status.textContent = text.slow;
+    return;
+  }
   main.dataset.state = "unreachable";
   status.textContent = text.unreachable;
   hint.replaceChildren(
@@ -82,8 +96,6 @@ async function check() {
   hint.hidden = false;
   retry.hidden = false;
   retry.disabled = false;
-  busy = false;
-  timer = setTimeout(check, INTERVAL_MS);
 }
 
 retry.addEventListener("click", check);

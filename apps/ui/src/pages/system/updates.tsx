@@ -1,6 +1,6 @@
 // updates.tsx — System › Updates: the version of each component with what is waiting or staged and its
 // rollback, the desktop app with its channel, the note on the Claude Code Desktop carries, and the
-// update log. «Update now» (in the tab bar) starts the wizard.
+// update log. An update waiting leads the page (update-ready.tsx), with «Update now».
 
 import type { ComponentChildren } from "preact";
 import { status } from "../../state.ts";
@@ -10,6 +10,7 @@ import { appUpdate, appUpdateAction, appUpdateChannel } from "../../shell/app-up
 import { appState } from "./app-state.ts";
 import { COMPONENTS, type MachineExtra, type RepoExtra, type Report } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
+import { UpdateReady } from "./update-ready.tsx";
 
 function Card({ name, current, lines, rollback, extra }: {
   name: string;
@@ -105,6 +106,7 @@ export function Updates() {
   const log = S.updateLog ?? [];
   return (
     <div class="sub-view">
+      <UpdateReady />
       <p class="lede">{appUpdate.value?.app ? t("up.lede.app") : t("up.lede")}</p>
       <div class="vcards" style={{ marginTop: "20px" }}>
         <Card

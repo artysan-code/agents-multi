@@ -16,6 +16,7 @@ import { go } from "./router.ts";
 import { t } from "./i18n.ts";
 import { toast } from "./lib/ui.tsx";
 import "./shell/prefs.ts";
+import { dismissBoot } from "./shell/boot.tsx";
 
 // Claude's faces come from the Desktop bundle the server scans, not from the build
 const faces = document.createElement("link");
@@ -25,14 +26,18 @@ document.head.append(faces);
 
 // «Which Claude?» (#pick) and «Hey Claude» (#hey) are pages of their own, without the console's frame:
 // the desktop app shows each in a small window
+// (the start screen is the console's: they go without it)
 if (location.hash === "#pick") {
+  dismissBoot();
   render(<Pick />, document.getElementById("root")!);
 } else if (location.hash === "#hey") {
+  dismissBoot();
   render(<Hey />, document.getElementById("root")!);
 } else {
   const setup = await loadSetup().catch(() => null);
   if (setup?.active) {
     // a machine with no configuration yet: the first-run wizard, in place of the console
+    dismissBoot();
     render(<Setup initial={setup} />, document.getElementById("root")!);
   } else {
     go(location.hash.slice(1));

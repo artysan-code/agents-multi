@@ -1,13 +1,14 @@
-// app.tsx — the shell: the header with the main tabs and the ☰ menu (shell/frame.tsx), the bar to ask
-// Claude where there is something to ask about, the page on screen, and the overlays (drawer, toast,
-// palette, update wizard).
+// app.tsx — the shell: the rail with every page (shell/rail.tsx), the bar to ask Claude where there is
+// something to ask about, the page on screen, and the overlays (drawer, toast, palette, update wizard,
+// the start screen).
 
 import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import { view, type View } from "./router.ts";
 import { Overlays } from "./lib/ui.tsx";
 import { ask, askContext, AskBar } from "./shell/ask.tsx";
-import { Header } from "./shell/frame.tsx";
+import { Rail } from "./shell/rail.tsx";
+import { Boot } from "./shell/boot.tsx";
 import { PaletteHost } from "./shell/palette.tsx";
 import { Today } from "./pages/today/index.tsx";
 import { Tasks } from "./pages/tasks/index.tsx";
@@ -35,7 +36,7 @@ export function App() {
   }, [v]);
   return (
     <div class="v2">
-      <Header />
+      <Rail />
       <div class="v2-main">
         {(v === "today" || v === "tasks" || v === "brain") && <AskBar />}
         <section id={`v-${v}`} class={`view${v === "brain" ? " wide" : ""}`}>
@@ -46,6 +47,7 @@ export function App() {
       <PaletteHost />
       <UpdateWizardHost />
       <CloseClaudeHost />
+      <Boot />
     </div>
   );
 }

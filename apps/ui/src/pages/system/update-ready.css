@@ -1,0 +1,54 @@
+/* update-ready.css — the update waiting, at the top of System › Updates. */
+
+.upd {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  border-radius: 11px;
+  background: var(--accent-wash);
+}
+.upd h4 {
+  margin: 0 0 8px;
+  font: 600 13.5px var(--sans);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.upd .vv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.upd .vv span {
+  color: var(--fg);
+}
+.upd .vv em {
+  font: normal 11.5px var(--mono);
+}
+.upd ul {
+  margin: 8px 0 10px;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.upd ul li {
+  margin: 2px 0;
+}
+.upd .go {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.upd .go .bt.pri {
+  height: 34px;
+  font-size: 13px;
+  padding: 0 18px;
+}
+.upd .note {
+  font-size: 11px;
+  color: var(--faint);
+  margin: 8px 0 0;
+}

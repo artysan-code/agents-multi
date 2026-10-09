@@ -78,6 +78,7 @@ export function Connections() {
 
   return (
     <div class="sub-view">
+      <h1 class="pg-h">{t("nav.connections")}</h1>
       <p class="lede">{t("conn.lede")}</p>
       <VaultCard v={view.vault} />
       {wantsGoogle && <GoogleClientCard reload={load} />}

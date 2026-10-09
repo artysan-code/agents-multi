@@ -8,9 +8,11 @@
     <script src="main.js" defer></script>
   </head>
   <body>
-    <main data-state="checking">
+    <main data-state="starting" role="status" aria-label="Agents Multi">
+      <img src="mark.svg" alt="" />
       <h1>Agents Multi</h1>
-      <p class="status" id="status">Connecting to the console…</p>
+      <div class="bar"></div>
+      <p class="status" id="status" hidden></p>
       <p class="hint" id="hint" hidden></p>
       <button type="button" id="retry" hidden>Retry</button>
     </main>

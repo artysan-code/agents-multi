@@ -2,7 +2,8 @@
 // whole window and updates everything in one flow, a step at a time with its progress: check what is
 // out (the console's check and the desktop app's), update Claude Code, Claude Desktop and the
 // agents-multi checkout (the console's update job), download and install the desktop app's new
-// version (shell/app-update.ts), restart, verify, and say «Updated to X.Y.Z» with what is new.
+// version (shell/app-update.ts), close Claude when the install waits for it (updates-close.tsx, drawn in
+// the screen), restart, verify, and say «Updated to X.Y.Z» with what is new.
 //
 // The restart takes the page with it (the console, or the whole app, comes back on new code), so the
 // run is kept in localStorage — the app's relaunch is a new window, which sessionStorage would not
@@ -11,7 +12,7 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { get, post } from "../../api.ts";
-import { loadStatus, status, useTopic } from "../../state.ts";
+import { loadStatus, reloadSoftly, status, useTopic } from "../../state.ts";
 import { type Key, t, tk } from "../../i18n.ts";
 import { intent, useIntent } from "../../router.ts";
 import { openDrawer, runJob } from "../../lib/ui.tsx";
@@ -33,12 +34,29 @@ import {
   type Report,
   type Whatsnew,
 } from "./updates-lib.tsx";
-import { openCloseClaude } from "./updates-close.tsx";
-import { StepRows, type StepState } from "../../lib/steps.tsx";
+import {
+  CloseClaude,
+  type Plan,
+  reopenProfile,
+  runSettle,
+} from "./updates-close.tsx";
+import {
+  RunMark,
+  runShare,
+  StepRows,
+  type StepState,
+} from "../../lib/steps.tsx";
 import "../../lib/screen.css";
 
 const UW_KEY = "cm.upwiz", SEEN_KEY = "cm.seenVersion";
-const STEPS = ["check", "update", "download", "restart", "verify"] as const;
+const STEPS = [
+  "check",
+  "update",
+  "download",
+  "close",
+  "restart",
+  "verify",
+] as const;
 type Step = typeof STEPS[number];
 
 /** What the run keeps across the restart. */
@@ -68,6 +86,7 @@ const fresh = (): Run => {
       check: "todo",
       update: "todo",
       download: "todo",
+      close: "todo",
       restart: "todo",
       verify: "todo",
     },
@@ -133,10 +152,19 @@ interface Health {
   msg: string;
 }
 
+/** The install left waiting for every Claude to be closed (status.selfInstall), as of now. */
+const installWaits = () =>
+  loadStatus(true).then(
+    () => !!(status.value as Report | null)?.selfInstall,
+    () => false,
+  );
+
 function Screen(
-  { resume, auto, close }: {
+  { resume, auto, settle, close }: {
     resume: Run | null;
     auto: boolean;
+    /** only the install is left: straight to closing Claude */
+    settle: boolean;
     close: () => void;
   },
 ) {
@@ -151,6 +179,12 @@ function Screen(
     news: null as Whatsnew | null,
     health: null as Health | null,
     showOut: false,
+    /** the close step on screen: who holds the install, and how the step ends */
+    closing: null as { plan: Plan; end: (installed: boolean) => void } | null,
+    later: false,
+    /** the profiles whose Claude the close step closed, to open again at the end */
+    reopen: [] as string[],
+    reopened: [] as string[],
   }).current;
   const outEl = useRef<HTMLPreElement>(null);
   const S = status.value as Report | null;
@@ -187,17 +221,44 @@ function Screen(
     return r;
   };
 
-  /** After the update: the restart when agents-multi moved, the doctor, and what is new. */
+  /** The install that waits for Claude, in the screen: the sessions that hold it, closed when the person
+   *  says so, then the install; or left for later. False when it failed. */
+  const closeStep = async (): Promise<boolean> => {
+    set("close", "running");
+    let plan: Plan;
+    try {
+      plan = await get<Plan>("/api/close-claude");
+    } catch (e) {
+      fail("close", (e as Error).message);
+      return false;
+    }
+    // closed by hand meanwhile: nothing to ask, the install runs now
+    if (!plan.offer) {
+      const r = plan.pending ? await runSettle() : { code: 0 };
+      if (r.code) {
+        fail("close", t("uw.exit", { c: r.code }));
+        return false;
+      }
+      set("close", "done");
+      return true;
+    }
+    const installed = await new Promise<boolean>((end) => {
+      v.closing = { plan, end };
+      draw();
+    });
+    v.later = !installed;
+    set("close", installed ? "done" : "skipped");
+    return true;
+  };
+
+  /** After the update: the restart when agents-multi moved, closing Claude when the install waits for
+   *  it, the doctor, and what is new. */
   const finish = async () => {
     if (run.state.restart !== "done") {
-      // an install still waiting for every Claude to be closed restarts nothing: the result offers
-      // «Close Claude and update» instead of waiting for a restart that does not come
-      const waiting = run.self && !run.app && await loadStatus(true).then(
-        () =>
-          !!(status.value as Report | null)?.selfInstall &&
-          !status.value?.repo.behind,
-        () => false,
-      );
+      // an install still waiting for every Claude to be closed restarts nothing: the close step
+      // follows instead of a restart that does not come
+      const waiting = run.self && !run.app && await installWaits() &&
+        !status.value?.repo.behind;
       if (!run.self || waiting) set("restart", "skipped");
       else {
         set("restart", "running");
@@ -205,9 +266,15 @@ function Screen(
         if (!back) return fail("restart", t("uw.noRestart"));
         set("restart", "done");
         // this page runs the old code: the new one, reloaded, carries on from the kept run
-        if (!resume) return location.reload();
+        if (!resume) return reloadSoftly();
       }
     }
+    if (
+      run.state.close !== "done" && run.state.close !== "skipped" &&
+      await installWaits()
+    ) {
+      if (!(await closeStep())) return;
+    } else if (run.state.close === "todo") set("close", "skipped");
     set("verify", "running");
     await loadStatus(true).catch(() => null);
     await loadAppUpdate();
@@ -311,12 +378,22 @@ function Screen(
       if (run.state.update === "running") run.state.update = "done";
       if (run.state.download === "running") run.state.download = "done";
       void finish();
+    } else if (settle) {
+      // only the install is left: the rest was done before
+      for (const s of ["check", "update", "download", "restart"] as const) {
+        run.state[s] = "skipped";
+      }
+      void finish();
     } else if (auto) void start();
   }, []);
 
-  // the steps on screen: the download only when the app has a new version
+  // the steps on screen: the download only when the app has a new version, closing Claude only when
+  // the install waited for it
   const shown = STEPS.filter((s) =>
-    s !== "download" || run.app || run.state.download === "running"
+    (s !== "download" || run.app || run.state.download === "running") &&
+    (s !== "close" || run.state.close === "running" ||
+      run.state.close === "done" || v.later ||
+      run.state.close === "failed")
   );
   const step = shown.find((s) => run.state[s] === "running");
   const failed = shown.find((s) => run.state[s] === "failed");
@@ -334,6 +411,8 @@ function Screen(
     ? (run.pending.length ? "uw.h.done" : "uw.h.current")
     : failed
     ? "uw.h.failed"
+    : step === "close" && v.closing
+    ? "uw.h.close"
     : step === "restart"
     ? "uw.h.restarting"
     : begun
@@ -360,25 +439,17 @@ function Screen(
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
-        <div
-          class={`uw-mark${step ? " on" : ""}${
-            finished && !failed ? " ok" : ""
-          }${failed ? " bad" : ""}`}
-          aria-hidden="true"
-        >
-          {finished && !failed
-            ? (
-              <svg viewBox="0 0 16 16">
-                <path d="M3.5 8.5l3 3 6-7" />
-              </svg>
-            )
-            : (
-              <svg viewBox="0 0 16 16">
-                <path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" />
-              </svg>
-            )}
-        </div>
-        <h2>{t(title, { v: nowVersion })}</h2>
+        <RunMark
+          share={runShare(shown.map(stepState))}
+          state={finished && !failed
+            ? "ok"
+            : failed
+            ? "bad"
+            : step
+            ? "on"
+            : "idle"}
+        />
+        <h2 key={title}>{t(title, { v: nowVersion })}</h2>
         {!begun && (
           <>
             {pendingUpdates(S).length || app?.available
@@ -417,6 +488,28 @@ function Screen(
           />
         )}
 
+        {step === "close" && v.closing && (
+          <div class="uw-close">
+            <CloseClaude
+              plan={v.closing.plan}
+              onSettled={(r, reopen) => {
+                const c = v.closing;
+                v.reopen = reopen;
+                if (r.code) {
+                  v.closing = null;
+                  return fail("close", t("uw.exit", { c: r.code }));
+                }
+                c?.end(true);
+              }}
+              onLater={() => {
+                const c = v.closing;
+                v.closing = null;
+                c?.end(false);
+              }}
+            />
+          </div>
+        )}
+        {v.later && finished && <p class="uw-sub">{t("uw.closeLater")}</p>}
         {step === "restart" && <p class="uw-sub">{t("uw.restartNote")}</p>}
         {v.cause && <p class="uw-cause">{v.cause}</p>}
         {h && (
@@ -505,19 +598,21 @@ function Screen(
             : finished
             ? (
               <>
-                {S?.selfInstall && log.length > 0 && (
+                {v.reopen.map((p) => (
                   <button
                     type="button"
                     class="bt"
+                    key={p}
+                    disabled={v.reopened.includes(p)}
                     onClick={() => {
-                      // the screen covers the drawer: it goes first
-                      close();
-                      void openCloseClaude();
+                      v.reopened.push(p);
+                      draw();
+                      void reopenProfile(p);
                     }}
                   >
-                    {t("cc.btn")}
+                    {t("cc.reopen", { p })}
                   </button>
-                )}
+                ))}
                 <button type="button" class="bt pri" onClick={close}>
                   {t("uw.done")}
                 </button>
@@ -565,7 +660,7 @@ function NewsDrawer({ since }: { since: string | null }) {
 
 export function UpdateWizardHost() {
   const [open, setOpen] = useState<
-    { resume: Run | null; auto: boolean; at: number } | null
+    { resume: Run | null; auto: boolean; settle?: boolean; at: number } | null
   >(null);
   const [note, setNote] = useState<{ v: string; seen: string } | null>(null);
   const booted = useRef(false);
@@ -576,7 +671,13 @@ export function UpdateWizardHost() {
 
   useIntent(
     "update.wizard",
-    (arg) => setOpen({ resume: null, auto: arg === "auto", at: Date.now() }),
+    (arg) =>
+      setOpen({
+        resume: null,
+        auto: arg === "auto",
+        settle: arg === "settle",
+        at: Date.now(),
+      }),
   );
 
   // At start: a run that the restart interrupted opens again; otherwise a version newer than the last
@@ -615,6 +716,7 @@ export function UpdateWizardHost() {
       setOpen({
         resume: null,
         auto: intent.value.arg === "auto",
+        settle: intent.value.arg === "settle",
         at: Date.now(),
       });
     }
@@ -627,6 +729,7 @@ export function UpdateWizardHost() {
           key={open.at}
           resume={open.resume}
           auto={open.auto}
+          settle={!!open.settle}
           close={() => {
             setOpen(null);
             keep(localStorage, UW_KEY);

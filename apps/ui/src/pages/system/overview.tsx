@@ -7,7 +7,6 @@ import { lang, t } from "../../i18n.ts";
 import type { Check } from "../../api.ts";
 import { ActionButton, FixControl } from "./health-repair.tsx";
 import { profilesOf } from "./profiles-types.ts";
-import { UpdateNow } from "./updates-close.tsx";
 
 const SYM = { ok: "✓", warn: "!", fail: "✕" } as const;
 
@@ -75,9 +74,6 @@ export function Overview() {
       {m.desktopVersion &&
         upLine("Claude Desktop", m.desktopVersion, m.desktopStaged ? t("ov.upStaged", { v: m.desktopStaged }) : null)}
       {r?.isRepo && upLine("agents-multi", (r.head ?? "").split(" ")[0], r.behind ? t("ov.upBehind", { n: r.behind }) : null)}
-      <div class="ov-acts">
-        <UpdateNow cls="btn sm" />
-      </div>
     </>
   );
 

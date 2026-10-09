@@ -53,13 +53,22 @@ export async function loadOwner(): Promise<void> {
   owner.value = await api.owner().catch(() => owner.value);
 }
 
+/** The start screen is back over the page, which reloads under it (shell/boot.tsx): new code shows up
+ *  the way the console first did, never as a page torn down. */
+export const leaving = signal(false);
+
+export function reloadSoftly(): void {
+  leaving.value = true;
+  setTimeout(() => location.reload(), 320);
+}
+
 /** A reload, but not under someone's fingers: while a field has focus, or a drawer with a form is
  *  open, it waits and asks again. */
 function reloadWhenIdle(): void {
   const busy = document.activeElement?.matches?.("input, textarea, select, [contenteditable]") ||
     document.querySelector(".drawer form, dialog[open]");
   if (busy) setTimeout(reloadWhenIdle, 5000);
-  else location.reload();
+  else reloadSoftly();
 }
 
 /** Listens to the server's events. A burst of state or usage events is coalesced into one refresh;

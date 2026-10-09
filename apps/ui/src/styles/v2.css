@@ -249,130 +249,22 @@ body {
   font-family: var(--mono);
 }
 
-/* ---------------- the frame ---------------- */
+/* ---------------- the frame: the rail and the page ---------------- */
 .v2 {
+  --rail-w: 56px;
+  --rail-open: 232px;
   height: 100vh;
   display: grid;
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
 }
-.hd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 14px 0 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  position: relative;
-  user-select: none;
-  z-index: 20;
-}
-.hd-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-weight: 600;
-  font-size: 14px;
-  margin-right: 18px;
-  white-space: nowrap;
+.hd-sp {
+  flex: 1;
 }
 .mark2 {
   width: 26px;
   height: 26px;
   display: block;
   flex: none;
-}
-.hd-tabs {
-  display: flex;
-  flex-direction: row;
-  gap: 2px;
-}
-.hd-tabs a {
-  padding: 6px 11px;
-  border-radius: 8px;
-  color: var(--dim);
-  font-weight: 500;
-  font-size: 13.5px;
-  text-decoration: none;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: flex-start;
-  position: static;
-}
-.hd-tabs a:hover {
-  color: var(--fg);
-}
-.hd-tabs a[aria-current="page"] {
-  background: var(--raised);
-  color: var(--fg);
-  font-weight: 500;
-}
-.hd-tabs .n {
-  margin: 0;
-  position: static;
-  font: 500 11px var(--mono);
-  color: var(--faint);
-}
-.hd-where {
-  color: var(--faint);
-  font-size: 12.5px;
-  margin-left: 8px;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.hd-sp {
-  flex: 1;
-}
-.pill2 {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: 15px;
-  font-weight: 500;
-  font-size: 12.5px;
-  color: var(--dim);
-  white-space: nowrap;
-}
-.pill2 i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ok);
-}
-.pill2:hover {
-  background: var(--raised);
-}
-.pill2.warn {
-  background: var(--warn-wash);
-  color: var(--warn);
-}
-.pill2.warn i {
-  background: var(--warn);
-}
-.pill2.crit {
-  background: var(--crit-wash);
-  color: var(--crit);
-}
-.pill2.crit i {
-  background: var(--crit);
-}
-.pill2.up {
-  background: var(--accent-wash);
-  color: var(--accent);
-}
-.pill2.up i {
-  background: var(--accent);
-}
-.pill2.down i {
-  background: var(--crit);
-}
-.hd-clock {
-  font: 500 13px var(--mono);
-  color: var(--dim);
-  padding: 0 10px 0 6px;
 }
 .ib {
   width: 34px;
@@ -397,17 +289,210 @@ body {
   stroke-linecap: round;
 }
 
-/* the ☰ menu */
-.menu2 {
+/* the rail: icons, opened over the page while the pointer or the focus is in it */
+.rail {
+  position: relative;
+  z-index: 30;
+  user-select: none;
+}
+.rl-panel {
   position: absolute;
-  right: 12px;
-  top: 46px;
-  width: 280px;
+  inset: 0 auto 0 0;
+  width: var(--rail-w);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+  /* closing waits a moment, so a pointer passing by does not make it flicker */
+  transition: width .16s ease .22s, box-shadow .16s ease .22s;
+}
+.rail:hover .rl-panel,
+.rail:has(:focus-visible) .rl-panel,
+.rail.held .rl-panel {
+  width: var(--rail-open);
+  box-shadow: var(--pop);
+  transition-delay: .08s;
+}
+.rl-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 7px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.rl-g {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rl-g + .rl-g {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.rl-h {
+  margin: 0 0 2px;
+  height: 0;
+  padding: 0 11px;
+  overflow: hidden;
+  font: 600 10.5px var(--sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity .12s, height .16s ease .22s;
+}
+.rail:hover .rl-h,
+.rail:has(:focus-visible) .rl-h,
+.rail.held .rl-h {
+  height: 18px;
+  opacity: 1;
+  transition-delay: .08s;
+}
+.rl-i {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--dim);
+  text-decoration: none;
+  font: 500 13px var(--sans);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rl-i:hover {
+  background: var(--raised);
+  color: var(--fg);
+}
+.rl-i[aria-current="page"] {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.rl-i svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rl-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity .12s ease .2s;
+}
+.rail:hover .rl-t,
+.rail:has(:focus-visible) .rl-t,
+.rail.held .rl-t {
+  opacity: 1;
+  transition-delay: .1s;
+}
+/* a page's sign: a number, or a dot; on the icon while the rail is closed */
+.rl-s {
+  font: 500 11px var(--mono);
+  color: var(--faint);
+  flex: none;
+}
+.rl-s.ok {
+  color: var(--ok);
+}
+.rl-s.warn {
+  color: var(--warn);
+}
+.rl-s.crit {
+  color: var(--crit);
+}
+.rl-s.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s {
+  position: absolute;
+  left: 26px;
+  top: 5px;
+  min-width: 7px;
+  height: 7px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  font-size: 0;
+  background: var(--faint);
+}
+.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.ok {
+  display: none;
+}
+.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.warn {
+  background: var(--warn);
+}
+.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.crit,
+.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.dot {
+  background: var(--crit);
+}
+.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.up {
+  background: var(--accent);
+}
+.rl-sp {
+  flex: 1;
+}
+.rl-foot {
+  border-top: 0 !important;
+}
+/* the one action that waits for the person */
+.rl-up {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.rl-up:hover {
+  background: var(--accent-hi);
+  color: var(--on-accent);
+}
+.rl-down {
+  background: var(--crit-wash);
+  color: var(--crit);
+}
+.rl-clock {
+  display: block;
+  padding: 6px 0 0;
+  text-align: center;
+  font: 500 11.5px var(--mono);
+  color: var(--faint);
+  width: 40px;
+}
+
+/* the preferences, beside the rail */
+.menu2 {
   background: var(--surface);
   border-radius: 12px;
   box-shadow: var(--pop);
   padding: 6px;
   z-index: 40;
+}
+.rl-pop {
+  position: fixed;
+  left: calc(var(--rail-open) + 8px);
+  bottom: 12px;
+  width: 280px;
 }
 .menu2 h6 {
   margin: 8px 10px 4px;
@@ -416,7 +501,6 @@ body {
   text-transform: uppercase;
   color: var(--faint);
 }
-.menu2 a,
 .menu2 .mi {
   display: flex;
   align-items: center;
@@ -425,30 +509,16 @@ body {
   padding: 7px 10px;
   border-radius: 7px;
   color: var(--fg);
-  text-decoration: none;
   text-align: left;
   font-size: 13px;
 }
-.menu2 a:hover,
-.menu2 .mi:hover,
-.menu2 a:focus-visible {
+.menu2 .mi:hover {
   background: var(--raised);
 }
 .menu2 small {
   margin-left: auto;
   color: var(--faint);
   font-size: 11.5px;
-}
-.menu2 small.crit {
-  color: var(--crit);
-}
-.menu2 small.warn {
-  color: var(--warn);
-}
-.menu2 .sub2 {
-  padding-left: 28px;
-  color: var(--dim);
-  font-size: 12.5px;
 }
 .menu2 .sg {
   margin: 2px 10px 8px;
@@ -462,6 +532,13 @@ body {
   padding: 6px 10px 4px;
   font-size: 11.5px;
   color: var(--faint);
+}
+
+/* a page's title, where the page has no header of its own */
+.pg-h {
+  margin: 0 0 14px;
+  font: 600 20px var(--sans);
+  letter-spacing: -.01em;
 }
 
 /* the page under the frame: Today lays itself out; the other pages scroll */
@@ -481,9 +558,6 @@ body {
 .v2-main > #v-today {
   padding: 14px 20px 18px;
   overflow: hidden;
-}
-.v2-main > #v-system > .tabs {
-  margin-top: 0;
 }
 
 /* the keyboard shortcuts */

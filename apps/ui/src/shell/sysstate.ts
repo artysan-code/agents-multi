@@ -1,8 +1,8 @@
-// sysstate.ts — the machine's state as the frame and Today tell it: the checks that need someone,
-// what an update would take now, and the one word for the header's pill. Read from the shared report;
+// sysstate.ts — the machine's state as the rail and Today tell it: the checks that need someone,
+// what an update would take now, and the word for the rail's update button. Read from the shared report;
 // nothing here asks the server.
 
-import { computed, signal } from "@preact/signals";
+import { computed } from "@preact/signals";
 import type { Check } from "../api.ts";
 import { live, status } from "../state.ts";
 import { pendingUpdates, type Report } from "../pages/system/updates-lib.tsx";
@@ -11,7 +11,7 @@ import { appUpdater } from "./app-update.ts";
 export type Level = "ok" | "warn" | "crit" | "up" | "down";
 
 export interface SysState {
-  /** the pill's word: the worst problem, else an update, else all good */
+  /** the worst news first: unreachable, a failing check, an update, a warning, else all good */
   level: Level;
   /** the checks that are not ok, failures first */
   problems: Check[];
@@ -19,7 +19,7 @@ export interface SysState {
   total: number;
   /** what an update would take now, one line per component */
   pending: string[];
-  /** the pill's word for an update: «Update ready», or «Close Claude to finish» when all that is left
+  /** the word for an update: «Update ready», or «Close Claude to finish» when all that is left
    *  is the install of code already here, waiting for every Claude to be closed */
   upWord: "pill.up" | "pill.settle";
 }
@@ -59,26 +59,3 @@ export const sys = computed<SysState>(() => {
     upWord: settling ? "pill.settle" : "pill.up",
   };
 });
-
-/* «Later» on the update card: the card folds into the header's pill until something new is pending. */
-
-const LATER = "cm.updateLater";
-const stored = (): string => {
-  try {
-    return localStorage.getItem(LATER) ?? "";
-  } catch {
-    return "";
-  }
-};
-const laterFor = signal(stored());
-
-export const updateLater = computed(() =>
-  sys.value.pending.length > 0 && laterFor.value === sys.value.pending.join("|")
-);
-
-export function setUpdateLater(on: boolean): void {
-  laterFor.value = on ? sys.value.pending.join("|") : "";
-  try {
-    localStorage.setItem(LATER, laterFor.value);
-  } catch { /* not remembered: the card comes back at the next visit */ }
-}

@@ -66,9 +66,10 @@ export function cmpVer(a: unknown, b: unknown): number {
 export function pendingUpdates(S: Report | null): string[] {
   if (!S) return [];
   const m = S.machine, u = S.update ?? {}, r = S.repo;
+  // a Claude Desktop already staged is not among them: it takes its new version when it next opens,
+  // and there is nothing to do for it (the Updates page says so)
   return [
     u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code ${m.cliVersion ?? "—"} → ${u.cli.latest}` : null,
-    m.desktopStaged ? `Claude Desktop ${m.desktopVersion ?? "—"} → ${m.desktopStaged}` : null,
     r.isRepo && r.behind ? `agents-multi: ${t("up.self.behind", { n: r.behind })}` : null,
     S.selfInstall ? `agents-multi: ${t("up.self.install")}` : null,
   ].filter((x): x is string => !!x);

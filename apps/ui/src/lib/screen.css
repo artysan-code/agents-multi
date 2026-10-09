@@ -90,6 +90,160 @@
   margin: 0 0 12px;
   font: 500 24px/1.2 var(--serif);
   letter-spacing: -.01em;
+  animation: uw-title .35s ease both;
+}
+@keyframes uw-title {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* the update screen's head (steps.tsx RunMark): the logo in a ring that fills as the steps go */
+.rm {
+  position: relative;
+  isolation: isolate;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 14px;
+}
+.rm-ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.rm-track,
+.rm-fill {
+  fill: none;
+  stroke-width: 3;
+}
+.rm-track {
+  stroke: var(--line);
+}
+.rm-fill {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset .7s cubic-bezier(.2, .8, .3, 1), stroke .4s
+    ease;
+}
+.rm-logo {
+  position: absolute;
+  inset: 13px;
+  width: 38px;
+  height: 38px;
+}
+.rm-on .rm-logo {
+  animation: rm-breathe 2.4s ease-in-out infinite;
+}
+@keyframes rm-breathe {
+  50% {
+    transform: scale(.92);
+    opacity: .8;
+  }
+}
+/* the ring's head while running: a soft glow that goes round */
+.rm-on::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 80%, var(--accent-wash)
+    92%, transparent);
+  animation: rot2 2.2s linear infinite;
+  z-index: -1;
+}
+.rm-ok .rm-fill {
+  stroke: var(--ok);
+}
+.rm-ok .rm-logo {
+  animation: rm-pop .55s cubic-bezier(.3, 1.6, .5, 1);
+}
+@keyframes rm-pop {
+  40% {
+    transform: scale(1.14);
+  }
+}
+.rm-ok-b {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--surface);
+  display: grid;
+  place-items: center;
+  animation: rm-in .3s .35s cubic-bezier(.3, 1.6, .5, 1) both;
+}
+@keyframes rm-in {
+  from {
+    transform: scale(0);
+  }
+}
+.rm-ok-b .uw-tick {
+  width: 13px;
+  height: 13px;
+  stroke: var(--surface);
+  animation-delay: .5s;
+}
+/* the logo's five drops, out once when the run ends well */
+.rm-burst i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--c-blue);
+  opacity: 0;
+  animation: rm-burst .8s .25s ease-out;
+}
+.rm-burst i:nth-child(2) {
+  background: var(--c-violet);
+}
+.rm-burst i:nth-child(3) {
+  background: var(--c-rose);
+}
+.rm-burst i:nth-child(4) {
+  background: var(--c-amber);
+}
+.rm-burst i:nth-child(5) {
+  background: var(--c-green);
+}
+@keyframes rm-burst {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateX(30px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(54px) scale(.4);
+  }
+}
+.rm-bad .rm-fill {
+  stroke: var(--crit);
+}
+.rm-bad {
+  animation: rm-shake .4s ease;
+}
+@keyframes rm-shake {
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rm *,
+  .rm::after,
+  .uw-steps li,
+  .uw-card h2 {
+    animation: none !important;
+  }
 }
 .uw-sub {
   color: var(--dim);
@@ -122,6 +276,15 @@
   align-items: center;
   font-size: 13.5px;
   color: var(--faint);
+  animation: uw-row .35s ease both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+  transition: color .3s;
+}
+@keyframes uw-row {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
 }
 .uw-steps li.uw-running,
 .uw-steps li.uw-done,
@@ -142,6 +305,48 @@
   background: var(--ok-wash);
   color: var(--ok);
   animation: uw-pop .3s ease;
+}
+.uw-tick {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: uw-tick .4s .05s ease forwards;
+}
+.uw-running .uw-n {
+  background: linear-gradient(90deg, var(--fg) 40%, var(--faint) 50%, var(--fg)
+    60%) 0 0 / 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: uw-shine 2.2s linear infinite;
+}
+@keyframes uw-shine {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+.uw-close {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--raised);
+  font-size: 13px;
+  animation: uw-row .35s ease both;
+}
+.uw-close p {
+  margin: 0 0 8px;
+}
+.uw-close .uw-go {
+  margin-top: 12px;
 }
 @keyframes uw-pop {
   50% {

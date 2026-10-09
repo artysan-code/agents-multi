@@ -1,16 +1,20 @@
+/* The waiting page: the console's start screen (apps/ui/index.html, the same colours, mark and bar), so
+   the window goes from this page to the console's without a change of scene. */
 :root {
   color-scheme: light dark;
-  --bg: #f6f5f2;
-  --fg: #1d1d1b;
-  --muted: #6b6a65;
-  --accent: #c2410c;
+  --bg: #f6f5f1;
+  --fg: #151514;
+  --muted: #77746c;
+  --line: #e4e2dc;
+  --accent: #ad4e2c;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161614;
-    --fg: #ecebe6;
-    --muted: #9b9a94;
-    --accent: #fb923c;
+    --bg: #121211;
+    --fg: #f0efeb;
+    --muted: #98958c;
+    --line: #2e2e2b;
+    --accent: #e0805f;
   }
 }
 html,
@@ -23,43 +27,95 @@ body {
   place-items: center;
   background: var(--bg);
   color: var(--fg);
-  font: 15px/1.5 system-ui, sans-serif;
+  font: 15px/1.4 "DM Sans", ui-sans-serif, system-ui, sans-serif;
 }
 main {
-  max-width: 28rem;
+  max-width: 26rem;
   padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
   text-align: center;
 }
-h1 {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 0 0 0.75rem;
+img {
+  width: 56px;
+  height: 56px;
+  animation: breathe 2.4s ease-in-out infinite;
 }
-.status {
+h1 {
+  font-size: 15px;
+  font-weight: 600;
   margin: 0;
+}
+.bar {
+  width: 120px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+  position: relative;
+}
+.bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: slide 1.3s ease-in-out infinite;
+}
+main[data-state="unreachable"] .bar {
+  display: none;
+}
+main[data-state="unreachable"] img {
+  animation: none;
+  opacity: .6;
+}
+.status,
+.hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 main[data-state="unreachable"] .status {
   color: var(--accent);
 }
-.hint {
-  color: var(--muted);
-  margin: 0.5rem 0 0;
-}
 code {
-  font: 0.9em ui-monospace, monospace;
+  font: 12px ui-monospace, monospace;
   white-space: nowrap;
 }
 button {
-  margin-top: 1.25rem;
-  padding: 0.45rem 1.1rem;
-  border: 1px solid var(--muted);
-  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 13px;
   cursor: pointer;
 }
 button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+@keyframes breathe {
+  50% {
+    transform: scale(.94);
+    opacity: .8;
+  }
+}
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  img,
+  .bar::after {
+    animation: none;
+  }
 }
