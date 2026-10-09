@@ -19,10 +19,11 @@ const FILES = [
 ];
 
 async function sh(cmd: string, args: string[], env: Record<string, string> = {}, cwd?: string) {
-  // the fixture's: nothing of this machine's runtime, configuration or git hooks
+  // the fixture's: nothing of this machine's runtime, configuration or git hooks, nor the AppImage
+  // a session started from the app inherits
   const base = Object.fromEntries(
     Object.entries(Deno.env.toObject()).filter(([k]) =>
-      !/^(AGENTS_MULTI_|CLAUDE_MULTI_|GIT_|XDG_(CONFIG|CACHE|STATE|DATA)_HOME$|DENO_DIR$)/.test(k)
+      !/^(AGENTS_MULTI_|CLAUDE_MULTI_|GIT_|XDG_(CONFIG|CACHE|STATE|DATA)_HOME$|DENO_DIR$|APPIMAGE$)/.test(k)
     ),
   );
   const r = await new Deno.Command(cmd, {
