@@ -1,7 +1,9 @@
 // agents.ts — the hub's children: Claude Code sessions of any profile, started without a terminal in a
 // project's folder, that ask the hub for every permission their profile's rules do not already give.
-// Nothing runs in bypass: each permission request arrives here (stream-json, `--permission-prompt-tool
-// stdio`) and waits until someone answers it — in practice the owner, through the coordinator.
+// A child keeps its profile's permission mode (auto: a classifier lets the safe steps through), never
+// a bypass: each request left over arrives here (stream-json, `--permission-prompt-tool stdio`) and
+// waits until someone answers it — in practice the owner, through the coordinator. An answer can allow
+// the one call, or a rule for the rest of the child's session (`sessionRule`).
 //
 // A child lives in files, so it outlives whoever started it and anyone on the machine can follow it:
 //   <runs>/<id>/meta.json     who, where, what it was asked
@@ -23,7 +25,43 @@ export interface Meta {
   task: string;
   started: string;
   model?: string;
+  /** the permission mode it runs in (`childMode`) */
+  mode?: ChildMode;
 }
+
+/** The modes a child may run in: the ones where whatever is not allowed comes back as a request. */
+export type ChildMode = "auto" | "acceptEdits" | "default";
+
+/** Pure: a child's mode from its profile's `defaultMode`. A bypass, `dontAsk` (which denies without
+ *  asking) or `plan` (which acts on nothing) would leave the owner out, so they become `default`. */
+export function childMode(defaultMode: unknown): ChildMode {
+  return defaultMode === "auto" || defaultMode === "acceptEdits" ? defaultMode : "default";
+}
+
+/** A rule the owner can allow for the rest of a child's session, as Claude Code's settings write it. */
+export interface Rule {
+  toolName: string;
+  ruleContent?: string;
+}
+
+/** Pure: the rule "yes for this session" adds for a request. Bash: the program, when the command is one
+ *  simple command (`curl:*`), else the command exactly; WebFetch: the domain; any other tool: the tool. */
+export function sessionRule(tool: string, input: Record<string, unknown>): Rule {
+  if (tool === "Bash" && typeof input.command === "string") {
+    const command = input.command.trim();
+    const program = command.split(/\s+/)[0];
+    const simple = !/[;&|<>`$(){}\n]/.test(command) && /^[A-Za-z0-9._\/-]+$/.test(program) && !program.includes("=");
+    return { toolName: tool, ruleContent: simple ? `${program}:*` : command };
+  }
+  if (tool === "WebFetch" && typeof input.url === "string") {
+    const host = URL.parse(input.url)?.hostname;
+    if (host) return { toolName: tool, ruleContent: `domain:${host}` };
+  }
+  return { toolName: tool };
+}
+
+/** Pure: a rule as a person reads it, `Bash(curl:*)`. */
+export const ruleText = (r: Rule) => r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName;
 
 /** A permission the child is waiting for. */
 export interface Pending {
@@ -33,6 +71,8 @@ export interface Pending {
   what: string;
   description?: string;
   input: Record<string, unknown>;
+  /** what "yes for this session" would allow from now on */
+  session: string;
   at: number;
 }
 
@@ -115,6 +155,7 @@ export function stateOf(lines: string[], answered: Set<string>, alive: boolean, 
           what: whatOf(tool, input),
           description: typeof r.description === "string" ? r.description : undefined,
           input,
+          session: ruleText(sessionRule(tool, input)),
           at: now,
         });
       }
@@ -159,11 +200,26 @@ export function attentionBetween(
 /** Pure: the line a user message is on the child's stdin. */
 export const userLine = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: text } });
 
-/** Pure: the line that answers a permission request. */
-export function answerLine(p: Pending, allow: boolean, message?: string): string {
-  const response = allow
-    ? { behavior: "allow", updatedInput: p.input }
-    : { behavior: "deny", message: message?.trim() || "The owner said no." };
+/** How the owner answers a request: this call, this call and the like for the session, or no. */
+export type Verdict = "allow" | "session" | "deny";
+
+/** Pure: the line that answers a permission request. "session" adds `sessionRule` to the child's
+ *  session only: it ends with the child, nothing is written in a settings file. */
+export function answerLine(p: Pending, verdict: Verdict, message?: string): string {
+  const response = verdict === "deny"
+    ? { behavior: "deny", message: message?.trim() || "The owner said no." }
+    : verdict === "session"
+    ? {
+      behavior: "allow",
+      updatedInput: p.input,
+      updatedPermissions: [{
+        type: "addRules",
+        rules: [sessionRule(p.tool, p.input)],
+        behavior: "allow",
+        destination: "session",
+      }],
+    }
+    : { behavior: "allow", updatedInput: p.input };
   return JSON.stringify({
     type: "control_response",
     response: { subtype: "success", request_id: p.request, response },
@@ -261,12 +317,20 @@ export interface StartInput {
   model?: string;
 }
 
+/** The mode a profile's sessions start in: `defaultMode` in its built settings (`<runtime>/<profile>`,
+ *  what the launcher points CLAUDE_CONFIG_DIR at), as `childMode` lets a child have it. */
+export async function modeOf(profile: string, runtime: string): Promise<ChildMode> {
+  const s = await Deno.readTextFile(`${runtime}/${profile}/settings.json`).then(JSON.parse).catch(() => null);
+  return childMode(s?.permissions?.defaultMode);
+}
+
 /** Starts a child: its folder, the fifo held open, the session detached from whoever asked. */
 export async function startChild(
   i: StartInput,
   runs = runsDir(),
   home = Deno.env.get("HOME") ?? "",
   config = configDir(),
+  runtime = `${home}/.agents-multi`,
 ): Promise<Meta> {
   const command = await launcherOf(i.profile, config);
   if (!command) throw new Error(`no profile ${i.profile}`);
@@ -278,7 +342,8 @@ export async function startChild(
   const id = childId(i.profile, dir, new Date(), crypto.randomUUID().slice(0, 4));
   const run = `${runs}/${id}`;
   await Deno.mkdir(run, { recursive: true });
-  const meta: Meta = { id, profile: i.profile, command, dir, task: i.task, started: new Date().toISOString() };
+  const mode = await modeOf(i.profile, runtime);
+  const meta: Meta = { id, profile: i.profile, command, dir, task: i.task, started: new Date().toISOString(), mode };
   if (i.model) meta.model = i.model;
   await Deno.writeTextFile(`${run}/meta.json`, JSON.stringify(meta, null, 2));
   const fifo = await new Deno.Command("mkfifo", { args: [`${run}/in`] }).output();
@@ -289,9 +354,9 @@ export async function startChild(
     'cd "$W" || exit 1',
     'echo $$ > "$R/claude.pid"',
     'exec "$L" -p ${M:+--model "$M"} --input-format stream-json --output-format stream-json --verbose ' +
-    '--permission-mode default --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
+    '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
   ].join("\n");
-  const env: Record<string, string> = { R: run, W: dir, L: command };
+  const env: Record<string, string> = { R: run, W: dir, L: command, P: mode };
   if (i.model) env.M = i.model;
   await new Deno.Command("setsid", {
     args: ["-f", "bash", "-c", script],
@@ -312,15 +377,16 @@ export async function sayTo(id: string, text: string, runs = runsDir()): Promise
 }
 
 /** Answers one of a child's requests; refused when it is not one it is waiting on. */
-export async function answer(id: string, request: string, allow: boolean, message?: string, runs = runsDir()) {
+export async function answer(id: string, request: string, verdict: Verdict, message?: string, runs = runsDir()) {
   const c = await readChild(id, runs);
   if (!c) throw new Error(`no child ${id}`);
   const p = c.state.pending.find((x) => x.request === request);
   if (!p) throw new Error(`${id} is not waiting on ${request}`);
-  await send(`${runs}/${id}`, answerLine(p, allow, message));
+  await send(`${runs}/${id}`, answerLine(p, verdict, message));
+  const rule = verdict === "session" ? p.session : null;
   await Deno.writeTextFile(
     `${runs}/${id}/answers.jsonl`,
-    JSON.stringify({ request, allow, message: message ?? null, at: new Date().toISOString() }) + "\n",
+    JSON.stringify({ request, verdict, rule, message: message ?? null, at: new Date().toISOString() }) + "\n",
     { append: true },
   );
 }

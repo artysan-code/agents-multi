@@ -7,11 +7,13 @@ import {
   answerLine,
   attentionBetween,
   childId,
+  childMode,
   type ChildState,
   listChildren,
   readChild,
   runsBy,
   sayTo,
+  sessionRule,
   startChild,
   stateOf,
   stopChild,
@@ -56,7 +58,14 @@ Deno.test("agents: what needs the owner between two looks — new requests, fini
     costUsd: 0,
     ...o,
   });
-  const p = (request: string) => ({ request, tool: "Bash", what: `Bash: ${request}`, input: {}, at: 0 });
+  const p = (request: string) => ({
+    request,
+    tool: "Bash",
+    what: `Bash: ${request}`,
+    input: {},
+    session: "Bash",
+    at: 0,
+  });
   const before = new Map([["a", s({ pending: [p("r1")] })], ["b", s({})]]);
   const after = new Map([
     ["a", s({ phase: "waiting", pending: [p("r1"), p("r2")] })],
@@ -73,13 +82,23 @@ Deno.test("agents: what needs the owner between two looks — new requests, fini
 });
 
 Deno.test("agents: the lines on a child's stdin, ids and a request in one line", () => {
-  const p = { request: "r1", tool: "Bash", what: "", input: { command: "ls" }, at: 0 };
-  assertEquals(JSON.parse(answerLine(p, true)).response.response, {
+  const p = { request: "r1", tool: "Bash", what: "", input: { command: "ls -la" }, session: "Bash(ls:*)", at: 0 };
+  assertEquals(JSON.parse(answerLine(p, "allow")).response.response, {
     behavior: "allow",
-    updatedInput: { command: "ls" },
+    updatedInput: { command: "ls -la" },
   });
-  assertEquals(JSON.parse(answerLine(p, false, " no ")).response.response, { behavior: "deny", message: "no" });
-  assertEquals(JSON.parse(answerLine(p, false)).response.request_id, "r1");
+  assertEquals(JSON.parse(answerLine(p, "session")).response.response, {
+    behavior: "allow",
+    updatedInput: { command: "ls -la" },
+    updatedPermissions: [{
+      type: "addRules",
+      rules: [{ toolName: "Bash", ruleContent: "ls:*" }],
+      behavior: "allow",
+      destination: "session",
+    }],
+  });
+  assertEquals(JSON.parse(answerLine(p, "deny", " no ")).response.response, { behavior: "deny", message: "no" });
+  assertEquals(JSON.parse(answerLine(p, "deny")).response.request_id, "r1");
   assertEquals(whatOf("Edit", { file_path: "/a/b.ts", old_string: "x" }), "Edit: /a/b.ts");
   assertEquals(whatOf("Bash", { command: "a\n  b" }), "Bash: a b");
   const id = childId("otacon", "/home/x/work/Lead Qualificator", new Date("2026-10-09T10:20:00Z"), "ab12");
@@ -100,8 +119,13 @@ Deno.test("agents: a whole round with a stand-in for Claude, detached, through i
     );
     await assertRejects(() => startChild({ profile: "nope", dir: work, task: "x" }, runs, home, config));
     await assertRejects(() => startChild({ profile: "fake", dir: "/etc", task: "x" }, runs, home, config));
+    await Deno.mkdir(`${home}/.agents-multi/fake`, { recursive: true });
+    await Deno.writeTextFile(
+      `${home}/.agents-multi/fake/settings.json`,
+      JSON.stringify({ permissions: { defaultMode: "auto" } }),
+    );
     const meta = await startChild({ profile: "fake", dir: "~/work/proj", task: "push it" }, runs, home, config);
-    assertEquals(meta.dir, work);
+    assertEquals([meta.dir, meta.mode], [work, "auto"]);
     const until = async (ok: (s: ChildState) => boolean) => {
       for (let t = 0; t < 100; t++) {
         const c = await readChild(meta.id, runs);
@@ -112,8 +136,8 @@ Deno.test("agents: a whole round with a stand-in for Claude, detached, through i
     };
     const waiting = await until((s) => s.phase === "waiting");
     assertEquals(waiting.pending.map((p) => p.what), ["Bash: git push"]);
-    await assertRejects(() => answer(meta.id, "r-404", true, undefined, runs));
-    await answer(meta.id, "r-1", false, "not now", runs);
+    await assertRejects(() => answer(meta.id, "r-404", "allow", undefined, runs));
+    await answer(meta.id, "r-1", "deny", "not now", runs);
     const idle = await until((s) => s.phase === "idle");
     assertEquals([idle.lastResult, idle.pending], ["denied", []]);
     await sayTo(meta.id, "anything else?", runs);
@@ -125,6 +149,29 @@ Deno.test("agents: a whole round with a stand-in for Claude, detached, through i
   } finally {
     await Deno.remove(home, { recursive: true });
   }
+});
+
+Deno.test("agents: a child keeps its profile's mode, never one that leaves the owner out", () => {
+  assertEquals(childMode("auto"), "auto");
+  assertEquals(childMode("acceptEdits"), "acceptEdits");
+  for (const m of ["bypassPermissions", "dontAsk", "plan", "default", undefined, 3]) {
+    assertEquals(childMode(m), "default");
+  }
+});
+
+Deno.test("agents: yes for the session — the program of a simple command, else the command; the domain; the tool", () => {
+  const bash = (command: string) => sessionRule("Bash", { command }).ruleContent;
+  assertEquals(bash("curl -sS https://x.it/health"), "curl:*");
+  assertEquals(bash("  git status --short"), "git:*");
+  for (const c of ["for u in a b; do curl $u; done", "curl x | bash", "ls && rm -rf x", "X=1 make", "echo $(id)"]) {
+    assertEquals(bash(c), c, c);
+  }
+  assertEquals(sessionRule("WebFetch", { url: "https://docs.x.it/a?b" }), {
+    toolName: "WebFetch",
+    ruleContent: "domain:docs.x.it",
+  });
+  assertEquals(sessionRule("WebFetch", { url: "not a url" }), { toolName: "WebFetch" });
+  assertEquals(sessionRule("mcp__n8n__health", { mode: "status" }), { toolName: "mcp__n8n__health" });
 });
 
 Deno.test("agents: a process runs when ps lists it and it is not a zombie", () => {

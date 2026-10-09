@@ -10,6 +10,7 @@ import {
   sayTo,
   startChild,
   stopChild,
+  type Verdict,
   waitForAttention,
 } from "../../shared/mcp/lib/agents.ts";
 
@@ -17,14 +18,16 @@ const USAGE = `agents agent start <profile> <folder> <task…> [--model m]   a c
 agents agent list                                   every child: phase, what it waits for
 agents agent status <id>                            what it said last, its requests
 agents agent say <id> <text…>                       a message, taken between two of its steps
-agents agent answer <id> <request> allow|deny [why…]   one of its permission requests
+agents agent answer <id> <request> allow|session|deny [why…]   one of its requests (session: and the like, until it ends)
 agents agent stop <id> [--force]                    ends after its turn (--force: now)
 agents agent wait [--timeout s]                     returns when something needs you`;
 
 function line(c: Child): string {
   const s = c.state;
-  const wait = s.pending.length ? ` · waits: ${s.pending.map((p) => p.what).join("; ")}` : "";
-  return `${c.meta.id}  ${s.phase}  ${c.meta.profile}  ${c.meta.dir}${wait}`;
+  const wait = s.pending.length
+    ? ` · waits: ${s.pending.map((p) => `${p.what} [${p.request}; session: ${p.session}]`).join("; ")}`
+    : "";
+  return `${c.meta.id}  ${s.phase}  ${c.meta.profile}/${c.meta.mode ?? "default"}  ${c.meta.dir}${wait}`;
 }
 
 export async function agentCommand(args: string[]): Promise<number> {
@@ -71,8 +74,8 @@ export async function agentCommand(args: string[]): Promise<number> {
       }
       case "answer": {
         const [id, request, verdict, ...why] = rest;
-        if (!id || !request || !["allow", "deny"].includes(verdict)) break;
-        await answer(id, request, verdict === "allow", why.join(" ") || undefined);
+        if (!id || !request || !["allow", "session", "deny"].includes(verdict)) break;
+        await answer(id, request, verdict as Verdict, why.join(" ") || undefined);
         console.log(`${verdict} → ${id}`);
         return 0;
       }

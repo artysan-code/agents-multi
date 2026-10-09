@@ -1,7 +1,16 @@
 // tools.ts — the coordinator's tools on the hub's children (shared/mcp/lib/agents.ts).
 import type { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { z } from "npm:zod@4.6.5";
-import { answer, type Child, listChildren, readChild, sayTo, startChild, stopChild } from "../lib/agents.ts";
+import {
+  answer,
+  type Child,
+  listChildren,
+  readChild,
+  sayTo,
+  startChild,
+  stopChild,
+  type Verdict,
+} from "../lib/agents.ts";
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 const fail = (e: unknown) => ({
@@ -17,7 +26,13 @@ const view = (c: Child, full = false) => ({
   task: full ? c.meta.task : c.meta.task.slice(0, 200),
   started: c.meta.started,
   phase: c.state.phase,
-  waiting_for: c.state.pending.map((p) => ({ request: p.request, what: p.what, description: p.description })),
+  mode: c.meta.mode ?? "default",
+  waiting_for: c.state.pending.map((p) => ({
+    request: p.request,
+    what: p.what,
+    description: p.description,
+    session: p.session,
+  })),
   said: full ? c.state.said : c.state.said.slice(-1).map((s) => s.slice(0, 400)),
   turns: c.state.turns,
   last_result: c.state.lastResult?.slice(0, full ? 4000 : 400) ?? null,
@@ -76,17 +91,18 @@ export function registerAgentTools(server: McpServer) {
 
   server.registerTool("agent_answer", {
     description: "Answer one of a child's permission requests — only with what the owner decided for that request. " +
-      "`allow` lets it do exactly what it asked; a denial carries `reason`, which the child reads.",
+      "`allow` lets it do exactly what it asked; `session` also allows the request's `session` rule until the child " +
+      "ends; `deny` carries `reason`, which the child reads.",
     inputSchema: {
       id: z.string(),
       request: z.string().describe("the request's id, from agent_status"),
-      allow: z.boolean(),
+      answer: z.enum(["allow", "session", "deny"]),
       reason: z.string().optional(),
     },
-  }, async (i: { id: string; request: string; allow: boolean; reason?: string }) => {
+  }, async (i: { id: string; request: string; answer: Verdict; reason?: string }) => {
     try {
-      await answer(i.id, i.request, i.allow, i.reason);
-      return text({ answered: i.request, allow: i.allow });
+      await answer(i.id, i.request, i.answer, i.reason);
+      return text({ answered: i.request, answer: i.answer });
     } catch (e) {
       return fail(e);
     }
