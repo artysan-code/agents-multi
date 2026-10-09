@@ -5,6 +5,17 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.4] - 2026-10-09
+
+### Added
+
+- **agents**: children of any profile at work in a project, every permission answered by the owner (5949322)
+
+### Fixed
+
+- **agents**: a child's life and its stop through the kill command, which the server may run (f2a0cb9)
+- **console**: «Close Claude and update» installs at once when no Claude is left to close (addac81)
+
 ## [1.0.0-beta.3] - 2026-10-08
 
 ### Added
