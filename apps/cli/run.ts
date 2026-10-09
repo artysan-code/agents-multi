@@ -5,11 +5,11 @@ import {
   answerRun,
   type Choice,
   drive,
+  ensureRunner,
   listRuns,
   type Plan,
   readRun,
   runEvents,
-  spawnRunner,
   startRun,
 } from "../../shared/mcp/lib/runs.ts";
 
@@ -60,7 +60,7 @@ export async function runCommand(args: string[]): Promise<number> {
           console.log(r.alive ? `${r.id} has its runner` : `${r.id} is ${r.state.status}`);
           return 0;
         }
-        await spawnRunner(r.id);
+        await ensureRunner(r.id);
         console.log(`resumed ${r.id}`);
         return 0;
       }

@@ -29,7 +29,10 @@ const instructions =
   "Workflows: for work in several steps or accounts, write a plan (workflow_list shows saved ones: read the " +
   "SKILL.md and fill it) and show it to the owner with AskUserQuestion — start / change / drop — before " +
   "workflow_start. A run goes on by itself; its events are `run-confirm` (ask go / skip), `run-failed` (ask " +
-  "retry / skip / stop), `run-done` and `run-stopped` (report them); answer with workflow_answer. A run's " +
+  "retry / skip / stop; one without a step is its runner gone: ask retry / stop), `run-done` and `run-stopped` " +
+  "(report them); answer with workflow_answer. To save a run the owner wants again as a workflow, write its " +
+  "SKILL.md (name, description of when to use it, the steps and a plan to fill) in " +
+  "`<project>/.agents/workflows/<name>/`, or in the owner's `workflows/` for every project. A run's " +
   "steps are only those of the plan: you never add one the owner has not approved.";
 
 const server = new McpServer({ name: "agents", version: "0.1.0" }, { instructions });

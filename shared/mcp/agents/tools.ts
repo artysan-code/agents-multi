@@ -190,7 +190,7 @@ export function registerAgentTools(server: McpServer) {
   server.registerTool("workflow_answer", {
     description: "Carry the owner's decision to a run — only what they decided. A step to confirm: `go` or " +
       "`skip`. A step that failed: `retry`, `skip` (the steps after it run without its HANDOFF) or `stop`. " +
-      "`stop` without a step ends the whole run.",
+      "Without a step: `stop` ends the whole run, `retry` starts its runner again when it stopped.",
     inputSchema: {
       id: z.string(),
       step: z.string().optional(),

@@ -268,6 +268,12 @@ const agentsBin = () =>
     new URL("../../../bin/agents", `file://${Deno.realPathSync(new URL(".", import.meta.url).pathname)}/`).pathname,
   );
 
+/** The last lines a run's runner wrote to its err.log, on one line: why it stopped, when it did. */
+async function runnerTail(dir: string): Promise<string> {
+  const text = await Deno.readTextFile(`${dir}/err.log`).catch(() => "");
+  return text.split("\n").map((l) => l.trim()).filter(Boolean).slice(-3).join(" | ").slice(0, 300);
+}
+
 /** Starts the runner of a run, detached from whoever asked. */
 export async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
   const dir = `${runsRoot(runs)}/${id}`;
@@ -278,6 +284,20 @@ export async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
     stdout: "null",
     stderr: "null",
   }).output();
+}
+
+/** Starts a run's runner and waits until it is up: a runner that dies at its start throws, with what it
+ *  wrote, so whoever started it says so instead of «started» over a run nobody drives. */
+export async function ensureRunner(id: string, runs = runsDir(), waitMs = 5000): Promise<void> {
+  await spawnRunner(id, runs);
+  for (let t = 0; t < waitMs; t += 200) {
+    await new Promise((res) => setTimeout(res, 200));
+    const r = await readRun(id, runs);
+    if (!r || r.alive || r.state.status !== "running") return;
+  }
+  throw new Error(
+    `the runner of ${id} did not start: ${await runnerTail(`${runsRoot(runs)}/${id}`) || "nothing in its err.log"}`,
+  );
 }
 
 /** Checks and writes a plan, then starts its runner. The profiles must exist and the folders be under
@@ -303,12 +323,13 @@ export async function startRun(plan: Plan, runs = runsDir(), home = Deno.env.get
     run: id,
     detail: `${plan.steps.length} steps`,
   });
-  await spawnRunner(id, runs);
+  await ensureRunner(id, runs);
   return id;
 }
 
 /** The owner's answer for a run: go for a step to confirm; retry, skip or stop for one that failed; stop
- *  for the whole run (no step). The runner applies it. */
+ *  for the whole run (no step), retry for it (no step) starts its runner again when it is gone. The
+ *  runner applies the rest. */
 export async function answerRun(id: string, choice: Choice, step?: string, runs = runsDir()): Promise<void> {
   const r = await readRun(id, runs);
   if (!r) throw new Error(`no run ${id}`);
@@ -317,7 +338,8 @@ export async function answerRun(id: string, choice: Choice, step?: string, runs 
     const want = choice === "go" ? "confirm" : "failed";
     if (r.state.steps[step].status !== want) throw new Error(`step ${step} is ${r.state.steps[step].status}`);
   }
-  if (!r.alive && r.state.status === "running") await spawnRunner(id, runs);
+  if (!r.alive && r.state.status === "running") await ensureRunner(id, runs);
+  if (choice === "retry" && !step) return;
   await append(`${runsRoot(runs)}/${id}/control.jsonl`, { at: new Date().toISOString(), choice, step: step ?? null });
 }
 
@@ -544,6 +566,9 @@ export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSi
     if (st.phase !== "ended") { for (const p of st.pending) yield attentionOf(id, p); }
   }
   const seen = new Map<string, number>();
+  // a running run whose runner is gone, for this many looks in a row (one start takes less), is news once
+  const GONE = 3;
+  const gone = new Map<string, number>();
   for (const r of await listRuns(runs)) {
     seen.set(r.id, (await runEvents(r.id, runs)).length);
     if (r.state.status !== "running") continue;
@@ -573,6 +598,21 @@ export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSi
         if (a) yield a;
       }
       seen.set(r.id, events.length);
+      if (r.state.status !== "running" || r.alive) {
+        gone.delete(r.id);
+        continue;
+      }
+      const n = (gone.get(r.id) ?? 0) + 1;
+      gone.set(r.id, n);
+      if (n === GONE) {
+        const why = await runnerTail(`${runsRoot(runs)}/${r.id}`);
+        yield {
+          id: r.id,
+          kind: "run-failed",
+          detail: `its runner stopped${why ? `: ${why}` : ""} — retry without a step starts it again`,
+          run: r.id,
+        };
+      }
     }
   }
 }

@@ -151,6 +151,7 @@ Deno.test("runs: a run's step to confirm reaches the owner, from its state and t
   await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify(p));
   await Deno.writeTextFile(`${dir}/state.json`, JSON.stringify(st));
   await Deno.writeTextFile(`${dir}/events.jsonl`, "");
+  await Deno.writeTextFile(`${dir}/runner.pid`, String(Deno.pid)); // a runner at work: this test's process
   const stop = new AbortController();
   const it = follow(runs, 50, stop.signal);
   assertEquals((await it.next()).value, {
@@ -165,6 +166,31 @@ Deno.test("runs: a run's step to confirm reaches the owner, from its state and t
     JSON.stringify({ at: "", kind: "failed", run: "r-1", step: "fix", detail: "fix: no HANDOFF" }) + "\n",
   );
   assertEquals((await it.next()).value?.kind, "run-failed");
+  stop.abort();
+  await it.return(undefined);
+  await Deno.remove(runs, { recursive: true });
+});
+
+Deno.test("runs: a running run whose runner is gone reaches the owner once, with what the runner wrote", async () => {
+  const runs = await Deno.makeTempDir();
+  const dir = `${runs}/runs/r-2`;
+  await Deno.mkdir(dir, { recursive: true });
+  const p = plan();
+  await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify(p));
+  await Deno.writeTextFile(`${dir}/state.json`, JSON.stringify(initialState(p)));
+  await Deno.writeTextFile(`${dir}/events.jsonl`, "");
+  await Deno.writeTextFile(`${dir}/err.log`, "bash: line 1: /nowhere/bin/agents: No such file or directory\n");
+  const stop = new AbortController();
+  const it = follow(runs, 20, stop.signal);
+  const a = (await it.next()).value;
+  assertEquals([a?.kind, a?.run, a?.step], ["run-failed", "r-2", undefined]);
+  assertStringIncludes(a?.detail ?? "", "No such file or directory");
+  // said once: the next news is something else
+  await Deno.writeTextFile(
+    `${dir}/events.jsonl`,
+    JSON.stringify({ at: "", kind: "stopped", run: "r-2", detail: "stopped" }) + "\n",
+  );
+  assertEquals((await it.next()).value?.kind, "run-stopped");
   stop.abort();
   await it.return(undefined);
   await Deno.remove(runs, { recursive: true });
