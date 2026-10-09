@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.11] - 2026-10-09
+
+### Added
+
+- **ui**: Today leads with the day as a vertical agenda; rail items stay put while it opens (b42d5fb)
+
 ## [1.0.0-beta.10] - 2026-10-09
 
 ### Added
