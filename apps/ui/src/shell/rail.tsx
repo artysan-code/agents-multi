@@ -105,12 +105,12 @@ function Item({ hash, icon, label, current, sign }: {
       <Ic name={icon} />
       <span class="rl-t">{label}</span>
       {sign && (
-        <span
-          class={`rl-s ${sign.tone ?? ""}${sign.text ? "" : " dot"}`}
-          aria-label={sign.text}
-        >
-          {sign.text}
-        </span>
+        <>
+          <span class={`rl-s ${sign.tone ?? ""}${sign.text ? "" : " dot"}`} aria-label={sign.text}>
+            {sign.text}
+          </span>
+          <span class={`rl-b ${sign.tone ?? ""}`} aria-hidden="true" />
+        </>
       )}
     </a>
   );

@@ -37,7 +37,7 @@ interface DrawerState {
 }
 const drawerSig = signal<DrawerState | null>(null);
 
-/** Opens the drawer on the right; `body` is called on each redraw, so it may read signals. One drawer
+/** Opens the dialog, a card in the middle of the window; `body` is called on each redraw, so it may read signals. One dialog
  *  at a time: opening another replaces it. */
 export function openDrawer(title: string, body: () => ComponentChildren, opts: { wide?: boolean; onClose?: () => void } = {}): void {
   drawerSig.value = { title, body, ...opts };

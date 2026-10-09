@@ -1327,11 +1327,12 @@ tbody tr[aria-selected="true"] {
   overflow-wrap: anywhere;
 }
 
-/* ---------------- drawer ---------------- */
+/* ---------------- the dialog (openDrawer): a card in the middle, as the update screen ---------------- */
 .scrim {
   position: fixed;
   inset: 0;
-  background: rgba(29,28,26,.45);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(6px);
   z-index: 40;
   animation: fade .18s ease;
 }
@@ -1342,40 +1343,45 @@ tbody tr[aria-selected="true"] {
 }
 .drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(680px,94vw);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(600px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
   background: var(--surface);
-  border-left: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--pop);
+  overflow: hidden;
   z-index: 41;
   display: flex;
   flex-direction: column;
-  animation: slide .22s cubic-bezier(.2,.8,.3,1);
+  animation: pop-in .26s cubic-bezier(.2, .8, .3, 1);
 }
-@keyframes slide {
+@keyframes pop-in {
   from {
-    transform: translateX(26px);
-    opacity: .5;
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(.98);
   }
 }
 .dh {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--line);
+  padding: 18px 20px 14px 24px;
+  border-bottom: 1px solid var(--line-soft);
 }
 .dh h3 {
-  font-size: 14px;
+  margin: 0;
+  font: 500 19px/1.25 var(--serif);
+  letter-spacing: -.01em;
 }
 .dh .x {
   margin-left: auto;
   color: var(--fg-faint);
   font-size: 19px;
   line-height: 1;
-  padding: 1px 7px;
-  border-radius: 4px;
+  padding: 4px 9px;
+  border-radius: 8px;
 }
 .dh .x:hover {
   background: var(--raised);
@@ -1384,6 +1390,13 @@ tbody tr[aria-selected="true"] {
 .dbody {
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+}
+/* what draws no margin of its own gets the dialog's */
+.dbody > .keys2,
+.dbody > .deb-full,
+.dbody > .rc-all {
+  padding: 18px 24px 24px;
 }
 .rep {
   padding: 14px 16px;
@@ -2152,7 +2165,7 @@ body.plbusy #mk-add button {
 
 /* one task's page */
 .drawer.wide {
-  width: min(820px, 96vw);
+  width: min(820px, calc(100vw - 48px));
 }
 .tsheet {
   display: flex;

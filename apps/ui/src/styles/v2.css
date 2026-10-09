@@ -405,11 +405,20 @@ body {
   opacity: 1;
   transition-delay: .1s;
 }
-/* a page's sign: a number, or a dot; on the icon while the rail is closed */
+/* a page's sign, twice: beside the name while the rail is open (it fades in with the name, never
+   shown alone), and as a dot on the icon while it is closed */
 .rl-s {
   font: 500 11px var(--mono);
   color: var(--faint);
   flex: none;
+  opacity: 0;
+  transition: opacity .12s ease .2s;
+}
+.rail:hover .rl-s,
+.rail:has(:focus-visible) .rl-s,
+.rail.held .rl-s {
+  opacity: 1;
+  transition-delay: .1s;
 }
 .rl-s.ok {
   color: var(--ok);
@@ -426,29 +435,33 @@ body {
   border-radius: 50%;
   background: var(--accent);
 }
-.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s {
+.rl-b {
   position: absolute;
-  left: 26px;
-  top: 5px;
-  min-width: 7px;
+  left: 25px;
+  top: 6px;
+  width: 7px;
   height: 7px;
-  padding: 0;
-  overflow: hidden;
   border-radius: 50%;
-  font-size: 0;
   background: var(--faint);
+  box-shadow: 0 0 0 2px var(--surface);
+  transition: opacity .12s ease .2s;
 }
-.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.ok {
+.rail:hover .rl-b,
+.rail:has(:focus-visible) .rl-b,
+.rail.held .rl-b {
+  opacity: 0;
+  transition-delay: 0s;
+}
+.rl-b.ok {
   display: none;
 }
-.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.warn {
+.rl-b.warn {
   background: var(--warn);
 }
-.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.crit,
-.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.dot {
+.rl-b.crit {
   background: var(--crit);
 }
-.rail:not(:hover):not(:has(:focus-visible)):not(.held) .rl-s.up {
+.rl-b.up {
   background: var(--accent);
 }
 .rl-sp {
@@ -572,6 +585,7 @@ body {
   display: flex;
   gap: 4px;
   justify-content: flex-end;
+  min-width: 84px;
 }
 .keys2 dd {
   margin: 0;
