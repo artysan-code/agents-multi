@@ -1,19 +1,19 @@
 {
-  "version": "1.0.0-beta.16",
-  "notes": "### Fixed\n\n- **agents**: a run whose runner does not start or stops says so, and retry starts it again (efb7641)",
-  "pub_date": "2026-10-09T19:40:13Z",
+  "version": "1.0.0-beta.17",
+  "notes": "### Fixed\n\n- **agents**: a child starts without the coordinator's Claude session variables (934666a)",
+  "pub_date": "2026-10-09T20:26:37Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.16/agents-multi_1.0.0-beta.16_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnhKYnRpYlMvaWI0TDlGencyNE04VG55UUhBOG0zRko0VDd5QjVqSms3Qy9UelRQeUN5MXRDMGZHdnZUb29YckRTcWgzTXVSWTNPdlFOZkZjQ2RSalFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc0ODEyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xNl9hbWQ2NC5kZWIJdmVyc2lvbjoxLjAuMC1iZXRhLjE2Cjk4MkhxT2h4cUdVbTlTTTdkRitmaUVaMnB4Tm5CV1BJem1wcjM5SVNVMFpGVlZjWjQxckgwYnNxMnJJcVlvRXVqdUwrZlNpMjNBQ2taaU1MTHRSY0J3PT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.17/agents-multi_1.0.0-beta.17_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjZQUldLYkVncnlTUDVIaUZicVJ1djR3YW1RUGlIYjhnYVl1VUdqNUJITXpNVzZjSndHTFBITy9BUjZNRjI5d1FTM3R4QTBYVk9TczZwSk5saG5GaWdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc3NTk2CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xN19hbWQ2NC5kZWIJdmVyc2lvbjoxLjAuMC1iZXRhLjE3ClIzNzBKSFFINnh4ZFZYWmtQQThmS042SDlwZDJJOXRmR3VOOWJEd2JiOUtWeW1ud3JyTEh6bE5rTGhDTXZhRmJOV2FQZXlyYWhzS1ZsMUVwdmg2dkFnPT0K"
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.16/agents-multi_1.0.0-beta.16_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjBUOVBLRWNiQ1JvcWxDK1dTZGdId1plS0pLbU42ZVgvR1JlT0RDSHYxNFF2ZnI0alRwQ2pGKzRyRTZ5eFV0bWdvaFFiWWJxYmYxdWZaS1ZtWnVqVWdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc0ODEyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xNl9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTYKczRsTjVnR0d0NTQxU015T3RmU2RIV01ZM1NDQWl3dFZXQlBvUnBVSFdsY3hvcnc1QTVSbDZWb3k1OWVmM0lKUWxPWDF3bkczeC84M2RDc1JBRlhXQmc9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.17/agents-multi_1.0.0-beta.17_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tjh5L21xWUtlVUkxblNvVi9KbmlIeGE5OE1STXMzM0ZiM3FxTGRJVzB1KzFFZTBDS04xUVNuL25hdWhKaUdCcElOekhrSzl0bktDaXE2aXBHUGhCNGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc3NTk2CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xN19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTcKZUJUaFdzOHd3eW9jaThGQ1ovLzhnUE4vQWVyZHZDaExramYyYUNra2ZqNjRKQUU0SzJ5eXlmV1BpK3pzOFlLWkNOY1g0SjhuTExTN1owYzhiSWlCQ2c9PQo="
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.16/agents-multi_1.0.0-beta.16_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjBUOVBLRWNiQ1JvcWxDK1dTZGdId1plS0pLbU42ZVgvR1JlT0RDSHYxNFF2ZnI0alRwQ2pGKzRyRTZ5eFV0bWdvaFFiWWJxYmYxdWZaS1ZtWnVqVWdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc0ODEyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xNl9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTYKczRsTjVnR0d0NTQxU015T3RmU2RIV01ZM1NDQWl3dFZXQlBvUnBVSFdsY3hvcnc1QTVSbDZWb3k1OWVmM0lKUWxPWDF3bkczeC84M2RDc1JBRlhXQmc9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.17/agents-multi_1.0.0-beta.17_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tjh5L21xWUtlVUkxblNvVi9KbmlIeGE5OE1STXMzM0ZiM3FxTGRJVzB1KzFFZTBDS04xUVNuL25hdWhKaUdCcElOekhrSzl0bktDaXE2aXBHUGhCNGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc3NTk2CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xN19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTcKZUJUaFdzOHd3eW9jaThGQ1ovLzhnUE4vQWVyZHZDaExramYyYUNra2ZqNjRKQUU0SzJ5eXlmV1BpK3pzOFlLWkNOY1g0SjhuTExTN1owYzhiSWlCQ2c9PQo="
     }
   }
 }
