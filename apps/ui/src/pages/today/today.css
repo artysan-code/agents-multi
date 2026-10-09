@@ -817,7 +817,7 @@ button.deb:hover {
 }
 .pfs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
   gap: 6px;
   margin-bottom: 8px;
 }
@@ -983,5 +983,19 @@ button.deb:hover {
   }
   .tq-hint {
     display: none;
+  }
+}
+/* a narrow window: one column, and the page scrolls instead of squeezing the lists */
+@media (max-width: 900px) {
+  .today2 {
+    height: auto;
+    grid-template-rows: auto auto;
+  }
+  .dayband,
+  .lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tq .tr {
+    grid-template-columns: 22px minmax(0, 1fr) 120px 72px;
   }
 }

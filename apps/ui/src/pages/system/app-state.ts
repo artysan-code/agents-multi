@@ -11,6 +11,10 @@ export interface AppLine {
   off?: string;
 }
 
+/** Pure: whether a check's error is the update site not answering, rather than something to look at. */
+export const unreachable = (e: string): boolean =>
+  /valid release JSON|error sending request|timed out|dns|connect|network|\b50[234]\b/i.test(e);
+
 /** Pure: the key of the line that says where the app's update stands, and its values. */
 export function appState(
   a: AppLine,
@@ -38,7 +42,11 @@ export function appState(
     case "restarting":
       return { key: "up.app.installing", vars: { v } };
     case "error":
-      return { key: "up.app.error", vars: { e: a.error ?? "" } };
+      // the manifest not reached (the site restarting while a release goes out, no network) is not a
+      // fault of this machine: said plainly, with the retry the app makes on its own
+      return unreachable(a.error ?? "")
+        ? { key: "up.app.unreachable" }
+        : { key: "up.app.error", vars: { e: a.error ?? "" } };
     default:
       return { key: "up.uptodate" };
   }

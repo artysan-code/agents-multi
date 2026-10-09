@@ -1004,6 +1004,15 @@ tbody tr[aria-selected="true"] {
 .plist-row:last-child {
   border-bottom: none;
 }
+@media (max-width: 1000px) {
+  .plist-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .plist-row > :last-child {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
 .pwho {
   display: flex;
   align-items: center;
@@ -1615,6 +1624,18 @@ td.acts {
 table.pl th,
 table.pl td {
   text-align: center;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+/* the marketplaces: the name over its source, which wraps rather than widening the table */
+table.mk td:first-child {
+  text-align: left;
+  white-space: normal;
+  color: var(--fg);
+}
+table.mk td:first-child .dim {
+  display: block;
+  overflow-wrap: anywhere;
 }
 table.pl th:first-child,
 table.pl td:first-child {

@@ -98,11 +98,17 @@ pub fn endpoint(site: &str, channel: Channel) -> Option<Url> {
     Url::parse(&format!("{site}/updates/{}.json", channel.name())).ok()
 }
 
-/// Whether it is time to look again: never looked, a day passed, or the clock went back.
-pub fn due(last: Option<SystemTime>, now: SystemTime) -> bool {
+/// After a check that could not reach the manifest (the site restarting while a release is
+/// published, no network): the next one comes this soon, not a day later.
+const RETRY: Duration = Duration::from_secs(15 * 60);
+
+/// Whether it is time to look again: never looked, a day passed (RETRY after a failed check), or
+/// the clock went back.
+pub fn due(last: Option<SystemTime>, now: SystemTime, failed: bool) -> bool {
+    let every = if failed { RETRY } else { EVERY };
     match last {
         None => true,
-        Some(at) => now.duration_since(at).map_or(true, |d| d >= EVERY),
+        Some(at) => now.duration_since(at).map_or(true, |d| d >= every),
     }
 }
 
@@ -556,7 +562,7 @@ mod imp {
     /// The first check waits for the app (and its backend) to settle.
     const FIRST_CHECK: Duration = Duration::from_secs(60);
     /// How often the checking thread wakes to see whether a check is due.
-    const WAKE: Duration = Duration::from_secs(3600);
+    const WAKE: Duration = Duration::from_secs(5 * 60);
     /// Between «restarting» and the relaunch: time for the console to tell the page.
     const RESTART_PAUSE: Duration = Duration::from_millis(1500);
 
@@ -638,11 +644,12 @@ mod imp {
                 .spawn(move || {
                     std::thread::sleep(FIRST_CHECK);
                     let mut last = None;
+                    let mut failed = false;
                     loop {
                         let now = SystemTime::now();
-                        if due(last, now) {
+                        if due(last, now, failed) {
                             last = Some(now);
-                            e.run_check();
+                            failed = !e.run_check();
                         }
                         std::thread::sleep(WAKE);
                     }
@@ -661,14 +668,15 @@ mod imp {
         }
 
         /// A check, the download of what it found, and the install when one was asked for.
-        fn run_check(&self) {
+        /// One check, and the download of what it found. False when the manifest could not be read.
+        fn run_check(&self) -> bool {
             let mut started = false;
             self.hub.update(|s| {
                 started = s.checking();
                 started
             });
             if !started {
-                return;
+                return true;
             }
             let have = self.have();
             let endpoint = self.endpoint.lock().ok().and_then(|e| e.clone());
@@ -688,7 +696,7 @@ mod imp {
                         true
                     });
                     self.install_wanted.store(false, Ordering::SeqCst);
-                    return;
+                    return false;
                 }
             };
             let available = update.as_ref().map(|u| Available {
@@ -703,18 +711,19 @@ mod imp {
             });
             let Some(update) = update else {
                 self.install_wanted.store(false, Ordering::SeqCst);
-                return;
+                return true;
             };
             if have.as_deref() != Some(update.version.as_str()) {
                 if !self.download(update) {
                     self.install_wanted.store(false, Ordering::SeqCst);
-                    return;
+                    return true;
                 }
                 notify_ready(&self.hub.get());
             }
             if self.install_wanted.swap(false, Ordering::SeqCst) {
                 self.install_pending();
             }
+            true
         }
 
         fn download(&self, update: Update) -> bool {
@@ -971,10 +980,13 @@ mod tests {
     #[test]
     fn a_check_is_due_after_a_day_or_when_the_clock_went_back() {
         let t = UNIX_EPOCH + Duration::from_secs(1_000_000);
-        assert!(due(None, t));
-        assert!(!due(Some(t), t + Duration::from_secs(3600)));
-        assert!(due(Some(t), t + EVERY));
-        assert!(due(Some(t), t - Duration::from_secs(1)));
+        assert!(due(None, t, false));
+        assert!(!due(Some(t), t + Duration::from_secs(3600), false));
+        assert!(due(Some(t), t + EVERY, false));
+        assert!(due(Some(t), t - Duration::from_secs(1), false));
+        // a failed check comes back within the quarter hour, not the next day
+        assert!(!due(Some(t), t + Duration::from_secs(60), true));
+        assert!(due(Some(t), t + RETRY, true));
     }
 
     #[test]

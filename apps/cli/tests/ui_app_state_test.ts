@@ -1,7 +1,7 @@
 // Tests for the Updates tab's line about the desktop app (apps/ui/src/pages/system/app-state.ts): each
 // state of the app's update says the right thing, and a package manager's name comes through.
 import { assertEquals } from "jsr:@std/assert@1";
-import { type AppLine, appState } from "../../ui/src/pages/system/app-state.ts";
+import { type AppLine, appState, unreachable } from "../../ui/src/pages/system/app-state.ts";
 
 const base: AppLine = { state: "idle", available: null };
 const next = { version: "1.0.1", notes: "", date: null };
@@ -39,4 +39,16 @@ Deno.test("appState: what the Updates tab says for each state of the app's updat
   assertEquals(appState({ ...base, off: "not-packaged", state: "error" }), {
     key: "up.app.off",
   });
+});
+
+Deno.test("appState: the update site not answering is said plainly, any other error as it is", () => {
+  const err = (e: string) => appState({ ...base, state: "error", error: e });
+  assertEquals(err("Could not fetch a valid release JSON from the remote"), { key: "up.app.unreachable" });
+  assertEquals(
+    err("error sending request for url (https://agents-multi.artysan.me/updates/beta.json)").key,
+    "up.app.unreachable",
+  );
+  assertEquals(err("the signature is invalid"), { key: "up.app.error", vars: { e: "the signature is invalid" } });
+  assertEquals(unreachable("server returned 503"), true);
+  assertEquals(unreachable("version 1.5030 not found"), false);
 });

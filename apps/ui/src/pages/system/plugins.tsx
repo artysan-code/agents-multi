@@ -452,7 +452,7 @@ export function Plugins() {
             </button>
           </div>
           <div class="scroll">
-            <table>
+            <table class="mk">
               <tbody>
                 {pl?.marketplaces.length
                   ? pl.marketplaces.map((m) => (
