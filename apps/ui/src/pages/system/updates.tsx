@@ -1,14 +1,16 @@
 // updates.tsx — System › Updates: the version of each component with what is waiting or staged and its
-// rollback, the desktop app with its channel, the note on the Claude Code Desktop carries, and the
-// update log. An update waiting leads the page (update-ready.tsx), with «Update now».
+// rollback and a «Check» of its own, the desktop app with its channel, the note on the Claude Code
+// Desktop carries, and the update log. An update waiting leads the page (update-ready.tsx), with
+// «Update now».
 
 import type { ComponentChildren } from "preact";
-import { status } from "../../state.ts";
+import { signal } from "@preact/signals";
+import { loadStatus, status } from "../../state.ts";
 import { lang, t, tk } from "../../i18n.ts";
-import { runAction, toast } from "../../lib/ui.tsx";
+import { runAction, runJob, toast } from "../../lib/ui.tsx";
 import { appUpdate, appUpdateAction, appUpdateChannel } from "../../shell/app-update.ts";
 import { appState } from "./app-state.ts";
-import { COMPONENTS, type MachineExtra, type RepoExtra, type Report } from "./updates-lib.tsx";
+import { COMPONENTS, type MachineExtra, pendingUpdates, type RepoExtra, type Report } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
 import { UpdateReady } from "./update-ready.tsx";
 
@@ -30,6 +32,28 @@ function Card({ name, current, lines, rollback, extra }: {
       {extra}
       {rollback && <button type="button" class="btn sm" onClick={() => void runAction(rollback)}>{t("up.rollback")}</button>}
     </div>
+  );
+}
+
+/** A check for Claude Code and Claude Desktop runs: one for both, so both their buttons show it. */
+const checking = signal(false);
+
+/** «Check» on Claude Code and Claude Desktop: looks for a new version of both now (`agents update
+ *  --check`), instead of at the next round, and says what it found. */
+function CheckButton() {
+  const go = async () => {
+    checking.value = true;
+    const r = await runJob("update-check", {}, () => {}).catch((e: Error) => ({ error: e.message }));
+    await loadStatus(true).catch(() => {});
+    checking.value = false;
+    if ("error" in r) return toast(r.error, true);
+    const n = pendingUpdates(status.value as Report | null).length;
+    toast(n ? t("up.check.found", { n }) : t("up.check.none"));
+  };
+  return (
+    <button type="button" class="btn sm" disabled={checking.value} onClick={() => void go()}>
+      {t(checking.value ? "up.check.running" : "up.app.check")}
+    </button>
   );
 }
 
@@ -117,6 +141,7 @@ export function Updates() {
             cliPrev ? t("up.previous", { v: cliPrev }) : null,
           ]}
           rollback={cliPrev ? "rollback-cli" : null}
+          extra={<CheckButton />}
         />
         <Card
           name="Claude Desktop"
@@ -127,6 +152,7 @@ export function Updates() {
             m.desktopPrevious ? t("up.previous", { v: m.desktopPrevious }) : null,
           ]}
           rollback={m.desktopPrevious ? "rollback-desktop" : null}
+          extra={<CheckButton />}
         />
         <AppCard />
         <SelfCard S={S} />
