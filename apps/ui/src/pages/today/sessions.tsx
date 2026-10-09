@@ -1,10 +1,13 @@
-// sessions.tsx — «Active now»: one tile per profile (its Desktop open or closed; a click opens it or
-// brings it forward), the Claude Code sessions running with their profile, model and whether they are
-// working, and «Pick up again»: the last sessions, one per folder, in the room left — whole rows only.
+// sessions.tsx — «Claude now»: one row per profile with its usage limits (the five hours and the week,
+// with when they start again) and today's tokens, and its Desktop (a click opens it or brings it
+// forward); the Claude Code sessions running, with how much of their context they use and whether they
+// are working; and «Pick up again»: the last sessions, one per folder, in the room left — whole rows
+// only. The limits and the context come from the status line (apps/cli/live.ts); «refresh» asks
+// Anthropic for the limits now.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { get, post, type Result } from "../../api.ts";
-import { t } from "../../i18n.ts";
+import { lang, t } from "../../i18n.ts";
 import { Spark } from "../../lib/claude.tsx";
 import { ago, cap, dur, modelShort } from "../../lib/format.ts";
 import { openDrawer, pcolor, toast } from "../../lib/ui.tsx";
@@ -98,6 +101,45 @@ function Resume() {
   );
 }
 
+interface Limit {
+  used: number;
+  resets: number | null;
+}
+interface LiveView {
+  profiles: Record<string, { limits: { five_hour?: Limit; seven_day?: Limit } | null; at: number | null; tokens: number }>;
+  sessions: Record<string, { context?: { used: number | null; size: number | null } | null; at: number }>;
+  errors?: Record<string, string>;
+}
+
+/** Tokens as a person reads them: 950, 12k, 3.4M. */
+const tokens = (n: number): string =>
+  n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n);
+
+/** When a window starts again: the hour today, else the day and the hour. */
+function resetsAt(sec: number | null): string {
+  if (!sec) return "";
+  const d = new Date(sec * 1000), now = new Date();
+  const hm = d.toLocaleTimeString(lang(), { hour: "2-digit", minute: "2-digit" });
+  return d.toDateString() === now.toDateString() ? hm : `${d.toLocaleDateString(lang(), { weekday: "short" })} ${hm}`;
+}
+
+const level = (pct: number) => (pct >= 80 ? "crit" : pct >= 50 ? "warn" : "ok");
+
+function LimitBar({ label, l }: { label: string; l?: Limit }) {
+  if (!l) return null;
+  const pct = Math.max(0, Math.min(100, l.used));
+  return (
+    <div class={`lim ${level(l.used)}`}>
+      <span class="lim-l">{label}</span>
+      <span class="lim-bar">
+        <i style={{ width: `${pct}%` }} />
+      </span>
+      <b>{Math.round(l.used)}%</b>
+      <small>{l.resets ? t("now.resets", { w: resetsAt(l.resets) }) : ""}</small>
+    </div>
+  );
+}
+
 const DESK = (
   <svg viewBox="0 0 16 16">
     <rect x="2" y="3" width="12" height="9" rx="1.5" />
@@ -111,6 +153,27 @@ export function SessionsCard() {
   const profiles = Object.keys(s?.profiles ?? {});
   const cli = s?.running.cli ?? [];
   const open = new Set(s?.running.desktop.map((d) => d.variant) ?? []);
+  const [view, setView] = useState<LiveView | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const at = useRef(0);
+  // the status line writes at every turn: read again at most every 15 s
+  useTopic(async () => {
+    if (Date.now() - at.current < 15000) return;
+    at.current = Date.now();
+    setView(await get<LiveView>("/api/live").catch(() => view));
+  }, ["state", "usage"]);
+  const refresh = async () => {
+    setRefreshing(true);
+    const v = await post<LiveView & { ok?: boolean }>("/api/live/refresh", {}).catch((e: Error) => {
+      toast(e.message, true);
+      return null;
+    });
+    setRefreshing(false);
+    if (!v) return;
+    setView(v);
+    const errs = Object.entries(v.errors ?? {});
+    if (errs.length) toast(errs.map(([p, e]) => `${p}: ${e}`).join(" · "), true);
+  };
   // busy first, then the most recent
   const rows = cli.map((c) => ({ c, busy: isWorking(c.session, c.lastActivity) })).sort((a, b) =>
     Number(b.busy) - Number(a.busy) || String(b.c.lastActivity ?? "").localeCompare(String(a.c.lastActivity ?? ""))
@@ -119,53 +182,92 @@ export function SessionsCard() {
   return (
     <article class="card ac">
       <div class="sc-h">
-        <span class="lbl">{t("today.running")}</span>
+        <span class="lbl">{t("now.title")}</span>
         {active > 0 && <span class="r on">{t("run.busyN", { n: active })}</span>}
+        <button
+          type="button"
+          class={`now-rf${refreshing ? " on" : ""}`}
+          title={t("now.refresh")}
+          aria-label={t("now.refresh")}
+          onClick={() => void refresh()}
+        >
+          <svg viewBox="0 0 16 16">
+            <path d="M13 8a5 5 0 1 1-1.5-3.5M13 3v3h-3" />
+          </svg>
+        </button>
       </div>
-      {profiles.length > 0 && (
-        <div class="pfs">
-          {profiles.map((p) => {
-            const on = open.has(p);
-            return (
-              <button
-                type="button"
-                key={p}
-                class={`pft${on ? " on" : ""}`}
-                style={{ "--k": pcolor(p) }}
-                title={t(on ? "run.focus" : "run.open")}
-                onClick={() => void say(post("/api/launch", { profile: p }))}
-              >
-                <span><i class="dot2" />{p}</span>
-                <span class="dk">{DESK}{t(on ? "run.deskOn" : "run.deskOff")}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <div class="cus">
+        {profiles.map((p) => {
+          const v = view?.profiles[p];
+          const on = open.has(p);
+          return (
+            <div class="cu" key={p} style={{ "--k": pcolor(p) }}>
+              <div class="cu-h">
+                <i class="dot2" />
+                <b>{p}</b>
+                {!!v?.tokens && <span class="cu-tok">{t("now.tokens", { n: tokens(v.tokens) })}</span>}
+                <span class="hd-sp" />
+                {v?.at && <small class="cu-at">{ago(new Date(v.at * 1000).toISOString())}</small>}
+                <button
+                  type="button"
+                  class={`cu-dk${on ? " on" : ""}`}
+                  title={t(on ? "run.focus" : "run.open")}
+                  aria-label={t(on ? "run.focus" : "run.open")}
+                  onClick={() => void say(post("/api/launch", { profile: p }))}
+                >
+                  {DESK}
+                </button>
+              </div>
+              {v?.limits
+                ? (
+                  <>
+                    <LimitBar label={t("now.5h")} l={v.limits.five_hour} />
+                    <LimitBar label={t("now.7d")} l={v.limits.seven_day} />
+                  </>
+                )
+                : <small class="cu-none">{t("now.noLimits")}</small>}
+            </div>
+          );
+        })}
+      </div>
       <div class="sess">
         {s && !rows.length && <div class="rc-none">{t("today.nothing")}</div>}
-        {rows.map(({ c, busy }) => (
-          <button
-            type="button"
-            class="ss"
-            key={c.pid}
-            title={c.cwd ?? ""}
-            style={{ "--k": pcolor(c.profile) }}
-            onClick={() => void say(post("/api/focus", { pid: c.pid }), t("run.noFocus"))}
-          >
-            <span class="m">{busy ? <Spark mode="thinking" /> : <i />}</span>
-            <span class="nm">
-              {folder(c.cwd)}{" "}
-              <small>
-                <i class="dot2" />
-                {[c.profile, t(c.embedded ? "run.desktop" : "run.terminal"), c.model ? cap(modelShort(c.model)) : ""].filter(Boolean).join(" · ")}
-              </small>
-            </span>
-            <span class={`w${busy ? " on" : ""}`}>
-              {busy ? t("run.working") : c.lastActivity ? t("run.idle", { d: dur(c.lastActivity) }) : ""}
-            </span>
-          </button>
-        ))}
+        {rows.map(({ c, busy }) => {
+          const ctx = c.session ? view?.sessions[c.session]?.context : null;
+          return (
+            <button
+              type="button"
+              class="ss"
+              key={c.pid}
+              title={c.cwd ?? ""}
+              style={{ "--k": pcolor(c.profile) }}
+              onClick={() => void say(post("/api/focus", { pid: c.pid }), t("run.noFocus"))}
+            >
+              <span class="m">{busy ? <Spark mode="thinking" /> : <i />}</span>
+              <span class="nm">
+                {folder(c.cwd)}{" "}
+                <small>
+                  <i class="dot2" />
+                  {[c.profile, c.model ? cap(modelShort(c.model)) : ""].filter(Boolean).join(" · ")}
+                </small>
+              </span>
+              {ctx?.used != null
+                ? (
+                  <span class={`ctx ${level(ctx.used)}`} title={t("now.ctx")}>
+                    <span class="lim-bar">
+                      <i style={{ width: `${Math.min(100, ctx.used)}%` }} />
+                    </span>
+                    {Math.round(ctx.used)}%
+                  </span>
+                )
+                : (
+                  <span class={`w${busy ? " on" : ""}`}>
+                    {busy ? t("run.working") : c.lastActivity ? t("run.idle", { d: dur(c.lastActivity) }) : ""}
+                  </span>
+                )}
+            </button>
+          );
+        })}
       </div>
       <Resume />
     </article>

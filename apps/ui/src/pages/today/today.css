@@ -687,6 +687,164 @@ button.deb:hover {
   gap: 6px;
 }
 
+/* a card's head: its label, and on the right what it says or does */
+.today2 .sc-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.today2 .sc-h .r {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--faint);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.today2 .sc-h .r.on {
+  color: var(--spark);
+}
+
+/* Claude now: the limits of each profile, today's tokens, the context of each session */
+.now-rf {
+  margin-left: auto;
+  color: var(--faint);
+  display: grid;
+  padding: 2px;
+  border-radius: 6px;
+}
+.today2 .sc-h .r + .now-rf {
+  margin-left: 6px;
+}
+.now-rf:hover {
+  color: var(--fg);
+  background: var(--raised);
+}
+.now-rf svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+}
+.now-rf.on svg {
+  animation: rot2 .9s linear infinite;
+}
+.cus {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cu {
+  padding: 9px 11px 10px;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cu-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+}
+.cu-h .dot2 {
+  background: var(--k);
+}
+.cu-tok {
+  font: 500 11px var(--mono);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.cu-at {
+  font-size: 10.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.cu-dk {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--faint);
+}
+.cu-dk:hover {
+  background: var(--raised);
+  color: var(--fg);
+}
+.cu-dk.on {
+  color: var(--ok);
+}
+.cu-dk svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+}
+.cu-none {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.lim {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 34px auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--dim);
+  --lc: var(--ok);
+}
+.lim.warn,
+.ctx.warn {
+  --lc: var(--warn);
+}
+.lim.crit,
+.ctx.crit {
+  --lc: var(--crit);
+}
+.lim b {
+  font: 600 11px var(--mono);
+  color: var(--fg);
+  text-align: right;
+}
+.lim small {
+  font-size: 10.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.lim-bar {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.lim-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--lc, var(--ok));
+  transition: width .5s ease;
+}
+.ctx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11px var(--mono);
+  color: var(--dim);
+  --lc: var(--ok);
+}
+.ctx .lim-bar {
+  width: 48px;
+}
+
 /* active now */
 .ac {
   padding: 14px 18px 8px;
@@ -694,55 +852,6 @@ button.deb:hover {
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.pfs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.pft {
-  padding: 7px 8px;
-  border-radius: 9px;
-  box-shadow: inset 0 0 0 1px var(--line);
-  font-size: 12.5px;
-  font-weight: 600;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-  min-width: 0;
-}
-.pft:hover {
-  background: var(--hover);
-}
-.pft > span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.pft .dk {
-  font-weight: 400;
-  font-size: 11px;
-  color: var(--faint);
-  gap: 3px;
-}
-.pft.on {
-  background: var(--ok-wash);
-  box-shadow: none;
-}
-.pft.on .dk {
-  color: var(--ok);
-}
-.pft .dk svg {
-  width: 12px;
-  height: 12px;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  fill: none;
-  flex: none;
 }
 .sess {
   flex: none;

@@ -41,6 +41,7 @@ import { jobsFor, startSchedule } from "./schedule.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
+import { live, refresh as refreshLimits } from "../live.ts";
 
 interface Ctx {
   req: Request;
@@ -67,6 +68,10 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/summary": {
       get: async ({ url }) => json(summarize((await status.get(url.searchParams.has("fresh"))).report)),
     },
+    // Claude at work: each profile's limits and today's tokens, each session's context (live.ts)
+    "/api/live": { get: async () => json(await live()) },
+    // the limits asked of Anthropic now, with each profile's login: only when the person asks
+    "/api/live/refresh": { post: async () => json({ errors: await refreshLimits(), ...(await live()) }) },
     "/api/sessions": {
       get: async ({ url }) => {
         const db = openDb();

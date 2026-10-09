@@ -2,9 +2,10 @@
 # agents: setup management CLI (also answers to agents-multi and claude-multi) (install, doctor, status, sync, update).
 # The logic lives in apps/cli/main.ts (Deno); this shim resolves the repo from its own real path and
 # runs it with a minimal permission set.
-# Network allowed: Google (calendar and mail), the brain host (the `brain` account in accounts.json,
-# in the person's config) for tasks, loopback, the claude-multi-app unix socket, and the desktop app's
-# (its updates: apps/cli/console/app-update.ts; the app names it for the backend it starts).
+# Network allowed: Google (calendar and mail), Anthropic (the usage limits, only on a refresh: live.ts),
+# the brain host (the `brain` account in accounts.json, in the person's config) for tasks, loopback,
+# the claude-multi-app unix socket, and the desktop app's (its updates: apps/cli/console/app-update.ts;
+# the app names it for the backend it starts).
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
@@ -26,5 +27,5 @@ except (OSError, ValueError):
 print(",".join(sorted({urllib.parse.urlparse(a["url"]).netloc for a in accounts if a.get("service") == "brain" and a.get("url")})))
 PY
 )
-exec "$DENO" run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com${BRAIN_HOSTS:+,$BRAIN_HOSTS},"unix:${XDG_RUNTIME_DIR:-/tmp}/claude-multi-app.sock,unix:${AGENTS_MULTI_APP_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/agents-multi-app.sock}" \
+exec "$DENO" run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com,api.anthropic.com${BRAIN_HOSTS:+,$BRAIN_HOSTS},"unix:${XDG_RUNTIME_DIR:-/tmp}/claude-multi-app.sock,unix:${AGENTS_MULTI_APP_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/agents-multi-app.sock}" \
   "$REPO/apps/cli/main.ts" "$@"
