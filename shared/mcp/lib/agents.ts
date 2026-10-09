@@ -166,9 +166,13 @@ export function answerLine(p: Pending, allow: boolean, message?: string): string
 
 // ---------------------------------------------------------------- the files
 
+// `kill -0`: whether the process is there, no signal sent. Not /proc: Deno lets only --allow-all read it.
 const alive = async (pidFile: string) => {
   const pid = Number((await Deno.readTextFile(pidFile).catch(() => "")).trim());
-  return pid > 0 && !!(await Deno.stat(`/proc/${pid}`).catch(() => null));
+  if (!(pid > 0)) return false;
+  const r = await new Deno.Command("kill", { args: ["-0", String(pid)], stdout: "null", stderr: "null" }).output()
+    .catch(() => null);
+  return !!r?.success;
 };
 
 async function lines(file: string): Promise<string[]> {
@@ -317,10 +321,10 @@ export async function stopChild(id: string, force = false, runs = runsDir()): Pr
   const dir = `${runs}/${id}`;
   for (const f of force ? ["holder.pid", "claude.pid"] : ["holder.pid"]) {
     const pid = Number((await Deno.readTextFile(`${dir}/${f}`).catch(() => "")).trim());
+    // the `kill` command, not Deno.kill: that needs --allow-run for every program, the server has three
     if (pid > 0) {
-      try {
-        Deno.kill(pid, "SIGTERM");
-      } catch { /* gone */ }
+      await new Deno.Command("kill", { args: ["-TERM", String(pid)], stdout: "null", stderr: "null" }).output()
+        .catch(() => null);
     }
   }
 }
