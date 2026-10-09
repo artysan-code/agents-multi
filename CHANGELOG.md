@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.6] - 2026-10-09
+
+### Fixed
+
+- **agents**: a child that ended is not alive while nobody has reaped it (ps, not kill -0) (eca6177)
+
 ## [1.0.0-beta.5] - 2026-10-09
 
 ### Fixed
