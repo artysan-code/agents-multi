@@ -5,6 +5,22 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-beta.10] - 2026-10-09
+
+### Added
+
+- **console**: «Claude now» with each account's limits, today's tokens and each session's context (573e38d)
+- **console**: Today's tasks as a plain list; the day's tasks without a time over the line (94e613f)
+- **console**: Claude works out what the bar is for; health moves to the rail (9967ef9)
+
+### Fixed
+
+- **console**: tables, profiles and Today fit narrow windows; an unreachable update site said plainly (d7bf170)
+
+### Documentation
+
+- the rail, the bar without modes and «Claude now» in the README and the site (0e1141e)
+
 ## [1.0.0-beta.9] - 2026-10-09
 
 ### Fixed
