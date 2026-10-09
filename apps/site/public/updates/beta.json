@@ -1,19 +1,19 @@
 {
-  "version": "1.0.0-beta.12",
-  "notes": "### Added\n\n- **brain**: the site reads the update manifests from release; betas redeploy only :beta (94c7a91)",
-  "pub_date": "2026-10-09T13:46:13Z",
+  "version": "1.0.0-beta.13",
+  "notes": "### Added\n\n- **agents**: workflow runs with hand-offs per step and a team channel, run by their own process (cc8df94)\n- **agents**: children's questions reach the owner as native questions, followed live (e898d62)\n\n### Documentation\n\n- **adr**: 0005 adds the team channel of a run (42d9500)\n- **adr**: 0005 agent workflows, run by their own process and answered with native questions (7794d9b)",
+  "pub_date": "2026-10-09T15:42:16Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.12/agents-multi_1.0.0-beta.12_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJqdlA2YWl0T3pEVmlYSkszdnlzNDVSSkZLeWVmTG9RY0QzR29aY29ldFovd21SaFRHUWJnWU9xdkx3MVhBRHQ4MzQ3V2dmdFZKV1llUHpwV1VVeUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTUzNTcyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xMl9hbWQ2NC5kZWIJdmVyc2lvbjoxLjAuMC1iZXRhLjEyCkNOOEZ4VDZmc2c2eHVteHdxWS9mZ0RhRnZsS1A3N1owRkpSRTJRcjB6ZndvYVhscE5SS1dMU3gwcmdlWENhVXBVdC9EejFwWUkwNCtqODdhK3dzeUFnPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.13/agents-multi_1.0.0-beta.13_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjRXdnRzZ3g0MXFVRTNnbHBJcTh0VFdmQ2VvU1gxYXdSM2JmN01wVDdQOFQvOUNzRmNYTHRmQU16MWcyRlhrRnpZNTJ2bUhWN0Q0c2RHTDV1SUhQN2dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTYwNTM1CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xM19hbWQ2NC5kZWIJdmVyc2lvbjoxLjAuMC1iZXRhLjEzCmJ5ZU9lTWpZKzMrMS91ZEVIRkYyOHVNM0J6RGtnU2FtdmxONmZUODFuU0xPbzdDTWFSWE9tamxteUhkU3pzLzJUazg1TzR1V2IyY1V0WHNmUWJudUNRPT0K"
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.12/agents-multi_1.0.0-beta.12_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Ti9pYjluY28veGxPelZhdkdRWW1TNXk1OGNSK2FvNUpsbFduYkZPMXYrOHNnYm5id1dwY2NheDk4Umdhbk45Rk5ob0RtNGpNUG16WmNTZzNnQUdBZVFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTUzNTcyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xMl9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTIKdnhTSjVnb3V4VWtjZmd5ZlVDZGRJV0FwZUVoczZVdklZb3NsekJqU2cwV0tuMU5wQ1Fyckw4ZlRxK2lWVERxMmt6WDFZWkFSKzJUSUdGQkZsYnNJQkE9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.13/agents-multi_1.0.0-beta.13_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tit0ckxBU1FURGRpUHVzOEFHNTNOdFdZL1lzR0lQRVVNazZKQTJSb2MrdldNdStHL0Z5dkNFajB3bmFySnpQU1Z5MXpmNGRpQThnL2Z5V1djTnNIVGdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTYwNTM2CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xM19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTMKb2drWFh4OGFOL2VHS2xDSE5PdmJUODVRSTl2ZmlYOHlJb1g3eWNrSGNFQlMydE9wNjhNbjgyWG1Ja1U0VHgrU0wrVCtkYmtncjJlSHFJWlgrbVJYQnc9PQo="
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.12/agents-multi_1.0.0-beta.12_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Ti9pYjluY28veGxPelZhdkdRWW1TNXk1OGNSK2FvNUpsbFduYkZPMXYrOHNnYm5id1dwY2NheDk4Umdhbk45Rk5ob0RtNGpNUG16WmNTZzNnQUdBZVFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTUzNTcyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xMl9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTIKdnhTSjVnb3V4VWtjZmd5ZlVDZGRJV0FwZUVoczZVdklZb3NsekJqU2cwV0tuMU5wQ1Fyckw4ZlRxK2lWVERxMmt6WDFZWkFSKzJUSUdGQkZsYnNJQkE9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.13/agents-multi_1.0.0-beta.13_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tit0ckxBU1FURGRpUHVzOEFHNTNOdFdZL1lzR0lQRVVNazZKQTJSb2MrdldNdStHL0Z5dkNFajB3bmFySnpQU1Z5MXpmNGRpQThnL2Z5V1djTnNIVGdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTYwNTM2CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4xM19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLWJldGEuMTMKb2drWFh4OGFOL2VHS2xDSE5PdmJUODVRSTl2ZmlYOHlJb1g3eWNrSGNFQlMydE9wNjhNbjgyWG1Ja1U0VHgrU0wrVCtkYmtncjJlSHFJWlgrbVJYQnc9PQo="
     }
   }
 }
