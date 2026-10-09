@@ -27,6 +27,8 @@ export interface Meta {
   model?: string;
   /** the permission mode it runs in (`childMode`) */
   mode?: ChildMode;
+  /** the workflow run and step it is (runs.ts), when it is one */
+  run?: { id: string; step: string };
 }
 
 /** The modes a child may run in: the ones where whatever is not allowed comes back as a request. */
@@ -199,8 +201,11 @@ export function stateOf(lines: string[], answered: Set<string>, alive: boolean, 
 /** What needs the owner: a request or a question to answer, a turn finished, a child gone. */
 export interface Attention {
   id: string;
-  kind: "request" | "question" | "done" | "ended";
+  kind: "request" | "question" | "done" | "ended" | "run-confirm" | "run-failed" | "run-done" | "run-stopped";
   detail: string;
+  /** for a run's own events: the run, and the step it is about */
+  run?: string;
+  step?: string;
   /** for a request or a question: its id, to answer it with */
   request?: string;
   /** for a request: the rule "yes for the session" would add */
@@ -361,6 +366,10 @@ export interface StartInput {
   dir: string;
   task: string;
   model?: string;
+  run?: { id: string; step: string };
+  /** more MCP servers for this child (`--mcp-config`, JSON), and tools it may use without asking */
+  mcpConfig?: string;
+  allowedTools?: string[];
 }
 
 /** The mode a profile's sessions start in: `defaultMode` in its built settings (`<runtime>/<profile>`,
@@ -391,6 +400,7 @@ export async function startChild(
   const mode = await modeOf(i.profile, runtime);
   const meta: Meta = { id, profile: i.profile, command, dir, task: i.task, started: new Date().toISOString(), mode };
   if (i.model) meta.model = i.model;
+  if (i.run) meta.run = i.run;
   await Deno.writeTextFile(`${run}/meta.json`, JSON.stringify(meta, null, 2));
   const fifo = await new Deno.Command("mkfifo", { args: [`${run}/in`] }).output();
   if (!fifo.success) throw new Error("could not make the child's stdin");
@@ -399,11 +409,14 @@ export async function startChild(
     'sleep infinity > "$R/in" & echo $! > "$R/holder.pid"',
     'cd "$W" || exit 1',
     'echo $$ > "$R/claude.pid"',
-    'exec "$L" -p ${M:+--model "$M"} --input-format stream-json --output-format stream-json --verbose ' +
+    'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
+    "--input-format stream-json --output-format stream-json --verbose " +
     '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
   ].join("\n");
   const env: Record<string, string> = { R: run, W: dir, L: command, P: mode };
   if (i.model) env.M = i.model;
+  if (i.mcpConfig) env.C = i.mcpConfig;
+  if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
   await new Deno.Command("setsid", {
     args: ["-f", "bash", "-c", script],
     env,
@@ -476,23 +489,4 @@ export async function waitForAttention(timeoutMs: number, runs = runsDir(), ever
     if (found.length) return found;
   }
   return [];
-}
-
-/** What needs the owner, as it happens: first every request and question still waiting (so a watch
- *  started again loses none), then each new one, finished turn and child gone, until `signal`. */
-export async function* followAttention(
-  runs = runsDir(),
-  everyMs = 1000,
-  signal?: AbortSignal,
-): AsyncGenerator<Attention> {
-  let before = await look(runs);
-  for (const [id, st] of before) {
-    if (st.phase !== "ended") { for (const p of st.pending) yield attentionOf(id, p); }
-  }
-  while (!signal?.aborted) {
-    await new Promise((r) => setTimeout(r, everyMs));
-    const now = await look(runs);
-    yield* attentionBetween(before, now);
-    before = now;
-  }
 }

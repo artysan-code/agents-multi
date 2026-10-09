@@ -7,7 +7,6 @@ import {
   answer,
   attentionOf,
   type Child,
-  followAttention,
   listChildren,
   readChild,
   sayTo,
@@ -16,6 +15,7 @@ import {
   type Verdict,
   waitForAttention,
 } from "../../shared/mcp/lib/agents.ts";
+import { follow } from "../../shared/mcp/lib/runs.ts";
 
 const USAGE = `agents agent start <profile> <folder> <task…> [--model m]   a child in that folder, with that profile
 agents agent list                                   every child: phase, what it waits for
@@ -27,7 +27,7 @@ agents agent answer <id> <request> allow|session|deny [why…] [--answers json]
 agents agent stop <id> [--force]                    ends after its turn (--force: now)
 agents agent wait [--timeout s]                     returns when something needs you
 agents agent events [--follow]                      what needs you, one JSON line each: what waits now
-                                                    (--follow: then everything new, until stopped)`;
+                                                    (--follow: then everything new, workflow runs included)`;
 
 function line(c: Child): string {
   const s = c.state;
@@ -102,15 +102,15 @@ export async function agentCommand(args: string[]): Promise<number> {
         return 0;
       }
       case "events": {
-        const follow = has("--follow");
-        if (!follow) {
+        const live = has("--follow");
+        if (!live) {
           for (const c of await listChildren()) {
             if (c.state.phase === "ended") continue;
             for (const p of c.state.pending) console.log(JSON.stringify(attentionOf(c.meta.id, p)));
           }
           return 0;
         }
-        for await (const a of followAttention()) console.log(JSON.stringify(a));
+        for await (const a of follow()) console.log(JSON.stringify(a));
         return 0;
       }
     }

@@ -10,7 +10,6 @@ import {
   childId,
   childMode,
   type ChildState,
-  followAttention,
   listChildren,
   questionsOf,
   readChild,
@@ -23,6 +22,7 @@ import {
   validId,
   whatOf,
 } from "../../../shared/mcp/lib/agents.ts";
+import { follow } from "../../../shared/mcp/lib/runs.ts";
 import { REPO } from "../lib/paths.ts";
 
 const ev = (o: unknown) => JSON.stringify(o);
@@ -165,7 +165,7 @@ Deno.test("agents: the events follow what waits now, then what happens, and skip
   await child("live-one", Deno.pid, [ask("r1")]);
   await child("gone-one", 0, [ask("r2")]);
   const stop = new AbortController();
-  const it = followAttention(runs, 50, stop.signal);
+  const it = follow(runs, 50, stop.signal);
   assertEquals((await it.next()).value, {
     id: "live-one",
     kind: "request",

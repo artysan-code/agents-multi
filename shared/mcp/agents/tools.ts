@@ -11,6 +11,16 @@ import {
   stopChild,
   type Verdict,
 } from "../lib/agents.ts";
+import {
+  answerRun,
+  type Choice,
+  listRuns,
+  type Plan,
+  readRun,
+  runEvents,
+  savedWorkflows,
+  startRun,
+} from "../lib/runs.ts";
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 const fail = (e: unknown) => ({
@@ -118,6 +128,78 @@ export function registerAgentTools(server: McpServer) {
     try {
       await stopChild(id, !!force);
       return text({ stopping: id });
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  const step = z.object({
+    id: z.string().describe("lowercase, e.g. review"),
+    profile: z.string().describe("the profile (so the account) it runs with"),
+    folder: z.string().optional().describe("its folder; the plan's when absent"),
+    model: z.string().optional(),
+    prompt: z.string().describe("what it has to do, complete: it knows only this, its folder and the HANDOFFs"),
+    after: z.array(z.string()).optional().describe("the steps it waits for"),
+    confirm: z.boolean().optional().describe("wait for the owner's go before it starts (publishing, deploying…)"),
+  });
+
+  server.registerTool("workflow_start", {
+    description: "Start a workflow run from a plan the owner has approved — never one they have not seen. The hub " +
+      "runs it on its own: steps start when the ones they wait for are done, each writes a HANDOFF the next " +
+      "reads, they can talk on the run's team channel. Follow it with `agents agent events --follow`.",
+    inputSchema: {
+      name: z.string(),
+      folder: z.string().optional().describe("the steps' folder when they do not name one"),
+      tasks: z.array(z.string()).optional().describe("brain tasks the run belongs to (ids or refs), if any"),
+      concurrency: z.number().int().min(1).max(8).optional().describe("steps at work at once, default 3"),
+      steps: z.array(step),
+    },
+  }, async (plan: Plan) => {
+    try {
+      const id = await startRun(plan);
+      return text({ started: id, steps: plan.steps.map((s) => s.id) });
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  server.registerTool("workflow_list", {
+    description: "The saved workflows a folder can use (the project's, then the owner's: read the SKILL.md to " +
+      "fill a plan) and the runs on this machine with their steps' state.",
+    inputSchema: { folder: z.string().optional() },
+  }, async ({ folder }: { folder?: string }) =>
+    text({
+      saved: await savedWorkflows(folder),
+      runs: (await listRuns()).map((r) => ({
+        id: r.id,
+        name: r.plan.name,
+        status: r.state.status,
+        runner: r.alive,
+        steps: Object.fromEntries(Object.entries(r.state.steps).map(([k, v]) => [k, v.status])),
+      })),
+    }));
+
+  server.registerTool("workflow_status", {
+    description: "One run in full: its plan, each step's state, child and HANDOFF, and what happened.",
+    inputSchema: { id: z.string() },
+  }, async ({ id }: { id: string }) => {
+    const r = await readRun(id);
+    return r ? text({ ...r, events: (await runEvents(id)).slice(-30) }) : fail(new Error(`no run ${id}`));
+  });
+
+  server.registerTool("workflow_answer", {
+    description: "Carry the owner's decision to a run — only what they decided. A step to confirm: `go` or " +
+      "`skip`. A step that failed: `retry`, `skip` (the steps after it run without its HANDOFF) or `stop`. " +
+      "`stop` without a step ends the whole run.",
+    inputSchema: {
+      id: z.string(),
+      step: z.string().optional(),
+      choice: z.enum(["go", "retry", "skip", "stop"]),
+    },
+  }, async ({ id, step, choice }: { id: string; step?: string; choice: Choice }) => {
+    try {
+      await answerRun(id, choice, step);
+      return text({ run: id, step: step ?? null, choice });
     } catch (e) {
       return fail(e);
     }

@@ -37,11 +37,15 @@ from the Code tab and the phone. Widgets (MCP Apps, `show_widget`) wait for 1.1.
 A run lives next to the children, in `<runs>/<run-id>/` (`runsDir()`):
 
 - `plan.json` — the plan as approved (below), never changed after the start;
-- `steps/<step>.json` — each step's state: `waiting | running | done | failed | skipped`, its child's id,
-  its start and end;
-- `events.jsonl` — one line per thing that happened (a step started or ended, a request, a question, an
-  answer), the stream the coordinator follows;
+- `state.json` — the run's state and each step's: `waiting | confirm | running | done | failed | skipped |
+  stopped`, its child's id, its HANDOFF, its start and end; written by the runner alone;
+- `events.jsonl` — one line per thing that happened to the run (a step started, done, to confirm,
+  failed; the run's end);
+- `control.jsonl` — the owner's answers (go, retry, skip, stop), which the runner reads and applies;
+- `channel.jsonl` — the team's messages;
 - `runner.pid`, `err.log`.
+
+The run's folder is `<runs>/runs/<run-id>/`, beside the children's.
 
 `agents run start <plan.json>` validates the plan, writes the folder and starts the **runner**
 (`agents run drive <id>`, detached with `setsid` like a child): it starts every step whose dependencies
@@ -104,11 +108,12 @@ outlast the run goes to the brain's tasks and the repository's docs, not only th
 ### The team channel
 
 The steps of a run can talk while they work (owner, 2026-10-09). Each run has a channel,
-`<runs>/<run-id>/channel.jsonl`, and its children get two tools from the hub: `team_send` (to the
-run, or to one step by id) and `team_read` (what is new for it since its last read, with a cursor). A
-child is told in its prompt who else is in the run and that the channel exists; the runner also hands
-it what arrived for it between two of its turns. Accounts do not matter: the children are all on this
-machine and the channel is the hub's file.
+`channel.jsonl`, and its children get one tool, `team_send` (to the run, or to one step by id), from a
+small MCP server the runner gives each child (`shared/mcp/agents/team.ts`, `--mcp-config`, allowed
+without asking). Nothing to read: the runner hands every step at work what was said for it, as a
+message marked `[team]`, and a step that has not started yet hears it when it does. A child is told in
+its prompt who else is in the run. Accounts do not matter: the children are all on this machine and the
+channel is the hub's file.
 
 - A message is data from another agent, never an instruction to obey: the child weighs it against its
   own task, and a permission is still the owner's.
@@ -155,7 +160,8 @@ Neither is versioned in git: they are the owner's working tools, and the owner a
 
 The MCP server keeps `agent_*` (a lone child is a one-step run without a plan) and adds
 `workflow_start`, `workflow_list` (saved ones for a folder, and the runs: running, waiting, ended),
-`workflow_status` (a run in full: steps, children, HANDOFF paths, events) and `workflow_stop`. The CLI
+`workflow_status` (a run in full: steps, children, HANDOFF paths, events) and `workflow_answer` (go,
+retry, skip, stop — a step, or the whole run). The CLI
 mirrors them under `agents run`. The server's instructions say how to follow and answer, as above.
 
 ## Consequences
