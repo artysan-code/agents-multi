@@ -15,8 +15,14 @@ online. English or Italian, following the machine's locale.
 
 ## Sections
 
-- **Today** — the sessions running now, the day's tasks and appointments, the last sessions per
-  directory with the command that reopens each one.
+A rail on the left holds every page: its icons open into names while the pointer is on it. At its
+foot, the machine's health (green, yellow or red, it opens the Health page), the update when one is
+waiting, the commands and the preferences.
+
+- **Today** — the bar to ask Claude, the day's appointments and the tasks with a time on one line
+  (those due today without a time in a strip above it), the tasks as a plain list, and **Claude now**:
+  each account's usage limits (the five hours and the week) with today's tokens, and how much context
+  each running session uses, then the last sessions per directory with the command that reopens each one.
 - **Tasks** — a board, a sortable list, a month calendar with the Google events, a board per project.
 - **Brain** — the brain's pages as a tree, search by words and by meaning, every version, the links
   both ways, and the whole brain as a live graph.
@@ -24,6 +30,13 @@ online. English or Italian, following the machine's locale.
 - **System** — profiles, permissions, plugins and skills, updates, and every doctor check with its fix.
 
 `Ctrl-K` opens a command palette with every view and every action.
+
+The bar to ask Claude has nothing to choose: Claude works out whether you ask something, say
+something to do (it becomes a task, with a time when one fits your day) or tell something worth
+remembering (it goes into the brain), and each change it makes shows under the answer. The limits come
+from Claude Code's status line while a session works; the refresh button on **Claude now** asks
+Anthropic for them at once, with each profile's own login, which the console reads for that request
+only.
 
 ## The desktop app
 

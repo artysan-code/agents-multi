@@ -264,13 +264,18 @@ the machine and never committed: `install` and every update that changed `apps/u
 `agents ui build`, a failed build keeps the previous one, and the doctor says when it is missing or
 behind. It needs pnpm.
 
-Five sections, in English or Italian. The language follows the machine's locale — the regional
-format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian — and
-the globe button in the rail overrides it per browser.
+Five sections, in English or Italian, on a rail of icons that opens into names while the pointer is on
+it; at its foot the machine's health (its colour is the worst check; it opens Health), the update when
+one is waiting, the commands and the preferences. The language follows the machine's locale — the
+regional format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian —
+and the preferences override it per browser.
 
-- **Today** (`#today`) — the sessions running now first, then the day's tasks and appointments and
-  the last sessions per directory with the command that reopens each one. A status card appears
-  only when something needs you; the rail's dot says the rest.
+- **Today** (`#today`) — the bar to ask Claude; the day's appointments and tasks with a time on one
+  line, the day's tasks without a time in a strip above it; the tasks as a plain list (project,
+  progress, due); and **Claude now**: each account's limits (five hours, week) with today's tokens,
+  each running session's context, and the last sessions per directory with the command that reopens
+  each one. The limits and the context come from the status line (`apps/cli/live.ts`); its refresh
+  button asks Anthropic with each profile's login, read for that request only.
 - **Tasks** (`#tasks`) — the board (columns by status, drag a card to move it), a sortable list, a
   month calendar with the Google events, and one small board per project folder. The folder tree
   on the left filters every view. A task opens as a page: its fields, its steps and their
@@ -294,7 +299,9 @@ the globe button in the rail overrides it per browser.
   rules to every profile), **Plugins & skills**, **Updates** (versions, and what is pending), **Health** (every doctor
   check, with a button for the fixes that map to a known action).
 
-Consumption is not on the page: `agents usage` reports it in the terminal.
+The bar to ask Claude has no modes: Claude works out whether it is a question, something to do (a
+task, with a time when one fits) or something to remember (the brain), and each change it made shows
+as a chip under the answer. The full consumption report stays in the terminal: `agents usage`.
 
 `⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the
 local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating and

@@ -66,6 +66,9 @@ a console, and a desktop app that carries it all. **This repository is the sourc
   `calendar_delete`, in the shared `ask` permissions like `gmail_send`. The shared deny rules on
   `secret-tool`, `kwallet-query`, `vault recovery-code` and the vault folder keep a session away from
   the keyring's vault key (the doctor checks they are there).
+- **A profile's Claude login is read in one place only**: `apps/cli/live.ts`, when the person asks to
+  refresh the usage limits (Today › Claude now). It is used for that request to Anthropic and never
+  kept, logged or sent anywhere else; the limits otherwise come from the status line.
 - **Notifications go through `desktopNotify()`** (`apps/cli/notify.ts`): normal urgency, eight seconds,
   once per event. Never `-u critical` — on KDE it ignores the expiry.
 - **The desktop app is a view** (`apps/desktop/`, Tauri 2; [ADR 0003](docs/adr/0003-desktop-app.md)):
