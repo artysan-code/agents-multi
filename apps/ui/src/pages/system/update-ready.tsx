@@ -8,6 +8,7 @@ import { status } from "../../state.ts";
 import { appUpdater, notePoints } from "../../shell/app-update.ts";
 import { sys } from "../../shell/sysstate.ts";
 import { UpdateNow } from "./updates-close.tsx";
+import { desktopNext } from "./updates-lib.tsx";
 import "./update-ready.css";
 
 /** One row per component an update would move: from → to. */
@@ -31,7 +32,9 @@ function UpdateRows() {
     if (u.cli?.latest && u.cli.latest !== m.cliVersion) {
       rows.push(["Claude Code", `${m.cliVersion ?? "—"} → ${u.cli.latest}`]);
     }
-    if (m.desktopStaged) {
+    const desk = desktopNext(S);
+    if (desk) rows.push(["Claude Desktop", `${m.desktopVersion ?? "—"} → ${desk}`]);
+    else if (m.desktopStaged) {
       rows.push([
         "Claude Desktop",
         `${m.desktopVersion ?? "—"} → ${m.desktopStaged} · ${t("sc.staged")}`,

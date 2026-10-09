@@ -10,7 +10,7 @@ import { lang, t, tk } from "../../i18n.ts";
 import { runAction, runJob, toast } from "../../lib/ui.tsx";
 import { appUpdate, appUpdateAction, appUpdateChannel } from "../../shell/app-update.ts";
 import { appState } from "./app-state.ts";
-import { COMPONENTS, type MachineExtra, pendingUpdates, type RepoExtra, type Report } from "./updates-lib.tsx";
+import { COMPONENTS, desktopNext, type MachineExtra, pendingUpdates, type RepoExtra, type Report } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
 import { UpdateReady } from "./update-ready.tsx";
 
@@ -128,6 +128,7 @@ export function Updates() {
   const u = S.update ?? {};
   const cliPrev = (m.cliVersions ?? []).filter((v) => v !== m.cliVersion).sort().pop();
   const log = S.updateLog ?? [];
+  const deskNext = desktopNext(S);
   return (
     <div class="sub-view">
       <UpdateReady />
@@ -147,7 +148,11 @@ export function Updates() {
           name="Claude Desktop"
           current={m.desktopVersion}
           lines={[
-            m.desktopStaged ? t("up.staged", { v: m.desktopStaged }) : t("up.uptodate"),
+            deskNext
+              ? t("up.next", { v: deskNext })
+              : m.desktopStaged
+              ? t("up.staged", { v: m.desktopStaged })
+              : t("up.uptodate"),
             m.desktopSystem ? t("up.system") : null,
             m.desktopPrevious ? t("up.previous", { v: m.desktopPrevious }) : null,
           ]}

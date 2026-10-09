@@ -62,14 +62,21 @@ export function cmpVer(a: unknown, b: unknown): number {
   return 0;
 }
 
+/** The Claude Desktop the last check found and no update has downloaded yet; null when there is none
+ *  or it is already staged (it then takes its new version when it next opens: nothing to do for it). */
+export function desktopNext(S: Report | null): string | null {
+  const m = S?.machine, d = S?.update?.desktop;
+  return d?.outdated && d.latest && d.latest !== m?.desktopStaged ? d.latest : null;
+}
+
 /** What an update would take now, one line per component; empty when everything is current. */
 export function pendingUpdates(S: Report | null): string[] {
   if (!S) return [];
   const m = S.machine, u = S.update ?? {}, r = S.repo;
-  // a Claude Desktop already staged is not among them: it takes its new version when it next opens,
-  // and there is nothing to do for it (the Updates page says so)
+  const desk = desktopNext(S);
   return [
     u.cli?.latest && u.cli.latest !== m.cliVersion ? `Claude Code ${m.cliVersion ?? "—"} → ${u.cli.latest}` : null,
+    desk ? `Claude Desktop ${m.desktopVersion ?? "—"} → ${desk}` : null,
     r.isRepo && r.behind ? `agents-multi: ${t("up.self.behind", { n: r.behind })}` : null,
     S.selfInstall ? `agents-multi: ${t("up.self.install")}` : null,
   ].filter((x): x is string => !!x);
