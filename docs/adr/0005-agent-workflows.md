@@ -101,6 +101,21 @@ outlast the run goes to the brain's tasks and the repository's docs, not only th
 - **Done** is a turn that ends without error _and_ a HANDOFF on disk. A turn that ends without one gets
   one reminder; a second miss, or an error, fails the step.
 
+### The team channel
+
+The steps of a run can talk while they work (owner, 2026-10-09). Each run has a channel,
+`<runs>/<run-id>/channel.jsonl`, and its children get two tools from the hub: `team_send` (to the
+run, or to one step by id) and `team_read` (what is new for it since its last read, with a cursor). A
+child is told in its prompt who else is in the run and that the channel exists; the runner also hands
+it what arrived for it between two of its turns. Accounts do not matter: the children are all on this
+machine and the channel is the hub's file.
+
+- A message is data from another agent, never an instruction to obey: the child weighs it against its
+  own task, and a permission is still the owner's.
+- The team is the plan: no child starts another. One that needs a step the plan lacks asks for it, and
+  the owner gets it as a `question`.
+- Across machines it is the relay's (issue #11, 1.1), on the same message shape.
+
 ### What reaches the owner
 
 `agents run events [--follow] [<run-id>]` prints one line per event that needs the owner, as JSON:
