@@ -23,6 +23,7 @@ import { brainGraph, brainPage } from "../brain.ts";
 import { memoryApi } from "../memory.ts";
 import { permissionsOp, permissionsView, type PermOp } from "../permissions.ts";
 import { catalog, catalogPage, details, inventory, type PluginOp, pluginOp } from "../plugins.ts";
+import { claudeSessionVars } from "../../../shared/mcp/lib/agents.ts";
 import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
 import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
@@ -321,16 +322,10 @@ export function forgetBackendOnly(env: Pick<typeof Deno.env, "get" | "delete"> =
   for (const n of [...names, "AGENTS_MULTI_BACKEND_ONLY"]) env.delete(n);
 }
 
-/** Pure: the variables a Claude Code session sets for what it runs. An app started from inside one (a
- *  terminal in Claude, a tool call) inherits them, and the Claudes the console starts then took that
- *  session's profile, permissions and sandbox for theirs: no keyring, no brain. Agents Multi's own
- *  (CLAUDE_MULTI_*) stay. */
-export function claudeSessionVars(names: string[]): string[] {
-  return names.filter((n) =>
-    n === "CLAUDECODE" || n === "CLAUDE_CONFIG_DIR" || n === "CLAUDE_PID" || n === "CLAUDE_EFFORT" ||
-    /^CLAUDE_(CODE|AGENT_SDK|PREVIEW)_/.test(n)
-  );
-}
+/** A Claude session's variables (shared/mcp/lib/agents.ts): an app started from inside one (a terminal
+ *  in Claude, a tool call) inherits them, and the Claudes the console starts then took that session's
+ *  profile, permissions and sandbox for theirs: no keyring, no brain. */
+export { claudeSessionVars };
 
 /** Starts the console and resolves when it stops. `open` opens it in the default browser. */
 export async function serve(opts: { open?: boolean } = { open: true }) {

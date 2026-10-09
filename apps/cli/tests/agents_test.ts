@@ -264,3 +264,33 @@ Deno.test("agents: a process runs when ps lists it and it is not a zombie", () =
     false,
   ]);
 });
+
+Deno.test("agents: a child starts without the variables of the Claude session that started the hub", async () => {
+  const home = await Deno.makeTempDir();
+  const set = ["CLAUDE_PROJECT_DIR", "CLAUDECODE", "CLAUDE_CODE_SESSION_ID"];
+  try {
+    const runs = `${home}/runs`, config = `${home}/config`, work = `${home}/work/proj`;
+    await Deno.mkdir(`${config}/profiles/envy`, { recursive: true });
+    await Deno.mkdir(work, { recursive: true });
+    // a stand-in that writes what it was given and reads its stdin until it is stopped
+    const bin = `${home}/envy.sh`;
+    await Deno.writeTextFile(bin, '#!/usr/bin/env bash\nenv > "$PWD/env.txt"\ncat > /dev/null\n');
+    await Deno.chmod(bin, 0o755);
+    await Deno.writeTextFile(`${config}/profiles/envy/profile.json`, JSON.stringify({ command: bin }));
+    for (const n of set) Deno.env.set(n, "/the/coordinator");
+    Deno.env.set("CLAUDE_MULTI_KEEP", "1");
+    const meta = await startChild({ profile: "envy", dir: work, task: "x" }, runs, home, config);
+    let env = "";
+    for (let t = 0; t < 100 && !env; t++) {
+      env = await Deno.readTextFile(`${work}/env.txt`).catch(() => "");
+      if (!env) await new Promise((r) => setTimeout(r, 50));
+    }
+    const names = env.split("\n").map((l) => l.split("=")[0]);
+    for (const n of set) assert(!names.includes(n), `${n} reached the child`);
+    assert(names.includes("CLAUDE_MULTI_KEEP") && names.includes("HOME"));
+    await stopChild(meta.id, true, runs);
+  } finally {
+    for (const n of [...set, "CLAUDE_MULTI_KEEP"]) Deno.env.delete(n);
+    await Deno.remove(home, { recursive: true });
+  }
+});

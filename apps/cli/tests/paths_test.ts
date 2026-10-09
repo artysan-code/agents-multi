@@ -42,6 +42,7 @@ Deno.test("claudeSessionVars: a Claude session's variables, not Agents Multi's o
       "CLAUDE_CONFIG_DIR",
       "CLAUDE_PID",
       "CLAUDE_EFFORT",
+      "CLAUDE_PROJECT_DIR",
       "CLAUDE_MULTI_NO_ASSISTANT_TRAILER",
       "DBUS_SESSION_BUS_ADDRESS",
       "HOME",
@@ -55,6 +56,7 @@ Deno.test("claudeSessionVars: a Claude session's variables, not Agents Multi's o
       "CLAUDE_CONFIG_DIR",
       "CLAUDE_PID",
       "CLAUDE_EFFORT",
+      "CLAUDE_PROJECT_DIR",
     ],
   );
 });

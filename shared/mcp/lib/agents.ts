@@ -379,6 +379,19 @@ export async function modeOf(profile: string, runtime: string): Promise<ChildMod
   return childMode(s?.permissions?.defaultMode);
 }
 
+/** The variables a Claude Code session sets for what it runs, as an extended regular expression (bash's
+ *  `=~` and JavaScript read it alike). Whatever is started from inside one — this server, the console
+ *  from a terminal in Claude — inherits them, and a Claude started from there took that session's
+ *  profile, permissions and project for its own: with `CLAUDE_PROJECT_DIR` a project's `.mcp.json`
+ *  looked for its files in the coordinator's folder, and its servers failed. Agents Multi's own
+ *  (CLAUDE_MULTI_*) stay. */
+export const CLAUDE_SESSION_VARS =
+  "^(CLAUDECODE|CLAUDE_CONFIG_DIR|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_PROJECT_DIR|CLAUDE_ENV_FILE|CLAUDE_(CODE|AGENT_SDK|PREVIEW)_.*)$";
+
+/** Pure: of these variable names, a Claude session's (CLAUDE_SESSION_VARS). */
+export const claudeSessionVars = (names: string[]): string[] =>
+  names.filter((n) => new RegExp(CLAUDE_SESSION_VARS).test(n));
+
 /** Starts a child: its folder, the fifo held open, the session detached from whoever asked. */
 export async function startChild(
   i: StartInput,
@@ -405,7 +418,9 @@ export async function startChild(
   const fifo = await new Deno.Command("mkfifo", { args: [`${run}/in`] }).output();
   if (!fifo.success) throw new Error("could not make the child's stdin");
   // values reach the shell as variables, never inside the script's text
+  // a child is a session of its own: none of the variables of the Claude session that started the hub
   const script = [
+    'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',
     'sleep infinity > "$R/in" & echo $! > "$R/holder.pid"',
     'cd "$W" || exit 1',
     'echo $$ > "$R/claude.pid"',
@@ -413,7 +428,7 @@ export async function startChild(
     "--input-format stream-json --output-format stream-json --verbose " +
     '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
   ].join("\n");
-  const env: Record<string, string> = { R: run, W: dir, L: command, P: mode };
+  const env: Record<string, string> = { R: run, W: dir, L: command, P: mode, V: CLAUDE_SESSION_VARS };
   if (i.model) env.M = i.model;
   if (i.mcpConfig) env.C = i.mcpConfig;
   if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
