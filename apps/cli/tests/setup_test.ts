@@ -26,6 +26,7 @@ import {
 } from "../setup.ts";
 import { init } from "../init.ts";
 import { createHandler } from "../console/server.ts";
+import { Tickets } from "../console/token.ts";
 import { setupRoutes } from "../console/setup.ts";
 
 const facts = (f: Partial<SetupFacts> = {}): SetupFacts => ({
@@ -310,11 +311,11 @@ Deno.test("watchFor: says once when the file appears, not for others; a second w
 
 Deno.test("setup routes: on a configured machine every write is refused, header or not", async () => {
   // the tests' configuration (CLAUDE_MULTI_CONFIG) has an owner and no setup of its own: configured by hand
-  const handle = createHandler(setupRoutes({ invalidate: () => {} }));
+  const handle = createHandler(setupRoutes({ invalidate: () => {} }), { token: "t", tickets: new Tickets() });
   const req = (path: string, init: RequestInit = {}) =>
     new Request(`http://127.0.0.1:7331${path}`, {
       ...init,
-      headers: { host: "127.0.0.1:7331", ...(init.headers as Record<string, string> ?? {}) },
+      headers: { host: "127.0.0.1:7331", "x-agents-token": "t", ...(init.headers as Record<string, string> ?? {}) },
     });
   const post = (path: string, body: unknown, header = true) =>
     handle(req(path, {

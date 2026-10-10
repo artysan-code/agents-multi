@@ -38,6 +38,7 @@ import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
 import { UI_DIST } from "../ui.ts";
 import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
+import { answer, type Auth, gate, newToken, publishToken, Tickets, tokenPath } from "./token.ts";
 import { jobsFor, startSchedule } from "./schedule.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
@@ -302,18 +303,21 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
 }
 
 /**
- * The request handler over a route table: the local-host guard, then the table (POST handlers
+ * The request handler over a route table: the local-host guard, the token (token.ts), then the table (POST handlers
  * behind the anti-CSRF header, 405 for a POST-only path), then the feature modules, then the
  * page's files (from `uiDist`, the interface's build). An exception becomes a 500 with its message
  * (the console is local).
  */
 export function createHandler(
   table: Record<string, Route>,
+  auth: Auth,
   uiDist: string = UI_DIST,
 ): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     if (!isLocalHost(req)) return new Response("forbidden host", { status: 403 });
     const u = new URL(req.url);
+    const verdict = gate({ method: req.method, url: u, headers: req.headers }, auth);
+    if (verdict.kind !== "pass") return answer(verdict, auth.token);
     try {
       const route = table[u.pathname];
       if (route) {
@@ -367,9 +371,24 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   void status.refresh().catch(() => {}); // warm: the first page after a start is not the one to wait
   void claudeAssets(); // the scan of Desktop's bundle, done before the first page asks for it
 
-  const handler = createHandler(table);
+  // the token of this start, in a file only this user reads; gone when the console stops cleanly
+  const auth: Auth = { token: newToken(), tickets: new Tickets() };
+  const file = tokenPath(PORT);
+  const unpublish = await publishToken(file, auth.token);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    try {
+      Deno.addSignalListener(sig, () => {
+        unpublish();
+        Deno.exit(0);
+      });
+    } catch { /* a signal this platform does not have */ }
+  }
+  const handler = createHandler(table, auth);
 
-  console.log(`${ANSI.b}agents serve${ANSI.x} — ${url}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
+  // the key to the page: on a terminal the person may copy it; elsewhere (the app's log) it stays out
+  const entry = Deno.stdout.isTerminal() ? `${url}/?k=${auth.token}` : url;
+  console.log(`${ANSI.b}agents serve${ANSI.x} — ${entry}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
+  if (entry === url) console.log(`${ANSI.d}access key: ${file}${ANSI.x}`);
   void watchTree(ac.signal);
   void watchBrain(ac.signal, connectTasks() === "brain");
   void app.follow(ac.signal);
@@ -385,9 +404,15 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     ac.signal.addEventListener("abort", stop);
   }
   if (opts.open) {
+    // a one-use ticket, not the token: the command line of xdg-open is readable by other users
+    const entryUrl = `${url}/?k=${auth.tickets.issue()}`;
     try {
-      new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn().unref();
+      new Deno.Command("xdg-open", { args: [entryUrl], stdout: "null", stderr: "null" }).spawn().unref();
     } catch { /* no browser */ }
   }
-  await srv.finished;
+  try {
+    await srv.finished;
+  } finally {
+    unpublish();
+  }
 }

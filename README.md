@@ -252,8 +252,16 @@ would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 
 ## The console
 
-The desktop app's backend serves the console at <http://127.0.0.1:7331> while the app runs. A
-browser or an ssh tunnel reaches it the same; on a headless box `agents serve` runs it by hand.
+The desktop app's backend serves the console at <http://127.0.0.1:7331> while the app runs; on a
+headless box `agents serve` runs it by hand.
+
+It is private to you, not just to the machine: every request but the liveness probe (`/api/code`)
+carries a random token made at each start and kept in a file only you can read
+(`$XDG_RUNTIME_DIR/agents-multi-console.token`, else under `~/.local/state/agents-multi/`; removed when
+the console stops). The app's window enters with it once and holds it as a cookie; `agents serve` opens
+your browser with a one-use key, or prints the address with the key on a terminal. A browser without it
+sees a page that says where to enter from. The shared deny rules keep a Claude session from reading the
+file (`agents doctor` checks both).
 
 Updates are **pushed, not polled**: the server watches the transcript tree and the shared config,
 asks the brain every half minute whether its tasks or pages moved, and the page redraws the view you

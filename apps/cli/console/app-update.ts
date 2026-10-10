@@ -16,6 +16,7 @@
 
 import type { Route } from "./server.ts";
 import { json } from "./http.ts";
+import { privateDir } from "./token.ts";
 
 const SOCKET_VAR = "AGENTS_MULTI_APP_SOCKET";
 export const NOT_RUNNING = "the desktop app is not running";
@@ -67,9 +68,7 @@ export function appSocket(
 ): string {
   if (env[SOCKET_VAR]) return env[SOCKET_VAR]!;
   // the runtime folder, else the app's private state folder: never a shared one like /tmp
-  const dir = env.XDG_RUNTIME_DIR ||
-    `${env.XDG_STATE_HOME || `${env.HOME ?? ""}/.local/state`}/agents-multi`;
-  return `${dir}/agents-multi-app.sock`;
+  return `${privateDir(env)}/agents-multi-app.sock`;
 }
 
 const str = (v: unknown): v is string => typeof v === "string";

@@ -4,8 +4,11 @@ description: A local web app that shows what every profile is doing.
 ---
 
 The desktop app runs the console, so it is at <http://127.0.0.1:7331> while the app is open; its
-window shows it. On a headless box `agents serve` runs it alone, and over an ssh tunnel it works the
-same.
+window shows it. On a headless box `agents serve` runs it alone.
+
+The console is private to you: it asks for a random token, made at every start and kept in a file only
+you can read, on every request but the liveness probe. The app's window and the browser `agents serve`
+opens enter with it once; a browser without it is told where to enter from.
 
 Updates are **pushed, not polled**: the server watches the transcripts and the shared configuration,
 asks the brain whether its tasks or pages moved, and the page redraws the view you are looking at. It

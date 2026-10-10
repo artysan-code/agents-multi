@@ -3,20 +3,25 @@
 
 import { codeVersion } from "../../codeversion.ts";
 import { RETIRED_UNITS } from "../../install.ts";
-import { lstat, readJson } from "../../lib/fs.ts";
+import { lstat, readJson, stat } from "../../lib/fs.ts";
 import { HOME, PORT, REPO } from "../../lib/paths.ts";
 import { has } from "../../lib/proc.ts";
 import { uiStatus } from "../../ui.ts";
 import { type Check } from "../../lib/output.ts";
+import { tokenPath } from "../../console/token.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
 
 /** The rules that keep a Claude session from driving the console: on 127.0.0.1 it answers any process
- *  of this user, and its actions open terminals, run Claude and change accounts. */
+ *  that holds its token, and its actions open terminals, run Claude and change accounts. */
 export const CONSOLE_DENY = [
   "Bash(curl *127.0.0.1:7331*)",
   "Bash(curl *localhost:7331*)",
   "Bash(wget *127.0.0.1:7331*)",
   "Bash(wget *localhost:7331*)",
+  // the token that opens the console's API (console/token.ts): runtime folder and state folder
+  "Read(//run/user/*/agents-multi-console*.token)",
+  "Read(~/.local/state/agents-multi/agents-multi-console*.token)",
+  "Bash(*agents-multi-console*.token*)",
 ];
 
 /** The console: who serves it, whether it runs the current code, and its interface's build. */
@@ -58,6 +63,28 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
         "restart Agents Multi",
       );
     } else add("console", "ok", `console on http://127.0.0.1:${PORT}`);
+    // --- it must ask for its token (console/token.ts): a console that answers a stranger's request
+    // runs code from before the token, or a bug let it through
+    const open = await fetch(`http://127.0.0.1:${PORT}/api/summary`, { signal: AbortSignal.timeout(3000) })
+      .then(async (r) => (await r.body?.cancel(), r.status)).catch(() => 0);
+    if (open === 200) {
+      add(
+        "console.token",
+        "warn",
+        "the console answers without its token (it runs code from before the token, or does not ask for it)",
+        "restart Agents Multi",
+      );
+    }
+    const file = tokenPath(PORT);
+    const mode = (await stat(file))?.mode;
+    if (mode != null && (mode & 0o077) !== 0) {
+      add(
+        "console.token",
+        "fail",
+        `${file} can be read by others (mode ${(mode & 0o777).toString(8)})`,
+        `chmod 600 ${file}`,
+      );
+    }
   }
   // --- a session must not reach the console's actions (a prompt injected into a chat could open a
   // terminal or change an account through it)
