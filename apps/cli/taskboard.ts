@@ -32,8 +32,11 @@ import {
 } from "../../shared/mcp/lib/tasks.ts";
 
 const TASK_FILE_MAX = 50 * 1024 * 1024;
-const OPENABLE =
-  /\.(pdf|txt|md|csv|json|odt|ods|odp|docx?|xlsx?|pptx?|rtf|epub|png|jpe?g|gif|webp|svg|heic|avif|bmp|tiff?|mp3|wav|ogg|opus|flac|m4a|mp4|mkv|webm|mov|avi|zip|7z|tar|gz)$/i;
+/** What /api/open hands to the default program: documents, images, sound, video. Not archives (an
+ *  unpacker would write files), SVG (it carries scripts) or the Office formats that carry macros: the
+ *  legacy .doc/.xls/.ppt and every .docm/.xlsm/.pptm-like one. */
+export const OPENABLE =
+  /\.(pdf|txt|md|csv|json|odt|ods|odp|docx|xlsx|pptx|rtf|epub|png|jpe?g|gif|webp|heic|avif|bmp|tiff?|mp3|wav|ogg|opus|flac|m4a|mp4|mkv|webm|mov|avi)$/i;
 
 /** A request body read up to `max` bytes; null past it, whatever the Content-Length claimed. */
 async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
@@ -124,8 +127,8 @@ async function localPath(target: string): Promise<string | null> {
   if (!inside) return null;
   const st = await Deno.stat(real);
   if (st.isDirectory) return real;
-  // a file opens only when its default program is a viewer: documents, images, sound, video.
-  // Anything else (.desktop, .jar, scripts, executables) could run instead of opening.
+  // a file opens only when its default program is a viewer (OPENABLE). Anything else
+  // (.desktop, .jar, scripts, executables, archives, macro documents) could run or write instead.
   if (!OPENABLE.test(real) || ((st.mode ?? 0) & 0o111)) return null;
   return real;
 }
