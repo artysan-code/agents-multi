@@ -4,21 +4,12 @@
 // agents-multi card of the Updates page.
 
 import { useState } from "preact/hooks";
-import { get, post, type Result } from "../../api.ts";
+import { type ActionResult, api, type Blocker, type Plan } from "../../api.ts";
 import { loadStatus } from "../../state.ts";
 import { t } from "../../i18n.ts";
 import { Pf, toast, toastErr } from "../../lib/ui.tsx";
-import { type Blocker, closeScreen, type Plan } from "./close-plan.ts";
-
-interface StepResult extends Result {
-  reopen: string[];
-  remaining: Blocker[];
-}
-interface Settled {
-  code: number;
-  ms: number;
-  output?: string;
-}
+import { closeStep, reopenClaude, settleInstall, type StepResult } from "./api.ts";
+import { closeScreen } from "./close-plan.ts";
 
 function age(s: number | null): string {
   if (s == null) return "";
@@ -59,11 +50,8 @@ type Phase =
   | { k: "done"; out: string };
 
 /** The install that waited, run now: what the screen does once every Claude is closed. */
-export async function runSettle(): Promise<Settled> {
-  const r = await post<Settled>("/api/action", {
-    action: "settle-install",
-    opts: [],
-  }).catch((e: Error) => (
+export async function runSettle(): Promise<ActionResult> {
+  const r = await settleInstall().catch((e: Error): ActionResult => (
     { code: 1, ms: 0, output: e.message }
   ));
   const s = (r.ms / 1000).toFixed(1);
@@ -79,7 +67,7 @@ export async function runSettle(): Promise<Settled> {
  *  buttons to open again what it closed; `onLater` leaves the install for another time. */
 export function CloseClaude({ plan, onSettled, onLater }: {
   plan: Plan;
-  onSettled?: (r: Settled, reopen: string[]) => void;
+  onSettled?: (r: ActionResult, reopen: string[]) => void;
   onLater?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>({ k: "plan" });
@@ -97,7 +85,7 @@ export function CloseClaude({ plan, onSettled, onLater }: {
 
   const step = async (kind: "term" | "kill") => {
     setPhase({ k: "text", msg: t("cc.closing") });
-    const r = await post<StepResult>("/api/close-claude", { step: kind }).catch(
+    const r = await closeStep(kind).catch(
       (e: Error) => (
         { ok: false, message: e.message } as StepResult
       ),
@@ -191,10 +179,7 @@ export function CloseClaude({ plan, onSettled, onLater }: {
 
 /** Opens again a profile's Claude that the step closed. */
 export async function reopenProfile(p: string): Promise<void> {
-  const r = await post<{ started?: string[] }>("/api/close-claude", {
-    step: "reopen",
-    profiles: [p],
-  }).catch(() => null);
+  const r = await reopenClaude(p);
   toast(
     r ? t("cc.reopened", { p: (r.started ?? []).join(", ") }) : t("uw.reopenFailed"),
     !r,
@@ -206,7 +191,7 @@ export async function reopenProfile(p: string): Promise<void> {
 export async function openCloseClaude(): Promise<void> {
   let plan: Plan;
   try {
-    plan = await get<Plan>("/api/close-claude");
+    plan = await api.closePlan();
   } catch (e) {
     return toastErr(e);
   }

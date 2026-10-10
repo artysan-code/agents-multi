@@ -4,30 +4,23 @@
 
 import { Fragment } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { get, post } from "../../api.ts";
 import { useTopic } from "../../state.ts";
 import { type Key, t } from "../../i18n.ts";
 import { toast, toastErr } from "../../lib/ui.tsx";
+import { type List, loadPermissions, type Permissions as PermissionRules, permissionOp } from "./api.ts";
 
-type List = "allow" | "ask" | "deny";
 const LISTS: List[] = ["allow", "ask", "deny"];
-
-interface Permissions {
-  mode: string;
-  rules: Record<List, string[]>;
-  profiles: Record<string, { mode?: string; lists: Record<string, { added: string[]; dropped: string[] }> }>;
-}
 
 const MODES = ["default", "acceptEdits", "plan", "auto"];
 
 export function Permissions() {
-  const [perm, setPerm] = useState<Permissions | null>(null);
+  const [perm, setPerm] = useState<PermissionRules | null>(null);
   const [over, setOver] = useState<List | null>(null);
   const drag = useRef<{ from: List; rule: string } | null>(null);
 
   const load = async () => {
     try {
-      setPerm(await get<Permissions>("/api/permissions"));
+      setPerm(await loadPermissions());
     } catch (e) {
       toastErr(e);
     }
@@ -35,10 +28,7 @@ export function Permissions() {
   useTopic(load, ["state"]);
 
   const op = async (body: Record<string, string>) => {
-    const r = await post<{ ok: boolean; message?: string }>("/api/permissions", body).catch((e: Error) => ({
-      ok: false,
-      message: e.message,
-    }));
+    const r = await permissionOp(body);
     if (r.message) toast(r.message, !r.ok);
     if (r.ok) await load();
   };

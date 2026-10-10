@@ -11,7 +11,7 @@
 // notice on the next visit (the version last seen is in localStorage).
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { get, post } from "../../api.ts";
+import { api, type Plan } from "../../api.ts";
 import { loadStatus, reloadSoftly, status, useTopic } from "../../state.ts";
 import { type Key, t, tk } from "../../i18n.ts";
 import { intent, useIntent } from "../../router.ts";
@@ -35,7 +35,6 @@ import {
   type Whatsnew,
 } from "./updates-lib.tsx";
 import { CloseClaude, reopenProfile, runSettle } from "./updates-close.tsx";
-import type { Plan } from "./close-plan.ts";
 import {
   RunMark,
   runShare,
@@ -118,7 +117,7 @@ function relaunched(u: { from: string; to: string }): Run {
 async function consoleBack(old: string, timeoutMs = 120000): Promise<boolean> {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
-    const r = await get<{ code?: string }>("/api/code").catch(() => null);
+    const r = await api.code().catch(() => null);
     if (r?.code && r.code !== old) return true;
     await new Promise((res) => setTimeout(res, 2000));
   }
@@ -223,7 +222,7 @@ function Screen(
     set("close", "running");
     let plan: Plan;
     try {
-      plan = await get<Plan>("/api/close-claude");
+      plan = await api.closePlan();
     } catch (e) {
       fail("close", (e as Error).message);
       return false;
@@ -299,7 +298,7 @@ function Screen(
   const start = async () => {
     v.cause = "";
     run.code =
-      (await get<{ code?: string }>("/api/code").catch(() => ({ code: "" })))
+      (await api.code().catch(() => ({ code: "" })))
         .code ?? "";
     set("check", "running");
     // the console's check, and the app's when there is an app to update
@@ -548,7 +547,7 @@ function Screen(
                 type="button"
                 class="bt"
                 onClick={() => v.jobId &&
-                  void post("/api/job/cancel", { id: v.jobId }).catch(() => {})}
+                  void api.jobCancel(v.jobId)}
               >
                 {t("uw.cancel")}
               </button>

@@ -1,7 +1,7 @@
 // api.ts — the Tasks page's endpoints (/api/tasks/*, /api/open) and the shapes they answer with. The data
 // is shared/mcp/lib/tasks.ts: the same files a chat changes through the tasks MCP server.
 
-import { get, post, type Result } from "../../api.ts";
+import { get, post, type Result, upload } from "../../api.ts";
 import { t } from "../../i18n.ts";
 import { toast } from "../../lib/ui.tsx";
 
@@ -129,13 +129,7 @@ export async function taskOp(body: OpBody, onStale?: (current: Item) => void): P
 /** Uploads one file to a task's folder (the request body is the file itself). */
 export async function uploadFile(id: string, f: File): Promise<Answer | Refused> {
   try {
-    const res = await fetch("/api/tasks/file", {
-      method: "POST",
-      headers: { "x-claude-multi": "1", "x-task-id": id, "x-filename": encodeURIComponent(f.name) },
-      body: f,
-    });
-    if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => "")}`.trim());
-    return await res.json() as Answer | Refused;
+    return await upload<Answer | Refused>("/api/tasks/file", f, { "x-task-id": id, "x-filename": encodeURIComponent(f.name) });
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }

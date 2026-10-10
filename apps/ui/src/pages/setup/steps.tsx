@@ -7,7 +7,7 @@ import { useRef, useState } from "preact/hooks";
 import { type Key, lang, setLangPref, t } from "../../i18n.ts";
 import { runJob } from "../../lib/ui.tsx";
 import { StepRows } from "../../lib/steps.tsx";
-import { post } from "../../api.ts";
+import { api } from "../../api.ts";
 import { send } from "./api.ts";
 import { Nav, type StepProps } from "./index.tsx";
 
@@ -262,7 +262,7 @@ export function JobStep(
         {st !== "running" && st !== "done" && extra}
         {st === "running"
           ? (
-            <button type="button" class="bt" onClick={() => jobId && void post("/api/job/cancel", { id: jobId }).catch(() => {})}>
+            <button type="button" class="bt" onClick={() => jobId && void api.jobCancel(jobId)}>
               {t("uw.cancel")}
             </button>
           )

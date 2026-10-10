@@ -4,7 +4,7 @@
 // at the end. The steps come from the doctor; the server checks every action again.
 
 import { useRef, useState } from "preact/hooks";
-import { post, type Check, type RepairStep } from "../../api.ts";
+import { api, type Check, type RepairStep } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
 import { t } from "../../i18n.ts";
 import { short } from "../../lib/format.ts";
@@ -124,7 +124,7 @@ function useRepair(id: string, steps: RepairStep[]) {
   };
 
   const cancel = async () => {
-    if (jobId.current) await post("/api/job/cancel", { id: jobId.current }).catch(() => {});
+    if (jobId.current) await api.jobCancel(jobId.current);
   };
 
   return { state, running, cause, out, outEl, start, cancel, userDone: () => userGo.current?.() };

@@ -5,7 +5,7 @@
 import type { ComponentChildren } from "preact";
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import { ndjson, post, postInit } from "../api.ts";
+import { api, ndjson } from "../api.ts";
 import { loadStatus, status } from "../state.ts";
 import { t } from "../i18n.ts";
 import { profileColor } from "./pcolor.ts";
@@ -105,7 +105,7 @@ export function Pf({ name, label }: { name: string; label?: string }) {
 export async function runAction(action: string, opts: string[] = []): Promise<void> {
   toast(t("act.running", { a: action }));
   try {
-    const r = await post<{ output?: string; code: number; ms: number }>("/api/action", { action, opts });
+    const r = await api.action(action, opts);
     showOutput(action, r.output || t("act.noOutput"));
     const s = (r.ms / 1000).toFixed(1);
     toast(r.code ? t("act.doneExit", { a: action, c: r.code, s }) : t("act.done", { a: action, s }), r.code !== 0);
@@ -137,11 +137,11 @@ export async function runJob(
   onOut: (text: string) => void,
   track: (id: string) => void = () => {},
 ): Promise<JobEnd> {
-  const r = await fetch("/api/job", postInit({ action, params }));
+  const r = await api.jobStart(action, params);
   const j = await r.json().catch(() => ({})) as { ok?: boolean; id?: string; message?: string };
   if (!j.ok || !j.id) return { error: j.message ?? String(r.status) };
   track(j.id);
-  const res = await fetch(`/api/job?id=${encodeURIComponent(j.id)}`);
+  const res = await api.jobOutput(j.id);
   let end: JobEnd | null = null;
   await ndjson<{ o?: string; done?: number; cancelled?: boolean }>(res, (m) => {
     if (m.o !== undefined) onOut(m.o);
