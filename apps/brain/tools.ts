@@ -27,7 +27,7 @@ import { dayOf, hhmm, zone } from "../../shared/mcp/lib/tasks.ts";
 import { type Owner, owner } from "../../shared/mcp/lib/owner.ts";
 
 /** How the brain is used and written, for every Claude connected to it; then who its owner is
- *  (owner.ts: CLAUDE_MULTI_OWNER_NAME, CLAUDE_MULTI_LANGUAGE), from io/, so each conversation starts
+ *  (owner.ts: AGENTS_MULTI_OWNER_NAME, AGENTS_MULTI_LANGUAGE), from io/, so each conversation starts
  *  knowing them. */
 export function instructions(store: Store, o: Owner = owner()): string {
   const who = o.name, a = areasOf(store);

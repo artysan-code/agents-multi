@@ -2,7 +2,7 @@
 // on every machine.
 //
 // Where things are:
-//   the entries   ~/vault/claude-multi/secrets/<id>.json (CLAUDE_MULTI_VAULT overrides the directory).
+//   the entries   ~/vault/claude-multi/secrets/<id>.json (AGENTS_MULTI_VAULT overrides the directory).
 //                 ~/vault is a Syncthing folder: the entries travel between machines already
 //                 encrypted, and a relay device in between cannot read them.
 //   the key       one per vault, 256 bits, in each machine's keyring through the Secret Service API

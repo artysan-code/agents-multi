@@ -1,7 +1,7 @@
 // owner.ts — whose setup this is: the person the tasks belong to by default, the name the prompts
 // use, the language Claude answers in. Read from the person's configuration
 // (~/.agents-multi/config/owner.json) on a machine, and from the environment where there is no
-// such file (the brain service: CLAUDE_MULTI_OWNER_ID, CLAUDE_MULTI_OWNER_NAME, CLAUDE_MULTI_LANGUAGE),
+// such file (the brain service: AGENTS_MULTI_OWNER_ID, AGENTS_MULTI_OWNER_NAME, AGENTS_MULTI_LANGUAGE),
 // which also wins over the file.
 //
 //   { "id": "alice", "name": "Alice", "language": "English" }

@@ -8,7 +8,7 @@
 //   servers.json (the catalogue writes `[]`). Their own servers go in their servers.json only.
 //   _profiles  defaults to every profile · _surfaces defaults to ["cli"]
 //   _service   the server works on the accounts of that service (shared/mcp/accounts.json): only the
-//              profiles that see one of them get it, with CLAUDE_MULTI_PROFILE in its env and
+//              profiles that see one of them get it, with AGENTS_MULTI_PROFILE in its env and
 //              {hosts} in its args replaced by those accounts' hosts (its --allow-net); on Desktop
 //              also the session bus address, because Desktop starts servers with a bare env (HOME,
 //              PATH, USER…) and the vault key is read from the keyring over D-Bus (secret-tool)

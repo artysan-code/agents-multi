@@ -9,8 +9,6 @@
  * Exits non-zero when a server does not answer, answers with an error, or lists no tools.
  */
 
-import { amEnvBoth } from "../shared/mcp/lib/env.ts";
-
 const ROOT = new URL("..", import.meta.url).pathname;
 const SERVERS = ["coolify", "google", "syncthing-status", "tasks"];
 
@@ -33,7 +31,7 @@ export async function probe(name: string, timeoutMs = 20_000): Promise<{ tools: 
     stdin: "piped",
     stdout: "piped",
     stderr: "piped",
-    env: amEnvBoth("PROFILE", "probe"),
+    env: { AGENTS_MULTI_PROFILE: "probe" },
   }).spawn();
   // read stderr alongside, so a server that exits early can say why
   const stderr = new Response(child.stderr).text();

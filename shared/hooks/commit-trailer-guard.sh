@@ -9,7 +9,7 @@
 # Blocks with exit 2: stderr goes back to the agent, which rewrites the message.
 set -uo pipefail
 
-[ "${AGENTS_MULTI_NO_ASSISTANT_TRAILER:-${CLAUDE_MULTI_NO_ASSISTANT_TRAILER:-}}" = "1" ] || exit 0
+[ "${AGENTS_MULTI_NO_ASSISTANT_TRAILER:-}" = "1" ] || exit 0
 
 # shellcheck source=lib/guard.sh
 source "$(dirname "$0")/lib/guard.sh"

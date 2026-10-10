@@ -2,7 +2,6 @@
 // name and config, and what the registry implies for permissions. No I/O.
 
 import { type Account, accountHosts, visibleAccounts } from "../../../shared/mcp/lib/accounts.ts";
-import { amEnvBoth } from "../../../shared/mcp/lib/env.ts";
 import { HOME } from "../lib/paths.ts";
 import { type Profile } from "../lib/profiles.ts";
 import { isHttp, type LaunchPaths, launchPaths, type Registry, type ServerCfg, type Surface } from "./registry.ts";
@@ -54,7 +53,7 @@ export function launcher(paths: LaunchPaths, run?: string, bind = false): string
     "--no-lock",
     // a binding is looked for from the session's folder up to the home folder
     `--allow-read=${(bind ? [...paths.read, HOME] : paths.read).join(",")}`,
-    "--allow-env=HOME,AGENTS_MULTI_PROFILE,CLAUDE_MULTI_PROFILE,AGENTS_MULTI_VAULT,CLAUDE_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS,CLAUDE_MULTI_ACCOUNTS",
+    "--allow-env=HOME,AGENTS_MULTI_PROFILE,AGENTS_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS",
     `--allow-run=/usr/bin/secret-tool${run ? `,${run}` : ""}`,
     paths.script,
   ];
@@ -79,7 +78,6 @@ export function perAccount(
     if (headers.length) {
       out.headersHelper = [
         `AGENTS_MULTI_PROFILE=${shellQuote(t.profile)}`,
-        `CLAUDE_MULTI_PROFILE=${shellQuote(t.profile)}`,
         ...launcher(paths),
         "headers",
         service,
@@ -105,7 +103,7 @@ export function perAccount(
       ];
       out.command = paths.deno;
     }
-    out.env = { ...(out.env as Record<string, string> ?? {}), ...amEnvBoth("PROFILE", t.profile) };
+    out.env = { ...(out.env as Record<string, string> ?? {}), AGENTS_MULTI_PROFILE: t.profile };
     if (t.surface === "desktop" && reg.bus) (out.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
   }
   return [`${name}-${a.name}`, out];
@@ -151,10 +149,10 @@ export function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): 
         out.push({ entry: name, name, cfg: forAccount(clean, visible[0]), accounts: [visible[0].name] });
         continue;
       }
-      clean.env = { ...(clean.env as Record<string, string> ?? {}), ...amEnvBoth("PROFILE", t.profile) };
+      clean.env = { ...(clean.env as Record<string, string> ?? {}), AGENTS_MULTI_PROFILE: t.profile };
       // a work profile sees only its part of the brain (manifest brainScope)
       const scope = cfg._service === "brain" ? reg.brainScopes?.[t.profile] : undefined;
-      if (scope) Object.assign(clean.env as Record<string, string>, amEnvBoth("BRAIN_SCOPE", scope));
+      if (scope) (clean.env as Record<string, string>).AGENTS_MULTI_BRAIN_SCOPE = scope;
       if (t.surface === "desktop" && reg.bus) (clean.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;
     }
     if (t.surface === "desktop") delete clean.type; // Desktop takes command/args/env; "type" is CLI vocabulary

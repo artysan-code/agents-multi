@@ -664,8 +664,7 @@ deno task test    # usage (rates, dedupe, turns), notifications,
 
 The variables are `AGENTS_MULTI_<NAME>` (`ROOT`, `CONFIG`, `PORT`, `VAULT`, `TASKS`, `BRAIN`, `ACCOUNTS`,
 `PROFILE`, `BRAIN_SCOPE`, `OWNER_ID`, `OWNER_NAME`, `LANGUAGE`, `REPO`, `FETCH_TTL`, `FETCH_TIMEOUT`,
-`NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` is still read when the new one is not set, and the
-MCP servers get both until 1.0.
+`NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` names are no longer read.
 
 ## License
 

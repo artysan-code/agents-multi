@@ -97,4 +97,4 @@ The variables are `AGENTS_MULTI_<NAME>`. The ones you may set:
 The full list, which also has `TASKS`, `BRAIN`, `ACCOUNTS`, `PROFILE`, `BRAIN_SCOPE`, `REPO` and
 `NO_ASSISTANT_TRAILER`, is in the repository's
 [README](https://github.com/artysan-code/agents-multi/blob/release/README.md#environment-variables).
-The old `CLAUDE_MULTI_<NAME>` names are still read when the new one is not set.
+The old `CLAUDE_MULTI_<NAME>` names are no longer read.

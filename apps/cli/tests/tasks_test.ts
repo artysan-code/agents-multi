@@ -3,8 +3,8 @@
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 
 const dir = await Deno.makeTempDir();
-Deno.env.set("CLAUDE_MULTI_TASKS", dir);
-Deno.env.set("CLAUDE_MULTI_OWNER_ID", "alice"); // whose tasks these are (owner.ts), whatever this machine's config says
+Deno.env.set("AGENTS_MULTI_TASKS", dir);
+Deno.env.set("AGENTS_MULTI_OWNER_ID", "alice"); // whose tasks these are (owner.ts), whatever this machine's config says
 const T = await import("../../../shared/mcp/lib/tasks.ts");
 
 const at = (s: string) => new Date(s); // local time, no Z

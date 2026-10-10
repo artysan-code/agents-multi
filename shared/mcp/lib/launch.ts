@@ -19,7 +19,7 @@
 //       an http server's `headersHelper`: prints the headers as one JSON object, which Claude Code
 //       reads on every connection. The output is the secret: it goes to Claude Code, nowhere else.
 //
-// The account must be one the profile sees (CLAUDE_MULTI_PROFILE, accounts.json): a configuration
+// The account must be one the profile sees (AGENTS_MULTI_PROFILE, accounts.json): a configuration
 // edited by hand cannot reach an account the registry keeps from that profile.
 
 import { loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";

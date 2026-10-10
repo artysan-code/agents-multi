@@ -3,8 +3,8 @@
 // completed task unblocks.
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 
-Deno.env.set("CLAUDE_MULTI_TASKS", await Deno.makeTempDir());
-Deno.env.set("CLAUDE_MULTI_OWNER_ID", "alice");
+Deno.env.set("AGENTS_MULTI_TASKS", await Deno.makeTempDir());
+Deno.env.set("AGENTS_MULTI_OWNER_ID", "alice");
 const { registerTaskTools } = await import("../../../shared/mcp/tasks/tools.ts");
 
 type Handler = (input: Record<string, unknown>) => Promise<{ content: { text: string }[] }>;

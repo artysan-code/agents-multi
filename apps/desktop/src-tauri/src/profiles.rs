@@ -1,8 +1,7 @@
 //! The profiles, for the tray's «Open Claude Desktop» menu: every folder of the configuration's
 //! `profiles/` with a readable `profile.json`, by name — the CLI's rule (`profileNames()`), never a
-//! fixed list. The configuration is where the CLI looks (apps/cli/lib/paths.ts): `AGENTS_MULTI_CONFIG`
-//! (or `CLAUDE_MULTI_CONFIG`), else `config/` in the runtime — `AGENTS_MULTI_ROOT` (or
-//! `CLAUDE_MULTI_ROOT`), else `~/.agents-multi`.
+//! fixed list. The configuration is where the CLI looks (apps/cli/lib/paths.ts): `AGENTS_MULTI_CONFIG`,
+//! else `config/` in the runtime — `AGENTS_MULTI_ROOT`, else `~/.agents-multi`.
 //! Read here, not asked of the console, so the menu still opens a Desktop while the console is down.
 
 use std::path::{Path, PathBuf};
@@ -59,14 +58,8 @@ mod tests {
 
     #[test]
     fn config_variable_wins() {
-        let get = env(&[
-            ("CLAUDE_MULTI_CONFIG", "/b"),
-            ("AGENTS_MULTI_CONFIG", "/a"),
-            ("HOME", "/h"),
-        ]);
+        let get = env(&[("AGENTS_MULTI_CONFIG", "/a"), ("HOME", "/h")]);
         assert_eq!(config_dir_from(get), Some("/a".into()));
-        let get = env(&[("CLAUDE_MULTI_CONFIG", "/b"), ("HOME", "/h")]);
-        assert_eq!(config_dir_from(get), Some("/b".into()));
     }
 
     #[test]

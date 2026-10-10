@@ -40,10 +40,10 @@ Deno.test("prelaunch: fetch and ff-only pull when behind and clean; no pull when
   );
   await sh(`git clone -q "${bare}" "${mine}"`);
   const env = {
-    CLAUDE_MULTI_REPO: mine,
+    AGENTS_MULTI_REPO: mine,
     XDG_CACHE_HOME: cache,
-    CLAUDE_MULTI_FETCH_TTL: "0",
-    CLAUDE_MULTI_FETCH_TIMEOUT: "10",
+    AGENTS_MULTI_FETCH_TTL: "0",
+    AGENTS_MULTI_FETCH_TIMEOUT: "10",
   };
 
   // 1. allineato: nessun pull, stato tutto a zero

@@ -1,22 +1,11 @@
 //! The project's environment variables, read as the CLI's `amEnv()` does (shared/mcp/lib/env.ts):
-//! `AGENTS_MULTI_<NAME>`, else `CLAUDE_MULTI_<NAME>` (the name before the rename, read until 1.0). One
-//! copy for every module that looks one up, and the runtime folder they share.
+//! `AGENTS_MULTI_<NAME>`. One copy for every module that looks one up, and the runtime folder they share.
 
 use std::path::{Path, PathBuf};
 
-/// The variable that is set and not empty — `AGENTS_MULTI_<name>` first — and its value.
-pub fn am_var(get: &impl Fn(&str) -> Option<String>, name: &str) -> Option<(String, String)> {
-    ["AGENTS_MULTI_", "CLAUDE_MULTI_"]
-        .iter()
-        .find_map(|prefix| {
-            let var = format!("{prefix}{name}");
-            get(&var).filter(|v| !v.is_empty()).map(|v| (var, v))
-        })
-}
-
-/// The value of `AGENTS_MULTI_<name>`, else of `CLAUDE_MULTI_<name>`; empty counts as not set.
+/// The value of `AGENTS_MULTI_<name>`; empty counts as not set.
 pub fn am_env(get: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
-    am_var(get, name).map(|(_, v)| v)
+    get(&format!("AGENTS_MULTI_{name}")).filter(|v| !v.is_empty())
 }
 
 /// Pure: the runtime, as apps/cli/lib/runtime-root.ts finds it: `AGENTS_MULTI_ROOT`, else
@@ -42,16 +31,10 @@ mod tests {
     }
 
     #[test]
-    fn the_new_name_wins_and_an_empty_value_is_not_set() {
-        let get = env(&[("CLAUDE_MULTI_X", "old"), ("AGENTS_MULTI_X", "new")]);
-        assert_eq!(am_env(&get, "X").as_deref(), Some("new"));
-        let get = env(&[("CLAUDE_MULTI_X", "old")]);
-        assert_eq!(
-            am_var(&get, "X"),
-            Some(("CLAUDE_MULTI_X".into(), "old".into()))
-        );
-        let get = env(&[("AGENTS_MULTI_X", ""), ("CLAUDE_MULTI_X", "old")]);
-        assert_eq!(am_env(&get, "X").as_deref(), Some("old"));
+    fn an_empty_value_is_not_set() {
+        let get = env(&[("AGENTS_MULTI_X", "v"), ("AGENTS_MULTI_Y", "")]);
+        assert_eq!(am_env(&get, "X").as_deref(), Some("v"));
+        assert_eq!(am_env(&get, "Y"), None);
         assert_eq!(am_env(&env(&[]), "X"), None);
     }
 
@@ -63,7 +46,7 @@ mod tests {
             runtime_root(&none, Some(home)),
             Some("/h/.agents-multi".into())
         );
-        let root = env(&[("CLAUDE_MULTI_ROOT", "/rt")]);
+        let root = env(&[("AGENTS_MULTI_ROOT", "/rt")]);
         assert_eq!(runtime_root(&root, None), Some("/rt".into()));
         assert_eq!(runtime_root(&none, None), None);
     }
