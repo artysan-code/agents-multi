@@ -59,7 +59,7 @@ pages too long and an inbox left alone for a week. The numbers are meant to be t
   metadata; Claude registers itself (only Claude's callback or a loopback address are accepted),
   sends the person to `/authorize`, and gets a code bound to a PKCE S256 challenge and to the
   account that signed in. Access tokens last an hour; refresh tokens rotate, and one used twice
-  revokes its whole family. Since anyone may register, a client that got nothing after a day, or has
+  revokes its whole family. Since anyone may register, a client that got nothing after an hour, or has
   had no live token for ninety days, is removed; past a thousand clients in use, registration waits.
 - **Signing in** takes the account, its passphrase and the current TOTP code. Five wrong attempts
   from one address close that account to that address for fifteen minutes, so nobody can lock its
@@ -134,20 +134,20 @@ with `BRAIN_BACKUP_KEY` is refused.
 
 ## Running it
 
-| Variable                                           |                                                                                                                                                                                                                |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BRAIN_URL`                                        | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain                                                                                                  |
-| `BRAIN_MASTER_KEY`                                 | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost                                                                   |
-| `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL`             | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`)                                                                                                                                           |
-| `BRAIN_TIMEZONE`                                   | the zone of the days of an account that has not chosen its own on `/account` (the process's `TZ`; the compose file sets `TZ` from it, `Europe/Rome`)                                                           |
-| `BRAIN_CLIENT_IP_HEADER`                           | the header a proxy in front puts the client's address in, for the rate limits (`cf-connecting-ip` behind Cloudflare; none: the connection's)                                                                   |
-| `BRAIN_LOG_LEVEL`                                  | how much the log says: `debug`, `info`, `warn` or `error` (`info`): one JSON line per event on stdout, and one per request (method, path without query, status, ms, id), never a token, cookie, header or body |
-| `BRAIN_DATA`                                       | where `accounts.db` and `users/` live (`/data`)                                                                                                                                                                |
-| `BRAIN_BACKUP_KEY`                                 | 32 random bytes, base64: seals the server's own daily copies in `BRAIN_DATA/backups` (none without it; also the administrator's backup key when the service first starts)                                      |
-| `BRAIN_BACKUP_KEEP`                                | how many daily copies stay (`7`)                                                                                                                                                                               |
-| `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server a Francoforte, in Germania")                              |
-| `BRAIN_SITE_URL`                                   | the site's own address, another origin than the brain's (both domains on the `brain` service in Coolify); unset, the site is served on the brain's address                                                     |
-| `BRAIN_DEV=1`                                      | local only: signing in without TOTP                                                                                                                                                                            |
+| Variable                                           |                                                                                                                                                                                                                            |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BRAIN_URL`                                        | the public address, `https://brain.example.com` (OAuth names it exactly); on Coolify it comes from the domain                                                                                                              |
+| `BRAIN_MASTER_KEY`                                 | 32 random bytes, base64 (`head -c32 /dev/urandom \| base64`): encrypts every account's TOTP secret and backup key; lose it and they are lost                                                                               |
+| `BRAIN_EMBED_URL`, `BRAIN_EMBED_MODEL`             | an Ollama-compatible API and model (`http://ollama:11434`, `bge-m3`)                                                                                                                                                       |
+| `BRAIN_TIMEZONE`                                   | the zone of the days of an account that has not chosen its own on `/account` (the process's `TZ`; the compose file sets `TZ` from it, `Europe/Rome`)                                                                       |
+| `BRAIN_CLIENT_IP_HEADER`                           | the header a proxy in front puts the client's address in, for the rate limits (`x-forwarded-for` by default in the compose files, right for one Traefik hop; `cf-connecting-ip` behind Cloudflare; none: the connection's) |
+| `BRAIN_LOG_LEVEL`                                  | how much the log says: `debug`, `info`, `warn` or `error` (`info`): one JSON line per event on stdout, and one per request (method, path without query, status, ms, id), never a token, cookie, header or body             |
+| `BRAIN_DATA`                                       | where `accounts.db` and `users/` live (`/data`)                                                                                                                                                                            |
+| `BRAIN_BACKUP_KEY`                                 | 32 random bytes, base64: seals the server's own daily copies in `BRAIN_DATA/backups` (none without it; also the administrator's backup key when the service first starts)                                                  |
+| `BRAIN_BACKUP_KEEP`                                | how many daily copies stay (`7`)                                                                                                                                                                                           |
+| `BRAIN_OPERATOR`, `BRAIN_CONTACT`, `BRAIN_HOSTING` | the public pages (`public.ts`): who runs the instance (default: the owner's name), an address that reaches them, and where the server is ("un server a Francoforte, in Germania")                                          |
+| `BRAIN_SITE_URL`                                   | the site's own address, another origin than the brain's (both domains on the `brain` service in Coolify); unset, the site is served on the brain's address                                                                 |
+| `BRAIN_DEV=1`                                      | local only: signing in without TOTP                                                                                                                                                                                        |
 
 **The first account** is made on the first start, when there is none: the administrator, with the
 id `BRAIN_ADMIN_ID` (or `AGENTS_MULTI_OWNER_ID`) and the name and language of `AGENTS_MULTI_OWNER_NAME`

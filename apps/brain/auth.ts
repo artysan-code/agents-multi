@@ -231,7 +231,13 @@ export class Auth {
     if (!row || row.revoked || row.kind === "refresh" || (row.expires && row.expires < Date.now())) return null;
     const u = this.users.get(row.user);
     if (!u || u.disabled) return null;
-    this.db.prepare("update tokens set used = ? where hash = ?").run(new Date().toISOString(), h);
+    // "last used" is a courtesy to the owner: written at most every five minutes, not on every request
+    const now = Date.now();
+    this.db.prepare("update tokens set used = ? where hash = ? and (used is null or used < ?)").run(
+      new Date(now).toISOString(),
+      h,
+      new Date(now - 5 * 60_000).toISOString(),
+    );
     if (row.kind === "personal") return { user: row.user, label: `token:${row.name}` };
     const c = this.db.prepare("select name from oauth_clients where id = ?").get(row.client) as
       | { name: string }
@@ -272,14 +278,15 @@ export class Auth {
 
   // ------------------------------------------------------------ OAuth
   /** Anyone may register a client (RFC 7591: that is how Claude connects), so the ones nobody uses
-   *  go: a client that never got a code or a token after a day, and one with no live token after
+   *  go: a client that never got a code or a token after an hour (a real one authorises within
+   *  minutes), and one with no live token after
    *  ninety days. Past MAX_CLIENTS still in use, registration waits. */
   private pruneClients(now: number): number {
-    const day = new Date(now - 86_400_000).toISOString(), quarter = new Date(now - 90 * 86_400_000).toISOString();
+    const hour = new Date(now - 3600_000).toISOString(), quarter = new Date(now - 90 * 86_400_000).toISOString();
     const unused = this.db.prepare(
       `delete from oauth_clients where created < ? and not exists (select 1 from tokens t where t.client = oauth_clients.id)
         and not exists (select 1 from oauth_codes c where c.client = oauth_clients.id)`,
-    ).run(day);
+    ).run(hour);
     const idle = this.db.prepare(
       `delete from oauth_clients where created < ? and not exists (select 1 from tokens t where t.client = oauth_clients.id
         and t.revoked = 0 and (t.expires is null or t.expires > ?))`,
