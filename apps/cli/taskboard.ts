@@ -31,7 +31,7 @@ import {
   updateTask,
 } from "../../shared/mcp/lib/tasks.ts";
 
-export const TASK_FILE_MAX = 50 * 1024 * 1024;
+const TASK_FILE_MAX = 50 * 1024 * 1024;
 const OPENABLE =
   /\.(pdf|txt|md|csv|json|odt|ods|odp|docx?|xlsx?|pptx?|rtf|epub|png|jpe?g|gif|webp|svg|heic|avif|bmp|tiff?|mp3|wav|ogg|opus|flac|m4a|mp4|mkv|webm|mov|avi|zip|7z|tar|gz)$/i;
 

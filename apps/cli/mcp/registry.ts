@@ -36,7 +36,7 @@ import { installation, type Mode } from "../lib/mode.ts";
 import { diffPatch, mergePatch } from "../lib/json-patch.ts";
 import { loadManifest, profileNames } from "../lib/profiles.ts";
 
-export interface PerAccount {
+interface PerAccount {
   env?: Record<string, string>;
   headers?: Record<string, string>;
 }
@@ -80,7 +80,7 @@ export interface RawRegistry {
 /** The servers the setup knows how to run (repository), and the person's choices over them: which
  *  profiles see which (`_profiles`), servers of their own, `null` to drop one — a JSON Merge Patch. */
 export const REGISTRY = `${REPO}/shared/mcp/servers.json`;
-export const PERSON_REGISTRY = `${CONFIG}/servers.json`;
+const PERSON_REGISTRY = `${CONFIG}/servers.json`;
 export const ACCOUNTS = `${CONFIG}/accounts.json`;
 
 /** Pure: every `${HOME}` in a registry entry's strings as this user's home. servers.json is shared

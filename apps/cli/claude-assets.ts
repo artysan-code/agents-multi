@@ -8,7 +8,7 @@
 
 import { LIB } from "./lib/paths.ts";
 
-export interface ClaudeAssets {
+interface ClaudeAssets {
   dist: string;
   faces: { family: string; style: string; file: string }[];
 }

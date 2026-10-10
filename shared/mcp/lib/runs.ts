@@ -27,7 +27,7 @@ import {
   validId,
 } from "./agents.ts";
 
-export interface PlanStep {
+interface PlanStep {
   id: string;
   profile: string;
   /** the step's folder; the plan's when absent */
@@ -48,8 +48,8 @@ export interface Plan {
   steps: PlanStep[];
 }
 
-export type StepStatus = "waiting" | "confirm" | "running" | "done" | "failed" | "skipped" | "stopped";
-export type RunStatus = "running" | "done" | "stopped";
+type StepStatus = "waiting" | "confirm" | "running" | "done" | "failed" | "skipped" | "stopped";
+type RunStatus = "running" | "done" | "stopped";
 
 export interface StepState {
   status: StepStatus;
@@ -65,7 +65,7 @@ export interface StepState {
   ended?: string;
 }
 
-export interface RunState {
+interface RunState {
   status: RunStatus;
   steps: Record<string, StepState>;
   /** lines of control.jsonl already applied */
@@ -75,9 +75,9 @@ export interface RunState {
   heard: Record<string, number>;
 }
 
-export type RunEventKind = "started" | "step" | "confirm" | "failed" | "done" | "stopped";
+type RunEventKind = "started" | "step" | "confirm" | "failed" | "done" | "stopped";
 
-export interface RunEvent {
+interface RunEvent {
   at: string;
   kind: RunEventKind;
   run: string;
@@ -203,7 +203,7 @@ export function attentionOfEvent(e: RunEvent): Attention | null {
 
 // ---------------------------------------------------------------- the files
 
-export const runsRoot = (runs = runsDir()) => `${runs}/runs`;
+const runsRoot = (runs = runsDir()) => `${runs}/runs`;
 
 const lines = async (file: string) =>
   (await Deno.readTextFile(file).catch(() => "")).split("\n").filter(Boolean).map((l) => {
@@ -275,7 +275,7 @@ async function runnerTail(dir: string): Promise<string> {
 }
 
 /** Starts the runner of a run, detached from whoever asked. */
-export async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
+async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
   const dir = `${runsRoot(runs)}/${id}`;
   await new Deno.Command("setsid", {
     args: ["-f", "bash", "-c", 'exec "$A" run drive "$I" >> "$D/err.log" 2>&1'],
@@ -619,7 +619,7 @@ export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSi
 
 // ---------------------------------------------------------------- saved workflows
 
-export interface SavedWorkflow {
+interface SavedWorkflow {
   name: string;
   description: string;
   path: string;

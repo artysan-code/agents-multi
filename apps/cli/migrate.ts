@@ -15,9 +15,9 @@ import { ANSI } from "./lib/output.ts";
 import { LEGACY_RUNTIME_NAME, RUNTIME_NAME } from "./lib/runtime-root.ts";
 
 /** Files under a profile that hold absolute paths into the runtime. */
-export const PATH_FILES = [".claude.json", "plugins/installed_plugins.json", "plugins/known_marketplaces.json"];
+const PATH_FILES = [".claude.json", "plugins/installed_plugins.json", "plugins/known_marketplaces.json"];
 
-export interface MigrateOptions {
+interface MigrateOptions {
   home: string;
   dry: boolean;
   rollback: boolean;

@@ -25,13 +25,13 @@
 import { git } from "./lib/git.ts";
 
 /** The manifests that carry the version, relative to the repository root. */
-export const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json", "apps/desktop/package.json"];
+const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json", "apps/desktop/package.json"];
 
 /** A pre-release kind, oldest first: a beta comes before a release candidate, which comes before the stable version. */
-export type Pre = "beta" | "rc";
+type Pre = "beta" | "rc";
 
 export type Target = "major" | "minor" | "patch";
-export type Bump = Target | Pre;
+type Bump = Target | Pre;
 
 export interface Version {
   major: number;

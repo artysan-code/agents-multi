@@ -10,7 +10,7 @@ export const UI_DIST = `${UI}/dist`;
 const STAMP = ".source";
 
 /** `unstamped`: a page is there, built without `agents ui build` (its stamp), so from code unknown. */
-export type UiState = "built" | "stale" | "unstamped" | "missing";
+type UiState = "built" | "stale" | "unstamped" | "missing";
 
 /** Pure: a build (its stamp, and whether it has the page) against the tree of apps/ui it should match.
  *  Outside a checkout (no tree: the app's code) the page is the package's build, whatever its stamp. */

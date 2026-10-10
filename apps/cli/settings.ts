@@ -101,11 +101,11 @@ export function paths(p: Obj, prefix = ""): string[] {
 }
 
 // ---------------------------------------------------------------- files
-export const BASE_SETTINGS = `${REPO}/shared/settings.json`;
-export const PERSON_SETTINGS = `${CONFIG}/settings.json`;
-export const patchPath = (p: Profile) => `${PROFILES}/${p}/settings.json`;
+const BASE_SETTINGS = `${REPO}/shared/settings.json`;
+const PERSON_SETTINGS = `${CONFIG}/settings.json`;
+const patchPath = (p: Profile) => `${PROFILES}/${p}/settings.json`;
 export const runtimePath = (p: Profile) => `${RUNTIME}/${p}/settings.json`;
-export const builtPath = (p: Profile) => `${STATE}/settings/${p}.json`;
+const builtPath = (p: Profile) => `${STATE}/settings/${p}.json`;
 
 async function readObj(path: string): Promise<Obj | null> {
   const v = await readJson<Json>(path);
@@ -118,7 +118,7 @@ async function writeJson(path: string, v: Json) {
   await Deno.rename(tmp, path);
 }
 
-export interface SettingsResult {
+interface SettingsResult {
   profile: Profile;
   /** paths adopted from Claude's writes into profiles/<p>/settings.json */
   adopted: string[];

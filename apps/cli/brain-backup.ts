@@ -18,7 +18,7 @@ export const BACKUPS = `${DATA}/brain-backups`;
 const LAST = `${STATE}/brain-backup.json`;
 const KEEP = 14;
 
-export interface BackupState {
+interface BackupState {
   version: string;
   file: string;
   at: string;

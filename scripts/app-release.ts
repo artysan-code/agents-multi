@@ -26,11 +26,11 @@ import { sectionOf } from "./publish-releases.ts";
 
 export const RELEASE_CONFIG = "apps/desktop/release.json";
 export const TAURI_CONFIG = "apps/desktop/src-tauri/tauri.conf.json";
-export const UPDATES_DIR = "apps/site/public/updates";
+const UPDATES_DIR = "apps/site/public/updates";
 /** The assets' names start with this, whatever the bundle identifier is. */
 export const NAME = "agents-multi";
 export const CHANNELS = ["stable", "beta"] as const;
-export type Channel = typeof CHANNELS[number];
+type Channel = typeof CHANNELS[number];
 
 export interface ReleaseConfig {
   /** the project site, which serves /updates/<channel>.json */
@@ -46,10 +46,10 @@ export interface ReleaseConfig {
 export type Kind = "deb" | "rpm" | "appimage";
 /** The kinds a release publishes: the rpm is left out until Tauri's rpm writer stops taking most of
  *  the release build (13 of 21 minutes on the runner); Fedora and openSUSE take the AppImage. */
-export const PUBLISHED: Kind[] = ["deb", "appimage"];
+const PUBLISHED: Kind[] = ["deb", "appimage"];
 
 /** One platform of an update manifest (Tauri's static format). */
-export interface Platform {
+interface Platform {
   url: string;
   signature: string;
 }

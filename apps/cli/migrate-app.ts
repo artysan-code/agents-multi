@@ -26,9 +26,9 @@ import { which } from "./lib/proc.ts";
 import { RUNTIME_NAME } from "./lib/runtime-root.ts";
 import { apply, describe, plan } from "./mcp/apply.ts";
 
-export const MIGRATION_RECORD = `${STATE}/migrate-app.json`;
+const MIGRATION_RECORD = `${STATE}/migrate-app.json`;
 
-export interface MigrateAppOptions {
+interface MigrateAppOptions {
   dry: boolean;
   rollback: boolean;
   force?: boolean;

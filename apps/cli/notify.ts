@@ -8,7 +8,7 @@ import { STATE } from "./lib/paths.ts";
 import { has, run } from "./lib/proc.ts";
 
 const STATE_FILE = `${STATE}/doctor-last.json`;
-export interface DoctorDiff {
+interface DoctorDiff {
   newFails: Check[];
   gone: string[];
   stillFails: Check[];

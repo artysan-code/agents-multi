@@ -25,7 +25,7 @@ export const SCOPES = [
 const AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN = "https://oauth2.googleapis.com/token";
 
-export interface Client {
+interface Client {
   id: string;
   secret: string;
 }
@@ -159,7 +159,7 @@ export function encodeHeader(v: string): string {
   return `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode(v)))}?=`;
 }
 
-export interface Draft {
+interface Draft {
   to: string;
   subject: string;
   body: string;
@@ -256,7 +256,7 @@ export function freeName(name: string, taken: (n: string) => boolean): string {
 }
 
 // ---------------------------------------------------------------- labels and invitations
-export interface Label {
+interface Label {
   id: string;
   name: string;
 }

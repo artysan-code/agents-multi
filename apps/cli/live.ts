@@ -13,7 +13,7 @@ import { RUNTIME, STATE } from "./lib/paths.ts";
 import { profileNames } from "./lib/profiles.ts";
 import { openDb, report } from "./usage.ts";
 
-export const LIVE = `${STATE}/live`;
+const LIVE = `${STATE}/live`;
 /** Snapshots older than this are of sessions long gone: dropped when read. */
 const KEEP_S = 7 * 24 * 3600;
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
@@ -92,7 +92,7 @@ export function liveView(snaps: Snapshot[], profiles: string[], tokens: Record<s
 }
 
 /** The snapshots on disk, the ones too old removed. */
-export async function readSnapshots(now = Date.now() / 1000): Promise<Snapshot[]> {
+async function readSnapshots(now = Date.now() / 1000): Promise<Snapshot[]> {
   const out: Snapshot[] = [];
   try {
     for await (const e of Deno.readDir(LIVE)) {

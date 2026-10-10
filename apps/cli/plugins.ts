@@ -85,7 +85,7 @@ interface Installed {
   installPath?: string;
 }
 
-export interface PluginCell {
+interface PluginCell {
   /** this profile's own entry in profiles/<p>/settings.json: true/false, null = removed, undefined = inherits */
   override?: boolean | null;
   /** what the generated settings say */
@@ -105,7 +105,7 @@ export interface PluginRow {
   shared?: boolean;
   profiles: Record<Profile, PluginCell>;
 }
-export interface MarketplaceRow {
+interface MarketplaceRow {
   name: string;
   source: string;
   declared: boolean;
@@ -203,7 +203,7 @@ async function syncedSkillNames(dir: string) {
 }
 
 // ---------------------------------------------------------------- catalog and details
-export interface CatalogEntry {
+interface CatalogEntry {
   id: string;
   name: string;
   marketplace: string;

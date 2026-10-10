@@ -15,7 +15,7 @@
 
 import { configDir } from "./owner.ts";
 
-export interface Meta {
+interface Meta {
   id: string;
   profile: string;
   /** the launcher it runs: the profile's command */
@@ -32,7 +32,7 @@ export interface Meta {
 }
 
 /** The modes a child may run in: the ones where whatever is not allowed comes back as a request. */
-export type ChildMode = "auto" | "acceptEdits" | "default";
+type ChildMode = "auto" | "acceptEdits" | "default";
 
 /** Pure: a child's mode from its profile's `defaultMode`. A bypass, `dontAsk` (which denies without
  *  asking) or `plan` (which acts on nothing) would leave the owner out, so they become `default`. */
@@ -63,7 +63,7 @@ export function sessionRule(tool: string, input: Record<string, unknown>): Rule 
 }
 
 /** Pure: a rule as a person reads it, `Bash(curl:*)`. */
-export const ruleText = (r: Rule) => r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName;
+const ruleText = (r: Rule) => r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName;
 
 /** A question a child asks with `AskUserQuestion`, as Claude Code writes it. */
 export interface Question {
@@ -236,7 +236,7 @@ export function attentionBetween(
 }
 
 /** Pure: the line a user message is on the child's stdin. */
-export const userLine = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: text } });
+const userLine = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: text } });
 
 /** How the owner answers a request: this call, this call and the like for the session, or no. */
 export type Verdict = "allow" | "session" | "deny";
@@ -361,7 +361,7 @@ export function childId(profile: string, dir: string, at: Date, rand: string): s
   return `${slug(profile)}-${slug(dir.split("/").filter(Boolean).pop() ?? "x")}-${stamp}-${rand}`;
 }
 
-export interface StartInput {
+interface StartInput {
   profile: string;
   dir: string;
   task: string;
@@ -385,7 +385,7 @@ export async function modeOf(profile: string, runtime: string): Promise<ChildMod
  *  profile, permissions and project for its own: with `CLAUDE_PROJECT_DIR` a project's `.mcp.json`
  *  looked for its files in the coordinator's folder, and its servers failed. Agents Multi's own
  *  (CLAUDE_MULTI_*) stay. */
-export const CLAUDE_SESSION_VARS =
+const CLAUDE_SESSION_VARS =
   "^(CLAUDECODE|CLAUDE_CONFIG_DIR|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_PROJECT_DIR|CLAUDE_ENV_FILE|CLAUDE_(CODE|AGENT_SDK|PREVIEW)_.*)$";
 
 /** Pure: of these variable names, a Claude session's (CLAUDE_SESSION_VARS). */

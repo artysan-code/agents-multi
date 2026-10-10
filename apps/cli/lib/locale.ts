@@ -1,8 +1,8 @@
 // locale.ts — The interface language a machine asks for.
 
 /** The console's languages. The page carries one dictionary per entry (apps/ui/src/i18n.ts). */
-export const UI_LANGUAGES = ["en", "it"] as const;
-export type UiLanguage = typeof UI_LANGUAGES[number];
+const UI_LANGUAGES = ["en", "it"] as const;
+type UiLanguage = typeof UI_LANGUAGES[number];
 
 /**
  * Pure: the interface language a machine asks for, from its locale variables. The regional format

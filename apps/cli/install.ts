@@ -240,7 +240,7 @@ export async function appExecutable(): Promise<string | null> {
 }
 
 /** The app's menu entry, named after its window's app_id so the panel groups the two. */
-export const APP_ENTRY = "me.artysan.agents.desktop";
+const APP_ENTRY = "me.artysan.agents.desktop";
 /** Pure: the menu entry install writes for an AppImage, which brings none (a deb or an rpm does). */
 export const appImageEntry = (app: string) =>
   [

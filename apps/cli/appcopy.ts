@@ -19,7 +19,7 @@ import { run } from "./lib/proc.ts";
 import { APP_DIR } from "./lib/mode.ts";
 
 /** The stamp scripts/bundle.sh writes at the root of the package's code. */
-export const BUILD_FILE = "build.json";
+const BUILD_FILE = "build.json";
 export interface Build {
   version: string;
   commit: string;
@@ -38,7 +38,7 @@ export async function readBuild(dir: string): Promise<Build | null> {
     : null;
 }
 
-export interface CopyResult {
+interface CopyResult {
   /** whether `current` moved */
   changed: boolean;
   /** the build in use before, if any */

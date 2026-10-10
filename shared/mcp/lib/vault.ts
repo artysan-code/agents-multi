@@ -48,10 +48,10 @@ export interface Entry {
   updatedAt: string;
   deleted?: boolean;
 }
-export type EntryMeta = Omit<Entry, "value" | "deleted">;
+type EntryMeta = Omit<Entry, "value" | "deleted">;
 
 // ---------------------------------------------------------------- key material
-export interface VaultKey {
+interface VaultKey {
   aes: CryptoKey;
   hmac: CryptoKey;
   raw: Uint8Array;
@@ -121,7 +121,7 @@ export function parseRecoveryCode(code: string): Uint8Array {
 }
 
 // ---------------------------------------------------------------- entries (pure given a key)
-export async function entryId(key: VaultKey, service: string, account: string, field: string): Promise<string> {
+async function entryId(key: VaultKey, service: string, account: string, field: string): Promise<string> {
   const mac = new Uint8Array(
     await crypto.subtle.sign("HMAC", key.hmac, enc.encode(`${service}\n${account}\n${field}`)),
   );

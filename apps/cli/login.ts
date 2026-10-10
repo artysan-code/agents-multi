@@ -10,7 +10,7 @@ import { readJson } from "./lib/fs.ts";
 import { BIN, HOME, STATE } from "./lib/paths.ts";
 
 const FILE = `${STATE}/claude-login.json`;
-export interface LoginFailure {
+interface LoginFailure {
   command: string;
   error: string;
   at: string;
