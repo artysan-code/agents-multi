@@ -5,8 +5,8 @@
 // there, in the page's flow, instead of over the page: the Hey window is as tall as its page, and a
 // list over the page would fall outside it.
 
+import { createPortal } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { createPortal } from "preact/compat";
 import { get, post, type Result } from "../api.ts";
 import { type Key, t, tk } from "../i18n.ts";
 import "./model-picker.css";

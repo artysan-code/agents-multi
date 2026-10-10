@@ -3,31 +3,13 @@
 // install. A step of the update screen (wizard.tsx), drawn inside it; on its own screen only from the
 // agents-multi card of the Updates page.
 
-import type { ComponentChildren } from "preact";
-import { signal } from "@preact/signals";
 import { useState } from "preact/hooks";
 import { get, post, type Result } from "../../api.ts";
 import { loadStatus } from "../../state.ts";
 import { t } from "../../i18n.ts";
 import { Pf, toast, toastErr } from "../../lib/ui.tsx";
-import { request } from "../../router.ts";
-import { sys } from "../../shell/sysstate.ts";
+import { type Blocker, closeScreen, type Plan } from "./close-plan.ts";
 
-interface Blocker {
-  key: string;
-  pid: number;
-  profile: string;
-  embedded: boolean;
-  busy: boolean | null;
-  ageSec: number | null;
-  protected: boolean;
-}
-export interface Plan {
-  offer: boolean;
-  /** the build or commit an install is waiting with; null when none is */
-  pending: string | null;
-  blockers: Blocker[];
-}
 interface StepResult extends Result {
   reopen: string[];
   remaining: Blocker[];
@@ -219,8 +201,6 @@ export async function reopenProfile(p: string): Promise<void> {
   );
 }
 
-const open = signal<{ plan: Plan; at: number } | null>(null);
-
 /** Asks the server who holds the install, and opens the screen with the plan. With nothing left to close
  *  (every Claude closed by hand since) the install runs at once; with none waiting, it says so. */
 export async function openCloseClaude(): Promise<void> {
@@ -234,14 +214,14 @@ export async function openCloseClaude(): Promise<void> {
     if (plan.pending) return void await runSettle();
     return toast(t("cc.none"));
   }
-  open.value = { plan, at: Date.now() };
+  closeScreen.value = { plan, at: Date.now() };
 }
 
 /** The screen, drawn by the shell beside the update screen. */
 export function CloseClaudeHost() {
-  const o = open.value;
+  const o = closeScreen.value;
   if (!o) return null;
-  const close = () => open.value = null;
+  const close = () => closeScreen.value = null;
   return (
     <div
       class="uw-screen"
@@ -265,36 +245,5 @@ export function CloseClaudeHost() {
         <CloseClaude key={o.at} plan={o.plan} />
       </div>
     </div>
-  );
-}
-
-/** «Update now», or «Close Claude and update» when all that is left is the install waiting for every
- *  Claude to be closed: the update is already here, and the wizard would only say so. With `icon`, the
- *  label is its own span (`label` its class), as the rail draws it. */
-export function UpdateNow({ cls, auto, icon, label }: {
-  cls: string;
-  auto?: boolean;
-  icon?: ComponentChildren;
-  label?: string;
-}) {
-  const settle = sys.value.upWord === "pill.settle";
-  // the install left waiting is a step of the update screen, as the rest of the update
-  const go = () =>
-    request(
-      "update.wizard",
-      undefined,
-      settle ? "settle" : auto ? "auto" : undefined,
-    );
-  const text = t(settle ? "cc.btn" : "up.now");
-  return (
-    <button
-      type="button"
-      class={cls}
-      title={icon ? text : undefined}
-      onClick={go}
-    >
-      {icon}
-      {icon ? <span class={label}>{text}</span> : text}
-    </button>
   );
 }

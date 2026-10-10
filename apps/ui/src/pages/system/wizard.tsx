@@ -34,12 +34,8 @@ import {
   type Report,
   type Whatsnew,
 } from "./updates-lib.tsx";
-import {
-  CloseClaude,
-  type Plan,
-  reopenProfile,
-  runSettle,
-} from "./updates-close.tsx";
+import { CloseClaude, reopenProfile, runSettle } from "./updates-close.tsx";
+import type { Plan } from "./close-plan.ts";
 import {
   RunMark,
   runShare,

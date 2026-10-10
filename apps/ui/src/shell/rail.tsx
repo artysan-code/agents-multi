@@ -14,7 +14,7 @@ import { openDrawer } from "../lib/ui.tsx";
 import { type Tab, tab, type View, view } from "../router.ts";
 import { status } from "../state.ts";
 import { board, isOpen } from "../pages/tasks/model.ts";
-import { UpdateNow } from "../pages/system/updates-close.tsx";
+import { UpdateNow } from "../pages/system/update-now.tsx";
 import { paletteOpen } from "./palette.tsx";
 import { setTheme, type Theme, theme } from "./prefs.ts";
 import { sys } from "./sysstate.ts";

@@ -7,7 +7,7 @@ import { t } from "../../i18n.ts";
 import { status } from "../../state.ts";
 import { appUpdater, notePoints } from "../../shell/app-update.ts";
 import { sys } from "../../shell/sysstate.ts";
-import { UpdateNow } from "./updates-close.tsx";
+import { UpdateNow } from "./update-now.tsx";
 import { desktopNext } from "./updates-lib.tsx";
 import "./update-ready.css";
 

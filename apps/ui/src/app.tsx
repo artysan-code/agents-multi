@@ -2,7 +2,7 @@
 // something to ask about, the page on screen, and the overlays (drawer, toast, palette, update wizard,
 // the start screen).
 
-import type { ComponentChildren } from "preact";
+import type { FunctionComponent } from "preact";
 import { useEffect } from "preact/hooks";
 import { view, type View } from "./router.ts";
 import { Overlays } from "./lib/ui.tsx";
@@ -10,15 +10,19 @@ import { ask, askContext, AskBar } from "./shell/ask.tsx";
 import { Rail } from "./shell/rail.tsx";
 import { Boot } from "./shell/boot.tsx";
 import { PaletteHost } from "./shell/palette.tsx";
+import { lazy } from "./lib/lazy.tsx";
 import { Today } from "./pages/today/index.tsx";
 import { Tasks } from "./pages/tasks/index.tsx";
-import { Brain } from "./pages/brain/index.tsx";
-import { Connections } from "./pages/connections/index.tsx";
-import { System } from "./pages/system/index.tsx";
-import { UpdateWizardHost } from "./pages/system/wizard.tsx";
-import { CloseClaudeHost } from "./pages/system/updates-close.tsx";
+import { closeScreen } from "./pages/system/close-plan.ts";
 
-const PAGES: Record<View, () => ComponentChildren> = {
+// the pages Today and the shell do not need to draw come in their own chunks, when first shown
+const Brain = lazy(() => import("./pages/brain/index.tsx").then((m) => m.Brain));
+const Connections = lazy(() => import("./pages/connections/index.tsx").then((m) => m.Connections));
+const System = lazy(() => import("./pages/system/index.tsx").then((m) => m.System));
+const UpdateWizardHost = lazy(() => import("./pages/system/wizard.tsx").then((m) => m.UpdateWizardHost));
+const CloseClaudeHost = lazy(() => import("./pages/system/updates-close.tsx").then((m) => m.CloseClaudeHost));
+
+const PAGES: Record<View, FunctionComponent> = {
   today: Today,
   tasks: Tasks,
   brain: Brain,
@@ -46,7 +50,7 @@ export function App() {
       <Overlays />
       <PaletteHost />
       <UpdateWizardHost />
-      <CloseClaudeHost />
+      {closeScreen.value && <CloseClaudeHost />}
       <Boot />
     </div>
   );
