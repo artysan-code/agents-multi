@@ -46,7 +46,48 @@ create table if not exists chunks (
   primary key (path, ord));
 `;
 /** The brain database's schema, step by step: step 1 is the schema as it was before versions. */
-export const BRAIN_MIGRATIONS: Migration[] = [(db) => db.exec(SCHEMA)];
+export const BRAIN_MIGRATIONS: Migration[] = [
+  (db) => db.exec(SCHEMA),
+  // the live documents are what nearly every query asks for; the index keeps those scans short
+  (db) => db.exec("create index if not exists docs_live on docs(path) where deleted = 0"),
+  // a counter of writes (see Store.version) so the memory's version never scans the revisions
+  (db) => {
+    db.exec("create table if not exists meta (k text primary key, v text not null)");
+    db.exec("create index if not exists revisions_at on revisions(at)");
+    // started at the revisions already there, so the version strings stay what they were
+    db.exec(`insert or ignore into meta (k, v) select 'writes_all', count(*) from revisions`);
+    db.exec(
+      `insert or ignore into meta (k, v) select 'writes_pages', count(*) from revisions where path not like 'tasks/%'`,
+    );
+  },
+];
+
+/** Resolves a [[target]] to a document path (see Store.resolver). */
+export type Resolver = (target: string) => string | null;
+
+/** Pure: a resolver over a set of live paths — the exact path, else the shallowest document with
+ *  that name (ties by name order). Built once, it answers each target without touching the database. */
+export function makeResolver(paths: Iterable<string>): Resolver {
+  const exact = new Set<string>();
+  const byName = new Map<string, string>();
+  const depth = (p: string) => p.split("/").length;
+  for (const p of paths) {
+    exact.add(p);
+    const name = p.split("/").pop()!.toLowerCase();
+    const cur = byName.get(name);
+    if (!cur || depth(p) < depth(cur) || (depth(p) === depth(cur) && p.localeCompare(cur) < 0)) byName.set(name, p);
+  }
+  return (target) => {
+    const t = target.replace(/\.md$/i, "");
+    if (exact.has(`${t}.md`)) return `${t}.md`;
+    return byName.get(`${t.split("/").pop()!.toLowerCase()}.md`) ?? null;
+  };
+}
+
+/** Settings every brain database gets: WAL with `synchronous = normal` (a crash can lose the last
+ *  commits, never corrupt the file), a bigger page cache, temporaries in memory. */
+export const PRAGMAS =
+  "pragma journal_mode = wal; pragma synchronous = normal; pragma foreign_keys = on; pragma busy_timeout = 5000; pragma cache_size = -16000; pragma temp_store = memory;";
 
 /** Pure: a path the brain accepts — folders and a name ending in .md, no way out of the tree. */
 export function cleanPath(p: string): string {
@@ -87,8 +128,39 @@ export class Store {
 
   constructor(file: string) {
     this.db = new DatabaseSync(file);
-    this.db.exec("pragma journal_mode = wal; pragma foreign_keys = on; pragma busy_timeout = 5000;");
+    this.db.exec(PRAGMAS);
     migrate(this.db, BRAIN_MIGRATIONS);
+  }
+
+  /** Counts a write in the same transaction as the revision it made. */
+  private bump(path: string) {
+    const up = (k: string) => this.db.prepare("update meta set v = cast(v as integer) + 1 where k = ?").run(k);
+    up("writes_all");
+    if (!path.startsWith("tasks/")) up("writes_pages");
+  }
+
+  /** What the memory is at: it changes with every write and never otherwise. `pages` leaves the
+   *  tasks out (their writes do not change the pages). Reads a counter, not the revisions. */
+  version(pages = false): { version: string; revisions: number; last: string | null } {
+    const row = this.db.prepare("select v from meta where k = ?").get(pages ? "writes_pages" : "writes_all") as
+      | { v: string }
+      | undefined;
+    const n = Number(row?.v ?? 0);
+    const last = (this.db.prepare(
+      pages ? "select max(at) last from revisions where path not like 'tasks/%'" : "select max(at) last from revisions",
+    ).get() as { last: string | null }).last;
+    return { version: `${n}:${last ?? ""}`, revisions: n, last };
+  }
+
+  /** How many writes the tasks have had: the validator of the task list (changes with each task write). */
+  tasksVersion(): number {
+    return this.version().revisions - this.version(true).revisions;
+  }
+
+  /** The task documents' bodies, from a range on the primary key (tasks/t-…) rather than a LIKE. */
+  taskBodies(): string[] {
+    return (this.db.prepare("select body from docs where path >= 'tasks/t-' and path < 'tasks/t.' and deleted = 0")
+      .all() as { body: string }[]).map((r) => r.body);
   }
 
   get(path: string): Doc | null {
@@ -142,6 +214,7 @@ export class Store {
       this.db.prepare("delete from docs_fts where path = ?").run(p);
       this.db.prepare("insert into docs_fts (path, title, body) values (?, ?, ?)").run(p, title, body);
       this.db.prepare("delete from chunks where path = ?").run(p); // embed.ts fills them again
+      this.bump(p);
     });
     return this.get(p)!;
   }
@@ -168,6 +241,7 @@ export class Store {
       this.db.prepare("delete from links where src = ?").run(p);
       this.db.prepare("delete from docs_fts where path = ?").run(p);
       this.db.prepare("delete from chunks where path = ?").run(p);
+      this.bump(p);
     });
   }
 
@@ -191,39 +265,38 @@ export class Store {
     return this.write(path, r.body, by, undefined, "restore");
   }
 
+  /** A resolver over the live documents, from one query: build it once per request, not per link. */
+  resolver(): Resolver {
+    return makeResolver(
+      (this.db.prepare("select path from docs where deleted = 0").all() as { path: string }[]).map((r) => r.path),
+    );
+  }
+
   /** Where a [[target]] points: the exact path, else the shallowest document with that name. */
-  resolve(target: string): string | null {
-    const t = target.replace(/\.md$/i, "");
-    const exact = this.db.prepare("select path from docs where deleted = 0 and path = ?").get(`${t}.md`) as {
-      path: string;
-    } | undefined;
-    if (exact) return exact.path;
-    const name = t.split("/").pop()!.toLowerCase();
-    const rows = this.db.prepare(
-      "select path from docs where deleted = 0 and (lower(path) = ? or lower(path) like ? escape '\\')",
-    )
-      .all(`${name}.md`, `%/${name.replace(/[\\%_]/g, "\\$&")}.md`) as { path: string }[];
-    return rows.map((r) => r.path).sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b))[0] ??
-      null;
+  resolve(target: string, resolver: Resolver = this.resolver()): string | null {
+    return resolver(target);
   }
 
   /** A document's links both ways, resolved to paths where they exist. */
-  links(path: string): { out: { target: string; path: string | null }[]; back: string[] } {
+  links(path: string, resolver: Resolver = this.resolver()): {
+    out: { target: string; path: string | null }[];
+    back: string[];
+  } {
     const p = cleanPath(path);
     const out = (this.db.prepare("select dst from links where src = ?").all(p) as { dst: string }[]).map((r) => ({
       target: r.dst,
-      path: this.resolve(r.dst),
+      path: resolver(r.dst),
     }));
     // a link reaches this document when it names it (by path or by name) and resolves to it
     const name = p.replace(/\.md$/, "").split("/").pop()!.toLowerCase();
     const cands = this.db.prepare("select src, dst from links where lower(dst) = ? or lower(dst) like ? escape '\\'")
       .all(name, `%/${name.replace(/[\\%_]/g, "\\$&")}`) as { src: string; dst: string }[];
-    const back = [...new Set(cands.filter((c) => c.src !== p && this.resolve(c.dst) === p).map((c) => c.src))].sort();
+    const back = [...new Set(cands.filter((c) => c.src !== p && resolver(c.dst) === p).map((c) => c.src))].sort();
     return { out, back };
   }
 
   /** Every document and every resolved link, for the graph. */
-  graph(): { nodes: { path: string; title: string }[]; edges: [string, string][] } {
+  graph(resolver: Resolver = this.resolver()): { nodes: { path: string; title: string }[]; edges: [string, string][] } {
     const nodes = this.db.prepare("select path, title from docs where deleted = 0 and path not like 'tasks/%'")
       .all() as { path: string; title: string }[];
     const edges: [string, string][] = [];
@@ -233,7 +306,7 @@ export class Store {
         dst: string;
       }[]
     ) {
-      const d = this.resolve(l.dst);
+      const d = resolver(l.dst);
       if (d && d !== l.src) edges.push([l.src, d]);
     }
     return { nodes, edges };

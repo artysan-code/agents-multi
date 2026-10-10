@@ -87,7 +87,7 @@ export async function admin(argv: string[], cfg: AdminConfig, out: (line: string
   await Deno.mkdir(cfg.data, { recursive: true });
   const db = new DatabaseSync(`${cfg.data}/accounts.db`);
   try {
-    db.exec("pragma journal_mode = wal; pragma busy_timeout = 5000;");
+    db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 5000;");
     const users = new Users(db, await masterKey(cfg.masterKey));
     const auth = new Auth(db, users, { url: cfg.url });
     const account = (a: string) => {

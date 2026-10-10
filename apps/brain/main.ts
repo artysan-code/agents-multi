@@ -70,7 +70,7 @@ const DATA = env("BRAIN_DATA", "/data")!;
 await Deno.mkdir(DATA, { recursive: true });
 
 const accountsDb = new DatabaseSync(`${DATA}/accounts.db`);
-accountsDb.exec("pragma journal_mode = wal; pragma busy_timeout = 5000;");
+accountsDb.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 5000;");
 const users = new Users(accountsDb, await masterKey(env("BRAIN_MASTER_KEY")!), DEV);
 const auth = new Auth(accountsDb, users, { url: URL_ });
 const embedCfg = { url: env("BRAIN_EMBED_URL", "http://ollama:11434")!, model: env("BRAIN_EMBED_MODEL", "bge-m3")! };
@@ -197,7 +197,15 @@ const refused = (r: "wrong" | "locked" | "busy") => r === "locked" ? LOCKED : r 
 // endpoint Claude's clients call (thirty, then one every two seconds), and registering a client
 // (ten, then one a minute). Claude's servers call from a few shared addresses: generous on purpose.
 const FORMS = new Buckets(10, 6_000), OAUTH = new Buckets(30, 2_000), REGISTER = new Buckets(10, 60_000);
+// registration also has a limit for everyone together (thirty, then one every thirty seconds): the
+// address can be rotated, the table of clients cannot grow past what real connections need
+const REGISTER_ALL = new Buckets(30, 30_000);
 const IP_HEADER = env("BRAIN_CLIENT_IP_HEADER")?.toLowerCase();
+if (URL_.startsWith("https:") && !IP_HEADER) {
+  log.warn(
+    "BRAIN_CLIENT_IP_HEADER is not set: behind a proxy every client shares its address, and the sign-in limits lock everyone out together",
+  );
+}
 /** Pure: which bucket a request draws from, if any. */
 const bucketOf = (method: string, p: string) =>
   method !== "POST"
@@ -236,7 +244,10 @@ async function handle(req: Request, ip: string): Promise<Response> {
     (p.startsWith("/account") || p.startsWith("/tasks") || p === "/authorize" || p === "/invite") &&
     !fromOwnPages(req.headers, URL_)
   ) return new Response("cross-origin form refused\n", { status: 403, headers: { "content-type": "text/plain" } });
-  const wait = bucketOf(req.method, p)?.take(ip) ?? 0;
+  const wait = Math.max(
+    bucketOf(req.method, p)?.take(ip) ?? 0,
+    req.method === "POST" && p === "/register" ? REGISTER_ALL.take("*") : 0,
+  );
   if (wait) {
     return new Response("too many requests\n", {
       status: 429,
@@ -446,10 +457,11 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   // the tasks as files, for the person's machines (the console, the reminders, the local tasks
   // tools): the TaskStore of shared/mcp/lib/brain-tasks.ts on the other side; the rules run there
   if (p === "/api/tasks" && req.method === "GET") {
-    const rows = store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as {
-      body: string;
-    }[];
-    return json({ tasks: rows.map((r) => r.body) });
+    const etag = `W/"t${store.tasksVersion()}"`;
+    if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag } });
+    const res = json({ tasks: store.taskBodies() });
+    res.headers.set("etag", etag);
+    return res;
   }
   const one = p.match(/^\/api\/tasks\/(t-[\w-]+)$/);
   if (one && req.method === "GET") {
@@ -477,15 +489,11 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   }
   // what the machines compare before fetching a backup: it changes with every write, never otherwise
   if (p === "/backup/state" && who.label.startsWith("token:")) {
-    const r = store.db.prepare("select count(*) n, max(at) last from revisions").get() as {
-      n: number;
-      last: string | null;
-    };
-    return json({ version: `${r.n}:${r.last ?? ""}`, revisions: r.n, last: r.last });
+    return json(store.version());
   }
   // the person's brain, sealed with their own backup key: nobody else's copy opens with it
   if (p === "/backup" && who.label.startsWith("token:")) {
-    return new Response(await snapshot(store, tenant.file, await users.backupKey(who.user)), {
+    return new Response(await snapshot(tenant.file, await users.backupKey(who.user)), {
       headers: {
         "content-type": "application/octet-stream",
         "content-disposition": `attachment; filename="brain-${new Date().toISOString().slice(0, 10)}.brn"`,

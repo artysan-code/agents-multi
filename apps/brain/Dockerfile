@@ -32,6 +32,7 @@ RUN mkdir -p /data && chown deno:deno /data
 USER deno
 VOLUME /data
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=2s CMD ["deno", "eval", "const r = await fetch('http://127.0.0.1:8080/ready'); if (!r.ok) Deno.exit(1)"]
+# a probe over bash's /dev/tcp: a few milliseconds, where `deno eval` started a runtime every 30 s
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=2s CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && read -r l <&3 && [[ $l == *' 200 '* ]]"]
 # reads only its code, the site, its cache and its data
 CMD ["run", "--allow-net", "--allow-env", "--allow-read=/app,/data,/deno-dir", "--allow-write=/data", "apps/brain/main.ts"]

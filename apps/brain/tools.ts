@@ -69,8 +69,9 @@ const CHANGE = { readOnlyHint: false, destructiveHint: false, idempotentHint: fa
 export function staleProjects(store: Store, diary: string, line: string, now: Date): { reminder?: string } {
   const day = dayOf(now);
   const stale: string[] = [];
+  const resolve = store.resolver();
   for (const t of linksIn(line)) {
-    const proj = store.resolve(t);
+    const proj = resolve(t);
     if (!proj?.startsWith(`${areasOf(store).projects}/`)) continue;
     const updated = store.get(proj)?.updated;
     if (!updated) continue;
@@ -98,11 +99,23 @@ export function health(store: Store) {
   const linked = new Set<string>(),
     broken: { page: string; link: string }[] = [],
     long: { page: string; words: number }[] = [];
+  // three queries for the whole brain (the live paths, every link, every body), not three per page
+  const resolve = store.resolver();
+  const outgoing = new Map<string, string[]>();
+  for (const l of store.db.prepare("select src, dst from links").all() as { src: string; dst: string }[]) {
+    (outgoing.get(l.src) ?? outgoing.set(l.src, []).get(l.src)!).push(l.dst);
+  }
+  const bodies = new Map(
+    (store.db.prepare("select path, body from docs where deleted = 0").all() as { path: string; body: string }[]).map((
+      r,
+    ) => [r.path, r.body]),
+  );
   for (const p of pages) {
-    const body = store.get(p.path)!.body;
-    for (const l of store.links(p.path).out) {
-      if (l.path) linked.add(l.path);
-      else broken.push({ page: p.path, link: l.target });
+    const body = bodies.get(p.path) ?? "";
+    for (const target of outgoing.get(p.path) ?? []) {
+      const path = resolve(target);
+      if (path) linked.add(path);
+      else broken.push({ page: p.path, link: target });
     }
     const n = (body.match(/[\p{L}\p{N}]+/gu) ?? []).length;
     if (n > maxWords(areaOf(p.path), a)) long.push({ page: p.path, words: n });
@@ -361,7 +374,7 @@ export function brainServer(ctx: ToolContext): McpServer {
     if (!v.ok) return refuse(v.errors);
     // the pages that link here, found before the move while their links still resolve to the old path
     const back = store.links(d.path).back;
-    const resolveOld = (t: string) => store.resolve(t);
+    const resolveOld = store.resolver();
     const rewritten = back.map((src) => ({ src, body: relink(store.get(src)!.body, d.path, dest, resolveOld) }));
     store.write(dest, d.body, ctx.by());
     store.remove(d.path, ctx.by());

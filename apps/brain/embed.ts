@@ -88,10 +88,11 @@ export async function embed(cfg: EmbedConfig, input: string[], timeoutMs = 120_0
   return j.embeddings;
 }
 
-/** Fills the chunks of every document that has none (new, changed, or embedded by another model). */
+/** Fills the chunks of every document that has none (new, changed, or embedded by another model).
+ *  Tasks (tasks/) are left out: they are found by words, and each change to one would cost an embedding. */
 async function indexPending(store: Store, cfg: EmbedConfig, max = 50): Promise<number> {
   const stale = store.db.prepare(
-    `select d.path, d.body from docs d where d.deleted = 0 and not exists (select 1 from chunks c where c.path = d.path and c.model = ?) limit ?`,
+    `select d.path, d.body from docs d where d.deleted = 0 and d.path not like 'tasks/%' and not exists (select 1 from chunks c where c.path = d.path and c.model = ?) limit ?`,
   ).all(cfg.model, max) as { path: string; body: string }[];
   for (const d of stale) {
     const pieces = chunk(d.body);
@@ -141,6 +142,13 @@ export function indexer(store: Store, cfg: EmbedConfig) {
     }
   };
   const timer = setInterval(run, 60_000);
+  // tasks were embedded once: their chunks are dead weight now
+  try {
+    store.db.exec("delete from chunks where path like 'tasks/%'");
+  } catch { /* the database is closing */ }
+  // the model is loaded into memory by its first request, which takes seconds: do it now, off the
+  // request path; an unreachable model is no error here (the indexer tries again on its tick)
+  void embed(cfg, ["warm up"], 30_000).catch(() => {});
   void run();
   return {
     kick: () => void run(),
@@ -148,7 +156,7 @@ export function indexer(store: Store, cfg: EmbedConfig) {
     status: () => ({
       lastError,
       pending: (store.db.prepare(
-        "select count(*) n from docs d where d.deleted = 0 and not exists (select 1 from chunks c where c.path = d.path and c.model = ?)",
+        "select count(*) n from docs d where d.deleted = 0 and d.path not like 'tasks/%' and not exists (select 1 from chunks c where c.path = d.path and c.model = ?)",
       ).get(cfg.model) as { n: number }).n,
     }),
   };
