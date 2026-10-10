@@ -3,15 +3,14 @@
 
 use url::Url;
 
+use crate::amenv::am_var;
+
 pub const DEFAULT_PORT: u16 = 7331;
 
 /// The console's port, from the variables `get` returns. The first variable that is set wins, as in
 /// `amEnv()`; a value that is not a port falls back to the default, with a warning.
 pub fn port_from(get: impl Fn(&str) -> Option<String>) -> u16 {
-    let Some((name, value)) = ["AGENTS_MULTI_PORT", "CLAUDE_MULTI_PORT"]
-        .into_iter()
-        .find_map(|name| get(name).map(|v| (name, v)))
-    else {
+    let Some((name, value)) = am_var(&get, "PORT") else {
         return DEFAULT_PORT;
     };
     match value.trim().parse::<u16>() {

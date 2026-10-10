@@ -19,6 +19,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Manager};
 
+use crate::amenv::runtime_root;
 use crate::backend::{child_path, DENO, PERMISSIONS};
 use crate::repo::{self, Source};
 
@@ -53,7 +54,7 @@ pub fn before_backend(app: &AppHandle) {
             )
         });
     }
-    let Some(root) = runtime_root(&get, home.as_deref()) else {
+    let Some(root) = runtime_root(&get, home.as_deref(), |p| p.symlink_metadata().is_ok()) else {
         return;
     };
     let copy = read_build(&root.join("app/current"));
@@ -92,21 +93,6 @@ pub fn build_id(stamp: &str) -> Option<String> {
 
 fn read_build(dir: &Path) -> Option<String> {
     build_id(&std::fs::read_to_string(dir.join(BUILD_FILE)).ok()?)
-}
-
-/// The first of the variables `get` returns that is set and not empty, as `amEnv()` reads them.
-fn am_env(get: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
-    ["AGENTS_MULTI_", "CLAUDE_MULTI_"]
-        .iter()
-        .find_map(|prefix| get(&format!("{prefix}{name}")).filter(|v| !v.is_empty()))
-}
-
-/// Pure: the runtime, as apps/cli/lib/paths.ts finds it: AGENTS_MULTI_ROOT, else ~/.agents-multi (a
-/// machine not moved yet has it as a link to ~/.claude-multi).
-pub fn runtime_root(get: &impl Fn(&str) -> Option<String>, home: Option<&Path>) -> Option<PathBuf> {
-    am_env(get, "ROOT")
-        .map(PathBuf::from)
-        .or_else(|| home.map(|h| h.join(".agents-multi")))
 }
 
 /// Pure: `$XDG_STATE_HOME/agents-multi`, the CLI's STATE (the old name, `claude-multi`, is a link to it
@@ -236,12 +222,6 @@ mod tests {
     fn the_runtime_and_the_state_follow_the_cli() {
         let home = Path::new("/h");
         let none = |_: &str| None;
-        assert_eq!(
-            runtime_root(&none, Some(home)),
-            Some(PathBuf::from("/h/.agents-multi"))
-        );
-        let root = |n: &str| (n == "CLAUDE_MULTI_ROOT").then(|| "/rt".to_string());
-        assert_eq!(runtime_root(&root, Some(home)), Some(PathBuf::from("/rt")));
         assert_eq!(
             state_dir(&none, Some(home)),
             Some(PathBuf::from("/h/.local/state/agents-multi"))
