@@ -95,8 +95,7 @@ fn read_build(dir: &Path) -> Option<String> {
     build_id(&std::fs::read_to_string(dir.join(BUILD_FILE)).ok()?)
 }
 
-/// Pure: `$XDG_STATE_HOME/agents-multi`, the CLI's STATE (the old name, `claude-multi`, is a link to it
-/// once the CLI has moved it: apps/cli/lib/runtime-root.ts).
+/// Pure: `$XDG_STATE_HOME/agents-multi`, the CLI's STATE (apps/cli/lib/runtime-root.ts).
 pub fn state_dir(get: &impl Fn(&str) -> Option<String>, home: Option<&Path>) -> Option<PathBuf> {
     get("XDG_STATE_HOME")
         .filter(|v| !v.is_empty())
