@@ -1,6 +1,5 @@
 // tasks.ts — `agents tasks …`: the task list from the terminal, the desktop reminders the
-// timer sends (claude-tasks.timer → `tasks remind`, every five minutes), and `migrate`, which moves
-// the old task files into the brain.
+// timer sends (claude-tasks.timer → `tasks remind`, every five minutes).
 //
 // The list itself is shared/mcp/lib/tasks.ts; the MCP server `tasks` is how Claude reads and keeps
 // it in every chat. Here: a brief to read, a quick add, done, and the reminders — the briefs at the
@@ -19,15 +18,12 @@ import {
   dayOf,
   dueBriefs,
   dueReminders,
-  fromFile,
   listTasks,
   loadSettings,
   type Task,
-  tasksRoot,
   updateTask,
 } from "../../shared/mcp/lib/tasks.ts";
-import { brainAccount, brainStore, connectTasks } from "../../shared/mcp/lib/brain-tasks.ts";
-import { getSecret } from "../../shared/mcp/lib/vault.ts";
+import { connectTasks } from "../../shared/mcp/lib/brain-tasks.ts";
 import { owner } from "../../shared/mcp/lib/owner.ts";
 
 const SENT = `${STATE}/tasks-sent.json`;
@@ -126,49 +122,6 @@ function print(title: string, xs: Task[]) {
   }
 }
 
-/** The task files of ~/brains/tasks/items copied into the brain, once: those it already has are
- *  left alone, then the folder is renamed so that nothing reads the old list by mistake. */
-async function migrate(dry: boolean): Promise<number> {
-  const account = brainAccount();
-  const token = account && await getSecret("brain", account.name).catch(() => null);
-  if (!account || !token) {
-    console.error(
-      account
-        ? `no token for the brain on this machine: make one on ${account.url}/account and put it in the console, Connections`
-        : "no brain account in shared/mcp/accounts.json",
-    );
-    return 1;
-  }
-  const items = `${tasksRoot()}/items`;
-  const local: Task[] = [];
-  try {
-    for await (const e of Deno.readDir(items)) {
-      if (!e.isFile || !/^t-[\w-]+\.md$/.test(e.name)) continue;
-      const t = fromFile(await Deno.readTextFile(`${items}/${e.name}`));
-      if (t) local.push(t);
-    }
-  } catch {
-    console.log("no local tasks to move");
-    return 0;
-  }
-  const store = brainStore(account.url!, token);
-  const there = new Set((await store.list()).map((t) => t.id));
-  const todo = local.filter((t) => !there.has(t.id));
-  for (const t of todo) {
-    console.log(`${dry ? "would move" : "moved"}  ${t.id}  ${t.title}`);
-    if (!dry) await store.write(t);
-  }
-  console.log(`${todo.length} moved, ${local.length - todo.length} already in the brain`);
-  if (dry) return 0;
-  // a folder already set aside (say, synced back from another machine) is never overwritten
-  const base = `${items}-moved-to-brain-${dayOf(new Date())}`;
-  let aside = base;
-  for (let n = 2; await Deno.lstat(aside).then(() => true, () => false); n++) aside = `${base}-${n}`;
-  await Deno.rename(items, aside);
-  console.log(`the old files are in ${aside}`);
-  return 0;
-}
-
 export async function tasksCommand(args: string[]): Promise<number> {
   connectTasks();
   const [sub = "brief", ...rest] = args;
@@ -212,11 +165,9 @@ export async function tasksCommand(args: string[]): Promise<number> {
     }
     case "remind":
       return await remind(rest.includes("--dry-run"));
-    case "migrate":
-      return await migrate(rest.includes("--dry-run"));
     default:
       console.error(
-        "usage: agents tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]|migrate [--dry-run]]",
+        "usage: agents tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]]",
       );
       return 2;
   }

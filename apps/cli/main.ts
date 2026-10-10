@@ -242,7 +242,7 @@ switch (cmd) {
   vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
-  tasks   [brief|add|done|remind|migrate]   the task list (in the brain); remind is what claude-tasks.timer runs
+  tasks   [brief|add|done|remind]   the task list (in the brain); remind is what claude-tasks.timer runs
   agent   start|list|status|say|answer|stop|wait|events   Claude sessions of any profile at work in a project, every
           permission they need answered here (agents agent, alone, says how)
   run     start|list|status|answer|resume   workflow runs: a plan of steps, each a child, with HANDOFFs and a

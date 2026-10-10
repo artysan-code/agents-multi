@@ -9,7 +9,6 @@ const MANUAL = new Set([
   "agents brain-backup",
   "agents doctor --probe",
   "agents sync",
-  "agents tasks migrate",
   "agents update --cli",
   "agents vault status",
 ]);

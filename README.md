@@ -227,7 +227,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                         |
 | `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                        |
 | `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                          |
-| `agents tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                                |
+| `agents tasks brief\|add\|done\|remind`                         | the task list from the terminal; `remind` is what the timer runs                                                                                              |
 | `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                            |
 | `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                    |
 | `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                |
@@ -473,8 +473,7 @@ token goes to the vault and the address next to the account's name.
 The owner's tasks live in their brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
-are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`), as they were before the brain held them;
-`agents tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
+are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`). `~/brains/tasks` also keeps
 `settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
 completing one creates the next) and an owner — who has to move: `alice`, `claude`, or someone else,
