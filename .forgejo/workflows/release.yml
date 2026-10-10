@@ -141,13 +141,17 @@ jobs:
         run: |
           git config user.name "Agents Multi release"
           git config user.email "release@agents-multi.invalid"
+          # the tag's scripts, not those on `release`: that branch moves at stable versions only, and its
+          # copy may not know this version's form (a release candidate)
+          tag_scripts=$(mktemp -d)
+          cp -r scripts/. "$tag_scripts"
           for _ in 1 2 3; do
             git fetch --quiet origin release
             git checkout --quiet -B release origin/release
-            deno run --allow-read --allow-write scripts/app-release.ts channels dist-app/latest.json
+            deno run --allow-read --allow-write "$tag_scripts/app-release.ts" channels dist-app/latest.json
             if [[ "$VERSION" != *-beta.* && "$VERSION" != *-rc.* ]]; then
               if [[ -n "$(jq -r '.license // ""' apps/desktop/release.json)" ]]; then
-                deno run --allow-read --allow-write scripts/aur.ts render "$VERSION" \
+                deno run --allow-read --allow-write "$tag_scripts/aur.ts" render "$VERSION" \
                   "$(sha256sum "dist-app/agents-multi_${VERSION}_amd64.deb" | cut -d' ' -f1)"
               else
                 echo "::warning::release.json has no licence: the AUR package is not rendered"
