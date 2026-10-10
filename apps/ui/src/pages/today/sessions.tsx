@@ -11,6 +11,7 @@ import { lang, t } from "../../i18n.ts";
 import { Spark } from "../../lib/claude.tsx";
 import { ago, cap, dur, modelShort } from "../../lib/format.ts";
 import { openDrawer, pcolor, toast } from "../../lib/ui.tsx";
+import { useThrottled } from "../../lib/throttle.ts";
 import { status, useTopic, working } from "../../state.ts";
 import type { SessionRow } from "./api.ts";
 
@@ -48,18 +49,16 @@ function Resume() {
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [fit, setFit] = useState(0);
   const box = useRef<HTMLDivElement>(null);
-  const at = useRef(0);
 
-  // a busy session writes every second: the list is re-read at most every 15 s
-  useTopic(async () => {
-    if (Date.now() - at.current < 15000) return;
-    at.current = Date.now();
+  // a busy session writes every second: the list is re-read at most every 15 s, the last change included
+  const load = useThrottled(async () => {
     try {
       const all = await get<SessionRow[]>("/api/sessions?" + new URLSearchParams({ since: "7d", limit: "60" }));
       const dirs = new Set<string>();
       setRows(all.filter((r) => r.cwd && !dirs.has(r.cwd) && dirs.add(r.cwd)).slice(0, 20));
     } catch { /* the list stays as it was */ }
-  }, ["state", "usage"]);
+  }, 15000);
+  useTopic(load, ["state", "usage"]);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -155,13 +154,12 @@ export function SessionsCard() {
   const open = new Set(s?.running.desktop.map((d) => d.variant) ?? []);
   const [view, setView] = useState<LiveView | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const at = useRef(0);
-  // the status line writes at every turn: read again at most every 15 s
-  useTopic(async () => {
-    if (Date.now() - at.current < 15000) return;
-    at.current = Date.now();
-    setView(await get<LiveView>("/api/live").catch(() => view));
-  }, ["state", "usage"]);
+  // the status line writes at every turn: read again at most every 15 s, the last change included
+  const load = useThrottled(async () => {
+    const v = await get<LiveView>("/api/live").catch(() => null);
+    if (v) setView(v);
+  }, 15000);
+  useTopic(load, ["state", "usage"]);
   const refresh = async () => {
     setRefreshing(true);
     const v = await post<LiveView & { ok?: boolean }>("/api/live/refresh", {}).catch((e: Error) => {
