@@ -27,5 +27,5 @@ except (OSError, ValueError):
 print(",".join(sorted({urllib.parse.urlparse(a["url"]).netloc for a in accounts if a.get("service") == "brain" and a.get("url")})))
 PY
 )
-exec "$DENO" run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com,api.anthropic.com${BRAIN_HOSTS:+,$BRAIN_HOSTS},"unix:${XDG_RUNTIME_DIR:-/tmp}/claude-multi-app.sock,unix:${AGENTS_MULTI_APP_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/agents-multi-app.sock}" \
+exec "$DENO" run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com,api.anthropic.com${BRAIN_HOSTS:+,$BRAIN_HOSTS},"unix:${AGENTS_MULTI_APP_SOCKET:-${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agents-multi}/agents-multi-app.sock}" \
   "$REPO/apps/cli/main.ts" "$@"

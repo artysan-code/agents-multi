@@ -108,8 +108,9 @@ The app owns the updater (`src-tauri/src/updater.rs`); the console shows it.
   `/api/events`; the page never polls. `POST /api/app/update` with `{ action }` and the anti-CSRF
   header: `check`, `install` (download when needed, install, relaunch) and `dismiss` (the «updated»
   screen was shown). 400 for another action, 503 without an app, 409 when the app refuses (updates off).
-- **The local channel** is a unix socket of the app's, `$XDG_RUNTIME_DIR/agents-multi-app.sock`, mode
-  600 in a folder only the user can open; one JSON line per request (`status`, `watch`, `check`,
+- **The local channel** is a unix socket of the app's, `$XDG_RUNTIME_DIR/agents-multi-app.sock` (without
+  a runtime folder, in the state folder, `~/.local/state/agents-multi`, which the app makes mode 700;
+  never `/tmp`), mode 600 in a folder only the user can open; one JSON line per request (`status`, `watch`, `check`,
   `install`, `dismiss`), and `watch` keeps the connection to send the status on every change
   (`updater/socket.rs`). The backend follows it on one connection, again after the app goes (2 s
   doubling to 30 s), and relays (`apps/cli/console/app-update.ts`). The socket's file permission is the

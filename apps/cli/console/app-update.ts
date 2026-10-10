@@ -65,8 +65,11 @@ export const NO_APP: AppUpdate = {
 export function appSocket(
   env: Record<string, string | undefined> = Deno.env.toObject(),
 ): string {
-  return env[SOCKET_VAR] ||
-    `${env.XDG_RUNTIME_DIR || "/tmp"}/agents-multi-app.sock`;
+  if (env[SOCKET_VAR]) return env[SOCKET_VAR]!;
+  // the runtime folder, else the app's private state folder: never a shared one like /tmp
+  const dir = env.XDG_RUNTIME_DIR ||
+    `${env.XDG_STATE_HOME || `${env.HOME ?? ""}/.local/state`}/agents-multi`;
+  return `${dir}/agents-multi-app.sock`;
 }
 
 const str = (v: unknown): v is string => typeof v === "string";
