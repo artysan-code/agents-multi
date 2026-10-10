@@ -10,7 +10,6 @@ import { t } from "../i18n.ts";
 import { view } from "../router.ts";
 import { leaving, live, status } from "../state.ts";
 import { board } from "../pages/tasks/model.ts";
-import mark from "../assets/mark.svg";
 
 /** How long the console may be silent before the screen covers the page, and before it says so. */
 const QUIET_MS = 2500, LOST_MS = 30000;
@@ -67,8 +66,7 @@ export function Boot() {
       aria-hidden={!shown}
     >
       <div class="boot-in">
-        <img src={mark} alt="" />
-        <div>Agents Multi</div>
+        <div class="boot-name">Agents Multi</div>
         {quiet !== "lost" && <div class="boot-bar" />}
         {quiet === "reconnect" && !leaving.value && <div class="boot-msg">{t("boot.reconnect")}</div>}
         {quiet === "lost" && !leaving.value && (

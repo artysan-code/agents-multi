@@ -1,4 +1,4 @@
-/* The waiting page: the console's start screen (apps/ui/index.html, the same colours, mark and bar), so
+/* The waiting page: the console's start screen (apps/ui/index.html, the same colours, name and bar), so
    the window goes from this page to the console's without a change of scene. */
 :root {
   color-scheme: light dark;
@@ -38,18 +38,14 @@ main {
   gap: 14px;
   text-align: center;
 }
-img {
-  width: 56px;
-  height: 56px;
-  animation: breathe 2.4s ease-in-out infinite;
-}
 h1 {
-  font-size: 15px;
-  font-weight: 600;
+  font: 400 22px/1.2 "Source Serif 4", "Noto Serif", Georgia, serif;
+  letter-spacing: -.01em;
   margin: 0;
+  animation: rise .5s ease both;
 }
 .bar {
-  width: 120px;
+  width: 132px;
   height: 2px;
   border-radius: 2px;
   background: var(--line);
@@ -67,10 +63,6 @@ h1 {
 }
 main[data-state="unreachable"] .bar {
   display: none;
-}
-main[data-state="unreachable"] img {
-  animation: none;
-  opacity: .6;
 }
 .status,
 .hint {
@@ -99,10 +91,10 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
 }
-@keyframes breathe {
-  50% {
-    transform: scale(.94);
-    opacity: .8;
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
   }
 }
 @keyframes slide {
@@ -114,7 +106,7 @@ button:disabled {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  img,
+  h1,
   .bar::after {
     animation: none;
   }

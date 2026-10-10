@@ -1,9 +1,7 @@
 // steps.tsx — a run's steps, one row each with its mark, and the bar of the one running (styles in
 // screen.css): the update screen (pages/system/wizard.tsx) and the first-run wizard (pages/setup/) draw
-// their progress with it. And `RunMark`, the update screen's head: the logo in a ring that fills as the
-// steps go, which closes green with the logo's five drops when the run ends well.
-
-import mark from "../assets/mark.svg";
+// their progress with it. And `RunMark`, the update screen's head: a ring of one arc per step that
+// fills as they go, the share in the middle; at the end the arcs close into one ring and a tick draws.
 
 export type StepState = "todo" | "running" | "done" | "failed" | "skipped";
 
@@ -66,35 +64,54 @@ export const runShare = (states: StepState[]): number =>
     ) / states.length
     : 0;
 
-const R = 28, C = 2 * Math.PI * R;
+const R = 30, C = 2 * Math.PI * R;
+/** The gap between two steps' arcs, in degrees. */
+const GAP = 14;
+
+/** Pure: each step's arc as a dash on the ring — where it starts (degrees from the top) and how long it
+ *  is (in the circle's length units). One step, or none, is the whole ring. */
+export function arcs(n: number): { from: number; len: number }[] {
+  if (n <= 1) return [{ from: 0, len: C }];
+  const each = 360 / n;
+  return Array.from({ length: n }, (_, i) => ({ from: i * each + GAP / 2, len: ((each - GAP) / 360) * C }));
+}
 
 export function RunMark(
-  { share, state }: { share: number; state: "idle" | "on" | "ok" | "bad" },
+  { states, state }: { states: StepState[]; state: "idle" | "on" | "ok" | "bad" },
 ) {
-  const fill = state === "ok" ? 1 : share;
+  const pct = Math.round((state === "ok" ? 1 : runShare(states)) * 100);
+  const segs = arcs(states.length);
   return (
     <div class={`rm rm-${state}`} aria-hidden="true">
-      <svg viewBox="0 0 64 64" class="rm-ring">
-        <circle class="rm-track" cx="32" cy="32" r={R} />
-        <circle
-          class="rm-fill"
-          cx="32"
-          cy="32"
-          r={R}
-          style={{ strokeDasharray: C, strokeDashoffset: C * (1 - fill) }}
-        />
+      <svg viewBox="0 0 72 72" class="rm-ring">
+        {segs.map((a, i) => {
+          const st = states.length > 1 ? states[i] : state === "ok" ? "done" : states[0] ?? "todo";
+          return (
+            <circle
+              key={i}
+              class={`rm-seg rm-${st}`}
+              cx="36"
+              cy="36"
+              r={R}
+              style={{
+                "--i": i,
+                strokeDasharray: `${a.len} ${C}`,
+                transform: `rotate(${a.from - 90}deg)`,
+              }}
+            />
+          );
+        })}
+        <circle class="rm-whole" cx="36" cy="36" r={R} />
       </svg>
-      <img src={mark} class="rm-logo" alt="" />
-      {state === "ok" && (
-        <>
-          <span class="rm-burst">
-            {[0, 1, 2, 3, 4].map((i) => <i key={i} style={{ "--a": `${i * 72 - 90}deg` }} />)}
+      <span class="rm-c">
+        {state === "ok" ? <Tick /> : state === "bad" ? <b>!</b> : (
+          <span class="rm-pct">
+            {pct}
+            <small>%</small>
           </span>
-          <span class="rm-ok-b">
-            <Tick />
-          </span>
-        </>
-      )}
+        )}
+      </span>
+      {state === "ok" && <span class="rm-ripple" />}
     </div>
   );
 }

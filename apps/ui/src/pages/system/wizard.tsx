@@ -42,7 +42,6 @@ import {
 } from "./updates-close.tsx";
 import {
   RunMark,
-  runShare,
   StepRows,
   type StepState,
 } from "../../lib/steps.tsx";
@@ -440,7 +439,7 @@ function Screen(
           </svg>
         </button>
         <RunMark
-          share={runShare(shown.map(stepState))}
+          states={shown.map(stepState)}
           state={finished && !failed
             ? "ok"
             : failed

@@ -73,13 +73,15 @@
       gap: 14px;
       transition: transform .38s ease;
     }
-    .boot-in img {
-      width: 56px;
-      height: 56px;
-      animation: boot-breathe 2.4s ease-in-out infinite;
+    /* the name alone, set in the console's serif (its own faces are not loaded yet: the same stack as
+       the desktop app's waiting page, so the two pages match to the pixel) */
+    .boot-name {
+      font: 400 22px/1.2 "Source Serif 4", "Noto Serif", Georgia, serif;
+      letter-spacing: -.01em;
+      animation: boot-in .5s ease both;
     }
     .boot-bar {
-      width: 120px;
+      width: 132px;
       height: 2px;
       border-radius: 2px;
       background: var(--b-line);
@@ -95,10 +97,10 @@
       background: var(--b-accent);
       animation: boot-slide 1.3s ease-in-out infinite;
     }
-    @keyframes boot-breathe {
-      50% {
-        transform: scale(.94);
-        opacity: .8;
+    @keyframes boot-in {
+      from {
+        opacity: 0;
+        transform: translateY(3px);
       }
     }
     @keyframes boot-slide {
@@ -110,7 +112,7 @@
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .boot-in img,
+      .boot-name,
       .boot-bar::after {
         animation: none;
       }
@@ -120,8 +122,7 @@
   <body>
     <div id="boot" class="boot" role="status" aria-label="Agents Multi">
       <div class="boot-in">
-        <img src="./src/assets/mark.svg" alt="">
-        <div>Agents Multi</div>
+        <div class="boot-name">Agents Multi</div>
         <div class="boot-bar"></div>
       </div>
     </div>

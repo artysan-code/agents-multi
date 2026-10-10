@@ -99,132 +99,136 @@
   }
 }
 
-/* the update screen's head (steps.tsx RunMark): the logo in a ring that fills as the steps go */
+/* the update screen's head (steps.tsx RunMark): one arc per step round the share done; the arcs close
+   into one ring and a tick draws when the run ends well */
 .rm {
   position: relative;
   isolation: isolate;
-  width: 64px;
-  height: 64px;
-  margin-bottom: 14px;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 16px;
 }
 .rm-ring {
   position: absolute;
   inset: 0;
-  transform: rotate(-90deg);
   overflow: visible;
 }
-.rm-track,
-.rm-fill {
+.rm-seg,
+.rm-whole {
   fill: none;
-  stroke-width: 3;
-}
-.rm-track {
-  stroke: var(--line);
-}
-.rm-fill {
-  stroke: var(--accent);
+  stroke-width: 3.5;
   stroke-linecap: round;
-  transition: stroke-dashoffset .7s cubic-bezier(.2, .8, .3, 1), stroke .4s
-    ease;
+  transform-origin: 36px 36px;
 }
-.rm-logo {
-  position: absolute;
-  inset: 13px;
-  width: 38px;
-  height: 38px;
+.rm-seg {
+  stroke: var(--line);
+  transition: stroke .45s ease, opacity .45s ease;
 }
-.rm-on .rm-logo {
-  animation: rm-breathe 2.4s ease-in-out infinite;
+.rm-seg.rm-done {
+  stroke: var(--accent);
+  animation: rm-seg-in .5s cubic-bezier(.2, .8, .3, 1);
 }
-@keyframes rm-breathe {
+@keyframes rm-seg-in {
+  from {
+    stroke-width: 6;
+    opacity: .4;
+  }
+}
+.rm-seg.rm-running {
+  stroke: var(--accent);
+  animation: rm-run 1.4s ease-in-out infinite;
+}
+@keyframes rm-run {
   50% {
-    transform: scale(.92);
-    opacity: .8;
+    opacity: .3;
   }
 }
-/* the ring's head while running: a soft glow that goes round */
-.rm-on::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0 80%, var(--accent-wash)
-    92%, transparent);
-  animation: rot2 2.2s linear infinite;
-  z-index: -1;
+.rm-seg.rm-skipped {
+  stroke: var(--line);
+  opacity: .5;
 }
-.rm-ok .rm-fill {
+.rm-seg.rm-failed {
+  stroke: var(--crit);
+}
+/* the whole ring, drawn over the arcs once the run has ended well: the gaps close */
+.rm-whole {
   stroke: var(--ok);
+  stroke-dasharray: 189 189;
+  stroke-dashoffset: 189;
+  transform: rotate(-90deg);
+  opacity: 0;
 }
-.rm-ok .rm-logo {
-  animation: rm-pop .55s cubic-bezier(.3, 1.6, .5, 1);
+.rm-ok .rm-whole {
+  opacity: 1;
+  animation: rm-close .6s .1s cubic-bezier(.4, 0, .2, 1) forwards;
 }
-@keyframes rm-pop {
-  40% {
-    transform: scale(1.14);
+@keyframes rm-close {
+  to {
+    stroke-dashoffset: 0;
   }
 }
-.rm-ok-b {
+/* a run that failed: what it did fades, the step that failed stays */
+.rm-bad .rm-seg.rm-done {
+  opacity: .4;
+}
+/* the middle: the share, then a tick or a mark */
+.rm-c {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 0 3px var(--surface);
+  inset: 0;
   display: grid;
   place-items: center;
-  animation: rm-in .3s .35s cubic-bezier(.3, 1.6, .5, 1) both;
+}
+.rm-pct {
+  font: 500 19px/1 var(--serif);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  color: var(--fg);
+  transition: color .3s;
+}
+.rm-pct small {
+  font: 500 10px/1 var(--sans, inherit);
+  color: var(--dim);
+  margin-left: 1px;
+}
+.rm-idle .rm-pct {
+  color: var(--dim);
+}
+.rm-c .uw-tick {
+  width: 26px;
+  height: 26px;
+  stroke: var(--ok);
+  stroke-width: 2.2;
+  animation-delay: .45s;
+}
+.rm-c b {
+  font: 600 24px/1 var(--serif);
+  color: var(--crit);
+  animation: rm-in .3s cubic-bezier(.3, 1.6, .5, 1) both;
 }
 @keyframes rm-in {
   from {
     transform: scale(0);
   }
 }
-.rm-ok-b .uw-tick {
-  width: 13px;
-  height: 13px;
-  stroke: var(--surface);
-  animation-delay: .5s;
-}
-/* the logo's five drops, out once when the run ends well */
-.rm-burst i {
+/* the end: one ring of light goes out and fades */
+.rm-ripple {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px;
-  border-radius: 50% 50% 50% 0;
-  background: var(--c-blue);
+  inset: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--ok);
   opacity: 0;
-  animation: rm-burst .8s .25s ease-out;
+  animation: rm-ripple .9s .55s ease-out;
+  pointer-events: none;
 }
-.rm-burst i:nth-child(2) {
-  background: var(--c-violet);
-}
-.rm-burst i:nth-child(3) {
-  background: var(--c-rose);
-}
-.rm-burst i:nth-child(4) {
-  background: var(--c-amber);
-}
-.rm-burst i:nth-child(5) {
-  background: var(--c-green);
-}
-@keyframes rm-burst {
-  0% {
-    opacity: 1;
-    transform: rotate(var(--a)) translateX(30px) scale(1);
+@keyframes rm-ripple {
+  from {
+    opacity: .55;
+    transform: scale(1);
   }
-  100% {
+  to {
     opacity: 0;
-    transform: rotate(var(--a)) translateX(54px) scale(.4);
+    transform: scale(1.45);
   }
-}
-.rm-bad .rm-fill {
-  stroke: var(--crit);
 }
 .rm-bad {
   animation: rm-shake .4s ease;
@@ -239,7 +243,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .rm *,
-  .rm::after,
   .uw-steps li,
   .uw-card h2 {
     animation: none !important;
