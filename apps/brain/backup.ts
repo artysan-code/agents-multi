@@ -1,12 +1,11 @@
 // backup.ts — the brain as one encrypted file, for the owner's machines to fetch and keep.
 //
-// A consistent copy of the database (see snapshot), sealed with
+// A consistent copy of the database (see sealedCopy), sealed with
 // AES-256-GCM under BRAIN_BACKUP_KEY (32 bytes, base64): the server never hands out the brain in
 // clear, and the machines keeping copies cannot read them without the key from the vault.
 // Format: "BRN1", a 12-byte IV, the ciphertext.
 
 import { backup, DatabaseSync } from "node:sqlite";
-import type { Store } from "./store.ts";
 
 const MAGIC = new TextEncoder().encode("BRN1");
 
@@ -41,16 +40,6 @@ export async function open(sealed: Uint8Array<ArrayBuffer>, b64key: string): Pro
   );
 }
 
-/** The database as one sealed file. VACUUM INTO would be the obvious copy, but it needs ATTACH,
- *  which Deno refuses to a process without unrestricted file access (the service only writes
- *  /data). One process and synchronous statements make this consistent instead: the WAL is folded
- *  into the file and the file is read in the same tick, with no write able to run in between. */
-export async function snapshot(store: Store, dbFile: string, b64key: string): Promise<Uint8Array<ArrayBuffer>> {
-  const c = store.db.prepare("pragma wal_checkpoint(truncate)").get() as { busy: number };
-  if (c.busy) throw new Error("the database is busy: try again");
-  return await seal(Deno.readFileSync(dbFile) as Uint8Array<ArrayBuffer>, b64key);
-}
-
 /** A database file as one sealed copy, taken from a connection of its own, so it works from another
  *  process than the one serving (the admin CLI) as well as from the server's scheduled job: SQLite's
  *  online backup copies a consistent state while writers go on. The plain copy exists only as a
@@ -66,4 +55,11 @@ export async function sealedCopy(file: string, b64key: string, tmpDir: string): 
     src.close();
     await Deno.remove(tmp).catch(() => {});
   }
+}
+
+/** The sealed copy of one account's brain for /backup: SQLite's online backup, in steps, so the
+ *  request does not hold the event loop (a checkpoint and a whole-file read in one tick did). The
+ *  temporary plain copy lives beside the database, in the account's own folder. */
+export function snapshot(dbFile: string, b64key: string): Promise<Uint8Array<ArrayBuffer>> {
+  return sealedCopy(dbFile, b64key, dbFile.slice(0, dbFile.lastIndexOf("/")));
 }

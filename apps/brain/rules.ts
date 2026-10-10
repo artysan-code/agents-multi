@@ -149,7 +149,8 @@ export function check(
       "select count(*) n from docs where deleted = 0 and path not like 'tasks/%' and path not like ? and path not like ? and path <> ?",
     )
       .get(`${a.diary}/%`, `${a.inbox}/%`, path) as { n: number };
-    const live = linksIn(body).map((t) => store.resolve(t)).filter((p) => p && p !== path);
+    const resolve = store.resolver();
+    const live = linksIn(body).map((t) => resolve(t)).filter((p) => p && p !== path);
     if (others.n > 0 && !live.length) {
       errors.push("link at least one existing page with [[path]]: the project, person or note this belongs to");
     }

@@ -14,11 +14,7 @@ import { health, search, type ToolContext } from "./tools.ts";
 
 /** What the memory is at, tasks left out: their writes do not change the pages. */
 export function memoryVersion(store: Store): string {
-  const r = store.db.prepare("select count(*) n, max(at) last from revisions where path not like 'tasks/%'").get() as {
-    n: number;
-    last: string | null;
-  };
-  return `${r.n}:${r.last ?? ""}`;
+  return store.version(true).version;
 }
 
 /** The answer to a GET under /api/brain, or null when the path is not one of these. */

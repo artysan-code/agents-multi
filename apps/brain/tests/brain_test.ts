@@ -2,10 +2,10 @@
 // search, TOTP, redirects and the backup seal. The OAuth dance and the MCP tools run end to end in
 // brain/tests/e2e.ts, against a running service.
 import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
-import { cleanPath, linksIn, Store, titleOf } from "../store.ts";
+import { cleanPath, linksIn, makeResolver, Store, titleOf } from "../store.ts";
 import { chunk, fuse } from "../embed.ts";
 import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, totp, totpOk } from "../auth.ts";
-import { open, seal } from "../backup.ts";
+import { open, seal, snapshot } from "../backup.ts";
 import { instructions, staleProjects } from "../tools.ts";
 import { brainApi } from "../api.ts";
 import {
@@ -287,4 +287,79 @@ Deno.test("areas: an English brain is described and checked with its own names",
   // the diary is a log there too: no link needed, no duplicate check
   assert(check(s, "diary/2026-10-07.md", "# 2026-10-07\n\nWhat happened.\n\n- 10:00 a line\n", { creating: true }).ok);
   s.db.close();
+});
+
+Deno.test("makeResolver: the exact path, else the shallowest document with that name", () => {
+  const r = makeResolver(["a/deep/x.md", "b/x.md", "c/Y.md", "z.md"]);
+  assertEquals(r("b/x"), "b/x.md", "exact path");
+  assertEquals(r("x"), "b/x.md", "shallowest by name");
+  assertEquals(r("nowhere/x.md"), "b/x.md", "an unknown folder falls back to the name");
+  assertEquals(r("y"), "c/Y.md", "case-insensitive on the name");
+  assertEquals(r("missing"), null);
+  assertEquals(makeResolver(["m/same.md", "k/same.md"])("same"), "k/same.md", "ties by path order");
+});
+
+Deno.test("Store: version changes with every write and never otherwise; pages leave tasks out", () => {
+  const s = new Store(":memory:");
+  const v0 = s.version().version, p0 = s.version(true).version;
+  assertEquals(s.version().version, v0, "reads change nothing");
+  s.write("persone/a.md", "uno", "t");
+  const v1 = s.version().version, p1 = s.version(true).version;
+  assert(v1 !== v0 && p1 !== p0);
+  s.write("tasks/t-1-a.md", "una task", "t");
+  assert(s.version().version !== v1, "a task write moves the whole version");
+  assertEquals(s.version(true).version, p1, "but not the pages'");
+  assertEquals(s.tasksVersion(), 1);
+  s.remove("persone/a.md", "t");
+  assert(s.version(true).version !== p1);
+  assertEquals(s.version().revisions, 3);
+  s.close();
+});
+
+Deno.test("Store.taskBodies: the live tasks only, by a range on the key", () => {
+  const s = new Store(":memory:");
+  s.write("tasks/t-1-a.md", "uno", "t");
+  s.write("tasks/t-2-b.md", "due", "t");
+  s.write("tasks/other.md", "no", "t");
+  s.write("persone/t-x.md", "no", "t");
+  s.remove("tasks/t-2-b.md", "t");
+  assertEquals(s.taskBodies(), ["uno"]);
+  const plan = s.db.prepare(
+    "explain query plan select body from docs where path >= 'tasks/t-' and path < 'tasks/t.' and deleted = 0",
+  ).all().map((r) => (r as { detail: string }).detail).join(" ");
+  assert(/SEARCH/.test(plan) && !/SCAN/.test(plan), plan);
+  s.close();
+});
+
+Deno.test("Store: one resolver serves the links and the graph of a whole pass", () => {
+  const s = new Store(":memory:");
+  s.write("progetti/p.md", "vedi [[alice]] e [[nessuno]]", "t");
+  s.write("persone/alice.md", "x", "t");
+  const r = s.resolver();
+  assertEquals(s.links("progetti/p.md", r).out.map((l) => l.path), ["persone/alice.md", null]);
+  assertEquals(s.graph(r).edges, [["progetti/p.md", "persone/alice.md"]]);
+  s.close();
+});
+
+Deno.test("snapshot: a live database as one sealed copy, taken without stopping writers", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const file = `${dir}/brain.db`;
+    const s = new Store(file);
+    s.write("persone/a.md", "uno", "t");
+    const key = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+    const sealed = await snapshot(file, key);
+    s.write("persone/b.md", "due", "t"); // a write after the copy is not in it, and nothing broke
+    const plain = await open(sealed, key);
+    const copy = `${dir}/copy.db`;
+    await Deno.writeFile(copy, plain);
+    const c = new Store(copy);
+    assertEquals(c.get("persone/a.md")?.body, "uno");
+    assertEquals(c.get("persone/b.md"), null);
+    c.close();
+    s.close();
+    assertEquals([...Deno.readDirSync(dir)].filter((e) => e.name.endsWith(".tmp")).length, 0, "no plain temp left");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });

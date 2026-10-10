@@ -43,13 +43,7 @@ export class Tenants {
     const index = indexer(store, this.embed);
     // tasks live here as documents under tasks/, with the rules of shared/mcp/lib/tasks.ts on top
     const tasks: TaskStore = {
-      list: () =>
-        Promise.resolve(
-          (store.db.prepare("select body from docs where deleted = 0 and path like 'tasks/t-%'").all() as {
-            body: string;
-          }[])
-            .map((r) => fromFile(r.body)).filter((t): t is Task => !!t),
-        ),
+      list: () => Promise.resolve(store.taskBodies().map((b) => fromFile(b)).filter((t): t is Task => !!t)),
       get: (id) => Promise.resolve(fromFile(store.get(`tasks/${id}.md`)?.body ?? "")),
       // read, compared and written with no await in between: two requests cannot interleave here
       write: (t, base) => {
