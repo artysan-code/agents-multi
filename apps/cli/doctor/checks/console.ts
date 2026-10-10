@@ -3,12 +3,21 @@
 
 import { codeVersion } from "../../codeversion.ts";
 import { RETIRED_UNITS } from "../../install.ts";
-import { lstat } from "../../lib/fs.ts";
+import { lstat, readJson } from "../../lib/fs.ts";
 import { HOME, PORT, REPO } from "../../lib/paths.ts";
 import { has } from "../../lib/proc.ts";
 import { uiStatus } from "../../ui.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
+
+/** The rules that keep a Claude session from driving the console: on 127.0.0.1 it answers any process
+ *  of this user, and its actions open terminals, run Claude and change accounts. */
+export const CONSOLE_DENY = [
+  "Bash(curl *127.0.0.1:7331*)",
+  "Bash(curl *localhost:7331*)",
+  "Bash(wget *127.0.0.1:7331*)",
+  "Bash(wget *localhost:7331*)",
+];
 
 /** The console: who serves it, whether it runs the current code, and its interface's build. */
 export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -49,6 +58,19 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
         "restart Agents Multi",
       );
     } else add("console", "ok", `console on http://127.0.0.1:${PORT}`);
+  }
+  // --- a session must not reach the console's actions (a prompt injected into a chat could open a
+  // terminal or change an account through it)
+  const deny =
+    (await readJson<{ permissions?: { deny?: string[] } }>(`${REPO}/shared/settings.json`))?.permissions?.deny ?? [];
+  const absent = CONSOLE_DENY.filter((r) => !deny.includes(r));
+  if (absent.length) {
+    add(
+      "console.deny",
+      "fail",
+      `Claude sessions could drive the console: shared deny lacks ${absent.join(", ")}`,
+      "console › System › Permissions › Denied",
+    );
   }
   // --- the interface: built from the tree the checkout is on; without a build there is no console page.
   // A build without the stamp (`pnpm build` in apps/ui, as a developer does) serves the page all the

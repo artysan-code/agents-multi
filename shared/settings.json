@@ -15,7 +15,11 @@
       "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",
       "Read(~/vault/claude-multi/**)",
-      "Edit(~/vault/claude-multi/**)"
+      "Edit(~/vault/claude-multi/**)",
+      "Bash(curl *127.0.0.1:7331*)",
+      "Bash(curl *localhost:7331*)",
+      "Bash(wget *127.0.0.1:7331*)",
+      "Bash(wget *localhost:7331*)"
     ],
     "ask": [
       "Read(.env)",
