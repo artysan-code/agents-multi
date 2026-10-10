@@ -17,7 +17,8 @@ services:
       - BRAIN_CONTACT=${BRAIN_CONTACT:-}
       - BRAIN_HOSTING=${BRAIN_HOSTING:-}
       - BRAIN_SITE_URL=${BRAIN_SITE_URL:-}
-      - BRAIN_CLIENT_IP_HEADER=${BRAIN_CLIENT_IP_HEADER:-}
+      # behind Coolify's Traefik; cf-connecting-ip when Cloudflare is in front of it
+      - BRAIN_CLIENT_IP_HEADER=${BRAIN_CLIENT_IP_HEADER:-x-forwarded-for}
       - BRAIN_LOG_LEVEL=${BRAIN_LOG_LEVEL:-info}
       # the model's own resource (ollama.yaml), by its alias on Coolify's network
       - BRAIN_EMBED_URL=${BRAIN_EMBED_URL:-http://agents-multi-ollama:11434}
@@ -32,7 +33,12 @@ services:
     networks:
       - coolify
     healthcheck:
-      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/ready'); if (!r.ok) Deno.exit(1)"]
+      test: [
+        "CMD",
+        "bash",
+        "-c",
+        "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && read -r l <&3 && [[ $$l == *' 200 '* ]]",
+      ]
       interval: 30s
       timeout: 5s
       retries: 3

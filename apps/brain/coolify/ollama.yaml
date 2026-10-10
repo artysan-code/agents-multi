@@ -11,11 +11,15 @@ services:
       "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$$BRAIN_EMBED_MODEL\"; wait",
     ]
     environment:
-      - OLLAMA_KEEP_ALIVE=10m
+      # the model stays in memory (loading it costs seconds on a search); two requests at once
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=2
       # the same name as the brain's BRAIN_EMBED_MODEL
       - BRAIN_EMBED_MODEL=${BRAIN_EMBED_MODEL:-bge-m3}
     volumes:
       - brain-models:/root/.ollama
+    # the model must not starve the brain of the CPU while it indexes
+    cpus: "3"
     networks:
       coolify:
         aliases: [agents-multi-ollama]

@@ -26,9 +26,12 @@ services:
       - BRAIN_HOSTING=${BRAIN_HOSTING:-}
       # the site's own address (another origin than the brain's), when it has one
       - BRAIN_SITE_URL=${BRAIN_SITE_URL:-}
-      # the header a proxy in front puts the client's address in (cf-connecting-ip behind Cloudflare),
-      # for the rate limits; empty means the connection's own address
-      - BRAIN_CLIENT_IP_HEADER=${BRAIN_CLIENT_IP_HEADER:-}
+      # the header a proxy in front puts the client's address in, for the rate limits. Behind Coolify's
+      # Traefik (one hop) x-forwarded-for: its last entry is the address Traefik saw. Behind Cloudflare
+      # in front of Traefik set cf-connecting-ip. Empty (a direct connection) means the connection's own
+      # address; behind a proxy that would put every client under the proxy's address, and five wrong
+      # sign-ins from anyone would lock the owner out.
+      - BRAIN_CLIENT_IP_HEADER=${BRAIN_CLIENT_IP_HEADER:-x-forwarded-for}
       # how much the log says: debug, info, warn or error (one JSON line per event and per request)
       - BRAIN_LOG_LEVEL=${BRAIN_LOG_LEVEL:-info}
       - BRAIN_EMBED_URL=${BRAIN_EMBED_URL:-http://ollama:11434}
@@ -50,7 +53,12 @@ services:
     # the proxy sends traffic only to a healthy container: checked every two seconds while it starts,
     # so a deploy is out of service for the seconds the new one takes to boot, not for half a minute
     healthcheck:
-      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/ready'); if (!r.ok) Deno.exit(1)"]
+      test: [
+        "CMD",
+        "bash",
+        "-c",
+        "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && read -r l <&3 && [[ $$l == *' 200 '* ]]",
+      ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -77,10 +85,14 @@ services:
       "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$$BRAIN_EMBED_MODEL\"; wait",
     ]
     environment:
-      - OLLAMA_KEEP_ALIVE=10m
+      # the model stays in memory (loading it costs seconds on a search); two requests at once
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=2
       - BRAIN_EMBED_MODEL=${BRAIN_EMBED_MODEL:-bge-m3}
     volumes:
       - brain-models:/root/.ollama
+    # the model must not starve the brain of the CPU while it indexes
+    cpus: "3"
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s
