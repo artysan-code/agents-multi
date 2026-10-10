@@ -18,6 +18,8 @@ paths = ['''^apps/cli/tests/''', '''^apps/brain/tests/''', '''^\.githooks/''', '
 
 [allowlist]
 description = "public values that look like keys"
+# made-up tokens of every shape the masking recognises, which its test feeds it
+paths = ['''^apps/cli/tests/mask_test\.ts$''']
 regexes = [
   # fingerprint of Anthropic's apt signing key, pinned in bin/claude-desktop-update
   '''31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE''',
