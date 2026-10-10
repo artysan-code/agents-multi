@@ -122,8 +122,6 @@ interface SettingsResult {
   adopted: string[];
   /** the runtime file was (or, dry, would be) rewritten */
   wrote: boolean;
-  /** it was still a symlink to shared/settings.json */
-  migrated: boolean;
   /** a regular file with no record of what was generated: kept aside, not adopted */
   orphan?: string;
 }
@@ -167,11 +165,9 @@ async function registryRules(p: Profile): Promise<Rules> {
  */
 export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: boolean } = {}): Promise<SettingsResult> {
   const adoptWrites = opts.adopt ?? true;
-  const res: SettingsResult = { profile: p, adopted: [], wrote: false, migrated: false };
+  const res: SettingsResult = { profile: p, adopted: [], wrote: false };
   const rt = runtimePath(p);
-  const st = await lstat(rt);
-  res.migrated = !!st?.isSymlink;
-  const current = st && !st.isSymlink ? await readObj(rt) : null;
+  const current = await readObj(rt);
   const lastBuilt = await readObj(builtPath(p));
 
   let { shared, patch, derived, rules, fromManifest } = await expectedSettings(p);
@@ -194,9 +190,8 @@ export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: bo
   }
 
   const built = buildSettings(shared, patch, derived);
-  res.wrote = res.migrated || !current || !same(current, built);
+  res.wrote = !current || !same(current, built);
   if (opts.dry) return res;
-  if (res.migrated) await Deno.remove(rt);
   if (res.wrote) await writeJson(rt, built);
   if (!same(lastBuilt, built)) await writeJson(builtPath(p), built);
   return res;

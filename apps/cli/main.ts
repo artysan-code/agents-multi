@@ -55,9 +55,7 @@ switch (cmd) {
         console.log(`  ${pre}${r.profile}: settings.json had no record of being generated, kept aside as ${r.orphan}`);
       }
       if (r.wrote && !flag("--quiet")) {
-        console.log(
-          `  ${pre}${r.profile}/settings.json ${r.migrated ? "generated (was a link to shared/)" : "regenerated"}`,
-        );
+        console.log(`  ${pre}${r.profile}/settings.json regenerated`);
       }
     }
     break;

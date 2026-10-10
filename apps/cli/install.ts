@@ -334,9 +334,7 @@ export async function install(
           shortHome(set.orphan)
         }`,
       );
-    }
-    if (set.migrated) say(`${ANSI.y}→${ANSI.x} ${p}/settings.json: from a link to shared/ to a generated file`);
-    else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
+    } else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
     await ensureSymlink("../shared/hooks", `${dir}/hooks`, `${p}/hooks`);
     await ensureDir(`${dir}/plugins`);
     await ensureSymlink("../../marketplaces", `${dir}/plugins/marketplaces`, `${p}/plugins/marketplaces`);
