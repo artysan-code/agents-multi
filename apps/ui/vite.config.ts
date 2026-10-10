@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 import preact from "@preact/preset-vite";
 
-const port = Number(process.env.AGENTS_MULTI_PORT ?? process.env.CLAUDE_MULTI_PORT) || 7331;
+const port = Number(process.env.AGENTS_MULTI_PORT) || 7331;
 const target = `http://127.0.0.1:${port}`;
 
 /** The console's token (apps/cli/console/token.ts): its file is in the folder of the app's socket. Read
