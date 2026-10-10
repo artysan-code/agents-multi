@@ -1,7 +1,7 @@
 // api.ts — the Tasks page's endpoints (/api/tasks/*, /api/open) and the shapes they answer with. The data
 // is shared/mcp/lib/tasks.ts: the same files a chat changes through the tasks MCP server.
 
-import { get, post, type Result } from "../../api.ts";
+import { get, post, type Result, upload } from "../../api.ts";
 import { t } from "../../i18n.ts";
 import { toast } from "../../lib/ui.tsx";
 
@@ -56,7 +56,7 @@ export interface Board {
 }
 
 /** A task with its notes, as the sheet reads it. */
-export interface TaskFull extends Omit<BoardTask, "folder" | "progress"> {
+interface TaskFull extends Omit<BoardTask, "folder" | "progress"> {
   notes?: string;
   remind?: number;
 }
@@ -97,7 +97,7 @@ export interface Item {
   links?: Links;
 }
 
-export type OpBody =
+type OpBody =
   | { op: "update"; id: string; status?: string; base?: string; [field: string]: unknown }
   | { op: "step"; id: string; index: number; done: boolean }
   | { op: "addstep"; id: string; text: string }
@@ -129,13 +129,7 @@ export async function taskOp(body: OpBody, onStale?: (current: Item) => void): P
 /** Uploads one file to a task's folder (the request body is the file itself). */
 export async function uploadFile(id: string, f: File): Promise<Answer | Refused> {
   try {
-    const res = await fetch("/api/tasks/file", {
-      method: "POST",
-      headers: { "x-claude-multi": "1", "x-task-id": id, "x-filename": encodeURIComponent(f.name) },
-      body: f,
-    });
-    if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => "")}`.trim());
-    return await res.json() as Answer | Refused;
+    return await upload<Answer | Refused>("/api/tasks/file", f, { "x-task-id": id, "x-filename": encodeURIComponent(f.name) });
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }

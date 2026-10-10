@@ -24,7 +24,7 @@ import {
 } from "./model.ts";
 import { openTask } from "./sheet.tsx";
 
-export function Bar({ p }: { p: Progress }) {
+function Bar({ p }: { p: Progress }) {
   return (
     <>
       <span class="tbar" title={`${p.done}/${p.total}`}>

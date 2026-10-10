@@ -7,9 +7,6 @@ import { render } from "preact";
 import "./styles/base.css";
 import "./styles/v2.css";
 import { App } from "./app.tsx";
-import { Pick } from "./pages/pick/index.tsx";
-import { Hey } from "./pages/hey/index.tsx";
-import { Setup } from "./pages/setup/index.tsx";
 import { loadSetup } from "./pages/setup/api.ts";
 import { connect, loadOwner, loadStatus } from "./state.ts";
 import { go } from "./router.ts";
@@ -29,15 +26,18 @@ document.head.append(faces);
 // (the start screen is the console's: they go without it)
 if (location.hash === "#pick") {
   dismissBoot();
+  const { Pick } = await import("./pages/pick/index.tsx");
   render(<Pick />, document.getElementById("root")!);
 } else if (location.hash === "#hey") {
   dismissBoot();
+  const { Hey } = await import("./pages/hey/index.tsx");
   render(<Hey />, document.getElementById("root")!);
 } else {
   const setup = await loadSetup().catch(() => null);
   if (setup?.active) {
     // a machine with no configuration yet: the first-run wizard, in place of the console
     dismissBoot();
+    const { Setup } = await import("./pages/setup/index.tsx");
     render(<Setup initial={setup} />, document.getElementById("root")!);
   } else {
     go(location.hash.slice(1));

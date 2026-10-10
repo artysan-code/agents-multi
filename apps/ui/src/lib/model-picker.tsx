@@ -5,19 +5,11 @@
 // there, in the page's flow, instead of over the page: the Hey window is as tall as its page, and a
 // list over the page would fall outside it.
 
+import { createPortal } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { createPortal } from "preact/compat";
-import { get, post, type Result } from "../api.ts";
+import { api, type ModelState, type Result } from "../api.ts";
 import { type Key, t, tk } from "../i18n.ts";
 import "./model-picker.css";
-
-/** GET /api/ask/model. `efforts` and `default` came later: an older console sends only the names. */
-export interface ModelState {
-  model: string;
-  models: string[];
-  efforts?: Record<string, string>;
-  default?: string;
-}
 
 const COLOR: Record<string, string> = { haiku: "green", sonnet: "blue", opus: "violet" };
 const TICKS: Record<string, number> = { low: 1, medium: 2, high: 3 };
@@ -26,12 +18,12 @@ const color = (m: string) => (COLOR[m] ? `var(--c-${COLOR[m]})` : "var(--faint)"
 /** The server's model and a way to change it; a refused change reloads what the server keeps. */
 export function useAskModel(onError: (msg: string) => void): { state: ModelState | null; pick: (m: string) => Promise<void> } {
   const [state, setState] = useState<ModelState | null>(null);
-  const load = () => get<ModelState>("/api/ask/model").then(setState, () => setState(null));
+  const load = () => api.askModel().then(setState, () => setState(null));
   useEffect(() => void load(), []);
   const pick = async (model: string) => {
     if (!state || model === state.model) return;
     setState({ ...state, model });
-    const r = await post("/api/ask/model", { model }).catch((e: Error): Result => ({ ok: false, message: e.message }));
+    const r = await api.setAskModel(model).catch((e: Error): Result => ({ ok: false, message: e.message }));
     if (!r.ok) {
       onError(r.message ?? "");
       void load();

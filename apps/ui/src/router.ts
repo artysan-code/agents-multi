@@ -6,7 +6,7 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 
-export const VIEWS = ["today", "tasks", "brain", "connections", "system"] as const;
+const VIEWS = ["today", "tasks", "brain", "connections", "system"] as const;
 export const TABS = ["overview", "profiles", "permissions", "plugins", "updates", "health"] as const;
 export type View = typeof VIEWS[number];
 export type Tab = typeof TABS[number];
@@ -24,7 +24,7 @@ export function go(hash: string): void {
 
 addEventListener("hashchange", () => go(location.hash.slice(1)));
 
-export type IntentName =
+type IntentName =
   | "tasks.new" // open the new-task form
   | "profiles.new" // open the form for a new profile
   | "update.wizard" // start the update wizard (on any page: the wizard is a drawer)

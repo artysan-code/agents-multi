@@ -507,15 +507,6 @@ button.deb:hover {
   white-space: nowrap;
   overflow: hidden;
 }
-/* the secondary meta shows on hover, and when the steps are open */
-.tq .tm .sec {
-  display: none;
-  gap: 8px;
-  align-items: center;
-}
-.tq .tr:hover .tm .sec {
-  display: inline-flex;
-}
 .tq .proj {
   font: 400 11px var(--mono);
   color: var(--dim);

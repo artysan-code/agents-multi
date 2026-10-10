@@ -7,7 +7,7 @@
 
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { ndjson, post, postInit, type Result } from "../api.ts";
+import { api, ndjson, type Result } from "../api.ts";
 import { t, tk } from "../i18n.ts";
 import { Spark, type SparkMode } from "../lib/claude.tsx";
 import { renderMarkdown } from "../lib/markdown.tsx";
@@ -149,7 +149,7 @@ export function AskBar() {
     busy.current = new AbortController();
     try {
       const where = project === "~none" ? { noProject: true } : { project };
-      const res = await fetch("/api/ask", postInit({ text, kind, ...where, session: session.current }, busy.current.signal));
+      const res = await api.ask({ text, kind, ...where, session: session.current }, busy.current.signal);
       if (!res.ok || !res.body) {
         throw new Error((await res.json().catch(() => ({})) as { error?: string }).error ?? `HTTP ${res.status}`);
       }
@@ -192,7 +192,7 @@ export function AskBar() {
   };
 
   const terminal = async (body: Record<string, unknown>) => {
-    const r = await post("/api/terminal", body).catch((err: Error): Result => ({ ok: false, message: err.message }));
+    const r = await api.terminal(body).catch((err: Error): Result => ({ ok: false, message: err.message }));
     if (!r.ok) toast(r.message ?? "", true);
   };
 

@@ -4,59 +4,21 @@
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { get, post } from "../../api.ts";
 import { status, useTopic } from "../../state.ts";
 import { t } from "../../i18n.ts";
 import { fmt, short } from "../../lib/format.ts";
 import { showOutput, toast, toastErr } from "../../lib/ui.tsx";
-
-/** One profile's view of a plugin: `override` is what that profile's own settings say (none = inherits). */
-interface Cell {
-  enabled: boolean;
-  installed: boolean;
-  broken?: boolean;
-  version?: string;
-  override?: boolean | null;
-}
-interface PluginRow {
-  id: string;
-  name: string;
-  marketplace: string;
-  synced?: boolean;
-  shared?: boolean | null;
-  profiles: Record<string, Cell>;
-}
-interface Marketplace {
-  name: string;
-  source: string;
-  declared: boolean;
-  known: string[];
-}
-interface PluginsView {
-  profiles: string[];
-  plugins: PluginRow[];
-  marketplaces: Marketplace[];
-  syncedSkills: Record<string, string[]>;
-}
-interface CatEntry {
-  id: string;
-  name: string;
-  marketplace: string;
-  description: string;
-  installs?: number;
-}
-interface Catalog {
-  total: number;
-  entries: CatEntry[];
-  marketplaces: string[];
-}
-interface OpResult {
-  ok: boolean;
-  message: string;
-  log?: string[];
-  confirm?: { command: string; sha256: string };
-}
-type Body = Record<string, unknown>;
+import {
+  type CatEntry,
+  type Catalog,
+  type Cell,
+  loadCatalogPage,
+  loadPluginsView,
+  type PluginBody as Body,
+  pluginDetails,
+  pluginOp,
+  type PluginsView,
+} from "./api.ts";
 
 // the first answer is a dozen entries, "Load more" asks for the next ones
 const CAT_FIRST = 10, CAT_PAGE = 20;
@@ -81,7 +43,7 @@ async function plOp(body: Body, label: string, reload: () => Promise<unknown>): 
   document.body.classList.add("plbusy");
   toast(`${label}…`);
   try {
-    let r = await post<OpResult>("/api/plugins", body);
+    let r = await pluginOp(body);
     if (r.confirm) {
       if (!confirm(t("pl.confirmCmd", { msg: r.message, cmd: r.confirm.command }))) return toast(t("pl.notAccepted"));
       const retry = body.op === "set"
@@ -92,7 +54,7 @@ async function plOp(body: Body, label: string, reload: () => Promise<unknown>): 
           accept: r.confirm.sha256,
         }
         : { ...body, accept: r.confirm.sha256 };
-      r = await post<OpResult>("/api/plugins", retry);
+      r = await pluginOp(retry);
     }
     toast(r.message, !r.ok);
     if (!r.ok && r.log?.length) showOutput(r.message, r.log.join("\n"));
@@ -145,7 +107,7 @@ function Toggle({ id, target, value, cell, run }: {
 
 function details(id: string): void {
   showOutput(id, t("pl.loading"));
-  get<{ text?: string }>(`/api/plugins/details?id=${encodeURIComponent(id)}`)
+  pluginDetails(id)
     .catch((e: Error) => ({ text: e.message }))
     .then((r) => showOutput(id, r.text || t("pl.noDetails")));
 }
@@ -336,7 +298,7 @@ export function Plugins() {
   // a state event reloads the table, but not under an operation of ours (it reloads itself after)
   const loadPlugins = async (fresh = false) => {
     if (busy && !fresh) return;
-    setPl(await get<PluginsView>("/api/plugins" + (fresh ? "?fresh" : "")));
+    setPl(await loadPluginsView(fresh));
   };
   /** Ask for a page: from the start (a new search or marketplace, or `fresh`) or the one after what is shown. */
   const loadCatalog = async (opts: { fresh?: boolean; more?: boolean; q?: string; mk?: string } = {}) => {
@@ -351,7 +313,7 @@ export function Plugins() {
     if (opts.fresh) qs.set("fresh", "");
     setCatLoading(opts.more && cur ? cur.entries.length : 0);
     try {
-      const r = await get<Catalog>("/api/plugins/catalog?" + qs);
+      const r = await loadCatalogPage(qs);
       if (n !== seq.current) return; // a newer request owns the table
       const next = opts.more && cur ? { ...r, entries: [...cur.entries, ...r.entries] } : r;
       catRef.current = next;

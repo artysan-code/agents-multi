@@ -1,7 +1,7 @@
 // api.ts — the part of /api/accounts and /api/calendars the Connections page reads, and the calls
 // it makes. The server never sends a secret: an account only says whether this machine has one.
 
-import { get, post, type Result } from "../../api.ts";
+import { get, post, type Result, upload } from "../../api.ts";
 
 export interface Reach {
   profiles: string[];
@@ -64,7 +64,7 @@ export interface AccountCalendars {
   calendars: CalendarInfo[];
 }
 
-export interface AccountBody {
+interface AccountBody {
   op: "save" | "delete";
   service: string;
   name: string;
@@ -98,9 +98,7 @@ export const startLogin = (kind: "google" | "brain", account: string) =>
 /** Sends the Google OAuth client file as it is (the server reads the JSON itself). */
 export async function importGoogleClient(text: string): Promise<Result> {
   try {
-    const r = await fetch("/api/google/client", { method: "POST", headers: { "x-claude-multi": "1" }, body: text });
-    if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
-    return await r.json() as Result;
+    return await upload("/api/google/client", text);
   } catch (e) {
     return failed(e as Error);
   }

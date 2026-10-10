@@ -3,7 +3,7 @@
 // it is (apps/cli/tests/ui_today_test.ts).
 
 /** The part of a board task the groups read (BoardTask in pages/tasks/api.ts fits it). */
-export interface GroupTask {
+interface GroupTask {
   id: string;
   status: string;
   owner?: string;
@@ -61,7 +61,7 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
 }
 
-export interface Span {
+interface Span {
   start: number;
   end: number;
 }

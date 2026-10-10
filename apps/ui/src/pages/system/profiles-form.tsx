@@ -2,10 +2,10 @@
 // profile's manifest on the server and runs install there.
 
 import { useState } from "preact/hooks";
-import { post } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
 import { t } from "../../i18n.ts";
 import { closeDrawer, openDrawer, showOutput, toast, toastErr } from "../../lib/ui.tsx";
+import { saveProfile } from "./api.ts";
 import { type ProfileFull, registryOf } from "./profiles-types.ts";
 
 export function openProfileForm(name: string | null): void {
@@ -47,7 +47,7 @@ function ProfileForm({ name }: { name: string | null }) {
     };
     setBusy(true);
     try {
-      const r = await post<{ message?: string; output?: string }>("/api/profile", body);
+      const r = await saveProfile(body);
       closeDrawer();
       await loadStatus();
       toast(r.message ?? t("profile.saved", { name: body.name }));

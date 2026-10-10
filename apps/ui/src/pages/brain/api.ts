@@ -44,13 +44,13 @@ export interface PageReply extends PageInfo {
   versions: Version[];
 }
 
-export interface VersionReply {
+interface VersionReply {
   body: string;
   at: string;
   by: string;
 }
 
-export interface SearchReply {
+interface SearchReply {
   results?: { path: string; title: string; excerpt?: string }[];
   note?: string;
 }

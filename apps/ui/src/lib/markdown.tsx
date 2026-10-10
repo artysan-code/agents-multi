@@ -6,7 +6,7 @@
 import type { ComponentChildren, VNode } from "preact";
 import { request } from "../router.ts";
 
-export type OnPage = (target: string) => void;
+type OnPage = (target: string) => void;
 
 const readInBrain: OnPage = (target) => request("brain.open", "brain", target);
 

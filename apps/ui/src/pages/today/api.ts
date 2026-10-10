@@ -1,5 +1,7 @@
 // api.ts — what the Today page reads beyond the shared report and the task board: the day's list
-// (/api/tasks), the saved sessions and the debrief.
+// (/api/tasks), the saved sessions, the usage limits and the debrief.
+
+import { api, get, post, postRaw, type Result } from "../../api.ts";
 
 export interface DayItem {
   id: string;
@@ -47,3 +49,35 @@ export interface DebriefDone {
   text?: string;
   error?: string;
 }
+
+export const loadDay = () => get<Day>("/api/tasks");
+
+/** The last sessions, newest first. */
+export const loadSessions = () => get<SessionRow[]>("/api/sessions?" + new URLSearchParams({ since: "7d", limit: "60" }));
+
+export interface Limit {
+  used: number;
+  resets: number | null;
+}
+/** /api/live: each profile's limits and tokens, each running session's context (apps/cli/live.ts). */
+export interface LiveView {
+  profiles: Record<string, { limits: { five_hour?: Limit; seven_day?: Limit } | null; at: number | null; tokens: number }>;
+  sessions: Record<string, { context?: { used: number | null; size: number | null } | null; at: number }>;
+  errors?: Record<string, string>;
+}
+
+export const loadLive = () => get<LiveView>("/api/live");
+/** Asks Anthropic for the limits now. */
+export const refreshLive = () => post<LiveView>("/api/live/refresh", {});
+
+/** Resumes a saved session in a terminal. */
+export const resumeSession = (r: SessionRow) => api.terminal({ cwd: r.cwd, profile: r.profile, resume: r.session_id });
+/** Opens a profile's Claude Desktop. */
+export const openDesktop = (profile: string) => api.launch(profile);
+/** Brings a running Claude's window forward. */
+export const focusWindow = (pid: number): Promise<Result> => post("/api/focus", { pid });
+
+/** The debrief written today, if there is one. */
+export const loadDebrief = () => get<{ debrief?: { text: string } | null }>("/api/debrief");
+/** Has it written (NDJSON: text pieces, then done). */
+export const writeDebrief = () => postRaw("/api/debrief", {});

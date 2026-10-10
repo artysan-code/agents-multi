@@ -6,13 +6,14 @@
 // Anthropic for the limits now.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { get, post, type Result } from "../../api.ts";
+import type { Result } from "../../api.ts";
 import { lang, t } from "../../i18n.ts";
 import { Spark } from "../../lib/claude.tsx";
 import { ago, cap, dur, modelShort } from "../../lib/format.ts";
 import { openDrawer, pcolor, toast } from "../../lib/ui.tsx";
+import { useThrottled } from "../../lib/throttle.ts";
 import { status, useTopic, working } from "../../state.ts";
-import type { SessionRow } from "./api.ts";
+import { focusWindow, type Limit, type LiveView, loadLive, loadSessions, openDesktop, refreshLive, resumeSession, type SessionRow } from "./api.ts";
 
 /** A row stays "working" for a few seconds after its last write, because a session pauses between
  *  turns and flickering would be worse than a short lag. */
@@ -48,18 +49,16 @@ function Resume() {
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [fit, setFit] = useState(0);
   const box = useRef<HTMLDivElement>(null);
-  const at = useRef(0);
 
-  // a busy session writes every second: the list is re-read at most every 15 s
-  useTopic(async () => {
-    if (Date.now() - at.current < 15000) return;
-    at.current = Date.now();
+  // a busy session writes every second: the list is re-read at most every 15 s, the last change included
+  const load = useThrottled(async () => {
     try {
-      const all = await get<SessionRow[]>("/api/sessions?" + new URLSearchParams({ since: "7d", limit: "60" }));
+      const all = await loadSessions();
       const dirs = new Set<string>();
       setRows(all.filter((r) => r.cwd && !dirs.has(r.cwd) && dirs.add(r.cwd)).slice(0, 20));
     } catch { /* the list stays as it was */ }
-  }, ["state", "usage"]);
+  }, 15000);
+  useTopic(load, ["state", "usage"]);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -69,7 +68,7 @@ function Resume() {
     return () => ro.disconnect();
   }, []);
 
-  const resume = (r: SessionRow) => void say(post("/api/terminal", { cwd: r.cwd, profile: r.profile, resume: r.session_id }));
+  const resume = (r: SessionRow) => void say(resumeSession(r));
   const row = (r: SessionRow) => (
     <button type="button" class="rc-r" key={r.session_id} title={r.cwd ?? ""} style={{ "--k": pcolor(r.profile) }} onClick={() => resume(r)}>
       <i class="dot2" />
@@ -99,16 +98,6 @@ function Resume() {
       </div>
     </div>
   );
-}
-
-interface Limit {
-  used: number;
-  resets: number | null;
-}
-interface LiveView {
-  profiles: Record<string, { limits: { five_hour?: Limit; seven_day?: Limit } | null; at: number | null; tokens: number }>;
-  sessions: Record<string, { context?: { used: number | null; size: number | null } | null; at: number }>;
-  errors?: Record<string, string>;
 }
 
 /** Tokens as a person reads them: 950, 12k, 3.4M. */
@@ -155,16 +144,15 @@ export function SessionsCard() {
   const open = new Set(s?.running.desktop.map((d) => d.variant) ?? []);
   const [view, setView] = useState<LiveView | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const at = useRef(0);
-  // the status line writes at every turn: read again at most every 15 s
-  useTopic(async () => {
-    if (Date.now() - at.current < 15000) return;
-    at.current = Date.now();
-    setView(await get<LiveView>("/api/live").catch(() => view));
-  }, ["state", "usage"]);
+  // the status line writes at every turn: read again at most every 15 s, the last change included
+  const load = useThrottled(async () => {
+    const v = await loadLive().catch(() => null);
+    if (v) setView(v);
+  }, 15000);
+  useTopic(load, ["state", "usage"]);
   const refresh = async () => {
     setRefreshing(true);
-    const v = await post<LiveView & { ok?: boolean }>("/api/live/refresh", {}).catch((e: Error) => {
+    const v = await refreshLive().catch((e: Error) => {
       toast(e.message, true);
       return null;
     });
@@ -213,7 +201,7 @@ export function SessionsCard() {
                   class={`cu-dk${on ? " on" : ""}`}
                   title={t(on ? "run.focus" : "run.open")}
                   aria-label={t(on ? "run.focus" : "run.open")}
-                  onClick={() => void say(post("/api/launch", { profile: p }))}
+                  onClick={() => void say(openDesktop(p))}
                 >
                   {DESK}
                 </button>
@@ -241,7 +229,7 @@ export function SessionsCard() {
               key={c.pid}
               title={c.cwd ?? ""}
               style={{ "--k": pcolor(c.profile) }}
-              onClick={() => void say(post("/api/focus", { pid: c.pid }), t("run.noFocus"))}
+              onClick={() => void say(focusWindow(c.pid), t("run.noFocus"))}
             >
               <span class="m">{busy ? <Spark mode="thinking" /> : <i />}</span>
               <span class="nm">

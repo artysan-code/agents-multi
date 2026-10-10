@@ -2,13 +2,13 @@
 // POSTs of its steps (apps/cli/console/setup.ts). A refused step answers 400 with its message, which
 // is returned here as a result, not thrown.
 
-import { get, postInit, type Result } from "../../api.ts";
+import { get, postRaw, type Result } from "../../api.ts";
 
 export const STEPS = ["welcome", "you", "folder", "profiles", "install", "claude", "vault", "logins", "brain", "done"] as const;
 export type Step = typeof STEPS[number];
 export type VaultState = "ok" | "none" | "locked" | "wrong-key" | "unavailable";
 
-export interface SetupProfile {
+interface SetupProfile {
   profile: string;
   command: string;
   installed: boolean;
@@ -47,7 +47,7 @@ export const loadSetup = () => get<SetupView | { active: false }>("/api/setup");
 /** One step's POST: its answer, a refusal included. */
 export async function send<T extends Result = Result>(path: string, body: unknown): Promise<T> {
   try {
-    const r = await fetch(`/api/setup/${path}`, postInit(body));
+    const r = await postRaw(`/api/setup/${path}`, body);
     const j = await r.json().catch(() => ({ ok: false, message: String(r.status) }));
     return j as T;
   } catch (e) {

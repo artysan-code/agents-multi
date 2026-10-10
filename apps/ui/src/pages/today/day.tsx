@@ -5,7 +5,7 @@
 // when they overlap, the past hatched, a line for now.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { get, ndjson, postInit } from "../../api.ts";
+import { ndjson } from "../../api.ts";
 import { lang, t } from "../../i18n.ts";
 import { Spark } from "../../lib/claude.tsx";
 import { minute } from "../../lib/clock.ts";
@@ -15,7 +15,7 @@ import { closeDrawer, openDrawer } from "../../lib/ui.tsx";
 import { askNow } from "../../shell/ask.tsx";
 import { board } from "../tasks/model.ts";
 import { openTask } from "../tasks/sheet.tsx";
-import type { Day, DayItem, DebriefDone } from "./api.ts";
+import { type Day, type DayItem, type DebriefDone, loadDebrief, writeDebrief } from "./api.ts";
 import { columns, countdown, dayWindow, firstSentence, minutes, upNext } from "./model.ts";
 
 const isEvent = (x: DayItem) => x.source === "calendar";
@@ -137,7 +137,7 @@ function Debrief() {
     setText("");
     let acc = "";
     try {
-      const res = await fetch("/api/debrief", postInit({}));
+      const res = await writeDebrief();
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
       await ndjson<{ t: string; d?: string } & Partial<DebriefDone>>(
         res,
@@ -154,7 +154,7 @@ function Debrief() {
   };
 
   useEffect(() => {
-    get<{ debrief?: { text: string } | null }>("/api/debrief").catch(() => null)
+    loadDebrief().catch(() => null)
       .then((r) => {
         if (!alive.current) return;
         if (r?.debrief) setText(r.debrief.text);

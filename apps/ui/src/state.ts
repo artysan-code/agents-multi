@@ -5,10 +5,10 @@
 
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import { api, type Owner, type StatusView, type Summary } from "./api.ts";
+import { api, openEvents, type Owner, type StatusView, type Summary } from "./api.ts";
 
-export type Live = "live" | "busy" | "down";
-export type Topic = "state" | "usage" | "tasks" | "brain" | "app-update";
+type Live = "live" | "busy" | "down";
+type Topic = "state" | "usage" | "tasks" | "brain" | "app-update";
 
 export const status = signal<StatusView | null>(null);
 export const summary = signal<Summary | null>(null);
@@ -95,7 +95,7 @@ export function connect(): void {
 
   const open = () => {
     es?.close();
-    es = new EventSource("/api/events");
+    es = openEvents();
     es.onopen = () => {
       retry = 0;
       last = Date.now();
