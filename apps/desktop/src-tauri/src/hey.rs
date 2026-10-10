@@ -1,4 +1,4 @@
-//! «Hey Claude», the quick entry (what `apps/tray/hey.py` does): one field in a small frameless window
+//! «Hey Claude», the quick entry one field in a small frameless window
 //! near the top of the screen. The page is the console's (`/#hey`, apps/ui/src/pages/hey/), loaded by URL
 //! like the main window — through the local page, which waits for the console — so it needs no IPC: it
 //! asks through the console's `/api/ask` and hands over to a terminal through `/api/terminal`.
@@ -7,7 +7,7 @@
 //! its title (`agents-multi:size=<px>` or `agents-multi:size=<px>,answer`), and asks to close with
 //! `agents-multi:close` as the picker does — titles are the one thing a page says without IPC. Like a
 //! launcher it goes away when it loses the focus (once it has had it), unless an answer is there to
-//! keep reading, as in hey.py.
+//! keep reading.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -27,7 +27,7 @@ const WIDTH: f64 = 720.0;
 /// The field alone, before the page has said its height.
 const COMPACT: f64 = 72.0;
 const MAX_HEIGHT: f64 = 640.0;
-/// From the top of the screen, as a share of its height (hey.py's).
+/// From the top of the screen, as a share of its height.
 const FROM_TOP: f64 = 0.22;
 
 /// What the page asks of its window, through its title.

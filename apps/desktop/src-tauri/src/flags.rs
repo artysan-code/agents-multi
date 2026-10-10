@@ -1,5 +1,5 @@
-//! What a launch asks for, from its command line: the same flags as the tray app it replaces
-//! (`apps/tray/app.py`). A second launch hands its arguments to the running app, which reads them here.
+//! What a launch asks for, from its command line: the flags of `claude-multi-app`. A second
+//! launch hands its arguments to the running app, which reads them here.
 //!
 //!   (none)    show the console window
 //!   --tray    start in the tray, no window: what the login unit runs

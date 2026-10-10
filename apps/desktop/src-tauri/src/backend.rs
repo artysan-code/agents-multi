@@ -1,7 +1,6 @@
 //! The console's backend, owned by the app (docs/adr/0003): `agents serve` as a child process.
 //!
-//! On start, a console that already answers `GET /api/code` on the port (the systemd unit during the
-//! transition, one started by hand) is used as it is: nothing is spawned, and the app never stops or
+//! On start, a console that already answers `GET /api/code` on the port (one started by hand, `agents serve` on a headless box) is used as it is: nothing is spawned, and the app never stops or
 //! restarts it. Otherwise the app starts the backend (repo.rs says which source): the package's copy,
 //! run by the package's Deno (the sidecar) on the package's module cache, or a checkout's `bin/agents`
 //! for a developer — with its output in `backend.log` in the app's log folder. If it dies, the window
@@ -81,7 +80,7 @@ pub fn start_again(app: &AppHandle) -> bool {
 enum Mode {
     /// Not known yet.
     Looking,
-    /// Another console (the unit, one started by hand): the app leaves it alone.
+    /// Another console (one started by hand): the app leaves it alone.
     External,
     /// The app's own backend.
     Own,
@@ -478,8 +477,8 @@ fn open_log(path: &Path, launch: &Launch) -> std::io::Result<File> {
     Ok(file)
 }
 
-/// The PATH the backend gets: the app's own, then the folders the systemd unit lists
-/// (systemd/user/claude-multi-console.service) that it lacks. A desktop session's PATH often has no
+/// The PATH the backend gets: the app's own, then the usual user tool folders
+/// (`~/.deno/bin`, `~/.local/bin`, pnpm's) that it lacks. A desktop session's PATH often has no
 /// `~/.deno/bin`, and the console runs `bin/agents` (Deno), git and Claude.
 pub fn child_path(
     home: Option<&Path>,

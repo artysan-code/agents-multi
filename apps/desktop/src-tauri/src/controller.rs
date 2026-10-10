@@ -1,13 +1,12 @@
 //! What the app does with a request — its own launch's, a second launch's (handed over by the
-//! single-instance plugin), or the tray menu's — and when it stays alive. The behaviour of
-//! `apps/tray/app.py`:
+//! single-instance plugin), or the tray menu's — and when it stays alive. The behaviour:
 //!
 //! - With a tray, closing the console window hides it and the app lives in the tray; it quits from the
 //!   menu. Without one (GNOME without the AppIndicator extension) the app quits with its last window.
 //! - `--tray` waits up to a minute for a tray host (at login it can come up after the app), then gives
 //!   up, says so, and notes it for the doctor; any other launch looks once.
-//! - What the menu does is a CLI command (`claude-launch`, `systemctl` for a console the app does not run),
-//!   the app's backend (`backend.rs`), or one of the app's windows.
+//! - What the menu does is a CLI command (`claude-launch`), the app's backend (`backend.rs`),
+//!   or one of the app's windows.
 
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,8 +20,6 @@ use crate::{hey, picker, profiles, reveal};
 
 /// At login the tray host can come up after the app.
 const TRAY_WAIT: Duration = Duration::from_secs(60);
-/// The console's unit, for a console the app does not run (backend.rs): the transition's.
-const CONSOLE_UNIT: &str = "claude-multi-console.service";
 
 struct Shell {
     port: u16,
@@ -221,9 +218,8 @@ fn launch(profile: &str) {
 }
 
 fn start_console(app: &AppHandle) {
-    if !crate::backend::start_again(app) {
-        spawn("systemctl", &["--user", "start", CONSOLE_UNIT]);
-    }
+    // a console the app does not run (started by hand) is not the app's to start
+    crate::backend::start_again(app);
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(1500));
