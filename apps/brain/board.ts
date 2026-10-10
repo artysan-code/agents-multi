@@ -82,9 +82,35 @@ export function columns(tasks: Task[], f: { project?: string; q?: string }, now:
   return out;
 }
 
-function card(t: Task, all: Task[], me: string, today: string, back: string): string {
+/** Pure: what a card shows of its task's relations — its parts (done/total) and whether it waits for
+ *  an open task — from one pass over the list, so a board of n tasks costs n, not n². */
+export function cardRelations(all: Task[]): (t: Task) => { parts: number; parts_done: number; blocked: boolean } {
+  const byId = new Map(all.map((x) => [x.id, x]));
+  const parts = new Map<string, { total: number; done: number }>();
+  for (const x of all) {
+    if (!x.parent) continue;
+    const c = parts.get(x.parent) ?? parts.set(x.parent, { total: 0, done: 0 }).get(x.parent)!;
+    c.total++;
+    if (closed(x)) c.done++;
+  }
+  return (t) => ({
+    parts: parts.get(t.id)?.total ?? 0,
+    parts_done: parts.get(t.id)?.done ?? 0,
+    blocked: (t.blocked_by ?? []).some((id) => {
+      const b = byId.get(id);
+      return !!b && !closed(b);
+    }),
+  });
+}
+
+function card(
+  t: Task,
+  rel: ReturnType<ReturnType<typeof cardRelations>>,
+  me: string,
+  today: string,
+  back: string,
+): string {
   const p = progress(t.notes);
-  const rel = relations(all, t);
   const late = !closed(t) && t.due && t.due < today;
   const meta = [
     t.project && `<span>${esc(t.project)}</span>`,
@@ -93,8 +119,8 @@ function card(t: Task, all: Task[], me: string, today: string, back: string): st
     t.due &&
     `<span class="${late ? "late" : ""}">${esc(dayLabel(t.due, today))}${t.time ? ` ${esc(t.time)}` : ""}</span>`,
     t.owner && t.owner !== me && `<span>→ ${esc(t.owner)}</span>`,
-    rel.waiting_for.length && `<span class="late">bloccata</span>`,
-    rel.parts.length && `<span>parti ${rel.parts_done}/${rel.parts.length}</span>`,
+    rel.blocked && `<span class="late">bloccata</span>`,
+    rel.parts && `<span>parti ${rel.parts_done}/${rel.parts}</span>`,
     p && `<span>${p.done}/${p.total}</span>`,
     t.priority === 1 && `<span class="late">!</span>`,
   ].filter(Boolean).join("");
@@ -129,6 +155,7 @@ function boardPage(
 ): string {
   const today = dayOf(now);
   const cols = columns(all, f, now);
+  const relationsOf = cardRelations(all);
   const projects = [...new Set(all.filter((t) => !closed(t)).map((t) => t.project).filter((p): p is string => !!p))]
     .sort();
   const back = `/tasks${
@@ -159,7 +186,7 @@ function boardPage(
       COLUMNS.map((c) => {
         const list = cols.get(c.status)!;
         return `<section><h2>${c.label} <span class="sub">${list.length}</span></h2><ul>${
-          list.map((t) => card(t, all, me, today, back)).join("") || `<li class="sub">nessuna</li>`
+          list.map((t) => card(t, relationsOf(t), me, today, back)).join("") || `<li class="sub">nessuna</li>`
         }</ul></section>`;
       }).join("")
     }</div>`,

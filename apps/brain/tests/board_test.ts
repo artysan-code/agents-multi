@@ -1,8 +1,8 @@
 // Tests for the board (board.ts): what each column shows, the edit form as a task input, where a
 // change may send the browser back to, and the routes on a list of tasks kept in memory.
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
-import { backTo, boardRoute, columns, editInput } from "../board.ts";
-import { type Task, useTaskStore } from "../../../shared/mcp/lib/tasks.ts";
+import { backTo, boardRoute, cardRelations, columns, editInput } from "../board.ts";
+import { relations, type Task, useTaskStore } from "../../../shared/mcp/lib/tasks.ts";
 import { ownerFrom, useOwner } from "../../../shared/mcp/lib/owner.ts";
 
 const NOW = new Date("2026-10-05T10:00:00");
@@ -123,4 +123,24 @@ Deno.test("board routes: the page, add, start, tick a step, a note, edit; errors
     "2026-10-12",
   ]);
   assertEquals((await go(new Request("https://b.test/tasks/t-9-zz"))).status, 404);
+});
+
+Deno.test("cardRelations: parts and blockers from one pass, as relations() says them", () => {
+  const all = [
+    T("big"),
+    T("p1", { parent: "big", status: "done" }),
+    T("p2", { parent: "big" }),
+    T("w", { blocked_by: ["p2"] }),
+    T("w2", { blocked_by: ["p1"] }),
+    T("w3", { blocked_by: ["gone"] }),
+  ];
+  const rel = cardRelations(all);
+  assertEquals(rel(all[0]), { parts: 2, parts_done: 1, blocked: false });
+  assertEquals(rel(all[3]).blocked, true, "waits for an open task");
+  assertEquals(rel(all[4]).blocked, false, "what it waits for is done");
+  assertEquals(rel(all[5]).blocked, false, "an unknown task blocks nothing");
+  for (const t of all) {
+    const r = relations(all, t);
+    assertEquals(rel(t), { parts: r.parts.length, parts_done: r.parts_done, blocked: r.waiting_for.length > 0 });
+  }
 });
