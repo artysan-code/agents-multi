@@ -1,19 +1,19 @@
 {
-  "version": "1.0.0-beta.3",
-  "notes": "### Added\n\n- **console**: Updates shows the app, its update and its channel, which can change there (0934930)\n\n### Fixed\n\n- **console**: on the line of the day an item keeps its lane until its title ends (7112bf7)\n- **update**: after a Claude Code update, claude points at the app's code, not the AppImage's mount (5044472)",
-  "pub_date": "2026-10-08T21:33:05Z",
+  "version": "1.0.0-rc.3",
+  "notes": "### Fixed\n\n- **ci**: the update channels are written by the tag's scripts (4ed8011)",
+  "pub_date": "2026-10-10T19:12:13Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.3/agents-multi_1.0.0-beta.3_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjhXV3prc09YczJtR2h2b05LaUtLSGI0T0l4SWl5eWhzeVdSaGszc2xEUFgzSjM4TVM3VmswcFJYc2Z0S2FwT1ZlQUdRbHd2RGxWaVQ1R3g4RDZzR2dnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDk1MTg0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4zX2FtZDY0LmRlYgl2ZXJzaW9uOjEuMC4wLWJldGEuMwptVHJ1R1pDTVpzMkQzL0I0RnZJbW5Zeld3OEk3RkpaZjlUeDRyZkRUTWpHR080aXVxN0xTam45NXVuTUY1T0E5cUV6RXRmNnNlUnZ6ZjFWdFhQcUhCUT09Cg=="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-rc.3/agents-multi_1.0.0-rc.3_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjFJMG9SeFhMMnFIb3lUcmhWNktaVk9UYWhxZ05aM2tVTzhIUHUxajlkUjc1ZDdpcllpNFpzZWU3dzhoYWsxTE5yMUp5c0JlN3hWb1NERW5qWkhrUFF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNjU5NTMyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtcmMuM19hbWQ2NC5kZWIJdmVyc2lvbjoxLjAuMC1yYy4zCnV5dm9aUjBrTGlVM2dLemtOL1hKejdFZmlUSGZKeCtMT3lMOU5yWjZwNzZYUmtsR1FYajVCNklMTTNXaGVxdkVxWXNVVjd0b2ZoNkcrcW9Cc2U5U0RRPT0K"
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.3/agents-multi_1.0.0-beta.3_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJxdVlLaFI2YzdFaTVITzlQOURwc0JBSFdOUmtQeSt1dEN1NisvT2dGZklURXZ5VnR5eW5NUmR0T2NSUVl4NStZS25pa253Tkg2R2plamlFR0p4Q2c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDk1MTg0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4zX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4wLjAtYmV0YS4zCkt3UHd0RXQ3NzB5aGtBRmQzNXY3K0E3Z3poRm5MYldQM0ZOWTRhQU8ybFZEVzBzd01sUGl2UU9EWHZDVjNvZmlEU0Z5ZitmaTgyNzVDa0JmNlBRZkJBPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-rc.3/agents-multi_1.0.0-rc.3_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjFBeUt5a2xOR1g3MFp5V1puV25tSnhZamJwQVlDRmM1Ni93KzB2clNjdk4rN21IVWM2OVZoWnROZzhzYWhpMWNXd1ZDcHgvYlYrOEJjS3ArYlM1OWdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNjU5NTMyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtcmMuM19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLXJjLjMKU0JzeHd2QlFhUjY3RTlkVHpORzJxckdqOWFQN25lbWtLdHlpdGRlZVlrN2ZpV2RobzMreUZ2N2JUaHRRYXRYbVY1c21ScnE3L0dBL2NzaGdGNmtyQnc9PQo="
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-beta.3/agents-multi_1.0.0-beta.3_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJxdVlLaFI2YzdFaTVITzlQOURwc0JBSFdOUmtQeSt1dEN1NisvT2dGZklURXZ5VnR5eW5NUmR0T2NSUVl4NStZS25pa253Tkg2R2plamlFR0p4Q2c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDk1MTg0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtYmV0YS4zX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4wLjAtYmV0YS4zCkt3UHd0RXQ3NzB5aGtBRmQzNXY3K0E3Z3poRm5MYldQM0ZOWTRhQU8ybFZEVzBzd01sUGl2UU9EWHZDVjNvZmlEU0Z5ZitmaTgyNzVDa0JmNlBRZkJBPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.0.0-rc.3/agents-multi_1.0.0-rc.3_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjFBeUt5a2xOR1g3MFp5V1puV25tSnhZamJwQVlDRmM1Ni93KzB2clNjdk4rN21IVWM2OVZoWnROZzhzYWhpMWNXd1ZDcHgvYlYrOEJjS3ArYlM1OWdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNjU5NTMyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4wLjAtcmMuM19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC4wLXJjLjMKU0JzeHd2QlFhUjY3RTlkVHpORzJxckdqOWFQN25lbWtLdHlpdGRlZVlrN2ZpV2RobzMreUZ2N2JUaHRRYXRYbVY1c21ScnE3L0dBL2NzaGdGNmtyQnc9PQo="
     }
   }
 }
