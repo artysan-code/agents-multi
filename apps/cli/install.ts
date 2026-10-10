@@ -171,7 +171,7 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   }
   await ensureDir(dir);
   // the shared items the profile links resolve to: the mounted code's (CODE), which also holds the
-  // links to ~/.agents/skills; the code being run (SRC) is the package's during `migrate app`
+  // links to ~/.agents/skills
   const shared = (await stat(`${CODE}/shared/${kind}`)) ? `${CODE}/shared/${kind}` : `${SRC}/shared/${kind}`;
   // "all" mounts what really is an item of that kind, exactly like sharedInventory() counts them:
   // a skill is a directory with a SKILL.md, an agent or a command is a .md file — and AGENTS.md is
@@ -210,7 +210,7 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
 }
 
 /** Pure: the code an installation's links point into. Dev installs the checkout it runs from, as
- *  ever; the app's code running on a dev installation (the app's backend, before `migrate app`) keeps
+ *  ever; the app's code running on a dev installation (the app's backend) keeps
  *  the installation's checkout instead of pointing it into the package. */
 export function codeFor(inst: Installation, running: string, runningIsCheckout: boolean): string {
   return inst.mode === "dev" && runningIsCheckout ? running : inst.code;
@@ -261,19 +261,18 @@ export const autostartEntry = (template: string, bin: string) =>
   template.slice(template.indexOf("[Desktop Entry]")).replaceAll("@BIN@", bin);
 
 /**
- * Materialises the runtime. `as` names the installation to install (agents migrate app plans one
- * before the runtime is one); otherwise it is this machine's.
+ * Materialises the runtime. `as` names the installation to install; otherwise it is this machine's.
  */
 export async function install(
   dry: boolean,
-  opts: { as?: Installation; src?: string; diagnose?: boolean } = {},
+  opts: { as?: Installation; diagnose?: boolean } = {},
 ) {
   DRY = dry;
   actions.length = 0;
   const m = await machine();
   const inst = opts.as ?? await installation();
   CODE = codeFor(inst, REPO, await isCheckout(REPO));
-  SRC = opts.src ?? ((await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO);
+  SRC = (await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO;
   const dev = inst.mode === "dev";
   console.log(
     `${ANSI.b}agents install${ANSI.x} — ${dev ? "checkout" : "the app's code"} ${

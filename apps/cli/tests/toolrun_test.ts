@@ -55,15 +55,12 @@ Deno.test("wranglerDestructive: deletions, rollbacks, remote migrations and dest
 
 Deno.test("profileFrom: the server's profile, else the Claude configuration directory under the runtime", () => {
   assertEquals(
-    profileFrom({ profile: "work", configDir: "/h/.claude-multi/personal" }, "/h/.claude-multi"),
+    profileFrom({ profile: "work", configDir: "/h/.agents-multi/personal" }, "/h/.agents-multi"),
     "work",
   );
-  assertEquals(profileFrom({ configDir: "/h/.claude-multi/personal/" }, "/h/.claude-multi"), "personal");
-  assertEquals(profileFrom({ configDir: "/h/.claude" }, "/h/.claude-multi"), undefined);
-  assertEquals(profileFrom({}, "/h/.claude-multi"), undefined);
-  // the runtime moved: a session started before still names the old folder, and the other way round
-  assertEquals(profileFrom({ configDir: "/h/.claude-multi/personal" }, "/h/.agents-multi"), "personal");
-  assertEquals(profileFrom({ configDir: "/h/.agents-multi/work" }, "/h/.claude-multi"), "work");
+  assertEquals(profileFrom({ configDir: "/h/.agents-multi/personal/" }, "/h/.agents-multi"), "personal");
+  assertEquals(profileFrom({ configDir: "/h/.claude" }, "/h/.agents-multi"), undefined);
+  assertEquals(profileFrom({}, "/h/.agents-multi"), undefined);
   assertEquals(profileFrom({ configDir: "/h/other/personal" }, "/h/.agents-multi"), undefined);
 });
 

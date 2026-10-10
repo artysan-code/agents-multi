@@ -54,7 +54,7 @@ pub fn before_backend(app: &AppHandle) {
             )
         });
     }
-    let Some(root) = runtime_root(&get, home.as_deref(), |p| p.symlink_metadata().is_ok()) else {
+    let Some(root) = runtime_root(&get, home.as_deref()) else {
         return;
     };
     let copy = read_build(&root.join("app/current"));

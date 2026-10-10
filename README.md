@@ -108,18 +108,6 @@ For Claude Desktop profile variants also `gnupg`, `binutils` (`ar`), `libarchive
 The project was called claude-multi: `claude-multi` still works as another name for the command, and
 some folders, services and settings keep that name until they move with a migration of their own.
 
-### Moving a machine from a checkout to the app
-
-`agents migrate app` (with every Claude closed, from a terminal, after installing the app's package):
-the package's code becomes the runtime's copy, `shared`, the launchers and the stignore-gen template
-point into it, the systemd units are stopped and removed (the app runs their jobs) together with the
-old console and tray units, the app's autostart entry is written, and the MCP servers are placed again
-on the package's Deno. Your configuration, the vault, the brain login, the profiles and their sessions
-do not move. `--dry-run` shows the plan; `--from <dir>` names the package's code when it is not beside
-the installed app (an AppImage: its mount's `usr/lib/me.artysan.agents/repo`). The checkout is
-recorded and left as it is: `agents migrate app --rollback` points the runtime back at it and runs its
-own `install` and `mcp sync`.
-
 ---
 
 ## Profiles
@@ -233,7 +221,6 @@ closed, then run `agents install` and `agents doctor`.
 | `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears           |
 | `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console  |
 | `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                               |
-| `agents migrate app [--dry-run] [--rollback]`                   | move a checkout installation to the app's code, or back (above)                                                                                               |
 | `agents mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                  |
 | `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                    |
 | `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                        |

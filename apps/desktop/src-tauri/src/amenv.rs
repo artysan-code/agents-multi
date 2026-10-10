@@ -20,23 +20,12 @@ pub fn am_env(get: &impl Fn(&str) -> Option<String>, name: &str) -> Option<Strin
 }
 
 /// Pure: the runtime, as apps/cli/lib/runtime-root.ts finds it: `AGENTS_MULTI_ROOT`, else
-/// `~/.agents-multi`, else `~/.claude-multi` while only that exists (a machine not moved yet, before
-/// the CLI has made the first a link to the second).
-pub fn runtime_root(
-    get: &impl Fn(&str) -> Option<String>,
-    home: Option<&Path>,
-    exists: impl Fn(&Path) -> bool,
-) -> Option<PathBuf> {
+/// `~/.agents-multi`.
+pub fn runtime_root(get: &impl Fn(&str) -> Option<String>, home: Option<&Path>) -> Option<PathBuf> {
     if let Some(root) = am_env(get, "ROOT") {
         return Some(PathBuf::from(root));
     }
-    let home = home?;
-    let (now, old) = (home.join(".agents-multi"), home.join(".claude-multi"));
-    Some(if exists(&now) || !exists(&old) {
-        now
-    } else {
-        old
-    })
+    Some(home?.join(".agents-multi"))
 }
 
 #[cfg(test)]
@@ -67,23 +56,15 @@ mod tests {
     }
 
     #[test]
-    fn the_runtime_is_the_variable_then_the_new_folder_then_the_old_one_while_alone() {
+    fn the_runtime_is_the_variable_then_the_folder_in_home() {
         let home = Path::new("/h");
         let none = env(&[]);
         assert_eq!(
-            runtime_root(&none, Some(home), |_| false),
-            Some("/h/.agents-multi".into())
-        );
-        assert_eq!(
-            runtime_root(&none, Some(home), |p| p == Path::new("/h/.claude-multi")),
-            Some("/h/.claude-multi".into())
-        );
-        assert_eq!(
-            runtime_root(&none, Some(home), |_| true),
+            runtime_root(&none, Some(home)),
             Some("/h/.agents-multi".into())
         );
         let root = env(&[("CLAUDE_MULTI_ROOT", "/rt")]);
-        assert_eq!(runtime_root(&root, None, |_| true), Some("/rt".into()));
-        assert_eq!(runtime_root(&none, None, |_| true), None);
+        assert_eq!(runtime_root(&root, None), Some("/rt".into()));
+        assert_eq!(runtime_root(&none, None), None);
     }
 }

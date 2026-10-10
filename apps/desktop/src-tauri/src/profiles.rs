@@ -2,27 +2,24 @@
 //! `profiles/` with a readable `profile.json`, by name — the CLI's rule (`profileNames()`), never a
 //! fixed list. The configuration is where the CLI looks (apps/cli/lib/paths.ts): `AGENTS_MULTI_CONFIG`
 //! (or `CLAUDE_MULTI_CONFIG`), else `config/` in the runtime — `AGENTS_MULTI_ROOT` (or
-//! `CLAUDE_MULTI_ROOT`), else `~/.agents-multi`, or `~/.claude-multi` on a machine that has not moved.
+//! `CLAUDE_MULTI_ROOT`), else `~/.agents-multi`.
 //! Read here, not asked of the console, so the menu still opens a Desktop while the console is down.
 
 use std::path::{Path, PathBuf};
 
 use crate::amenv::{am_env, runtime_root};
 
-/// The configuration folder, given the environment and whether a path exists.
-pub fn config_dir_from(
-    get: impl Fn(&str) -> Option<String>,
-    exists: impl Fn(&Path) -> bool,
-) -> Option<PathBuf> {
+/// The configuration folder, given the environment.
+pub fn config_dir_from(get: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
     if let Some(dir) = am_env(&get, "CONFIG") {
         return Some(dir.into());
     }
     let home = get("HOME").filter(|h| !h.is_empty()).map(PathBuf::from);
-    Some(runtime_root(&get, home.as_deref(), exists)?.join("config"))
+    Some(runtime_root(&get, home.as_deref())?.join("config"))
 }
 
 pub fn config_dir() -> Option<PathBuf> {
-    config_dir_from(|n| std::env::var(n).ok(), |p| p.symlink_metadata().is_ok())
+    config_dir_from(|n| std::env::var(n).ok())
 }
 
 /// The profiles declared under `config`: folders of `profiles/` whose `profile.json` is JSON, sorted.
@@ -67,27 +64,21 @@ mod tests {
             ("AGENTS_MULTI_CONFIG", "/a"),
             ("HOME", "/h"),
         ]);
-        assert_eq!(config_dir_from(get, |_| true), Some("/a".into()));
+        assert_eq!(config_dir_from(get), Some("/a".into()));
         let get = env(&[("CLAUDE_MULTI_CONFIG", "/b"), ("HOME", "/h")]);
-        assert_eq!(config_dir_from(get, |_| true), Some("/b".into()));
+        assert_eq!(config_dir_from(get), Some("/b".into()));
     }
 
     #[test]
     fn runtime_root_then_home() {
         let get = env(&[("AGENTS_MULTI_ROOT", "/r"), ("HOME", "/h")]);
-        assert_eq!(config_dir_from(get, |_| false), Some("/r/config".into()));
-        // a fresh machine, and one that moved: the new name
+        assert_eq!(config_dir_from(get), Some("/r/config".into()));
         let get = env(&[("HOME", "/h")]);
         assert_eq!(
-            config_dir_from(&get, |_| false),
+            config_dir_from(&get),
             Some("/h/.agents-multi/config".into())
         );
-        // only the old folder: it is still there
-        assert_eq!(
-            config_dir_from(&get, |p| p == Path::new("/h/.claude-multi")),
-            Some("/h/.claude-multi/config".into())
-        );
-        assert_eq!(config_dir_from(env(&[]), |_| true), None);
+        assert_eq!(config_dir_from(env(&[])), None);
     }
 
     #[test]

@@ -13,7 +13,6 @@ import { denoFor, type Registry, withDeno } from "../mcp/registry.ts";
 import { permissionRules, wanted } from "../mcp/placement.ts";
 import { uiState } from "../ui.ts";
 import { jobPath, jobsFor, nextDelay } from "../console/schedule.ts";
-import { packageCandidates } from "../migrate-app.ts";
 
 // ---------------------------------------------------------------- mode
 Deno.test("modeOf: the shared link decides; with none, the running code", () => {
@@ -273,12 +272,4 @@ Deno.test("jobPath: the runtime's bin last, once", () => {
   assertEquals(jobPath("/usr/bin:/bin", "/rt"), "/usr/bin:/bin:/rt/bin");
   assertEquals(jobPath("/rt/bin:/usr/bin", "/rt"), "/rt/bin:/usr/bin");
   assertEquals(jobPath(undefined, "/rt"), "/rt/bin");
-});
-
-// ---------------------------------------------------------------- migration
-Deno.test("packageCandidates: the resources beside the app's executable", () => {
-  assertEquals(packageCandidates("/usr/bin/agents-multi-desktop", ["me.artysan.agents", "Agents Multi"]), [
-    "/usr/lib/me.artysan.agents/repo",
-    "/usr/lib/Agents Multi/repo",
-  ]);
 });

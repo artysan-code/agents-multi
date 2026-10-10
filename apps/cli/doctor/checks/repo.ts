@@ -93,7 +93,7 @@ export async function repoChecks(ctx: DoctorCtx): Promise<Check[]> {
   }
   // the app installed on a machine still on a checkout: its install refused, and says why
   if (record && !record.ok) {
-    add("app.install", "warn", record.error ?? "the app's install was refused", "agents migrate app");
+    add("app.install", "warn", record.error ?? "the app's install was refused");
   }
   // --- repository
   if (!repo.isRepo) add("repo", "fail", `${REPO} is not a git repository`, `git clone <your fork> ${shortHome(REPO)}`);

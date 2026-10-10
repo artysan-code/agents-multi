@@ -9,14 +9,9 @@ import { runCommand } from "./run.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
 import { ANSI, printDoctor } from "./lib/output.ts";
-import { CACHE, HOME, PORT, REPO, STAMP, STATE, XDG } from "./lib/paths.ts";
-import { ensureRuntimeLink, moveXdgDirs } from "./lib/runtime-root.ts";
-import { migrate } from "./migrate.ts";
-import { migrateApp } from "./migrate-app.ts";
+import { CACHE, PORT, REPO } from "./lib/paths.ts";
 import { installApp } from "./appinstall.ts";
 import { installation } from "./lib/mode.ts";
-import { running } from "./lib/processes.ts";
-import { amEnv } from "../../shared/mcp/lib/env.ts";
 import { run } from "./lib/proc.ts";
 import { doctor } from "./doctor/index.ts";
 import { notifyDoctor } from "./notify.ts";
@@ -42,49 +37,7 @@ const opt = (name: string, def?: string) => {
   return i >= 0 ? rest[i + 1] : def;
 };
 
-// A machine whose runtime has not moved yet gets ~/.agents-multi as a link to ~/.claude-multi,
-// before anything here (settings, servers, install) writes a path with the new name.
-if (!amEnv("ROOT")) await ensureRuntimeLink(HOME).catch(() => false);
-// the same for the XDG folders, before anything here reads or writes under the new name
-await moveXdgDirs([XDG.cache, XDG.state, XDG.data]);
-
 switch (cmd) {
-  case "migrate": {
-    const procs = await running();
-    if (rest[0] === "app") {
-      Deno.exit(
-        await migrateApp({
-          dry: flag("--dry-run"),
-          rollback: flag("--rollback"),
-          force: flag("--force"),
-          from: opt("--from"),
-          to: opt("--to"),
-          running: [
-            ...procs.cli.map((p) => `claude ${p.profile ?? "?"} (pid ${p.pid})`),
-            ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
-          ],
-        }),
-      );
-    }
-    const code = await migrate({
-      home: HOME,
-      dry: flag("--dry-run"),
-      rollback: flag("--rollback"),
-      force: flag("--force"),
-      backupDir: `${STATE}/migrate-${STAMP}`,
-      running: [
-        ...procs.cli.map((p) => `claude ${p.profile ?? "?"} (pid ${p.pid})`),
-        ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
-      ],
-    });
-    // the console found the runtime by its name when it started: it reports the paths of the old one
-    // until Agents Multi restarts it
-    if (code === 0 && !flag("--dry-run")) {
-      console.log("restart Agents Multi: its console still holds the old runtime paths");
-    }
-    Deno.exit(code);
-    break;
-  }
   case "init":
     Deno.exit(await init(rest));
     break;
@@ -279,9 +232,6 @@ switch (cmd) {
   init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.agents-multi/config
   install [--app] [--dry-run] materialise runtime, wrappers, units and desktop entries (idempotent);
           --app: from the desktop app's code, which becomes the runtime's copy (what the app runs)
-  migrate [--dry-run] [--rollback] [--force]   move the runtime from ~/.claude-multi to ~/.agents-multi (with Claude closed)
-  migrate app [--from <package code>] [--dry-run] [--rollback [--to <checkout>]] [--force]
-          move this machine from a checkout to the desktop app's code (with Claude closed)
   doctor  [--probe] [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only;
           --probe: one tiny request per profile, to see that its Claude Code login works
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances

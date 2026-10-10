@@ -123,13 +123,11 @@ export function withDeno(servers: Record<string, ServerCfg>, deno: string): Reco
  * The registry as the setup uses it: catalogue plus the person's patch, `${HOME}` expanded, with the
  * profiles, accounts, session bus, brain scopes and launch paths of this machine.
  *
- * @param opts.mode the installation's mode to place servers for (`agents migrate app` plans the
- *   app's before the machine is in it); this machine's by default
  * @throws when servers.json is missing or invalid.
  */
-export async function loadRegistry(opts: { mode?: Mode } = {}): Promise<Registry> {
+export async function loadRegistry(): Promise<Registry> {
   const raw = await rawRegistry();
-  const deno = denoFor(opts.mode ?? (await installation()).mode);
+  const deno = denoFor((await installation()).mode);
   const r = { ...raw, servers: withDeno(expandHome(raw.servers), deno) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) {

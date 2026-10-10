@@ -11,7 +11,6 @@ import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 import { type Target, wanted } from "./placement.ts";
 import { loadRegistry } from "./registry.ts";
-import { type Mode } from "../lib/mode.ts";
 
 export interface Change {
   target: Target;
@@ -54,8 +53,8 @@ async function loadState(): Promise<Record<string, string[]>> {
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Differences per existing target (missing files are skipped: profile or Desktop not installed). */
-export async function plan(opts: { mode?: Mode } = {}): Promise<{ changes: Change[]; skipped: Target[] }> {
-  const reg = await loadRegistry(opts);
+export async function plan(): Promise<{ changes: Change[]; skipped: Target[] }> {
+  const reg = await loadRegistry();
   const state = await loadState();
   const changes: Change[] = [];
   const skipped: Target[] = [];
@@ -112,10 +111,10 @@ export async function blockers(): Promise<Record<string, string[]>> {
  * @returns the changes applied
  * @throws when running instances would rewrite a touched config (without `force`)
  */
-export async function apply(opts: { force?: boolean; mode?: Mode } = {}) {
-  const reg = await loadRegistry(opts);
+export async function apply(opts: { force?: boolean } = {}) {
+  const reg = await loadRegistry();
   const state = await loadState();
-  const { changes } = await plan(opts);
+  const { changes } = await plan();
   const block = opts.force ? {} : await blockers();
   const touched = new Set(changes.map((c) => c.target.managedKey));
   const blocked = [...touched].filter((k) => block[k]);
