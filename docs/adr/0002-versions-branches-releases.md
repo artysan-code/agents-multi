@@ -9,7 +9,7 @@
   every manifest listed in `MANIFESTS` (`scripts/release.ts`). Raising a component resets the ones
   to its right: 0.1.24 → 0.2.0 → 1.0.0. Before 1.0.0 a breaking change raises the minor.
 - **Branches**: `dev` receives the work; `beta` and `release` move only by merge from the branch
-  before them. Betas are `X.Y.Z-beta.N`, cut on `beta`; stable versions are cut on `release`.
+  before them. Betas (`X.Y.Z-beta.N`) and release candidates (`X.Y.Z-rc.N`, after the last beta) are cut on `beta`; stable versions are cut on `release`.
   Installations follow `release`.
 - **Commit subjects are Conventional Commits**; the CHANGELOG section and the bump are generated
   from them by `deno task release`. The `commit-msg` hook and CI enforce the format on every commit

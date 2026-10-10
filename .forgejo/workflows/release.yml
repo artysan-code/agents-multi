@@ -1,4 +1,4 @@
-# Releases on Forgejo, on every version tag (vX.Y.Z, vX.Y.Z-beta.N): docs/adr/0002, docs/adr/0004.
+# Releases on Forgejo, on every version tag (vX.Y.Z, vX.Y.Z-beta.N, vX.Y.Z-rc.N): docs/adr/0002, docs/adr/0004.
 #
 # `publish`: a Forgejo release for each tag that has none yet, with its CHANGELOG section as the notes
 # (scripts/publish-releases.ts). The job's own token is enough.
@@ -145,7 +145,7 @@ jobs:
             git fetch --quiet origin release
             git checkout --quiet -B release origin/release
             deno run --allow-read --allow-write scripts/app-release.ts channels dist-app/latest.json
-            if [[ "$VERSION" != *-beta.* ]]; then
+            if [[ "$VERSION" != *-beta.* && "$VERSION" != *-rc.* ]]; then
               if [[ -n "$(jq -r '.license // ""' apps/desktop/release.json)" ]]; then
                 deno run --allow-read --allow-write scripts/aur.ts render "$VERSION" \
                   "$(sha256sum "dist-app/agents-multi_${VERSION}_amd64.deb" | cut -d' ' -f1)"
@@ -164,7 +164,7 @@ jobs:
           exit 1
 
       - name: AUR
-        if: ${{ !contains(github.ref_name, '-beta.') }}
+        if: ${{ !contains(github.ref_name, '-beta.') && !contains(github.ref_name, '-rc.') }}
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
@@ -223,7 +223,7 @@ jobs:
               --label "org.opencontainers.image.version=$version" --verbosity warn
           }
           case "$version" in
-            *-beta.*)
+            *-beta.*|*-rc.*)
               build refs/heads/release "$SITE" latest
               # from `beta`, which holds the tagged commit: the tag is annotated, the commit is not
               build refs/heads/beta "$GITHUB_SHA" beta "$version" ;;
@@ -245,7 +245,7 @@ jobs:
           BETA_URL: ${{ secrets.COOLIFY_DEPLOY_BETA_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          case "$GITHUB_REF_NAME" in *-beta.*) url="$BETA_URL" ;; *) url="$STABLE_URL" ;; esac
+          case "$GITHUB_REF_NAME" in *-beta.*|*-rc.*) url="$BETA_URL" ;; *) url="$STABLE_URL" ;; esac
           [ -n "$url" ] && [ -n "$COOLIFY_TOKEN" ] ||
             { echo "no Coolify deploy hook for this channel: nothing redeployed"; exit 0; }
           curl -fsS -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$url"

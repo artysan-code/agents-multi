@@ -12,7 +12,7 @@
  *                                         idempotent: what is already there is left as it is
  *   app-release.ts channels <out>/latest.json
  *                                         the site's manifests (apps/site/public/updates/<channel>.json)
- *                                         moved to the version: a stable one on both channels, a beta on
+ *                                         moved to the version: a stable one on both channels, a beta or rc on
  *                                         beta; never back to an older version
  *   --dry-run                             publish: say what would be sent, send nothing
  *
@@ -21,7 +21,7 @@
  * manifests' URLs from the next release on, never the installed apps (they only know the site).
  */
 
-import { parseVersion, type Version } from "./release.ts";
+import { compareVersion, isPre, parseVersion } from "./release.ts";
 import { sectionOf } from "./publish-releases.ts";
 
 export const RELEASE_CONFIG = "apps/desktop/release.json";
@@ -90,7 +90,7 @@ export function bundleKind(file: string): { kind: Kind; sig: boolean } | null {
 
 /** Pure: the name an asset is published under, the same for every identifier: Debian's, RPM's and
  *  AppImage's conventions, the architecture x86_64 for now (Linux first, ADR 0003). An RPM version
- *  cannot carry a dash: a beta's is `X.Y.Z~beta.N`, which sorts before X.Y.Z. */
+ *  cannot carry a dash: a pre-release's is `X.Y.Z~beta.N` or `X.Y.Z~rc.N`, which sorts before X.Y.Z. */
 export function assetName(kind: Kind, version: string): string {
   if (kind === "deb") return `${NAME}_${version}_amd64.deb`;
   if (kind === "rpm") return `${NAME}-${version.replace("-", "~")}-1.x86_64.rpm`;
@@ -119,24 +119,21 @@ export function manifestFor(
   return { version, notes, pub_date: date.toISOString().replace(/\.\d{3}Z$/, "Z"), platforms };
 }
 
-/** Pure: a < b for versions, a beta before its stable version. */
+/** Pure: a < b for versions, a beta before its rc before its stable version. */
 export function older(a: string, b: string): boolean {
-  const k = (v: Version) => [v.major, v.minor, v.patch, v.beta ?? Infinity];
-  const x = k(parseVersion(a)), y = k(parseVersion(b));
-  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] < y[i];
-  return false;
+  return compareVersion(parseVersion(a), parseVersion(b)) < 0;
 }
 
 /**
  * Pure: the channels' manifests once `release` is out. A stable version goes on stable and, when it
- * is newer than the last beta, on beta too, so a beta never lags behind a stable; a beta goes on beta.
+ * is newer than the last beta, on beta too, so a beta never lags behind a stable; a beta or an rc goes on beta.
  * A channel never moves back: a rollback is a hand-made commit of the previous manifest (ADR 0004).
  */
 export function nextChannels(
   current: Partial<Record<Channel, Manifest>>,
   release: Manifest,
 ): Partial<Record<Channel, Manifest>> {
-  const beta = parseVersion(release.version).beta !== undefined;
+  const beta = isPre(parseVersion(release.version));
   const out: Partial<Record<Channel, Manifest>> = {};
   for (const ch of CHANNELS) {
     if (ch === "stable" && beta) continue;
@@ -246,7 +243,7 @@ async function publish(out: string, dry: boolean) {
   const config = await readConfig();
   const manifest = await readJson<Manifest>(`${out}/latest.json`);
   const tag = `v${manifest.version}`;
-  const pre = parseVersion(manifest.version).beta !== undefined;
+  const pre = isPre(parseVersion(manifest.version));
   const names: string[] = [];
   for await (const e of Deno.readDir(out)) if (e.isFile && e.name !== "latest.json") names.push(e.name);
   names.sort();

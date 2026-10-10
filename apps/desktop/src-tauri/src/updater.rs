@@ -20,7 +20,7 @@
 //!   installing would overwrite the binary), or a package manager owns it — the AUR package puts a
 //!   `package-manager` file naming it in the app's resources.
 //!
-//! The channel is `beta` for a beta build, which also writes it to `update-channel` in the app's config
+//! The channel is `beta` for a beta or release-candidate build, which also writes it to `update-channel` in the app's config
 //! folder, so the stable version a beta ends in keeps following betas; deleting that file, or writing
 //! `stable` there, leaves the channel. `AGENTS_MULTI_UPDATE_CHANNEL` overrides both. A beta manifest also
 //! carries a stable version newer than its last beta (scripts/app-release.ts).
@@ -79,12 +79,12 @@ impl Channel {
     }
 }
 
-/// The channel: the one chosen (the variable, else the file), else the build's — beta for a beta version.
+/// The channel: the one chosen (the variable, else the file), else the build's — beta for a beta or rc version.
 pub fn channel(version: &str, chosen: Option<&str>) -> Channel {
     match chosen.map(str::trim) {
         Some("beta") => Channel::Beta,
         Some("stable") => Channel::Stable,
-        _ if version.contains("-beta.") => Channel::Beta,
+        _ if version.contains("-beta.") || version.contains("-rc.") => Channel::Beta,
         _ => Channel::Stable,
     }
 }
@@ -954,6 +954,8 @@ mod tests {
     fn the_channel_is_the_chosen_one_else_the_builds() {
         assert_eq!(channel("1.0.0", None), Channel::Stable);
         assert_eq!(channel("1.1.0-beta.2", None), Channel::Beta);
+        assert_eq!(channel("1.1.0-rc.1", None), Channel::Beta);
+        assert_eq!(channel("1.1.0-rc.1", Some("stable")), Channel::Stable);
         assert_eq!(channel("1.1.0", Some("beta\n")), Channel::Beta);
         assert_eq!(channel("1.1.0-beta.2", Some("stable")), Channel::Stable);
         assert_eq!(channel("1.1.0", Some("nightly")), Channel::Stable);

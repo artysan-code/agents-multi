@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env --allow-net --allow-run=git
 /**
  * publish-releases.ts — a Forgejo release for every version tag that has none yet, with its
- * CHANGELOG section as the notes; a beta is marked as a pre-release. Run by the release workflow on
+ * CHANGELOG section as the notes; a beta or an rc is marked as a pre-release. Run by the release workflow on
  * every tag push (.forgejo/workflows/release.yml), so a tag that was pushed before the workflow
  * existed gets its release on the next one. Idempotent: an existing release is left as it is.
  *
@@ -9,7 +9,8 @@
  *   publish-releases.ts --dry-run    print what it would publish, without the API
  */
 
-import { parseVersion } from "./release.ts";
+import { compareVersion, isPre, parseVersion } from "./release.ts";
+import { git } from "./lib/git.ts";
 
 /** Pure: the notes of one version, its CHANGELOG section without the heading; null when missing. */
 export function sectionOf(changelog: string, version: string): string | null {
@@ -20,7 +21,7 @@ export function sectionOf(changelog: string, version: string): string | null {
   return null;
 }
 
-/** Pure: the version tags (vX.Y.Z, vX.Y.Z-beta.N), oldest first, so releases are created in order. */
+/** Pure: the version tags (vX.Y.Z, vX.Y.Z-beta.N, vX.Y.Z-rc.N), oldest first, so releases are created in order. */
 export function versionTags(tags: string[]): string[] {
   const vs = tags.flatMap((t) => {
     try {
@@ -29,17 +30,8 @@ export function versionTags(tags: string[]): string[] {
       return [];
     }
   }).filter((x) => x.t.startsWith("v"));
-  vs.sort((a, b) =>
-    a.v.major - b.v.major || a.v.minor - b.v.minor || a.v.patch - b.v.patch ||
-    (a.v.beta ?? Infinity) - (b.v.beta ?? Infinity)
-  );
+  vs.sort((a, b) => compareVersion(a.v, b.v));
   return vs.map((x) => x.t);
-}
-
-async function git(...args: string[]): Promise<string> {
-  const out = await new Deno.Command("git", { args, stdout: "piped", stderr: "piped" }).output();
-  if (!out.success) throw new Error(`git ${args.join(" ")}: ${new TextDecoder().decode(out.stderr).trim()}`);
-  return new TextDecoder().decode(out.stdout).trim();
 }
 
 async function main(args: string[]) {
@@ -54,7 +46,7 @@ async function main(args: string[]) {
   const changelog = await Deno.readTextFile("CHANGELOG.md");
   for (const tag of versionTags((await git("tag", "--list", "v*")).split("\n"))) {
     const notes = sectionOf(changelog, tag.slice(1)) ?? "No notes for this version.";
-    const pre = parseVersion(tag).beta !== undefined;
+    const pre = isPre(parseVersion(tag));
     if (dry) {
       console.log(
         `${tag}${pre ? " (pre-release)" : ""}: ${notes.split("\n").filter((l) => l.startsWith("- ")).length} changes`,
