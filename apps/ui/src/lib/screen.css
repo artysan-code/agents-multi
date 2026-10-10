@@ -143,9 +143,10 @@
     opacity: .3;
   }
 }
+/* a step not needed is behind the run as much as one done: the share counts it, so the ring does */
 .rm-seg.rm-skipped {
-  stroke: var(--line);
-  opacity: .5;
+  stroke: var(--accent);
+  opacity: .45;
 }
 .rm-seg.rm-failed {
   stroke: var(--crit);
