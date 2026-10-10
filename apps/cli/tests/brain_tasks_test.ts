@@ -166,3 +166,47 @@ Deno.test("brainStore: a brain restarting is waited for, an offline one is said 
     retriable(new Response("", { status: 500 })),
   ], [false, true, false]);
 });
+
+Deno.test("brainStore: an unchanged list is a 304 and the list kept; a 404 on the list is an error", async () => {
+  const file = (id: string) =>
+    `---\nid: ${id}\ntitle: A task\nstatus: todo\ncreated: 2026-10-01T00:00:00.000Z\nupdated: 2026-10-01T00:00:00.000Z\n---\n`;
+  const sent: (string | null)[] = [];
+  let calls = 0;
+  const store = brainStore("https://b", "t", (input, init) => {
+    sent.push(new Request(input, init).headers.get("if-none-match"));
+    return Promise.resolve(
+      calls++ === 0
+        ? new Response(JSON.stringify({ tasks: [file("t-20261001-aaaaaa")] }), { headers: { etag: 'W/"1"' } })
+        : new Response(null, { status: 304 }),
+    );
+  });
+  const first = await store.list();
+  first[0].title = "changed by the caller";
+  const again = await store.list();
+  assertEquals(sent, [null, 'W/"1"']);
+  assertEquals(again.map((t) => [t.id, t.title]), [["t-20261001-aaaaaa", "A task"]]);
+  await assertRejects(
+    () => brainStore("https://b", "t", () => Promise.resolve(new Response("{}", { status: 404 }))).list(),
+    Error,
+    "404",
+  );
+});
+
+Deno.test("lazyStore: a write carries the version it was made from", async () => {
+  let base: string | undefined;
+  const inner = {
+    list: () => Promise.resolve([]),
+    get: () => Promise.resolve(null),
+    write: (_t: unknown, b?: string) => {
+      base = b;
+      return Promise.resolve();
+    },
+  };
+  const store = lazyStore(
+    { name: "b", service: "brain", url: "https://b" } as never,
+    () => Promise.resolve("tok"),
+    () => inner as never,
+  );
+  await store.write({ id: "t-20261001-aaaaaa" } as never, "2026-10-01T00:00:00.000Z");
+  assertEquals(base, "2026-10-01T00:00:00.000Z");
+});

@@ -28,7 +28,7 @@ import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
 import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { hasCsrfHeader, isLocalHost, json, jsonText, uiFile } from "./http.ts";
-import { broadcast, eventStream, onTopic, watchBrain, watchTree } from "./events.ts";
+import { broadcast, eventStream, onTopic, type Topic, TOPICS, watchBrain, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
 import { cancelJob, jobStream, startJob } from "./jobs.ts";
@@ -55,12 +55,36 @@ export interface Route {
 }
 
 /** The routes of the console, given the state they share. */
+/** The usage database, kept open, and the transcripts read into it at most every few seconds: an
+ *  ingest looks at every transcript of every profile, and a busy session asks for the list often. */
+const usage = (() => {
+  let db: ReturnType<typeof openDb> | null = null, at = 0, running: Promise<unknown> | null = null;
+  return {
+    async fresh() {
+      db ??= openDb();
+      if (Date.now() - at > 3000) {
+        running ??= ingest(db, { quiet: true }).finally(() => {
+          at = Date.now();
+          running = null;
+        });
+        await running;
+      }
+      return db;
+    },
+  };
+})();
+
 export function routes(code: string, status: StatusCache, app?: AppLink): Record<string, Route> {
   let plugins: { at: number; body: string } | null = null;
   const body = (req: Request) => req.json().catch(() => ({}));
 
   return {
-    "/api/events": { get: () => eventStream(code) },
+    "/api/events": {
+      get: ({ url }) => {
+        const only = url.searchParams.get("only")?.split(",").filter((t): t is Topic => TOPICS.includes(t as Topic));
+        return eventStream(code, only?.length ? only : undefined);
+      },
+    },
     "/api/code": { get: () => json({ code }) },
     // the CHANGELOG sections after ?since= up to the version on disk: the update wizard's last step
     "/api/whatsnew": { get: async ({ url }) => json(await whatsNew(url.searchParams.get("since"))) },
@@ -75,15 +99,12 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/live/refresh": { post: async () => json({ errors: await refreshLimits(), ...(await live()) }) },
     "/api/sessions": {
       get: async ({ url }) => {
-        const db = openDb();
-        await ingest(db, { quiet: true });
-        const r = sessions(db, {
+        const db = await usage.fresh();
+        return json(sessions(db, {
           since: url.searchParams.get("since") ?? "7d",
           profile: url.searchParams.get("profile") || undefined,
           limit: Number(url.searchParams.get("limit") ?? 60),
-        });
-        db.close();
-        return json(r);
+        }));
       },
     },
     "/api/brain/login": {

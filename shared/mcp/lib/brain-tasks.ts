@@ -19,6 +19,8 @@ export const RETRY_MS = [1_000, 2_000, 4_000, 8_000];
  *  machine or the server is offline, which seconds do not fix: that error comes at once. */
 export const retriable = (r: Response | null) => r?.status === 502 || r?.status === 503;
 
+const ETAG = "\0etag";
+
 /** The TaskStore on a brain at `url`, signed in with a personal token. */
 export function brainStore(
   url: string,
@@ -49,7 +51,12 @@ export function brainStore(
       await pause(RETRY_MS[i]);
     }
     r = r!;
-    if (r.status === 404 && !init.method) {
+    // the list as last read is still the list: the brain said so without sending it again
+    if (r.status === 304) {
+      await r.body?.cancel();
+      return { notModified: true };
+    }
+    if (r.status === 404 && !init.method && path !== "/api/tasks") {
       await r.body?.cancel();
       return null;
     }
@@ -67,12 +74,21 @@ export function brainStore(
           : `the brain answered ${r.status} on ${path}`,
       );
     }
-    return await r.json();
+    const etag = r.headers.get("etag");
+    return { ...(await r.json()), ...(etag ? { [ETAG]: etag } : {}) };
   }
+  // the list and the version the brain gave it, sent back as If-None-Match: an unchanged list is a
+  // 304 of a few bytes instead of every task again (the console asks every half minute, each chat
+  // at every task tool)
+  let last: { etag: string; tasks: Task[] } | null = null;
   return {
     async list() {
-      const d = await call("/api/tasks");
-      return ((d?.tasks ?? []) as string[]).map((b) => fromFile(b)).filter((t): t is Task => !!t);
+      const d = await call("/api/tasks", last ? { headers: { "if-none-match": last.etag } } : {});
+      if (d?.notModified && last) return last.tasks.map((t) => structuredClone(t));
+      const tasks = ((d?.tasks ?? []) as string[]).map((b) => fromFile(b)).filter((t): t is Task => !!t);
+      const etag = d?.[ETAG];
+      last = typeof etag === "string" ? { etag, tasks: tasks.map((t) => structuredClone(t)) } : null;
+      return tasks;
     },
     async get(id) {
       const d = await call(`/api/tasks/${id}`);
@@ -129,7 +145,8 @@ export function lazyStore(account: Account, token: () => Promise<string | null>,
   return {
     list: async () => (await ready()).list(),
     get: async (id) => (await ready()).get(id),
-    write: async (t) => (await ready()).write(t),
+    // the version the change was made from goes along: without it the brain cannot refuse a stale one
+    write: async (t, base) => (await ready()).write(t, base),
   };
 }
 
