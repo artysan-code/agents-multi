@@ -18,7 +18,7 @@
 import { installCopy, readBuild, seedCache } from "./appcopy.ts";
 import { keepPackagePrograms, personDenoDir } from "./appinstall.ts";
 import { AUTOSTART, install } from "./install.ts";
-import { lstat, readJson, stat } from "./lib/fs.ts";
+import { lstat, readJson, stat, swapLink } from "./lib/fs.ts";
 import { APP_DIR, installation, isCheckout } from "./lib/mode.ts";
 import { ANSI } from "./lib/output.ts";
 import { CACHE, CONFIG, HOME, REPO, RUNTIME, shortHome, STATE } from "./lib/paths.ts";
@@ -158,10 +158,7 @@ async function rollback(
   say(`remove ~/.agents-multi/${APP_DIR} and ~/.agents-multi/bin (the app's copy and its programs)`);
   if (o.dry) return 0;
   await Deno.remove(autostart).catch(() => {});
-  const tmp = `${RUNTIME}/shared.tmp-${Deno.pid}`;
-  await Deno.remove(tmp).catch(() => {});
-  await Deno.symlink(`${checkout}/shared`, tmp);
-  await Deno.rename(tmp, `${RUNTIME}/shared`);
+  await swapLink(`${RUNTIME}/shared`, `${checkout}/shared`);
   // the checkout's own code, whatever version it is: it installs what it knows
   for (const args of [["install"], ["mcp", "sync", "--force"]]) {
     const r = await new Deno.Command(`${checkout}/bin/agents`, { args, stdout: "inherit", stderr: "inherit" }).output();

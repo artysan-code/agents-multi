@@ -21,6 +21,7 @@
 
 import { owner } from "./owner.ts";
 import { amEnv } from "./env.ts";
+import { serializer, writeAtomic } from "./fs.ts";
 
 export type Status = "todo" | "doing" | "waiting" | "done" | "dropped";
 export const STATUSES: Status[] = ["todo", "doing", "waiting", "done", "dropped"];
@@ -277,9 +278,7 @@ const fileStore: TaskStore = {
   },
   async write(t) {
     await Deno.mkdir(itemsDir(), { recursive: true });
-    const p = `${itemsDir()}/${t.id}.md`, tmp = `${p}.${crypto.randomUUID()}.tmp`;
-    await Deno.writeTextFile(tmp, toFile(t));
-    await Deno.rename(tmp, p);
+    await writeAtomic(`${itemsDir()}/${t.id}.md`, toFile(t));
   },
 };
 let store: TaskStore = fileStore;
@@ -439,12 +438,7 @@ export function applyInput(base: Task, input: TaskInput, now: Date): Task {
 
 /** Changes run one at a time in a process: a server answers several tool calls at once, and two
  *  read-modify-writes of the same task would otherwise lose one of them. */
-let chain: Promise<unknown> = Promise.resolve();
-function serial<T>(job: () => Promise<T>): Promise<T> {
-  const run = chain.then(job, job);
-  chain = run.catch(() => {});
-  return run;
-}
+const serial = serializer();
 
 export function addTask(input: TaskInput, now = new Date()): Promise<Task> {
   return serial(() => addTaskNow(input, now));

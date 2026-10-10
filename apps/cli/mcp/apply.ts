@@ -5,7 +5,7 @@
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
-import { lstat, readJson } from "../lib/fs.ts";
+import { lstat, readJson, writeAtomic } from "../lib/fs.ts";
 import { REPO, RUNTIME, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
@@ -134,9 +134,7 @@ export async function apply(opts: { force?: boolean; mode?: Mode } = {}) {
       Object.assign(merged, want);
       conf.mcpServers = merged;
       await backup(t);
-      const tmp = `${t.path}.claude-multi.tmp`;
-      await Deno.writeTextFile(tmp, JSON.stringify(conf, null, 2) + "\n");
-      await Deno.rename(tmp, t.path);
+      await writeAtomic(t.path, JSON.stringify(conf, null, 2) + "\n");
     }
     state[t.managedKey] = Object.keys(want).sort();
   }

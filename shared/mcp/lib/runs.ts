@@ -11,6 +11,7 @@
 //   <runs>/runs/<id>/channel.jsonl  the team's messages
 //   <runs>/runs/<id>/runner.pid, err.log, handoffs/ (when a folder has no git repository)
 
+import { writeAtomic } from "./fs.ts";
 import { configDir } from "./owner.ts";
 import {
   type Attention,
@@ -217,8 +218,7 @@ const lines = async (file: string) =>
 const append = (file: string, o: unknown) => Deno.writeTextFile(file, JSON.stringify(o) + "\n", { append: true });
 
 async function writeState(dir: string, st: RunState) {
-  await Deno.writeTextFile(`${dir}/state.json.tmp`, JSON.stringify(st, null, 2));
-  await Deno.rename(`${dir}/state.json.tmp`, `${dir}/state.json`);
+  await writeAtomic(`${dir}/state.json`, JSON.stringify(st, null, 2));
 }
 
 export interface Run {

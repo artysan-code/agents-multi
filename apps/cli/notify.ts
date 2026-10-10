@@ -3,6 +3,7 @@
 // failure clears, to say things are healthy again). Warnings never notify: every four hours they
 // would be noise. Driven by the claude-update-check timer, alongside the update check.
 
+import { readJson } from "./lib/fs.ts";
 import { type Check } from "./lib/output.ts";
 import { STATE } from "./lib/paths.ts";
 import { has, run } from "./lib/proc.ts";
@@ -43,11 +44,7 @@ export function notifyText(d: DoctorDiff): { title: string; body: string } | nul
 }
 
 async function loadLast(): Promise<string[]> {
-  try {
-    return JSON.parse(await Deno.readTextFile(STATE_FILE)).fails ?? [];
-  } catch {
-    return [];
-  }
+  return (await readJson<{ fails?: string[] }>(STATE_FILE))?.fails ?? [];
 }
 async function saveLast(current: Check[]) {
   await Deno.mkdir(STATE, { recursive: true });

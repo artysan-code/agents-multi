@@ -26,6 +26,7 @@
 // getSecret(), and the MCP servers use it for their HTTP headers, never in a tool result.
 
 import { amEnv } from "./env.ts";
+import { readJson, writeAtomic } from "./fs.ts";
 
 const HOME = Deno.env.get("HOME") ?? "";
 const SECRET_TOOL = "/usr/bin/secret-tool";
@@ -189,24 +190,12 @@ async function storeKey(raw: Uint8Array) {
 const entriesDir = () => `${vaultDir()}/secrets`;
 const checkFile = () => `${vaultDir()}/key-check.json`;
 
-async function readJsonFile<T>(p: string): Promise<T | null> {
-  try {
-    return JSON.parse(await Deno.readTextFile(p)) as T;
-  } catch {
-    return null;
-  }
-}
-
-/** Write via a temporary file and a rename: Syncthing never ships half an entry. */
-async function writeAtomic(p: string, text: string) {
-  const tmp = `${p}.${crypto.randomUUID()}.tmp`;
-  await Deno.writeTextFile(tmp, text, { mode: 0o600 });
-  await Deno.rename(tmp, p);
-}
+/** Written via a temporary file and a rename (Syncthing never ships half an entry), readable by the owner only. */
+const writeEntry = (p: string, text: string) => writeAtomic(p, text, { mode: 0o600 });
 
 /** Does this key open this vault? True for a vault that has no check yet (a new one). */
 export async function keyMatches(key: VaultKey): Promise<boolean> {
-  const box = await readJsonFile<{ iv: string; ct: string }>(checkFile());
+  const box = await readJson<{ iv: string; ct: string }>(checkFile());
   if (!box) return true;
   try {
     return (await open(key, "key-check", box)) === CHECK_TEXT;
@@ -217,13 +206,13 @@ export async function keyMatches(key: VaultKey): Promise<boolean> {
 
 /** First machine: a new key, in the keyring, and the check next to the entries. */
 export async function initVault(): Promise<string> {
-  if (await readJsonFile(checkFile())) {
+  if (await readJson(checkFile())) {
     throw new VaultError(`a vault already exists in ${vaultDir()}: pair this machine with its recovery code instead`);
   }
   const raw = newKeyBytes();
   const key = await importKey(raw);
   await Deno.mkdir(entriesDir(), { recursive: true, mode: 0o700 });
-  await writeAtomic(checkFile(), JSON.stringify(await seal(key, "key-check", CHECK_TEXT)) + "\n");
+  await writeEntry(checkFile(), JSON.stringify(await seal(key, "key-check", CHECK_TEXT)) + "\n");
   await storeKey(raw);
   return recoveryCode(raw);
 }
@@ -232,7 +221,7 @@ export async function initVault(): Promise<string> {
 export async function pairVault(code: string) {
   const raw = parseRecoveryCode(code);
   const key = await importKey(raw);
-  if (!(await readJsonFile(checkFile()))) {
+  if (!(await readJson(checkFile()))) {
     throw new VaultError(
       `no vault in ${vaultDir()} yet: wait for Syncthing, or run \`vault init\` if this is the first machine`,
     );
@@ -249,7 +238,7 @@ export async function getSecret(
 ): Promise<string | null> {
   const k = key ?? await loadKey();
   const id = await entryId(k, service, account, field);
-  const box = await readJsonFile<{ iv: string; ct: string }>(`${entriesDir()}/${id}.json`);
+  const box = await readJson<{ iv: string; ct: string }>(`${entriesDir()}/${id}.json`);
   if (!box) return null;
   const e = JSON.parse(await open(k, id, box)) as Entry;
   return e.deleted ? null : e.value;
@@ -262,7 +251,7 @@ export async function setSecret(service: string, account: string, value: string,
   const id = await entryId(k, service, account, field);
   const entry: Entry = { service, account, field, value, updatedAt: new Date().toISOString() };
   await Deno.mkdir(entriesDir(), { recursive: true, mode: 0o700 });
-  await writeAtomic(`${entriesDir()}/${id}.json`, JSON.stringify(await seal(k, id, JSON.stringify(entry))) + "\n");
+  await writeEntry(`${entriesDir()}/${id}.json`, JSON.stringify(await seal(k, id, JSON.stringify(entry))) + "\n");
 }
 
 /** Deletes by writing a tombstone (see the top of the file): true if there was a secret to delete. */
@@ -276,7 +265,7 @@ export async function deleteSecret(
   if ((await getSecret(service, account, field, k)) === null) return false;
   const id = await entryId(k, service, account, field);
   const entry: Entry = { service, account, field, value: "", deleted: true, updatedAt: new Date().toISOString() };
-  await writeAtomic(`${entriesDir()}/${id}.json`, JSON.stringify(await seal(k, id, JSON.stringify(entry))) + "\n");
+  await writeEntry(`${entriesDir()}/${id}.json`, JSON.stringify(await seal(k, id, JSON.stringify(entry))) + "\n");
   return true;
 }
 
@@ -300,7 +289,7 @@ export async function listSecrets(
     if (!/^[0-9a-f]{32}\.json$/.test(f.name)) continue; // temporaries
     const id = f.name.slice(0, -5);
     try {
-      const box = await readJsonFile<{ iv: string; ct: string }>(`${entriesDir()}/${f.name}`);
+      const box = await readJson<{ iv: string; ct: string }>(`${entriesDir()}/${f.name}`);
       const { value: _v, deleted, ...meta } = JSON.parse(await open(k, id, box!)) as Entry;
       if (!deleted) entries.push(meta);
     } catch {

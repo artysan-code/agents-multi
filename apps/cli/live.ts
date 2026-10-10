@@ -8,7 +8,7 @@
 // Claude Code's /usage uses, and the answer is kept as <state>/live/limits-<profile>.json. The token is
 // read for that request and never kept, logged or sent anywhere else.
 
-import { readJson } from "./lib/fs.ts";
+import { readJson, writeAtomic } from "./lib/fs.ts";
 import { RUNTIME, STATE } from "./lib/paths.ts";
 import { profileNames } from "./lib/profiles.ts";
 import { openDb, report } from "./usage.ts";
@@ -157,8 +157,7 @@ export async function refresh(): Promise<Record<string, string>> {
     }
     const snap: Snapshot = { at: Math.round(Date.now() / 1000), profile: p, limits: r.limits, source: "endpoint" };
     const path = `${LIVE}/limits-${p}.json`;
-    await Deno.writeTextFile(`${path}.tmp`, JSON.stringify(snap));
-    await Deno.rename(`${path}.tmp`, path);
+    await writeAtomic(path, JSON.stringify(snap));
   }
   return errors;
 }

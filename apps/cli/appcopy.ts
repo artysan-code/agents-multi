@@ -14,7 +14,7 @@
 // sees the old build or the new one, never half of one. Everything here takes its folders as
 // arguments, so the tests run it on temporary ones.
 
-import { listDir, lstat, readJson, readlink, stat } from "./lib/fs.ts";
+import { listDir, lstat, readJson, readlink, stat, swapLink } from "./lib/fs.ts";
 import { run } from "./lib/proc.ts";
 import { APP_DIR } from "./lib/mode.ts";
 
@@ -44,14 +44,6 @@ interface CopyResult {
   /** the build in use before, if any */
   from: string | null;
   to: string;
-}
-
-/** Replaces `link` with a symlink to `target`, by renaming a new link over it. */
-async function swapLink(link: string, target: string) {
-  const tmp = `${link}.tmp-${Deno.pid}`;
-  await Deno.remove(tmp).catch(() => {});
-  await Deno.symlink(target, tmp);
-  await Deno.rename(tmp, link);
 }
 
 /**
