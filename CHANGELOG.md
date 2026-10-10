@@ -5,6 +5,89 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0] - 2026-10-10
+
+### Added
+
+- **ui**: the update screen and the start screen without the logo (0c4e6bd)
+- **release**: release candidates between betas and stable (87f9d1c)
+- **agents**: workflow runs with hand-offs per step and a team channel, run by their own process (cc8df94)
+- **agents**: children's questions reach the owner as native questions, followed live (e898d62)
+- **brain**: the site reads the update manifests from release; betas redeploy only :beta (94c7a91)
+- **ui**: Today leads with the day as a vertical agenda; rail items stay put while it opens (b42d5fb)
+- **console**: «Claude now» with each account's limits, today's tokens and each session's context (573e38d)
+- **console**: Today's tasks as a plain list; the day's tasks without a time over the line (94e613f)
+- **console**: Claude works out what the bar is for; health moves to the rail (9967ef9)
+- **console**: «Check» on Claude Code and Claude Desktop too, as on the app (1648e85)
+- **console**: a rail for every page, a start screen, and closing Claude as a step of the update (bc51fd1)
+- **agents**: children keep their profile's mode; an answer can allow the like for the session (e8f9965)
+- **agents**: children of any profile at work in a project, every permission answered by the owner (5949322)
+- **console**: Updates shows the app, its update and its channel, which can change there (0934930)
+- **brain**: the site runs on its own, and Coolify can run brain, model and site apart (934df53)
+
+### Fixed
+
+- **ci**: the update channels are written by the tag's scripts (4ed8011)
+- **ci**: the masking test's made-up tokens are not leaks (bd15f39)
+- **brain**: the image copies shared/mcp/lib/fs.ts, which the task rules now import (b4c13fd)
+- **security**: Claude sessions are denied curl and wget to the console (ca20e0a)
+- **brain**: trust x-forwarded-for by default behind Traefik; keep the model loaded, cap its CPU (2504826)
+- **tasks**: changes carry their version again, an unchanged list is a 304 (e420e7d)
+- **console**: a working session no longer recomputes the report every second (47eed78)
+- **agents**: a child starts without the coordinator's Claude session variables (934666a)
+- **agents**: a run whose runner does not start or stops says so, and retry starts it again (efb7641)
+- **agents**: the runner starts from the real bin/agents, also with the server loaded through a link (94878c2)
+- **ui**: agenda items are opaque tints and the past a flat shade: nothing shows through them (114bfd8)
+- **ui**: a Claude Desktop the check found is an update waiting, not «up to date» (2a07f1f)
+- **console**: tables, profiles and Today fit narrow windows; an unreachable update site said plainly (d7bf170)
+- **console**: dialogs open in the middle; a page's count never shows alone beside its icon (fa07d35)
+- **app**: the install waits for Claude only when it would change what an open Claude reads (b9dfd61)
+- **agents**: the hub reads only the variables it is allowed, not the whole environment (64aeefc)
+- **agents**: a child that ended is not alive while nobody has reaped it (ps, not kill -0) (eca6177)
+- **ci**: the agents test's stand-in for Claude reads what it ignores into _, as shellcheck wants (87d3942)
+- **agents**: a child's life and its stop through the kill command, which the server may run (f2a0cb9)
+- **console**: «Close Claude and update» installs at once when no Claude is left to close (addac81)
+- **console**: on the line of the day an item keeps its lane until its title ends (7112bf7)
+- **update**: after a Claude Code update, claude points at the app's code, not the AppImage's mount (5044472)
+- **tasks**: a brain restarting for a deploy is waited for, not reported as down (bc04ae3)
+- **ci**: a beta's brain image builds twice, so kaniko cleans up and builds from beta (e381999)
+
+### Performance
+
+- **desktop**: the tray follows state alone (52ec910)
+- **ui**: keep the last change when the session lists are throttled, pause the clock while hidden (3cef295)
+- **ui**: load Brain, Connections, System, the hosts and the start pages on demand (fad15e5)
+- **brain**: one resolver per pass, counters for versions, async backup, task list with ETag (531f710)
+- **brain**: write a token's last use at most every five minutes; prune idle clients in an hour (227301e)
+- **brain**: health probe over bash /dev/tcp instead of starting deno every 30 s (d7f377d)
+- **brain**: leave tasks out of the embeddings, warm the model at start (e36db2b)
+- **brain**: board cards read relations from one pass instead of one scan per card (36fa778)
+- **doctor**: a key's verdict is kept for minutes, the brain asked for its version only (bf62b62)
+
+### Changed
+
+- **ui**: every request goes through src/api.ts and the pages' api.ts files (d411fa4)
+- **desktop**: one AGENTS_MULTI_ lookup and one runtime root, with the old-folder fallback (fc81e9a)
+- one atomic write, one null-reading readJson and one serial queue (44b5c81)
+- **cli**: stop exporting what only its own file uses (0cd018b)
+- drop the retired systemd restart chain and stale tray comments (fa6bc7b)
+- **ui**: stop exporting what only its own file uses (9e17747)
+- **ui**: remove CSS no markup uses (3009838)
+- **ui**: drop i18n keys nothing reads (9d90c83)
+
+### Security
+
+- **cli**: /api/open no longer opens archives, SVG or macro documents (9eafa15)
+- **mcp**: mask secrets by their look, and more secret names (58ab860)
+- **updater**: keep the app's update socket out of /tmp (7e76175)
+- **agents**: narrow session rules, check a child's real folder under home (7389c0c)
+
+### Documentation
+
+- **adr**: 0005 adds the team channel of a run (42d9500)
+- **adr**: 0005 agent workflows, run by their own process and answered with native questions (7794d9b)
+- the rail, the bar without modes and «Claude now» in the README and the site (0e1141e)
+
 ## [1.0.0-rc.3] - 2026-10-10
 
 ### Fixed
