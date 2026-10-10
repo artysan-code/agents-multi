@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { buildId, installCopy, keepBy, keepProgram, readBuild, seedCache } from "../appcopy.ts";
 import { personDenoDir } from "../appinstall.ts";
-import { appImageEntry, autostartEntry, codeFor, unitsToRetire } from "../install.ts";
+import { appImageEntry, autostartEntry, codeFor } from "../install.ts";
 import { COPY_SHARED, modeOf } from "../lib/mode.ts";
 import { managerHome } from "../lib/machine.ts";
 import { appCodeChecks, runningFrom } from "../doctor/checks/repo.ts";
@@ -138,22 +138,6 @@ Deno.test("personDenoDir: DENO_DIR, else the XDG cache's deno, else ~/.cache/den
 });
 
 // ---------------------------------------------------------------- install
-Deno.test("unitsToRetire: app mode removes every unit of ours, dev only the ones the app replaced", () => {
-  const units = [
-    { name: "claude-tasks.timer", target: "/src/am/systemd/user/claude-tasks.timer" },
-    { name: "claude-multi-console.service", target: "/src/am/systemd/user/claude-multi-console.service" },
-    { name: "claude-multi-app.service", target: null },
-    { name: "someone-else.service", target: "/opt/x/someone-else.service" },
-    { name: "default.target.wants", target: null },
-  ];
-  assertEquals(unitsToRetire("dev", units), ["claude-multi-console.service", "claude-multi-app.service"]);
-  assertEquals(unitsToRetire("app", units), [
-    "claude-tasks.timer",
-    "claude-multi-console.service",
-    "claude-multi-app.service",
-  ]);
-});
-
 Deno.test("autostartEntry: the app in the tray, through the launcher in ~/.local/bin", async () => {
   const tpl = await Deno.readTextFile(new URL("../../../desktop/autostart.desktop.in", import.meta.url));
   const text = autostartEntry(tpl, "/h/.local/bin");
