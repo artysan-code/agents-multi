@@ -2,7 +2,7 @@
 # command, holding no account and no data. The update manifests are read from `release` at a request
 # (BRAIN_UPDATES_URL, apps/brain/manifests.ts), so a release does not redeploy it for them; a release
 # that changes the site's pages does, without touching the brain. Coolify puts the site's domain in
-# front of `site`. Until 1.0.0 it runs :beta (BRAIN_IMAGE), the first image with site.ts in it.
+# front of `site`.
 services:
   site:
     image: ${BRAIN_IMAGE:-ghcr.io/artysan-code/agents-multi-brain:latest}
@@ -20,7 +20,13 @@ services:
       - BRAIN_LOG_LEVEL=${BRAIN_LOG_LEVEL:-warn}
       - PORT=8080
     healthcheck:
-      test: ["CMD", "deno", "eval", "const r = await fetch('http://127.0.0.1:8080/health'); if (!r.ok) Deno.exit(1)"]
+      # bash over /dev/tcp, as the brain's: no Deno started every 30 s to ask
+      test: [
+        "CMD",
+        "bash",
+        "-c",
+        "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && read -r l <&3 && [[ $$l == *' 200 '* ]]",
+      ]
       interval: 30s
       timeout: 5s
       retries: 3
