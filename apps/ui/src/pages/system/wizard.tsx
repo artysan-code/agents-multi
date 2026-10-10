@@ -116,7 +116,12 @@ function relaunched(u: { from: string; to: string }): Run {
 async function consoleBack(old: string, timeoutMs = 120000): Promise<boolean> {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
-    const r = await api.code().catch(() => null);
+    // each try at most 3 s: a request caught on the old console's way out can hang without an
+    // answer, and the screen sat on «Restarting» long after the new one was up
+    const r = await Promise.race([
+      api.code().catch(() => null),
+      new Promise<null>((res) => setTimeout(() => res(null), 3000)),
+    ]);
     if (r?.code && r.code !== old) return true;
     await new Promise((res) => setTimeout(res, 2000));
   }
