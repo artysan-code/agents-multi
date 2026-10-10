@@ -11,7 +11,7 @@ use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, Window, WindowEvent};
 
 use crate::navigation::{self, Decision};
-use crate::{console, profiles, reveal};
+use crate::{console, profiles, reveal, token};
 
 pub const LABEL: &str = "picker";
 /// The page's request to close (apps/ui/src/lib/window.ts).
@@ -54,11 +54,19 @@ pub fn open(app: &AppHandle, port: u16) -> tauri::Result<()> {
         .skip_taskbar(true)
         .center()
         .focused(true)
-        .on_navigation(move |url| match navigation::decide(url, &nav) {
-            Decision::Allow => true,
-            other => {
-                crate::refuse(url, other);
-                false
+        .on_navigation({
+            let app = app.clone();
+            move |url| {
+                if token::intercept(&app, LABEL, port, url) {
+                    return false;
+                }
+                match navigation::decide(url, &nav) {
+                    Decision::Allow => true,
+                    other => {
+                        crate::refuse(url, other);
+                        false
+                    }
+                }
             }
         })
         .on_new_window(|url, _features| {

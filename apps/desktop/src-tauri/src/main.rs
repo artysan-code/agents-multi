@@ -25,6 +25,7 @@ mod picker;
 mod profiles;
 mod repo;
 mod reveal;
+mod token;
 mod tray;
 mod updater;
 
@@ -97,21 +98,36 @@ fn open_main_window(app: &AppHandle, port: u16, view: &str) -> tauri::Result<()>
         .title("Agents Multi")
         .inner_size(1280.0, 860.0)
         .min_inner_size(720.0, 480.0)
-        .on_navigation(move |url| match navigation::decide(url, &console) {
-            Decision::Allow => {
-                if cfg!(debug_assertions) {
-                    eprintln!("agents-multi: navigating to {url}");
+        .on_navigation({
+            let app = app.clone();
+            move |url| {
+                if token::intercept(&app, MAIN, port, url) {
+                    return false;
                 }
-                true
-            }
-            other => {
-                refuse(url, other);
-                false
+                match navigation::decide(url, &console) {
+                    Decision::Allow => {
+                        if cfg!(debug_assertions) {
+                            eprintln!("agents-multi: navigating to {url}");
+                        }
+                        true
+                    }
+                    other => {
+                        refuse(url, other);
+                        false
+                    }
+                }
             }
         })
         .on_new_window(|url, _features| {
             refuse(&url, navigation::external(&url));
             NewWindowResponse::Deny
+        })
+        // a page whose token the console no longer knows (a console restarted under the window) asks to
+        // enter again
+        .on_document_title_changed(move |window, title| {
+            if title == token::REAUTH_TITLE {
+                token::reauth(&window, port);
+            }
         });
     // shown once the console has loaded in it, not on the local page first (reveal.rs)
     let window = reveal::hidden(builder, console::url(port)).build()?;
