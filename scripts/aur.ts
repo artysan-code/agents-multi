@@ -14,7 +14,8 @@
  * name, the licence) and tauri.conf.json (the identifier, which names the deb's resource folder).
  */
 
-import { parseVersion } from "./release.ts";
+import { isPre, parseVersion } from "./release.ts";
+import { gitIn } from "./lib/git.ts";
 import { assetName, downloadUrl, RELEASE_CONFIG, type ReleaseConfig, TAURI_CONFIG } from "./app-release.ts";
 
 export interface Package {
@@ -38,11 +39,11 @@ export function packageProblems(p: Package): string[] {
   const out: string[] = [];
   let beta = false;
   try {
-    beta = parseVersion(p.version).beta !== undefined;
+    beta = isPre(parseVersion(p.version));
   } catch {
     out.push(`not a version: ${p.version}`);
   }
-  if (beta) out.push("the AUR package follows the stable channel, not betas");
+  if (beta) out.push("the AUR package follows the stable channel, not pre-releases");
   if (!/^[0-9a-f]{64}$/.test(p.sha256)) out.push("the deb's sha256 is not 64 hex digits");
   if (!/^[\w.-]+\/[\w.-]+$/.test(p.github)) out.push(`${RELEASE_CONFIG}: "github" is not owner/name`);
   if (!p.license.trim()) out.push(`${RELEASE_CONFIG}: "license" is empty (an SPDX identifier)`);
@@ -105,11 +106,6 @@ export function srcinfo(p: Package): string {
   ].join("\n");
 }
 
-async function git(cwd: string, ...args: string[]) {
-  const out = await new Deno.Command("git", { args, cwd, stdout: "inherit", stderr: "inherit" }).output();
-  if (!out.success) throw new Error(`git ${args.join(" ")} failed`);
-}
-
 async function render(version: string, sha256: string, dir: string) {
   const config = JSON.parse(await Deno.readTextFile(RELEASE_CONFIG)) as ReleaseConfig;
   const tauri = JSON.parse(await Deno.readTextFile(TAURI_CONFIG)) as { identifier: string };
@@ -133,22 +129,22 @@ async function push(dir: string, dry: boolean) {
   const config = JSON.parse(await Deno.readTextFile(RELEASE_CONFIG)) as ReleaseConfig;
   const work = await Deno.makeTempDir({ prefix: "aur-" });
   try {
-    await git(work, "clone", "--quiet", `ssh://aur@aur.archlinux.org/${config.aur}.git`, "repo");
+    await gitIn(work, "clone", "--quiet", `ssh://aur@aur.archlinux.org/${config.aur}.git`, "repo");
     for (const f of ["PKGBUILD", ".SRCINFO"]) await Deno.copyFile(`${dir}/${f}`, `${work}/repo/${f}`);
     const version = /^pkgver=(.+)$/m.exec(await Deno.readTextFile(`${dir}/PKGBUILD`))?.[1] ?? "?";
-    await git(`${work}/repo`, "add", "PKGBUILD", ".SRCINFO");
+    await gitIn(`${work}/repo`, "add", "PKGBUILD", ".SRCINFO");
     const status = await new Deno.Command("git", { args: ["diff", "--cached", "--quiet"], cwd: `${work}/repo` })
       .output();
     if (status.success) {
       console.log(`${config.aur} is already at ${version}`);
       return;
     }
-    await git(`${work}/repo`, "commit", "--quiet", "-m", `${version}`);
+    await gitIn(`${work}/repo`, "commit", "--quiet", "-m", `${version}`);
     if (dry) {
       console.log(`${config.aur} ${version}: committed in ${work}/repo, not pushed (--dry-run)`);
       return;
     }
-    await git(`${work}/repo`, "push", "--quiet", "origin", "HEAD:master");
+    await gitIn(`${work}/repo`, "push", "--quiet", "origin", "HEAD:master");
     console.log(`${config.aur} ${version} pushed to the AUR`);
   } finally {
     if (!dry) await Deno.remove(work, { recursive: true });

@@ -7,7 +7,7 @@
 // opens with the backup key from the vault when the vault has one, and keeps the newest KEEP
 // copies in DATA/brain-backups. The copies stay sealed on disk: reading one needs the key.
 
-import { readJson } from "./lib/fs.ts";
+import { readJson, writeAtomic } from "./lib/fs.ts";
 import { DATA, STATE } from "./lib/paths.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { getSecret } from "../../shared/mcp/lib/vault.ts";
@@ -18,7 +18,7 @@ export const BACKUPS = `${DATA}/brain-backups`;
 const LAST = `${STATE}/brain-backup.json`;
 const KEEP = 14;
 
-export interface BackupState {
+interface BackupState {
   version: string;
   file: string;
   at: string;
@@ -92,9 +92,7 @@ export async function brainBackup(force = false): Promise<number> {
 
   await Deno.mkdir(BACKUPS, { recursive: true });
   const d = new Date(now), file = `brain-${dayOf(d)}T${hhmm(d).replace(":", "-")}.brn`; // local time, as the owner reads it
-  const tmp = `${BACKUPS}/.${file}.tmp`;
-  await Deno.writeFile(tmp, sealed);
-  await Deno.rename(tmp, `${BACKUPS}/${file}`);
+  await writeAtomic(`${BACKUPS}/${file}`, sealed);
   const names: string[] = [];
   for await (const e of Deno.readDir(BACKUPS)) if (e.isFile) names.push(e.name);
   for (const old of toPrune(names)) await Deno.remove(`${BACKUPS}/${old}`).catch(() => {});

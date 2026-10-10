@@ -15,6 +15,7 @@
 // to the page as `confirm`, and runs only when the person re-sends its sha256.
 
 import { listDir, lstat, readJson } from "./lib/fs.ts";
+import { serializer } from "../../shared/mcp/lib/fs.ts";
 import { BIN, CACHE, RUNTIME, STATE } from "./lib/paths.ts";
 import { type Profile, profileNames } from "./lib/profiles.ts";
 import { editSettingsSource, expectedSettings, runtimePath, syncAllSettings, syncSettings } from "./settings.ts";
@@ -69,12 +70,7 @@ async function livingProfiles(): Promise<Profile[]> {
 
 // One operation at a time: two installs racing over the same settings file would adopt each
 // other's bookkeeping.
-let chain: Promise<unknown> = Promise.resolve();
-function serial<T>(f: () => Promise<T>): Promise<T> {
-  const next = chain.then(f, f);
-  chain = next.catch(() => {});
-  return next;
-}
+const serial = serializer();
 
 // ---------------------------------------------------------------- inventory
 interface Installed {
@@ -85,7 +81,7 @@ interface Installed {
   installPath?: string;
 }
 
-export interface PluginCell {
+interface PluginCell {
   /** this profile's own entry in profiles/<p>/settings.json: true/false, null = removed, undefined = inherits */
   override?: boolean | null;
   /** what the generated settings say */
@@ -105,7 +101,7 @@ export interface PluginRow {
   shared?: boolean;
   profiles: Record<Profile, PluginCell>;
 }
-export interface MarketplaceRow {
+interface MarketplaceRow {
   name: string;
   source: string;
   declared: boolean;
@@ -203,7 +199,7 @@ async function syncedSkillNames(dir: string) {
 }
 
 // ---------------------------------------------------------------- catalog and details
-export interface CatalogEntry {
+interface CatalogEntry {
   id: string;
   name: string;
   marketplace: string;

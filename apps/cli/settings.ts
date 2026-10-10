@@ -19,7 +19,7 @@
 
 import { permissionRules, type RegistryRules } from "./mcp/placement.ts";
 import { loadRegistry } from "./mcp/registry.ts";
-import { lstat, readJson } from "./lib/fs.ts";
+import { lstat, readJson, writeAtomic } from "./lib/fs.ts";
 import { CONFIG, PROFILES, REPO, RUNTIME, STAMP, STATE } from "./lib/paths.ts";
 import { syncedPlugins } from "./lib/plugins.ts";
 import { loadManifest, type Manifest, type Profile, profileNames } from "./lib/profiles.ts";
@@ -101,11 +101,11 @@ export function paths(p: Obj, prefix = ""): string[] {
 }
 
 // ---------------------------------------------------------------- files
-export const BASE_SETTINGS = `${REPO}/shared/settings.json`;
-export const PERSON_SETTINGS = `${CONFIG}/settings.json`;
-export const patchPath = (p: Profile) => `${PROFILES}/${p}/settings.json`;
+const BASE_SETTINGS = `${REPO}/shared/settings.json`;
+const PERSON_SETTINGS = `${CONFIG}/settings.json`;
+const patchPath = (p: Profile) => `${PROFILES}/${p}/settings.json`;
 export const runtimePath = (p: Profile) => `${RUNTIME}/${p}/settings.json`;
-export const builtPath = (p: Profile) => `${STATE}/settings/${p}.json`;
+const builtPath = (p: Profile) => `${STATE}/settings/${p}.json`;
 
 async function readObj(path: string): Promise<Obj | null> {
   const v = await readJson<Json>(path);
@@ -113,12 +113,10 @@ async function readObj(path: string): Promise<Obj | null> {
 }
 async function writeJson(path: string, v: Json) {
   await Deno.mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true });
-  const tmp = `${path}.tmp-${Deno.pid}`;
-  await Deno.writeTextFile(tmp, JSON.stringify(v, null, 2) + "\n");
-  await Deno.rename(tmp, path);
+  await writeAtomic(path, JSON.stringify(v, null, 2) + "\n");
 }
 
-export interface SettingsResult {
+interface SettingsResult {
   profile: Profile;
   /** paths adopted from Claude's writes into profiles/<p>/settings.json */
   adopted: string[];

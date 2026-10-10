@@ -8,6 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::amenv::am_env;
+
 /// The file that tells a folder is the source.
 const MARKER: &str = "apps/cli/main.ts";
 
@@ -21,13 +23,6 @@ pub enum Source {
 
 pub fn is_repo(dir: &Path) -> bool {
     dir.join(MARKER).is_file()
-}
-
-/// The first of the variables `get` returns that is set and not empty, as `amEnv()` reads them.
-fn am_env(get: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
-    ["AGENTS_MULTI_", "CLAUDE_MULTI_"]
-        .iter()
-        .find_map(|prefix| get(&format!("{prefix}{name}")).filter(|v| !v.is_empty()))
 }
 
 /// The source, from the variables `get` returns, a debug build's checkout and the package's copy.

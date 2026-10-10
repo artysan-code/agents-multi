@@ -16,7 +16,7 @@ import { profileOfConfigDir } from "./lib/runtime-root.ts";
 const dirname = (p: string) => p.replace(/\/+[^/]*\/*$/, "") || "/";
 const join = (...parts: string[]) => parts.join("/").replace(/\/{2,}/g, "/");
 
-export interface Runner {
+interface Runner {
   /** the executable, as the person types it */
   tool: string;
   /** the variable the tool reads the token from */
@@ -53,7 +53,7 @@ export function wranglerDestructive(args: string[], read: (path: string) => stri
   return null;
 }
 
-export const RUNNERS: Record<string, Runner> = {
+const RUNNERS: Record<string, Runner> = {
   cloudflare: {
     tool: "wrangler",
     env: "CLOUDFLARE_API_TOKEN",
@@ -69,7 +69,7 @@ export function profileFrom(env: { profile?: string; configDir?: string }, runti
   return env.profile ?? profileOfConfigDir(env.configDir, runtime);
 }
 
-export interface RunPlan {
+interface RunPlan {
   service: string;
   account?: string;
   runner: Runner;

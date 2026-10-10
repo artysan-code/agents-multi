@@ -26,7 +26,7 @@ export interface Account {
   note?: string;
 }
 
-export function accountsFile(): string {
+function accountsFile(): string {
   return amEnv("ACCOUNTS") ?? `${configDir()}/accounts.json`;
 }
 

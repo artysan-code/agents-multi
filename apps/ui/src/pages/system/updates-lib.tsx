@@ -51,14 +51,15 @@ export function kept<T>(store: Storage, key: string): T | null {
   }
 }
 
-/** X.Y.Z or X.Y.Z-beta.N, a beta before its stable version: the same order as lib/changelog.ts. */
+/** X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N, beta < rc < stable: the same order as lib/changelog.ts. */
 export function cmpVer(a: unknown, b: unknown): number {
   const p = (v: unknown) => {
-    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(String(v ?? ""));
-    return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? Infinity : +m[4]] : [0, 0, 0, 0];
+    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(beta|rc)\.(\d+))?$/.exec(String(v ?? ""));
+    if (!m) return [0, 0, 0, 0, 0];
+    return [+m[1], +m[2], +m[3], m[4] === undefined ? 2 : m[4] === "rc" ? 1 : 0, m[5] === undefined ? 0 : +m[5]];
   };
   const x = p(a), y = p(b);
-  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
   return 0;
 }
 

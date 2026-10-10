@@ -22,9 +22,10 @@ Deno.test("publish-releases: a version's notes are its section without the headi
 });
 
 Deno.test("publish-releases: version tags only, oldest first, a beta before its version", () => {
-  assertEquals(versionTags(["v0.2.0", "v0.10.0", "v0.2.0-beta.1", "latest", "0.3.0", "v0.1.0", ""]), [
+  assertEquals(versionTags(["v0.2.0", "v0.10.0", "v0.2.0-rc.1", "v0.2.0-beta.1", "latest", "0.3.0", "v0.1.0", ""]), [
     "v0.1.0",
     "v0.2.0-beta.1",
+    "v0.2.0-rc.1",
     "v0.2.0",
     "v0.10.0",
   ]);

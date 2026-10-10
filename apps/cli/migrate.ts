@@ -11,13 +11,14 @@
 // Claude must be closed: a session holds its config directory by path, and a file it rewrites
 // while we do would undo the rewrite. Running instances refuse the move unless --force.
 
+import { lstat, readlink, writeAtomic } from "./lib/fs.ts";
 import { ANSI } from "./lib/output.ts";
 import { LEGACY_RUNTIME_NAME, RUNTIME_NAME } from "./lib/runtime-root.ts";
 
 /** Files under a profile that hold absolute paths into the runtime. */
-export const PATH_FILES = [".claude.json", "plugins/installed_plugins.json", "plugins/known_marketplaces.json"];
+const PATH_FILES = [".claude.json", "plugins/installed_plugins.json", "plugins/known_marketplaces.json"];
 
-export interface MigrateOptions {
+interface MigrateOptions {
   home: string;
   dry: boolean;
   rollback: boolean;
@@ -35,13 +36,6 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  *  folder itself and what is under it: ~/.claude-multi-config or ~/.claude-multi.bak are not it. */
 export function rewritePaths(text: string, home: string, from: string, to: string): string {
   return text.replace(new RegExp(`${escape(`${home}/${from}`)}(?=[/"'\\s]|$)`, "g"), `${home}/${to}`);
-}
-
-async function lstat(p: string) {
-  return await Deno.lstat(p).catch(() => null);
-}
-async function readLink(p: string) {
-  return await Deno.readLink(p).catch(() => null);
 }
 
 /** Rewrites PATH_FILES of every profile under `root`, copying each changed one into `backupDir`
@@ -66,10 +60,7 @@ async function rewriteAll(root: string, o: MigrateOptions, from: string, to: str
       await Deno.copyFile(path, copy);
       await Deno.chmod(copy, 0o600);
       // written beside and renamed over: a crash leaves the old file or the new, never half of one
-      const tmp = `${path}.agents-migrate.tmp`;
-      await Deno.writeTextFile(tmp, next, { mode: (st.mode ?? 0o600) & 0o777 });
-      await Deno.chmod(tmp, (st.mode ?? 0o600) & 0o777);
-      await Deno.rename(tmp, path);
+      await writeAtomic(path, next, { mode: (st.mode ?? 0o600) & 0o777 });
     }
   }
   return changed;
@@ -83,7 +74,7 @@ export async function migrate(o: MigrateOptions): Promise<number> {
   const nowIsDir = !!nowSt?.isDirectory && !nowSt.isSymlink;
   const oldIsDir = !!oldSt?.isDirectory && !oldSt.isSymlink;
   const pointsAt = async (link: string, name: string, st: Deno.FileInfo | null) =>
-    !!st?.isSymlink && [name, `${o.home}/${name}`].includes(await readLink(link) ?? "");
+    !!st?.isSymlink && [name, `${o.home}/${name}`].includes(await readlink(link) ?? "");
   const pre = o.dry ? `${ANSI.d}(dry-run)${ANSI.x} ` : "";
   const fail = (msg: string) => (log(`  ${ANSI.r}✗${ANSI.x} ${msg}`), 1);
 

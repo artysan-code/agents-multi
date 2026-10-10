@@ -23,7 +23,7 @@ export function reachOf(reg: Registry, cfg: ServerCfg): string[] {
 }
 
 /** Pure: a value with {url} {host} {name} {hosts} replaced by the account's. {secret} is left alone. */
-export function forAccount<T>(v: T, a: Account): T {
+function forAccount<T>(v: T, a: Account): T {
   let host = "";
   try {
     host = a.url ? new URL(a.url).host : "";
@@ -112,7 +112,7 @@ export function perAccount(
 }
 
 /** One server a target gets: the registry entry it comes from, the name it has there, the accounts it works on. */
-export interface Placed {
+interface Placed {
   entry: string;
   name: string;
   cfg: Record<string, unknown>;
@@ -236,7 +236,7 @@ export function reach(
 export function wanted(reg: Registry, t: Pick<Target, "profile" | "surface">): Record<string, Record<string, unknown>> {
   return Object.fromEntries(servers(reg, t).map((s) => [s.name, s.cfg]));
 }
-export interface GuardHook {
+interface GuardHook {
   matcher: string;
   hooks: { type: "command"; command: string }[];
 }

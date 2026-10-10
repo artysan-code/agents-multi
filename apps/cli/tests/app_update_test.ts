@@ -63,7 +63,12 @@ Deno.test("app update: the socket is the app's word, else the runtime folder's",
     appSocket({ XDG_RUNTIME_DIR: "/run/user/1000" }),
     "/run/user/1000/agents-multi-app.sock",
   );
-  assertEquals(appSocket({}), "/tmp/agents-multi-app.sock");
+  // without a runtime folder: the private state folder, never /tmp
+  assertEquals(appSocket({ HOME: "/home/u" }), "/home/u/.local/state/agents-multi/agents-multi-app.sock");
+  assertEquals(
+    appSocket({ HOME: "/home/u", XDG_STATE_HOME: "/s", XDG_RUNTIME_DIR: "" }),
+    "/s/agents-multi/agents-multi-app.sock",
+  );
 });
 
 Deno.test("app update: a status line is checked field by field", () => {

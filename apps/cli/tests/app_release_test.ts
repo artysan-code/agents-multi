@@ -58,6 +58,9 @@ Deno.test("app release: versions order with a beta before its stable", () => {
   assert(older("1.1.0-beta.1", "1.1.0-beta.2"));
   assert(older("1.1.0-beta.9", "1.1.0"));
   assert(!older("1.1.0", "1.1.0-beta.9"));
+  assert(older("1.1.0-beta.9", "1.1.0-rc.1"));
+  assert(older("1.1.0-rc.1", "1.1.0"));
+  assert(!older("1.1.0-rc.2", "1.1.0-rc.1"));
   assert(!older("1.0.0", "1.0.0"));
 });
 
@@ -74,6 +77,10 @@ Deno.test("app release: a stable version moves both channels, a beta only beta, 
   });
   // a stable fix while a newer beta runs: beta keeps its beta
   assertEquals(v(nextChannels({ stable: m("1.0.0"), beta: m("1.1.0-beta.1") }, m("1.0.1"))), { stable: "1.0.1" });
+  // a release candidate goes on beta only, and after the last beta
+  assertEquals(v(nextChannels({ stable: m("1.0.0"), beta: m("1.1.0-beta.3") }, m("1.1.0-rc.1"))), {
+    beta: "1.1.0-rc.1",
+  });
   // a workflow run again for an old tag moves nothing
   assertEquals(v(nextChannels({ stable: m("1.1.0"), beta: m("1.2.0-beta.1") }, m("1.1.0"))), {});
   assertEquals(v(nextChannels({ stable: m("1.1.0"), beta: m("1.2.0-beta.1") }, m("1.0.0-beta.4"))), {});
@@ -91,7 +98,7 @@ const PKG: Package = {
 Deno.test("aur: only a stable version with its checksum, repository and licence makes a package", () => {
   assertEquals(packageProblems(PKG), []);
   assertEquals(packageProblems({ ...PKG, version: "1.1.0-beta.1" }), [
-    "the AUR package follows the stable channel, not betas",
+    "the AUR package follows the stable channel, not pre-releases",
   ]);
   assertEquals(packageProblems({ ...PKG, sha256: "SKIP", github: "", license: " " }).length, 3);
 });

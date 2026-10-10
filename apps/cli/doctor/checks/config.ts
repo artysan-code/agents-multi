@@ -7,7 +7,7 @@ import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 
 /** The Syncthing conflict copies (name.sync-conflict-…) under a folder, as paths relative to it. */
-export async function syncConflicts(root: string, rel = ""): Promise<string[]> {
+async function syncConflicts(root: string, rel = ""): Promise<string[]> {
   const out: string[] = [];
   for (const n of await listDir(`${root}/${rel}`)) {
     const r = rel ? `${rel}/${n}` : n;

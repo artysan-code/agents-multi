@@ -30,6 +30,9 @@ Deno.test("changelog: versions in order, a beta before its stable version", () =
   assertEquals(compareVersions("0.6.0", "0.5.9"), 1);
   assertEquals(compareVersions("0.6.0-beta.1", "0.6.0"), -1);
   assertEquals(compareVersions("0.6.0-beta.2", "0.6.0-beta.1"), 1);
+  assertEquals(compareVersions("1.0.0-beta.17", "1.0.0-rc.1"), -1);
+  assertEquals(compareVersions("1.0.0-rc.1", "1.0.0"), -1);
+  assertEquals(compareVersions("1.0.0-rc.2", "1.0.0-rc.1"), 1);
   assertEquals(compareVersions("v1.0.0", "1.0.0"), 0);
 });
 

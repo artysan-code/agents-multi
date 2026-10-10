@@ -1,7 +1,7 @@
 // Tests for agents-multi updating itself (selfupdate.ts): when it pulls, and what a pull makes stale.
 import { assertEquals } from "jsr:@std/assert@1";
 import { remoteIsGone, selfPlan } from "../selfupdate.ts";
-import { staleParts, staleUnits } from "../lib/stale.ts";
+import { consoleStale } from "../lib/stale.ts";
 
 const R = { upstream: "origin/release", branch: "release", ahead: 0, behind: 0, dirty: 0 };
 
@@ -16,23 +16,12 @@ Deno.test("self-update: pulls only fast-forward on a clean tree that follows a r
   assertEquals(selfPlan({ ...R, dirty: 4 }).do, "nothing");
 });
 
-Deno.test("self-update: the console restarts for its code, the app for its own, tests and docs restart nothing", () => {
-  assertEquals(staleParts(["apps/cli/serve.ts"]), { console: true, app: false });
-  assertEquals(staleParts(["shared/mcp/lib/tasks.ts"]), { console: true, app: false });
-  assertEquals(staleParts(["apps/ui/src/pages/today/index.tsx"]), { console: true, app: false });
-  assertEquals(staleParts(["apps/tray/console.py"]), { console: false, app: true });
-  assertEquals(staleParts(["apps/cli/tests/x_test.ts", "README.md", "apps/brain/main.ts"]), {
-    console: false,
-    app: false,
-  });
-});
-
-Deno.test("self-update: the units to restart, the console last", () => {
-  assertEquals(staleUnits(["apps/tray/console.py", "apps/cli/serve.ts"]), [
-    "claude-multi-app.service",
-    "claude-multi-console.service",
-  ]);
-  assertEquals(staleUnits(["CHANGELOG.md", "deno.json"]), []);
+Deno.test("self-update: the console is stale for its code and the page's, tests and docs leave it alone", () => {
+  assertEquals(consoleStale(["apps/cli/serve.ts"]), true);
+  assertEquals(consoleStale(["shared/mcp/lib/tasks.ts"]), true);
+  assertEquals(consoleStale(["apps/ui/src/pages/today/index.tsx"]), true);
+  assertEquals(consoleStale(["apps/cli/tests/x_test.ts", "README.md", "apps/brain/main.ts"]), false);
+  assertEquals(consoleStale(["CHANGELOG.md", "deno.json"]), false);
 });
 
 Deno.test("self-update: a renamed repository is told apart from a network that is down", () => {

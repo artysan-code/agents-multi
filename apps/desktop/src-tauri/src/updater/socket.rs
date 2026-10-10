@@ -1,6 +1,7 @@
 //! The local channel between the console's backend and the app (docs/adr/0004): a unix socket in the
 //! user's runtime folder, `$XDG_RUNTIME_DIR/agents-multi-app.sock` (a development instance's carries its
-//! name), readable by the user alone. The backend asks, the app answers; the page never reaches it.
+//! name), readable by the user alone. Without a runtime folder it is in the app's state folder
+//! (`~/.local/state/agents-multi`, made private), never in a shared one like `/tmp`. The backend asks, the app answers; the page never reaches it.
 //!
 //! One request per connection, a JSON line: `{"op":"status"}` answers the status (`Status`) and closes;
 //! `{"op":"watch"}` answers it and then a line on every change, for as long as the backend keeps the
@@ -9,13 +10,14 @@
 //! named pipe.
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Deserialize;
 
 use super::{Channel, Hub, Ops};
+use crate::install::state_dir;
 
 /// The longest request line read.
 const MAX_LINE: u64 = 1024;
@@ -34,13 +36,40 @@ pub enum Request {
     Channel { channel: Channel },
 }
 
-/// The socket's path: the runtime folder (the backend's default is the same, apps/cli/console/
-/// app-update.ts), `/tmp` without one; a development instance's own.
-pub fn path() -> PathBuf {
-    let dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
-    dir.join(name(crate::instance::dev().as_deref()))
+/// Pure: the folder of the socket: the runtime folder, else the state folder (the backend's default is
+/// the same, apps/cli/console/app-update.ts). True when it is the state folder, which the app makes
+/// private. None when there is neither.
+pub fn dir_from(
+    get: &impl Fn(&str) -> Option<String>,
+    home: Option<&Path>,
+) -> Option<(PathBuf, bool)> {
+    match get("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) {
+        Some(dir) => Some((PathBuf::from(dir), false)),
+        None => state_dir(get, home).map(|d| (d, true)),
+    }
+}
+
+/// The socket's path (a development instance's own), and whether its folder is the state one.
+fn location() -> Option<(PathBuf, bool)> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let (dir, private) = dir_from(&|n| std::env::var(n).ok(), home.as_deref())?;
+    Some((dir.join(name(crate::instance::dev().as_deref())), private))
+}
+
+/// The socket's path; None when the machine has no runtime folder and no home to keep it in.
+pub fn path() -> Option<PathBuf> {
+    location().map(|(p, _)| p)
+}
+
+/// Makes the folder only the user can open, so that no one else can plant a file where the socket goes.
+#[cfg(unix)]
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)?;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
 }
 
 /// The socket's file name, with a development instance's name.
@@ -124,7 +153,16 @@ pub fn bind(path: &std::path::Path) -> std::io::Result<std::os::unix::net::UnixL
 /// Answers on the socket for the app's lifetime, each connection on its own thread.
 #[cfg(unix)]
 pub fn serve(hub: Arc<Hub>, ops: Arc<dyn Ops>) {
-    let path = path();
+    let Some((path, private)) = location() else {
+        eprintln!("agents-multi: no update socket: no runtime folder and no home");
+        return;
+    };
+    if let (true, Some(dir)) = (private, path.parent()) {
+        if let Err(e) = private_dir(dir) {
+            eprintln!("agents-multi: no update socket: {}: {e}", dir.display());
+            return;
+        }
+    }
     let listener = match bind(&path) {
         Ok(l) => l,
         Err(e) => {
@@ -197,6 +235,54 @@ mod tests {
     fn the_names_keep_a_development_instance_apart() {
         assert_eq!(name(None), "agents-multi-app.sock");
         assert_eq!(name(Some("release")), "agents-multi-app.dev_release.sock");
+    }
+
+    #[test]
+    fn the_folder_is_the_runtime_one_else_the_private_state_one_never_tmp() {
+        let home = Path::new("/h");
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |n: &str| {
+                pairs
+                    .iter()
+                    .find(|(k, _)| *k == n)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert_eq!(
+            dir_from(&env(&[("XDG_RUNTIME_DIR", "/run/user/1000")]), Some(home)),
+            Some(("/run/user/1000".into(), false))
+        );
+        assert_eq!(
+            dir_from(&env(&[]), Some(home)),
+            Some(("/h/.local/state/agents-multi".into(), true))
+        );
+        assert_eq!(
+            dir_from(
+                &env(&[("XDG_RUNTIME_DIR", ""), ("XDG_STATE_HOME", "/s")]),
+                Some(home)
+            ),
+            Some(("/s/agents-multi".into(), true))
+        );
+        assert_eq!(dir_from(&env(&[]), None), None);
+    }
+
+    #[test]
+    fn the_private_folder_is_made_0700_even_over_a_looser_one() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::temp_dir().join(format!("am-private-{}", std::process::id()));
+        let dir = base.join("state/agents-multi");
+        private_dir(&dir).unwrap();
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        private_dir(&dir).unwrap();
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        std::fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]

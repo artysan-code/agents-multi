@@ -5,6 +5,7 @@ import {
   baseTag,
   bump,
   changelogSection,
+  compareVersion,
   formatVersion,
   impliedBump,
   lintSubject,
@@ -32,9 +33,29 @@ Deno.test("bump: betas open on the target version, count up, and release that ve
   assertEquals(next("1.0.0-beta.4", "patch"), "1.0.0");
 });
 
-Deno.test("parseVersion: rejects anything that is not X.Y.Z or X.Y.Z-beta.N", () => {
+Deno.test("bump: rc turns a beta into its release candidate, counts up, and releases that version", () => {
+  assertEquals(next("1.0.0-beta.17", "rc"), "1.0.0-rc.1");
+  assertEquals(next("1.0.0-rc.1", "rc"), "1.0.0-rc.2");
+  assertEquals(next("1.0.0-rc.2", "patch"), "1.0.0");
+  assertEquals(next("1.0.0-rc.2", "minor"), "1.0.0");
+  assertEquals(next("0.9.3", "rc", "major"), "1.0.0-rc.1");
+  assertThrows(() => next("1.0.0-rc.1", "beta"), Error, "cannot follow");
+});
+
+Deno.test("compareVersion: beta < rc < stable on the same X.Y.Z", () => {
+  const cmp = (a: string, b: string) => compareVersion(parseVersion(a), parseVersion(b));
+  assertEquals(cmp("1.0.0-beta.17", "1.0.0-rc.1"), -1);
+  assertEquals(cmp("1.0.0-rc.1", "1.0.0"), -1);
+  assertEquals(cmp("1.0.0-rc.2", "1.0.0-rc.1"), 1);
+  assertEquals(cmp("1.0.1-beta.1", "1.0.0"), 1);
+  assertEquals(cmp("1.0.0-rc.1", "1.0.0-rc.1"), 0);
+  assertEquals(formatVersion(parseVersion("v1.0.0-rc.3")), "1.0.0-rc.3");
+});
+
+Deno.test("parseVersion: rejects anything that is not X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N", () => {
   assertThrows(() => parseVersion("1.2"));
-  assertThrows(() => parseVersion("1.2.3-rc.1"));
+  assertThrows(() => parseVersion("1.2.3-rc"));
+  assertThrows(() => parseVersion("1.2.3-alpha.1"));
 });
 
 const c = (subject: string, body = "", hash = "abcdef1234") => ({ hash, subject, body });
@@ -118,4 +139,7 @@ Deno.test("baseTag: a stable version counts from the last stable one, a beta fro
   assertEquals(baseTag(tags, true), "v0.2.0-beta.2");
   assertEquals(baseTag([...tags, "v0.2.0"], true), "v0.2.0");
   assertEquals(baseTag([], false), null);
+  const rcs = ["v1.0.0-beta.17", "v1.0.0-rc.1", "v0.9.0"];
+  assertEquals(baseTag(rcs, true), "v1.0.0-rc.1");
+  assertEquals(baseTag(rcs, false), "v0.9.0");
 });

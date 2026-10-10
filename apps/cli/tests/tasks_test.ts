@@ -434,3 +434,30 @@ Deno.test("boardSteps: the board carries each step and the first one not done", 
   assertEquals(boardSteps("niente passi"), {});
   assertEquals(boardSteps(undefined), {});
 });
+
+Deno.test("taskboard: /api/open opens viewers' files, not archives, SVG, scripts or macro documents", async () => {
+  const { OPENABLE } = await import("../taskboard.ts");
+  for (const f of ["a.pdf", "a.PDF", "n.md", "p.png", "d.docx", "s.xlsx", "x.pptx", "v.mp4", "x.odt"]) {
+    assert(OPENABLE.test(`/h/${f}`), f);
+  }
+  for (
+    const f of [
+      "a.zip",
+      "a.7z",
+      "a.tar",
+      "a.gz",
+      "a.svg",
+      "a.docm",
+      "a.xlsm",
+      "a.pptm",
+      "a.dotm",
+      "a.doc",
+      "a.xls",
+      "a.ppt",
+      "a.sh",
+      "a.desktop",
+      "a.html",
+      "a.pdf.exe",
+    ]
+  ) assert(!OPENABLE.test(`/h/${f}`), f);
+});

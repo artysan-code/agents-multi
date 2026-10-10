@@ -5,9 +5,27 @@
  *  it: a masked read edited and saved would otherwise replace the real secret with this text. */
 export const HIDDEN = "‹hidden — look it up in the service's own panel›";
 
-/** Names that almost certainly hold a secret. */
+/** Names that almost certainly hold a secret. `auth`, `dsn`, `bearer` and `jwt` count as whole words
+ *  (`x-auth`, `SENTRY_DSN`), so that `author` and `authority` do not. */
 export const SECRET_NAME =
-  /(^|[_-])(pass|passwd|pwd|pin|otp|totp|seed|salt)($|[_-])|password|passphrase|secret|token|apikey|api_key|_key$|^key$|private|credential|authorization|cookie|signing/i;
+  /(^|[_-])(pass|passwd|pwd|pin|otp|totp|seed|salt|auth|dsn|bearer|jwt)($|[_-])|password|passphrase|secret|token|apikey|api_key|_key$|^key$|private|credential|authorization|cookie|signing|connection[_-]?string|session[_-]?id|access[_-]?key[_-]?id/i;
+
+/** Secrets recognised by what they look like, wherever they sit: a JWT, a token with a well-known
+ *  prefix (GitHub, OpenAI/Anthropic, Slack, AWS access key, GitLab), a `Bearer` credential. There is
+ *  deliberately no rule for "a long hex string": git SHAs and UUIDs would all be covered. */
+const SECRET_VALUE = new RegExp(
+  [
+    String.raw`\beyJ[\w-]+\.[\w-]+\.[\w-]+`,
+    String.raw`\b(?:gh[pousr]_|github_pat_|sk-ant-|sk-|xox[bp]-|AKIA|glpat-)[\w-]{10,}`,
+    String.raw`\bBearer\s+\S+`,
+  ].join("|"),
+  "gi",
+);
+
+/** Pure: a text with every secret-looking value (SECRET_VALUE) replaced. */
+export function maskValues(s: string): string {
+  return s.replace(SECRET_VALUE, HIDDEN);
+}
 /** An address carrying credentials: `postgres://user:password@host/db`. */
 export const CREDENTIALS_IN_URL = /:\/\/[^/@\s]+:[^/@\s]+@/;
 
@@ -17,8 +35,8 @@ export const CREDENTIALS_IN_URL = /:\/\/[^/@\s]+:[^/@\s]+@/;
 export function mask(name: string, value: unknown): unknown {
   if (typeof value !== "string" || value.length === 0) return value;
   if (SECRET_NAME.test(name)) return HIDDEN;
-  if (CREDENTIALS_IN_URL.test(value)) return value.replace(CREDENTIALS_IN_URL, "://‹user›:‹password›@");
-  return value;
+  const text = CREDENTIALS_IN_URL.test(value) ? value.replace(CREDENTIALS_IN_URL, "://‹user›:‹password›@") : value;
+  return maskValues(text);
 }
 
 /** A whole object, recursively: every field whose name looks secret is covered. */
@@ -45,5 +63,15 @@ export function maskText(s: string): string {
       /(\b[\w.-]*(?:password|passwd|passphrase|secret|token|apikey|api_key|private_key|credential|totp|_pin)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,
       (_, k: string, v: string) => /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`,
     ) // a ${VARIABLE} reference is not the secret
-    .replace(new RegExp(CREDENTIALS_IN_URL.source, "g"), "://‹user›:‹password›@");
+    .replace(
+      // names that are secret as a whole word, not as a part of one (`author: Ada` stays)
+      /(\b(?:[\w.-]*[_-])?(?:dsn|auth|bearer|jwt)(?:[_-][\w.-]*)?["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,
+      (_, k: string, v: string) => /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`,
+    )
+    .replace(
+      /(\b[\w.-]*(?:connection_string|session_id|access_key_id)[\w.-]*["']?\s*[=:]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,
+      (_, k: string, v: string) => /^\$\{?\w+\}?$/.test(v) ? `${k}${v}` : `${k}${HIDDEN}`,
+    )
+    .replace(new RegExp(CREDENTIALS_IN_URL.source, "g"), "://‹user›:‹password›@")
+    .replace(SECRET_VALUE, HIDDEN);
 }

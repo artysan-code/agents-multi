@@ -8,60 +8,88 @@
  *   deno task release minor           an explicit major | minor | patch
  *   deno task release beta            the next beta pre-release of the coming version (X.Y.Z-beta.N)
  *   deno task release beta major      the first beta of an explicit major | minor | patch (0.14.0 → 1.0.0-beta.1)
+ *   deno task release rc              the release candidate: X.Y.Z-rc.1 from a beta, X.Y.Z-rc.N+1 from an rc
  *   deno task release --dry-run       print the version and the section, change nothing
  *   release.ts --lint                 every commit since the last tag is a Conventional Commit (CI)
  *   release.ts --lint-subject "<s>"   one subject (the commit-msg hook)
  *
- * Channels follow branches: a stable version is cut on `release`, a beta on `beta`.
+ * Versions order beta < rc < stable (1.0.0-beta.17 → 1.0.0-rc.1 → 1.0.0). Channels follow branches: a
+ * stable version is cut on `release`, a beta or a release candidate on `beta`; both pre-releases
+ * publish to the beta update channel.
  *
  * What the pushed tag starts (.forgejo/workflows/release.yml, docs/adr/0004): the Forgejo release with
  * the notes, then the desktop app's signed bundles on the GitHub release, and the site's update manifest
  * for the channel, committed on `release` by the workflow — pull it before cutting the next version.
- *
- * When the repository is the one the runtime runs (~/.agents-multi/shared links into it), the console
- * and the tray app still hold the code from before the merge: they are restarted if it changed since
- * the last tag, as self-update does after a pull.
  */
 
-import { staleUnits } from "../apps/cli/lib/stale.ts";
-import { amEnv } from "../shared/mcp/lib/env.ts";
-import { runtimeRoot } from "../apps/cli/lib/runtime-root.ts";
+import { git } from "./lib/git.ts";
 
 /** The manifests that carry the version, relative to the repository root. */
-export const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json", "apps/desktop/package.json"];
+const MANIFESTS = ["deno.json", "apps/site/package.json", "apps/ui/package.json", "apps/desktop/package.json"];
 
-export type Bump = "major" | "minor" | "patch" | "beta";
+/** A pre-release kind, oldest first: a beta comes before a release candidate, which comes before the stable version. */
+type Pre = "beta" | "rc";
+
+export type Target = "major" | "minor" | "patch";
+type Bump = Target | Pre;
 
 export interface Version {
   major: number;
   minor: number;
   patch: number;
   beta?: number;
+  rc?: number;
+}
+
+/** Pure: whether a version is a pre-release (a beta or a release candidate). */
+export function isPre(v: Version): boolean {
+  return v.beta !== undefined || v.rc !== undefined;
+}
+
+/** Pure: -1, 0 or 1; on the same X.Y.Z a beta comes before an rc, which comes before the stable version. */
+export function compareVersion(a: Version, b: Version): number {
+  const key = (
+    v: Version,
+  ) => [v.major, v.minor, v.patch, v.rc !== undefined ? 1 : v.beta !== undefined ? 0 : 2, v.rc ?? v.beta ?? 0];
+  const x = key(a), y = key(b);
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  return 0;
 }
 
 export function parseVersion(s: string): Version {
-  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(s.trim());
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(beta|rc)\.(\d+))?$/.exec(s.trim());
   if (!m) throw new Error(`not a version: ${s}`);
   const v: Version = { major: +m[1], minor: +m[2], patch: +m[3] };
-  if (m[4] !== undefined) v.beta = +m[4];
+  if (m[4] !== undefined) v[m[4] as Pre] = +m[5];
   return v;
 }
 
 export function formatVersion(v: Version): string {
-  return `${v.major}.${v.minor}.${v.patch}${v.beta === undefined ? "" : `-beta.${v.beta}`}`;
+  const pre = v.rc !== undefined ? `-rc.${v.rc}` : v.beta !== undefined ? `-beta.${v.beta}` : "";
+  return `${v.major}.${v.minor}.${v.patch}${pre}`;
 }
 
 /**
  * The next version. Raising a component resets every one to its right (0.1.24 → 0.2.0 → 1.0.0).
  * `beta` opens the first beta of the version `target` would cut (0.2.0 → 0.3.0-beta.1) or adds one
- * to a running beta; any stable bump from a beta releases the version the beta was for.
+ * to a running beta; `rc` turns a beta into the release candidate of its version (1.0.0-beta.17 →
+ * 1.0.0-rc.1), adds one to a running rc, or opens one like `beta` from a stable version. A beta
+ * cannot follow an rc. Any stable bump from a pre-release releases the version it was for.
  */
-export function bump(v: Version, kind: Bump, target: Exclude<Bump, "beta"> = "patch"): Version {
-  if (kind === "beta") return v.beta === undefined ? { ...bump(v, target), beta: 1 } : { ...v, beta: v.beta + 1 };
-  if (v.beta !== undefined) return { major: v.major, minor: v.minor, patch: v.patch };
-  if (kind === "major") return { major: v.major + 1, minor: 0, patch: 0 };
-  if (kind === "minor") return { major: v.major, minor: v.minor + 1, patch: 0 };
-  return { major: v.major, minor: v.minor, patch: v.patch + 1 };
+export function bump(v: Version, kind: Bump, target: Target = "patch"): Version {
+  const { major, minor, patch } = v;
+  if (kind === "beta") {
+    if (v.rc !== undefined) throw new Error(`a beta cannot follow ${formatVersion(v)}: cut another rc or release`);
+    return v.beta === undefined ? { ...bump(v, target), beta: 1 } : { major, minor, patch, beta: v.beta + 1 };
+  }
+  if (kind === "rc") {
+    if (v.rc !== undefined) return { major, minor, patch, rc: v.rc + 1 };
+    return v.beta === undefined ? { ...bump(v, target), rc: 1 } : { major, minor, patch, rc: 1 };
+  }
+  if (isPre(v)) return { major, minor, patch };
+  if (kind === "major") return { major: major + 1, minor: 0, patch: 0 };
+  if (kind === "minor") return { major, minor: minor + 1, patch: 0 };
+  return { major, minor, patch: patch + 1 };
 }
 
 export interface Commit {
@@ -125,26 +153,23 @@ export function parseCommit(c: Commit): Change | null {
 
 /**
  * The tag a new version's changes are counted from: the newest stable version for a stable
- * release, so its CHANGELOG section covers everything since the previous stable one, betas
- * included; the newest version of any kind for a beta. Null when there is none.
+ * release, so its CHANGELOG section covers everything since the previous stable one, betas and
+ * release candidates included; the newest version of any kind for a pre-release. Null when there is none.
  */
-export function baseTag(tags: string[], forBeta: boolean): string | null {
+export function baseTag(tags: string[], forPre: boolean): string | null {
   const versions = tags.flatMap((t) => {
     try {
       return [{ tag: t, v: parseVersion(t) }];
     } catch {
       return [];
     }
-  }).filter((x) => forBeta || x.v.beta === undefined);
-  versions.sort((a, b) =>
-    b.v.major - a.v.major || b.v.minor - a.v.minor || b.v.patch - a.v.patch ||
-    (b.v.beta ?? Infinity) - (a.v.beta ?? Infinity)
-  );
+  }).filter((x) => forPre || !isPre(x.v));
+  versions.sort((a, b) => compareVersion(b.v, a.v));
   return versions[0]?.tag ?? null;
 }
 
 /** The bump a set of changes calls for. Before 1.0.0 a breaking change raises the minor. */
-export function impliedBump(changes: Change[], current: Version): Exclude<Bump, "beta"> {
+export function impliedBump(changes: Change[], current: Version): Target {
   if (changes.some((c) => c.breaking)) return current.major === 0 ? "minor" : "major";
   if (changes.some((c) => c.type === "feat")) return "minor";
   return "patch";
@@ -190,28 +215,6 @@ export function setManifestVersion(json: string, version: string): string {
   return json.replace(/^\{\n/, `{\n  "version": "${version}",\n`);
 }
 
-async function git(...args: string[]): Promise<string> {
-  const out = await new Deno.Command("git", { args, stdout: "piped", stderr: "piped" }).output();
-  if (!out.success) throw new Error(`git ${args.join(" ")}: ${new TextDecoder().decode(out.stderr).trim()}`);
-  return new TextDecoder().decode(out.stdout).trim();
-}
-
-/** Whether `root` is the checkout the runtime runs: ~/.agents-multi/shared is a link into it. */
-async function isRuntime(root: string): Promise<boolean> {
-  const runtime = amEnv("ROOT") ?? runtimeRoot(Deno.env.get("HOME") ?? "");
-  return await Deno.realPath(`${runtime}/shared`).then((p) => p === `${root}/shared`, () => false);
-}
-
-/** Restarts the console and the tray app when the code they run changed since `tag`. */
-async function restartStale(root: string, tag: string | null) {
-  if (!tag || !(await isRuntime(root))) return;
-  const units = staleUnits((await git("diff", "--name-only", tag, "HEAD")).split("\n").filter(Boolean));
-  if (!units.length) return;
-  const out = await new Deno.Command("systemctl", { args: ["--user", "--no-block", "try-restart", ...units] })
-    .output().catch(() => null);
-  console.log(out?.success ? `restarted ${units.join(", ")}` : `could not restart ${units.join(", ")}`);
-}
-
 async function commitsSince(tag: string | null): Promise<Commit[]> {
   const range = tag ? [`${tag}..HEAD`] : ["HEAD"];
   const raw = await git("log", "--no-merges", "--format=%H%x1f%s%x1f%b%x1e", ...range);
@@ -243,9 +246,10 @@ async function main(args: string[]) {
   if (args.some((a) => a.startsWith("--lint"))) Deno.exit(await lint(args));
   const dry = args.includes("--dry-run");
   const [kind, aim] = args.filter((a) => !a.startsWith("--")) as [Bump?, string?];
-  if (kind && !["major", "minor", "patch", "beta"].includes(kind)) throw new Error(`unknown bump: ${kind}`);
-  if (aim && (kind !== "beta" || !["major", "minor", "patch"].includes(aim))) {
-    throw new Error(`only a beta takes a target (beta major | minor | patch), not ${kind} ${aim}`);
+  if (kind && !["major", "minor", "patch", "beta", "rc"].includes(kind)) throw new Error(`unknown bump: ${kind}`);
+  const pre = kind === "beta" || kind === "rc";
+  if (aim && (!pre || !["major", "minor", "patch"].includes(aim))) {
+    throw new Error(`only a beta or an rc takes a target (beta major | minor | patch), not ${kind} ${aim}`);
   }
 
   const root = await git("rev-parse", "--show-toplevel");
@@ -253,16 +257,16 @@ async function main(args: string[]) {
   if (!dry && (await git("status", "--porcelain"))) throw new Error("the working tree is not clean");
 
   const branch = await git("rev-parse", "--abbrev-ref", "HEAD");
-  const wanted = kind === "beta" ? "beta" : "release";
+  const wanted = pre ? "beta" : "release";
   if (!dry && branch !== wanted) {
-    throw new Error(`a ${kind === "beta" ? "beta" : "stable"} version is cut on ${wanted}, not ${branch}`);
+    throw new Error(`a ${pre ? kind : "stable"} version is cut on ${wanted}, not ${branch}`);
   }
 
   const current = parseVersion(JSON.parse(await Deno.readTextFile("deno.json")).version);
   const tags = (await git("tag", "--list", "v*", "--merged", "HEAD")).split("\n").filter(Boolean);
-  const lastTag = baseTag(tags, kind === "beta");
+  const lastTag = baseTag(tags, pre);
   const changes = (await commitsSince(lastTag)).map(parseCommit).filter((c): c is Change => c !== null);
-  const target = (aim as Exclude<Bump, "beta"> | undefined) ?? impliedBump(changes, current);
+  const target = (aim as Target | undefined) ?? impliedBump(changes, current);
   const next = formatVersion(bump(current, kind ?? target, target));
   const date = new Date().toISOString().slice(0, 10);
   const section = changelogSection(next, date, changes);
@@ -281,7 +285,6 @@ async function main(args: string[]) {
   await git("tag", "-a", `v${next}`, "-m", `v${next}`);
   console.log(`tagged v${next}. Publish with: git push origin ${branch} v${next}`);
   console.log("The tag builds the app's bundles and moves its update channel (docs/adr/0004); pull release after.");
-  await restartStale(root, lastTag);
 }
 
 if (import.meta.main) {

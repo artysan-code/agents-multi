@@ -8,12 +8,12 @@
 // Claude Code's /usage uses, and the answer is kept as <state>/live/limits-<profile>.json. The token is
 // read for that request and never kept, logged or sent anywhere else.
 
-import { readJson } from "./lib/fs.ts";
+import { readJson, writeAtomic } from "./lib/fs.ts";
 import { RUNTIME, STATE } from "./lib/paths.ts";
 import { profileNames } from "./lib/profiles.ts";
 import { openDb, report } from "./usage.ts";
 
-export const LIVE = `${STATE}/live`;
+const LIVE = `${STATE}/live`;
 /** Snapshots older than this are of sessions long gone: dropped when read. */
 const KEEP_S = 7 * 24 * 3600;
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
@@ -92,7 +92,7 @@ export function liveView(snaps: Snapshot[], profiles: string[], tokens: Record<s
 }
 
 /** The snapshots on disk, the ones too old removed. */
-export async function readSnapshots(now = Date.now() / 1000): Promise<Snapshot[]> {
+async function readSnapshots(now = Date.now() / 1000): Promise<Snapshot[]> {
   const out: Snapshot[] = [];
   try {
     for await (const e of Deno.readDir(LIVE)) {
@@ -157,8 +157,7 @@ export async function refresh(): Promise<Record<string, string>> {
     }
     const snap: Snapshot = { at: Math.round(Date.now() / 1000), profile: p, limits: r.limits, source: "endpoint" };
     const path = `${LIVE}/limits-${p}.json`;
-    await Deno.writeTextFile(`${path}.tmp`, JSON.stringify(snap));
-    await Deno.rename(`${path}.tmp`, path);
+    await writeAtomic(path, JSON.stringify(snap));
   }
   return errors;
 }

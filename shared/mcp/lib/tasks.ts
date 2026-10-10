@@ -21,10 +21,11 @@
 
 import { owner } from "./owner.ts";
 import { amEnv } from "./env.ts";
+import { serializer, writeAtomic } from "./fs.ts";
 
 export type Status = "todo" | "doing" | "waiting" | "done" | "dropped";
 export const STATUSES: Status[] = ["todo", "doing", "waiting", "done", "dropped"];
-export type Repeat = "daily" | "weekdays" | "weekly" | "monthly";
+type Repeat = "daily" | "weekdays" | "weekly" | "monthly";
 export const REPEATS: Repeat[] = ["daily", "weekdays", "weekly", "monthly"];
 
 export interface Task {
@@ -58,13 +59,13 @@ export interface Task {
   link?: string;
 }
 
-export interface TaskSettings {
+interface TaskSettings {
   /** local times of the day at which the desktop brief is sent */
   briefs: string[];
   /** default minutes of warning before a timed task */
   remind: number;
 }
-export const DEFAULT_SETTINGS: TaskSettings = { briefs: ["08:30", "13:30", "19:00"], remind: 15 };
+const DEFAULT_SETTINGS: TaskSettings = { briefs: ["08:30", "13:30", "19:00"], remind: 15 };
 
 const HOME = Deno.env.get("HOME") ?? "";
 export const tasksRoot = () => amEnv("TASKS") ?? `${HOME}/brains/tasks`;
@@ -126,7 +127,7 @@ export const hhmm = (d: Date) => {
   return `${pad(w.h)}:${pad(w.mi)}`;
 };
 /** The hour of an instant, in the owner's zone. */
-export const hourOf = (d: Date) => wall(d).h;
+const hourOf = (d: Date) => wall(d).h;
 
 const cal = (day: string) => {
   const [y, m, d] = day.split("-").map(Number);
@@ -162,7 +163,7 @@ export const validDay = (s: string) => {
   const { y, m, d } = cal(s);
   return calDay(Date.UTC(y, m - 1, d)) === s;
 };
-export const validTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+const validTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
 /** Pure: the next due day of a repeating task, after `from`. */
 export function nextDue(from: string, repeat: Repeat): string {
@@ -244,7 +245,7 @@ export function fromFile(text: string): Task | null {
   };
 }
 
-export function newId(now = new Date()): string {
+function newId(now = new Date()): string {
   const r = crypto.getRandomValues(new Uint8Array(3));
   return `t-${dayOf(now).replaceAll("-", "")}-${[...r].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
@@ -277,9 +278,7 @@ const fileStore: TaskStore = {
   },
   async write(t) {
     await Deno.mkdir(itemsDir(), { recursive: true });
-    const p = `${itemsDir()}/${t.id}.md`, tmp = `${p}.${crypto.randomUUID()}.tmp`;
-    await Deno.writeTextFile(tmp, toFile(t));
-    await Deno.rename(tmp, p);
+    await writeAtomic(`${itemsDir()}/${t.id}.md`, toFile(t));
   },
 };
 let store: TaskStore = fileStore;
@@ -439,12 +438,7 @@ export function applyInput(base: Task, input: TaskInput, now: Date): Task {
 
 /** Changes run one at a time in a process: a server answers several tool calls at once, and two
  *  read-modify-writes of the same task would otherwise lose one of them. */
-let chain: Promise<unknown> = Promise.resolve();
-function serial<T>(job: () => Promise<T>): Promise<T> {
-  const run = chain.then(job, job);
-  chain = run.catch(() => {});
-  return run;
-}
+const serial = serializer();
 
 export function addTask(input: TaskInput, now = new Date()): Promise<Task> {
   return serial(() => addTaskNow(input, now));
@@ -702,7 +696,7 @@ export function resolveRefs(all: Task[], input: TaskInput, self: Task | null): T
   return out;
 }
 
-export type AttachmentKind = "url" | "file" | "path" | "page";
+type AttachmentKind = "url" | "file" | "path" | "page";
 export interface Attachment {
   label: string;
   target: string;
@@ -779,7 +773,7 @@ const byTimeThenPriority = (a: Task, b: Task) =>
   (a.time ?? "99:99").localeCompare(b.time ?? "99:99") || (a.priority ?? 2) - (b.priority ?? 2) ||
   a.title.localeCompare(b.title);
 
-export type Moment = "morning" | "afternoon" | "evening";
+type Moment = "morning" | "afternoon" | "evening";
 export const momentOf = (now: Date): Moment =>
   hourOf(now) < 13 ? "morning" : hourOf(now) < 18 ? "afternoon" : "evening";
 

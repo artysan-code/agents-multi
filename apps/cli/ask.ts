@@ -141,15 +141,15 @@ export const asArg = (s: string) => s.startsWith("-") ? ` ${s}` : s;
 /** The models a request can be asked of, by Claude Code's aliases; the first is the default: most of
  *  what is asked here (a summary, a question on the day, a task to add) is light work. The debrief is
  *  not among the choices: it always runs on the light model, at low effort. */
-export const ASK_MODELS = ["haiku", "sonnet", "opus"] as const;
-export type AskModel = typeof ASK_MODELS[number];
+const ASK_MODELS = ["haiku", "sonnet", "opus"] as const;
+type AskModel = typeof ASK_MODELS[number];
 /** The effort each model is asked with: enough for the work it is chosen for, no more. */
-export const ASK_EFFORT: Record<AskModel, "low" | "medium" | "high"> = { haiku: "low", sonnet: "medium", opus: "high" };
+const ASK_EFFORT: Record<AskModel, "low" | "medium" | "high"> = { haiku: "low", sonnet: "medium", opus: "high" };
 const DEBRIEF_MODEL: AskModel = "haiku";
 const ASK_MODEL_FILE = `${STATE}/ask-model.json`;
-export const isAskModel = (m: unknown): m is AskModel => ASK_MODELS.includes(m as AskModel);
+const isAskModel = (m: unknown): m is AskModel => ASK_MODELS.includes(m as AskModel);
 /** The model chosen last, in the console or in the Hey window: one choice for both. */
-export async function askModel(): Promise<AskModel> {
+async function askModel(): Promise<AskModel> {
   const m = (await readJson<{ model?: string }>(ASK_MODEL_FILE))?.model;
   return isAskModel(m) ? m : ASK_MODELS[0];
 }
@@ -311,7 +311,7 @@ export class AskStream {
 }
 
 /** The machine's default profile: the one whose launcher is plain `claude`, else the first. */
-export async function defaultLauncher() {
+async function defaultLauncher() {
   const ls = await launchers();
   return ls.find((l) => l.command === "claude") ?? ls[0];
 }

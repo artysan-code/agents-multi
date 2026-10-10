@@ -7,33 +7,18 @@
 
 use std::path::{Path, PathBuf};
 
-fn first(get: &impl Fn(&str) -> Option<String>, suffix: &str) -> Option<String> {
-    ["AGENTS_MULTI_", "CLAUDE_MULTI_"]
-        .iter()
-        .find_map(|p| get(&format!("{p}{suffix}")).filter(|v| !v.is_empty()))
-}
+use crate::amenv::{am_env, runtime_root};
 
 /// The configuration folder, given the environment and whether a path exists.
 pub fn config_dir_from(
     get: impl Fn(&str) -> Option<String>,
     exists: impl Fn(&Path) -> bool,
 ) -> Option<PathBuf> {
-    if let Some(dir) = first(&get, "CONFIG") {
+    if let Some(dir) = am_env(&get, "CONFIG") {
         return Some(dir.into());
     }
-    let runtime = match first(&get, "ROOT") {
-        Some(root) => PathBuf::from(root),
-        None => {
-            let home = PathBuf::from(get("HOME").filter(|h| !h.is_empty())?);
-            let (now, old) = (home.join(".agents-multi"), home.join(".claude-multi"));
-            if exists(&now) || !exists(&old) {
-                now
-            } else {
-                old
-            }
-        }
-    };
-    Some(runtime.join("config"))
+    let home = get("HOME").filter(|h| !h.is_empty()).map(PathBuf::from);
+    Some(runtime_root(&get, home.as_deref(), exists)?.join("config"))
 }
 
 pub fn config_dir() -> Option<PathBuf> {

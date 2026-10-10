@@ -14,19 +14,19 @@ import { run } from "./lib/proc.ts";
 import { blockers } from "./mcp/apply.ts";
 import { currentVersion, highlights, type Release, whatsNew } from "./lib/changelog.ts";
 import { desktopNotify } from "./notify.ts";
-import { staleParts, staleUnits } from "./lib/stale.ts";
+import { consoleStale } from "./lib/stale.ts";
 import { syncAllSettings } from "./settings.ts";
 import { uiBuild, uiStatus } from "./ui.ts";
 import { installation } from "./lib/mode.ts";
 
-export interface RepoView {
+interface RepoView {
   upstream: string | null;
   branch: string;
   ahead: number;
   behind: number;
   dirty: number;
 }
-export type SelfPlan = { do: "pull" } | { do: "nothing"; why: string } | { do: "skip"; why: string };
+type SelfPlan = { do: "pull" } | { do: "nothing"; why: string } | { do: "skip"; why: string };
 
 /** Pure: what to do with the repository as it stands after a fetch. */
 export function selfPlan(r: RepoView): SelfPlan {
@@ -74,10 +74,7 @@ const T = {
     installDone: "install eseguito",
     installFail: "install non riuscito: lancia agents install per vedere perché",
     nothingPending: "nessun install in attesa",
-    restarted: (console: boolean, app: boolean) =>
-      console && app
-        ? "riavviate la console e l'app: giravano col codice vecchio"
-        : `riavviata ${console ? "la console" : "l'app"}: girava col codice vecchio`,
+    consoleOld: "la console gira ancora col codice vecchio: riavvia Agents Multi",
     pullFail: "pull non riuscito: git pull --ff-only nel repo per vedere perché",
     remoteGone: (url: string) =>
       `il remote ${url} non esiste più (repository rinominato o spostato): git -C <repo> remote set-url origin <nuovo URL>`,
@@ -105,10 +102,7 @@ const T = {
     installDone: "install done",
     installFail: "install failed: run agents install to see why",
     nothingPending: "no install waiting",
-    restarted: (console: boolean, app: boolean) =>
-      `restarted ${
-        [console && "the console", app && "the app"].filter(Boolean).join(" and ")
-      }: it was running the old code`,
+    consoleOld: "the console still runs the old code: restart Agents Multi",
     pullFail: "pull failed: git pull --ff-only in the repository to see why",
     remoteGone: (url: string) =>
       `the remote ${url} is gone (the repository was renamed or moved): git -C <repo> remote set-url origin <new URL>`,
@@ -274,14 +268,9 @@ export async function selfUpdate({ quiet = false } = {}): Promise<number> {
     if (!b.ok) await log("failed", from, to, `ui build: ${b.error}`);
   }
   const installed = await settleInstall(to, say);
-  // last, and without waiting: the console may be the one running this round (its Update button),
-  // and restarting it ends whatever runs inside it
-  const stale = staleParts(changed);
-  const units = staleUnits(changed);
-  if (units.length) {
-    say(note(T.restarted(stale.console, stale.app)));
-    await run("systemctl", ["--user", "--no-block", "try-restart", ...units]);
-  }
+  // the console is the app's backend (or `agents serve` by hand): it is not restarted from here, since it
+  // may be the one running this round (its Update button). The doctor says the same until it restarts.
+  if (consoleStale(changed)) say(note(T.consoleOld));
   return installed ? 0 : 1;
 }
 

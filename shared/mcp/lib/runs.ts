@@ -11,6 +11,7 @@
 //   <runs>/runs/<id>/channel.jsonl  the team's messages
 //   <runs>/runs/<id>/runner.pid, err.log, handoffs/ (when a folder has no git repository)
 
+import { writeAtomic } from "./fs.ts";
 import { configDir } from "./owner.ts";
 import {
   type Attention,
@@ -27,7 +28,7 @@ import {
   validId,
 } from "./agents.ts";
 
-export interface PlanStep {
+interface PlanStep {
   id: string;
   profile: string;
   /** the step's folder; the plan's when absent */
@@ -48,8 +49,8 @@ export interface Plan {
   steps: PlanStep[];
 }
 
-export type StepStatus = "waiting" | "confirm" | "running" | "done" | "failed" | "skipped" | "stopped";
-export type RunStatus = "running" | "done" | "stopped";
+type StepStatus = "waiting" | "confirm" | "running" | "done" | "failed" | "skipped" | "stopped";
+type RunStatus = "running" | "done" | "stopped";
 
 export interface StepState {
   status: StepStatus;
@@ -65,7 +66,7 @@ export interface StepState {
   ended?: string;
 }
 
-export interface RunState {
+interface RunState {
   status: RunStatus;
   steps: Record<string, StepState>;
   /** lines of control.jsonl already applied */
@@ -75,9 +76,9 @@ export interface RunState {
   heard: Record<string, number>;
 }
 
-export type RunEventKind = "started" | "step" | "confirm" | "failed" | "done" | "stopped";
+type RunEventKind = "started" | "step" | "confirm" | "failed" | "done" | "stopped";
 
-export interface RunEvent {
+interface RunEvent {
   at: string;
   kind: RunEventKind;
   run: string;
@@ -203,7 +204,7 @@ export function attentionOfEvent(e: RunEvent): Attention | null {
 
 // ---------------------------------------------------------------- the files
 
-export const runsRoot = (runs = runsDir()) => `${runs}/runs`;
+const runsRoot = (runs = runsDir()) => `${runs}/runs`;
 
 const lines = async (file: string) =>
   (await Deno.readTextFile(file).catch(() => "")).split("\n").filter(Boolean).map((l) => {
@@ -217,8 +218,7 @@ const lines = async (file: string) =>
 const append = (file: string, o: unknown) => Deno.writeTextFile(file, JSON.stringify(o) + "\n", { append: true });
 
 async function writeState(dir: string, st: RunState) {
-  await Deno.writeTextFile(`${dir}/state.json.tmp`, JSON.stringify(st, null, 2));
-  await Deno.rename(`${dir}/state.json.tmp`, `${dir}/state.json`);
+  await writeAtomic(`${dir}/state.json`, JSON.stringify(st, null, 2));
 }
 
 export interface Run {
@@ -275,7 +275,7 @@ async function runnerTail(dir: string): Promise<string> {
 }
 
 /** Starts the runner of a run, detached from whoever asked. */
-export async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
+async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
   const dir = `${runsRoot(runs)}/${id}`;
   await new Deno.Command("setsid", {
     args: ["-f", "bash", "-c", 'exec "$A" run drive "$I" >> "$D/err.log" 2>&1'],
@@ -619,7 +619,7 @@ export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSi
 
 // ---------------------------------------------------------------- saved workflows
 
-export interface SavedWorkflow {
+interface SavedWorkflow {
   name: string;
   description: string;
   path: string;

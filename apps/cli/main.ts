@@ -1,30 +1,6 @@
 #!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
-// agents-multi — CLI for a multi-profile Claude Code / Claude Desktop setup.
-//
-//   init    <folder>        a person's configuration (profiles, accounts, rules), linked from ~/.agents-multi/config
-//   install [--app] [--dry-run]   materialise ~/.agents-multi, ~/.local/bin, units and .desktop entries (idempotent);
-//                           --app: from the desktop app's code, installed first as the runtime's copy
-//   migrate [app] [--dry-run] [--rollback]   move the runtime from ~/.claude-multi to ~/.agents-multi;
-//                           app: move a checkout installation to the desktop app
-//   settings [--dry-run] [--quiet]   regenerate each profile's settings.json, adopting what Claude wrote into it
-//   doctor  [--probe] [--json|--notify [--dry-run]]   verify every invariant; --notify raises a desktop notification on new failures only;
-//           --probe also sends each profile one tiny request (Haiku) to check its Claude Code login
-//   status  [--json]        versions, updates, repo sync, profiles (what is mounted), running instances
-//   sync    [--fetch]       align the repository (fetch when stale, ff-only pull on a clean tree)
-//   mcp     check|sync|health [--force]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop)
-//   update  [...]           passthrough to bin/claude-update (CLI + Desktop, --rollback)
-//   usage   [...]           tokens and list-price estimate per profile/model/project/agent/skill/command (SQLite)
-//   serve   [--no-open]     local console on http://127.0.0.1:7331 (today, connections, profiles, plugins, updates, health)
-//   tasks   [...]           the task list, its brief and the desktop reminders
-//   agent   [...]           the hub's children: sessions at work in a project, their permissions answered here
-//   run     [...]           the hub's workflows: plans of steps run on their own (docs/adr/0005)
-//   vault   [...]           the MCP servers' secrets: encrypted in ~/vault/claude-multi, key in the keyring
-//   version                 the version (deno.json), also --version / -V
-//
-// Principle: the repository is the source of truth, ~/.agents-multi is runtime materialised by
-// `install` — from the desktop app's copy of the code, or from a checkout (lib/mode.ts). Launching Claude stays pure bash (bin/claude, the per-profile launchers, bin/lib/prelaunch.sh):
-// management lives here. Zero external dependencies — Deno APIs plus the built-in node:sqlite — so
-// it runs on a fresh machine with no cache to warm.
+// agents-multi — the CLI of a multi-profile Claude Code / Claude Desktop setup. The commands are
+// dispatched below; `agents help` lists them and is the one place that says what each does.
 
 import { vaultCommand } from "./vault.ts";
 import { tasksCommand } from "./tasks.ts";
@@ -101,16 +77,10 @@ switch (cmd) {
         ...procs.desktop.map((p) => `Claude Desktop ${p.variant} (pid ${p.pid})`),
       ],
     });
-    // the console and the tray found the runtime by its name when they started: they restart on the
-    // new one, or they report the paths of the old (the console last: it may be the one asking)
+    // the console found the runtime by its name when it started: it reports the paths of the old one
+    // until Agents Multi restarts it
     if (code === 0 && !flag("--dry-run")) {
-      await run("systemctl", [
-        "--user",
-        "--no-block",
-        "try-restart",
-        "claude-multi-app.service",
-        "claude-multi-console.service",
-      ]);
+      console.log("restart Agents Multi: its console still holds the old runtime paths");
     }
     Deno.exit(code);
     break;

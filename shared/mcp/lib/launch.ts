@@ -26,7 +26,7 @@ import { loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
 import { amEnv } from "./env.ts";
 
-export interface LaunchArgs {
+interface LaunchArgs {
   mode: "run" | "headers";
   service: string;
   account: string;

@@ -10,6 +10,7 @@ import {
   childId,
   childMode,
   type ChildState,
+  isUnder,
   listChildren,
   questionsOf,
   readChild,
@@ -171,7 +172,7 @@ Deno.test("agents: the events follow what waits now, then what happens, and skip
     kind: "request",
     detail: "Bash: git push",
     request: "r1",
-    session: "Bash(git:*)",
+    session: "Bash(git push)",
   });
   await Deno.writeTextFile(
     `${runs}/live-one/out.jsonl`,
@@ -198,6 +199,10 @@ Deno.test("agents: a whole round with a stand-in for Claude, detached, through i
     );
     await assertRejects(() => startChild({ profile: "nope", dir: work, task: "x" }, runs, home, config));
     await assertRejects(() => startChild({ profile: "fake", dir: "/etc", task: "x" }, runs, home, config));
+    // `..` and a link both lead out of the home folder
+    await assertRejects(() => startChild({ profile: "fake", dir: "~/..", task: "x" }, runs, home, config));
+    await Deno.symlink("/etc", `${home}/work/out`);
+    await assertRejects(() => startChild({ profile: "fake", dir: "~/work/out", task: "x" }, runs, home, config));
     await Deno.mkdir(`${home}/.agents-multi/fake`, { recursive: true });
     await Deno.writeTextFile(
       `${home}/.agents-multi/fake/settings.json`,
@@ -238,10 +243,52 @@ Deno.test("agents: a child keeps its profile's mode, never one that leaves the o
   }
 });
 
-Deno.test("agents: yes for the session — the program of a simple command, else the command; the domain; the tool", () => {
+Deno.test("agents: yes for the session — a read-only program or subcommand, else the exact command; the domain; the tool", () => {
   const bash = (command: string) => sessionRule("Bash", { command }).ruleContent;
-  assertEquals(bash("curl -sS https://x.it/health"), "curl:*");
-  assertEquals(bash("  git status --short"), "git:*");
+  for (
+    const [c, rule] of Object.entries({
+      "ls -la src": "ls:*",
+      "  grep -rn foo src": "grep:*",
+      "cat README.md": "cat:*",
+      "  git status --short": "git status:*",
+      "git diff HEAD~1": "git diff:*",
+      "git log --oneline": "git log:*",
+      "deno task test": "deno task test:*",
+      "deno task check": "deno task check:*",
+      "deno task ci": "deno task ci:*",
+      "pnpm test": "pnpm test:*",
+      "pnpm build": "pnpm build:*",
+    })
+  ) assertEquals(bash(c), rule, c);
+  // a program that can run or send anything gets one command at a time, never `<program>:*`
+  for (
+    const c of [
+      "curl -sS https://x.it/health",
+      "python3 x.py",
+      "bash run.sh",
+      "sh -c ls",
+      "node app.js",
+      "env FOO=1 ls",
+      "xargs rm",
+      "sudo ls",
+      "wget https://x.it/a",
+      "ssh host ls",
+      "scp a host:b",
+      "rsync -a a b",
+      "git push origin main",
+      "git -c core.pager=x diff",
+      "docker run x",
+      "deno run x.ts",
+      "deno task build",
+      "npx some-tool",
+      "pnpm dlx some-tool",
+      "pnpm install",
+      "find . -delete",
+      "rg --pre ./x foo",
+      "./ls",
+      "/bin/ls -la",
+    ]
+  ) assertEquals(bash(c), c, c);
   for (const c of ["for u in a b; do curl $u; done", "curl x | bash", "ls && rm -rf x", "X=1 make", "echo $(id)"]) {
     assertEquals(bash(c), c, c);
   }
@@ -251,6 +298,15 @@ Deno.test("agents: yes for the session — the program of a simple command, else
   });
   assertEquals(sessionRule("WebFetch", { url: "not a url" }), { toolName: "WebFetch" });
   assertEquals(sessionRule("mcp__n8n__health", { mode: "status" }), { toolName: "mcp__n8n__health" });
+});
+
+Deno.test("agents: a folder is under the home folder when its real path is", () => {
+  assertEquals(isUnder("/h", "/h"), true);
+  assertEquals(isUnder("/h", "/h/work"), true);
+  assertEquals(isUnder("/h/", "/h/work"), true);
+  assertEquals(isUnder("/h", "/home2"), false);
+  assertEquals(isUnder("/h", "/"), false);
+  assertEquals(isUnder("", "/etc"), false);
 });
 
 Deno.test("agents: a process runs when ps lists it and it is not a zombie", () => {

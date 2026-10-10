@@ -24,7 +24,7 @@ description: Every version of agents-multi and what changed in it, newest first.
 
 <!-- Generated from CHANGELOG.md by apps/site/scripts/changelog.mjs: change that file, not this one. -->
 
-Versions follow [Semantic Versioning](https://semver.org); stable versions and betas (\`X.Y.Z-beta.N\`)
+Versions follow [Semantic Versioning](https://semver.org); stable versions, betas (\`X.Y.Z-beta.N\`) and release candidates (\`X.Y.Z-rc.N\`)
 are listed together. The console shows the same notes after an update, under **What's new**.
 
 ${body.trim()}

@@ -1,5 +1,4 @@
-//! The tray icon: the setup's state at a glance, and a menu to act on it — what `apps/tray/tray.py`
-//! shows, from the same source. The state is the console's `/api/summary` (`summarize()` in
+//! The tray icon: the setup's state at a glance, and a menu to act on it, from one source. The state is the console's `/api/summary` (`summarize()` in
 //! apps/cli/status.ts, with its test): this module only draws it. It is refetched when the console says
 //! something changed (`state` on the `/api/events` stream the page also listens to), never on a timer.
 //! With the console down the icon turns grey and the stream reconnects with a bounded backoff.
@@ -146,7 +145,7 @@ pub struct View {
     pub menu: Vec<Entry>,
 }
 
-/// The lines under the headline, as tray.py writes them.
+/// The lines under the headline.
 fn lines(s: &Summary) -> Vec<String> {
     let mut lines: Vec<String> = s.fails.iter().map(|m| format!("✗ {m}")).collect();
     if let Some(v) = &s.staged {
@@ -217,7 +216,7 @@ pub fn sse_event(line: &str) -> Option<&str> {
     line.strip_prefix("event:").map(str::trim)
 }
 
-/// Draws the state dot on a square RGBA icon, where tray.py draws it: a soft shadow, then the colour,
+/// Draws the state dot on a square RGBA icon, a soft shadow, then the colour,
 /// in the lower right quarter.
 pub fn draw_dot(rgba: &mut [u8], size: u32, colour: [u8; 3]) {
     let s = size as f32 / 64.0;
