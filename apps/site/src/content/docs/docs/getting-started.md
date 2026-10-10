@@ -85,6 +85,4 @@ git clone https://github.com/artysan-code/agents-multi ~/.local/src/agents-multi
 ```
 
 `install` is idempotent and reversible: it never deletes real content, it moves it aside to
-`*.pre-repo-<stamp>` and says so; `install --dry-run` shows the plan. A machine installed this way
-moves to the app with `agents migrate app`, with every Claude closed. A machine set up before the
-project was called Agents Multi (`~/.claude-multi`) moves first with `agents migrate`.
+`*.pre-repo-<stamp>` and says so; `install --dry-run` shows the plan.

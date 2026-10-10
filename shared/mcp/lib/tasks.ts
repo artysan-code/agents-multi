@@ -2,7 +2,7 @@
 //
 // One Markdown file per task. Where the files are is the store's business: in the owner's brain when
 // there is a brain account (brain-tasks.ts, the only list from 2026-10-02 on), otherwise in
-// ~/brains/tasks/items (CLAUDE_MULTI_TASKS overrides the root), a Syncthing folder. That root also
+// ~/brains/tasks/items (AGENTS_MULTI_TASKS overrides the root), a Syncthing folder. That root also
 // keeps settings.json and the files attached from the console. A task is never deleted, it is
 // `dropped`: a write, which keeps it in the history (and on Syncthing, where a removal can get lost).
 //

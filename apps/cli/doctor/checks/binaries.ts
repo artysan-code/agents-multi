@@ -1,6 +1,6 @@
 // binaries.ts — Launchers and wrappers in ~/.local/bin, jq, and the Claude Code binary.
 
-import { listDir, lstat, readlink } from "../../lib/fs.ts";
+import { listDir, readlink } from "../../lib/fs.ts";
 import { BIN } from "../../lib/paths.ts";
 import { has } from "../../lib/proc.ts";
 import { launchers } from "../../lib/profiles.ts";
@@ -65,14 +65,6 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
       "fail",
       "jq is not installed: the guard hooks (vault, destructive commands, memory) fall back to a coarse parser",
       "install jq with the system package manager (pacman -S jq, apt install jq, dnf install jq)",
-    );
-  }
-  if (await lstat(`${BIN}/claude-multi-finalize`)) {
-    add(
-      "bin.finalize",
-      "warn",
-      "claude-multi-finalize is superseded by `agents doctor`",
-      `rm ${BIN}/claude-multi-finalize`,
     );
   }
   if (!m.cliVersion) add("bin.claude-bin", "fail", "claude-bin resolves to no version", "agents update --cli");

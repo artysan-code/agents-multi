@@ -153,7 +153,6 @@ export function Updates() {
               : m.desktopStaged
               ? t("up.staged", { v: m.desktopStaged })
               : t("up.uptodate"),
-            m.desktopSystem ? t("up.system") : null,
             m.desktopPrevious ? t("up.previous", { v: m.desktopPrevious }) : null,
           ]}
           rollback={m.desktopPrevious ? "rollback-desktop" : null}

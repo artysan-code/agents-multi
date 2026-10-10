@@ -1,7 +1,7 @@
 // desktop.ts — Claude Desktop packaging, its per-profile variants and desktop entries.
 
 import { listDir, lstat, readText, stat } from "../../lib/fs.ts";
-import { HOME, LIB } from "../../lib/paths.ts";
+import { HOME, LIB, REPO } from "../../lib/paths.ts";
 import { loadManifest } from "../../lib/profiles.ts";
 import { has, run } from "../../lib/proc.ts";
 import { type Check } from "../../lib/output.ts";
@@ -11,22 +11,15 @@ import { checkList, type DoctorCtx } from "../context.ts";
 export async function desktopChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { m, declared } = ctx;
-  // --- Claude Desktop: in user space since 2026-09-30 (bin/claude-desktop-update)
-  if (m.desktopSystem) {
-    add(
-      "desktop.userspace",
-      "warn",
-      `Claude Desktop ${m.desktopSystem} is still the system package: it cannot update itself`,
-      "claude-desktop-migrate (in a terminal, with every Claude Desktop closed)",
-    );
-  } else if (m.desktopVersion) {
+  // --- the system half of Claude Desktop (pkg/claude-desktop-shims)
+  if (m.desktopVersion) {
     const shims = await run("pacman", ["-Q", "claude-desktop-shims"]);
     if (shims.code !== 0) {
       add(
         "desktop.shims",
         "warn",
         "claude-desktop-shims is not installed: the VM mode misses virtiofsd/OVMF and the runtime libraries are untracked",
-        "claude-desktop-migrate",
+        `cd ${REPO}/pkg/claude-desktop-shims && makepkg -si`,
       );
     }
   }
@@ -40,11 +33,7 @@ export async function desktopChecks(ctx: DoctorCtx): Promise<Check[]> {
       const bin = await lstat(`${LIB}/${variant}/${variant}`);
       const asar = await lstat(`${LIB}/${variant}/resources/app.asar`);
       // the variant is built from the version in use; a switch rebuilds it, so older means a failed rebuild
-      const srcAsar = await stat(
-        m.desktopSystem
-          ? "/usr/lib/claude-desktop/resources/app.asar"
-          : `${LIB}/claude-desktop/current/resources/app.asar`,
-      );
+      const srcAsar = await stat(`${LIB}/claude-desktop/current/resources/app.asar`);
       if (!bin || !asar) {
         add(`desktop.${p}`, "fail", `Claude Desktop variant for ${p} is missing`, `claude-desktop-rebuild ${p}`);
       } else if (srcAsar?.mtime && asar.mtime && srcAsar.mtime > asar.mtime) {

@@ -1,7 +1,7 @@
 //! Which source the backend runs (docs/adr/0003): the console serves `apps/ui/dist`, reads `shared/` and
 //! runs `bin/agents` from it, so it is a folder in the repository's layout. In order:
 //!
-//! 1. `AGENTS_MULTI_REPO`, then `CLAUDE_MULTI_REPO` (the names bin/lib/prelaunch.sh reads): a checkout
+//! 1. `AGENTS_MULTI_REPO` (the name bin/lib/prelaunch.sh reads): a checkout
 //!    a developer points the app at;
 //! 2. in a debug build, the checkout the app was built from;
 //! 3. the copy the package carries in its resources (`repo/`, made by scripts/bundle.sh).
@@ -101,7 +101,7 @@ mod tests {
         make_repo(&t.0.join("dev"));
         make_repo(&t.0.join("bundled"));
         let at = t.0.join("dev").display().to_string();
-        let env = move |n: &str| (n == "CLAUDE_MULTI_REPO").then(|| at.clone());
+        let env = move |n: &str| (n == "AGENTS_MULTI_REPO").then(|| at.clone());
         assert_eq!(
             find(env, None, Some(&t.0.join("bundled"))),
             Ok(Source::Checkout(t.0.join("dev")))

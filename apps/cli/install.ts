@@ -23,7 +23,7 @@ import {
   STIGNORE_GEN_TEMPLATE_IN_REPO,
   SYNCTHING_CONFIG,
 } from "./lib/paths.ts";
-import { COPY_SHARED, type Installation, installation, isCheckout, type Mode } from "./lib/mode.ts";
+import { COPY_SHARED, type Installation, installation, isCheckout } from "./lib/mode.ts";
 import { has, run, which } from "./lib/proc.ts";
 import {
   desktopDir,
@@ -171,7 +171,7 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
   }
   await ensureDir(dir);
   // the shared items the profile links resolve to: the mounted code's (CODE), which also holds the
-  // links to ~/.agents/skills; the code being run (SRC) is the package's during `migrate app`
+  // links to ~/.agents/skills
   const shared = (await stat(`${CODE}/shared/${kind}`)) ? `${CODE}/shared/${kind}` : `${SRC}/shared/${kind}`;
   // "all" mounts what really is an item of that kind, exactly like sharedInventory() counts them:
   // a skill is a directory with a SKILL.md, an agent or a command is a .md file — and AGENTS.md is
@@ -210,26 +210,12 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
 }
 
 /** Pure: the code an installation's links point into. Dev installs the checkout it runs from, as
- *  ever; the app's code running on a dev installation (the app's backend, before `migrate app`) keeps
+ *  ever; the app's code running on a dev installation (the app's backend) keeps
  *  the installation's checkout instead of pointing it into the package. */
 export function codeFor(inst: Installation, running: string, runningIsCheckout: boolean): string {
   return inst.mode === "dev" && runningIsCheckout ? running : inst.code;
 }
 
-/** The units the desktop app replaced: install stops, disables and removes them (docs/adr/0003). */
-export const RETIRED_UNITS = ["claude-multi-console.service", "claude-multi-app.service"];
-/**
- * Pure: the units in the user's unit folder (each with where its link points, null for a file) that
- * install removes: in both modes the ones the app replaced; in app mode also every one of ours — a
- * link into some code's systemd/user, as install makes them — since the app runs their jobs.
- */
-export function unitsToRetire(mode: Mode, units: { name: string; target: string | null }[]): string[] {
-  return units.filter(({ name, target }) =>
-    RETIRED_UNITS.includes(name) || (mode === "app" && !!target?.endsWith(`/systemd/user/${name}`))
-  ).map((u) => u.name);
-}
-/** Menu entries an older install wrote, now the package's own (its desktop file is the app's entry). */
-const RETIRED_ENTRIES = ["claude-multi.desktop", "claude-update-gui.desktop"];
 /** The login entry that starts the app in the tray (XDG autostart). */
 export const AUTOSTART = "agents-multi.desktop";
 
@@ -261,19 +247,18 @@ export const autostartEntry = (template: string, bin: string) =>
   template.slice(template.indexOf("[Desktop Entry]")).replaceAll("@BIN@", bin);
 
 /**
- * Materialises the runtime. `as` names the installation to install (agents migrate app plans one
- * before the runtime is one); otherwise it is this machine's.
+ * Materialises the runtime. `as` names the installation to install; otherwise it is this machine's.
  */
 export async function install(
   dry: boolean,
-  opts: { as?: Installation; src?: string; diagnose?: boolean } = {},
+  opts: { as?: Installation; diagnose?: boolean } = {},
 ) {
   DRY = dry;
   actions.length = 0;
   const m = await machine();
   const inst = opts.as ?? await installation();
   CODE = codeFor(inst, REPO, await isCheckout(REPO));
-  SRC = opts.src ?? ((await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO);
+  SRC = (await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO;
   const dev = inst.mode === "dev";
   console.log(
     `${ANSI.b}agents install${ANSI.x} — ${dev ? "checkout" : "the app's code"} ${
@@ -349,9 +334,7 @@ export async function install(
           shortHome(set.orphan)
         }`,
       );
-    }
-    if (set.migrated) say(`${ANSI.y}→${ANSI.x} ${p}/settings.json: from a link to shared/ to a generated file`);
-    else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
+    } else if (set.wrote) say(`${ANSI.g}+${ANSI.x} ${p}/settings.json regenerated`);
     await ensureSymlink("../shared/hooks", `${dir}/hooks`, `${p}/hooks`);
     await ensureDir(`${dir}/plugins`);
     await ensureSymlink("../../marketplaces", `${dir}/plugins/marketplaces`, `${p}/plugins/marketplaces`);
@@ -380,9 +363,6 @@ export async function install(
     `${BIN}/stignore-gen`,
     "~/.local/bin/stignore-gen",
   );
-  if (await lstat(`${BIN}/claude-multi-finalize`)) {
-    await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
-  }
   // updates install themselves now: the notifier that offered to install them is gone
   if ((await lstat(`${BIN}/claude-update-notify`))?.isSymlink) {
     await removeLink(`${BIN}/claude-update-notify`, "updates install themselves");
@@ -391,16 +371,7 @@ export async function install(
   if ((await lstat(`${BIN}/claude-distiller`))?.isSymlink) {
     await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
   }
-  // claude-personal, an alias that named one person's profile, is gone: each profile's command comes
-  // from its manifest (a profile whose command is claude-personal still gets it, linked to bin/claude)
-  if ((await readlink(`${BIN}/claude-personal`))?.endsWith("/bin/claude-personal")) {
-    await removeLink(`${BIN}/claude-personal`, "an alias of the personal profile, now its manifest's command");
-  }
   await ensureDir(LIB);
-  // The update GUI became the desktop app (bin/claude-multi-app finds its code through the repo).
-  for (const old of [`${LIB}/claude-update-gui`, `${BIN}/claude-update-gui`]) {
-    if ((await lstat(old))?.isSymlink) await removeLink(old, "replaced by claude-multi-app");
-  }
 
   // 5b. the checkout's git hooks (pre-commit: secret guard + type check)
   if (dev && await isCheckout(CODE)) {
@@ -463,13 +434,12 @@ export async function install(
   }
 
   // 8. systemd user units: dev mode only. In app mode the app's backend schedules their jobs while it
-  // runs (console/schedule.ts), so nothing depends on systemd, and the units an earlier install made go.
+  // runs (console/schedule.ts), so nothing depends on systemd.
   {
     const ud = `${HOME}/.config/systemd/user`;
     const present = await Promise.all(
       (await listDir(ud)).map(async (name) => ({ name, target: await readlink(`${ud}/${name}`) })),
     );
-    const gone = unitsToRetire(inst.mode, present);
     if (dev && m.systemd) {
       await ensureDir(ud);
       for (const u of await listDir(`${SRC}/systemd/user`)) {
@@ -477,7 +447,7 @@ export async function install(
       }
       // a unit removed from the code leaves its link behind: drop the ones pointing at nothing
       for (const { name: u, target } of present) {
-        if (target?.endsWith(`/systemd/user/${u}`) && !gone.includes(u) && !(await lstat(target))) {
+        if (target?.endsWith(`/systemd/user/${u}`) && !(await lstat(target))) {
           say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
           if (!DRY) {
             await run("systemctl", ["--user", "disable", "--now", u]); // a linked unit: disable removes the link itself
@@ -507,30 +477,6 @@ export async function install(
         }
       }
     }
-    // Stopped last and without waiting: the console's unit may be what runs this install (its «Close
-    // Claude and update»), and stopping it ends whatever runs inside it. The files are this HOME's
-    // either way; the manager is told only when it is this HOME's (machine.ts).
-    if (gone.length) {
-      say(
-        `${ANSI.y}-${ANSI.x} systemd units ${gone.join(", ")} (${
-          dev ? "replaced by the desktop app" : "the app runs their jobs"
-        })`,
-      );
-      if (!DRY) {
-        if (m.systemd) await run("systemctl", ["--user", "disable", ...gone]);
-        for (const u of gone) await Deno.remove(`${ud}/${u}`).catch(() => {});
-        if (m.systemd) {
-          await run("systemctl", ["--user", "daemon-reload"]);
-          // one unit per call: systemctl enqueues nothing when any unit it is given is not loaded (a
-          // service whose file is gone and that was not running), and the running ones kept going
-          for (const u of gone) {
-            await run("systemctl", ["--user", "--no-block", "stop", u]);
-            // a timer whose service vanished is left «failed»
-            await run("systemctl", ["--user", "reset-failed", u]);
-          }
-        }
-      }
-    }
   }
 
   // 9. Claude Desktop (only where it is installed)
@@ -538,10 +484,6 @@ export async function install(
     const apps = `${HOME}/.local/share/applications`;
     for (const d of await listDir(`${SRC}/desktop`)) {
       if (d.endsWith(".desktop")) await ensureRendered(`${SRC}/desktop/${d}`, `${apps}/${d}`);
-    }
-    // copies an older install wrote, of files the code no longer has
-    for (const d of RETIRED_ENTRIES) {
-      if (await lstat(`${apps}/${d}`)) await removeLink(`${apps}/${d}`, "the desktop app's package has its own entry");
     }
     await writeDesktopEntries(apps);
     // the icons of the person's Desktop profiles (config/icons/<size>/claude-desktop-<profile>.png)

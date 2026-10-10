@@ -15,7 +15,7 @@ export const CONFIG = amEnv("CONFIG") ?? `${RUNTIME}/config`;
 export const PROFILES = `${CONFIG}/profiles`;
 export const BIN = `${HOME}/.local/bin`;
 export const LIB = `${HOME}/.local/lib`;
-/** The XDG bases; ours is the `agents-multi` folder in each (the old name, a link to it: moveXdgDirs). */
+/** The XDG bases; ours is the `agents-multi` folder in each. */
 export const XDG = xdgBases((n) => Deno.env.get(n), HOME);
 export const CACHE = `${XDG.cache}/${XDG_NAME}`;
 export const STATE = `${XDG.state}/${XDG_NAME}`;

@@ -3,11 +3,9 @@
 import { keyRefused } from "./vault.ts";
 import { loadAccounts } from "../../../../shared/mcp/lib/accounts.ts";
 import { brainAccount } from "../../../../shared/mcp/lib/brain-tasks.ts";
-import { dayOf, hhmm, tasksRoot } from "../../../../shared/mcp/lib/tasks.ts";
+import { dayOf, hhmm } from "../../../../shared/mcp/lib/tasks.ts";
 import { getSecret } from "../../../../shared/mcp/lib/vault.ts";
 import { lastBackup } from "../../brain-backup.ts";
-import { listDir } from "../../lib/fs.ts";
-import { shortHome } from "../../lib/paths.ts";
 import { run } from "../../lib/proc.ts";
 import { probeKept } from "../../vault.ts";
 import { type Check } from "../../lib/output.ts";
@@ -18,7 +16,7 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
   const { m } = ctx;
   if (m.desktopVersion) {
-    // the tasks live in the brain when there is a brain account: old files left in place are a second list
+    // the tasks live in the brain when there is a brain account
     const ba = brainAccount(undefined, loadAccounts());
     if (ba) {
       // the token this machine's tasks, console and copies use: one request says whether the brain still takes it
@@ -48,15 +46,7 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
             `curl -s ${ba.url}/health`,
           );}
       }
-      const left = (await listDir(`${tasksRoot()}/items`)).filter((n) => /^t-[\w-]+\.md$/.test(n));
-      if (left.length) {
-        add(
-          "tasks.migrate",
-          "warn",
-          `${left.length} tasks are still files in ${shortHome(tasksRoot())}/items, not in the brain`,
-          "agents tasks migrate",
-        );
-      } else add("tasks.store", "ok", "tasks: in the brain");
+      add("tasks.store", "ok", "tasks: in the brain");
       // a copy of the brain on this machine: the server's volume is the only other one
       const b = await lastBackup();
       if (!b) add("brain.backup", "warn", "no copy of the brain on this machine yet", "agents brain-backup");

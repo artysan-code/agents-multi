@@ -12,17 +12,17 @@ Deno.test("ownerFrom: what is given, trimmed, the id in lower case; the rest fro
 Deno.test("owner: the variables win over the file, the file over the defaults", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify({ id: "ann", name: "Ann", language: "Italian" }));
-  const keep = ["CLAUDE_MULTI_CONFIG", "CLAUDE_MULTI_OWNER_ID", "CLAUDE_MULTI_OWNER_NAME", "CLAUDE_MULTI_LANGUAGE"].map(
+  const keep = ["AGENTS_MULTI_CONFIG", "AGENTS_MULTI_OWNER_ID", "AGENTS_MULTI_OWNER_NAME", "AGENTS_MULTI_LANGUAGE"].map(
     (k) => [k, Deno.env.get(k)] as const,
   );
   try {
     for (const [k] of keep) Deno.env.delete(k);
-    Deno.env.set("CLAUDE_MULTI_CONFIG", dir);
+    Deno.env.set("AGENTS_MULTI_CONFIG", dir);
     assertEquals(owner(), { id: "ann", name: "Ann", language: "Italian" });
-    Deno.env.set("CLAUDE_MULTI_OWNER_NAME", "Annie");
+    Deno.env.set("AGENTS_MULTI_OWNER_NAME", "Annie");
     assertEquals(owner().name, "Annie");
-    Deno.env.set("CLAUDE_MULTI_CONFIG", `${dir}/none`);
-    Deno.env.delete("CLAUDE_MULTI_OWNER_NAME");
+    Deno.env.set("AGENTS_MULTI_CONFIG", `${dir}/none`);
+    Deno.env.delete("AGENTS_MULTI_OWNER_NAME");
     assertEquals(owner(), { id: "me", name: "the user", language: "English" });
   } finally {
     for (const [k, v] of keep) v === undefined ? Deno.env.delete(k) : Deno.env.set(k, v);

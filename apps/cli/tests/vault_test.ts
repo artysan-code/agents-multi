@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertNotEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 
 const dir = await Deno.makeTempDir();
-Deno.env.set("CLAUDE_MULTI_VAULT", dir);
+Deno.env.set("AGENTS_MULTI_VAULT", dir);
 const v = await import("../../../shared/mcp/lib/vault.ts");
 
 Deno.test("recovery code: round trip, forgiving about case, dashes and look-alikes", () => {

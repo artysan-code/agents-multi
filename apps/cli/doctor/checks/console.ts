@@ -1,10 +1,9 @@
 // console.ts — The console: served by the desktop app (its backend), whether it runs the current code,
-// the units it replaced, and its interface's build.
+// and its interface's build.
 
 import { codeVersion } from "../../codeversion.ts";
-import { RETIRED_UNITS } from "../../install.ts";
-import { lstat, readJson } from "../../lib/fs.ts";
-import { HOME, PORT, REPO } from "../../lib/paths.ts";
+import { readJson } from "../../lib/fs.ts";
+import { PORT, REPO } from "../../lib/paths.ts";
 import { has } from "../../lib/proc.ts";
 import { uiStatus } from "../../ui.ts";
 import { type Check } from "../../lib/output.ts";
@@ -22,17 +21,6 @@ export const CONSOLE_DENY = [
 /** The console: who serves it, whether it runs the current code, and its interface's build. */
 export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
-  // --- the units the app replaced: install removes them (docs/adr/0003)
-  const left = [];
-  for (const u of RETIRED_UNITS) if (await lstat(`${HOME}/.config/systemd/user/${u}`)) left.push(u);
-  if (left.length) {
-    add(
-      "console.unit",
-      "warn",
-      `${left.join(" and ")} still installed: the desktop app replaced them`,
-      "agents install",
-    );
-  }
   // --- the console on its port: the app's backend (or `agents serve` by hand on a headless box)
   const running = await fetch(`http://127.0.0.1:${PORT}/api/code`, { signal: AbortSignal.timeout(3000) })
     .then(async (r): Promise<{ code?: string }> => r.ok ? await r.json() : (await r.body?.cancel(), {})).catch(() =>

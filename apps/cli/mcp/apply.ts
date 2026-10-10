@@ -5,13 +5,12 @@
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
-import { lstat, readJson, writeAtomic } from "../lib/fs.ts";
-import { REPO, RUNTIME, STATE } from "../lib/paths.ts";
+import { readJson, writeAtomic } from "../lib/fs.ts";
+import { RUNTIME, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 import { type Target, wanted } from "./placement.ts";
 import { loadRegistry } from "./registry.ts";
-import { type Mode } from "../lib/mode.ts";
 
 export interface Change {
   target: Target;
@@ -20,7 +19,6 @@ export interface Change {
 }
 
 const STATE_FILE = `${STATE}/mcp-state.json`;
-const LEGACY_STATE = `${REPO}/shared/mcp/.sync-state.json`;
 const BACKUPS = `${STATE}/mcp-sync-backups`;
 const KEEP = 5;
 
@@ -42,20 +40,13 @@ export async function targets(): Promise<Target[]> {
   return t;
 }
 async function loadState(): Promise<Record<string, string[]>> {
-  const s = await readJson<Record<string, string[]>>(STATE_FILE);
-  if (s) return s;
-  // migration from the old in-repo file (keys were profile → cli surface)
-  const legacy = await readJson<Record<string, string[]>>(LEGACY_STATE);
-  if (!legacy) return {};
-  const out: Record<string, string[]> = {};
-  for (const [p, names] of Object.entries(legacy)) out[`cli:${p}`] = names;
-  return out;
+  return await readJson<Record<string, string[]>>(STATE_FILE) ?? {};
 }
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Differences per existing target (missing files are skipped: profile or Desktop not installed). */
-export async function plan(opts: { mode?: Mode } = {}): Promise<{ changes: Change[]; skipped: Target[] }> {
-  const reg = await loadRegistry(opts);
+export async function plan(): Promise<{ changes: Change[]; skipped: Target[] }> {
+  const reg = await loadRegistry();
   const state = await loadState();
   const changes: Change[] = [];
   const skipped: Target[] = [];
@@ -112,10 +103,10 @@ export async function blockers(): Promise<Record<string, string[]>> {
  * @returns the changes applied
  * @throws when running instances would rewrite a touched config (without `force`)
  */
-export async function apply(opts: { force?: boolean; mode?: Mode } = {}) {
-  const reg = await loadRegistry(opts);
+export async function apply(opts: { force?: boolean } = {}) {
+  const reg = await loadRegistry();
   const state = await loadState();
-  const { changes } = await plan(opts);
+  const { changes } = await plan();
   const block = opts.force ? {} : await blockers();
   const touched = new Set(changes.map((c) => c.target.managedKey));
   const blocked = [...touched].filter((k) => block[k]);
@@ -147,8 +138,4 @@ export async function apply(opts: { force?: boolean; mode?: Mode } = {}) {
 export function describe(c: Change) {
   const sym = { add: "+", update: "~", remove: "−" }[c.kind];
   return `${c.target.managedKey.padEnd(16)} ${sym} ${c.name}`;
-}
-/** Whether the old in-repo sync state file still exists. */
-export async function legacyStatePresent() {
-  return !!(await lstat(LEGACY_STATE));
 }

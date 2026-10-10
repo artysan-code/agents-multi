@@ -11,7 +11,7 @@ import { desktopChecks, desktopPackagingChecks } from "./checks/desktop.ts";
 import { agentsChecks } from "./checks/agents.ts";
 import { gitIgnoreChecks } from "./checks/gitignore.ts";
 import { loginChecks } from "./checks/logins.ts";
-import { mcpChecks, mcpLegacyChecks } from "./checks/mcp.ts";
+import { mcpChecks } from "./checks/mcp.ts";
 import { profileChecks } from "./checks/profiles.ts";
 import { repoChecks } from "./checks/repo.ts";
 import { runtimeChecks } from "./checks/runtime.ts";
@@ -40,7 +40,6 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
   consoleChecks,
   mcpChecks,
   vaultChecks,
-  mcpLegacyChecks,
   updateChecks,
   desktopChecks,
   appChecks,

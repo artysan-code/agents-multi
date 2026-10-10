@@ -1,22 +1,24 @@
 //! Where the local console answers: the same rule as the CLI's `PORT` (apps/cli/lib/paths.ts) —
-//! `AGENTS_MULTI_PORT`, then `CLAUDE_MULTI_PORT`, else 7331 — always on 127.0.0.1.
+//! `AGENTS_MULTI_PORT`, else 7331 — always on 127.0.0.1.
 
 use url::Url;
 
-use crate::amenv::am_var;
+use crate::amenv::am_env;
 
 pub const DEFAULT_PORT: u16 = 7331;
 
-/// The console's port, from the variables `get` returns. The first variable that is set wins, as in
-/// `amEnv()`; a value that is not a port falls back to the default, with a warning.
+/// The console's port, from the variables `get` returns; a value that is not a port falls back to the
+/// default, with a warning.
 pub fn port_from(get: impl Fn(&str) -> Option<String>) -> u16 {
-    let Some((name, value)) = am_var(&get, "PORT") else {
+    let Some(value) = am_env(&get, "PORT") else {
         return DEFAULT_PORT;
     };
     match value.trim().parse::<u16>() {
         Ok(port) if port != 0 => port,
         _ => {
-            eprintln!("agents-multi: {name}={value:?} is not a port, using {DEFAULT_PORT}");
+            eprintln!(
+                "agents-multi: AGENTS_MULTI_PORT={value:?} is not a port, using {DEFAULT_PORT}"
+            );
             DEFAULT_PORT
         }
     }
@@ -51,26 +53,13 @@ mod tests {
     }
 
     #[test]
-    fn agents_multi_wins_over_claude_multi() {
-        assert_eq!(
-            port_from(env(&[
-                ("CLAUDE_MULTI_PORT", "7400"),
-                ("AGENTS_MULTI_PORT", "7500")
-            ])),
-            7500
-        );
-        assert_eq!(port_from(env(&[("CLAUDE_MULTI_PORT", "7400")])), 7400);
+    fn the_variable_sets_the_port() {
+        assert_eq!(port_from(env(&[("AGENTS_MULTI_PORT", "7500")])), 7500);
     }
 
     #[test]
     fn invalid_value_falls_back_to_default() {
-        assert_eq!(
-            port_from(env(&[
-                ("AGENTS_MULTI_PORT", "nope"),
-                ("CLAUDE_MULTI_PORT", "7400")
-            ])),
-            7331
-        );
+        assert_eq!(port_from(env(&[("AGENTS_MULTI_PORT", "nope")])), 7331);
         assert_eq!(port_from(env(&[("AGENTS_MULTI_PORT", "0")])), 7331);
         assert_eq!(port_from(env(&[("AGENTS_MULTI_PORT", "70000")])), 7331);
     }

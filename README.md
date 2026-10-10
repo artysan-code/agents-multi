@@ -108,18 +108,6 @@ For Claude Desktop profile variants also `gnupg`, `binutils` (`ar`), `libarchive
 The project was called claude-multi: `claude-multi` still works as another name for the command, and
 some folders, services and settings keep that name until they move with a migration of their own.
 
-### Moving a machine from a checkout to the app
-
-`agents migrate app` (with every Claude closed, from a terminal, after installing the app's package):
-the package's code becomes the runtime's copy, `shared`, the launchers and the stignore-gen template
-point into it, the systemd units are stopped and removed (the app runs their jobs) together with the
-old console and tray units, the app's autostart entry is written, and the MCP servers are placed again
-on the package's Deno. Your configuration, the vault, the brain login, the profiles and their sessions
-do not move. `--dry-run` shows the plan; `--from <dir>` names the package's code when it is not beside
-the installed app (an AppImage: its mount's `usr/lib/me.artysan.agents/repo`). The checkout is
-recorded and left as it is: `agents migrate app --rollback` points the runtime back at it and runs its
-own `install` and `mcp sync`.
-
 ---
 
 ## Profiles
@@ -233,14 +221,13 @@ closed, then run `agents install` and `agents doctor`.
 | `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears           |
 | `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console  |
 | `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                               |
-| `agents migrate app [--dry-run] [--rollback]`                   | move a checkout installation to the app's code, or back (above)                                                                                               |
 | `agents mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                  |
 | `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                    |
 | `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                        |
 | `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                         |
 | `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                        |
 | `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                          |
-| `agents tasks brief\|add\|done\|remind\|migrate`                | the task list from the terminal; `remind` is what the timer runs, `migrate` moves the old files into the brain                                                |
+| `agents tasks brief\|add\|done\|remind`                         | the task list from the terminal; `remind` is what the timer runs                                                                                              |
 | `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                            |
 | `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                    |
 | `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                |
@@ -486,8 +473,7 @@ token goes to the vault and the address next to the account's name.
 The owner's tasks live in their brain (`apps/brain/`), one Markdown file per task, so the phone sees the same
 list: every process here reads and writes them on the brain's `/api/tasks` with a personal token
 from the vault (`shared/mcp/lib/brain-tasks.ts`, the `brain` account). Without a brain account they
-are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`), as they were before the brain held them;
-`agents tasks migrate` moves those files into the brain once. `~/brains/tasks` still keeps
+are files in `~/brains/tasks/items` (`AGENTS_MULTI_TASKS`). `~/brains/tasks` also keeps
 `settings.json` and the files attached from the console. A task has a day and optionally a time,
 a warning in minutes before it, a project, a priority, a repeat (daily, weekdays, weekly, monthly:
 completing one creates the next) and an owner — who has to move: `alice`, `claude`, or someone else,
@@ -639,9 +625,8 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   the `.deb` hash from that index. Anything missing or different stops the update before a file is
   extracted, and raises the only notification the updater ever sends.
 - **System half**: `pkg/claude-desktop-shims` holds the runtime dependencies and the links the app
-  expects at Debian paths (virtiofsd, OVMF). It is installed once and never changes.
-  `claude-desktop-migrate` moves a machine that still has the old system package: run it once, in
-  a terminal, with every Claude Desktop closed.
+  expects at Debian paths (virtiofsd, OVMF). It is installed once and never changes
+  (`cd pkg/claude-desktop-shims && makepkg -si`).
 
 ---
 
@@ -677,8 +662,7 @@ deno task test    # usage (rates, dedupe, turns), notifications,
 
 The variables are `AGENTS_MULTI_<NAME>` (`ROOT`, `CONFIG`, `PORT`, `VAULT`, `TASKS`, `BRAIN`, `ACCOUNTS`,
 `PROFILE`, `BRAIN_SCOPE`, `OWNER_ID`, `OWNER_NAME`, `LANGUAGE`, `REPO`, `FETCH_TTL`, `FETCH_TIMEOUT`,
-`NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` is still read when the new one is not set, and the
-MCP servers get both until 1.0.
+`NO_ASSISTANT_TRAILER`). The old `CLAUDE_MULTI_<NAME>` names are no longer read.
 
 ## License
 

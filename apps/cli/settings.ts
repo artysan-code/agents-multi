@@ -122,8 +122,6 @@ interface SettingsResult {
   adopted: string[];
   /** the runtime file was (or, dry, would be) rewritten */
   wrote: boolean;
-  /** it was still a symlink to shared/settings.json */
-  migrated: boolean;
   /** a regular file with no record of what was generated: kept aside, not adopted */
   orphan?: string;
 }
@@ -167,10 +165,11 @@ async function registryRules(p: Profile): Promise<Rules> {
  */
 export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: boolean } = {}): Promise<SettingsResult> {
   const adoptWrites = opts.adopt ?? true;
-  const res: SettingsResult = { profile: p, adopted: [], wrote: false, migrated: false };
+  const res: SettingsResult = { profile: p, adopted: [], wrote: false };
   const rt = runtimePath(p);
+  // a link in place of the file is never read nor adopted (what it points to could widen the
+  // permissions): the file built here replaces it
   const st = await lstat(rt);
-  res.migrated = !!st?.isSymlink;
   const current = st && !st.isSymlink ? await readObj(rt) : null;
   const lastBuilt = await readObj(builtPath(p));
 
@@ -194,9 +193,9 @@ export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: bo
   }
 
   const built = buildSettings(shared, patch, derived);
-  res.wrote = res.migrated || !current || !same(current, built);
+  res.wrote = !current || !same(current, built);
   if (opts.dry) return res;
-  if (res.migrated) await Deno.remove(rt);
+  if (st?.isSymlink) await Deno.remove(rt);
   if (res.wrote) await writeJson(rt, built);
   if (!same(lastBuilt, built)) await writeJson(builtPath(p), built);
   return res;

@@ -309,7 +309,7 @@ Deno.test("watchFor: says once when the file appears, not for others; a second w
 });
 
 Deno.test("setup routes: on a configured machine every write is refused, header or not", async () => {
-  // the tests' configuration (CLAUDE_MULTI_CONFIG) has an owner and no setup of its own: configured by hand
+  // the tests' configuration (AGENTS_MULTI_CONFIG) has an owner and no setup of its own: configured by hand
   const handle = createHandler(setupRoutes({ invalidate: () => {} }));
   const req = (path: string, init: RequestInit = {}) =>
     new Request(`http://127.0.0.1:7331${path}`, {

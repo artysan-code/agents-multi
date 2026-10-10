@@ -6,7 +6,7 @@
 // does, for the console's «Close Claude and update» or the update timer's next round. Its result goes
 // to `app-install.json` in the state folder, which the doctor reads (the health page).
 //
-// A dev installation (a checkout) is refused: moving one to the app is `agents migrate app`.
+// A dev installation (a checkout) is refused: it stays on its checkout.
 
 import { buildId, installCopy, keepProgram, readBuild, seedCache } from "./appcopy.ts";
 import { forgetBackendOnly } from "./console/server.ts";
@@ -61,7 +61,7 @@ export async function installApp(o: { dry: boolean }): Promise<number> {
   const id = buildId(build);
   const inst = await installation();
   if (inst.mode === "dev" && !inst.fresh) {
-    const error = `this machine runs a checkout (${inst.code}): agents migrate app moves it to the app`;
+    const error = `this machine runs a checkout (${inst.code}): the app does not replace it`;
     if (!o.dry) await record({ build: id, ok: false, error });
     console.error(error);
     return 3;

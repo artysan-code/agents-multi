@@ -20,7 +20,7 @@ shell's.
   `/api/events`, its cookies and CSRF header — and served from `tauri://localhost` it would be
   another origin, needing CORS on every route and a second build of the page. Loaded by URL, the
   window is one more browser on the console, and the page is the same in both.
-- **The port follows the CLI**: `AGENTS_MULTI_PORT`, then `CLAUDE_MULTI_PORT`, else 7331
+- **The port follows the CLI**: `AGENTS_MULTI_PORT`, else 7331
   (`src-tauri/src/console.rs`, with its tests).
 - **A bundled local page waits for the console** (`apps/desktop/src/`, plain HTML, CSS and JavaScript,
   no build step). The window opens on it; it asks `GET /api/code` on the port (the app passes it as

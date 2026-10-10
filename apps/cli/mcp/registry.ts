@@ -8,7 +8,7 @@
 //   servers.json (the catalogue writes `[]`). Their own servers go in their servers.json only.
 //   _profiles  defaults to every profile · _surfaces defaults to ["cli"]
 //   _service   the server works on the accounts of that service (shared/mcp/accounts.json): only the
-//              profiles that see one of them get it, with CLAUDE_MULTI_PROFILE in its env and
+//              profiles that see one of them get it, with AGENTS_MULTI_PROFILE in its env and
 //              {hosts} in its args replaced by those accounts' hosts (its --allow-net); on Desktop
 //              also the session bus address, because Desktop starts servers with a bare env (HOME,
 //              PATH, USER…) and the vault key is read from the keyring over D-Bus (secret-tool)
@@ -123,13 +123,11 @@ export function withDeno(servers: Record<string, ServerCfg>, deno: string): Reco
  * The registry as the setup uses it: catalogue plus the person's patch, `${HOME}` expanded, with the
  * profiles, accounts, session bus, brain scopes and launch paths of this machine.
  *
- * @param opts.mode the installation's mode to place servers for (`agents migrate app` plans the
- *   app's before the machine is in it); this machine's by default
  * @throws when servers.json is missing or invalid.
  */
-export async function loadRegistry(opts: { mode?: Mode } = {}): Promise<Registry> {
+export async function loadRegistry(): Promise<Registry> {
   const raw = await rawRegistry();
-  const deno = denoFor(opts.mode ?? (await installation()).mode);
+  const deno = denoFor((await installation()).mode);
   const r = { ...raw, servers: withDeno(expandHome(raw.servers), deno) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) {

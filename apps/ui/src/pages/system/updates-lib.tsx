@@ -20,7 +20,6 @@ export const COMPONENTS: Record<string, string> = {
 export type Report = StatusView & { selfInstall?: boolean };
 export interface MachineExtra {
   cliVersions?: string[];
-  desktopSystem?: boolean;
 }
 export interface RepoExtra {
   upstream?: string | null;

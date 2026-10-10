@@ -17,13 +17,13 @@
 set -uo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/profiles.sh"
 
-REPO="${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-$(cm_repo)}}"
+REPO="${AGENTS_MULTI_REPO:-$(cm_repo)}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agents-multi"
 STATE="$CACHE/sync.json"
 STAMP="$CACHE/fetch.stamp"
 LOCK="$CACHE/sync.lock"
-TTL="${AGENTS_MULTI_FETCH_TTL:-${CLAUDE_MULTI_FETCH_TTL:-43200}}"
-FETCH_TIMEOUT="${AGENTS_MULTI_FETCH_TIMEOUT:-${CLAUDE_MULTI_FETCH_TIMEOUT:-3}}"
+TTL="${AGENTS_MULTI_FETCH_TTL:-43200}"
+FETCH_TIMEOUT="${AGENTS_MULTI_FETCH_TIMEOUT:-3}"
 
 g() { git -C "$REPO" "$@"; }
 
@@ -37,7 +37,7 @@ write_state() {
 }
 
 main() {
-  [[ -n "${AGENTS_MULTI_REPO:-${CLAUDE_MULTI_REPO:-}}" || "$(cm_mode)" == dev ]] || return 0
+  [[ -n "${AGENTS_MULTI_REPO:-}" || "$(cm_mode)" == dev ]] || return 0
   [[ -e "$REPO/.git" ]] || return 0
   mkdir -p "$CACHE"
   exec 9>"$LOCK"
@@ -82,7 +82,7 @@ main() {
 regen_settings() {
   local runtime stamp="$CACHE/settings.stamp"
   runtime="$(cm_runtime)"
-  local config="${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$runtime/config}}"
+  local config="${AGENTS_MULTI_CONFIG:-$runtime/config}"
   # bin/agents runs on the deno on PATH, or in app mode on the package's (the runtime's bin/deno)
   [[ -x "$REPO/bin/agents" ]] || return 0
   command -v deno >/dev/null 2>&1 || [[ -x "$runtime/bin/deno" ]] || return 0

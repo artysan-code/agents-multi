@@ -430,7 +430,7 @@ export async function modeOf(profile: string, runtime: string): Promise<ChildMod
  *  from a terminal in Claude — inherits them, and a Claude started from there took that session's
  *  profile, permissions and project for its own: with `CLAUDE_PROJECT_DIR` a project's `.mcp.json`
  *  looked for its files in the coordinator's folder, and its servers failed. Agents Multi's own
- *  (CLAUDE_MULTI_*) stay. */
+ *  (AGENTS_MULTI_*) stay. */
 const CLAUDE_SESSION_VARS =
   "^(CLAUDECODE|CLAUDE_CONFIG_DIR|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_PROJECT_DIR|CLAUDE_ENV_FILE|CLAUDE_(CODE|AGENT_SDK|PREVIEW)_.*)$";
 

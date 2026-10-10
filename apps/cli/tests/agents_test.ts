@@ -334,7 +334,7 @@ Deno.test("agents: a child starts without the variables of the Claude session th
     await Deno.chmod(bin, 0o755);
     await Deno.writeTextFile(`${config}/profiles/envy/profile.json`, JSON.stringify({ command: bin }));
     for (const n of set) Deno.env.set(n, "/the/coordinator");
-    Deno.env.set("CLAUDE_MULTI_KEEP", "1");
+    Deno.env.set("AGENTS_MULTI_KEEP", "1");
     const meta = await startChild({ profile: "envy", dir: work, task: "x" }, runs, home, config);
     let env = "";
     for (let t = 0; t < 100 && !env; t++) {
@@ -343,10 +343,10 @@ Deno.test("agents: a child starts without the variables of the Claude session th
     }
     const names = env.split("\n").map((l) => l.split("=")[0]);
     for (const n of set) assert(!names.includes(n), `${n} reached the child`);
-    assert(names.includes("CLAUDE_MULTI_KEEP") && names.includes("HOME"));
+    assert(names.includes("AGENTS_MULTI_KEEP") && names.includes("HOME"));
     await stopChild(meta.id, true, runs);
   } finally {
-    for (const n of [...set, "CLAUDE_MULTI_KEEP"]) Deno.env.delete(n);
+    for (const n of [...set, "AGENTS_MULTI_KEEP"]) Deno.env.delete(n);
     await Deno.remove(home, { recursive: true });
   }
 });

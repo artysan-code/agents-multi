@@ -8,12 +8,9 @@
 # Repository root, from this file's real location.
 cm_repo() { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd; }
 
-# The runtime: ~/.agents-multi, or ~/.claude-multi on a machine that has not moved it yet (agents migrate).
+# The runtime: ~/.agents-multi.
 cm_runtime() {
-  local root="${AGENTS_MULTI_ROOT:-${CLAUDE_MULTI_ROOT:-}}"
-  if [[ -n "$root" ]]; then printf '%s\n' "$root"
-  elif [[ -e "$HOME/.agents-multi" || ! -e "$HOME/.claude-multi" ]]; then printf '%s\n' "$HOME/.agents-multi"
-  else printf '%s\n' "$HOME/.claude-multi"; fi
+  printf '%s\n' "${AGENTS_MULTI_ROOT:-$HOME/.agents-multi}"
 }
 
 # The installation's mode, as apps/cli/lib/mode.ts decides it: "app" when ~/.agents-multi/shared is the
@@ -33,7 +30,7 @@ cm_code() {
 }
 
 # The person's configuration (profiles, accounts, rules): ~/.agents-multi/config, a link to their folder.
-cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-${CLAUDE_MULTI_CONFIG:-$(cm_runtime)/config}}"; }
+cm_config() { printf '%s\n' "${AGENTS_MULTI_CONFIG:-$(cm_runtime)/config}"; }
 
 # Every declared profile, one per line.
 cm_profiles() {
