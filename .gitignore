@@ -17,7 +17,6 @@ index.pre.js
 pkg/*/*.pkg.tar.*
 pkg/*/pkg/
 pkg/*/src/
-shared/mcp/.sync-state.json
 
 # Skills from ~/.agents: absolute links created by `agents install`, per-machine
 shared/skills/use-railway

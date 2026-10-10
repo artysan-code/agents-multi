@@ -1,9 +1,8 @@
 // mcp.ts — The MCP registry against the surfaces, its validity, and the health of each server.
 
-import { legacyStatePresent, plan } from "../../mcp/apply.ts";
+import { plan } from "../../mcp/apply.ts";
 import { health } from "../../mcp/health.ts";
 import { loadRegistry, registryProblems } from "../../mcp/registry.ts";
-import { REPO } from "../../lib/paths.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 import { actionStep, userStep, verifyStep } from "../repair.ts";
@@ -37,19 +36,5 @@ export async function mcpChecks(): Promise<Check[]> {
     add("mcp.sync", "fail", `MCP registry: ${(e as Error).message}`);
   }
   c.push(...await health());
-  return c;
-}
-
-/** The old in-repo MCP sync state file. */
-export async function mcpLegacyChecks(): Promise<Check[]> {
-  const [c, add] = checkList();
-  if (await legacyStatePresent()) {
-    add(
-      "mcp.legacy",
-      "warn",
-      "shared/mcp/.sync-state.json is a leftover of the old sync script",
-      `rm ${REPO}/shared/mcp/.sync-state.json`,
-    );
-  }
   return c;
 }

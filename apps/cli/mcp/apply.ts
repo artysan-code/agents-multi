@@ -5,8 +5,8 @@
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
 // because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
 
-import { lstat, readJson, writeAtomic } from "../lib/fs.ts";
-import { REPO, RUNTIME, STATE } from "../lib/paths.ts";
+import { readJson, writeAtomic } from "../lib/fs.ts";
+import { RUNTIME, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 import { type Target, wanted } from "./placement.ts";
@@ -19,7 +19,6 @@ export interface Change {
 }
 
 const STATE_FILE = `${STATE}/mcp-state.json`;
-const LEGACY_STATE = `${REPO}/shared/mcp/.sync-state.json`;
 const BACKUPS = `${STATE}/mcp-sync-backups`;
 const KEEP = 5;
 
@@ -41,14 +40,7 @@ export async function targets(): Promise<Target[]> {
   return t;
 }
 async function loadState(): Promise<Record<string, string[]>> {
-  const s = await readJson<Record<string, string[]>>(STATE_FILE);
-  if (s) return s;
-  // migration from the old in-repo file (keys were profile → cli surface)
-  const legacy = await readJson<Record<string, string[]>>(LEGACY_STATE);
-  if (!legacy) return {};
-  const out: Record<string, string[]> = {};
-  for (const [p, names] of Object.entries(legacy)) out[`cli:${p}`] = names;
-  return out;
+  return await readJson<Record<string, string[]>>(STATE_FILE) ?? {};
 }
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -146,8 +138,4 @@ export async function apply(opts: { force?: boolean } = {}) {
 export function describe(c: Change) {
   const sym = { add: "+", update: "~", remove: "−" }[c.kind];
   return `${c.target.managedKey.padEnd(16)} ${sym} ${c.name}`;
-}
-/** Whether the old in-repo sync state file still exists. */
-export async function legacyStatePresent() {
-  return !!(await lstat(LEGACY_STATE));
 }
