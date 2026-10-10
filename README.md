@@ -625,9 +625,8 @@ stays set everywhere: the updates are driven from here, not by each binary on it
   the `.deb` hash from that index. Anything missing or different stops the update before a file is
   extracted, and raises the only notification the updater ever sends.
 - **System half**: `pkg/claude-desktop-shims` holds the runtime dependencies and the links the app
-  expects at Debian paths (virtiofsd, OVMF). It is installed once and never changes.
-  `claude-desktop-migrate` moves a machine that still has the old system package: run it once, in
-  a terminal, with every Claude Desktop closed.
+  expects at Debian paths (virtiofsd, OVMF). It is installed once and never changes
+  (`cd pkg/claude-desktop-shims && makepkg -si`).
 
 ---
 

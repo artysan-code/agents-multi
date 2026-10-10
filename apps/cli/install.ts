@@ -363,9 +363,6 @@ export async function install(
     `${BIN}/stignore-gen`,
     "~/.local/bin/stignore-gen",
   );
-  if (await lstat(`${BIN}/claude-multi-finalize`)) {
-    await removeLink(`${BIN}/claude-multi-finalize`, "superato da doctor");
-  }
   // updates install themselves now: the notifier that offered to install them is gone
   if ((await lstat(`${BIN}/claude-update-notify`))?.isSymlink) {
     await removeLink(`${BIN}/claude-update-notify`, "updates install themselves");
