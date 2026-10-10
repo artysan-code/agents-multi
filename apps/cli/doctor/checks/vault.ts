@@ -5,7 +5,7 @@ import { getSecret, keyMatches, listSecrets, loadKey, vaultDir } from "../../../
 import { lstat, readJson, readText } from "../../lib/fs.ts";
 import { HOME, REPO, shortHome } from "../../lib/paths.ts";
 import { ACCOUNTS } from "../../mcp/registry.ts";
-import { probeAccount } from "../../vault.ts";
+import { probeKept } from "../../vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 
@@ -82,7 +82,7 @@ export async function vaultChecks(): Promise<Check[]> {
       );
       const tried = await Promise.all(held.map(async (a) => {
         const secret = await getSecret(a.service, a.name).catch(() => null);
-        return { a, r: secret ? await probeAccount(a, secret) : { ok: false, detail: "unreadable", checked: true } };
+        return { a, r: secret ? await probeKept(a, secret) : { ok: false, detail: "unreadable", checked: true } };
       }));
       const checked = tried.filter((x) => x.r.checked !== false);
       const refused = checked.filter((x) => keyRefused(x.r.detail));

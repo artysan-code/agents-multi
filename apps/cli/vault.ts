@@ -51,7 +51,8 @@ export function probeRequest(
   const probes: Record<string, { path: string; header: string }> = {
     coolify: { path: "/api/v1/version", header: `Authorization: Bearer ${secret}` },
     n8n: { path: "/api/v1/workflows?limit=1", header: `X-N8N-API-KEY: ${secret}` },
-    brain: { path: "/api/tasks", header: `Authorization: Bearer ${secret}` },
+    // the memory's version: a few bytes, where the task list would be the whole list
+    brain: { path: "/api/brain/state", header: `Authorization: Bearer ${secret}` },
     gitea: { path: "/api/v1/user", header: `Authorization: token ${secret}` },
     supabase: { path: "https://api.supabase.com/v1/projects", header: `Authorization: Bearer ${secret}` },
   };
@@ -80,6 +81,26 @@ export async function probeAccount(
   await w.close();
   const code = new TextDecoder().decode((await child.output()).stdout).trim();
   return { ok: code.startsWith("2"), detail: `HTTP ${code || "unreachable"}` };
+}
+
+type Probe = Awaited<ReturnType<typeof probeAccount>>;
+const kept = new Map<string, { at: number; r: Probe }>();
+
+/** Pure: how long a probe's verdict holds. A key that works or is refused stays so for minutes; a
+ *  service that did not answer is asked again sooner. */
+export const probeTtl = (r: Probe) => r.ok || /HTTP [1-5]\d\d/.test(r.detail) ? 600_000 : 60_000;
+
+/** probeAccount, its verdict kept in this process for a while: the doctor runs again on every state
+ *  change in the console, and asking each service every time is a request a second to each. A new
+ *  secret is a new key here, so a key just changed is always tried. */
+export async function probeKept(a: Account, secret: string, now = Date.now()): Promise<Probe> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret)));
+  const key = `${a.service}\0${a.name}\0${a.url ?? ""}\0${Array.from(digest.subarray(0, 12)).join(".")}`;
+  const k = kept.get(key);
+  if (k && now - k.at < probeTtl(k.r)) return k.r;
+  const r = await probeAccount(a, secret);
+  kept.set(key, { at: now, r });
+  return r;
 }
 
 export async function vaultCommand(args: string[]): Promise<number> {

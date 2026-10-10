@@ -9,7 +9,7 @@ import { lastBackup } from "../../brain-backup.ts";
 import { listDir } from "../../lib/fs.ts";
 import { shortHome } from "../../lib/paths.ts";
 import { run } from "../../lib/proc.ts";
-import { probeAccount } from "../../vault.ts";
+import { probeKept } from "../../vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
 
@@ -32,7 +32,7 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
           login,
         );
       } else {
-        const p = await probeAccount(ba, token);
+        const p = await probeKept(ba, token);
         if (p.ok) add("brain.token", "ok", `brain: ${ba.url} takes this machine's token`);
         else if (keyRefused(p.detail)) {
           add(
