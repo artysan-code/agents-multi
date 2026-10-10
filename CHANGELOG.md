@@ -5,6 +5,51 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.0.0-rc.1] - 2026-10-10
+
+### Added
+
+- **ui**: the update screen and the start screen without the logo (0c4e6bd)
+- **release**: release candidates between betas and stable (87f9d1c)
+
+### Fixed
+
+- **brain**: the image copies shared/mcp/lib/fs.ts, which the task rules now import (b4c13fd)
+- **security**: Claude sessions are denied curl and wget to the console (ca20e0a)
+- **brain**: trust x-forwarded-for by default behind Traefik; keep the model loaded, cap its CPU (2504826)
+- **tasks**: changes carry their version again, an unchanged list is a 304 (e420e7d)
+- **console**: a working session no longer recomputes the report every second (47eed78)
+
+### Performance
+
+- **desktop**: the tray follows state alone (52ec910)
+- **ui**: keep the last change when the session lists are throttled, pause the clock while hidden (3cef295)
+- **ui**: load Brain, Connections, System, the hosts and the start pages on demand (fad15e5)
+- **brain**: one resolver per pass, counters for versions, async backup, task list with ETag (531f710)
+- **brain**: write a token's last use at most every five minutes; prune idle clients in an hour (227301e)
+- **brain**: health probe over bash /dev/tcp instead of starting deno every 30 s (d7f377d)
+- **brain**: leave tasks out of the embeddings, warm the model at start (e36db2b)
+- **brain**: board cards read relations from one pass instead of one scan per card (36fa778)
+- **doctor**: a key's verdict is kept for minutes, the brain asked for its version only (bf62b62)
+
+### Changed
+
+- **ui**: every request goes through src/api.ts and the pages' api.ts files (d411fa4)
+- **desktop**: one AGENTS_MULTI_ lookup and one runtime root, with the old-folder fallback (fc81e9a)
+- one atomic write, one null-reading readJson and one serial queue (44b5c81)
+- **cli**: stop exporting what only its own file uses (0cd018b)
+- drop the retired systemd restart chain and stale tray comments (fa6bc7b)
+- **ui**: stop exporting what only its own file uses (9e17747)
+- **ui**: remove CSS no markup uses (3009838)
+- **ui**: drop i18n keys nothing reads (9d90c83)
+
+### Security
+
+- **cli**: /api/open no longer opens archives, SVG or macro documents (9eafa15)
+- **mcp**: mask secrets by their look, and more secret names (58ab860)
+- **updater**: keep the app's update socket out of /tmp (7e76175)
+- **agents**: narrow session rules, check a child's real folder under home (7389c0c)
+
 ## [1.0.0-beta.17] - 2026-10-09
 
 ### Fixed
