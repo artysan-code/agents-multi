@@ -139,7 +139,7 @@ function Shortcuts() {
   );
 }
 
-export const openShortcuts = (): void => openDrawer(t("keys.title"), () => <Shortcuts />);
+const openShortcuts = (): void => openDrawer(t("keys.title"), () => <Shortcuts />);
 
 /** The preferences: theme, language, the shortcuts, and which console this is. */
 function Prefs({ close }: { close: () => void }) {

@@ -5,7 +5,7 @@
 import { get, ndjson, post, postInit, type Result } from "../../api.ts";
 
 /** One line of /api/ask's answer (`Out` in apps/cli/ask.ts). */
-export type AskLine =
+type AskLine =
   | { t: "session"; id: string }
   | { t: "text"; d: string }
   | { t: "tool"; k: string }

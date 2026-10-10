@@ -64,7 +64,7 @@ export interface AccountCalendars {
   calendars: CalendarInfo[];
 }
 
-export interface AccountBody {
+interface AccountBody {
   op: "save" | "delete";
   service: string;
   name: string;

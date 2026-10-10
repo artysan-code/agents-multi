@@ -41,7 +41,7 @@ export function FixControl({ c }: { c: Pick<Check, "id" | "fix" | "repair"> }) {
   return c.fix ? <ActionButton fix={c.fix} /> : null;
 }
 
-export function openRepair(id: string): void {
+function openRepair(id: string): void {
   const check = (status.value?.doctor ?? []).find((c) => c.id === id);
   if (!check?.repair?.length) return;
   openDrawer(t("rep.title"), () => <Repair id={id} check={check} steps={check.repair!} />);
@@ -49,7 +49,7 @@ export function openRepair(id: string): void {
 
 /** A repair's run, for the drawer and for Today's system card: the steps' state, the running step's
  *  output, the cause of a failure, and the controls. */
-export function useRepair(id: string, steps: RepairStep[]) {
+function useRepair(id: string, steps: RepairStep[]) {
   const [state, setState] = useState<StepState[]>(() => steps.map(() => "todo"));
   const [running, setRunning] = useState(false);
   const [cause, setCause] = useState("");

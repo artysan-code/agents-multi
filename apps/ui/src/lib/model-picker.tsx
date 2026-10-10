@@ -12,7 +12,7 @@ import { type Key, t, tk } from "../i18n.ts";
 import "./model-picker.css";
 
 /** GET /api/ask/model. `efforts` and `default` came later: an older console sends only the names. */
-export interface ModelState {
+interface ModelState {
   model: string;
   models: string[];
   efforts?: Record<string, string>;

@@ -8,7 +8,7 @@ export const STEPS = ["welcome", "you", "folder", "profiles", "install", "claude
 export type Step = typeof STEPS[number];
 export type VaultState = "ok" | "none" | "locked" | "wrong-key" | "unavailable";
 
-export interface SetupProfile {
+interface SetupProfile {
   profile: string;
   command: string;
   installed: boolean;

@@ -40,7 +40,7 @@ export function pickProject(k: string | null): void {
   } catch { /* not remembered */ }
 }
 
-export const isMine = (x: { owner?: string }): boolean => !x.owner || x.owner === owner.value.id;
+const isMine = (x: { owner?: string }): boolean => !x.owner || x.owner === owner.value.id;
 export const isOpen = (x: { status: string }): boolean => x.status !== "done" && x.status !== "dropped";
 
 export function dayLabel(day: string | undefined, time?: string): string {

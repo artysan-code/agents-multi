@@ -27,7 +27,7 @@ interface Link {
   t: Node;
 }
 
-export interface GraphOpts {
+interface GraphOpts {
   onClick?: (id: string | null) => void;
   onOpen?: (id: string) => void;
   charge?: number;

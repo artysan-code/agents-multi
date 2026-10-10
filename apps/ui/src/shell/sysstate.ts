@@ -8,9 +8,9 @@ import { live, status } from "../state.ts";
 import { pendingUpdates, type Report } from "../pages/system/updates-lib.tsx";
 import { appUpdater } from "./app-update.ts";
 
-export type Level = "ok" | "warn" | "crit" | "up" | "down";
+type Level = "ok" | "warn" | "crit" | "up" | "down";
 
-export interface SysState {
+interface SysState {
   /** the worst news first: unreachable, a failing check, an update, a warning, else all good */
   level: Level;
   /** the checks that are not ok, failures first */

@@ -32,7 +32,7 @@ interface StepResult extends Result {
   reopen: string[];
   remaining: Blocker[];
 }
-export interface Settled {
+interface Settled {
   code: number;
   ms: number;
   output?: string;

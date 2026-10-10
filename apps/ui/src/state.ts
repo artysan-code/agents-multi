@@ -7,8 +7,8 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { api, type Owner, type StatusView, type Summary } from "./api.ts";
 
-export type Live = "live" | "busy" | "down";
-export type Topic = "state" | "usage" | "tasks" | "brain" | "app-update";
+type Live = "live" | "busy" | "down";
+type Topic = "state" | "usage" | "tasks" | "brain" | "app-update";
 
 export const status = signal<StatusView | null>(null);
 export const summary = signal<Summary | null>(null);

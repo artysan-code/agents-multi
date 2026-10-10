@@ -127,7 +127,7 @@ export const FIX_ACTIONS: Record<string, string> = {
   "agents ui build": "ui-build",
 };
 
-export type JobEnd = { code: number; cancelled?: boolean } | { error: string };
+type JobEnd = { code: number; cancelled?: boolean } | { error: string };
 
 /** Runs one job on the server (/api/job), calling `onOut` with each piece of output as it arrives;
  *  `track` receives the job id, for cancelling (/api/job/cancel). */

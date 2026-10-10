@@ -56,7 +56,7 @@ export interface Board {
 }
 
 /** A task with its notes, as the sheet reads it. */
-export interface TaskFull extends Omit<BoardTask, "folder" | "progress"> {
+interface TaskFull extends Omit<BoardTask, "folder" | "progress"> {
   notes?: string;
   remind?: number;
 }
@@ -97,7 +97,7 @@ export interface Item {
   links?: Links;
 }
 
-export type OpBody =
+type OpBody =
   | { op: "update"; id: string; status?: string; base?: string; [field: string]: unknown }
   | { op: "step"; id: string; index: number; done: boolean }
   | { op: "addstep"; id: string; text: string }

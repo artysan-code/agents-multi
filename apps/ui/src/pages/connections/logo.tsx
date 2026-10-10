@@ -3,7 +3,7 @@
 import { LOGOS } from "./logos.ts";
 
 /** The services' display names; a service not here shows as it is called. */
-export const SVC_NAMES: Record<string, string> = {
+const SVC_NAMES: Record<string, string> = {
   n8n: "n8n",
   google: "Google",
   cloudflare: "Cloudflare",

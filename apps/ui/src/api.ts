@@ -17,7 +17,7 @@ export interface ProfileView {
   [more: string]: unknown;
 }
 
-export interface RunningCli {
+interface RunningCli {
   pid: number;
   profile: string;
   cwd: string;
@@ -28,7 +28,7 @@ export interface RunningCli {
   lastActivity: string | null;
 }
 
-export interface VersionState {
+interface VersionState {
   current: string | null;
   latest: string | null;
   outdated: boolean;
