@@ -326,11 +326,12 @@ pub fn create(app: &AppHandle, port: u16) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Follows the console's event stream for good, reconnecting with a bounded backoff.
+/// Follows the console's event stream for good (`state` alone: the tray is not a page, and the console
+/// polls the brain only for pages), reconnecting with a bounded backoff.
 fn follow(port: u16, tx: Sender<Msg>) {
     let mut failures = 0;
     loop {
-        if let Ok((head, body)) = http::open(port, "/api/events", SILENCE) {
+        if let Ok((head, body)) = http::open(port, "/api/events?only=state", SILENCE) {
             if head.status == 200 && tx.send(Msg::Up).is_ok() {
                 for line in body.lines() {
                     let Ok(line) = line else { break };
