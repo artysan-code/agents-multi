@@ -5,6 +5,20 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.1.0-rc.1] - 2026-10-10
+
+### Added
+
+- **ui**: follow the console's token in the page and the dev server (ec74409)
+- **desktop**: enter the console with its token and send it from the tray (1510598)
+- **console**: require a per-start token on every request but the liveness probe (1d039df)
+
+### Fixed
+
+- **ui**: the update screen leaves «Restarting» as soon as the new console answers (8b7c73f)
+- **cli**: a command that fails says why in one line, not with Deno's stack (bbfad5c)
+- **ui**: a step not needed fills its arc of the update ring, as the share counts it (d30d258)
+
 ## [1.0.0] - 2026-10-10
 
 ### Added
