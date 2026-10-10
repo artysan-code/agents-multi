@@ -42,6 +42,14 @@ const opt = (name: string, def?: string) => {
   return i >= 0 ? rest[i + 1] : def;
 };
 
+// A command that fails says why in one line, not with Deno's stack: the scheduled jobs (tasks remind,
+// brain-backup) log what they print, and a brain away for a deploy is a message, not a crash.
+globalThis.addEventListener("unhandledrejection", (e) => {
+  e.preventDefault();
+  console.error(`agents ${cmd}: ${e.reason instanceof Error ? e.reason.message : String(e.reason)}`);
+  Deno.exit(1);
+});
+
 // A machine whose runtime has not moved yet gets ~/.agents-multi as a link to ~/.claude-multi,
 // before anything here (settings, servers, install) writes a path with the new name.
 if (!amEnv("ROOT")) await ensureRuntimeLink(HOME).catch(() => false);
