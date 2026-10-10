@@ -23,6 +23,25 @@ pub fn is_app_url(url: &Url) -> bool {
     }
 }
 
+/// The local page's handoff to the console: once the console answers, the page goes to
+/// `index.html?go=1&view=…`, which the app takes instead of loading (token.rs) to send the window in
+/// with the console's token. Some(view) when `url` is that, the view only if it can be one.
+pub fn handoff(url: &Url) -> Option<Option<String>> {
+    if !is_app_url(url) {
+        return None;
+    }
+    let mut go = false;
+    let mut view = None;
+    for (k, v) in url.query_pairs() {
+        match k.as_ref() {
+            "go" => go = true,
+            "view" if crate::flags::is_view(&v) => view = Some(v.into_owned()),
+            _ => {}
+        }
+    }
+    go.then_some(view)
+}
+
 /// Where a navigation of the main frame may go, given the console's root URL.
 pub fn decide(url: &Url, console: &Url) -> Decision {
     if is_app_url(url) || url.origin() == console.origin() {
@@ -50,6 +69,21 @@ mod tests {
     }
 
     const CONSOLE: &str = "http://127.0.0.1:7331/";
+
+    #[test]
+    fn the_handoff_is_the_local_page_with_go() {
+        assert_eq!(handoff(&u("tauri://localhost/index.html?go=1")), Some(None));
+        assert_eq!(
+            handoff(&u("tauri://localhost/index.html?go=1&view=system/health")),
+            Some(Some("system/health".into()))
+        );
+        assert_eq!(
+            handoff(&u("http://tauri.localhost/index.html?go=1&view=A'b")),
+            Some(None)
+        );
+        assert_eq!(handoff(&u("tauri://localhost/index.html?port=7331")), None);
+        assert_eq!(handoff(&u("http://127.0.0.1:7331/?go=1")), None);
+    }
 
     #[test]
     fn local_page_and_console_are_allowed() {

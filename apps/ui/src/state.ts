@@ -103,6 +103,8 @@ export function connect(): void {
     };
     es.onerror = () => {
       live.value = "down";
+      // an event stream refused for its token looks like any other failure: ask, so a 401 is noticed
+      void api.owner().catch(() => {});
       // EventSource retries on its own, but a server gone for good would leave the page silently
       // stale; a bounded backoff makes the reconnection visible instead
       if (retry < 6) setTimeout(open, Math.min(30000, 2000 * 2 ** retry++));

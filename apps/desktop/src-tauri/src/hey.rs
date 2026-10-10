@@ -18,7 +18,7 @@ use tauri::{
 };
 
 use crate::navigation::{self, Decision};
-use crate::{console, reveal};
+use crate::{console, reveal, token};
 
 pub const LABEL: &str = "hey";
 /// The page's request to close, as the picker's (apps/ui/src/lib/window.ts).
@@ -102,11 +102,19 @@ pub fn open(app: &AppHandle, port: u16) -> tauri::Result<()> {
     };
     let nav = console.clone();
     let builder = builder
-        .on_navigation(move |url| match navigation::decide(url, &nav) {
-            Decision::Allow => true,
-            other => {
-                crate::refuse(url, other);
-                false
+        .on_navigation({
+            let app = app.clone();
+            move |url| {
+                if token::intercept(&app, LABEL, port, url) {
+                    return false;
+                }
+                match navigation::decide(url, &nav) {
+                    Decision::Allow => true,
+                    other => {
+                        crate::refuse(url, other);
+                        false
+                    }
+                }
             }
         })
         .on_new_window(|url, _features| {

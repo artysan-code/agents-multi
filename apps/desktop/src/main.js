@@ -1,7 +1,8 @@
 // The local page: shown while the console does not answer — at a relaunch, while the console starts. It
 // looks like the console's start screen (apps/ui/index.html), so the window passes from one to the other
 // without a change of scene. It asks GET /api/code on the console's port (given by the app in ?port=)
-// and navigates there once it answers, to the view in ?view= (a fragment: #system/health, #pick). A
+// and goes there once it answers, to the view in ?view= (a fragment: #system/health, #pick): not by itself,
+// since the console wants its token, but by a navigation the app takes and turns into the entry (token.rs). A
 // console starting is normal: the page says nothing for a while, then that it is slow, and only later
 // that it does not answer, with how to start it. The request is no-cors: the console sends no CORS
 // headers, and an opaque answer is enough to know it is up. The page has no IPC: it needs nothing from
@@ -74,7 +75,8 @@ async function check() {
   retry.disabled = true;
   clearTimeout(timer);
   if (await reachable()) {
-    location.replace(view ? `${consoleUrl}#${view}` : consoleUrl);
+    // the app takes this navigation and sends the window in with the console's token (token.rs)
+    location.replace(`index.html?go=1${view ? `&view=${view}` : ""}`);
     return;
   }
   const waited = Date.now() - started;

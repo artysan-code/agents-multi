@@ -4,6 +4,7 @@
 // endpoint only it calls, declares that beside itself (pages/<page>/api.ts), not here.
 
 import type { Check, RepairStep, Status } from "../../cli/lib/output.ts";
+import { askToEnterAgain } from "./lib/window.ts";
 
 export type { Check, RepairStep, Status };
 
@@ -101,11 +102,20 @@ export interface Result {
   [more: string]: unknown;
 }
 
-/** The one place that names the anti-CSRF header the server requires on every write. */
+/** The one place that names the anti-CSRF header the server requires on every write. The page's
+ *  token is a cookie the browser sends by itself (apps/cli/console/token.ts). */
 const CSRF = { "x-claude-multi": "1" };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+/** `fetch`, noticing that the console no longer knows the page's token (it restarted under an open
+ *  window): the app, if it holds the window, enters again. */
+async function send(path: string, init?: RequestInit): Promise<Response> {
   const r = await fetch(path, init);
+  if (r.status === 401) askToEnterAgain();
+  return r;
+}
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = await send(path, init);
   if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
   return r.json() as Promise<T>;
 }
@@ -131,12 +141,12 @@ export function post<T = Result>(path: string, body: unknown): Promise<T> {
 /** A POST whose Response the caller reads itself, whatever the status: a stream, or a refusal that is
  *  an answer. Aborting `signal` ends the request. */
 export function postRaw(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
-  return fetch(path, postInit(body, signal));
+  return send(path, postInit(body, signal));
 }
 
 /** A GET whose Response the caller reads itself (a stream). */
 function getRaw(path: string): Promise<Response> {
-  return fetch(path);
+  return send(path);
 }
 
 /** A POST whose body is a file or text as it is, with headers of its own; the JSON answer. */

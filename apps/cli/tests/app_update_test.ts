@@ -14,6 +14,7 @@ import {
   parseStatus,
 } from "../console/app-update.ts";
 import { createHandler } from "../console/server.ts";
+import { Tickets } from "../console/token.ts";
 
 /** A fake app on the other end of a connection: what the console wrote, and lines to answer with. */
 function fakeApp(answer: (request: string) => string[]) {
@@ -203,12 +204,12 @@ Deno.test("app update: the route gives the status and passes the page's actions 
         return Promise.resolve(answers[r.op] ?? { ok: true });
       },
     }),
-  });
+  }, { token: "t", tickets: new Tickets() });
   const req = (init: RequestInit = {}) =>
     handle(
       new Request("http://127.0.0.1:7331/api/app/update", {
         ...init,
-        headers: { host: "127.0.0.1:7331", ...init.headers },
+        headers: { host: "127.0.0.1:7331", "x-agents-token": "t", ...init.headers },
       }),
     );
   const post = (body: unknown, csrf = true) =>

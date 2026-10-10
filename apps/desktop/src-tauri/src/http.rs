@@ -19,7 +19,19 @@ pub struct Head {
     pub length: Option<u64>,
 }
 
-/// Opens `GET path` on the console and reads the head. Every read on the connection, the body's
+/// The request line and headers of `GET path`; the token, when there is one, as the console reads it.
+fn request(port: u16, path: &str, token: Option<&str>) -> String {
+    let auth = token
+        .map(|t| format!("{}: {t}\r\n", crate::token::HEADER))
+        .unwrap_or_default();
+    // Host names a local address: the console refuses any other (its DNS-rebinding guard).
+    format!(
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAccept: */*\r\n{auth}Connection: close\r\n\r\n"
+    )
+}
+
+/// Opens `GET path` on the console and reads the head, with the token the console wrote (read afresh
+/// each time: a console that restarted has a new one). Every read on the connection, the body's
 /// included, fails after `read_timeout` without data.
 pub fn open(
     port: u16,
@@ -30,11 +42,7 @@ pub fn open(
     let mut stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
     stream.set_read_timeout(Some(read_timeout))?;
     stream.set_write_timeout(Some(CONNECT_TIMEOUT))?;
-    // Host names a local address: the console refuses any other (its DNS-rebinding guard).
-    write!(
-        stream,
-        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAccept: */*\r\nConnection: close\r\n\r\n"
-    )?;
+    stream.write_all(request(port, path, crate::token::read(port).as_deref()).as_bytes())?;
     let mut reader = BufReader::new(stream);
     let head = read_head(&mut reader)?;
     let body = body(framing(&head), reader);
@@ -171,6 +179,15 @@ impl<R: BufRead> Read for Chunked<R> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn the_request_carries_the_token_when_there_is_one() {
+        let with = request(7331, "/api/summary", Some("tok"));
+        assert!(with.starts_with("GET /api/summary HTTP/1.1\r\nHost: 127.0.0.1:7331\r\n"));
+        assert!(with.contains("\r\nx-agents-token: tok\r\n"));
+        assert!(with.ends_with("\r\n\r\n"));
+        assert!(!request(7331, "/api/summary", None).contains("x-agents-token"));
+    }
 
     #[test]
     fn head_of_a_sized_answer() {

@@ -2,6 +2,7 @@
 // header on writes, 405 on a POST-only path, the table before the static files.
 import { assertEquals } from "jsr:@std/assert@1";
 import { createHandler, type Route } from "../console/server.ts";
+import { Tickets } from "../console/token.ts";
 
 const calls: string[] = [];
 const table: Record<string, Route> = {
@@ -17,11 +18,16 @@ const table: Record<string, Route> = {
 // the interface's build is not in the repository (apps/ui/dist): the tests serve one of their own
 const dist = Deno.makeTempDirSync();
 Deno.writeTextFileSync(`${dist}/index.html`, "<!doctype html>");
-const handle = createHandler(table, dist);
+const auth = { token: "test-token", tickets: new Tickets() };
+const handle = createHandler(table, auth, dist);
 const req = (path: string, init: RequestInit & { host?: string } = {}) =>
   new Request(`http://127.0.0.1:7331${path}`, {
     ...init,
-    headers: { host: init.host ?? "127.0.0.1:7331", ...(init.headers as Record<string, string> ?? {}) },
+    headers: {
+      host: init.host ?? "127.0.0.1:7331",
+      "x-agents-token": auth.token,
+      ...(init.headers as Record<string, string> ?? {}),
+    },
   });
 
 Deno.test("console router: a host that is not local is refused before anything runs", async () => {
@@ -54,6 +60,6 @@ Deno.test("console router: unknown paths fall to the page's files, which refuse 
 });
 
 Deno.test("console router: an interface that is not built says so, with 503", async () => {
-  const unbuilt = createHandler(table, `${dist}/missing`);
+  const unbuilt = createHandler(table, auth, `${dist}/missing`);
   assertEquals((await unbuilt(req("/"))).status, 503);
 });

@@ -19,7 +19,10 @@
       "Bash(curl *127.0.0.1:7331*)",
       "Bash(curl *localhost:7331*)",
       "Bash(wget *127.0.0.1:7331*)",
-      "Bash(wget *localhost:7331*)"
+      "Bash(wget *localhost:7331*)",
+      "Read(//run/user/*/agents-multi-console*.token)",
+      "Read(~/.local/state/agents-multi/agents-multi-console*.token)",
+      "Bash(*agents-multi-console*.token*)"
     ],
     "ask": [
       "Read(.env)",

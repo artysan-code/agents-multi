@@ -3,6 +3,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { type ActionDef, ACTIONS, manualCommand, resolveAction } from "../console/actions.ts";
 import { createHandler, routes } from "../console/server.ts";
+import { Tickets } from "../console/token.ts";
 import { StatusCache } from "../console/status-cache.ts";
 import { failedVariants } from "../doctor/checks/updates.ts";
 import { actionStep } from "../doctor/repair.ts";
@@ -84,12 +85,12 @@ Deno.test("failedVariants: the failing profiles of the last Desktop update, minu
 });
 
 Deno.test("repair: the routes refuse a parameter outside the allowlist, and run nothing", async () => {
-  const handle = createHandler(routes("test", new StatusCache()));
+  const handle = createHandler(routes("test", new StatusCache()), { token: "t", tickets: new Tickets() });
   const post = (path: string, b: unknown) =>
     handle(
       new Request(`http://127.0.0.1:7331${path}`, {
         method: "POST",
-        headers: { host: "127.0.0.1:7331", "x-claude-multi": "1" },
+        headers: { host: "127.0.0.1:7331", "x-claude-multi": "1", "x-agents-token": "t" },
         body: JSON.stringify(b),
       }),
     );
