@@ -46,14 +46,60 @@ export interface Rule {
   ruleContent?: string;
 }
 
-/** Pure: the rule "yes for this session" adds for a request. Bash: the program, when the command is one
- *  simple command (`curl:*`), else the command exactly; WebFetch: the domain; any other tool: the tool. */
+/** Programs that only read and print: "yes for the session" on one covers the program (`ls:*`). Left out on
+ *  purpose, because a flag makes them run or write anything: find (-exec, -delete), rg (--pre), sort (-o),
+ *  uniq and tee (an output file), date (-s), sed and awk. Every other program (interpreters, shells, env,
+ *  xargs, sudo, curl, ssh, git, docker, deno, npx…) is allowed one exact command at a time. */
+const SAFE_PROGRAMS = new Set([
+  "ls",
+  "cat",
+  "head",
+  "tail",
+  "grep",
+  "wc",
+  "pwd",
+  "echo",
+  "diff",
+  "stat",
+  "du",
+  "df",
+  "which",
+  "whoami",
+  "uname",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink",
+  "cut",
+]);
+
+/** Programs whose read-only or test subcommands (the words after the program) are safe to allow for the session. */
+const SAFE_SUBCOMMANDS: Record<string, string[][]> = {
+  git: [["status"], ["diff"], ["log"], ["show"]],
+  deno: [["task", "test"], ["task", "check"], ["task", "ci"]],
+  pnpm: [["test"], ["build"]],
+};
+
+/** Pure: the command prefix a session may be given a rule for, when the command is one simple command
+ *  of a safe program (or a safe subcommand of one); null otherwise. */
+function safePrefix(command: string): string | null {
+  if (/[;&|<>`$(){}\n\\]/.test(command)) return null;
+  const words = command.split(/\s+/);
+  const program = words[0];
+  if (!/^[A-Za-z0-9._-]+$/.test(program)) return null; // a path, a variable assignment, a quote
+  if (SAFE_PROGRAMS.has(program)) return program;
+  const sub = SAFE_SUBCOMMANDS[program]?.find((s) => s.every((w, i) => words[i + 1] === w));
+  return sub ? [program, ...sub].join(" ") : null;
+}
+
+/** Pure: the rule "yes for this session" adds for a request. Bash: the program for a simple command of a
+ *  read-only program (`ls:*`) or `git status:*`-like subcommand, else the command exactly — never a rule
+ *  that lets a program run anything; WebFetch: the domain; any other tool: the tool. */
 export function sessionRule(tool: string, input: Record<string, unknown>): Rule {
   if (tool === "Bash" && typeof input.command === "string") {
     const command = input.command.trim();
-    const program = command.split(/\s+/)[0];
-    const simple = !/[;&|<>`$(){}\n]/.test(command) && /^[A-Za-z0-9._\/-]+$/.test(program) && !program.includes("=");
-    return { toolName: tool, ruleContent: simple ? `${program}:*` : command };
+    const prefix = safePrefix(command);
+    return { toolName: tool, ruleContent: prefix ? `${prefix}:*` : command };
   }
   if (tool === "WebFetch" && typeof input.url === "string") {
     const host = URL.parse(input.url)?.hostname;
@@ -392,6 +438,10 @@ const CLAUDE_SESSION_VARS =
 export const claudeSessionVars = (names: string[]): string[] =>
   names.filter((n) => new RegExp(CLAUDE_SESSION_VARS).test(n));
 
+/** Pure: whether `path` is `home` itself or inside it; both are real paths (symlinks and `..` resolved). */
+export const isUnder = (home: string, path: string) =>
+  home !== "" && (path === home || path.startsWith(`${home.replace(/\/$/, "")}/`));
+
 /** Starts a child: its folder, the fifo held open, the session detached from whoever asked. */
 export async function startChild(
   i: StartInput,
@@ -402,9 +452,12 @@ export async function startChild(
 ): Promise<Meta> {
   const command = await launcherOf(i.profile, config);
   if (!command) throw new Error(`no profile ${i.profile}`);
-  const dir = i.dir.replace(/^~(?=\/|$)/, home);
-  if (!dir.startsWith(`${home}/`) || dir.includes("/../")) throw new Error("the folder must be under the home folder");
-  if (!(await Deno.stat(dir).catch(() => null))?.isDirectory) throw new Error(`no folder ${dir}`);
+  const given = i.dir.replace(/^~(?=\/|$)/, home);
+  if (!(await Deno.stat(given).catch(() => null))?.isDirectory) throw new Error(`no folder ${given}`);
+  const dir = await Deno.realPath(given);
+  if (!isUnder(await Deno.realPath(home).catch(() => home), dir)) {
+    throw new Error("the folder must be under the home folder");
+  }
   if (!i.task.trim()) throw new Error("say what the child has to do");
   if (i.model && !/^[a-z0-9.\[\]-]+$/i.test(i.model)) throw new Error("not a model name");
   const id = childId(i.profile, dir, new Date(), crypto.randomUUID().slice(0, 4));
