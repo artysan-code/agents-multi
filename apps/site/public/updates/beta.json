@@ -1,19 +1,19 @@
 {
-  "version": "1.1.0-rc.4",
-  "notes": "### Added\n\n- **statusline**: two lines with the folder's tasks from the brain (6e9ac05)\n\n### Documentation\n\n- **site**: MCP permission lists and the production guards (0250269)",
-  "pub_date": "2026-10-12T10:38:34Z",
+  "version": "1.1.0-rc.5",
+  "notes": "### Added\n\n- **mcp**: gitea-guard reads the method of write tools; tracker writes run unasked (0c591ae)",
+  "pub_date": "2026-10-12T13:22:25Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.4/agents-multi_1.1.0-rc.4_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjVUL1dqWnAyWThyYk8ycTNyRk5YVkxkc1REVmg0TzJiU09hbzJYSnJKN0NOY3hxNHFSdDJ0NWdmOGVnQVdERlNWdmpXYVhxNjlTTlZscU8vYmVSSVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODAxNTEzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNF9hbWQ2NC5kZWIJdmVyc2lvbjoxLjEuMC1yYy40CkZYeklvSnZMZktVWlV4bUtBV3BTNXJkS2pkY24rVE0wM2NDU0hGb0Q5WDVBeGs4UGZOVmhXNmpSRkR2K1NqL05ZRFd4S1hUYVpNcDVjd0syeHhNNUNnPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.5/agents-multi_1.1.0-rc.5_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tnh3RjFhdnd0cWI4K0lISE4ydHVRTlFBZ2xZMVU1YnZZaUVrSk5pZ2V3Y0JpR2NScmJXOFF4N2VEMjVoL0ozWGxVdmdQTzEzT3pPbzA5ek5yNjg4Q1FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODExMzQ0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNV9hbWQ2NC5kZWIJdmVyc2lvbjoxLjEuMC1yYy41CkwwTTk1Sm1HM0hMSnRzSTdvemxNdVlvQzc0dzd6eUcyNWtHMHEvaHB1RjFONUV3N2ZUUDl4STJ0SHFMazh6YnFCODJkRTFsVFBBUUJoM0RuNzZuWkJBPT0K"
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.4/agents-multi_1.1.0-rc.4_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJrbjBVbmVheitHUElqVHI0Zkh5RVFmWFdFODJaS0k1Y2MrMWR5RlBTYTQ3RnczK0kwNXBzOXA2ei9hSHhZbzhrdU9vUXpDNmhaejFVR0hVNmRiR1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODAxNTEzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjQKYmN5Y2xFdnVzV2I3eEx5Y1AvM3dEWERZdUc2VlUxcnVyT1F6OUt2YnBJRDJ5bEtVUzR0R3hBcWg5TlkyVnJ2QWdaMThNbE5tQVd3WmtlL3pyMGY3REE9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.5/agents-multi_1.1.0-rc.5_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnlobExja094eWVDS0N3Q2FwMkFqd0NtZDBjYXd5S2JwbDJTZXlINnRRL2xaM2hpd2ZzclhLamlkaW02QUduS0VmTnlPWjRHKzBvZmU5RnV2ajBMMFEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODExMzQ0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNV9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjUKKzZLOFFtU0ZsSG40c21FS3U3dHR6VndYNnBKWm5GOG9jaytaMmtzNXhjUjREb3lWenNCMi9BK1hFRHZJWTUxVys5dFBscmV4eU9RQ0N2ODJWcUlHRHc9PQo="
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.4/agents-multi_1.1.0-rc.4_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJrbjBVbmVheitHUElqVHI0Zkh5RVFmWFdFODJaS0k1Y2MrMWR5RlBTYTQ3RnczK0kwNXBzOXA2ei9hSHhZbzhrdU9vUXpDNmhaejFVR0hVNmRiR1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODAxNTEzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjQKYmN5Y2xFdnVzV2I3eEx5Y1AvM3dEWERZdUc2VlUxcnVyT1F6OUt2YnBJRDJ5bEtVUzR0R3hBcWg5TlkyVnJ2QWdaMThNbE5tQVd3WmtlL3pyMGY3REE9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.5/agents-multi_1.1.0-rc.5_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnlobExja094eWVDS0N3Q2FwMkFqd0NtZDBjYXd5S2JwbDJTZXlINnRRL2xaM2hpd2ZzclhLamlkaW02QUduS0VmTnlPWjRHKzBvZmU5RnV2ajBMMFEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODExMzQ0CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNV9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjUKKzZLOFFtU0ZsSG40c21FS3U3dHR6VndYNnBKWm5GOG9jaytaMmtzNXhjUjREb3lWenNCMi9BK1hFRHZJWTUxVys5dFBscmV4eU9RQ0N2ODJWcUlHRHc9PQo="
     }
   }
 }
