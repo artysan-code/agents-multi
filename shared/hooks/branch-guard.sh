@@ -10,7 +10,9 @@
 #   - skips the repository's hooks (--no-verify), which hold the gate
 #
 # and when a command cuts a stable version (`deno task ship stable`, `scripts/ship.ts stable`) or a
-# version by hand (`deno task release`, which only `ship` should run); --dry-run passes. Pushes to work branches (dev,
+# version by hand (`deno task release`, which only `ship` should run); --dry-run passes. Outside git it
+# asks for deploys (railway up/down/redeploy, wrangler deploy), merges, releases and repository changes
+# on GitHub (gh pr merge, gh release, gh repo delete/edit, a DELETE through gh api). Pushes to work branches (dev,
 # beta, feature branches) and their pre-release tags pass without a question. `git -C <dir>` and a
 # preceding `cd <dir>` are followed to find the checked-out branch. Commits are not guarded: they stay
 # local and a reset undoes them.
@@ -34,6 +36,15 @@ if ! printf '%s' "$CMD" | grep -qE -- '--dry-run'; then
   printf '%s' "$CMD" | grep -qE 'deno[[:space:]]+task[[:space:]]+release([[:space:]]|$)' \
     && ask "a version cut by hand (deno task release); versions go out with deno task ship."
 fi
+
+# Production outside git: deploys and the hosting's destructive verbs, merges and releases on GitHub.
+prod() { printf '%s' "$CMD" | grep -qE "(^|[[:space:];&|(])$1"; }
+prod 'railway[[:space:]]+(up|down|redeploy|delete)([[:space:]]|$)' && ask "a Railway deploy or removal changes a running service."
+prod 'wrangler[[:space:]]+(deploy|publish|versions[[:space:]]+deploy)([[:space:]]|$)' && ask "a Cloudflare Worker deploy goes live."
+prod 'gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)' && ask "merging a pull request moves its base branch."
+prod 'gh[[:space:]]+release[[:space:]]+(create|delete|edit|upload)([[:space:]]|$)' && ask "a GitHub release is public."
+prod 'gh[[:space:]]+repo[[:space:]]+(delete|archive|rename|edit)([[:space:]]|$)' && ask "this changes or removes a GitHub repository."
+prod 'gh[[:space:]]+api[[:space:]].*(-X|--method)[[:space:]=]*DELETE' && ask "a DELETE through the GitHub API."
 
 printf '%s' "$CMD" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]].*push' || exit 0
 

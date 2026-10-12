@@ -63,6 +63,15 @@ Deno.test("branch-guard: work pushes pass; release, stable tags, deletions and s
       ["ask", "deno task ship stable --yes"],
       ["ask", "deno run -A scripts/ship.ts stable --yes"],
       ["ask", "deno task release"],
+      ["allow", "railway logs --service brain"],
+      ["allow", "gh pr view 12 && gh pr checks 12"],
+      ["allow", "agents vault run cloudflare -- wrangler dev"],
+      ["ask", "railway up --detach"],
+      ["ask", "agents vault run cloudflare -- wrangler deploy"],
+      ["ask", "gh pr merge 12 --squash"],
+      ["ask", "gh release create v1.2.0"],
+      ["ask", "gh repo delete artysan/x --yes"],
+      ["ask", "gh api -X DELETE repos/a/b/git/refs/heads/x"],
     ];
     for (const [want, command] of cases) assertEquals(await decide("branch-guard.sh", command, dev), want, command);
     assertEquals(await decide("branch-guard.sh", "git push", rel), "ask", "git push on release");

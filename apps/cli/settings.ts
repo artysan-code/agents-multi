@@ -35,13 +35,15 @@ export function manifestPatch(m: Pick<Manifest, "disableAccountMcp">, synced: st
 type Rules = RegistryRules;
 const isGenerated = (rules: Rules, h: Json) => rules.hooks.some((g) => same(g, h));
 
-/** What the MCP registry implies (`_deny`, `_ask`, `_guard`): its rules added to the permission
- *  lists and its guards to the PreToolUse hooks the profile already has. Added, not replacing: a
- *  merge patch replaces arrays whole, so the derived list carries the base one with it. */
+/** What the MCP registry implies (`_allow`, `_deny`, `_ask`, `_guard`), with the repository's own
+ *  deny and ask lists: these rules added to the permission lists and the guards to the PreToolUse
+ *  hooks the profile already has. Added, not replacing: a merge patch replaces arrays whole, so the
+ *  derived list carries the base one with it — and a person's or profile's own `deny` or `ask` list
+ *  never drops a safety rule of the repository's. */
 export function registryPatch(base: Obj, rules: Rules): Obj {
   const perms = isObj(base.permissions) ? base.permissions : {};
   const permissions: Obj = {};
-  for (const k of ["deny", "ask"] as const) {
+  for (const k of ["allow", "deny", "ask"] as const) {
     if (!rules[k].length) continue;
     const have = Array.isArray(perms[k]) ? perms[k] as Json[] : [];
     permissions[k] = [...have, ...rules[k].filter((r) => !have.includes(r))];
@@ -63,7 +65,7 @@ export function withoutRules(shared: Obj, patch: Obj, rules: Rules): Obj {
   const p: Obj = structuredClone(patch);
   if (isObj(p.permissions)) {
     const pp = p.permissions;
-    for (const k of ["deny", "ask"] as const) {
+    for (const k of ["allow", "deny", "ask"] as const) {
       if (Array.isArray(pp[k])) pp[k] = (pp[k] as Json[]).filter((r) => !rules[k].includes(r as string));
     }
   }
@@ -139,7 +141,7 @@ export async function writeSharedLayer(layer: Obj) {
 export async function expectedSettings(p: Profile) {
   const shared = await sharedLayer();
   const patch = await readObj(patchPath(p)) ?? {};
-  const rules = await registryRules(p);
+  const rules = withBaseLists(await registryRules(p), await readObj(BASE_SETTINGS) ?? {});
   const fromManifest = manifestPatch(await loadManifest(p), await syncedPlugins(`${RUNTIME}/${p}`));
   const derived = derive(fromManifest, shared, patch, rules);
   return { shared, patch, fromManifest, derived, rules, built: buildSettings(shared, patch, derived) };
@@ -150,11 +152,45 @@ function derive(fromManifest: Obj, shared: Obj, patch: Obj, rules: Rules): Obj {
   return mergePatch(fromManifest, registryPatch(mergePatch(shared, patch) as Obj, rules)) as Obj;
 }
 
+/** The registry's rules with the repository's deny and ask lists (shared/settings.json) added. */
+export function withBaseLists(rules: Rules, base: Obj): Rules {
+  const perms = isObj(base.permissions) ? base.permissions : {};
+  const list = (k: "deny" | "ask") => {
+    const have = Array.isArray(perms[k]) ? (perms[k] as Json[]).filter((r): r is string => typeof r === "string") : [];
+    return [...have, ...rules[k].filter((r) => !have.includes(r))];
+  };
+  return { ...rules, deny: list("deny"), ask: list("ask") };
+}
+
+/** The guards every profile must run on Bash: a session without them pushes and deletes unasked. */
+export const REQUIRED_GUARDS = ["destructive-blocker.sh", "branch-guard.sh", "vault-guard.sh"];
+
+/** Pure: what a profile's built settings lack of the repository's safety — a deny or ask rule of
+ *  shared/settings.json, a required guard — or a permission mode that skips every rule. */
+export function safetyGaps(built: Obj, base: Obj): string[] {
+  const gaps: string[] = [];
+  const perms = (o: Obj) => (isObj(o.permissions) ? o.permissions : {}) as Obj;
+  const have = perms(built), want = perms(base);
+  for (const k of ["deny", "ask"] as const) {
+    const got = Array.isArray(have[k]) ? have[k] as Json[] : [];
+    for (const r of Array.isArray(want[k]) ? want[k] as Json[] : []) if (!got.includes(r)) gaps.push(`${k} ${r}`);
+  }
+  const commands = JSON.stringify(isObj(built.hooks) ? built.hooks.PreToolUse ?? [] : []);
+  for (const g of REQUIRED_GUARDS) if (!commands.includes(`/hooks/${g}`)) gaps.push(`hook ${g}`);
+  if (have.defaultMode === "bypassPermissions") gaps.push("defaultMode bypassPermissions");
+  return gaps;
+}
+
+/** The safety gaps of one profile's runtime settings, against the repository's base. */
+export async function profileSafetyGaps(p: Profile): Promise<string[]> {
+  return safetyGaps(await readObj(runtimePath(p)) ?? {}, await readObj(BASE_SETTINGS) ?? {});
+}
+
 async function registryRules(p: Profile): Promise<Rules> {
   try {
     return permissionRules(await loadRegistry(), p);
   } catch {
-    return { deny: [], ask: [], hooks: [] };
+    return { allow: [], deny: [], ask: [], hooks: [] };
   } // no registry: the doctor says so
 }
 

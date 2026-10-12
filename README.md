@@ -431,10 +431,16 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
   does not see.
 - `"_perAccount": {}` is a server that signs in by itself (OAuth): one per account, each logged in
   once with `/mcp`. Mark those accounts `"auth": "oauth"`: they have nothing in the vault.
-- **`_deny` / `_ask`**: tool names that become `mcp__<server>__<tool>` rules in each profile's
-  generated `settings.json`, for every server the entry expands to (any entry may use them). This is
-  how "no deletion tools" holds on a server that has some: deny them here, or switch them off in the
-  server itself when it can.
+- **`_allow` / `_deny` / `_ask`**: tool names that become `mcp__<server>__<tool>` rules in each
+  profile's generated `settings.json`, for every server the entry expands to (any entry may use them).
+  The convention: reads (lists, logs, status) in `_allow`, so they run without a question; writes that
+  reach production (deploys, variables, SQL, merges) in `_ask`; deletions in `_deny` — this is how "no
+  deletion tools" holds on a server that has some. A tool that both reads and writes stays out of all
+  three and is left to the permission mode. `scripts/mcp-probe.ts` fails when a list names a tool one of
+  our servers does not have.
+- **The repository's own deny and ask lists** (`shared/settings.json`) are added to every profile's,
+  whatever the person's or profile's layer says (a merge patch replaces arrays whole): the doctor
+  (`profile.<p>.safety`) fails when a built file lacks one of them or a required guard.
 - **`_guard: { tool, hook }`**: a PreToolUse hook of `shared/hooks` that decides on each call of
   that tool, wired by the same generated settings on exactly the entry's servers. For a server whose
   one tool does everything: `cloudflare-guard.ts` reads the code `execute` would run, lets reads

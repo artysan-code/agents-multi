@@ -14,6 +14,12 @@
         "--no-config",
         "--lock=${HOME}/.agents-multi/shared/mcp/syncthing-status/deno.lock",
         "${HOME}/.agents-multi/shared/mcp/syncthing-status/server.ts"
+      ],
+      "_allow": [
+        "syncthing_conflicts",
+        "syncthing_folders",
+        "syncthing_git_guard",
+        "syncthing_status"
       ]
     },
     "n8n": {
@@ -37,15 +43,33 @@
           "N8N_API_KEY": "{secret}"
         }
       },
+      "_allow": [
+        "get_node",
+        "get_template",
+        "n8n_audit_instance",
+        "n8n_explore_node_resources",
+        "n8n_health_check",
+        "n8n_list_catalog",
+        "n8n_list_workflows",
+        "n8n_validate_workflow",
+        "search_nodes",
+        "search_templates",
+        "tools_documentation",
+        "validate_node",
+        "validate_workflow"
+      ],
       "_deny": [
         "n8n_delete_workflow",
         "n8n_manage_credentials"
       ],
       "_ask": [
+        "n8n_autofix_workflow",
+        "n8n_create_workflow",
+        "n8n_deploy_template",
         "n8n_get_workflow",
+        "n8n_test_workflow",
         "n8n_update_full_workflow",
-        "n8n_update_partial_workflow",
-        "n8n_test_workflow"
+        "n8n_update_partial_workflow"
       ],
       "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05)."
     },
@@ -63,6 +87,29 @@
         "--no-config",
         "--lock=${HOME}/.agents-multi/shared/mcp/coolify/deno.lock",
         "${HOME}/.agents-multi/shared/mcp/coolify/server.ts"
+      ],
+      "_allow": [
+        "coolify_deploy_history",
+        "coolify_deploy_status",
+        "coolify_detail",
+        "coolify_env_vars",
+        "coolify_keys",
+        "coolify_logs",
+        "coolify_resources",
+        "coolify_version"
+      ],
+      "_ask": [
+        "coolify_action",
+        "coolify_cancel_deploy",
+        "coolify_create_application",
+        "coolify_create_database",
+        "coolify_create_environment",
+        "coolify_create_project",
+        "coolify_create_service",
+        "coolify_deploy",
+        "coolify_set_env_var",
+        "coolify_update_application",
+        "coolify_update_service"
       ]
     },
     "tasks": {
@@ -126,6 +173,22 @@
       "_surfaces": [
         "cli",
         "desktop"
+      ],
+      "_allow": [
+        "calendar_events",
+        "calendar_list",
+        "drive_read",
+        "drive_search",
+        "gmail_attachment",
+        "gmail_drafts",
+        "gmail_labels",
+        "gmail_search",
+        "gmail_thread"
+      ],
+      "_ask": [
+        "calendar_create",
+        "calendar_respond",
+        "calendar_update"
       ]
     },
     "brain": {
@@ -167,11 +230,44 @@
         "project": "--project-ref={value}",
         "readOnly": "--read-only"
       },
+      "_allow": [
+        "generate_typescript_types",
+        "get_advisors",
+        "get_cost",
+        "get_edge_function",
+        "get_logs",
+        "get_organization",
+        "get_project",
+        "get_project_url",
+        "get_publishable_keys",
+        "get_storage_config",
+        "list_branches",
+        "list_edge_functions",
+        "list_extensions",
+        "list_migrations",
+        "list_organizations",
+        "list_projects",
+        "list_storage_buckets",
+        "list_tables",
+        "search_docs"
+      ],
       "_deny": [
         "delete_branch",
         "reset_branch"
       ],
-      "_note": "Supabase's official MCP (the npm package, the same tools as mcp.supabase.com), one server per Supabase login: supabase-<account>, with that login's personal access token. Unbound it sees every org and project of the login. A project ties it to itself in .claude/claude-multi.json (git-ignored everywhere by install): {\"supabase\": {\"project\": \"<ref>\", \"readOnly\": true|false}} — then it reaches that project only, and the account tools (list_projects…) are gone. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose."
+      "_note": "Supabase's official MCP (the npm package, the same tools as mcp.supabase.com), one server per Supabase login: supabase-<account>, with that login's personal access token. Unbound it sees every org and project of the login. A project ties it to itself in .claude/claude-multi.json (git-ignored everywhere by install): {\"supabase\": {\"project\": \"<ref>\", \"readOnly\": true|false}} — then it reaches that project only, and the account tools (list_projects…) are gone. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose.",
+      "_ask": [
+        "apply_migration",
+        "create_branch",
+        "create_project",
+        "deploy_edge_function",
+        "execute_sql",
+        "merge_branch",
+        "pause_project",
+        "rebase_branch",
+        "restore_project",
+        "update_storage_config"
+      ]
     },
     "lovable": {
       "_service": "lovable",
@@ -179,8 +275,50 @@
       "url": "https://mcp.lovable.dev",
       "_perAccount": {},
       "_note": "Lovable's official MCP, one server per Lovable account: lovable-<account>. OAuth only (no API keys for MCP): sign in once per server and per machine with /mcp, in a browser logged into that account. Full access to that account. CLI only (http).",
+      "_allow": [
+        "get_database_status",
+        "get_diff",
+        "get_me",
+        "get_message",
+        "get_project",
+        "get_project_analytics",
+        "get_project_analytics_trend",
+        "get_project_knowledge",
+        "get_workspace",
+        "get_workspace_knowledge",
+        "get_workspace_skill",
+        "list_connectors",
+        "list_custom_connectors",
+        "list_design_systems",
+        "list_edits",
+        "list_files",
+        "list_messages",
+        "list_projects",
+        "list_template_projects",
+        "list_workspace_skills",
+        "list_workspaces",
+        "read_file"
+      ],
       "_deny": [
         "delete_workspace_skill"
+      ],
+      "_ask": [
+        "add_connector",
+        "create_project",
+        "create_workspace_skill",
+        "deploy_project",
+        "enable_database",
+        "initiate_project",
+        "move_projects_to_folder",
+        "query_database",
+        "remix_project",
+        "respond_to_approval",
+        "send_message",
+        "set_folder_visibility",
+        "set_project_knowledge",
+        "set_project_visibility",
+        "set_workspace_knowledge",
+        "update_workspace_skill"
       ]
     },
     "railway": {
@@ -196,6 +334,28 @@
           "RAILWAY_API_TOKEN": "{secret}"
         }
       },
+      "_allow": [
+        "docs_fetch",
+        "docs_search",
+        "domain_status",
+        "environment_status",
+        "get_logs",
+        "get_service_config",
+        "get_tcp_proxy",
+        "http_error_rate",
+        "http_requests",
+        "http_response_time",
+        "list_deployments",
+        "list_domains",
+        "list_projects",
+        "list_services",
+        "list_tcp_proxies",
+        "list_workspaces",
+        "private_network_status",
+        "search_templates",
+        "service_metrics",
+        "whoami"
+      ],
       "_deny": [
         "delete_domain",
         "remove_bucket",
@@ -205,7 +365,25 @@
       ],
       "_note": "Railway's own MCP, served in-process by the CLI (railway mcp local), one per Railway account token: railway-<account>. RAILWAY_API_TOKEN comes from the vault, so the CLI's own login is not used. Its destructive tools (the ones it marks destructiveHint) are denied; list_variables returns values in clear (sealed ones excepted), so it asks first. The binary by its full path (~/.railway/bin is on no service's PATH: the console's doctor, Desktop). CLI only.",
       "_ask": [
-        "list_variables"
+        "add_reference_variable",
+        "connect_service_source",
+        "create_bucket",
+        "create_environment",
+        "create_project",
+        "create_service",
+        "create_tcp_proxy",
+        "create_volume",
+        "deploy",
+        "deploy_template",
+        "disconnect_service_source",
+        "generate_domain",
+        "list_variables",
+        "private_network_update",
+        "scale_service",
+        "set_variables",
+        "update_domain",
+        "update_service",
+        "update_volume"
       ]
     },
     "zapier": {
@@ -230,6 +408,42 @@
           "GITEA_ACCESS_TOKEN": "{secret}"
         }
       },
+      "_allow": [
+        "actions_config_read",
+        "actions_run_read",
+        "attachment_read",
+        "get_commit",
+        "get_dir_contents",
+        "get_file_contents",
+        "get_gitea_mcp_server_version",
+        "get_latest_release",
+        "get_me",
+        "get_release",
+        "get_repository_tree",
+        "get_tag",
+        "get_user_orgs",
+        "issue_read",
+        "label_read",
+        "list_branches",
+        "list_commits",
+        "list_issues",
+        "list_my_repos",
+        "list_org_repos",
+        "list_pull_requests",
+        "list_releases",
+        "list_tags",
+        "milestone_read",
+        "notification_read",
+        "package_read",
+        "project_read",
+        "pull_request_read",
+        "search_issues",
+        "search_org_teams",
+        "search_repos",
+        "search_users",
+        "timetracking_read",
+        "wiki_read"
+      ],
       "_deny": [
         "delete_branch",
         "delete_file",
@@ -239,7 +453,6 @@
       "_ask": [
         "actions_config_write",
         "actions_run_write",
-        "create_branch",
         "create_or_update_file",
         "create_release",
         "create_repo",

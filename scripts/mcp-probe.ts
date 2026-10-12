@@ -6,7 +6,9 @@
  *
  *   deno run --allow-read --allow-run=deno --allow-env scripts/mcp-probe.ts [server …]
  *
- * Exits non-zero when a server does not answer, answers with an error, or lists no tools.
+ * Exits non-zero when a server does not answer, answers with an error, lists no tools, or when the
+ * registry's `_allow`, `_deny` or `_ask` for it names a tool it does not have (a renamed tool would
+ * otherwise drop out of its rule without a word). The servers are probed at once.
  */
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -76,14 +78,29 @@ export async function probe(name: string, timeoutMs = 20_000): Promise<{ tools: 
   }
 }
 
+/** The registry's rule names for `server` that `tools` lacks. */
+export function strayRules(cfg: Record<string, unknown> | undefined, tools: string[]): string[] {
+  const names = ["_allow", "_deny", "_ask"].flatMap((k) => (cfg?.[k] as string[] | undefined) ?? []);
+  return names.filter((n) => !tools.includes(n));
+}
+
 if (import.meta.main) {
+  const reg = JSON.parse(await Deno.readTextFile(`${ROOT}shared/mcp/servers.json`)).servers;
+  const names = Deno.args.length ? Deno.args : SERVERS;
+  const results = await Promise.all(names.map((n) => probe(n)));
   let failed = 0;
-  for (const name of Deno.args.length ? Deno.args : SERVERS) {
-    const r = await probe(name);
+  names.forEach((name, i) => {
+    const r = results[i];
     if ("error" in r || r.tools.length === 0) {
       failed++;
       console.log(`✗ ${name}: ${"error" in r ? r.error : "no tools"}`);
+      return;
+    }
+    const stray = strayRules(reg[name], r.tools);
+    if (stray.length) {
+      failed++;
+      console.log(`✗ ${name}: servers.json names tools it does not have: ${stray.join(", ")}`);
     } else console.log(`✓ ${name}: ${r.tools.length} tools (${r.tools.join(", ")})`);
-  }
+  });
   Deno.exit(failed ? 1 : 0);
 }

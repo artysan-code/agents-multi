@@ -19,8 +19,10 @@
 //              vault — as the command's wrapper (stdio) or as Claude Code's headersHelper (http).
 //              `{}` is a server that logs in by itself (OAuth): one per account, nothing to fill.
 //              http servers do not go to Desktop, whose config holds commands only.
-//   _deny / _ask  tool names this server must never run / must ask before running: they become
-//              mcp__<server>__<tool> permission rules in each profile's generated settings (settings.ts)
+//   _allow / _deny / _ask  tool names this server runs without asking (its reads) / must never run /
+//              must ask before running (its writes): they become mcp__<server>__<tool> permission rules
+//              in each profile's generated settings (settings.ts). A tool in none of them is left to
+//              the permission mode (auto: the classifier)
 //   _bind      { key: argument }: a stdio `_perAccount` server a project can tie to itself. launch.ts
 //              reads the nearest .claude/claude-multi.json from the folder Claude started in, up to
 //              the home folder; each key the project sets under the service's name adds its argument
@@ -45,6 +47,7 @@ export type ServerCfg = Record<string, unknown> & {
   _surfaces?: Surface[];
   _service?: string;
   _perAccount?: PerAccount;
+  _allow?: string[];
   _deny?: string[];
   _ask?: string[];
   /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` */
@@ -187,6 +190,12 @@ export function registryProblems(reg: Pick<Registry, "servers">): string[] {
     const { _perAccount, ...rest } = cfg;
     if (JSON.stringify(rest).includes("{secret}")) {
       out.push(`${name}: {secret} outside _perAccount would be written into a config as it is`);
+    }
+    const lists = [cfg._allow ?? [], cfg._deny ?? [], cfg._ask ?? []];
+    for (const t of new Set(lists.flat())) {
+      if (lists.filter((l) => l.includes(t)).length > 1) {
+        out.push(`${name}: ${t} is in more than one of _allow, _deny, _ask`);
+      }
     }
     if (!_perAccount) continue;
     if (!cfg._service) out.push(`${name}: _perAccount needs _service (whose accounts?)`);

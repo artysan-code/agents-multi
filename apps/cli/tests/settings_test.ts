@@ -1,8 +1,18 @@
 // Tests for settings.ts: the merge patch algebra and adopting what Claude Code writes into a
 // generated settings.json.
 import { assertEquals } from "jsr:@std/assert@1";
-import { diffPatch, mergePatch, type Obj } from "../lib/json-patch.ts";
-import { adopt, buildSettings, manifestPatch, paths, registryPatch, withoutRules } from "../settings.ts";
+import { diffPatch, type Json, mergePatch, type Obj } from "../lib/json-patch.ts";
+import {
+  adopt,
+  buildSettings,
+  manifestPatch,
+  paths,
+  registryPatch,
+  REQUIRED_GUARDS,
+  safetyGaps,
+  withBaseLists,
+  withoutRules,
+} from "../settings.ts";
 
 Deno.test("mergePatch: RFC 7386 — objects merge, null deletes, arrays and scalars replace", () => {
   assertEquals(mergePatch({ a: "b", c: { d: "e", f: "g" } }, { a: "z", c: { f: null } }), { a: "z", c: { d: "e" } });
@@ -90,6 +100,7 @@ Deno.test("paths: dotted leaves, an emptied object counts as one", () => {
 Deno.test("registryPatch: the registry's rules join the lists the profile has, never replace them", () => {
   const base: Obj = { permissions: { deny: ["Bash(secret-tool:*)"], allow: ["Read"] } };
   const rules = {
+    allow: [],
     deny: ["mcp__n8n-ark__n8n_delete_workflow", "Bash(secret-tool:*)"],
     ask: ["mcp__n8n-ark__n8n_test_workflow"],
     hooks: [],
@@ -100,21 +111,24 @@ Deno.test("registryPatch: the registry's rules join the lists the profile has, n
     allow: ["Read"],
     ask: ["mcp__n8n-ark__n8n_test_workflow"],
   });
-  assertEquals(registryPatch(base, { deny: [], ask: [], hooks: [] }), {});
+  assertEquals(registryPatch(base, { allow: [], deny: [], ask: [], hooks: [] }), {});
   // a guard joins the PreToolUse hooks already there
   const guard = { matcher: "^(mcp__cf-a__execute)$", hooks: [{ type: "command" as const, command: "deno run g.ts" }] };
   const withHooks: Obj = {
     hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "x.sh" }] }] },
   };
-  assertEquals(buildSettings(withHooks, {}, registryPatch(withHooks, { deny: [], ask: [], hooks: [guard] })).hooks, {
-    PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "x.sh" }] }, guard],
-  });
+  assertEquals(
+    buildSettings(withHooks, {}, registryPatch(withHooks, { allow: [], deny: [], ask: [], hooks: [guard] })).hooks,
+    {
+      PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "x.sh" }] }, guard],
+    },
+  );
 });
 
 Deno.test("withoutRules: an adopted list drops the generated rules, and what is left equal to shared goes too", () => {
   const shared: Obj = { permissions: { deny: ["A"] } };
   const guard = { matcher: "^(mcp__cf-a__execute)$", hooks: [{ type: "command" as const, command: "deno run g.ts" }] };
-  const rules = { deny: ["mcp__x__del"], ask: [], hooks: [guard] };
+  const rules = { allow: [], deny: ["mcp__x__del"], ask: [], hooks: [guard] };
   // Claude rewrote deny whole: adopting it would copy the generated rule into the repository
   assertEquals(withoutRules(shared, { permissions: { deny: ["A", "mcp__x__del"] } }, rules), {});
   assertEquals(withoutRules(shared, { permissions: { deny: ["A", "B", "mcp__x__del"] } }, rules), {
@@ -126,5 +140,38 @@ Deno.test("withoutRules: an adopted list drops the generated rules, and what is 
   assertEquals(
     withoutRules({ hooks: { PreToolUse: [bash] } }, { hooks: { PreToolUse: [bash, guard as unknown as Obj] } }, rules),
     {},
+  );
+});
+
+Deno.test("withBaseLists: a person's own deny or ask list never drops the repository's safety rules", () => {
+  const base: Obj = { permissions: { deny: ["Bash(secret-tool:*)"], ask: ["Bash(curl * | sh)"] } };
+  const person: Obj = { permissions: { deny: ["Bash(rm:*)"], ask: [], allow: ["Bash(git:*)"] } };
+  const shared = buildSettings(base, person, {});
+  const rules = withBaseLists({ allow: ["mcp__s__logs"], deny: ["mcp__s__drop"], ask: [], hooks: [] }, base);
+  const built = buildSettings(shared, {}, registryPatch(shared, rules));
+  assertEquals(built.permissions, {
+    deny: ["Bash(rm:*)", "Bash(secret-tool:*)", "mcp__s__drop"],
+    ask: ["Bash(curl * | sh)"],
+    allow: ["Bash(git:*)", "mcp__s__logs"],
+  });
+});
+
+Deno.test("safetyGaps: a missing base rule or guard, and bypass mode, are reported; a complete file is not", () => {
+  const base: Obj = { permissions: { deny: ["D"], ask: ["A"] } };
+  const hook = (g: string) => ({
+    matcher: "Bash",
+    hooks: [{ type: "command", command: `bash "$HOME"/x/shared/hooks/${g}` }],
+  });
+  const ok: Obj = {
+    permissions: { deny: ["D", "E"], ask: ["A"], defaultMode: "auto" },
+    hooks: { PreToolUse: REQUIRED_GUARDS.map(hook) as unknown as Json[] },
+  };
+  assertEquals(safetyGaps(ok, base), []);
+  assertEquals(
+    safetyGaps({
+      permissions: { deny: [], defaultMode: "bypassPermissions" },
+      hooks: { PreToolUse: [hook("vault-guard.sh")] as unknown as Json[] },
+    }, base),
+    ["deny D", "ask A", "hook destructive-blocker.sh", "hook branch-guard.sh", "defaultMode bypassPermissions"],
   );
 });

@@ -3,7 +3,7 @@
 import { listDir, mode, stat } from "../../lib/fs.ts";
 import { PROFILES, RUNTIME, shortHome } from "../../lib/paths.ts";
 import { commandOf, KINDS, ownItems, profileInfo, runtimeProfiles } from "../../lib/profiles.ts";
-import { settingsState } from "../../settings.ts";
+import { profileSafetyGaps, settingsState } from "../../settings.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
 import { loginStep, verifyStep } from "../repair.ts";
@@ -55,6 +55,17 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
         `${p}/settings.json is behind its sources (${list(set.changed)})`,
         "agents settings (or just launch Claude)",
       );
+    }
+    if (set.kind !== "symlink" && set.kind !== "missing") {
+      const gaps = await profileSafetyGaps(p);
+      if (gaps.length) {
+        add(
+          `profile.${p}.safety`,
+          "fail",
+          `${p}/settings.json lacks the repository's safety: ${list(gaps)}`,
+          "agents settings (a person's or profile's settings cannot drop these)",
+        );
+      }
     }
     if (info.hooks !== "../shared/hooks") {
       add(`profile.${p}.hooks`, "fail", `${p}/hooks → ${info.hooks ?? "not a symlink"}`, "agents install");

@@ -260,6 +260,7 @@ Deno.test("perAccount (http): headers come from a headersHelper, never written; 
 
 Deno.test("permissionRules: _deny and _ask under each server's name, only where the profile gets it", () => {
   assertEquals(permissionRules(perAccountReg, A), {
+    allow: [],
     deny: ["mcp__flows-mine__delete_flow", "mcp__flows-work__delete_flow", "mcp__remote-proj__drop"],
     ask: ["mcp__flows-mine__run_flow", "mcp__flows-work__run_flow"],
     hooks: [{
@@ -268,16 +269,27 @@ Deno.test("permissionRules: _deny and _ask under each server's name, only where 
     }],
   });
   assertEquals(permissionRules(perAccountReg, B), {
+    allow: [],
     deny: ["mcp__flows-work__delete_flow"],
     ask: ["mcp__flows-work__run_flow"],
     hooks: [],
   });
   // a plain server's rules use its own name
   assertEquals(permissionRules({ profiles: PROFILES, servers: { s: { command: "s", _deny: ["x"] } } }, A), {
+    allow: [],
     deny: ["mcp__s__x"],
     ask: [],
     hooks: [],
   });
+  // reads allowed, writes asked
+  const rw = permissionRules({
+    profiles: PROFILES,
+    servers: { s: { command: "s", _allow: ["logs"], _ask: ["deploy"] } },
+  }, A);
+  assertEquals([rw.allow, rw.ask], [["mcp__s__logs"], ["mcp__s__deploy"]]);
+  assertEquals(registryProblems({ servers: { s: { command: "s", _allow: ["x"], _ask: ["x"] } } }), [
+    "s: x is in more than one of _allow, _deny, _ask",
+  ]);
   // the guard's matcher matches its servers and nothing else
   const m = new RegExp(permissionRules(perAccountReg, A).hooks[0].matcher);
   assertEquals([

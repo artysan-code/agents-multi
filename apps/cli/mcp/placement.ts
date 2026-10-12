@@ -239,20 +239,23 @@ interface GuardHook {
   hooks: { type: "command"; command: string }[];
 }
 export interface RegistryRules {
+  allow: string[];
   deny: string[];
   ask: string[];
   hooks: GuardHook[];
 }
 
-/** Pure: what the registry implies for one profile's settings — `_deny` and `_ask` of every server
+/** Pure: what the registry implies for one profile's settings — `_allow`, `_deny` and `_ask` of every server
  *  it gets on the CLI as permission rules, and each `_guard` as a PreToolUse hook on exactly those
  *  servers, under the name each one has there (one per account, for `_perAccount`). */
 export function permissionRules(reg: Registry, profile: string): RegistryRules {
+  const allow: string[] = [];
   const deny: string[] = [];
   const ask: string[] = [];
   const guarded = new Map<string, string[]>();
   for (const { entry, name } of servers(reg, { profile, surface: "cli" })) {
     const cfg = reg.servers[entry];
+    for (const tool of cfg._allow ?? []) allow.push(`mcp__${name}__${tool}`);
     for (const tool of cfg._deny ?? []) deny.push(`mcp__${name}__${tool}`);
     for (const tool of cfg._ask ?? []) ask.push(`mcp__${name}__${tool}`);
     if (cfg._guard) guarded.set(entry, [...guarded.get(entry) ?? [], `mcp__${name}__${cfg._guard.tool}`]);
@@ -262,5 +265,5 @@ export function permissionRules(reg: Registry, profile: string): RegistryRules {
     matcher: `^(${tools.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`,
     hooks: [{ type: "command", command: `${deno} run --quiet --no-lock ${dir}/${reg.servers[entry]._guard!.hook}` }],
   }));
-  return { deny: deny.sort(), ask: ask.sort(), hooks };
+  return { allow: allow.sort(), deny: deny.sort(), ask: ask.sort(), hooks };
 }

@@ -12,7 +12,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export AGENTS_MULTI_CONFIG=apps/cli/tests/fixtures/config
-net=127.0.0.1:8384,127.0.0.1:7331,127.0.0.1:8789
+# loopback only: the tests talk to servers of their own on ports the system picks
+net=127.0.0.1
 perms=(--allow-read --allow-write --allow-run --allow-env --allow-sys=hostname "--allow-net=$net")
 
 serial=() pool=()
