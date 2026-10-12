@@ -1,15 +1,17 @@
 // Tests for the desktop app's release (scripts/app-release.ts, scripts/aur.ts): placeholders stop a
 // release, bundles get stable names, the manifest is Tauri's static format with one entry per package
 // kind, channels only move forward (a stable one on beta too), and the AUR files agree with each other.
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertStringIncludes, assertThrows } from "jsr:@std/assert@1";
 import {
   assetName,
+  assetPlan,
   bundleKind,
   configProblems,
   type Manifest,
   manifestFor,
   nextChannels,
   older,
+  retryable,
 } from "../../../scripts/app-release.ts";
 import { DEPENDS, type Package, packageProblems, pkgbuild, srcinfo } from "../../../scripts/aur.ts";
 
@@ -126,4 +128,18 @@ Deno.test("aur: the PKGBUILD repackages the release's deb with the updater off, 
     assertStringIncludes(s, `\tdepends = ${d}\n`);
   }
   assert(s.startsWith("pkgbase = agents-multi-bin\n") && s.endsWith("pkgname = agents-multi-bin\n"));
+});
+
+Deno.test("assetPlan: a draft's files are replaced by this build's; a published one's never change", () => {
+  assertEquals(assetPlan(true, undefined, 10), "upload");
+  assertEquals(assetPlan(true, { size: 10 }, 10), "replace");
+  assertEquals(assetPlan(true, { size: 3 }, 10), "replace");
+  assertEquals(assetPlan(false, undefined, 10), "upload");
+  assertEquals(assetPlan(false, { size: 10 }, 10), "skip");
+  assertThrows(() => assetPlan(false, { size: 3 }, 10));
+});
+
+Deno.test("retryable: GitHub's own failures and its rate limit, never a refusal", () => {
+  for (const s of [500, 502, 503, 429]) assertEquals(retryable(s), true, String(s));
+  for (const s of [400, 401, 403, 404, 422]) assertEquals(retryable(s), false, String(s));
 });

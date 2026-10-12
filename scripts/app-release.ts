@@ -204,7 +204,24 @@ interface GhRelease {
   tag_name: string;
   draft: boolean;
   upload_url: string;
-  assets: { name: string; size: number }[];
+  assets: { id: number; name: string; size: number }[];
+}
+
+/** Pure: whether GitHub's answer is worth asking again (its own failures and its rate limit). */
+export const retryable = (status: number) => status >= 500 || status === 429;
+
+/** Pure: what to do with one file of the version. A draft is nobody's yet: its files are replaced by
+ *  this build's, so the update manifest's signatures always match them, also after a run that stopped
+ *  halfway. On a published release a version's files never change: a different one is a mistake. */
+export function assetPlan(
+  draft: boolean,
+  there: { size: number } | undefined,
+  size: number,
+): "upload" | "replace" | "skip" {
+  if (!there) return "upload";
+  if (draft) return "replace";
+  if (there.size !== size) throw new Error("already published with another size");
+  return "skip";
 }
 
 async function gh(path: string, token: string, init: RequestInit = {}): Promise<Response> {
@@ -223,6 +240,23 @@ async function ghJson<T>(path: string, token: string, init: RequestInit = {}): P
   const r = await gh(path, token, init);
   if (!r.ok) throw new Error(`${init.method ?? "GET"} ${path}: ${r.status} ${await r.text()}`);
   return await r.json() as T;
+}
+
+const WAITS_S = [5, 20, 60];
+
+/** `step`, asked again after GitHub's own failures (a 5xx, a 429, the network), a few times. */
+async function withRetry<T>(what: string, step: () => Promise<T>): Promise<T> {
+  for (let i = 0;; i++) {
+    try {
+      return await step();
+    } catch (e) {
+      const status = Number(/: (\d{3}) /.exec((e as Error).message)?.[1] ?? 0);
+      const again = status ? retryable(status) : e instanceof TypeError; // a TypeError is fetch's network failure
+      if (!again || i >= WAITS_S.length) throw e;
+      console.log(`${what}: ${(e as Error).message.slice(0, 160)}; again in ${WAITS_S[i]}s`);
+      await new Promise((res) => setTimeout(res, WAITS_S[i] * 1000));
+    }
+  }
 }
 
 /** The tag reaches GitHub through the push mirror: a release created before it would make GitHub
@@ -256,7 +290,10 @@ async function publish(out: string, dry: boolean) {
   const repo = config.github;
   await waitForTag(repo, tag, token);
   // a draft is not found by its tag: look in the list, drafts included
-  const list = await ghJson<GhRelease[]>(`/repos/${repo}/releases?per_page=100`, token);
+  const list = await withRetry(
+    "listing the releases",
+    () => ghJson<GhRelease[]>(`/repos/${repo}/releases?per_page=100`, token),
+  );
   let rel = list.find((r) => r.tag_name === tag) ??
     await ghJson<GhRelease>(`/repos/${repo}/releases`, token, {
       method: "POST",
@@ -264,25 +301,37 @@ async function publish(out: string, dry: boolean) {
     });
   for (const name of names) {
     const bytes = await Deno.readFile(`${out}/${name}`);
-    const there = rel.assets.find((a) => a.name === name);
-    if (there) {
-      // a version's files never change: a different one is a mistake, not an update
-      if (there.size !== bytes.byteLength) throw new Error(`${name} is already on ${tag} with another size`);
-      continue;
+    let plan: ReturnType<typeof assetPlan>;
+    try {
+      plan = assetPlan(rel.draft, rel.assets.find((a) => a.name === name), bytes.byteLength);
+    } catch (e) {
+      throw new Error(`${name} on ${tag}: ${(e as Error).message}`);
     }
+    if (plan === "skip") continue;
     const upload = rel.upload_url.replace(/\{.*\}$/, "");
-    await ghJson(`${upload}?name=${encodeURIComponent(name)}`, token, {
-      method: "POST",
-      headers: { "content-type": "application/octet-stream" },
-      body: bytes,
+    await withRetry(`uploading ${name}`, async () => {
+      // what is there under this name — an earlier build's, or a half upload of a failed attempt — goes first
+      const now = await ghJson<GhRelease>(`/repos/${repo}/releases/${rel.id}`, token);
+      for (const a of now.assets.filter((a) => a.name === name)) {
+        const r = await gh(`/repos/${repo}/releases/assets/${a.id}`, token, { method: "DELETE" });
+        await r.body?.cancel();
+        if (!r.ok && r.status !== 404) throw new Error(`DELETE asset ${name}: ${r.status} `);
+      }
+      await ghJson(`${upload}?name=${encodeURIComponent(name)}`, token, {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: bytes,
+      });
     });
-    console.log(`uploaded ${name}`);
+    console.log(`${plan === "replace" ? "replaced" : "uploaded"} ${name}`);
   }
   if (rel.draft) {
-    rel = await ghJson<GhRelease>(`/repos/${repo}/releases/${rel.id}`, token, {
-      method: "PATCH",
-      body: JSON.stringify({ draft: false, prerelease: pre, make_latest: pre ? "false" : "true" }),
-    });
+    const id = rel.id;
+    rel = await withRetry("publishing the release", () =>
+      ghJson<GhRelease>(`/repos/${repo}/releases/${id}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ draft: false, prerelease: pre, make_latest: pre ? "false" : "true" }),
+      }));
   }
   console.log(`published ${tag} on ${repo}`);
 }
