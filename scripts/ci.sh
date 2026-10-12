@@ -4,8 +4,9 @@
 #   scripts/ci.sh             check, commit subjects, tests, MCP server probe, secret scan, console UI build, site build
 #   scripts/ci.sh --no-site   the same without the site build
 #
-# The steps are independent of each other: they run at once, each into its own log, printed in this
-# order when all are done; the gate fails when any fails, and names it.
+# The steps are independent of each other: they run at once, each into its own log. When all are done
+# each step prints one line with its time, in this order, and a failed one its whole log (CI_VERBOSE=1:
+# every log); the gate fails when any fails, and names it.
 # gitleaks is optional on a workstation (skipped with a warning) and required in CI (CI=true).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -42,7 +43,14 @@ step() {
   local name=$1
   shift
   names+=("$name")
-  ("$@") >"$logs/${#names[@]}" 2>&1 &
+  local n=${#names[@]}
+  (
+    start=$SECONDS
+    rc=0
+    "$@" || rc=$?
+    echo $((SECONDS - start)) >"$logs/$n.time"
+    exit "$rc"
+  ) >"$logs/$n" 2>&1 &
   pids+=($!)
 }
 
@@ -61,13 +69,19 @@ failed=()
 for i in "${!pids[@]}"; do
   rc=0
   wait "${pids[$i]}" || rc=$?
-  printf '\n\033[1m== %s\033[0m\n' "${names[$i]}"
-  cat "$logs/$((i + 1))"
-  ((rc == 0)) || failed+=("${names[$i]}")
+  n=$((i + 1))
+  if ((rc == 0)); then
+    printf '\033[32m✓\033[0m %-12s %3ss\n' "${names[$i]}" "$(cat "$logs/$n.time" 2>/dev/null)"
+    [[ "${CI_VERBOSE:-}" == 1 || "${CI:-}" == true ]] && cat "$logs/$n"
+  else
+    printf '\033[31m✗\033[0m %-12s %3ss\n' "${names[$i]}" "$(cat "$logs/$n.time" 2>/dev/null)"
+    sed 's/^/    /' "$logs/$n"
+    failed+=("${names[$i]}")
+  fi
 done
 
 if ((${#failed[@]})); then
-  printf '\n\033[31mci failed: %s\033[0m\n' "${failed[*]}" >&2
+  printf '\033[31mci failed: %s\033[0m\n' "${failed[*]}" >&2
   exit 1
 fi
-printf '\n\033[32mci ok\033[0m\n'
+printf '\033[32mci ok\033[0m\n'
