@@ -5,6 +5,31 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.1.0-rc.3] - 2026-10-12
+
+### Added
+
+- **mcp**: reads run unasked, production writes ask, base safety lists hold everywhere (eedb412)
+- **hooks**: branch-guard asks for what reaches production, not for the branch checked out (705554b)
+
+### Fixed
+
+- **release**: ship checks the version can be cut before the gate and any branch move (1d7a6ce)
+- **mcp**: a guard hook is quoted, ignores the project's deno.json, and asks when it cannot run (434cc96)
+- **security**: tool arguments stay one path segment, calls time out, the brain builds from the lock (c862d7e)
+
+### Performance
+
+- **statusline**: one jq and two git calls, about 260 ms to 40 ms a refresh (ddbf23b)
+- **hooks**: guards parse once and match in bash, dead hooks and duplicated agents go (a76a6d9)
+- **ci**: the gate's steps and the test files run at once (207b51b)
+
+### Changed
+
+- **tasks**: the task library in modules (96aab06)
+- **coolify**: the server in modules, one per section of tools (d7195b4)
+- no import cycles; shared helpers in one place (025022b)
+
 ## [1.1.0-rc.2] - 2026-10-12
 
 ### Added
