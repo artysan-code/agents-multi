@@ -39,16 +39,21 @@ done < <(git diff --cached -U0 --diff-filter=ACMR | awk '/^\+\+\+ b\//{f=substr(
 # 3. check and tests, skipped for commits that touch neither code nor what the tests read
 if git diff --cached --name-only | grep -qE '\.(ts|js|sh|py|json|md|css|html)$|^bin/|^\.githooks/|^shared/|^config\.example/|^desktop/|^apps/'; then
   if command -v deno >/dev/null; then
-    log=$(mktemp)
-    bash scripts/check.sh >"$log" 2>&1 || {
+    # at once: they share nothing, and the commit waits for the slower one only
+    check_log=$(mktemp) test_log=$(mktemp)
+    bash scripts/check.sh >"$check_log" 2>&1 &
+    check_pid=$!
+    deno task --quiet test >"$test_log" 2>&1 &
+    test_pid=$!
+    wait "$check_pid" || {
       red "scripts/check.sh failed:"
-      tail -20 "$log"
+      tail -20 "$check_log"
     }
-    deno task --quiet test >"$log" 2>&1 || {
+    wait "$test_pid" || {
       red "deno task test failed:"
-      tail -20 "$log"
+      tail -20 "$test_log"
     }
-    rm -f "$log"
+    rm -f "$check_log" "$test_log"
   else
     printf '\033[33m! deno not installed: check and tests skipped\033[0m\n'
   fi

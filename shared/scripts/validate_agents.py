@@ -1,7 +1,7 @@
 """validate_agents.py <agents-dir>: validates the frontmatter of agent files (*.md, except AGENTS.md).
 
 Checks: `name:` and `description:` present, `tools:` (if present) a valid JSON array, and `model:`
-(if present) one of opus|sonnet|haiku|inherit. Prints one line per file and a final RESULT line.
+(if present) one of opus|sonnet|haiku|inherit. Prints one line per file and a final RESULT line; exits 1 when a file fails.
 """
 import sys, os, json, re
 
@@ -53,3 +53,4 @@ for f in sorted(os.listdir(d)):
     for e in errs:
         print(f"      -> {e}")
 print("\nRESULT:", "ALL VALID" if ok else "ERRORS FOUND")
+sys.exit(0 if ok else 1)
