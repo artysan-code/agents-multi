@@ -23,13 +23,36 @@ export async function api(account: string | undefined, path: string, init?: Requ
     },
   });
   const body = await r.text();
-  if (!r.ok) throw new Error(`${path.split("?")[0]} → HTTP ${r.status}: ${maskText(body.slice(0, 400))}`);
+  if (!r.ok) {
+    const route = path.split("?")[0];
+    if (r.status === 404 && isOptionalRoute(route)) {
+      throw new Error(`${route} → this endpoint is not available on this Coolify (older version? see coolify_version)`);
+    }
+    throw new Error(`${route} → HTTP ${r.status}: ${maskText(body.slice(0, 400))}`);
+  }
   try {
     return JSON.parse(body);
   } catch {
     return body;
   }
 }
+/** Pure: routes that only exist on recent Coolify versions, where a 404 means "not there", not "no such resource". */
+export function isOptionalRoute(route: string): boolean {
+  return /\/(docker-cleanup|scheduled-tasks|s3-storages)(\/|$)/.test(route) ||
+    /^\/databases\/[^/]+\/(envs|logs)(\/|$)/.test(route) || /^\/services\/[^/]+\/logs(\/|$)/.test(route);
+}
+
+/** Pure: the section of an overview for a list that failed to load, so an error never reads as "empty". */
+export const unavailable = (e: unknown) => `unavailable: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`;
+
+/** Pure: base64 of a text's UTF-8 bytes, in chunks (a spread of a large file overflows the stack). */
+export function toBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 export const post = (account: string | undefined, path: string, body?: unknown) =>
   api(account, path, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 export const patch = (account: string | undefined, path: string, body: unknown) =>
@@ -48,19 +71,25 @@ export const API_PATH: Record<Kind, string> = {
 };
 
 /**
- * Resolves a resource in the list at `listPath` by uuid, then exact name, then name substring
- * (case-insensitive). `what` names the resource type in the error, which lists the candidates.
+ * Pure: picks the resource that `ref` names among `all`: by uuid, then exact name (case-insensitive),
+ * then name substring only when exactly one candidate has it. Several candidates throw, listing them.
  */
-export async function find(account: string | undefined, listPath: string, what: string, ref: string): Promise<Loose> {
-  const all = await api(account, listPath) as Loose[];
-  const match = all.find((a) => a.uuid === ref) ??
-    all.find((a) => String(a.name ?? "").toLowerCase() === ref.toLowerCase()) ??
-    all.find((a) => String(a.name ?? "").toLowerCase().includes(ref.toLowerCase()));
-  if (!match) {
-    const names = all.map((a) => `${a.name} (${a.uuid})`).join(", ") || "none";
-    throw new Error(`no ${what} matches "${ref}". Available: ${names}`);
+export function matchResource(all: Loose[], what: string, ref: string): Loose {
+  const lower = ref.toLowerCase();
+  const exact = all.find((a) => a.uuid === ref) ?? all.find((a) => String(a.name ?? "").toLowerCase() === lower);
+  if (exact) return exact;
+  const partial = all.filter((a) => String(a.name ?? "").toLowerCase().includes(lower));
+  if (partial.length === 1) return partial[0];
+  const list = (xs: Loose[]) => xs.map((a) => `${a.name} (${a.uuid})`).join(", ");
+  if (partial.length > 1) {
+    throw new Error(`"${ref}" is ambiguous among ${what}s: ${list(partial)}. Use the uuid or the exact name`);
   }
-  return match;
+  throw new Error(`no ${what} matches "${ref}". Available: ${list(all) || "none"}`);
+}
+
+/** Resolves a resource in the list at `listPath` (see matchResource). `what` names the resource type in errors. */
+export async function find(account: string | undefined, listPath: string, what: string, ref: string): Promise<Loose> {
+  return matchResource(await api(account, listPath) as Loose[], what, ref);
 }
 export const findApp = (account: string | undefined, ref: string) => find(account, "/applications", "application", ref);
 export const findOfKind = (account: string | undefined, kind: Kind, ref: string) =>
@@ -93,6 +122,13 @@ export function assertNotSecret(key: string, value: string) {
     throw new Error(
       `"${key}" looks like a secret: set it from the Coolify panel. A secret passed through here ends up in the conversation context.`,
     );
+  }
+}
+
+/** Throws when a free-text value (a command, labels) carries a secret: those belong in an environment variable. */
+export function assertNoSecretInText(key: string, value: string) {
+  if (maskText(value) !== value) {
+    throw new Error(`"${key}" contains what looks like a secret: put it in an environment variable and reference that`);
   }
 }
 

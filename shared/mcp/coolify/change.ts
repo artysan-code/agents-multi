@@ -5,6 +5,7 @@ import {
   account,
   api,
   API_PATH,
+  assertNoSecretInText,
   assertNotSecret,
   CHANGES,
   findApp,
@@ -13,6 +14,7 @@ import {
   kindArg,
   type Loose,
   patch,
+  toBase64,
 } from "./api.ts";
 import { CREDENTIALS_IN_URL, HIDDEN } from "../lib/mask.ts";
 import { text as txt } from "../lib/service.ts";
@@ -88,7 +90,12 @@ export function register(server: McpServer) {
       if (rejected.length) {
         throw new Error(`fields not allowed here: ${rejected.join(", ")}. Allowed: ${APP_FIELDS.join(", ")}`);
       }
-      for (const [k, v] of Object.entries(fields)) if (typeof v === "string") assertNotSecret(k, v);
+      for (const [k, v] of Object.entries(fields)) {
+        if (typeof v === "string") {
+          assertNotSecret(k, v);
+          assertNoSecretInText(k, v);
+        }
+      }
       const a = await findApp(account, application);
       await patch(account, `/applications/${a.uuid}`, fields);
       return txt(`updated ${Object.keys(fields).join(", ")} on ${a.name} — a deploy is required`);
@@ -132,7 +139,7 @@ export function register(server: McpServer) {
       }
       const s = await findOfKind(account, "service", service);
       await patch(account, `/services/${s.uuid}`, {
-        ...(compose ? { docker_compose_raw: btoa(String.fromCodePoint(...new TextEncoder().encode(compose))) } : {}),
+        ...(compose ? { docker_compose_raw: toBase64(compose) } : {}),
         ...(domains?.length ? { urls: domains.map((d) => ({ name: d.container, url: d.url })) } : {}),
         ...(name ? { name } : {}),
         ...(description ? { description } : {}),

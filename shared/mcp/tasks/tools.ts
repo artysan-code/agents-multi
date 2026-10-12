@@ -132,6 +132,7 @@ export function registerTaskTools(server: McpServer) {
       tomorrow: b.tomorrow.map(l),
       next_days: b.upcoming.map(l),
       no_date: b.undated.slice(0, 10).map(l),
+      no_date_total: b.undated.length,
       waiting_on_others: b.waiting.map(l),
       done_today: b.doneToday,
     });
@@ -186,10 +187,12 @@ export function registerTaskTools(server: McpServer) {
     ).sort((a, b) =>
       (a.due ?? "9999").localeCompare(b.due ?? "9999") || (a.time ?? "99").localeCompare(b.time ?? "99")
     );
+    const limit = q.limit ?? 50;
     return text({
       ...clock(),
       count: hits.length,
-      tasks: hits.slice(0, q.limit ?? 50).map((t) => ({
+      ...(hits.length > limit ? { truncated: true } : {}),
+      tasks: hits.slice(0, limit).map((t) => ({
         ...t,
         ...(isBlocked(all, t) ? { blocked: true } : {}),
         ...(t.notes && !q.full && t.notes.length > 300

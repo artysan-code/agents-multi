@@ -17,6 +17,7 @@ import {
   safeFileName,
   SCOPES,
   sheetsText,
+  toBase64,
 } from "../../../shared/mcp/lib/google.ts";
 
 const unb64url = (s: string) =>
@@ -137,4 +138,32 @@ Deno.test("sheetsText: every sheet under its title, CSV quoting, cut at the limi
   const t = sheetsText([{ title: "Q1", values: [["a", "b,c"], ['say "hi"']] }, { title: "Vuoto" }], 1000);
   assertEquals(t, '## Q1\na,"b,c"\n"say ""hi"""\n\n## Vuoto\n');
   assert(sheetsText([{ title: "X", values: [["0123456789"]] }], 8).endsWith("[…cut]"));
+});
+
+Deno.test("toBase64: large input does not overflow the stack", () => {
+  const big = new Uint8Array(1_000_000).fill(65);
+  assertEquals(atob(toBase64(big)).length, 1_000_000);
+  assertEquals(toBase64(new TextEncoder().encode("Ciao")), btoa("Ciao"));
+});
+
+Deno.test("encodeHeader: long non-ASCII values split into encoded-words of at most 75 characters", () => {
+  const v = "è".repeat(120);
+  const out = encodeHeader(v);
+  const words = out.split("\r\n ");
+  assert(words.length > 1);
+  for (const w of words) assert(w.length <= 75 && /^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=$/.test(w));
+  const back = words.map((w) =>
+    new TextDecoder().decode(Uint8Array.from(atob(w.slice(10, -2)), (c) => c.charCodeAt(0)))
+  )
+    .join("");
+  assertEquals(back, v);
+});
+
+Deno.test("rawMessage: line breaks in headers are refused", () => {
+  const ok = { to: "a@b.c", subject: "s", body: "b" };
+  assertThrows(() => rawMessage({ ...ok, to: "a@b.c\r\nBcc: x@y.z" }));
+  assertThrows(() => rawMessage({ ...ok, subject: "s\nX: y" }));
+  assertThrows(() => rawMessage({ ...ok, cc: "a\r\nb" }));
+  assertThrows(() => rawMessage({ ...ok, bcc: "a\nb" }));
+  rawMessage({ ...ok, body: "x".repeat(300_000) });
 });

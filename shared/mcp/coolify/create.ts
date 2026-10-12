@@ -1,7 +1,7 @@
 // coolify — create: projects, environments, applications, services, databases.
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { z } from "npm:zod@4.6.5";
-import { account, api, CHANGES, find, locate, type Loose, post, soleServer } from "./api.ts";
+import { account, api, CHANGES, find, locate, type Loose, post, soleServer, toBase64 } from "./api.ts";
 import { CREDENTIALS_IN_URL } from "../lib/mask.ts";
 import { text as txt } from "../lib/service.ts";
 
@@ -186,7 +186,7 @@ export function register(server: McpServer) {
       environment_name: w.environment_name,
       environment_uuid: w.environment_uuid,
       server_uuid: s.uuid,
-      docker_compose_raw: btoa(String.fromCodePoint(...new TextEncoder().encode(compose))),
+      docker_compose_raw: toBase64(compose),
       ...(domains?.length ? { urls: domains.map((d) => ({ name: d.container, url: d.url })) } : {}),
       instant_deploy: start ?? false,
     };

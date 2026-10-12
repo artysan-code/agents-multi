@@ -1,7 +1,7 @@
 // coolify — maintain: database backups, Docker cleanup.
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { z } from "npm:zod@4.6.5";
-import { account, api, CHANGES, find, findOfKind, type Loose, post, soleServer } from "./api.ts";
+import { account, api, CHANGES, find, findOfKind, type Loose, post, soleServer, unavailable } from "./api.ts";
 import { text as txt } from "../lib/service.ts";
 
 export function register(server: McpServer) {
@@ -41,9 +41,11 @@ export function register(server: McpServer) {
           schedule: x.frequency,
           enabled: x.enabled,
           s3: x.save_s3,
-          latest:
-            ((await api(a.account, `/databases/${d.uuid}/backups/${x.uuid}/executions`).catch(() => [])) as Loose[])
-              .slice(0, 5).map((e) => ({ status: e.status, at: e.created_at, size: e.size ?? null })),
+          latest: await api(a.account, `/databases/${d.uuid}/backups/${x.uuid}/executions`).then(
+            (r) =>
+              (r as Loose[]).slice(0, 5).map((e) => ({ status: e.status, at: e.created_at, size: e.size ?? null })),
+            unavailable,
+          ),
         })));
         return txt({ database: d.name, backups: withExecutions });
       }
@@ -88,9 +90,9 @@ export function register(server: McpServer) {
       if (!run) {
         const [settings, latest] = await Promise.all([
           api(account, `/servers/${s.uuid}/docker-cleanup`).catch((e) => (e as Error).message),
-          api(account, `/servers/${s.uuid}/docker-cleanup/executions`).catch(() => []),
+          api(account, `/servers/${s.uuid}/docker-cleanup/executions`).catch(unavailable),
         ]);
-        return txt({ server: s.name, settings, latest: (latest as Loose[]).slice?.(0, 5) ?? latest });
+        return txt({ server: s.name, settings, latest: Array.isArray(latest) ? latest.slice(0, 5) : latest });
       }
       const r = await post(account, `/servers/${s.uuid}/docker-cleanup/run`, {
         delete_unused_volumes: volumes ?? false,

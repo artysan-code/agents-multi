@@ -66,3 +66,14 @@ Deno.test("task tools: a project's tasks by ref, phases and blockers, log and de
   assertEquals((await call("tasks_list", { project: p, status: "all" })).count, 3);
   assertEquals((await call("tasks_list", { parent: "TASK-430", status: "done" })).count, 2);
 });
+
+Deno.test("task tools: a cut list says so (tasks_list truncated, tasks_brief no_date_total)", async () => {
+  const p = "work/bulk";
+  for (let i = 0; i < 12; i++) await call("tasks_add", { title: `senza data ${i}`, project: p });
+  const cut = await call("tasks_list", { project: p, limit: 5 });
+  assertEquals([cut.count, cut.tasks.length, cut.truncated], [12, 5, true]);
+  assertEquals((await call("tasks_list", { project: p })).truncated, undefined);
+  const b = await call("tasks_brief", {});
+  assertEquals(b.no_date.length, 10);
+  assert(b.no_date_total >= 12);
+});

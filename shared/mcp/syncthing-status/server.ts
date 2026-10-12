@@ -6,6 +6,7 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
 import { type Compiled, compilePattern, isIgnored } from "./ignore.ts";
+import { dbStatusProblem, expandHome, gitRisk } from "./logic.ts";
 
 /** Subset of Syncthing's REST objects that this server reads. */
 interface StFolder {
@@ -26,6 +27,8 @@ interface StDbStatus {
   pullErrors?: number;
   errors?: number;
   globalFiles?: number;
+  error?: string;
+  invalid?: string;
 }
 interface StConnections {
   connections?: Record<string, { connected?: boolean }>;
@@ -78,35 +81,73 @@ function apiKey(): string {
  *  tools then answer with the reason instead of the server failing to start. */
 let KEY: string | null = null;
 
-/** GET `path` on the Syncthing REST API and return the parsed JSON, typed by the caller. Throws on a non-2xx status. */
+const TIMEOUT_MS = 10_000;
+
+/** GET `path` on the Syncthing REST API and return the parsed JSON, typed by the caller. Throws on a non-2xx status or a timeout. */
 async function st<T = unknown>(path: string): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, { headers: { "X-API-Key": KEY ??= apiKey() } });
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}${path}`, {
+      headers: { "X-API-Key": KEY ??= apiKey() },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new Error(`${path} -> no answer from Syncthing within ${TIMEOUT_MS / 1000}s`);
+    }
+    throw e;
+  }
   if (!r.ok) throw new Error(`${path} -> HTTP ${r.status}`);
   return await r.json() as T;
 }
+const errMsg = (e: unknown) => e instanceof Error ? e.message : String(e);
 const txt = (o: unknown) => ({
   content: [{ type: "text" as const, text: typeof o === "string" ? o : JSON.stringify(o, null, 2) }],
 });
 
+/** What a walk could not look at: directories it failed to read and ones it did not descend into (depth limit). */
+interface WalkGaps {
+  unreadable: string[];
+  tooDeep: string[];
+}
+
+/** Walk `root` (at most `max` levels down), yielding the entries `pick` accepts and not descending into them or into `prune`d names. Gaps are recorded, never skipped silently. */
 async function* walk(
   root: string,
   pick: (e: Deno.DirEntry) => boolean,
   prune: (n: string) => boolean,
+  gaps: WalkGaps,
   max = 8,
   d = 0,
 ): AsyncGenerator<string> {
-  if (d > max) return;
+  if (d > max) {
+    gaps.tooDeep.push(root);
+    return;
+  }
   let entries: Deno.DirEntry[];
   try {
     entries = [...Deno.readDirSync(root)];
-  } catch {
+  } catch (e) {
+    gaps.unreadable.push(`${root} (${errMsg(e)})`);
     return;
   }
   for (const e of entries) {
     const p = `${root}/${e.name}`;
     if (pick(e)) yield p;
-    else if (e.isDirectory && !prune(e.name)) yield* walk(p, pick, prune, max, d + 1);
+    else if (e.isDirectory && !prune(e.name)) yield* walk(p, pick, prune, gaps, max, d + 1);
   }
+}
+
+/** The `warnings` entries for a walk's gaps (empty when it saw everything); long lists are cut to a few examples and a count. */
+function gapNotes(gaps: WalkGaps): string[] {
+  const some = (what: string, l: string[]) => [
+    ...l.slice(0, 3).map((x) => `${what}: ${x}`),
+    ...(l.length > 3 ? [`${what}: ... and ${l.length - 3} more`] : []),
+  ];
+  return [
+    ...some("not visited, unreadable", gaps.unreadable),
+    ...some("depth limit reached, not descended", gaps.tooDeep),
+  ];
 }
 
 const server = new McpServer({ name: "syncthing-status", version: "0.1.0" });
@@ -144,16 +185,18 @@ server.registerTool("syncthing_folders", {
   const cfg = await st<StConfig>("/rest/config");
   const rows = [];
   for (const f of cfg.folders ?? []) {
-    let s: StDbStatus = {};
+    const base = { label: f.label || f.id, id: f.id, path: f.path, type: f.type, paused: !!f.paused };
+    let s: StDbStatus;
     try {
       s = await st<StDbStatus>(`/rest/db/status?folder=${encodeURIComponent(f.id)}`);
-    } catch { /* */ }
+    } catch (e) {
+      rows.push({ ...base, state: "?", error: `status unavailable: ${errMsg(e)}` });
+      continue;
+    }
+    const problem = dbStatusProblem(s);
     rows.push({
-      label: f.label || f.id,
-      id: f.id,
-      path: f.path,
-      type: f.type,
-      paused: !!f.paused,
+      ...base,
+      ...(problem ? { error: problem } : {}),
       state: s.state ?? "?",
       needFiles: s.needFiles ?? 0,
       needDeletes: s.needDeletes ?? 0,
@@ -171,27 +214,42 @@ server.registerTool("syncthing_conflicts", {
 }, async () => {
   const cfg = await st<StConfig>("/rest/config");
   const found: string[] = [];
+  const warnings: string[] = [];
   for (const f of cfg.folders ?? []) {
+    const gaps: WalkGaps = { unreadable: [], tooDeep: [] };
     for await (
       const e of walk(
-        f.path,
+        expandHome(f.path, HOME),
         (e) => e.isFile && e.name.includes(".sync-conflict-"),
-        (n) => n === "node_modules" || n === ".stversions",
+        (n) => n === "node_modules" || n === ".stversions" || n === ".git",
+        gaps,
       )
     ) found.push(e);
+    warnings.push(...gapNotes(gaps).map((w) => `${f.label || f.id}: ${w}`));
   }
-  return txt(found.length ? { count: found.length, files: found } : "No *.sync-conflict-* files found. ✓");
+  if (found.length) return txt({ count: found.length, files: found, ...(warnings.length ? { warnings } : {}) });
+  if (warnings.length) {
+    return txt({
+      count: 0,
+      message: "No *.sync-conflict-* files found in the parts visited, but the check is incomplete.",
+      warnings,
+    });
+  }
+  return txt("No *.sync-conflict-* files found. ✓");
 });
 
-/** Files tracked by git in `repoAbs` (read-only `git ls-files`). Empty when it is not a repository or git fails. */
-async function gitTracked(repoAbs: string): Promise<string[]> {
+/** Files tracked by git in `repoAbs` (read-only `git ls-files`), or the reason it failed. */
+async function gitTracked(repoAbs: string): Promise<{ files: string[] } | { error: string }> {
   try {
-    const cmd = new Deno.Command("git", { args: ["-C", repoAbs, "ls-files", "-z"], stdout: "piped", stderr: "null" });
-    const { code, stdout } = await cmd.output();
-    if (code !== 0) return [];
-    return new TextDecoder().decode(stdout).split("\0").filter(Boolean);
-  } catch {
-    return [];
+    const cmd = new Deno.Command("git", { args: ["-C", repoAbs, "ls-files", "-z"], stdout: "piped", stderr: "piped" });
+    const { code, stdout, stderr } = await cmd.output();
+    if (code !== 0) {
+      const why = new TextDecoder().decode(stderr).trim().split("\n")[0];
+      return { error: `git ls-files failed (exit ${code})${why ? `: ${why}` : ""}` };
+    }
+    return { files: new TextDecoder().decode(stdout).split("\0").filter(Boolean) };
+  } catch (e) {
+    return { error: `git ls-files failed: ${errMsg(e)}` };
   }
 }
 
@@ -202,55 +260,71 @@ server.registerTool("syncthing_git_guard", {
 }, async () => {
   const cfg = await st<StConfig>("/rest/config");
   const report: GitReportRow[] = [];
+  const skipped: string[] = [];
+  const warnings: string[] = [];
   const CAP = 5000; // cap on tracked files inspected per repository
   for (const f of cfg.folders ?? []) {
     if (f.type !== "sendreceive") continue;
-    let pats: string[] = [];
+    let pats: string[];
     // Use `.expanded`, not `.ignore`: the raw lines are only `#include .stignore-common` (see ignore.ts).
     try {
       pats = (await st<{ expanded?: string[] }>(`/rest/db/ignores?folder=${encodeURIComponent(f.id)}`)).expanded ?? [];
-    } catch { /* */ }
+    } catch (e) {
+      // Without the patterns every .git would look "not ignored": a false CRITICAL.
+      skipped.push(`${f.label || f.id}: ignore patterns unavailable (${errMsg(e)}), folder not checked`);
+      continue;
+    }
     const compiled = pats.map(compilePattern).filter((c): c is Compiled => c !== null);
+    const root = expandHome(f.path, HOME);
+    const gaps: WalkGaps = { unreadable: [], tooDeep: [] };
+    // `.git` is a directory, or a file in a git worktree.
     for await (
       const g of walk(
-        f.path,
-        (e) => e.isDirectory && e.name === ".git",
-        (n) => n === "node_modules" || n === ".git" || n === ".stversions",
+        root,
+        (e) => (e.isDirectory || e.isFile) && e.name === ".git",
+        (n) => n === "node_modules" || n === ".stversions",
+        gaps,
       )
     ) {
       const repoAbs = g.replace(/\/?\.git$/, "");
-      const base = repoAbs.slice(f.path.length).replace(/^\/+/, "");
+      const base = repoAbs.slice(root.length).replace(/^\/+/, "");
       const join = (sub: string) => (base ? `${base}/${sub}` : sub);
       const gitDirSynced = !isIgnored(join(".git"), compiled);
       // A synced .git is already CRITICAL: skip enumerating tracked files.
-      const tracked = gitDirSynced ? [] : await gitTracked(repoAbs);
-      const sample = tracked.slice(0, CAP);
+      const listed = gitDirSynced ? { files: [] } : await gitTracked(repoAbs);
+      const tracked = "files" in listed ? listed.files : null;
+      const trackedError = "error" in listed ? listed.error : undefined;
       let exposed = 0;
-      for (const t of sample) if (!isIgnored(join(t), compiled)) exposed++;
-      const truncated = tracked.length > CAP;
-      const risk = gitDirSynced
-        ? "🔴 CRITICAL — .git synced (repository corruption risk)"
-        : exposed > 0
-        ? `🟡 WARN — ${exposed}${truncated ? "+" : ""}/${tracked.length} tracked files synced (working-tree drift)`
-        : "🟢 OK — correct partition (only valuable gitignored files synced)";
+      for (const t of (tracked ?? []).slice(0, CAP)) if (!isIgnored(join(t), compiled)) exposed++;
+      const truncated = (tracked?.length ?? 0) > CAP;
+      const risk = gitRisk({ gitDirSynced, tracked, trackedError, exposed, truncated });
       report.push({
         folder: f.label || f.id,
         repo: base || "(root)",
         gitDirSynced,
         trackedExposed: exposed,
-        trackedTotal: tracked.length,
-        ...(truncated ? { note: `inspected the first ${CAP} tracked files` } : {}),
+        trackedTotal: tracked?.length ?? 0,
+        ...(truncated
+          ? { note: `inspected the first ${CAP} tracked files` }
+          : trackedError
+          ? { note: trackedError }
+          : {}),
         risk,
       });
     }
+    warnings.push(...gapNotes(gaps).map((w) => `${f.label || f.id}: ${w}`));
   }
   const critical = report.filter((r) => r.gitDirSynced).length;
   const warn = report.filter((r) => !r.gitDirSynced && r.trackedExposed > 0).length;
+  const unknown = report.filter((r) => r.risk.startsWith("❔")).length;
   return txt({
     checked: report.length,
     critical,
     warn,
-    ok: report.length - critical - warn,
+    unknown,
+    ok: report.length - critical - warn - unknown,
+    ...(skipped.length ? { skipped } : {}),
+    ...(warnings.length ? { warnings } : {}),
     repos: report.length ? report : "No git repository inside a sendreceive folder.",
   });
 });

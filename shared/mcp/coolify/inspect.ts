@@ -13,6 +13,7 @@ import {
   kindArg,
   type Loose,
   READS,
+  unavailable,
 } from "./api.ts";
 import { HIDDEN, mask, maskDeep, maskText } from "../lib/mask.ts";
 import { text as txt } from "../lib/service.ts";
@@ -24,17 +25,17 @@ export function register(server: McpServer) {
     inputSchema: { account },
     annotations: READS,
   }, async ({ account }: { account?: string }) => {
-    const [servers, projects, apps, services, db] = await Promise.all([
-      api(account, "/servers"),
-      api(account, "/projects"),
-      api(account, "/applications"),
-      api(account, "/services"),
-      api(account, "/databases"),
-    ]) as Loose[][];
+    const sections = ["servers", "projects", "applications", "services", "databases"] as const;
+    const results = await Promise.allSettled(sections.map((k) => api(account, `/${k}`)));
+    // a list that failed is reported as such, never as an empty one
+    const list = (i: number, f: (x: Loose) => unknown) => {
+      const r = results[i];
+      return r.status === "fulfilled" ? (r.value as Loose[]).map(f) : unavailable(r.reason);
+    };
     return txt({
-      servers: servers.map((s) => ({ uuid: s.uuid, name: s.name, ip: s.ip, reachable: s.is_reachable })),
-      projects: projects.map((p) => ({ uuid: p.uuid, name: p.name })),
-      applications: apps.map((a) => ({
+      servers: list(0, (s) => ({ uuid: s.uuid, name: s.name, ip: s.ip, reachable: s.is_reachable })),
+      projects: list(1, (p) => ({ uuid: p.uuid, name: p.name })),
+      applications: list(2, (a) => ({
         uuid: a.uuid,
         name: a.name,
         domain: a.fqdn ?? null,
@@ -42,8 +43,8 @@ export function register(server: McpServer) {
         branch: a.git_branch,
         build_pack: a.build_pack,
       })),
-      services: services.map((v) => ({ uuid: v.uuid, name: v.name, status: v.status })),
-      databases: db.map((d) => ({ uuid: d.uuid, name: d.name, engine: d.database_type, status: d.status })),
+      services: list(3, (v) => ({ uuid: v.uuid, name: v.name, status: v.status })),
+      databases: list(4, (d) => ({ uuid: d.uuid, name: d.name, engine: d.database_type, status: d.status })),
     });
   });
 
@@ -124,7 +125,7 @@ export function register(server: McpServer) {
     }
     if (kind === "database") {
       const d = await api(account, `/databases/${(await findOfKind(account, "database", ref)).uuid}`) as Loose;
-      const backups = await api(account, `/databases/${d.uuid}/backups`).catch(() => []) as Loose[];
+      const backups = await api(account, `/databases/${d.uuid}/backups`).then((b) => b as Loose[], unavailable);
       return txt(maskDeep({
         uuid: d.uuid,
         name: d.name,
@@ -135,15 +136,17 @@ export function register(server: McpServer) {
         public_port: d.public_port,
         limits: { memory: d.limits_memory, cpu: d.limits_cpus },
         internal_url: d.internal_db_url ? maskText(d.internal_db_url) : null,
-        backups: backups.map((b) => ({ uuid: b.uuid, schedule: b.frequency, enabled: b.enabled, s3: b.save_s3 })),
+        backups: typeof backups === "string"
+          ? backups
+          : backups.map((b) => ({ uuid: b.uuid, schedule: b.frequency, enabled: b.enabled, s3: b.save_s3 })),
       }));
     }
     if (kind === "server") {
       const s = await find(account, "/servers", "server", ref);
       const [resources, domains] = await Promise.all([
-        api(account, `/servers/${s.uuid}/resources`).catch(() => []),
-        api(account, `/servers/${s.uuid}/domains`).catch(() => []),
-      ]) as Loose[][];
+        api(account, `/servers/${s.uuid}/resources`).then((r) => r as Loose[], unavailable),
+        api(account, `/servers/${s.uuid}/domains`).catch(unavailable),
+      ]);
       return txt({
         uuid: s.uuid,
         name: s.name,
@@ -151,14 +154,18 @@ export function register(server: McpServer) {
         reachable: s.is_reachable,
         usable: s.is_usable,
         proxy: s.proxy?.type ?? s.proxy_type,
-        resources: resources.map((r) => ({ uuid: r.uuid, name: r.name, type: r.type, status: r.status })),
+        resources: typeof resources === "string"
+          ? resources
+          : resources.map((r) => ({ uuid: r.uuid, name: r.name, type: r.type, status: r.status })),
         domains,
       });
     }
     const p = await find(account, "/projects", "project", ref);
     const envs = await api(account, `/projects/${p.uuid}/environments`) as Loose[];
     const contents = await Promise.all(envs.map(async (e) => {
-      const x = await api(account, `/projects/${p.uuid}/${e.uuid}`).catch(() => ({})) as Loose;
+      const loaded = await api(account, `/projects/${p.uuid}/${e.uuid}`).then((r) => r as Loose, unavailable);
+      if (typeof loaded === "string") return { environment: e.name, uuid: e.uuid, contents: loaded };
+      const x = loaded;
       const names = (k: string) => (x[k] ?? []).map((r: Loose) => r.name);
       return {
         environment: e.name,
@@ -281,7 +288,9 @@ export function register(server: McpServer) {
     inputSchema: {
       account,
       deployment: deploymentId.describe("identifier returned by coolify_deploy"),
-      lines: z.number().optional().describe("number of log lines (default 25, only once finished)"),
+      lines: z.number().int().min(1).max(500).optional().describe(
+        "number of log lines (default 25, only once finished)",
+      ),
     },
     annotations: READS,
   }, async ({ account, deployment, lines }: { account?: string; deployment: string; lines?: number }) => {
@@ -294,8 +303,8 @@ export function register(server: McpServer) {
         result.logs = entries.map((v) => v.output).filter(Boolean).slice(-(lines ?? 25)).map((l: string) =>
           maskText(l)
         );
-      } catch {
-        result.logs = "logs not readable";
+      } catch (e) {
+        result.logs = `logs not readable: ${(e as Error).message}`;
       }
     }
     return txt(result);

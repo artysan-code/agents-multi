@@ -74,41 +74,57 @@ const DOWNLOADS = [`${HOME}/Downloads`, `${HOME}/downloads`].find((d) => {
 const header = (m: Doc, name: string) =>
   m.payload?.headers?.find((h: Doc) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
 
+const pageToken = z.string().optional().describe("nextPageToken of the previous answer, for the following results");
+/** The results; when there are more, an object that says so and carries the token for the next page. */
+const paged = <T>(items: T[], next?: string) => next ? { more: true, nextPageToken: next, results: items } : items;
+
 const server = new McpServer({ name: "google", version: "0.1.0" });
 
 // ---------------------------------------------------------------- Gmail
-server.registerTool("gmail_search", {
-  description:
-    "Search mail with Gmail's own syntax (from:, to:, subject:, is:unread, newer_than:2d, has:attachment, in:inbox…). Newest first.",
-  inputSchema: {
-    account,
-    query: z.string().describe("Gmail search, e.g. 'is:unread newer_than:1d'"),
-    max: z.number().int().min(1).max(50).optional(),
+server.registerTool(
+  "gmail_search",
+  {
+    description:
+      "Search mail with Gmail's own syntax (from:, to:, subject:, is:unread, newer_than:2d, has:attachment, in:inbox…). Newest first.",
+    inputSchema: {
+      account,
+      query: z.string().describe("Gmail search, e.g. 'is:unread newer_than:1d'"),
+      max: z.number().int().min(1).max(50).optional(),
+      pageToken: pageToken,
+    },
   },
-}, async ({ account, query, max }: { account?: string; query: string; max?: number }) => {
-  const list = await api(
-    account,
-    `${GMAIL}/messages?${new URLSearchParams({ q: query, maxResults: String(max ?? 15) })}`,
-  );
-  const msgs = await Promise.all(
-    (list.messages ?? []).map((m: Doc) =>
-      api(
-        account,
-        `${GMAIL}/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
-      )
-    ),
-  );
-  return text(msgs.map((m) => ({
-    id: m.id,
-    threadId: m.threadId,
-    from: header(m, "From"),
-    to: header(m, "To"),
-    subject: header(m, "Subject"),
-    date: header(m, "Date"),
-    unread: (m.labelIds ?? []).includes("UNREAD"),
-    snippet: htmlToText(m.snippet ?? ""), // Gmail escapes snippets as HTML
-  })));
-});
+  async ({ account, query, max, pageToken }: { account?: string; query: string; max?: number; pageToken?: string }) => {
+    const list = await api(
+      account,
+      `${GMAIL}/messages?${new URLSearchParams({
+        q: query,
+        maxResults: String(max ?? 15),
+        ...(pageToken ? { pageToken } : {}),
+      })}`,
+    );
+    const msgs = await Promise.all(
+      (list.messages ?? []).map((m: Doc) =>
+        api(
+          account,
+          `${GMAIL}/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+        )
+      ),
+    );
+    return text(paged(
+      msgs.map((m) => ({
+        id: m.id,
+        threadId: m.threadId,
+        from: header(m, "From"),
+        to: header(m, "To"),
+        subject: header(m, "Subject"),
+        date: header(m, "Date"),
+        unread: (m.labelIds ?? []).includes("UNREAD"),
+        snippet: htmlToText(m.snippet ?? ""), // Gmail escapes snippets as HTML
+      })),
+      list.nextPageToken,
+    ));
+  },
+);
 
 server.registerTool("gmail_thread", {
   description:
@@ -118,7 +134,8 @@ server.registerTool("gmail_thread", {
   let t: Doc;
   try {
     t = await api(account, `${GMAIL}/threads/${id}?format=full`);
-  } catch {
+  } catch (e) {
+    if (!(e instanceof Error) || !e.message.startsWith("Google 404")) throw e;
     const m = await api(account, `${GMAIL}/messages/${id}?format=minimal`);
     t = await api(account, `${GMAIL}/threads/${m.threadId}?format=full`);
   }
@@ -192,20 +209,24 @@ server.registerTool(
 
 server.registerTool("gmail_drafts", {
   description: "The drafts waiting in the account: id, recipient, subject.",
-  inputSchema: { account },
-}, async ({ account }: { account?: string }) => {
-  const list = await api(account, `${GMAIL}/drafts?maxResults=20`);
+  inputSchema: { account, pageToken },
+}, async ({ account, pageToken }: { account?: string; pageToken?: string }) => {
+  const list = await api(
+    account,
+    `${GMAIL}/drafts?${new URLSearchParams({ maxResults: "20", ...(pageToken ? { pageToken } : {}) })}`,
+  );
   const ds = await Promise.all(
     (list.drafts ?? []).map((d: Doc) => api(account, `${GMAIL}/drafts/${d.id}?format=metadata`)),
   );
-  return text(
+  return text(paged(
     ds.map((d) => ({
       draftId: d.id,
       to: header(d.message, "To"),
       subject: header(d.message, "Subject"),
       snippet: htmlToText(d.message.snippet ?? ""),
     })),
-  );
+    list.nextPageToken,
+  ));
 });
 
 server.registerTool("gmail_send", {
@@ -326,15 +347,17 @@ server.registerTool(
       to: z.string().optional().describe("RFC 3339; default end of today"),
       calendarId: z.string().optional().describe("default primary"),
       query: z.string().optional(),
+      pageToken,
     },
   },
   async (
-    { account, from, to, calendarId, query }: {
+    { account, from, to, calendarId, query, pageToken }: {
       account?: string;
       from?: string;
       to?: string;
       calendarId?: string;
       query?: string;
+      pageToken?: string;
     },
   ) => {
     const now = new Date(), end = new Date(now);
@@ -346,19 +369,23 @@ server.registerTool(
       orderBy: "startTime",
       maxResults: "100",
       ...(query ? { q: query } : {}),
+      ...(pageToken ? { pageToken } : {}),
     });
     const r = await api(account, `${CAL}/calendars/${encodeURIComponent(calendarId ?? "primary")}/events?${q}`);
-    return text((r.items ?? []).map((e: Doc) => ({
-      id: e.id,
-      title: e.summary ?? "(no title)",
-      start: e.start?.dateTime ?? e.start?.date,
-      end: e.end?.dateTime ?? e.end?.date,
-      location: e.location ?? null,
-      meet: e.hangoutLink ?? null,
-      attendees: (e.attendees ?? []).length,
-      status: e.status,
-      myResponse: e.attendees?.find((a: Doc) => a.self)?.responseStatus ?? null,
-    })));
+    return text(paged(
+      (r.items ?? []).map((e: Doc) => ({
+        id: e.id,
+        title: e.summary ?? "(no title)",
+        start: e.start?.dateTime ?? e.start?.date,
+        end: e.end?.dateTime ?? e.end?.date,
+        location: e.location ?? null,
+        meet: e.hangoutLink ?? null,
+        attendees: (e.attendees ?? []).length,
+        status: e.status,
+        myResponse: e.attendees?.find((a: Doc) => a.self)?.responseStatus ?? null,
+      })),
+      r.nextPageToken,
+    ));
   },
 );
 
@@ -495,14 +522,16 @@ server.registerTool(
       text: z.string().optional().describe("words to find in name or content"),
       sharedWithMe: z.boolean().optional(),
       max: z.number().int().min(1).max(50).optional(),
+      pageToken,
     },
   },
   async (
-    { account, text: words, sharedWithMe, max }: {
+    { account, text: words, sharedWithMe, max, pageToken }: {
       account?: string;
       text?: string;
       sharedWithMe?: boolean;
       max?: number;
+      pageToken?: string;
     },
   ) => {
     const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -519,10 +548,11 @@ server.registerTool(
         orderBy: "modifiedTime desc",
         includeItemsFromAllDrives: "true",
         supportsAllDrives: "true",
-        fields: "files(id,name,mimeType,modifiedTime,owners(displayName,emailAddress),webViewLink,size)",
+        ...(pageToken ? { pageToken } : {}),
+        fields: "nextPageToken,files(id,name,mimeType,modifiedTime,owners(displayName,emailAddress),webViewLink,size)",
       })}`,
     );
-    return text(
+    return text(paged(
       (r.files ?? []).map((f: Doc) => ({
         id: f.id,
         name: f.name,
@@ -531,7 +561,8 @@ server.registerTool(
         owner: f.owners?.[0]?.emailAddress ?? null,
         link: f.webViewLink,
       })),
-    );
+      r.nextPageToken,
+    ));
   },
 );
 
@@ -539,6 +570,7 @@ const EXPORT: Record<string, string> = {
   "application/vnd.google-apps.document": "text/plain",
   "application/vnd.google-apps.presentation": "text/plain",
 };
+const MAX_READ_BYTES = 20_000_000;
 const cut = (body: string, limit: number) => body.slice(0, limit) + (body.length > limit ? "\n[…cut]" : "");
 
 server.registerTool("drive_read", {
@@ -558,10 +590,17 @@ server.registerTool("drive_read", {
     const v = await api(account, `${SHEETS}/${id}/values:batchGet?${q}`);
     return out(sheetsText(titles.map((title, i) => ({ title, values: v.valueRanges?.[i]?.values })), limit));
   }
+  if (Number(f.size) > MAX_READ_BYTES) {
+    throw new Error(
+      `${f.name} is ${Math.round(Number(f.size) / 1e6)} MB: too large to read here (limit ${
+        MAX_READ_BYTES / 1e6
+      } MB); open the link: ${f.webViewLink}`,
+    );
+  }
   const { secret } = await google.use(account);
   const token = await accessToken(await loadClient(), secret);
   const get = async (url: string) => {
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
     if (!r.ok) throw new Error(`Google ${r.status} reading ${f.name}`);
     return r;
   };

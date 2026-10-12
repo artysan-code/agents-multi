@@ -53,8 +53,14 @@ export function parseClientJson(text: string): Client {
   return { id: c.client_id, secret: c.client_secret };
 }
 
-const b64url = (b: Uint8Array) =>
-  btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+/** Pure: bytes as base64, in chunks (spreading a large array into fromCharCode overflows the stack). */
+export function toBase64(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode(...b.subarray(i, i + 8192));
+  return btoa(s);
+}
+
+const b64url = (b: Uint8Array) => toBase64(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 export async function pkce(): Promise<{ verifier: string; challenge: string }> {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -90,9 +96,15 @@ async function tokenCall(body: Record<string, string>): Promise<Record<string, u
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(body),
+    signal: AbortSignal.timeout(30_000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
+    if (j.error === "invalid_grant") {
+      throw new Error(
+        "Google login expired or was revoked for this account: reconnect it from the console (Connections page)",
+      );
+    }
     throw new Error(
       `Google token endpoint: ${j.error ?? r.status}${j.error_description ? ` — ${j.error_description}` : ""}`,
     );
@@ -152,11 +164,26 @@ export async function accessToken(client: Client, refresh: string): Promise<stri
 }
 
 // ---------------------------------------------------------------- mail format
-/** Pure: a header value in RFC 2047 when it is not plain ASCII. */
+/** Pure: a header value in RFC 2047 when it is not plain ASCII. Each encoded-word stays within 75
+ *  characters (45 bytes of text, cut between characters); several are folded onto continuation lines. */
 export function encodeHeader(v: string): string {
   // deno-lint-ignore no-control-regex
   if (/^[\x00-\x7f]*$/.test(v)) return v;
-  return `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode(v)))}?=`;
+  const enc = new TextEncoder();
+  const words: string[] = [];
+  let cur = "", size = 0;
+  for (const ch of v) {
+    const n = enc.encode(ch).length;
+    if (size + n > 45) {
+      words.push(cur);
+      cur = "";
+      size = 0;
+    }
+    cur += ch;
+    size += n;
+  }
+  if (cur) words.push(cur);
+  return words.map((w) => `=?UTF-8?B?${toBase64(enc.encode(w))}?=`).join("\r\n ");
 }
 
 interface Draft {
@@ -171,7 +198,13 @@ interface Draft {
 
 /** Pure: a plain-text UTF-8 message as Gmail's `raw` (base64url of the RFC 5322 text). */
 export function rawMessage(d: Draft): string {
-  const bodyB64 = btoa(String.fromCharCode(...new TextEncoder().encode(d.body))).replace(/.{76}/g, "$&\r\n");
+  for (const [name, v] of Object.entries({ To: d.to, Cc: d.cc, Bcc: d.bcc, Subject: d.subject })) {
+    if (v && /[\r\n]/.test(v)) throw new Error(`${name} contains a line break: refused (header injection)`);
+  }
+  for (const v of [d.inReplyTo, d.references]) {
+    if (v && /[\r\n]/.test(v)) throw new Error("message id contains a line break: refused (header injection)");
+  }
+  const bodyB64 = toBase64(new TextEncoder().encode(d.body)).replace(/.{76}/g, "$&\r\n");
   const headers = [
     `To: ${d.to}`,
     d.cc ? `Cc: ${d.cc}` : null,
