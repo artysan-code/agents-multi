@@ -103,6 +103,15 @@ async function main(args: string[]) {
   }
   if ((await git("rev-parse", "--abbrev-ref", "HEAD")) !== "dev") throw new Error("ship from dev");
   if (await git("status", "--porcelain")) throw new Error("the working tree is not clean");
+  // the version first, before the gate and any branch moves: a kind that cannot follow the current
+  // version (a beta after an rc) fails here, in a second, with nothing changed
+  const cut = steps.find((s) => s.run[0] === "release")!.run.slice(1);
+  const check = await new Deno.Command("deno", {
+    args: ["run", "--quiet", "--allow-read", "--allow-run=git", "scripts/release.ts", ...cut, "--dry-run"],
+    stdout: "null",
+    stderr: "inherit",
+  }).output();
+  if (!check.success) throw new Error(`release.ts refuses ${a.kind}: nothing was shipped`);
 
   // dev in step: the remote's dev, then what CI committed on release (update manifests) and what
   // the last cut left on beta, so every branch below moves by fast-forward
