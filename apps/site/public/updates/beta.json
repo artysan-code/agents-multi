@@ -1,19 +1,19 @@
 {
-  "version": "1.1.0-rc.3",
-  "notes": "### Added\n\n- **mcp**: reads run unasked, production writes ask, base safety lists hold everywhere (eedb412)\n- **hooks**: branch-guard asks for what reaches production, not for the branch checked out (705554b)\n\n### Fixed\n\n- **release**: ship checks the version can be cut before the gate and any branch move (1d7a6ce)\n- **mcp**: a guard hook is quoted, ignores the project's deno.json, and asks when it cannot run (434cc96)\n- **security**: tool arguments stay one path segment, calls time out, the brain builds from the lock (c862d7e)\n\n### Performance\n\n- **statusline**: one jq and two git calls, about 260 ms to 40 ms a refresh (ddbf23b)\n- **hooks**: guards parse once and match in bash, dead hooks and duplicated agents go (a76a6d9)\n- **ci**: the gate's steps and the test files run at once (207b51b)\n\n### Changed\n\n- **tasks**: the task library in modules (96aab06)\n- **coolify**: the server in modules, one per section of tools (d7195b4)\n- no import cycles; shared helpers in one place (025022b)",
-  "pub_date": "2026-10-12T09:03:12Z",
+  "version": "1.1.0-rc.4",
+  "notes": "### Added\n\n- **statusline**: two lines with the folder's tasks from the brain (6e9ac05)\n\n### Documentation\n\n- **site**: MCP permission lists and the production guards (0250269)",
+  "pub_date": "2026-10-12T10:38:34Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.3/agents-multi_1.1.0-rc.3_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjFJUmIyL2pMV1pFYVo0NmJzaEVhRXA4Q3I4ek4rZ1VuVFRkcVQ3bHBPeWpmMHdVZEFoeXorMzRjUTAwMjNBVll5USt2VHJuZG53V3dpRmtxNm10ZkFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNzk1NzkxCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuM19hbWQ2NC5kZWIJdmVyc2lvbjoxLjEuMC1yYy4zCmFESXpmUWJ5aGNjbnpQeG5XNjBzcXVOWDZTRGsyL0FtNlQxazhOYXkxYnVpUlpudlNKSEhMVGtFOXRIaWpuS3k1U1phTXVVTFZVME1hWmpKRjdIR0RRPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.4/agents-multi_1.1.0-rc.4_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjVUL1dqWnAyWThyYk8ycTNyRk5YVkxkc1REVmg0TzJiU09hbzJYSnJKN0NOY3hxNHFSdDJ0NWdmOGVnQVdERlNWdmpXYVhxNjlTTlZscU8vYmVSSVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODAxNTEzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNF9hbWQ2NC5kZWIJdmVyc2lvbjoxLjEuMC1yYy40CkZYeklvSnZMZktVWlV4bUtBV3BTNXJkS2pkY24rVE0wM2NDU0hGb0Q5WDVBeGs4UGZOVmhXNmpSRkR2K1NqL05ZRFd4S1hUYVpNcDVjd0syeHhNNUNnPT0K"
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.3/agents-multi_1.1.0-rc.3_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjlYN0RWaWJiMmFlS1RWeGZaRk81S2NYZzFsYjFQblBJSk1LWGh0QkUxd3RRK3NTZ2RieUQzQmVvdUNjdHhUWmpjSDd1NktBTTNnYXZhdmZEeHozTHcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNzk1NzkxCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuM19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjMKU0JVT0dBQjdLUnpRem1zZUlVVDRtN0ZydjlSYWVUbE1ud2RVR3FmdTVuMEEzaDdVakgzZlVyZ094RkJUSlA1VFh0MFpLcEFkQmNVSkRRdy93dWw1RGc9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.4/agents-multi_1.1.0-rc.4_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJrbjBVbmVheitHUElqVHI0Zkh5RVFmWFdFODJaS0k1Y2MrMWR5RlBTYTQ3RnczK0kwNXBzOXA2ei9hSHhZbzhrdU9vUXpDNmhaejFVR0hVNmRiR1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODAxNTEzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjQKYmN5Y2xFdnVzV2I3eEx5Y1AvM3dEWERZdUc2VlUxcnVyT1F6OUt2YnBJRDJ5bEtVUzR0R3hBcWg5TlkyVnJ2QWdaMThNbE5tQVd3WmtlL3pyMGY3REE9PQo="
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.3/agents-multi_1.1.0-rc.3_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjlYN0RWaWJiMmFlS1RWeGZaRk81S2NYZzFsYjFQblBJSk1LWGh0QkUxd3RRK3NTZ2RieUQzQmVvdUNjdHhUWmpjSDd1NktBTTNnYXZhdmZEeHozTHcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNzk1NzkxCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuM19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjMKU0JVT0dBQjdLUnpRem1zZUlVVDRtN0ZydjlSYWVUbE1ud2RVR3FmdTVuMEEzaDdVakgzZlVyZ094RkJUSlA1VFh0MFpLcEFkQmNVSkRRdy93dWw1RGc9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.4/agents-multi_1.1.0-rc.4_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjJrbjBVbmVheitHUElqVHI0Zkh5RVFmWFdFODJaS0k1Y2MrMWR5RlBTYTQ3RnczK0kwNXBzOXA2ei9hSHhZbzhrdU9vUXpDNmhaejFVR0hVNmRiR1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODAxNTEzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuNF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjQKYmN5Y2xFdnVzV2I3eEx5Y1AvM3dEWERZdUc2VlUxcnVyT1F6OUt2YnBJRDJ5bEtVUzR0R3hBcWg5TlkyVnJ2QWdaMThNbE5tQVd3WmtlL3pyMGY3REE9PQo="
     }
   }
 }
