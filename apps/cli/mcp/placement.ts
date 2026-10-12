@@ -275,7 +275,10 @@ export function permissionRules(reg: Registry, profile: string): RegistryRules {
     for (const tool of cfg._allow ?? []) allow.push(`mcp__${name}__${tool}`);
     for (const tool of cfg._deny ?? []) deny.push(`mcp__${name}__${tool}`);
     for (const tool of cfg._ask ?? []) ask.push(`mcp__${name}__${tool}`);
-    if (cfg._guard) guarded.set(entry, [...guarded.get(entry) ?? [], `mcp__${name}__${cfg._guard.tool}`]);
+    if (cfg._guard) {
+      const tools = [cfg._guard.tool].flat().map((t) => `mcp__${name}__${t}`);
+      guarded.set(entry, [...guarded.get(entry) ?? [], ...tools]);
+    }
   }
   const { hooks: dir, deno } = reg.launch ?? launchPaths();
   const hooks: GuardHook[] = [...guarded].map(([entry, tools]) => ({

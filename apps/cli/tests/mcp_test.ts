@@ -308,6 +308,21 @@ Deno.test("permissionRules: _deny and _ask under each server's name, only where 
   ], [true, false, false]);
 });
 
+Deno.test("permissionRules: a _guard can name several tools, one matcher for all", () => {
+  const r = permissionRules({
+    profiles: PROFILES,
+    servers: { s: { command: "s", _guard: { tool: ["a", "b.c"], hook: "g.ts" } } },
+  }, A);
+  assertEquals(r.hooks.length, 1);
+  const m = new RegExp(r.hooks[0].matcher);
+  assertEquals([m.test("mcp__s__a"), m.test("mcp__s__b.c"), m.test("mcp__s__bxc"), m.test("mcp__s__d")], [
+    true,
+    true,
+    false,
+    false,
+  ]);
+});
+
 Deno.test("registryProblems: {secret} outside _perAccount, missing _service, wrong template kind, http on Desktop", () => {
   assertEquals(registryProblems(perAccountReg), []);
   const bad = registryProblems({

@@ -50,8 +50,8 @@ export type ServerCfg = Record<string, unknown> & {
   _allow?: string[];
   _deny?: string[];
   _ask?: string[];
-  /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` */
-  _guard?: { tool: string; hook: string };
+  /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` (one name, or several) */
+  _guard?: { tool: string | string[]; hook: string };
   /** a project's binding key → the argument it adds (stdio `_perAccount` servers): launch.ts */
   _bind?: Record<string, string>;
   /** how to install the program the server runs, when it is not part of this repository */

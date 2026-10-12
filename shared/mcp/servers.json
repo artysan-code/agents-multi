@@ -423,6 +423,7 @@
         "get_tag",
         "get_user_orgs",
         "issue_read",
+        "issue_write",
         "label_read",
         "list_branches",
         "list_commits",
@@ -434,6 +435,7 @@
         "list_tags",
         "milestone_read",
         "notification_read",
+        "notification_write",
         "package_read",
         "project_read",
         "pull_request_read",
@@ -458,19 +460,22 @@
         "create_repo",
         "create_tag",
         "fork_repo",
-        "issue_write",
-        "label_write",
-        "milestone_write",
-        "notification_write",
         "package_write",
-        "project_write",
         "pull_request_review_write",
-        "pull_request_write",
-        "rename_branch",
-        "timetracking_write",
-        "wiki_write"
+        "rename_branch"
       ],
-      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied; every other write asks: the consolidated *_write tools carry a method, so a delete inside one is caught by the question, not by the list. CLI only."
+      "_guard": {
+        "tool": [
+          "label_write",
+          "milestone_write",
+          "project_write",
+          "pull_request_write",
+          "timetracking_write",
+          "wiki_write"
+        ],
+        "hook": "gitea-guard.ts"
+      },
+      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied. The consolidated *_write tools carry a method, so shared/hooks/gitea-guard.ts reads it: what is reversible in the tracker (issues, PRs, labels, wiki) goes through, a merge or a delete asks. What reaches production or the server stays in the ask list: files on a branch, tags, releases, actions, repositories, packages, reviews. CLI only."
     }
   }
 }

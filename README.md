@@ -442,9 +442,10 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
   whatever the person's or profile's layer says (a merge patch replaces arrays whole): the doctor
   (`profile.<p>.safety`) fails when a built file lacks one of them or a required guard.
 - **`_guard: { tool, hook }`**: a PreToolUse hook of `shared/hooks` that decides on each call of
-  that tool, wired by the same generated settings on exactly the entry's servers. For a server whose
+  that tool (or of each tool in a list), wired by the same generated settings on exactly the entry's servers. For a server whose
   one tool does everything: `cloudflare-guard.ts` reads the code `execute` would run, lets reads
-  through, denies any deletion and asks for writes.
+  through, denies any deletion and asks for writes. `gitea-guard.ts` reads the `method` of Gitea's consolidated
+  `*_write` tools: a merge or a delete asks, everything else reversible goes through.
 - **`_bind: { key: argument }`**: a project ties a stdio server to itself. `launch.ts` looks for
   `.claude/claude-multi.json` from the folder Claude started in up to the home folder, and each key
   the project sets under the service's name adds that argument (`{value}` filled in, `true` as it
