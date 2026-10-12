@@ -3,15 +3,20 @@
 # Segments: folder │ branch+state @hash │ model │ ctx bar % tokens │ 5h limit │ cost │ cfg (repo agents-multi) │ ⬆ update
 # It also keeps a snapshot of the session for the console's «Claude now» (apps/cli/live.ts): the context
 # and the account's rate limits Claude Code hands it, in <state>/agents-multi/live/<session>.json.
+#
+# It runs at every refresh of the prompt: one jq for the payload, two git calls, bash for the rest
+# (it took about 200 ms with a jq per field, five git calls and pacman -Q; now a few tens).
 
 input=$(cat)
+profile=$(basename "${CLAUDE_CONFIG_DIR:-personal}")
 
-# --- the snapshot: written beside and renamed over, never half a file; nothing printed ---
-live_dir="${XDG_STATE_HOME:-$HOME/.local/state}/agents-multi/live"
-sid=$(echo "$input" | jq -r '.session_id // empty')
-if [ -n "$sid" ] && [[ "$sid" =~ ^[A-Za-z0-9-]+$ ]] && mkdir -p "$live_dir" 2>/dev/null; then
-  profile=$(basename "${CLAUDE_CONFIG_DIR:-personal}")
-  echo "$input" | jq -c --arg p "$profile" '{
+# One jq: the snapshot on the first line, the fields on the second, separated by US (an IFS that is not
+# whitespace keeps empty fields)
+{
+  IFS= read -r snapshot
+  IFS=$'\x1f' read -r sid cwd model used_pct used_tok tot_tok cost five
+} < <(printf '%s' "$input" | jq -r --arg p "$profile" '
+  ({
     at: now | floor, profile: $p, session: .session_id,
     cwd: (.workspace.current_dir // .cwd), model: .model.display_name,
     context: { used: .context_window.used_percentage, size: .context_window.context_window_size,
@@ -21,51 +26,57 @@ if [ -n "$sid" ] && [[ "$sid" =~ ^[A-Za-z0-9-]+$ ]] && mkdir -p "$live_dir" 2>/d
       seven_day: (.seven_day // null | if . == null then null else { used: .used_percentage, resets: .resets_at } end)
     } | with_entries(select(.value != null)) end),
     cost: .cost.total_cost_usd, source: "statusline"
-  } | with_entries(select(.value != null))' > "$live_dir/.$sid.tmp" 2>/dev/null \
-    && mv -f "$live_dir/.$sid.tmp" "$live_dir/$sid.json"
+  } | with_entries(select(.value != null)) | tojson),
+  ([.session_id, (.workspace.current_dir // .cwd), .model.display_name, .context_window.used_percentage,
+    .context_window.used_tokens, .context_window.total_tokens, .cost.total_cost_usd,
+    .rate_limits.five_hour.used_percentage] | map(if . == null then "" else tostring end) | join("\u001f"))
+' 2>/dev/null)
+
+# --- the snapshot: written beside and renamed over, never half a file; nothing printed ---
+live_dir="${XDG_STATE_HOME:-$HOME/.local/state}/agents-multi/live"
+if [ -n "$sid" ] && [[ "$sid" =~ ^[A-Za-z0-9-]+$ ]] && mkdir -p "$live_dir" 2>/dev/null; then
+  printf '%s\n' "$snapshot" >"$live_dir/.$sid.tmp" 2>/dev/null && mv -f "$live_dir/.$sid.tmp" "$live_dir/$sid.json"
 fi
 
-cwd=$(echo "$input"      | jq -r '.workspace.current_dir // .cwd // ""')
-model=$(echo "$input"    | jq -r '.model.display_name // ""')
-used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
-used_tok=$(echo "$input" | jq -r '.context_window.used_tokens // empty')
-tot_tok=$(echo "$input"  | jq -r '.context_window.total_tokens // empty')
-cost=$(echo "$input"     | jq -r '.cost.total_cost_usd // empty')
-
-# ANSI
-RESET="\033[0m"; BOLD="\033[1m"; DIM="\033[2m"
-CYAN="\033[36m"; YELLOW="\033[33m"; MAGENTA="\033[35m"
-GREEN="\033[32m"; RED="\033[31m"; GREY="\033[90m"
+# ANSI, as real escape characters: the line is printed with %s, so a % or a \ in a folder or a branch
+# name is printed as it is
+RESET=$'\033[0m' BOLD=$'\033[1m' DIM=$'\033[2m'
+CYAN=$'\033[36m' YELLOW=$'\033[33m' MAGENTA=$'\033[35m'
+GREEN=$'\033[32m' RED=$'\033[31m' GREY=$'\033[90m'
 
 SEP=" ${GREY}│${RESET} "
 
 # --- folder: basename only ---
-folder=$(basename "$cwd")
-folder_part="${BOLD}${YELLOW}${folder}${RESET}"
+folder_part="${BOLD}${YELLOW}${cwd##*/}${RESET}"
 
-# --- git: branch ↑N↓M +X -Y ---
+# --- git: branch ↑N↓M +X -Y (status --porcelain=v2 --branch: branch, commit and upstream in one call) ---
 git_part=""
-if [ -n "$cwd" ] && git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
-  branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null)
-  hash=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
+if [ -n "$cwd" ] && status=$(git -C "$cwd" status --porcelain=v2 --branch --untracked-files=no 2>/dev/null); then
+  branch="" hash="" ahead=0 behind=0
+  while IFS= read -r line; do
+    case "$line" in
+      "# branch.oid "*) hash=${line#\# branch.oid } ;;
+      "# branch.head "*) branch=${line#\# branch.head } ;;
+      "# branch.ab "*)
+        read -r _ _ a b <<<"$line"
+        ahead=${a#+} behind=${b#-}
+        ;;
+      "# "*) ;;
+      *) break ;;
+    esac
+  done <<<"$status"
+  [ "$branch" = "(detached)" ] && branch=""
+  [ "$hash" = "(initial)" ] && hash=""
 
   ahead_behind=""
-  if [ -n "$branch" ]; then
-    counts=$(git -C "$cwd" rev-list --left-right --count "@{u}...HEAD" 2>/dev/null)
-    if [ -n "$counts" ]; then
-      behind=$(echo "$counts" | awk '{print $1}')
-      ahead=$(echo "$counts"  | awk '{print $2}')
-      [ "$ahead"  -gt 0 ] 2>/dev/null && ahead_behind="${ahead_behind} ${CYAN}↑${ahead}${RESET}"
-      [ "$behind" -gt 0 ] 2>/dev/null && ahead_behind="${ahead_behind} ${CYAN}↓${behind}${RESET}"
-    fi
-  fi
+  [ "$ahead" -gt 0 ] 2>/dev/null && ahead_behind="${ahead_behind} ${CYAN}↑${ahead}${RESET}"
+  [ "$behind" -gt 0 ] 2>/dev/null && ahead_behind="${ahead_behind} ${CYAN}↓${behind}${RESET}"
 
   # Uncommitted diff: staged + unstaged tracked changes vs HEAD
   shortstat=$(git -C "$cwd" diff --shortstat HEAD 2>/dev/null)
-  ins=$(echo "$shortstat" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+')
-  del=$(echo "$shortstat" | grep -oE '[0-9]+ deletion'  | grep -oE '[0-9]+')
-  [ -z "$ins" ] && ins=0
-  [ -z "$del" ] && del=0
+  ins=0 del=0
+  [[ $shortstat =~ ([0-9]+)\ insertion ]] && ins=${BASH_REMATCH[1]}
+  [[ $shortstat =~ ([0-9]+)\ deletion ]] && del=${BASH_REMATCH[1]}
   ins_color=$GREEN; [ "$ins" -eq 0 ] && ins_color=$DIM
   del_color=$RED;   [ "$del" -eq 0 ] && del_color=$DIM
   diff_part=" ${ins_color}+${ins}${RESET} ${del_color}-${del}${RESET}"
@@ -73,16 +84,18 @@ if [ -n "$cwd" ] && git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
   if [ -n "$branch" ]; then
     git_part="${SEP}${GREEN}${branch}${RESET}${ahead_behind}${diff_part}"
   elif [ -n "$hash" ]; then
-    git_part="${SEP}${DIM}@${hash}${RESET}${diff_part}"
+    git_part="${SEP}${DIM}@${hash:0:7}${RESET}${diff_part}"
   fi
 fi
 
 # --- model: strip leading "Claude " ---
 model_part=""
-if [ -n "$model" ]; then
-  short_model="${model#Claude }"
-  model_part="${SEP}${MAGENTA}${short_model}${RESET}"
-fi
+[ -n "$model" ] && model_part="${SEP}${MAGENTA}${model#Claude }${RESET}"
+
+# k for thousands: 634123 → 634.1k (decimals 1) or 634k (decimals 0); under a thousand, the number
+kilo() { # <tokens> <decimals>
+  if [ "$1" -ge 1000 ] 2>/dev/null; then LC_NUMERIC=C printf "%.${2}fk" "${1}e-3"; else printf '%s' "$1"; fi
+}
 
 # --- context: bar + % + tokens ---
 ctx_part=""
@@ -109,33 +122,26 @@ if [ -n "$used_pct" ]; then
 
   tok_str=""
   if [ -n "$used_tok" ] && [ -n "$tot_tok" ]; then
-    used_h=$(awk -v t="$used_tok" 'BEGIN{ if(t>=1000) printf "%.1fk", t/1000; else printf "%d", t }')
-    tot_h=$(awk  -v t="$tot_tok"  'BEGIN{ if(t>=1000) printf "%.0fk", t/1000; else printf "%d", t }')
-    tok_str=" ${DIM}${used_h}/${tot_h}${RESET}"
+    tok_str=" ${DIM}$(kilo "$used_tok" 1)/$(kilo "$tot_tok" 0)${RESET}"
   fi
 
-  ctx_part="${SEP}${ctx_color}[${bar}${RESET}${GREY}${bar_empty}${ctx_color}]${RESET} ${ctx_color}${pct_int}%%${RESET}${tok_str}"
+  ctx_part="${SEP}${ctx_color}[${bar}${RESET}${GREY}${bar_empty}${ctx_color}]${RESET} ${ctx_color}${pct_int}%${RESET}${tok_str}"
 fi
 
 # --- the account's five-hour limit, when Claude Code gives it ---
 limit_part=""
-five=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
 if [ -n "$five" ]; then
   five_int=$(LC_NUMERIC=C printf "%.0f" "$five")
   five_color="$DIM"
   [ "$five_int" -ge 50 ] && five_color="$YELLOW"
   [ "$five_int" -ge 80 ] && five_color="$RED"
-  limit_part="${SEP}${five_color}5h ${five_int}%%${RESET}"
+  limit_part="${SEP}${five_color}5h ${five_int}%${RESET}"
 fi
 
 # --- cost ---
 cost_part=""
-if [ -n "$cost" ]; then
-  is_zero=$(awk -v c="$cost" 'BEGIN{ print (c+0 == 0) ? 1 : 0 }')
-  if [ "$is_zero" = "0" ]; then
-    cost_str=$(awk -v c="$cost" 'BEGIN{ printf "$%.2f", c }')
-    cost_part="${SEP}${DIM}${CYAN}${cost_str}${RESET}"
-  fi
+if [ -n "$cost" ] && ! [[ $cost =~ ^[0.]*$ ]]; then
+  cost_part="${SEP}${DIM}${CYAN}\$$(LC_NUMERIC=C printf '%.2f' "$cost")${RESET}"
 fi
 
 # --- agents-multi: config repo state + available updates ---
@@ -143,9 +149,9 @@ fi
 cm_part=""
 cm_sync="${XDG_CACHE_HOME:-$HOME/.cache}/agents-multi/sync.json"
 if [ -f "$cm_sync" ]; then
-  cm=$(jq -r '[.behind,.ahead,.dirty,.fetch_ok,.upstream] | @tsv' "$cm_sync" 2>/dev/null)
-  cm_behind=$(echo "$cm" | cut -f1); cm_ahead=$(echo "$cm" | cut -f2); cm_dirty=$(echo "$cm" | cut -f3)
-  cm_fetch=$(echo "$cm" | cut -f4); cm_up=$(echo "$cm" | cut -f5)
+  IFS=$'\x1f' read -r cm_behind cm_ahead cm_dirty cm_fetch cm_up < <(
+    jq -r '[.behind,.ahead,.dirty,.fetch_ok,.upstream] | map(if . == null then "" else tostring end) | join("\u001f")' "$cm_sync" 2>/dev/null
+  )
   cm_str=""
   if [ "$cm_up" = "false" ]; then
     cm_str="${RED}cfg no-remote${RESET}"
@@ -161,12 +167,19 @@ if [ -f "$cm_sync" ]; then
 fi
 cm_upd="$HOME/.cache/claude-update/check.json"
 if [ -f "$cm_upd" ]; then
-  upd=$(jq -r '[(.cli.outdated|tostring),.cli.latest,(.desktop.outdated|tostring),.desktop.latest,.cli.current,.desktop.current] | @tsv' "$cm_upd" 2>/dev/null)
-  u_cli=$(echo "$upd" | cut -f1); u_cli_v=$(echo "$upd" | cut -f2)
-  u_desk=$(echo "$upd" | cut -f3); u_desk_v=$(echo "$upd" | cut -f4)
+  IFS=$'\x1f' read -r u_cli u_cli_v u_desk u_desk_v < <(
+    jq -r '[(.cli.outdated|tostring),.cli.latest,(.desktop.outdated|tostring),.desktop.latest] | map(if . == null then "" else tostring end) | join("\u001f")' "$cm_upd" 2>/dev/null
+  )
   # the cache goes stale after an update: it only counts if the remote version differs from the one installed NOW
-  cur_cli=$(basename "$(readlink -f "$HOME/.local/bin/claude-bin" 2>/dev/null)" 2>/dev/null)
-  cur_desk=$(pacman -Q claude-desktop 2>/dev/null | awk '{print $2}' | cut -d- -f1)
+  cur_cli=$(readlink -f "$HOME/.local/bin/claude-bin" 2>/dev/null)
+  cur_cli=${cur_cli##*/}
+  # the installed Desktop from pacman's own database (claude-desktop-<version>-<release>), not pacman -Q (100 ms)
+  cur_desk=""
+  for d in /var/lib/pacman/local/claude-desktop-[0-9]*; do
+    [ -d "$d" ] || continue
+    cur_desk=${d#/var/lib/pacman/local/claude-desktop-}
+    cur_desk=${cur_desk%%-*}
+  done
   [ -n "$cur_cli" ] && [ "$u_cli_v" = "$cur_cli" ] && u_cli=false
   [ -n "$cur_desk" ] && [ "$u_desk_v" = "$cur_desk" ] && u_desk=false
   u_str=""
@@ -175,4 +188,4 @@ if [ -f "$cm_upd" ]; then
   [ -n "$u_str" ] && cm_part="${cm_part}${SEP}${u_str}"
 fi
 
-printf "${folder_part}${git_part}${model_part}${ctx_part}${limit_part}${cost_part}${cm_part}"
+printf '%s' "${folder_part}${git_part}${model_part}${ctx_part}${limit_part}${cost_part}${cm_part}"
