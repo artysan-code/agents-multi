@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Claude Code status line: reads the session JSON on stdin and prints one ANSI-coloured line.
-# Segments: folder │ branch+state @hash │ model │ ctx bar % tokens │ 5h limit │ cost │ cfg (repo agents-multi) │ ⬆ update
+# Claude Code status line: reads the session JSON on stdin and prints two ANSI-coloured lines.
+# Line 1: folder │ branch+state @hash │ the folder's tasks (open, doing, waiting, overdue, P1)
+# Line 2: profile │ model │ ctx bar % tokens │ 5h and 7d limits │ cost │ cfg (repo agents-multi) │ ⬆ update
+# The tasks come from the brain through a cache that `agents tasks statusline-cache` rewrites in the
+# background when it is a minute old: this script never waits for the network.
 # It also keeps a snapshot of the session for the console's «Claude now» (apps/cli/live.ts): the context
 # and the account's rate limits Claude Code hands it, in <state>/agents-multi/live/<session>.json.
 #
@@ -14,7 +17,7 @@ profile=$(basename "${CLAUDE_CONFIG_DIR:-personal}")
 # whitespace keeps empty fields)
 {
   IFS= read -r snapshot
-  IFS=$'\x1f' read -r sid cwd model used_pct used_tok tot_tok cost five
+  IFS=$'\x1f' read -r sid cwd model used_pct used_tok tot_tok cost five five_reset seven seven_reset
 } < <(printf '%s' "$input" | jq -r --arg p "$profile" '
   ({
     at: now | floor, profile: $p, session: .session_id,
@@ -29,7 +32,8 @@ profile=$(basename "${CLAUDE_CONFIG_DIR:-personal}")
   } | with_entries(select(.value != null)) | tojson),
   ([.session_id, (.workspace.current_dir // .cwd), .model.display_name, .context_window.used_percentage,
     .context_window.used_tokens, .context_window.total_tokens, .cost.total_cost_usd,
-    .rate_limits.five_hour.used_percentage] | map(if . == null then "" else tostring end) | join("\u001f"))
+    .rate_limits.five_hour.used_percentage, .rate_limits.five_hour.resets_at,
+    .rate_limits.seven_day.used_percentage, .rate_limits.seven_day.resets_at] | map(if . == null then "" else tostring end) | join("\u001f"))
 ' 2>/dev/null)
 
 # --- the snapshot: written beside and renamed over, never half a file; nothing printed ---
@@ -43,6 +47,8 @@ fi
 RESET=$'\033[0m' BOLD=$'\033[1m' DIM=$'\033[2m'
 CYAN=$'\033[36m' YELLOW=$'\033[33m' MAGENTA=$'\033[35m'
 GREEN=$'\033[32m' RED=$'\033[31m' GREY=$'\033[90m'
+
+TEAL=$'\033[38;5;73m' AMBER=$'\033[38;5;179m' ROSE=$'\033[38;5;174m' LILAC=$'\033[38;5;140m'
 
 SEP=" ${GREY}│${RESET} "
 
@@ -128,15 +134,22 @@ if [ -n "$used_pct" ]; then
   ctx_part="${SEP}${ctx_color}[${bar}${RESET}${GREY}${bar_empty}${ctx_color}]${RESET} ${ctx_color}${pct_int}%${RESET}${tok_str}"
 fi
 
-# --- the account's five-hour limit, when Claude Code gives it ---
+# --- the account's limits, when Claude Code gives them: 5h and 7d, each with the time it resets ---
 limit_part=""
-if [ -n "$five" ]; then
-  five_int=$(LC_NUMERIC=C printf "%.0f" "$five")
-  five_color="$DIM"
-  [ "$five_int" -ge 50 ] && five_color="$YELLOW"
-  [ "$five_int" -ge 80 ] && five_color="$RED"
-  limit_part="${SEP}${five_color}5h ${five_int}%${RESET}"
-fi
+limit() { # <label> <used %> <reset epoch> <with weekday>
+  [ -n "$2" ] || return 0
+  local n color=$DIM when=""
+  n=$(LC_NUMERIC=C printf "%.0f" "$2")
+  [ "$n" -ge 50 ] && color=$YELLOW
+  [ "$n" -ge 80 ] && color=$RED
+  if [[ $3 =~ ^[0-9]+$ ]]; then
+    when=" ${DIM}↻ $(date -d "@$3" "+${4:+%a }%H:%M" 2>/dev/null)${RESET}"
+  fi
+  limit_part="${limit_part}${limit_part:+ }${DIM}$1${RESET} ${color}${n}%${RESET}${when}"
+}
+limit 5h "$five" "$five_reset" ""
+limit 7d "$seven" "$seven_reset" 1
+[ -n "$limit_part" ] && limit_part="${SEP}${limit_part}"
 
 # --- cost ---
 cost_part=""
@@ -188,4 +201,60 @@ if [ -f "$cm_upd" ]; then
   [ -n "$u_str" ] && cm_part="${cm_part}${SEP}${u_str}"
 fi
 
-printf '%s' "${folder_part}${git_part}${model_part}${ctx_part}${limit_part}${cost_part}${cm_part}"
+# --- tasks: the open ones of this folder, from the brain's cache (kept per profile) ---
+# A task belongs to a folder under ~ (its `project`): it shows here when its folder contains this one
+# or is inside it, so a repo sees its own tasks and its client's, and a parent folder sees all below.
+tasks_part=""
+rel=${cwd#"$HOME"/}
+if [ -n "$cwd" ] && [ "$rel" != "$cwd" ] && [ -n "$rel" ]; then
+  tl="${XDG_CACHE_HOME:-$HOME/.cache}/agents-multi/tasks-line-${profile}.json"
+  now=$(printf '%(%s)T' -1)
+  IFS=$'\x1f' read -r tl_at tl_n tl_doing tl_wait tl_late tl_p1 < <(
+    jq -r --arg rel "$rel" --arg today "$(printf '%(%F)T' -1)" '
+      def near: . as $p | ($p == $rel or ($p | startswith($rel + "/")) or ($rel | startswith($p + "/")));
+      [.tasks[]? | select(.p != null and (.p | near))] as $t
+      | [ (.at // 0), ($t | length),
+          ([$t[] | select(.s == "doing")] | length),
+          ([$t[] | select(.s == "waiting")] | length),
+          ([$t[] | select(.d != null and .d < $today and .s != "waiting")] | length),
+          ([$t[] | select(.pr == 1 and .s != "waiting") | .r | sub("^TASK-"; "")] | join(" ")) ]
+      | map(tostring) | join("\u001f")' "$tl" 2>/dev/null
+  )
+  tl_at=${tl_at:-0}
+  # older than a minute (or never made): ask for a new one without waiting for it, at most once a minute
+  if [ $((now - tl_at)) -gt 60 ] && [ -z "$(find "$tl.try" -mmin -1 2>/dev/null)" ]; then
+    am=$(command -v agents || echo "$HOME/.local/bin/agents")
+    if [ -x "$am" ] && mkdir -p "${tl%/*}" 2>/dev/null; then
+      : >"$tl.try"
+      (setsid "$am" tasks statusline-cache >/dev/null 2>&1 &)
+    fi
+  fi
+  if [ "${tl_n:-0}" -gt 0 ]; then
+    case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in
+      it*) l_open="da fare" l_doing="in corso" l_wait="aspettano" l_late="in ritardo" l_old="datate" ;;
+      *) l_open="todo" l_doing="doing" l_wait="waiting" l_late="overdue" l_old="stale" ;;
+    esac
+    tl_todo=$((tl_n - tl_doing - tl_wait))
+    tparts=("${DIM}${tl_n} task${RESET}")
+    [ "$tl_todo" -gt 0 ] && tparts+=("${TEAL}${tl_todo} ${l_open}${RESET}")
+    [ "$tl_doing" -gt 0 ] && tparts+=("${AMBER}${tl_doing} ${l_doing}${RESET}")
+    [ "$tl_wait" -gt 0 ] && tparts+=("${LILAC}${tl_wait} ${l_wait}${RESET}")
+    [ "$tl_late" -gt 0 ] && tparts+=("${ROSE}${tl_late} ${l_late}${RESET}")
+    [ -n "$tl_p1" ] && tparts+=("${DIM}P1 ${RESET}${ROSE}${tl_p1}${RESET}")
+    # the cache is a minute old at most while the brain answers: much older means it does not
+    [ $((now - tl_at)) -gt 1800 ] && tparts+=("${DIM}${l_old}${RESET}")
+    tasks_part=$SEP
+    for i in "${!tparts[@]}"; do
+      [ "$i" -gt 0 ] && tasks_part="${tasks_part} ${GREY}·${RESET} "
+      tasks_part="${tasks_part}${tparts[$i]}"
+    done
+  fi
+fi
+
+# --- two lines with an empty one between: braille blank (U+2800), because Claude Code drops lines of
+# nothing or of spaces; each line is indented one space ---
+profile_part="${LILAC}${profile}${RESET}"
+line1="${folder_part}${git_part}${tasks_part}"
+line2="${profile_part}${model_part}${ctx_part}${limit_part}${cost_part}${cm_part}"
+BLANK=$'\u2800'
+printf ' %s\n%s\n %s\n%s' "$line1" "$BLANK" "$line2" "$BLANK"

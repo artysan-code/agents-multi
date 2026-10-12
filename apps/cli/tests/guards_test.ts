@@ -5,8 +5,18 @@ import { assertEquals } from "jsr:@std/assert@1";
 
 const HOOKS = new URL("../../../shared/hooks/", import.meta.url).pathname;
 
+/** The environment without git's own variables: run from a git hook (pre-commit) they point at the real
+ *  repository, and the throwaway ones would commit into it. */
+const cleanEnv = () => Object.fromEntries(Object.entries(Deno.env.toObject()).filter(([k]) => !k.startsWith("GIT_")));
+
 async function git(dir: string, ...args: string[]) {
-  const r = await new Deno.Command("git", { args: ["-C", dir, ...args], stdout: "null", stderr: "piped" }).output();
+  const r = await new Deno.Command("git", {
+    args: ["-C", dir, ...args],
+    stdout: "null",
+    stderr: "piped",
+    clearEnv: true,
+    env: cleanEnv(),
+  }).output();
   if (!r.success) throw new Error(new TextDecoder().decode(r.stderr));
 }
 
@@ -21,7 +31,14 @@ async function repo(branch: string): Promise<string> {
 }
 
 async function decide(hook: string, command: string, cwd: string, env?: Record<string, string>): Promise<string> {
-  const child = new Deno.Command("bash", { args: [`${HOOKS}${hook}`], stdin: "piped", stdout: "piped", env }).spawn();
+  const child = new Deno.Command("bash", {
+    args: [`${HOOKS}${hook}`],
+    stdin: "piped",
+    stdout: "piped",
+    clearEnv: true,
+    env: { ...cleanEnv(), ...env },
+  })
+    .spawn();
   const w = child.stdin.getWriter();
   await w.write(new TextEncoder().encode(JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd })));
   await w.close();

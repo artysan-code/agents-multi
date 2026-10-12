@@ -9,7 +9,7 @@
 import { readJson } from "./lib/fs.ts";
 import { uiLanguage } from "./lib/locale.ts";
 import { ANSI } from "./lib/output.ts";
-import { STATE } from "./lib/paths.ts";
+import { CACHE, STATE } from "./lib/paths.ts";
 import { desktopNotify } from "./notify.ts";
 import { calendarAsTasks } from "./agenda.ts";
 import {
@@ -108,6 +108,32 @@ async function remind(dry: boolean): Promise<number> {
   return 0;
 }
 
+/** Pure: what the status line needs of the open tasks, one short record each: id, ref (the project's own
+ *  name for it), project, status, priority, due. A task without a project belongs to no folder, so no
+ *  status line shows it. */
+export function lineCache(tasks: Task[], at: number) {
+  return {
+    at,
+    tasks: tasks
+      .filter((t) => t.project && (t.status === "todo" || t.status === "doing" || t.status === "waiting"))
+      .map((t) => ({ id: t.id, r: t.ref ?? t.id, p: t.project, s: t.status, pr: t.priority, d: t.due })),
+  };
+}
+
+/** The status line reads this file, never the brain: it runs at every turn and the brain takes a second.
+ *  One file per profile, since a work profile sees only its own projects. */
+export const lineCachePath = (profile: string) => `${CACHE}/tasks-line-${profile}.json`;
+
+async function writeLineCache(): Promise<number> {
+  const profile = (Deno.env.get("CLAUDE_CONFIG_DIR") ?? "").split("/").filter(Boolean).pop() || "personal";
+  const out = lineCachePath(profile);
+  await Deno.mkdir(CACHE, { recursive: true });
+  const tmp = `${out}.${Deno.pid}.tmp`;
+  await Deno.writeTextFile(tmp, JSON.stringify(lineCache(await listTasks(), Math.floor(Date.now() / 1000))));
+  await Deno.rename(tmp, out);
+  return 0;
+}
+
 function print(title: string, xs: Task[]) {
   if (!xs.length) return;
   console.log(`\n  ${ANSI.b}${title}${ANSI.x}`);
@@ -165,6 +191,8 @@ export async function tasksCommand(args: string[]): Promise<number> {
     }
     case "remind":
       return await remind(rest.includes("--dry-run"));
+    case "statusline-cache": // not in the usage: the status line's, never typed by hand
+      return await writeLineCache();
     default:
       console.error(
         "usage: agents tasks [brief|add <title> [--due D] [--time HH:MM] [--project P] [--owner O]|done <id>|remind [--dry-run]]",
