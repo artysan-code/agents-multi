@@ -31,8 +31,11 @@ const coolify = service("coolify");
  * Throws on a non-2xx status, with the path (query stripped) and the masked start of the body.
  */
 async function api(account: string | undefined, path: string, init?: RequestInit): Promise<unknown> {
+  // a `..` built from a tool argument would reach another endpoint: fetch normalises it away
+  if (/(^|\/)\.\.?(\/|\?|$)/.test(path)) throw new Error(`refused path ${path.split("?")[0]}`);
   const { account: a, secret } = await coolify.use(account);
   const r = await fetch(`${a.url}/api/v1${path}`, {
+    signal: AbortSignal.timeout(60_000),
     ...init,
     headers: {
       Authorization: `Bearer ${secret}`,
@@ -51,6 +54,9 @@ const post = (account: string | undefined, path: string, body?: unknown) =>
   api(account, path, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 const patch = (account: string | undefined, path: string, body: unknown) =>
   api(account, path, { method: "PATCH", body: JSON.stringify(body) });
+
+/** A deployment's identifier, as coolify_deploy returns it: one path segment, nothing else. */
+const deploymentId = z.string().regex(/^[\w-]+$/, "a deployment identifier");
 
 // deno-lint-ignore no-explicit-any -- Coolify responses have no schema that is stable across versions
 type Loose = any;
@@ -375,7 +381,7 @@ server.registerTool("coolify_deploy_status", {
     "Returns the status of a deployment. When the deployment has finished, also returns the tail of its logs (Coolify nests them as JSON inside JSON), which is where a failure reason is found.",
   inputSchema: {
     account,
-    deployment: z.string().describe("identifier returned by coolify_deploy"),
+    deployment: deploymentId.describe("identifier returned by coolify_deploy"),
     lines: z.number().optional().describe("number of log lines (default 25, only once finished)"),
   },
   annotations: READS,
@@ -858,7 +864,7 @@ server.registerTool("coolify_deploy", {
 
 server.registerTool("coolify_cancel_deploy", {
   description: "Cancels a queued or running deployment.",
-  inputSchema: { account, deployment: z.string() },
+  inputSchema: { account, deployment: deploymentId },
   annotations: CHANGES,
 }, async ({ account, deployment }: { account?: string; deployment: string }) => {
   const r = await post(account, `/deployments/${deployment}/cancel`) as Loose;

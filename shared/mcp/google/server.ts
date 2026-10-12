@@ -40,6 +40,7 @@ async function api(acc: string | undefined, url: string, init?: RequestInit): Pr
   const { secret } = await google.use(acc);
   const token = await accessToken(await loadClient(), secret);
   const r = await fetch(url, {
+    signal: AbortSignal.timeout(60_000),
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init?.body ? { "Content-Type": "application/json" } : {}) },
   });

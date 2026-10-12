@@ -19,11 +19,13 @@ RUN pnpm build
 FROM denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432
 
 WORKDIR /app
+# the repository's lock: --frozen refuses a dependency that resolves to anything it does not pin
+COPY deno.json deno.lock ./
 COPY apps/brain/ apps/brain/
 COPY shared/mcp/lib/tasks.ts shared/mcp/lib/mask.ts shared/mcp/lib/owner.ts shared/mcp/lib/env.ts shared/mcp/lib/fs.ts shared/mcp/lib/
 COPY shared/mcp/tasks/tools.ts shared/mcp/tasks/tools.ts
 COPY --from=site /site/dist apps/site/dist
-RUN deno cache apps/brain/main.ts apps/brain/admin.ts apps/brain/site.ts
+RUN deno cache --frozen apps/brain/main.ts apps/brain/admin.ts apps/brain/site.ts
 # `brain-admin <command>` in a shell of the container: apps/brain/admin.ts with the service's own permissions
 RUN printf '#!/bin/sh\nexec deno run --allow-net=127.0.0.1 --allow-env --allow-read=/app,/data,/deno-dir --allow-write=/data /app/apps/brain/admin.ts "$@"\n' > /usr/local/bin/brain-admin \
   && chmod +x /usr/local/bin/brain-admin

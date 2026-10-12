@@ -46,10 +46,13 @@ done
 [ -n "$FOUND" ] || exit 0
 
 # already injected in this session?
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/claude-agents-md/$SESSION"
+# the session id names a folder: one path segment only; without XDG_RUNTIME_DIR, a private folder
+# under the home rather than a predictable one in the shared /tmp
+[[ "$SESSION" =~ ^[A-Za-z0-9_-]+$ ]] || SESSION=nosession
+STATE_DIR="${XDG_RUNTIME_DIR:-$HOME/.local/state}/claude-agents-md/$SESSION"
 KEY=$(printf '%s' "$FOUND" | md5sum | cut -d' ' -f1)
 [ -f "$STATE_DIR/$KEY" ] && exit 0
-mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+(umask 077 && mkdir -p "$STATE_DIR") 2>/dev/null || exit 0
 
 # Safety cap: an oversized AGENTS.md is a bug in that repo, not a reason to flood the context.
 BYTES=$(wc -c < "$FOUND" 2>/dev/null || echo 0)

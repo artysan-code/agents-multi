@@ -62,7 +62,7 @@ export async function resolveAction(
   const a = Object.hasOwn(defs, name) ? defs[name] : undefined;
   if (!a) return { error: `unknown action: ${name}` };
   if (Object.keys(params).some((k) => k !== a.param?.name)) return { error: `${name}: unknown parameter` };
-  const extra = opts.flatMap((o) => a.opts?.[o] ?? []);
+  const extra = opts.flatMap((o) => (a.opts && Object.hasOwn(a.opts, o) ? a.opts[o] : []));
   if (!a.param) return { cmd: `${REPO}/bin/${a.bin ?? "agents"}`, args: [...a.args, ...extra] };
   const v = params[a.param.name];
   if (typeof v !== "string" || !(await a.param.allowed()).includes(v)) {
