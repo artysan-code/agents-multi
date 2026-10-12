@@ -66,6 +66,10 @@
           {
             "type": "command",
             "command": "bash \"$HOME\"/.agents-multi/shared/hooks/graphify-nudge.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/commit-trailer-guard.sh"
           }
         ]
       },
@@ -79,20 +83,11 @@
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"$HOME\"/.agents-multi/shared/hooks/memory-legacy-guard.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/commit-trailer-guard.sh"
           }
         ]
       },
@@ -102,17 +97,6 @@
           {
             "type": "command",
             "command": "bash \"$HOME\"/.agents-multi/shared/hooks/agents-md-nested.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/typecheck-after-edit.sh"
           }
         ]
       }
@@ -127,30 +111,12 @@
         ]
       }
     ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/pre-compact.sh"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "bash \"$HOME\"/.agents-multi/shared/hooks/notify-stop.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/session-persist.sh"
           }
         ]
       },

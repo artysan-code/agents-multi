@@ -20,12 +20,14 @@ async function repo(branch: string): Promise<string> {
   return dir;
 }
 
-async function decide(hook: string, command: string, cwd: string): Promise<string> {
-  const child = new Deno.Command("bash", { args: [`${HOOKS}${hook}`], stdin: "piped", stdout: "piped" }).spawn();
+async function decide(hook: string, command: string, cwd: string, env?: Record<string, string>): Promise<string> {
+  const child = new Deno.Command("bash", { args: [`${HOOKS}${hook}`], stdin: "piped", stdout: "piped", env }).spawn();
   const w = child.stdin.getWriter();
   await w.write(new TextEncoder().encode(JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd })));
   await w.close();
-  const out = new TextDecoder().decode((await child.output()).stdout).trim();
+  const r = await child.output();
+  if (r.code === 2) return "block"; // a hook that blocks with exit 2 (commit-trailer-guard)
+  const out = new TextDecoder().decode(r.stdout).trim();
   return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : "allow";
 }
 
@@ -117,5 +119,22 @@ Deno.test("destructive-blocker: everyday commands pass, destructive ones ask, ca
   ];
   for (const [want, command] of cases) {
     assertEquals(await decide("destructive-blocker.sh", command, "/tmp"), want, command);
+  }
+});
+
+Deno.test("commit-trailer-guard: an assistant signature in a commit is blocked when the owner asks; else nothing", async () => {
+  // built from parts, so this file holds no signature of its own
+  const coauthor = ["Co-Authored", "-By: Cla", "ude <noreply@", "anthropic.com>"].join("");
+  const generated = ["Generated", " with [Cla", "ude Code](https://x)"].join("");
+  const on = { AGENTS_MULTI_NO_ASSISTANT_TRAILER: "1" };
+  const cases: [string, string, Record<string, string> | undefined][] = [
+    ["block", `git commit -m "x" -m "${coauthor}"`, on],
+    ["block", `git -c a=b commit -m "${generated}"`, on],
+    ["allow", 'git commit -m "fix: x"', on],
+    ["allow", `echo "${coauthor}"`, on],
+    ["allow", `git commit -m "x" -m "${coauthor}"`, { AGENTS_MULTI_NO_ASSISTANT_TRAILER: "0" }],
+  ];
+  for (const [want, command, env] of cases) {
+    assertEquals(await decide("commit-trailer-guard.sh", command, "/tmp", env), want, command);
   }
 });

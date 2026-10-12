@@ -15,14 +15,17 @@ set -uo pipefail
 source "$(dirname "$0")/lib/guard.sh"
 guard_read
 [ "$(guard_field .tool_name)" = "Bash" ] || exit 0
+# shellcheck disable=SC2034 # read by guard_match
 CMD=$(guard_field .tool_input.command)
 
-printf '%s' "$CMD" | grep -qiE 'git[[:space:]]+([a-z-]+[[:space:]]+)*(commit|merge|revert|tag)\b' || exit 0
+# shellcheck disable=SC2034 # read by guard_match
+GUARD_NOCASE=1
+guard_match 'git[[:space:]]+([^[:space:];&|]+[[:space:]]+)*(commit|merge|revert|tag)\b' || exit 0
 
 # Known signatures; -i because the trailer's capitalisation varies.
 PATTERN='co-authored-by:[[:space:]]*claude|generated[[:space:]]+with[[:space:]]+\[?claude[[:space:]]+code|noreply@anthropic\.com|🤖[[:space:]]*generated'
 
-if printf '%s' "$CMD" | grep -qiE "$PATTERN"; then
+if guard_match "$PATTERN"; then
   cat >&2 <<'EOF'
 Blocked by commit-trailer-guard.
 

@@ -21,7 +21,7 @@ These agents are available in every session without any extra invocation.
 ### Rimossi il 2026-07-26 (debloat Tier B)
 
 Erano duplicati di capacità già presenti nel harness o nei plugin abilitati. I file
-sono recuperabili da git (`shared/`) o dal backup `10-HOME-FULL`.
+sono stati tolti davvero il 2026-10-12 (prima restavano montati); si recuperano da git.
 
 | Agent rimosso       | Sostituito da                                            |
 | ------------------- | -------------------------------------------------------- |
@@ -31,7 +31,8 @@ sono recuperabili da git (`shared/`) o dal backup `10-HOME-FULL`.
 | react-reviewer      | idem, con `/react-review` per le lane React-specifiche   |
 
 Rimossi insieme a loro i comandi `/plan` (→ plan mode) e `/pr` (→ plugin
-`pr-review-toolkit`). Restano i due `*-build-resolver`: sono gli unici con
+`commit-commands`, `/commit-push-pr`); il 2026-10-12 anche `/save-session` e `/resume-session`
+(→ il brain) con gli hook `pre-compact`, `session-persist` e `typecheck-after-edit`. Restano i due `*-build-resolver`: sono gli unici con
 `Write`/`Edit` e non hanno equivalente built-in.
 
 ---

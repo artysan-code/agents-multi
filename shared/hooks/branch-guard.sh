@@ -30,15 +30,15 @@ CWD="${CWD:-$PWD}"
 ask() { guard_decide ask "BRANCH-GUARD: $1 This reaches production: confirm only if it is intended (an agreed release or hotfix)."; }
 
 # Releases cut outside git push: ship pushes from inside Deno, where no hook sees it. --dry-run passes.
-if ! printf '%s' "$CMD" | grep -qE -- '--dry-run'; then
-  printf '%s' "$CMD" | grep -qE '(deno[[:space:]]+task[[:space:]]+ship|scripts/ship\.ts)[[:space:]]+(.*[[:space:]])?stable' \
+if [[ $CMD != *--dry-run* ]]; then
+  guard_match '(deno[[:space:]]+task[[:space:]]+ship|scripts/ship\.ts)[[:space:]]+(.*[[:space:]])?stable' \
     && ask "a stable version (ship stable) moves release, tags and publishes it."
-  printf '%s' "$CMD" | grep -qE 'deno[[:space:]]+task[[:space:]]+release([[:space:]]|$)' \
+  guard_match 'deno[[:space:]]+task[[:space:]]+release([[:space:]]|$)' \
     && ask "a version cut by hand (deno task release); versions go out with deno task ship."
 fi
 
 # Production outside git: deploys and the hosting's destructive verbs, merges and releases on GitHub.
-prod() { printf '%s' "$CMD" | grep -qE "(^|[[:space:];&|(])$1"; }
+prod() { guard_match "(^|[[:space:];&|(])$1"; }
 prod 'railway[[:space:]]+(up|down|redeploy|delete)([[:space:]]|$)' && ask "a Railway deploy or removal changes a running service."
 prod 'wrangler[[:space:]]+(deploy|publish|versions[[:space:]]+deploy)([[:space:]]|$)' && ask "a Cloudflare Worker deploy goes live."
 prod 'gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)' && ask "merging a pull request moves its base branch."
@@ -46,7 +46,7 @@ prod 'gh[[:space:]]+release[[:space:]]+(create|delete|edit|upload)([[:space:]]|$
 prod 'gh[[:space:]]+repo[[:space:]]+(delete|archive|rename|edit)([[:space:]]|$)' && ask "this changes or removes a GitHub repository."
 prod 'gh[[:space:]]+api[[:space:]].*(-X|--method)[[:space:]=]*DELETE' && ask "a DELETE through the GitHub API."
 
-printf '%s' "$CMD" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]].*push' || exit 0
+guard_match '(^|[^[:alnum:]_-])git[[:space:]].*push' || exit 0
 
 STATIC='main master release production prod trunk develop'
 protected_branch() { # <name>
@@ -83,7 +83,7 @@ check_push() {
     dst=${w#*:}
     [ "$src" = HEAD ] && [ "$dst" = HEAD ] && dst=$(current_branch)
     dst=${dst#refs/heads/}
-    if printf '%s' "${dst#refs/tags/}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if [[ ${dst#refs/tags/} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       ask "the stable version tag $dst starts a release in CI."
     fi
     protected_branch "$dst" && ask "a push to the protected branch \"$dst\"."

@@ -12,8 +12,10 @@ guard_read
 CMD=$(guard_field .tool_input.command)
 [ -z "$CMD" ] && exit 0
 
-has() { printf '%s' "$CMD" | grep -qiE "$1"; }
-hasF() { printf '%s' "$CMD" | grep -qF "$1"; }
+# shellcheck disable=SC2034 # read by guard_match
+GUARD_NOCASE=1
+has() { guard_match "$1"; }
+hasF() { [[ $CMD == *"$1"* ]]; }
 
 # Catastrophic: deny.
 if has '\bmkfs(\.|[[:space:]])' || has '(>|of=)[[:space:]]*/dev/(sd|nvme|vd|mmcblk)' || hasF ':(){'; then

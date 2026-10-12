@@ -19,7 +19,7 @@ CMD=$(guard_field .tool_input.command)
 # The quote class also takes a backslash: without jq the command is matched inside its JSON
 # string, where a quote is written \".
 Q="[\\\\\"']*"
-if printf '%s' "$CMD" | grep -qE "launch\.ts${Q}[[:space:]]+${Q}(headers|run)([\\\\\"'[:space:]]|$)"; then
+if guard_match "launch\.ts${Q}[[:space:]]+${Q}(headers|run)([\\\\\"'[:space:]]|$)"; then
   guard_decide deny "launch.ts hands out a vault secret (headers prints it, run puts it in a command's environment): Claude Code runs it for the MCP servers, a session does not. To use a service's CLI on the vault's token: agents vault run <service> -- <tool> …"
 fi
 exit 0

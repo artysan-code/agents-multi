@@ -4,7 +4,7 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 
 const HOOKS = new URL("../../../shared/hooks/", import.meta.url).pathname;
 
-async function fire(hook: string, payload: unknown, env: Record<string, string>, cwd: string) {
+async function output(hook: string, payload: unknown, env: Record<string, string>, cwd: string) {
   const child = new Deno.Command("bash", {
     args: [`${HOOKS}${hook}`],
     cwd,
@@ -16,11 +16,14 @@ async function fire(hook: string, payload: unknown, env: Record<string, string>,
   const w = child.stdin.getWriter();
   await w.write(new TextEncoder().encode(JSON.stringify(payload)));
   await w.close();
-  const out = new TextDecoder().decode((await child.output()).stdout).trim();
+  return new TextDecoder().decode((await child.output()).stdout).trim();
+}
+async function fire(hook: string, payload: unknown, env: Record<string, string>, cwd: string) {
+  const out = await output(hook, payload, env, cwd);
   return JSON.parse(out).hookSpecificOutput as { hookEventName: string; additionalContext: string };
 }
 
-Deno.test("hooks: graphify-nudge, agents-md-nested and brain-nudge print parseable JSON when they fire", async () => {
+Deno.test("hooks: graphify-nudge (once per session), agents-md-nested and brain-nudge print parseable JSON when they fire", async () => {
   const home = await Deno.makeTempDir();
   try {
     const proj = `${home}/work/acme/site`;
@@ -28,15 +31,12 @@ Deno.test("hooks: graphify-nudge, agents-md-nested and brain-nudge print parseab
     await Deno.mkdir(`${proj}/sub`);
     await Deno.writeTextFile(`${proj}/graphify-out/graph.json`, "{}");
     await Deno.writeTextFile(`${proj}/sub/AGENTS.md`, '# rules with "quotes" and `ticks`');
-    const env = { HOME: home, CLAUDE_PROJECT_DIR: proj, PATH: Deno.env.get("PATH") ?? "" };
+    const env = { HOME: home, XDG_RUNTIME_DIR: home, CLAUDE_PROJECT_DIR: proj, PATH: Deno.env.get("PATH") ?? "" };
 
-    const g = await fire(
-      "graphify-nudge.sh",
-      { tool_name: "Bash", tool_input: { command: "grep -rn x ." } },
-      env,
-      proj,
-    );
+    const search = { session_id: "s1", tool_name: "Bash", tool_input: { command: "grep -rn x ." } };
+    const g = await fire("graphify-nudge.sh", search, env, proj);
     assertStringIncludes(g.additionalContext, 'graphify query "<question>"');
+    assertEquals(await output("graphify-nudge.sh", search, env, proj), "", "once per session");
 
     const a = await fire(
       "agents-md-nested.sh",
@@ -100,4 +100,34 @@ Deno.test("memory-legacy-guard: denies the auto-memory under either runtime name
   assertEquals(await decide("/h/.claude-multi/personal/projects/-h-x/memory/MEMORY.md"), "deny");
   assertEquals(await decide("/h/.claude/projects/-h-x/memory/a.md"), "deny");
   assertEquals(await decide("/h/code/app/projects/x/memory/a.md"), "allow");
+});
+
+Deno.test("brain-checkpoint: asks after a block of edits, once, and counts only the lines added since", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const t = `${dir}/t.jsonl`;
+    const edit = (f: string) =>
+      JSON.stringify({ message: { content: [{ type: "tool_use", name: "Edit", input: { file_path: f } }] } }) + "\n";
+    const stop = async () => {
+      const child = new Deno.Command("python3", {
+        args: [`${HOOKS}brain-checkpoint.py`],
+        env: { XDG_STATE_HOME: dir, CLAUDE_CONFIG_DIR: `${dir}/none/p` },
+        stdin: "piped",
+        stdout: "piped",
+      }).spawn();
+      const w = child.stdin.getWriter();
+      await w.write(new TextEncoder().encode(JSON.stringify({ transcript_path: t, session_id: "s1" })));
+      await w.close();
+      return new TextDecoder().decode((await child.output()).stdout).trim();
+    };
+    await Deno.writeTextFile(t, Array.from({ length: 7 }, (_, i) => edit(`/f${i}`)).join(""));
+    assertEquals(await stop(), "", "seven files are not a block of work");
+    await Deno.writeTextFile(t, edit("/f7"), { append: true });
+    assertEquals(JSON.parse(await stop()).decision, "block");
+    assertEquals(await stop(), "", "asked once");
+    const state = JSON.parse(await Deno.readTextFile(`${dir}/agents-multi/brain-checkpoint/s1.json`));
+    assertEquals([state.offset, state.edited], [(await Deno.stat(t)).size, []]);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });

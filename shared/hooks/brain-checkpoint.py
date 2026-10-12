@@ -8,8 +8,9 @@
 # on chat, questions and reads, and does not fire twice in a row (stop_hook_active) nor within GAP
 # minutes of the previous reminder.
 #
-# State (how far the transcript was already scanned, per session) lives in
-# ~/.local/state/agents-multi/brain-checkpoint/.
+# State, per session, in ~/.local/state/agents-multi/brain-checkpoint/: the byte offset the transcript
+# was scanned to and what was counted so far, so each Stop reads only the lines added since the last
+# one (it read the whole transcript every time, which grew with the session).
 # Robustness: always exit 0; on any error it decides nothing.
 import json, os, re, sys, time
 
@@ -31,22 +32,28 @@ REASON = (
 )
 
 
-def tool_uses(path):
-    """(line number, tool name, input) for every tool call in the transcript."""
-    with open(path, encoding="utf-8", errors="replace") as f:
-        for n, line in enumerate(f):
-            if '"tool_use"' not in line:
-                continue
-            try:
-                entry = json.loads(line)
-            except ValueError:
-                continue
-            content = (entry.get("message") or {}).get("content")
-            if not isinstance(content, list):
-                continue
-            for c in content:
-                if isinstance(c, dict) and c.get("type") == "tool_use":
-                    yield n, str(c.get("name", "")), c.get("input") or {}
+def tool_uses(path, offset):
+    """(tool name, input) for every tool call in the transcript after `offset`, and the offset of the
+    end of the last complete line (a line still being written is read next time)."""
+    with open(path, "rb") as f:
+        f.seek(offset)
+        data = f.read()
+    end = data.rfind(b"\n") + 1
+    calls = []
+    for raw in data[:end].split(b"\n"):
+        if b'"tool_use"' not in raw:
+            continue
+        try:
+            entry = json.loads(raw.decode("utf-8", errors="replace"))
+        except ValueError:
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if isinstance(c, dict) and c.get("type") == "tool_use":
+                calls.append((str(c.get("name", "")), c.get("input") or {}))
+    return calls, offset + end
 
 
 def work_profile():
@@ -76,17 +83,15 @@ def main():
     try:
         with open(state_file) as f:
             prev = json.load(f)
-        since, asked = int(prev.get("line", -1)), float(prev.get("at", 0))
-    except (OSError, ValueError):
-        since, asked = -1, 0.0
-    if time.time() - asked < GAP * 60:
-        return
+        offset, asked = int(prev.get("offset", 0)), float(prev.get("at", 0))
+        edited, shipped = set(prev.get("edited", [])), int(prev.get("shipped", 0))
+    except (OSError, ValueError, TypeError):
+        offset, asked, edited, shipped = 0, 0.0, set(), 0
+    if offset > os.path.getsize(transcript):
+        offset, edited, shipped = 0, set(), 0  # a transcript rewritten from the start
 
-    edited, shipped, last = set(), 0, since
-    for n, name, inp in tool_uses(transcript):
-        last = max(last, n)
-        if n <= since:
-            continue
+    calls, offset = tool_uses(transcript, offset)
+    for name, inp in calls:
         if BRAIN_WRITE.search(name):
             edited, shipped = set(), 0  # the brain was written: count again from here
         elif name in EDIT_TOOLS:
@@ -96,16 +101,18 @@ def main():
         elif name.endswith("coolify_deploy"):
             shipped += SHIPS  # a deploy is a change of state on its own
 
-    if len(edited) < EDITS and shipped < SHIPS:
-        return
+    remind = (len(edited) >= EDITS or shipped >= SHIPS) and time.time() - asked >= GAP * 60
     what = " and ".join(filter(None, [
         f"you edited {len(edited)} files" if len(edited) >= EDITS else "",
         "you made commits, pushes or deploys" if shipped >= SHIPS else "",
     ]))
+    if remind:
+        asked, edited, shipped = time.time(), set(), 0  # asked: count again from here
     os.makedirs(state_dir, exist_ok=True)
     with open(state_file, "w") as f:
-        json.dump({"line": last, "at": time.time()}, f)
-    print(json.dumps({"decision": "block", "reason": REASON.format(what=what)}))
+        json.dump({"offset": offset, "at": asked, "edited": sorted(edited), "shipped": shipped}, f)
+    if remind:
+        print(json.dumps({"decision": "block", "reason": REASON.format(what=what)}))
 
 
 try:

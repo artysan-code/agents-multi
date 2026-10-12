@@ -9,10 +9,8 @@ Clause in LICENSE does not apply to them.
 - Source: <https://github.com/affaan-m/everything-claude-code> (`agents/`, `commands/`)
 - Licence: MIT, Copyright (c) 2026 Affaan Mustafa
 - Files, adapted (trimmed, model and tools set, notes for this repository):
-  - `shared/agents/build-error-resolver.md`, `database-reviewer.md`, `planner.md`, `react-build-resolver.md`,
-    `react-reviewer.md`, `security-reviewer.md`, `typescript-reviewer.md`
-  - `shared/commands/build-fix.md`, `plan.md`, `pr.md`, `react-build.md`, `react-review.md`, `resume-session.md`,
-    `save-session.md`
+  - `shared/agents/build-error-resolver.md`, `database-reviewer.md`, `react-build-resolver.md`
+  - `shared/commands/build-fix.md`, `react-build.md`, `react-review.md`
 
 ```
 MIT License

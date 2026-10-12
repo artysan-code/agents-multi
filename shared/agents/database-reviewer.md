@@ -1,6 +1,6 @@
 ---
 name: database-reviewer
-description: PostgreSQL database specialist for query optimization, schema design, security, and performance. Use PROACTIVELY when writing SQL or Drizzle schema TS, creating migrations, designing schemas, or troubleshooting database performance.
+description: PostgreSQL database specialist for query optimization, schema design, security, and performance. Use when writing SQL or Drizzle schema TS, creating migrations, designing schemas, or troubleshooting database performance.
 tools: ["Read", "Bash", "Grep", "Glob"]
 model: sonnet
 ---
