@@ -5,6 +5,16 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.1.0-rc.4] - 2026-10-12
+
+### Added
+
+- **statusline**: two lines with the folder's tasks from the brain (6e9ac05)
+
+### Documentation
+
+- **site**: MCP permission lists and the production guards (0250269)
+
 ## [1.1.0-rc.3] - 2026-10-12
 
 ### Added
