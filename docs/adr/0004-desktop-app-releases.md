@@ -32,8 +32,9 @@ everything it runs, then says what changed.
 
 ### From a tag to an update
 
-1. `deno task release` (stable on `release`, `beta` on `beta`) bumps every manifest, the app's
-   included, and tags. The owner pushes the branch and the tag.
+1. `deno task ship beta|rc|stable` (ADR 0002) cuts the version with `deno task release` (stable on
+   `release`, `beta` on `beta`), which bumps every manifest, the app's included, and tags; then it
+   pushes the branch and the tag.
 2. `.forgejo/workflows/release.yml`, job `app`, on the tag: the tag must be the app's version; the
    release configuration must be filled; then the gate (`scripts/ci.sh`, the Rust included since the
    job installs it), the console's page (`agents ui build`), and `pnpm release` in `apps/desktop` —

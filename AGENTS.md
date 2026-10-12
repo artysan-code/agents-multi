@@ -89,10 +89,16 @@ a console, and a desktop app that carries it all. **This repository is the sourc
 - **Changing `~/.agents-multi` while a Claude session is open moves the ground under it**: run
   `install` and `agents mcp sync` with Claude closed.
 - **Branches and versions** ([ADR 0002](docs/adr/0002-versions-branches-releases.md)): work lands on
-  `dev`; `beta` and `release` move only by fast-forward to commits the branch before already has. A
-  version is cut with `deno task release` (stable on `release`, beta on `beta`): it bumps every manifest
-  in `MANIFESTS` (`scripts/release.ts`), writes the CHANGELOG section and tags. The CHANGELOG is the
-  only place release notes are written. Commit subjects are Conventional Commits (types in `TYPES`);
+  `dev`; `beta` and `release` move only by fast-forward to commits the branch before already has.
+- **Commit and push on `dev` and `beta` without asking**, as soon as it helps (testing a fix on the
+  machines, a beta to try): the gate in the pre-push hook is the check. **Ask first only for a stable
+  release**: anything that moves `release` or cuts a stable version.
+- **Versions go out with `deno task ship`**, never by hand: `ship beta [major|minor|patch]` or
+  `ship rc` from `dev` (cut on `beta`), `ship stable --yes` once the owner said so (cut on `release`
+  from `beta`); `--dry-run` shows the steps. It merges what CI committed on `release` into `dev`,
+  runs the gate, fast-forwards the branch, cuts the version with `scripts/release.ts` (every manifest
+  in `MANIFESTS`, the CHANGELOG section, the tag), pushes, and brings the release commit back to
+  `dev`. The CHANGELOG is the only place release notes are written. Commit subjects are Conventional Commits (types in `TYPES`);
   the `commit-msg` hook and CI reject anything else. No attribution trailer (`commit-trailer-guard`).
 - **Releases are built in CI only** ([ADR 0004](docs/adr/0004-desktop-app-releases.md)): the tag builds
   the signed bundles on the runner (Debian bookworm, so they run on older systems than a workstation's),
