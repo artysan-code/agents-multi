@@ -5,6 +5,20 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.1.0-rc.7] - 2026-10-12
+
+### Added
+
+- **mcp**: Slack as the person, one server per workspace (df44a12)
+
+### Fixed
+
+- **ci**: coolify's test feeds its guard a made-up credential, not a leak (9c23ce3)
+- **mcp**: our servers say when they could not look, instead of answering empty or green (a50b450)
+- **mcp**: n8n-mcp 2.92.1 without telemetry, and installed programs checked against their version (7bc6fd4)
+- **mcp**: every tool of every server classified, and the probe tells when the lists drift (c6a3d72)
+- **release**: retry GitHub's failures and replace a draft's files with this build's (5ed5349)
+
 ## [1.1.0-rc.6] - 2026-10-12
 
 ### Fixed
