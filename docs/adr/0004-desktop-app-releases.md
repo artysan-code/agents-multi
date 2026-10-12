@@ -36,8 +36,9 @@ everything it runs, then says what changed.
    `release`, `beta` on `beta`), which bumps every manifest, the app's included, and tags; then it
    pushes the branch and the tag.
 2. `.forgejo/workflows/release.yml`, job `app`, on the tag: the tag must be the app's version; the
-   release configuration must be filled; then the gate (`scripts/ci.sh`, the Rust included since the
-   job installs it), the console's page (`agents ui build`), and `pnpm release` in `apps/desktop` —
+   release configuration must be filled; then the static gate (`scripts/check.sh`, the Rust's fmt and
+   clippy included since the job installs WebKitGTK — the rest of the gate already passed on these
+   commits, in CI on `dev` and in `deno task ship`), the console's page (`agents ui build`), and `pnpm release` in `apps/desktop` —
    `bundle.sh` and `tauri build` with `tauri.release.conf.json`, which turns on the updater artifacts:
    each bundle gets a `.sig` made with `TAURI_SIGNING_PRIVATE_KEY`. Only that configuration asks for
    the key, so `pnpm build` on a workstation needs none.
@@ -185,7 +186,7 @@ built with it must be reinstalled by hand from a release, and the release notes 
   image is built and Coolify runs it.
 - `release` receives a commit from the workflow after each tag; `deno task release` wants a clean tree
   on an up-to-date branch, so the owner pulls first.
-- The release job is long (the gate, a Rust release build, three bundles) and needs about 2 GB of
+- The release job is long (the static gate, a Rust release build, three bundles) and needs about 2 GB of
   cache; the CI job on pushes stays as it was.
 - Before 1.0: fill `release.json` and the public key, set the secrets, create the GitHub repository and
   its mirror, decide the identifier (ADR 0003) and the licence.

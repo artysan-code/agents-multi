@@ -5,7 +5,7 @@
 #
 # `brain-image`: the brain's image on GHCR, after `app` (below).
 #
-# `app`: the desktop app. The gate, then the Linux bundles (deb, rpm, AppImage) signed for the updater,
+# `app`: the desktop app. The static gate, then the Linux bundles (deb, rpm, AppImage) signed for the updater,
 # uploaded to the GitHub release of the tag, then the site's update manifests moved to the version and
 # committed on `release`; the site that serves them is in the brain's image (`brain-image`). A stable
 # version also renders the AUR package there, and pushes it when the AUR key is set.
@@ -61,14 +61,12 @@ jobs:
       CI: "true"
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       RUST_VERSION: "1.99.0"
-      GITLEAKS_VERSION: 8.30.1
-      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
       # linuxdeploy (the AppImage) is itself an AppImage: no FUSE in a container
       APPIMAGE_EXTRACT_AND_RUN: "1"
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # gitleaks scans the whole history; the manifests' commit needs `release`
+          fetch-depth: 0 # the manifests' commit is made on `release` and pushed
 
       - uses: https://github.com/denoland/setup-deno@v2
         with:
@@ -92,10 +90,6 @@ jobs:
           apt-get install -y -qq --no-install-recommends jq shellcheck file patchelf \
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev \
             libayatana-appindicator3-dev zstd >/dev/null
-          curl -fsSL -o /tmp/gitleaks.tgz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
-          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
           curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
             --default-toolchain "$RUST_VERSION" --component rustfmt,clippy
           echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
@@ -113,8 +107,12 @@ jobs:
           key: app-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock') }}
           restore-keys: app-
 
-      - name: gate
-        run: bash scripts/ci.sh
+      # The static gate only (formatting, lint, types, shellcheck, and the Rust's fmt and clippy, which
+      # only this job can run: it has WebKitGTK). Tests, the MCP probe, the secret scan and the UI and
+      # site builds already passed on these commits: in CI on `dev`, and in `deno task ship` before the
+      # tag; the release commit on top changes only the manifests and the CHANGELOG.
+      - name: check
+        run: bash scripts/check.sh
 
       - name: build
         env:
