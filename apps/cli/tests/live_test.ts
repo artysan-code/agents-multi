@@ -1,7 +1,7 @@
 // Tests for «Claude now» (apps/cli/live.ts): the limits in one shape from the status line or the endpoint,
 // and the view — a profile's newest limits, whoever wrote them, and each session's newest context.
 import { assertEquals } from "jsr:@std/assert@1";
-import { limitOf, limitsOf, liveView, type Snapshot } from "../live.ts";
+import { expiredMessage, limitOf, limitsOf, liveView, type Snapshot, tokenStale } from "../live.ts";
 
 Deno.test("limitOf: the status line's percentage and seconds, the endpoint's utilization and ISO date", () => {
   assertEquals(limitOf({ used_percentage: 41.53, resets_at: 1791560000 }), { used: 41.5, resets: 1791560000 });
@@ -39,4 +39,27 @@ Deno.test("liveView: a profile's newest limits, whoever wrote them; each session
     at: 200,
     cwd: null,
   });
+});
+
+Deno.test("tokenStale: expired or within a minute is renewed; a later expiry or none stated is not", () => {
+  const now = 1_000_000;
+  assertEquals(tokenStale(now - 1, now), true);
+  assertEquals(tokenStale(now + 30_000, now), true);
+  assertEquals(tokenStale(now + 120_000, now), false);
+  assertEquals(tokenStale(undefined, now), false);
+});
+
+Deno.test("expiredMessage: a sign-out only when the renewal says so", () => {
+  assertEquals(
+    expiredMessage("claude-funnel", "Please run /login", true),
+    "signed out: run claude-funnel, then /login",
+  );
+  assertEquals(
+    expiredMessage("claude-funnel", "timed out", false),
+    "the token has expired and could not be renewed (timed out): it is not a sign-out, running claude-funnel renews it",
+  );
+  assertEquals(
+    expiredMessage("claude-funnel", null, false),
+    "the token was renewed but refused: run claude-funnel, then /login",
+  );
 });

@@ -7,10 +7,16 @@
 // refresh (POST /api/live/refresh): then each profile's own login reads its limits from the endpoint
 // Claude Code's /usage uses, and the answer is kept as <state>/live/limits-<profile>.json. The token is
 // read for that request and never kept, logged or sent anywhere else.
+//
+// The access token lives a few hours and only Claude Code renews it, when the profile runs in a
+// terminal: a profile used from Desktop (which has its own login) keeps an expired one. That is not a
+// sign-out, so an expired token is renewed by Claude Code itself — one tiny request through the
+// profile's launcher (probeLogin) — never here: two renewers of one token would revoke each other.
 
 import { readJson, writeAtomic } from "./lib/fs.ts";
 import { RUNTIME, STATE } from "./lib/paths.ts";
-import { profileNames } from "./lib/profiles.ts";
+import { launchers, profileNames } from "./lib/profiles.ts";
+import { isLoginError, probeLogin, recordLogin } from "./login.ts";
 import { openDb, report } from "./usage.ts";
 
 const LIVE = `${STATE}/live`;
@@ -128,18 +134,56 @@ export async function live(): Promise<LiveView> {
   return liveView(await readSnapshots(), await profileNames(), todayTokens());
 }
 
+/** Pure: whether a stored access token has to be renewed before it is used (gone, or within a minute). */
+export const tokenStale = (expiresAt: unknown, now = Date.now()): boolean =>
+  typeof expiresAt === "number" && expiresAt - now < 60_000;
+
+/** Pure: what the page says when the limits cannot be read with an expired token. `probeError` is why
+ *  the renewal failed: a login error is a real sign-out, anything else is not one. */
+export function expiredMessage(command: string, probeError: string | null, isLogin: boolean): string {
+  if (probeError === null) return `the token was renewed but refused: run ${command}, then /login`;
+  if (isLogin) return `signed out: run ${command}, then /login`;
+  return `the token has expired and could not be renewed (${probeError}): it is not a sign-out, running ${command} renews it`;
+}
+
+type Creds = { accessToken?: string; expiresAt?: number };
+const readCreds = async (profile: string) =>
+  (await readJson<{ claudeAiOauth?: Creds }>(`${RUNTIME}/${profile}/.credentials.json`))?.claudeAiOauth;
+
+/** Claude Code renews the profile's token with one tiny request; null when it worked, else the message. */
+async function renew(profile: string, command: string): Promise<string | null> {
+  const v = await probeLogin(command);
+  const err = v.ok ? null : v.error ?? "error";
+  await recordLogin(profile, command, err);
+  return err === null ? null : expiredMessage(command, err, isLoginError(err));
+}
+
 /** One profile's limits from the endpoint, with its own login; null with the reason when it cannot. */
-async function fetchLimits(profile: string): Promise<{ limits: Limits } | { error: string }> {
-  const creds = await readJson<{ claudeAiOauth?: { accessToken?: string } }>(`${RUNTIME}/${profile}/.credentials.json`);
-  const token = creds?.claudeAiOauth?.accessToken;
+async function fetchLimits(profile: string, command: string): Promise<{ limits: Limits } | { error: string }> {
+  let creds = await readCreds(profile);
   // a login Claude Code keeps elsewhere (the keyring, a token in the environment): the status line still reports them
-  if (!token) return { error: "no login token readable here: its sessions report the limits" };
-  const r = await fetch(USAGE_URL, {
-    headers: { Authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20" },
-    signal: AbortSignal.timeout(10000),
-  }).catch((e: Error) => e);
+  if (!creds?.accessToken) return { error: "no login token readable here: its sessions report the limits" };
+  let renewed = false;
+  if (tokenStale(creds.expiresAt)) {
+    const e = await renew(profile, command);
+    if (e) return { error: e };
+    creds = await readCreds(profile);
+    renewed = true;
+  }
+  const ask = (token: string | undefined) =>
+    fetch(USAGE_URL, {
+      headers: { Authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20" },
+      signal: AbortSignal.timeout(10000),
+    }).catch((e: Error) => e);
+  let r = await ask(creds?.accessToken);
+  // refused before its stated expiry (revoked, clock skew): one renewal, then once more
+  if (!(r instanceof Error) && r.status === 401 && !renewed) {
+    const e = await renew(profile, command);
+    if (e) return { error: e };
+    r = await ask((await readCreds(profile))?.accessToken);
+  }
   if (r instanceof Error) return { error: r.message };
-  if (r.status === 401) return { error: "the login has expired: open Claude to sign in again" };
+  if (r.status === 401) return { error: expiredMessage(command, null, false) };
   if (!r.ok) return { error: `HTTP ${r.status}` };
   const limits = limitsOf(await r.json().catch(() => null));
   return limits ? { limits } : { error: "no limits in the answer" };
@@ -149,15 +193,15 @@ async function fetchLimits(profile: string): Promise<{ limits: Limits } | { erro
 export async function refresh(): Promise<Record<string, string>> {
   await Deno.mkdir(LIVE, { recursive: true });
   const errors: Record<string, string> = {};
-  for (const p of await profileNames()) {
-    const r = await fetchLimits(p);
+  // side by side: a renewal takes seconds, and each profile has its own token
+  await Promise.all((await launchers()).map(async ({ profile: p, command }) => {
+    const r = await fetchLimits(p, command);
     if ("error" in r) {
       errors[p] = r.error;
-      continue;
+      return;
     }
     const snap: Snapshot = { at: Math.round(Date.now() / 1000), profile: p, limits: r.limits, source: "endpoint" };
-    const path = `${LIVE}/limits-${p}.json`;
-    await writeAtomic(path, JSON.stringify(snap));
-  }
+    await writeAtomic(`${LIVE}/limits-${p}.json`, JSON.stringify(snap));
+  }));
   return errors;
 }
