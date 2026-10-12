@@ -1,5 +1,6 @@
 // Tests for the pure decisions inside the doctor's check groups.
 import { assertEquals } from "jsr:@std/assert@1";
+import { tokenFileProblem } from "../doctor/checks/console.ts";
 import { keyRefused } from "../doctor/checks/vault.ts";
 import { zshBlockIn } from "../doctor/checks/zshrc.ts";
 import { runningFrom, writtenHomes } from "../doctor/checks/repo.ts";
@@ -33,4 +34,13 @@ Deno.test("runningFrom: one note when the running code is not the installed repo
     runningFrom("/opt/app/repo", "/srv/src/a", false)?.msg,
     "running from the desktop app's package: /opt/app/repo (installed: /srv/src/a)",
   );
+});
+
+Deno.test("tokenFileProblem: a missing file is a warning, a file open to others a failure, a private one nothing", () => {
+  assertEquals(tokenFileProblem("/run/t.token", 0o100600), null);
+  assertEquals(tokenFileProblem("/run/t.token", undefined)?.status, "warn");
+  const open = tokenFileProblem("/run/t.token", 0o100644);
+  assertEquals(open?.status, "fail");
+  assertEquals(open?.msg, "/run/t.token can be read by others (mode 644)");
+  assertEquals(open?.fix, "chmod 600 /run/t.token");
 });

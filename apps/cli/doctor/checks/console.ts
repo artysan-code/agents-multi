@@ -23,6 +23,29 @@ export const CONSOLE_DENY = [
   "Bash(*agents-multi-console*.token*)",
 ];
 
+/** What is wrong with the token file of a console that is running: missing (the console asks for the key
+ *  but nobody can read it) or readable by others. Null when it is there and private. */
+export function tokenFileProblem(
+  file: string,
+  mode: number | undefined,
+): { status: "warn" | "fail"; msg: string; fix: string } | null {
+  if (mode == null) {
+    return {
+      status: "warn",
+      msg: `the console is running but ${file} is missing: the app, the tray and the CLI cannot enter it`,
+      fix: "restart Agents Multi",
+    };
+  }
+  if ((mode & 0o077) !== 0) {
+    return {
+      status: "fail",
+      msg: `${file} can be read by others (mode ${(mode & 0o777).toString(8)})`,
+      fix: `chmod 600 ${file}`,
+    };
+  }
+  return null;
+}
+
 /** The console: who serves it, whether it runs the current code, and its interface's build. */
 export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
   const [c, add] = checkList();
@@ -64,15 +87,8 @@ export async function consoleChecks(ctx: DoctorCtx): Promise<Check[]> {
       );
     }
     const file = tokenPath(PORT);
-    const mode = (await stat(file))?.mode;
-    if (mode != null && (mode & 0o077) !== 0) {
-      add(
-        "console.token",
-        "fail",
-        `${file} can be read by others (mode ${(mode & 0o777).toString(8)})`,
-        `chmod 600 ${file}`,
-      );
-    }
+    const problem = tokenFileProblem(file, (await stat(file))?.mode ?? undefined);
+    if (problem) add("console.token", problem.status, problem.msg, problem.fix);
   }
   // --- a session must not reach the console's actions (a prompt injected into a chat could open a
   // terminal or change an account through it)
