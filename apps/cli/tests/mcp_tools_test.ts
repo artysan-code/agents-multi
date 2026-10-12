@@ -3,7 +3,7 @@
 // elsewhere — so a new tool never falls to the permission mode unnoticed — and every listed name is
 // one the server still registers, so a list never names a tool that is gone.
 import { assertEquals } from "jsr:@std/assert@1";
-import { listDrift } from "../mcp/health.ts";
+import { listDrift, versionDrift } from "../mcp/health.ts";
 
 const ROOT = new URL("../../../", import.meta.url).pathname;
 
@@ -59,4 +59,11 @@ Deno.test("listDrift: tools in no list, listed tools not offered; a denied tool 
   assertEquals(listDrift(["a", "b", "g", "m", "new"], cfg), { unlisted: ["new"], stale: ["gone"] });
   assertEquals(listDrift(["a", "gone", "b", "g"], cfg), { unlisted: [], stale: [] });
   assertEquals(listDrift(["a", "gone", "b", "g", "s"], cfg, (t) => t === "s"), { unlisted: [], stale: [] });
+});
+
+Deno.test("versionDrift: the version at the end of serverInfo against the expected one", () => {
+  assertEquals(versionDrift("5.60.0", "railway 5.66.0"), "5.66.0");
+  assertEquals(versionDrift("1.8.0", "Gitea MCP Server 1.8.0"), null);
+  assertEquals(versionDrift(undefined, "railway 5.66.0"), null);
+  assertEquals(versionDrift("1.0.0", "no version here"), null);
 });

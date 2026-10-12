@@ -27,6 +27,9 @@
 //              reads the nearest .claude/claude-multi.json from the folder Claude started in, up to
 //              the home folder; each key the project sets under the service's name adds its argument
 //              ({value} filled in, true as it is). No file: the server is as it always was.
+//   _version   the version of a program installed outside the repository (not pinned by its command)
+//              that the lists were checked against: mcp health --probe warns when the server reports
+//              another one in its initialize answer
 //   _auto      tool names left to the permission mode on purpose: in no list, and the checks that look
 //              for unlisted tools (mcp health --probe, mcp_tools_test.ts) know it
 //   _guard     { tool, hook }: a PreToolUse hook of shared/hooks that decides on each call of that tool
@@ -52,6 +55,8 @@ export type ServerCfg = Record<string, unknown> & {
   _allow?: string[];
   _deny?: string[];
   _ask?: string[];
+  /** the version the lists were checked against, for a program installed outside the repository */
+  _version?: string;
   /** tools left to the permission mode on purpose (in no list, not a drift) */
   _auto?: string[];
   /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` (one name, or several) */

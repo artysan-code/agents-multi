@@ -28,14 +28,16 @@
       "command": "npx",
       "args": [
         "-y",
-        "n8n-mcp@2.91.0"
+        "n8n-mcp@2.92.1"
       ],
       "env": {
         "MCP_MODE": "stdio",
         "LOG_LEVEL": "error",
         "DISABLE_CONSOLE_OUTPUT": "true",
         "DISABLED_TOOLS": "n8n_delete_workflow,n8n_manage_credentials",
-        "DISABLED_TOOL_OPERATIONS": "n8n_executions:delete;n8n_workflow_versions:delete,prune;n8n_manage_folders:delete;n8n_manage_datatable:deletetable,deleterows,deletecolumn"
+        "DISABLED_TOOL_OPERATIONS": "n8n_executions:delete;n8n_workflow_versions:delete,prune;n8n_manage_folders:delete;n8n_manage_datatable:deletetable,deleterows,deletecolumn",
+        "N8N_MCP_TELEMETRY_DISABLED": "true",
+        "N8N_MCP_DISABLE_UI_APPS": "true"
       },
       "_perAccount": {
         "env": {
@@ -77,7 +79,7 @@
         "n8n_update_partial_workflow",
         "n8n_workflow_versions"
       ],
-      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05)."
+      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05). Telemetry is off (N8N_MCP_TELEMETRY_DISABLED: the package sends sanitised workflows to its author by default), and so are its result cards, which only cost context here."
     },
     "coolify": {
       "_service": "coolify",
@@ -415,7 +417,7 @@
         "remove_tcp_proxy",
         "remove_volume"
       ],
-      "_note": "Railway's own MCP, served in-process by the CLI (railway mcp local), one per Railway account token: railway-<account>. RAILWAY_API_TOKEN comes from the vault, so the CLI's own login is not used. Its destructive tools (the ones it marks destructiveHint) are denied; list_variables returns values in clear (sealed ones excepted), so it asks first. The binary by its full path (~/.railway/bin is on no service's PATH: the console's doctor, Desktop). CLI only.",
+      "_note": "Railway's own MCP, served in-process by the CLI (railway mcp local), one per Railway account token: railway-<account>. RAILWAY_API_TOKEN comes from the vault, so the CLI's own login is not used. Its destructive tools (the ones it marks destructiveHint) are denied; list_variables returns values in clear (sealed ones excepted), so it asks first. The binary by its full path (~/.railway/bin is on no service's PATH: the console's doctor, Desktop). CLI only. Railway's CLI is installed by its own installer and updates itself: _version is the one the lists were checked against, and mcp health --probe says when the installed one differs.",
       "_ask": [
         "add_reference_variable",
         "connect_service_source",
@@ -436,7 +438,8 @@
         "update_domain",
         "update_service",
         "update_volume"
-      ]
+      ],
+      "_version": "5.60.0"
     },
     "zapier": {
       "_service": "zapier",
@@ -528,7 +531,8 @@
         ],
         "hook": "gitea-guard.ts"
       },
-      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied. The consolidated *_write tools carry a method, so shared/hooks/gitea-guard.ts reads it: what is reversible in the tracker (issues, PRs, labels, wiki) goes through, a merge or a delete asks. What reaches production or the server stays in the ask list: files on a branch, tags, releases, actions, repositories, packages, reviews. CLI only. Forgejo has no projects API (404 on 16.0.6): project_read and project_write are denied, so a call never looks like it could work."
+      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied. The consolidated *_write tools carry a method, so shared/hooks/gitea-guard.ts reads it: what is reversible in the tracker (issues, PRs, labels, wiki) goes through, a merge or a delete asks. What reaches production or the server stays in the ask list: files on a branch, tags, releases, actions, repositories, packages, reviews. CLI only. Forgejo has no projects API (404 on 16.0.6): project_read and project_write are denied, so a call never looks like it could work.",
+      "_version": "1.8.0"
     }
   }
 }

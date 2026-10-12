@@ -25,6 +25,13 @@ export function listDrift(
   };
 }
 
+/** Pure: the version a server reports in its initialize answer ("railway 5.60.0"), when it differs
+ *  from the one its entry expects; null when they agree or either is unknown. */
+export function versionDrift(expected: string | undefined, reported: string): string | null {
+  const got = reported.match(/(\d+\.\d+\.\d+[\w.-]*)\s*$/)?.[1];
+  return expected && got && got !== expected ? got : null;
+}
+
 /** Live probe: start the stdio server with its own config, send `initialize` then `tools/list`, wait
  *  for the replies. Catches what static checks cannot see (native modules built for the wrong ABI,
  *  missing env, cold-start crashes) and the tools the server really offers. It costs a real process
@@ -222,6 +229,12 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
             ].filter(Boolean).join("; ");
           }
         }
+        const other = versionDrift(cfg._version, r.detail);
+        if (r.ok && other && !drift.includes(other)) {
+          drift = [drift, `installed ${other}, the lists were checked against ${cfg._version}`].filter(Boolean).join(
+            "; ",
+          );
+        }
         if (r.ok) {
           oks.push(
             `${runs.length > 1 ? `${n} ` : ""}initialize ok in ${(r.ms / 1000).toFixed(1)}s${
@@ -242,8 +255,9 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
       out.push({
         id: `mcp.${name}.lists`,
         status: "warn",
-        msg: `MCP ${name}: its permission lists and its tools disagree (${drift})`,
-        fix: "classify each tool in _allow, _ask or _deny of shared/mcp/servers.json (or drop the stale name)",
+        msg: `MCP ${name}: its permission lists may not match what runs (${drift})`,
+        fix:
+          "classify each tool in _allow, _ask or _deny of shared/mcp/servers.json (or drop the stale name), then set _version to the version checked",
       });
     }
   }
