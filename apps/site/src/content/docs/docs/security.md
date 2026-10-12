@@ -27,7 +27,16 @@ anything they do not say.
 
 The shared permissions deny a Claude session the ways to the key: `secret-tool`, `kwallet-query`,
 `agents vault recovery-code`, and reading or editing the vault folder. Reading `.env` files asks first.
-Hooks in the shared settings also guard the vault and block destructive shell commands.
+These shared deny and ask lists are added to every profile whatever its own settings say, and
+`agents doctor` fails when a profile's built settings lack one of them.
+
+Hooks in the shared settings also guard the vault, and two more guard what cannot be taken back:
+
+- **Branches and releases**: pushing to a work branch goes through; anything that reaches production
+  asks first — a protected branch, a stable version tag, a deleted or rewritten ref, `--no-verify`, a
+  stable release.
+- **Destructive commands**: broad deletions, lost work, destructive SQL and Docker volume removal ask
+  first; what cannot be undone is denied.
 
 A service's own command-line tool gets its token through `agents vault run`; what deletes or rolls
 back asks for a typed "yes" on a terminal. A Claude session has none, so there it is refused with the
@@ -37,7 +46,8 @@ command for you to run.
 
 - The tool servers have **no deletion tools** on external services. The one exception is deleting a
   calendar event (`calendar_delete`), which asks first.
-- Sending mail asks first.
+- Reads (lists, logs, status) run without a question; writes that reach production (deploys,
+  variables, SQL, merges) ask first; deletions are denied. Sending mail asks first.
 
 ## The brain
 

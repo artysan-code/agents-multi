@@ -13,6 +13,11 @@ Railway…) run one per account, so each one only ever sees its own.
 A profile can see several accounts of one service; each tool then takes `account`, required as soon
 as there is more than one — never a silent default.
 
+Each server entry can sort its tools into three lists, which become permission rules in every
+profile: **`_allow`** for reads (lists, logs, status), so they run without a question; **`_ask`** for
+writes that reach production (deploys, variables, SQL, merges); **`_deny`** for deletions. A tool that
+both reads and writes stays out of all three and follows the profile's permission mode.
+
 ## The vault
 
 - Accounts are listed without secrets; the **secrets are in the vault**: one file per secret,
