@@ -9,7 +9,7 @@ import { runJob } from "../../lib/ui.tsx";
 import { StepRows } from "../../lib/steps.tsx";
 import { api } from "../../api.ts";
 import { send } from "./api.ts";
-import { Nav, type StepProps } from "./index.tsx";
+import { Nav, type StepProps } from "./nav.tsx";
 
 /** A step's write: busy while it runs, its refusal kept to show, `then` on success. */
 export function useSend(p: StepProps) {

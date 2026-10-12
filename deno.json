@@ -19,6 +19,7 @@
     "lineWidth": 120,
     "proseWrap": "preserve",
     "exclude": [
+      ".claude/",
       "apps/site/",
       "apps/ui/",
       "apps/desktop/pnpm-lock.yaml",
@@ -29,6 +30,7 @@
   },
   "lint": {
     "exclude": [
+      ".claude/",
       "apps/site/",
       "apps/ui/"
     ],

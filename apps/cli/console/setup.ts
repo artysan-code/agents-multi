@@ -30,7 +30,7 @@ import { json } from "./http.ts";
 import { broadcast } from "./events.ts";
 import { writeProfile } from "./profiles.ts";
 import { accountOp, recordConnect } from "./accounts.ts";
-import type { Route } from "./server.ts";
+import type { Route } from "./http.ts";
 import type { StatusCache } from "./status-cache.ts";
 
 type Body = Record<string, unknown>;

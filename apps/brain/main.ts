@@ -21,7 +21,8 @@ import {
   useZone,
   validZone,
 } from "../../shared/mcp/lib/tasks.ts";
-import { Auth, base32Encode, type Caller, SESSION_SECONDS } from "./auth.ts";
+import { Auth, type Caller, SESSION_SECONDS } from "./auth.ts";
+import { base32Encode } from "./crypto.ts";
 import { boardRoute } from "./board.ts";
 import {
   accountPage,

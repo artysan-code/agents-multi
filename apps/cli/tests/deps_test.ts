@@ -4,7 +4,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 
 const ROOT = new URL("../../../", import.meta.url).pathname;
-const SKIP = /\/(node_modules|site|\.git|vendor|target|dist)\//;
+const SKIP = /\/(node_modules|site|\.git|\.claude|vendor|target|dist)\//;
 
 async function* sources(dir: string): AsyncGenerator<string> {
   for await (const e of Deno.readDir(dir)) {

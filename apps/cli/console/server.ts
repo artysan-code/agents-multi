@@ -43,17 +43,8 @@ import { jobsFor, startSchedule } from "./schedule.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
+import type { Route } from "./http.ts";
 import { live, refresh as refreshLimits } from "../live.ts";
-
-interface Ctx {
-  req: Request;
-  url: URL;
-}
-export type Handler = (c: Ctx) => Promise<Response> | Response;
-export interface Route {
-  get?: Handler;
-  post?: Handler;
-}
 
 /** The routes of the console, given the state they share. */
 /** The usage database, kept open, and the transcripts read into it at most every few seconds: an

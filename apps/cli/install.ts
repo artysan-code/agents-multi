@@ -24,7 +24,8 @@ import {
   SYNCTHING_CONFIG,
 } from "./lib/paths.ts";
 import { COPY_SHARED, type Installation, installation, isCheckout } from "./lib/mode.ts";
-import { has, run, which } from "./lib/proc.ts";
+import { has, run } from "./lib/proc.ts";
+import { APP_ENTRY, appExecutable, appImageEntry, AUTOSTART, autostartEntry } from "./lib/desktop-entry.ts";
 import {
   desktopDir,
   type Kind,
@@ -215,36 +216,6 @@ async function materializeKind(p: Profile, kind: Kind, spec: "all" | string[]) {
 export function codeFor(inst: Installation, running: string, runningIsCheckout: boolean): string {
   return inst.mode === "dev" && runningIsCheckout ? running : inst.code;
 }
-
-/** The login entry that starts the app in the tray (XDG autostart). */
-export const AUTOSTART = "agents-multi.desktop";
-
-/** The desktop app's executable: the runtime's link to the package's (appcopy.ts), else on PATH. */
-export async function appExecutable(): Promise<string | null> {
-  const own = `${RUNTIME}/bin/agents-multi-desktop`;
-  return (await stat(own)) ? own : await which("agents-multi-desktop");
-}
-
-/** The app's menu entry, named after its window's app_id so the panel groups the two. */
-const APP_ENTRY = "me.artysan.agents.desktop";
-/** Pure: the menu entry install writes for an AppImage, which brings none (a deb or an rpm does). */
-export const appImageEntry = (app: string) =>
-  [
-    "[Desktop Entry]",
-    "Type=Application",
-    "Name=Agents Multi",
-    `Exec=${app}`,
-    "Icon=claude-multi",
-    "StartupWMClass=me.artysan.agents",
-    "StartupNotify=true",
-    "Terminal=false",
-    "Categories=Development;",
-    "",
-  ].join("\n");
-
-/** Pure: the autostart entry, from desktop/autostart.desktop.in. */
-export const autostartEntry = (template: string, bin: string) =>
-  template.slice(template.indexOf("[Desktop Entry]")).replaceAll("@BIN@", bin);
 
 /**
  * Materialises the runtime. `as` names the installation to install; otherwise it is this machine's.

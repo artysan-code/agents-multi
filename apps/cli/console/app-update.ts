@@ -14,7 +14,7 @@
 // The socket is AGENTS_MULTI_APP_SOCKET, which the app sets for the backend it starts, else the
 // app's default in the runtime folder; bin/agents allows both.
 
-import type { Route } from "./server.ts";
+import type { Route } from "./http.ts";
 import { json } from "./http.ts";
 import { privateDir } from "./token.ts";
 

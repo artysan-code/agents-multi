@@ -1,7 +1,18 @@
-// http.ts — what every console route shares: JSON responses, the local-host guard, the anti-CSRF
-// header on writes, and the page's static files.
+// http.ts — what every console route shares: the route's shape, JSON responses, the local-host
+// guard, the anti-CSRF header on writes, and the page's static files.
 
 import { readText } from "../lib/fs.ts";
+
+interface Ctx {
+  req: Request;
+  url: URL;
+}
+export type Handler = (c: Ctx) => Promise<Response> | Response;
+/** One path's handlers, by method: server.ts dispatches to them, setup.ts and app-update.ts add some. */
+export interface Route {
+  get?: Handler;
+  post?: Handler;
+}
 
 /** A JSON response that is never cached. */
 export function json(v: unknown, code = 200): Response {

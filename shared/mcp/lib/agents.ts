@@ -329,8 +329,9 @@ export function answerLine(
  *  child nobody has reaped yet (a container whose first process does not reap orphans). */
 export const runsBy = (stat: string) => stat.trim() !== "" && !stat.trim().startsWith("Z");
 
-// `ps` on the one pid, not /proc: Deno lets only --allow-all read /proc
-const alive = async (pidFile: string) => {
+/** Whether the process whose pid `pidFile` holds runs (a child, a workflow's runner). `ps` on the one
+ *  pid, not /proc: Deno lets only --allow-all read /proc. */
+export const pidAlive = async (pidFile: string) => {
   const pid = Number((await Deno.readTextFile(pidFile).catch(() => "")).trim());
   if (!(pid > 0)) return false;
   const r = await new Deno.Command("ps", { args: ["-o", "stat=", "-p", String(pid)], stdout: "piped", stderr: "null" })
@@ -338,7 +339,8 @@ const alive = async (pidFile: string) => {
   return !!r?.success && runsBy(new TextDecoder().decode(r.stdout));
 };
 
-async function lines(file: string): Promise<string[]> {
+/** A file's non-empty lines; none when it is missing. */
+export async function lines(file: string): Promise<string[]> {
   return (await Deno.readTextFile(file).catch(() => "")).split("\n").filter(Boolean);
 }
 
@@ -362,7 +364,7 @@ export async function readChild(id: string, runs = runsDir()): Promise<Child | n
   const dir = `${runs}/${id}`;
   const meta = await Deno.readTextFile(`${dir}/meta.json`).then(JSON.parse).catch(() => null) as Meta | null;
   if (!meta) return null;
-  const state = stateOf(await lines(`${dir}/out.jsonl`), await answeredOf(dir), await alive(`${dir}/claude.pid`));
+  const state = stateOf(await lines(`${dir}/out.jsonl`), await answeredOf(dir), await pidAlive(`${dir}/claude.pid`));
   const err = (await Deno.readTextFile(`${dir}/err.log`).catch(() => "")).trim();
   if (state.phase === "ended" && !state.turns && err) state.error = err.split("\n").slice(-3).join(" ");
   return { meta, state };
@@ -382,7 +384,7 @@ export async function listChildren(runs = runsDir()): Promise<Child[]> {
 
 /** Writes a line on a child's stdin; refused when the child is gone (a fifo with no reader would block). */
 async function send(dir: string, line: string): Promise<void> {
-  if (!(await alive(`${dir}/claude.pid`))) throw new Error("the child is not running");
+  if (!(await pidAlive(`${dir}/claude.pid`))) throw new Error("the child is not running");
   const f = await Deno.open(`${dir}/in`, { write: true });
   try {
     await f.write(new TextEncoder().encode(`${line}\n`));
@@ -492,7 +494,7 @@ export async function startChild(
     stdout: "null",
     stderr: "null",
   }).output();
-  for (let t = 0; t < 50 && !(await alive(`${run}/claude.pid`)); t++) await new Promise((r) => setTimeout(r, 100));
+  for (let t = 0; t < 50 && !(await pidAlive(`${run}/claude.pid`)); t++) await new Promise((r) => setTimeout(r, 100));
   await send(run, userLine(i.task));
   return meta;
 }

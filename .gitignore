@@ -32,3 +32,6 @@ apps/desktop/src-tauri/gen/
 # what the desktop app packs, prepared by apps/desktop/scripts/bundle.sh
 apps/desktop/src-tauri/binaries/
 apps/desktop/src-tauri/bundle/
+
+# Claude Code worktrees of parallel sessions and agents (EnterWorktree, isolation: worktree)
+/.claude/worktrees/

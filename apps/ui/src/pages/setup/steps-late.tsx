@@ -11,7 +11,7 @@ import { closeStep } from "../system/api.ts";
 import { BlockerList } from "../system/updates-close.tsx";
 import { type StepRow, StepRows } from "../../lib/steps.tsx";
 import { send, type Step } from "./api.ts";
-import { Nav, type StepProps } from "./index.tsx";
+import { Nav, type StepProps } from "./nav.tsx";
 import { JobStep, useSend } from "./steps.tsx";
 
 /** «Later»: the step is recorded as put off, and the wizard moves on. */

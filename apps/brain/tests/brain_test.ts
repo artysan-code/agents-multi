@@ -4,7 +4,8 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import { cleanPath, linksIn, makeResolver, Store, titleOf } from "../store.ts";
 import { chunk, fuse } from "../embed.ts";
-import { base32Decode, base32Encode, redirectAllowed, redirectMatches, same, totp, totpOk } from "../auth.ts";
+import { redirectAllowed, redirectMatches } from "../auth.ts";
+import { base32Decode, base32Encode, same, totp, totpOk } from "../crypto.ts";
 import { open, seal, snapshot } from "../backup.ts";
 import { instructions, staleProjects } from "../tools.ts";
 import { brainApi } from "../api.ts";

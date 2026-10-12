@@ -19,7 +19,9 @@ import {
   attentionOf,
   type ChildState,
   launcherOf,
+  lines,
   listChildren,
+  pidAlive,
   readChild,
   runsDir,
   sayTo,
@@ -206,8 +208,8 @@ export function attentionOfEvent(e: RunEvent): Attention | null {
 
 const runsRoot = (runs = runsDir()) => `${runs}/runs`;
 
-const lines = async (file: string) =>
-  (await Deno.readTextFile(file).catch(() => "")).split("\n").filter(Boolean).map((l) => {
+const jsonLines = async (file: string) =>
+  (await lines(file)).map((l) => {
     try {
       return JSON.parse(l);
     } catch {
@@ -228,14 +230,7 @@ export interface Run {
   alive: boolean;
 }
 
-const runnerAlive = async (dir: string) => {
-  const pid = Number((await Deno.readTextFile(`${dir}/runner.pid`).catch(() => "")).trim());
-  if (!(pid > 0)) return false;
-  const r = await new Deno.Command("ps", { args: ["-o", "stat=", "-p", String(pid)], stdout: "piped", stderr: "null" })
-    .output().catch(() => null);
-  const stat = r?.success ? new TextDecoder().decode(r.stdout).trim() : "";
-  return stat !== "" && !stat.startsWith("Z");
-};
+const runnerAlive = (dir: string) => pidAlive(`${dir}/runner.pid`);
 
 export async function readRun(id: string, runs = runsDir()): Promise<Run | null> {
   if (!validId(id)) return null;
@@ -258,7 +253,7 @@ export async function listRuns(runs = runsDir()): Promise<Run[]> {
 }
 
 export const runEvents = (id: string, runs = runsDir()) =>
-  lines(`${runsRoot(runs)}/${id}/events.jsonl`) as Promise<RunEvent[]>;
+  jsonLines(`${runsRoot(runs)}/${id}/events.jsonl`) as Promise<RunEvent[]>;
 
 /** The command that runs a run: this code's own CLI (bin/agents), in app mode and in a checkout alike.
  *  From the real folder of this file: in app mode the server is loaded through ~/.agents-multi/shared, a
@@ -459,7 +454,7 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
 
   while (st.status === "running") {
     // the owner's answers
-    const control = await lines(`${dir}/control.jsonl`);
+    const control = await jsonLines(`${dir}/control.jsonl`);
     for (const c of control.slice(st.control) as { choice: Choice; step: string | null }[]) {
       const s = c.step ? st.steps[c.step] : null;
       if (c.choice === "stop") {
@@ -509,7 +504,7 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
     }
 
     // the team channel: to each step at work, what was said for it since it last heard
-    const channel = await lines(`${dir}/channel.jsonl`) as { from: string; to: string | null; text: string }[];
+    const channel = await jsonLines(`${dir}/channel.jsonl`) as { from: string; to: string | null; text: string }[];
     for (const [sid, s] of Object.entries(st.steps)) {
       if (s.status !== "running" || !s.child) continue;
       const fresh = channel.slice(st.heard[sid] ?? 0).filter((m) => m.from !== sid && (!m.to || m.to === sid));

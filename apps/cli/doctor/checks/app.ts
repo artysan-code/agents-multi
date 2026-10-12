@@ -1,7 +1,7 @@
 // app.ts — The desktop app: installed, started at login, its tray, and the scheduled jobs (systemd
 // timers in dev mode, the app's backend in app mode).
 
-import { appExecutable, AUTOSTART } from "../../install.ts";
+import { appExecutable, AUTOSTART } from "../../lib/desktop-entry.ts";
 import { readJson, readText } from "../../lib/fs.ts";
 import { HOME, STATE } from "../../lib/paths.ts";
 import { run } from "../../lib/proc.ts";

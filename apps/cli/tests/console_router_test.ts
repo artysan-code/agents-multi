@@ -1,7 +1,8 @@
 // Tests for the console's request handler (console/server.ts): the local-host guard, the anti-CSRF
 // header on writes, 405 on a POST-only path, the table before the static files.
 import { assertEquals } from "jsr:@std/assert@1";
-import { createHandler, type Route } from "../console/server.ts";
+import { createHandler } from "../console/server.ts";
+import type { Route } from "../console/http.ts";
 import { Tickets } from "../console/token.ts";
 
 const calls: string[] = [];

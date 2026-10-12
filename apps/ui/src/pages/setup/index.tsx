@@ -17,17 +17,9 @@ import { Overlays } from "../../lib/ui.tsx";
 import { loadSetup, type SetupView, type Step, STEPS } from "./api.ts";
 import { Folder, Install, Profiles, Welcome, You } from "./steps.tsx";
 import { Brain, Claude, Done, Logins, Vault } from "./steps-late.tsx";
+import type { StepProps } from "./nav.tsx";
 import "../../lib/screen.css";
 import "./setup.css";
-
-/** What every step gets: the view, moving on, going back, and saying that it is busy. */
-export interface StepProps {
-  v: SetupView;
-  /** after a step's write: reload, and show the step the server says is next */
-  next: () => Promise<void>;
-  back: (() => void) | null;
-  busy: (b: boolean) => void;
-}
 
 const BODIES: Record<Step, (p: StepProps) => ComponentChildren> = {
   welcome: Welcome,
@@ -41,17 +33,6 @@ const BODIES: Record<Step, (p: StepProps) => ComponentChildren> = {
   brain: Brain,
   done: Done,
 };
-
-/** The footer of a step: «Back» first when there is somewhere to go back to, then the step's buttons. */
-export function Nav({ back, children }: { back: (() => void) | null; children?: ComponentChildren }) {
-  return (
-    <div class="uw-go su-go">
-      {back && <button type="button" class="bt ghost" onClick={back}>{t("su.back")}</button>}
-      <span class="su-fill" />
-      {children}
-    </div>
-  );
-}
 
 export function Setup({ initial }: { initial: SetupView }) {
   const [v, setV] = useState(initial);

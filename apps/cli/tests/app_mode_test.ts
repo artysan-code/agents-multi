@@ -5,7 +5,8 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { buildId, installCopy, keepBy, keepProgram, readBuild, seedCache } from "../appcopy.ts";
 import { personDenoDir } from "../appinstall.ts";
-import { appImageEntry, autostartEntry, codeFor } from "../install.ts";
+import { codeFor } from "../install.ts";
+import { appImageEntry, autostartEntry } from "../lib/desktop-entry.ts";
 import { COPY_SHARED, modeOf } from "../lib/mode.ts";
 import { managerHome } from "../lib/machine.ts";
 import { appCodeChecks, runningFrom } from "../doctor/checks/repo.ts";

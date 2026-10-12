@@ -12,7 +12,8 @@
 // lives only in the server's environment.
 
 import type { DatabaseSync } from "node:sqlite";
-import { ACCOUNTS_MIGRATIONS, base32Encode, randomToken, same, sha256, totpOk } from "./auth.ts";
+import { ACCOUNTS_MIGRATIONS } from "./auth.ts";
+import { base32Encode, randomToken, same, sha256, totpOk } from "./crypto.ts";
 import { migrate } from "./migrate.ts";
 import { validZone } from "../../shared/mcp/lib/tasks.ts";
 

@@ -3,7 +3,8 @@
 // account is reachable from another.
 import { assert, assertEquals, assertNotEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import { DatabaseSync } from "node:sqlite";
-import { Auth, base32Encode, MAX_CLIENTS, sha256, totp } from "../auth.ts";
+import { Auth, MAX_CLIENTS } from "../auth.ts";
+import { base32Encode, sha256, totp } from "../crypto.ts";
 import { accountError, hashPassphrase, masterKey, passphraseOk, Users } from "../users.ts";
 import { tenantFile, Tenants } from "../tenants.ts";
 

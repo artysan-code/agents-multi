@@ -303,7 +303,7 @@ await r.body?.cancel();
 
 // two people at once: a second account, then both write and read their tasks with the requests
 // interleaved; neither sees the other's, and two machines changing the same version lose nothing
-const { totp } = await import("../auth.ts");
+const { totp } = await import("../crypto.ts");
 const { toFile } = await import("../../../shared/mcp/lib/tasks.ts");
 const inviteDone = await (await fetch(`${B}/account/admin/invite`, {
   method: "POST",
