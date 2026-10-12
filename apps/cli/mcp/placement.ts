@@ -238,6 +238,23 @@ interface GuardHook {
   matcher: string;
   hooks: { type: "command"; command: string }[];
 }
+/** What a guard that cannot run answers: a question, never a silent pass (Claude Code lets a call
+ *  through when a hook fails with anything but exit 2). */
+export const GUARD_FALLBACK = JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "ask",
+    permissionDecisionReason: "the guard of this tool could not run: confirm by hand",
+  },
+});
+
+/** Pure: the command line of a `_guard` hook — quoted, without the project's deno.json (the hook runs
+ *  in whatever folder the session is in), and asking when the guard itself fails. */
+export const guardCommand = (deno: string, hook: string) =>
+  `${shellQuote(deno)} run --quiet --no-lock --no-config ${shellQuote(hook)} || printf '%s\\n' ${
+    shellQuote(GUARD_FALLBACK)
+  }`;
+
 export interface RegistryRules {
   allow: string[];
   deny: string[];
@@ -263,7 +280,7 @@ export function permissionRules(reg: Registry, profile: string): RegistryRules {
   const { hooks: dir, deno } = reg.launch ?? launchPaths();
   const hooks: GuardHook[] = [...guarded].map(([entry, tools]) => ({
     matcher: `^(${tools.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`,
-    hooks: [{ type: "command", command: `${deno} run --quiet --no-lock ${dir}/${reg.servers[entry]._guard!.hook}` }],
+    hooks: [{ type: "command", command: guardCommand(deno, `${dir}/${reg.servers[entry]._guard!.hook}`) }],
   }));
   return { allow: allow.sort(), deny: deny.sort(), ask: ask.sort(), hooks };
 }

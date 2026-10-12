@@ -11,7 +11,7 @@ import { COPY_SHARED, modeOf } from "../lib/mode.ts";
 import { managerHome } from "../lib/machine.ts";
 import { appCodeChecks, runningFrom } from "../doctor/checks/repo.ts";
 import { denoFor, type Registry, withDeno } from "../mcp/registry.ts";
-import { permissionRules, wanted } from "../mcp/placement.ts";
+import { guardCommand, permissionRules, wanted } from "../mcp/placement.ts";
 import { uiState } from "../ui.ts";
 import { jobPath, jobsFor, nextDelay } from "../console/schedule.ts";
 
@@ -226,7 +226,7 @@ Deno.test("placement: launch.ts and the guard hooks run on the registry's Deno",
   assertEquals(s.command, "/rt/bin/deno");
   assertEquals(
     permissionRules(reg, "p").hooks[0].hooks[0].command,
-    "/rt/bin/deno run --quiet --no-lock /rt/shared/hooks/guard.ts",
+    guardCommand("/rt/bin/deno", "/rt/shared/hooks/guard.ts"),
   );
 });
 

@@ -2,7 +2,16 @@
 // The profile names come from the configuration (the tests run on apps/cli/tests/fixtures/config), never
 // from a literal: a rename must not break this.
 import { assertEquals } from "jsr:@std/assert@1";
-import { permissionRules, placements, reach, reachOf, shellQuote, type Target, wanted } from "../mcp/placement.ts";
+import {
+  guardCommand,
+  permissionRules,
+  placements,
+  reach,
+  reachOf,
+  shellQuote,
+  type Target,
+  wanted,
+} from "../mcp/placement.ts";
 import { targets } from "../mcp/apply.ts";
 import { type RawRegistry, REGISTRY, type Registry, registryProblems, selectServers } from "../mcp/registry.ts";
 import { missingIgnores } from "../lib/git.ts";
@@ -265,7 +274,7 @@ Deno.test("permissionRules: _deny and _ask under each server's name, only where 
     ask: ["mcp__flows-mine__run_flow", "mcp__flows-work__run_flow"],
     hooks: [{
       matcher: "^(mcp__remote-proj__execute)$",
-      hooks: [{ type: "command", command: "deno run --quiet --no-lock /rt/shared/hooks/remote-guard.ts" }],
+      hooks: [{ type: "command", command: guardCommand("deno", "/rt/shared/hooks/remote-guard.ts") }],
     }],
   });
   assertEquals(permissionRules(perAccountReg, B), {
@@ -357,4 +366,12 @@ Deno.test("missingIgnores: the patterns a global ignore file does not list yet, 
   assertEquals(missingIgnores("", want), want);
   assertEquals(missingIgnores("**/.claude/settings.local.json\n**/.claude/claude-multi.json\n", want), []);
   assertEquals(missingIgnores("# **/.claude/claude-multi.json\n", want), want);
+});
+
+Deno.test("guardCommand: quoted, no project config, and a question when the guard cannot run", async () => {
+  const cmd = guardCommand("/no/such/deno", "/x y/guard.ts");
+  assertEquals(cmd.startsWith("/no/such/deno run --quiet --no-lock --no-config '/x y/guard.ts' || "), true);
+  const r = await new Deno.Command("bash", { args: ["-c", cmd], stdout: "piped", stderr: "null" }).output();
+  assertEquals(r.code, 0);
+  assertEquals(JSON.parse(new TextDecoder().decode(r.stdout)).hookSpecificOutput.permissionDecision, "ask");
 });

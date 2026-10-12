@@ -4,6 +4,18 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 
 const HOOKS = new URL("../../../shared/hooks/", import.meta.url).pathname;
 
+/** The payload on the hook's stdin. A hook that decides before reading it (brain-nudge on a work
+ *  profile) may have exited already: the broken pipe is that, not a failure. */
+async function feed(child: Deno.ChildProcess, payload: unknown) {
+  const w = child.stdin.getWriter();
+  try {
+    await w.write(new TextEncoder().encode(JSON.stringify(payload)));
+    await w.close();
+  } catch (e) {
+    if (!(e instanceof Deno.errors.BrokenPipe)) throw e;
+  }
+}
+
 async function output(hook: string, payload: unknown, env: Record<string, string>, cwd: string) {
   const child = new Deno.Command("bash", {
     args: [`${HOOKS}${hook}`],
@@ -13,9 +25,7 @@ async function output(hook: string, payload: unknown, env: Record<string, string
     stdout: "piped",
     stderr: "null",
   }).spawn();
-  const w = child.stdin.getWriter();
-  await w.write(new TextEncoder().encode(JSON.stringify(payload)));
-  await w.close();
+  await feed(child, payload);
   return new TextDecoder().decode((await child.output()).stdout).trim();
 }
 async function fire(hook: string, payload: unknown, env: Record<string, string>, cwd: string) {
@@ -70,9 +80,7 @@ async function raw(hook: string, payload: unknown, env: Record<string, string>, 
     stderr: "null",
   })
     .spawn();
-  const w = child.stdin.getWriter();
-  await w.write(new TextEncoder().encode(JSON.stringify(payload)));
-  await w.close();
+  await feed(child, payload);
   return new TextDecoder().decode((await child.output()).stdout).trim();
 }
 
