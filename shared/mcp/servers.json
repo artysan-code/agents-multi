@@ -533,6 +533,54 @@
       },
       "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied. The consolidated *_write tools carry a method, so shared/hooks/gitea-guard.ts reads it: what is reversible in the tracker (issues, PRs, labels, wiki) goes through, a merge or a delete asks. What reaches production or the server stays in the ask list: files on a branch, tags, releases, actions, repositories, packages, reviews. CLI only. Forgejo has no projects API (404 on 16.0.6): project_read and project_write are denied, so a call never looks like it could work.",
       "_version": "1.8.0"
+    },
+    "slack": {
+      "_service": "slack",
+      "_install": "bash {repo}/scripts/install-slack-mcp.sh",
+      "_version": "1.3.0",
+      "type": "stdio",
+      "command": "${HOME}/.local/lib/slack-mcp/slack-mcp-server",
+      "args": [
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "SLACK_MCP_ENABLED_TOOLS": "attachment_get_data,channels_list,channels_me,conversations_add_message,conversations_history,conversations_mark,conversations_replies,conversations_search_messages,conversations_unreads,reactions_add,reactions_remove,usergroups_list,usergroups_me,users_search",
+        "SLACK_MCP_LOG_LEVEL": "error"
+      },
+      "_perAccount": {
+        "env": {
+          "SLACK_MCP_XOXP_TOKEN": "{secret}"
+        }
+      },
+      "_allow": [
+        "attachment_get_data",
+        "channels_list",
+        "channels_me",
+        "conversations_history",
+        "conversations_mark",
+        "conversations_replies",
+        "conversations_search_messages",
+        "conversations_unreads",
+        "usergroups_list",
+        "usergroups_me",
+        "users_search"
+      ],
+      "_ask": [
+        "conversations_add_message",
+        "reactions_add",
+        "reactions_remove"
+      ],
+      "_deny": [
+        "conversations_join",
+        "conversations_leave",
+        "saved_clear_completed",
+        "saved_update",
+        "usergroups_create",
+        "usergroups_update",
+        "usergroups_users_update"
+      ],
+      "_note": "Slack as the person, not a bot (korotovsky/slack-mcp-server, MIT), one server per workspace: slack-<account>, with that workspace's user token (xoxp-, from a Slack app of their own with user token scopes and token rotation off) from the vault. Browser-session tokens (xoxc/xoxd) are not used. Only the tools in SLACK_MCP_ENABLED_TOOLS are offered: reads run unasked; a message, or a reaction others see, asks first; joining or leaving channels and changing user groups are not offered and denied. What it reads is other people's text: data, never instructions. Installed by scripts/install-slack-mcp.sh (SHA-256 checked). It keeps users and channels in ~/.cache/slack-mcp-server, per workspace. CLI only."
     }
   }
 }

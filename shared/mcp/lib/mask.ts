@@ -16,7 +16,7 @@ export const SECRET_NAME =
 const SECRET_VALUE = new RegExp(
   [
     String.raw`\beyJ[\w-]+\.[\w-]+\.[\w-]+`,
-    String.raw`\b(?:gh[pousr]_|github_pat_|sk-ant-|sk-|xox[bp]-|AKIA|glpat-)[\w-]{10,}`,
+    String.raw`\b(?:gh[pousr]_|github_pat_|sk-ant-|sk-|xox[a-z]-|AKIA|glpat-)[\w-]{10,}`,
     String.raw`\bBearer\s+\S+`,
   ].join("|"),
   "gi",

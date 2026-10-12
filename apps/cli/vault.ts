@@ -47,19 +47,26 @@ async function readStdin(prompt: string): Promise<string> {
 export function probeRequest(
   a: Pick<Account, "service" | "url">,
   secret: string,
-): { url: string; header: string } | null {
-  const probes: Record<string, { path: string; header: string }> = {
+): { url: string; header: string; okBody?: RegExp } | null {
+  const probes: Record<string, { path: string; header: string; okBody?: RegExp }> = {
     coolify: { path: "/api/v1/version", header: `Authorization: Bearer ${secret}` },
     n8n: { path: "/api/v1/workflows?limit=1", header: `X-N8N-API-KEY: ${secret}` },
     // the memory's version: a few bytes, where the task list would be the whole list
     brain: { path: "/api/brain/state", header: `Authorization: Bearer ${secret}` },
     gitea: { path: "/api/v1/user", header: `Authorization: token ${secret}` },
     supabase: { path: "https://api.supabase.com/v1/projects", header: `Authorization: Bearer ${secret}` },
+    // Slack answers 200 to a refused token too: what tells is "ok" in the body
+    slack: {
+      path: "https://slack.com/api/auth.test",
+      header: `Authorization: Bearer ${secret}`,
+      okBody: /"ok"\s*:\s*true/,
+    },
   };
   const p = probes[a.service];
   if (!p) return null;
-  if (/^https:\/\//.test(p.path)) return { url: p.path, header: p.header };
-  return a.url ? { url: `${a.url.replace(/\/+$/, "")}${p.path}`, header: p.header } : null;
+  const body = p.okBody ? { okBody: p.okBody } : {};
+  if (/^https:\/\//.test(p.path)) return { url: p.path, header: p.header, ...body };
+  return a.url ? { url: `${a.url.replace(/\/+$/, "")}${p.path}`, header: p.header, ...body } : null;
 }
 
 /** Does this secret open this account? One authenticated request, the secret passed to curl as a
@@ -70,8 +77,9 @@ export async function probeAccount(
 ): Promise<{ ok: boolean; detail: string; checked?: boolean }> {
   const p = probeRequest(a, secret);
   if (!p) return { ok: true, detail: "no check for this service", checked: false };
+  // the body is read only when the answer's code does not tell (okBody), and never kept
   const child = new Deno.Command("curl", {
-    args: ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "15", "-H", "@-", p.url],
+    args: ["-s", "-o", p.okBody ? "-" : "/dev/null", "-w", "\n%{http_code}", "--max-time", "15", "-H", "@-", p.url],
     stdin: "piped",
     stdout: "piped",
     stderr: "null",
@@ -79,8 +87,17 @@ export async function probeAccount(
   const w = child.stdin.getWriter();
   await w.write(new TextEncoder().encode(p.header + "\n"));
   await w.close();
-  const code = new TextDecoder().decode((await child.output()).stdout).trim();
-  return { ok: code.startsWith("2"), detail: `HTTP ${code || "unreachable"}` };
+  const out = new TextDecoder().decode((await child.output()).stdout);
+  return probeVerdict(out, p.okBody);
+}
+
+/** Pure: curl's output (the body when asked for, then the code on the last line) as a verdict. */
+export function probeVerdict(out: string, okBody?: RegExp): { ok: boolean; detail: string } {
+  const lines = out.trimEnd().split("\n");
+  const code = (lines.pop() ?? "").trim();
+  if (!code.startsWith("2")) return { ok: false, detail: `HTTP ${code || "unreachable"}` };
+  if (okBody && !okBody.test(lines.join("\n"))) return { ok: false, detail: `HTTP ${code}, refused` };
+  return { ok: true, detail: `HTTP ${code}` };
 }
 
 type Probe = Awaited<ReturnType<typeof probeAccount>>;

@@ -71,3 +71,17 @@ Deno.test("key-check: the sealed text and the key derivation infos keep their or
   const old = JSON.parse(await Deno.readTextFile(new URL("./fixtures/vault-key-check.json", import.meta.url)));
   assertEquals(await v.open(k, "key-check", old), "claude-multi vault");
 });
+
+Deno.test("probeVerdict: the code decides, and the body too where the service answers 200 to a refusal", async () => {
+  const { probeVerdict, probeRequest } = await import("../vault.ts");
+  assertEquals(probeVerdict("\n200"), { ok: true, detail: "HTTP 200" });
+  assertEquals(probeVerdict("\n401"), { ok: false, detail: "HTTP 401" });
+  assertEquals(probeVerdict(""), { ok: false, detail: "HTTP unreachable" });
+  const slack = probeRequest({ service: "slack" }, "xoxp-k");
+  assertEquals(slack?.url, "https://slack.com/api/auth.test");
+  assertEquals(probeVerdict('{"ok":true,"team":"t"}\n200', slack?.okBody), { ok: true, detail: "HTTP 200" });
+  assertEquals(probeVerdict('{"ok":false,"error":"invalid_auth"}\n200', slack?.okBody), {
+    ok: false,
+    detail: "HTTP 200, refused",
+  });
+});

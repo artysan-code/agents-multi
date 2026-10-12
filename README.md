@@ -399,7 +399,10 @@ that would rewrite the file is open (`--force` overrides), backs up into
 
 `mcp health` checks binaries, files, lock files and dependencies. `mcp health --probe` actually
 starts each server and waits for its `initialize` reply, which catches what static checks cannot —
-native modules built for the wrong Node ABI, missing environment, cold-start crashes.
+native modules built for the wrong Node ABI, missing environment, cold-start crashes. It also asks
+each stdio server for `tools/list` and warns when the entry's lists disagree with it (a tool in no
+list, a listed tool the server does not offer), and when a program installed outside the repository
+reports another version than the entry's `_version`, the one its lists were checked against.
 
 Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege). The ones that work on
 an external service share `shared/mcp/lib/`: `coolify` and `google` today. n8n is not ours any more: it runs n8n-mcp, one server per account (below).
@@ -433,11 +436,13 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
   once with `/mcp`. Mark those accounts `"auth": "oauth"`: they have nothing in the vault.
 - **`_allow` / `_deny` / `_ask`**: tool names that become `mcp__<server>__<tool>` rules in each
   profile's generated `settings.json`, for every server the entry expands to (any entry may use them).
-  The convention: reads (lists, logs, status) in `_allow`, so they run without a question; writes that
-  reach production (deploys, variables, SQL, merges) in `_ask`; deletions in `_deny` — this is how "no
-  deletion tools" holds on a server that has some. A tool that both reads and writes stays out of all
-  three and is left to the permission mode. `scripts/mcp-probe.ts` fails when a list names a tool one of
-  our servers does not have.
+  The convention: reads and changes that stay reversible and inside the service (lists, logs, drafts,
+  labels, links) in `_allow`, so they run without a question; what reaches outside or production
+  (messages, deploys, variables, SQL, merges), spends credits or touches secrets in `_ask`; deletions in
+  `_deny` — this is how "no deletion tools" holds on a server that has some. Every tool a server offers
+  is in one of them: one left to the permission mode on purpose is named in `_auto`.
+  `scripts/mcp-probe.ts` fails when a list names a tool one of our servers does not have, and
+  `apps/cli/tests/mcp_tools_test.ts` when one of our servers registers a tool no list names.
 - **The repository's own deny and ask lists** (`shared/settings.json`) are added to every profile's,
   whatever the person's or profile's layer says (a merge patch replaces arrays whole): the doctor
   (`profile.<p>.safety`) fails when a built file lacks one of them or a required guard.

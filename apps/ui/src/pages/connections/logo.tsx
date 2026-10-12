@@ -12,6 +12,7 @@ const SVC_NAMES: Record<string, string> = {
   railway: "Railway",
   zapier: "Zapier",
   gitea: "Gitea · Forgejo",
+  slack: "Slack",
   coolify: "Coolify",
   "syncthing-status": "Syncthing",
   brain: "Brain",
