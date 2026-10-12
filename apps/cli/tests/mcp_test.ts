@@ -297,7 +297,7 @@ Deno.test("permissionRules: _deny and _ask under each server's name, only where 
   }, A);
   assertEquals([rw.allow, rw.ask], [["mcp__s__logs"], ["mcp__s__deploy"]]);
   assertEquals(registryProblems({ servers: { s: { command: "s", _allow: ["x"], _ask: ["x"] } } }), [
-    "s: x is in more than one of _allow, _deny, _ask",
+    "s: x is in more than one of _allow, _deny, _ask, _auto",
   ]);
   // the guard's matcher matches its servers and nothing else
   const m = new RegExp(permissionRules(perAccountReg, A).hooks[0].matcher);

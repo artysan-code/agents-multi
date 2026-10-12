@@ -27,6 +27,8 @@
 //              reads the nearest .claude/claude-multi.json from the folder Claude started in, up to
 //              the home folder; each key the project sets under the service's name adds its argument
 //              ({value} filled in, true as it is). No file: the server is as it always was.
+//   _auto      tool names left to the permission mode on purpose: in no list, and the checks that look
+//              for unlisted tools (mcp health --probe, mcp_tools_test.ts) know it
 //   _guard     { tool, hook }: a PreToolUse hook of shared/hooks that decides on each call of that tool
 //              (allow / ask / deny), wired by the same generated settings
 
@@ -50,6 +52,8 @@ export type ServerCfg = Record<string, unknown> & {
   _allow?: string[];
   _deny?: string[];
   _ask?: string[];
+  /** tools left to the permission mode on purpose (in no list, not a drift) */
+  _auto?: string[];
   /** a PreToolUse hook (a file in shared/hooks) that decides on each call of `tool` (one name, or several) */
   _guard?: { tool: string | string[]; hook: string };
   /** a project's binding key → the argument it adds (stdio `_perAccount` servers): launch.ts */
@@ -191,10 +195,10 @@ export function registryProblems(reg: Pick<Registry, "servers">): string[] {
     if (JSON.stringify(rest).includes("{secret}")) {
       out.push(`${name}: {secret} outside _perAccount would be written into a config as it is`);
     }
-    const lists = [cfg._allow ?? [], cfg._deny ?? [], cfg._ask ?? []];
+    const lists = [cfg._allow ?? [], cfg._deny ?? [], cfg._ask ?? [], cfg._auto ?? []];
     for (const t of new Set(lists.flat())) {
       if (lists.filter((l) => l.includes(t)).length > 1) {
-        out.push(`${name}: ${t} is in more than one of _allow, _deny, _ask`);
+        out.push(`${name}: ${t} is in more than one of _allow, _deny, _ask, _auto`);
       }
     }
     if (!_perAccount) continue;

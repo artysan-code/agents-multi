@@ -66,10 +66,16 @@
         "n8n_autofix_workflow",
         "n8n_create_workflow",
         "n8n_deploy_template",
+        "n8n_evaluations",
+        "n8n_executions",
         "n8n_get_workflow",
+        "n8n_manage_agents",
+        "n8n_manage_datatable",
+        "n8n_manage_folders",
         "n8n_test_workflow",
         "n8n_update_full_workflow",
-        "n8n_update_partial_workflow"
+        "n8n_update_partial_workflow",
+        "n8n_workflow_versions"
       ],
       "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05)."
     },
@@ -89,6 +95,7 @@
         "${HOME}/.agents-multi/shared/mcp/coolify/server.ts"
       ],
       "_allow": [
+        "coolify_backup_database",
         "coolify_deploy_history",
         "coolify_deploy_status",
         "coolify_detail",
@@ -107,6 +114,8 @@
         "coolify_create_project",
         "coolify_create_service",
         "coolify_deploy",
+        "coolify_docker_cleanup",
+        "coolify_scheduled_tasks",
         "coolify_set_env_var",
         "coolify_update_application",
         "coolify_update_service"
@@ -152,7 +161,21 @@
       "_surfaces": [
         "cli"
       ],
-      "_note": "The hub's children for a coordinator (shared/mcp/lib/agents.ts): sessions of any profile at work in a project, every permission they need answered by the owner. No profile by default: a person's servers.json names the coordinator's (_profiles). Starting a child of another profile uses that profile's account."
+      "_note": "The hub's children for a coordinator (shared/mcp/lib/agents.ts): sessions of any profile at work in a project, every permission they need answered by the owner. No profile by default: a person's servers.json names the coordinator's (_profiles). Starting a child of another profile uses that profile's account. agent_answer and workflow_answer are in no list on purpose: they answer a child's permission request, which the owner decides first (AskUserQuestion); the permission mode judges the call.",
+      "_allow": [
+        "agent_list",
+        "agent_say",
+        "agent_start",
+        "agent_status",
+        "agent_stop",
+        "workflow_list",
+        "workflow_start",
+        "workflow_status"
+      ],
+      "_auto": [
+        "agent_answer",
+        "workflow_answer"
+      ]
     },
     "google": {
       "_service": "google",
@@ -180,8 +203,10 @@
         "drive_read",
         "drive_search",
         "gmail_attachment",
+        "gmail_draft",
         "gmail_drafts",
         "gmail_labels",
+        "gmail_modify",
         "gmail_search",
         "gmail_thread"
       ],
@@ -195,7 +220,23 @@
       "_service": "brain",
       "type": "http",
       "url": "{url}/mcp",
-      "_note": "The person's brain (apps/brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. CLI only (http)."
+      "_note": "The person's brain (apps/brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. CLI only (http). Everything runs unasked but deleting a page and clearing the inbox: every change is in the page's history (brain_restore).",
+      "_allow": [
+        "brain_append",
+        "brain_check",
+        "brain_edit",
+        "brain_history",
+        "brain_list",
+        "brain_move",
+        "brain_read",
+        "brain_restore",
+        "brain_search",
+        "brain_write"
+      ],
+      "_ask": [
+        "brain_delete",
+        "brain_inbox_clear"
+      ]
     },
     "cloudflare": {
       "_service": "cloudflare",
@@ -210,7 +251,12 @@
       "_guard": {
         "tool": "execute",
         "hook": "cloudflare-guard.ts"
-      }
+      },
+      "_allow": [
+        "docs",
+        "search",
+        "whoami"
+      ]
     },
     "supabase": {
       "_service": "supabase",
@@ -231,11 +277,11 @@
         "readOnly": "--read-only"
       },
       "_allow": [
+        "confirm_cost",
         "generate_typescript_types",
         "get_advisors",
         "get_cost",
         "get_edge_function",
-        "get_logs",
         "get_organization",
         "get_project",
         "get_project_url",
@@ -249,6 +295,7 @@
         "list_projects",
         "list_storage_buckets",
         "list_tables",
+        "query_logs",
         "search_docs"
       ],
       "_deny": [
@@ -278,6 +325,7 @@
       "_allow": [
         "get_database_status",
         "get_diff",
+        "get_file_upload_url",
         "get_me",
         "get_message",
         "get_project",
@@ -297,7 +345,10 @@
         "list_template_projects",
         "list_workspace_skills",
         "list_workspaces",
-        "read_file"
+        "move_projects_to_folder",
+        "read_file",
+        "render_project_widget",
+        "set_project_knowledge"
       ],
       "_deny": [
         "delete_workspace_skill"
@@ -309,13 +360,11 @@
         "deploy_project",
         "enable_database",
         "initiate_project",
-        "move_projects_to_folder",
         "query_database",
         "remix_project",
         "respond_to_approval",
         "send_message",
         "set_folder_visibility",
-        "set_project_knowledge",
         "set_project_visibility",
         "set_workspace_knowledge",
         "update_workspace_skill"
@@ -345,6 +394,8 @@
         "http_error_rate",
         "http_requests",
         "http_response_time",
+        "link_environment",
+        "link_service",
         "list_deployments",
         "list_domains",
         "list_projects",
@@ -352,6 +403,7 @@
         "list_tcp_proxies",
         "list_workspaces",
         "private_network_status",
+        "retry_domain_certificate",
         "search_templates",
         "service_metrics",
         "whoami"
@@ -412,6 +464,7 @@
         "actions_config_read",
         "actions_run_read",
         "attachment_read",
+        "create_branch",
         "get_commit",
         "get_dir_contents",
         "get_file_contents",
@@ -437,7 +490,6 @@
         "notification_read",
         "notification_write",
         "package_read",
-        "project_read",
         "pull_request_read",
         "search_issues",
         "search_org_teams",
@@ -450,7 +502,9 @@
         "delete_branch",
         "delete_file",
         "delete_release",
-        "delete_tag"
+        "delete_tag",
+        "project_read",
+        "project_write"
       ],
       "_ask": [
         "actions_config_write",
@@ -468,14 +522,13 @@
         "tool": [
           "label_write",
           "milestone_write",
-          "project_write",
           "pull_request_write",
           "timetracking_write",
           "wiki_write"
         ],
         "hook": "gitea-guard.ts"
       },
-      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied. The consolidated *_write tools carry a method, so shared/hooks/gitea-guard.ts reads it: what is reversible in the tracker (issues, PRs, labels, wiki) goes through, a merge or a delete asks. What reaches production or the server stays in the ask list: files on a branch, tags, releases, actions, repositories, packages, reviews. CLI only."
+      "_note": "The official Gitea MCP (gitea.com/gitea/gitea-mcp, MIT), which Forgejo speaks too: one server per account, gitea-<account>, the address and an access token from the vault. Installed by scripts/install-gitea-mcp.sh (release checksum checked). Tools that only delete are denied. The consolidated *_write tools carry a method, so shared/hooks/gitea-guard.ts reads it: what is reversible in the tracker (issues, PRs, labels, wiki) goes through, a merge or a delete asks. What reaches production or the server stays in the ask list: files on a branch, tags, releases, actions, repositories, packages, reviews. CLI only. Forgejo has no projects API (404 on 16.0.6): project_read and project_write are denied, so a call never looks like it could work."
     }
   }
 }
