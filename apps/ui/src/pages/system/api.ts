@@ -2,7 +2,7 @@
 // plugins (table, catalog, one operation at a time), the profile form and the step that closes Claude
 // before an install.
 
-import { api, type Blocker, get, post, type Result } from "../../api.ts";
+import { api, type Blocker, type ClosePurpose, get, post, type Result } from "../../api.ts";
 
 /* ---------------- permissions ---------------- */
 
@@ -91,8 +91,9 @@ export interface StepResult extends Result {
   remaining: Blocker[];
 }
 
-/** Closes what holds the install: TERM, or KILL as the second, explicit step. */
-export const closeStep = (step: "term" | "kill") => post<StepResult>("/api/close-claude", { step });
+/** Closes what holds the install (or, `mcp`, the MCP sync): TERM, or KILL as the second, explicit step. */
+export const closeStep = (step: "term" | "kill", why: ClosePurpose = "install") =>
+  post<StepResult>("/api/close-claude", { step, for: why });
 
 /** Opens again a profile's Claude that the step closed; null when the server could not. */
 export const reopenClaude = (profile: string) =>

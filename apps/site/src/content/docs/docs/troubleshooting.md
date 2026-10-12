@@ -35,7 +35,8 @@ that is unlocked. Check with `agents vault status`.
 
 - Keyring locked: unlock it (it usually unlocks at login).
 - No Secret Service on this machine: install and start one.
-- Keyring lost or a new machine: `agents vault pair` with the vault's recovery code. If you have
+- Keyring lost or a new machine: the vault card in console › Connections (or `agents vault pair`)
+  with the vault's recovery code. If you have
   another machine that still has the vault, `agents vault recovery-code` run in a terminal there
   shows it. Do not restore the vault folder from a backup onto a reinstalled machine: pair it and
   let the entries sync.

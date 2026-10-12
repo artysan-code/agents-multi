@@ -6,6 +6,15 @@ import { loadManifest } from "../../lib/profiles.ts";
 import { has, run } from "../../lib/proc.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
+import { actionStep, closeDesktopStep, verifyStep } from "../repair.ts";
+import { type RepairStep } from "../../lib/output.ts";
+
+/** A variant rebuilt: its Desktop closed first, its files replaced, the check again. */
+const rebuild = (p: string): RepairStep[] => [
+  closeDesktopStep(p),
+  actionStep("desktop-rebuild", { profile: p }),
+  verifyStep,
+];
 
 /** Claude Desktop packaging, its per-profile variants and desktop entries. */
 export async function desktopChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -35,13 +44,20 @@ export async function desktopChecks(ctx: DoctorCtx): Promise<Check[]> {
       // the variant is built from the version in use; a switch rebuilds it, so older means a failed rebuild
       const srcAsar = await stat(`${LIB}/claude-desktop/current/resources/app.asar`);
       if (!bin || !asar) {
-        add(`desktop.${p}`, "fail", `Claude Desktop variant for ${p} is missing`, `claude-desktop-rebuild ${p}`);
+        add(
+          `desktop.${p}`,
+          "fail",
+          `Claude Desktop variant for ${p} is missing`,
+          `claude-desktop-rebuild ${p}`,
+          rebuild(p),
+        );
       } else if (srcAsar?.mtime && asar.mtime && srcAsar.mtime > asar.mtime) {
         add(
           `desktop.${p}`,
           "fail",
           `the ${p} variant is older than the Claude Desktop in use`,
           `claude-desktop-rebuild ${p}`,
+          rebuild(p),
         );
       } else add(`desktop.${p}`, "ok", `Claude Desktop ${m.desktopVersion} + ${p} variant in step`);
     }

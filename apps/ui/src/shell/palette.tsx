@@ -8,6 +8,7 @@ import { type Key, t } from "../i18n.ts";
 import { runAction } from "../lib/ui.tsx";
 import { go, request, TABS } from "../router.ts";
 import { cycleLang, cycleTheme } from "./prefs.ts";
+import { syncMcp } from "../pages/system/health-repair.tsx";
 
 export const paletteOpen = signal(false);
 
@@ -31,7 +32,7 @@ const cmds = (): Cmd[] => [
     f: () => go(`system/${x}`),
   })),
   { s: "pal.run", n: t("cmd.health"), d: "doctor", f: () => request("health.rerun", "system/health") },
-  { s: "pal.run", n: t("cmd.mcpSync"), d: "mcp sync", f: () => runAction("mcp-sync") },
+  { s: "pal.run", n: t("cmd.mcpSync"), d: "mcp sync", f: () => syncMcp() },
   { s: "pal.run", n: t("cmd.mcpCheck"), d: "mcp check", f: () => runAction("mcp-check") },
   { s: "pal.run", n: t("cmd.fetch"), d: "sync --fetch", f: () => runAction("sync-fetch") },
   { s: "pal.run", n: t("cmd.installDry"), d: "install --dry-run", f: () => runAction("install-dry") },

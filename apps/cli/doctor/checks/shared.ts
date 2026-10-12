@@ -3,6 +3,7 @@
 import { KINDS, sharedInventory } from "../../lib/profiles.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
+import { installRepair } from "../repair.ts";
 
 /** shared/: broken entries and skills installed but not mounted. */
 export async function sharedChecks(): Promise<Check[]> {
@@ -19,6 +20,7 @@ export async function sharedChecks(): Promise<Check[]> {
           broken.length > 4 ? "…" : ""
         })`,
         "agents install, or remove the entry",
+        installRepair,
       );
     }
   }

@@ -5,6 +5,7 @@ import { launchers } from "../../lib/profiles.ts";
 import { loginFailures, probeLogin, recordLogin } from "../../login.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
+import { loginStep } from "../repair.ts";
 
 /** Claude Code logins: recorded failures and, with --probe, one request each. */
 export async function loginChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -22,6 +23,8 @@ export async function loginChecks(ctx: DoctorCtx): Promise<Check[]> {
           "warn",
           `${l.profile}: Claude Code cannot sign in (${v.error})`,
           `${l.command}, then /login`,
+          // no check again: the failure on record clears at the next request that signs in
+          [loginStep(l.profile, l.command)],
         );}
     }
   } else {
@@ -31,6 +34,7 @@ export async function loginChecks(ctx: DoctorCtx): Promise<Check[]> {
         "warn",
         `${p}: Claude Code's login stopped working (${f.error}, ${dayOf(new Date(f.at))} ${hhmm(new Date(f.at))})`,
         `${f.command}, then /login`,
+        [loginStep(p, f.command)],
       );
     }
   }

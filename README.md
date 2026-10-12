@@ -534,7 +534,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
 - **Deleting** a secret rewrites it as a tombstone instead of removing the file: through an encrypted
   relay a removal can lose against a concurrent modification and come back, a write cannot.
 - **Machines**: `agents vault init` on the first one prints a recovery code — keep it outside the
-  machine. Every other machine runs `agents vault pair` with it. Never restore the vault
+  machine. Every other machine runs `agents vault pair` with it. The first-run wizard and the vault
+  card of console › Connections do the same without a terminal. Never restore the vault
   directory from a backup onto a reinstalled machine: pair it and let Syncthing bring the entries.
 - **Adding an account**: console › Connections (the secret is checked against the service before it
   is stored, and never comes back to the page), or `agents vault set <service> <account>`

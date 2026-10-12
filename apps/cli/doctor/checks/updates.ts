@@ -5,7 +5,7 @@ import { HOME } from "../../lib/paths.ts";
 import { updateLog } from "../../lib/versions.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
-import { actionStep, verifyStep } from "../repair.ts";
+import { actionStep, closeDesktopStep, verifyStep } from "../repair.ts";
 import { variantProfiles } from "../../lib/profiles.ts";
 
 type LogEntry = Awaited<ReturnType<typeof updateLog>>[number];
@@ -56,7 +56,10 @@ export async function updateChecks(): Promise<Check[]> {
         "agents update --auto",
         [
           ...(variants.length
-            ? variants.map((v) => actionStep("desktop-rebuild", { profile: v.profile }))
+            ? variants.flatMap((v) => [
+              closeDesktopStep(v.profile),
+              actionStep("desktop-rebuild", { profile: v.profile }),
+            ])
             : [actionStep("update-now")]),
           verifyStep,
         ],

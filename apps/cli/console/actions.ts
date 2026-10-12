@@ -32,7 +32,8 @@ export const ACTIONS: Record<string, ActionDef> = {
   "claude-code": { args: ["update", "--cli"], timeoutMs: 600000 },
   "ui-build": { args: ["ui", "build"], timeoutMs: 300000 },
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
-  "update-check": { args: ["update", "--check"], timeoutMs: 40000 },
+  // two downloads of 8 s each, a git fetch of 15 s and two Deno starts in the worst case
+  "update-check": { args: ["update", "--check"], timeoutMs: 90000 },
   "update-now": { args: ["update", "--auto"], timeoutMs: 900000 },
   // the install a round left waiting for Claude to be closed (the sessions are closed by close-claude.ts)
   "settle-install": { args: ["self-update", "--settle"], timeoutMs: 300000 },

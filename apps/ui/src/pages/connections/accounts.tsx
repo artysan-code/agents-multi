@@ -8,6 +8,8 @@ import { Logo, svcName } from "./logo.tsx";
 import { openAccountForm } from "./form.tsx";
 import { type Key, t, tk } from "../../i18n.ts";
 import { toast } from "../../lib/ui.tsx";
+import { useState } from "preact/hooks";
+import { post } from "../../api.ts";
 
 const Chips = ({ ps }: { ps?: string[] }) =>
   ps ? <>{ps.map((p) => <span class="chip on" key={p}>{p}</span>)}</> : <span class="sub">{t("acc.allProfiles")}</span>;
@@ -146,9 +148,16 @@ export function Ours({ view, accs, reload }: { view: AccountsView; accs: Account
   );
 }
 
-/** The vault speaks up only when something is to be done on this machine. */
-export function VaultCard({ v }: { v: AccountsView["vault"] }) {
-  const msg: [string, Key] | null = v.state === "wrong-key"
+/** The vault speaks up only when something is to be done on this machine, and does it here: created
+ *  (its recovery code shown once) or opened with the recovery code, as the first-run wizard does. */
+export function VaultCard({ v, reload }: { v: AccountsView["vault"]; reload: () => void }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [given, setGiven] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const msg: [string, Key] | null = code
+    ? ["update", "vault.created"]
+    : v.state === "wrong-key"
     ? ["fail", "vault.wrongKey"]
     : v.state === "no-key"
     ? ["update", v.initialised ? "vault.pair" : "vault.init"]
@@ -156,6 +165,17 @@ export function VaultCard({ v }: { v: AccountsView["vault"] }) {
     ? ["update", "vault.conflicts"]
     : null;
   if (!msg) return null;
+  const op = async (body: Record<string, string>) => {
+    setBusy(true);
+    const r = await post<{ ok: boolean; message?: string; code?: string }>("/api/vault", body)
+      .catch((e: Error) => ({ ok: false, message: e.message, code: undefined }));
+    setBusy(false);
+    if (!r.ok) return toast(r.message ?? "", true);
+    if (r.code) return setCode(r.code);
+    toast(t("vault.paired"));
+    reload();
+  };
+  const pairing = !code && (v.state === "wrong-key" || (v.state === "no-key" && v.initialised));
   return (
     <div class={`status-card ${msg[0]}`} style={{ marginTop: "20px" }}>
       <i />
@@ -163,6 +183,39 @@ export function VaultCard({ v }: { v: AccountsView["vault"] }) {
         <b>{t("vault.title")}</b>
         <div class="sub">{t(msg[1], { n: v.conflicts })}</div>
         <div class="sub"><code>{v.dir}</code></div>
+        {code && (
+          <p>
+            <code>{code}</code>{" "}
+            <button
+              type="button"
+              class="btn sm"
+              onClick={() => void navigator.clipboard?.writeText(code).then(() => setCopied(true), () => {})}
+            >
+              {t(copied ? "su.vault.copied" : "su.vault.copy")}
+            </button>{" "}
+            <button type="button" class="btn sm" onClick={() => { setCode(null); reload(); }}>{t("su.vault.saved")}</button>
+          </p>
+        )}
+        {!code && v.state === "no-key" && !v.initialised && (
+          <p><button type="button" class="btn sm" disabled={busy} onClick={() => void op({ mode: "init" })}>{t("su.vault.create")}</button></p>
+        )}
+        {pairing && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void op({ mode: "pair", code: given.trim() });
+            }}
+          >
+            <input
+              type="password"
+              autocomplete="off"
+              placeholder={t("su.vault.code")}
+              value={given}
+              onInput={(e) => setGiven(e.currentTarget.value)}
+            />{" "}
+            <button type="submit" class="btn sm" disabled={busy || !given.trim()}>{t("su.vault.pair")}</button>
+          </form>
+        )}
       </div>
     </div>
   );

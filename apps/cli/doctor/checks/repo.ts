@@ -7,8 +7,9 @@ import { lstat, readlink, readText } from "../../lib/fs.ts";
 import { REPO, shortHome } from "../../lib/paths.ts";
 import { installWaiting } from "../../selfupdate.ts";
 import { run } from "../../lib/proc.ts";
-import { type Check } from "../../lib/output.ts";
+import { type Check, type RepairStep } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
+import { actionStep, closeForInstallStep, installRepair, verifyStep } from "../repair.ts";
 
 /** Pure: the home folders written out in a text (/home/<name>), each once. */
 export function writtenHomes(text: string): string[] {
@@ -39,15 +40,23 @@ export function appCodeChecks(
   f: { app: AppBuild | null; copy: Build | null; record: InstallRecord | null; waiting: boolean },
 ): Check[] {
   const out: Check[] = [];
-  const add = (id: string, status: Check["status"], msg: string, fix?: string) => out.push({ id, status, msg, fix });
+  const add = (id: string, status: Check["status"], msg: string, fix?: string, repair?: RepairStep[]) =>
+    out.push({ id, status, msg, fix, ...(repair ? { repair } : {}) });
   if (f.record && !f.record.ok) {
-    add("app.install", "fail", `the app's install failed: ${f.record.error ?? "no reason recorded"}`, "agents install");
+    add(
+      "app.install",
+      "fail",
+      `the app's install failed: ${f.record.error ?? "no reason recorded"}`,
+      "agents install",
+      installRepair,
+    );
   } else if (f.waiting) {
     add(
       "app.install",
       "warn",
       "the app's code is new, and install waits for every Claude to be closed",
       "close Claude, then agents self-update --settle (the console's «Close Claude and update»)",
+      [closeForInstallStep, actionStep("settle-install"), verifyStep],
     );
   }
   if (!f.copy) {
@@ -112,8 +121,12 @@ export async function repoChecks(ctx: DoctorCtx): Promise<Check[]> {
         `repository diverged: ↓${repo.behind} ↑${repo.ahead}`,
         `git -C ${shortHome(REPO)} pull --rebase (by hand)`,
       );
-    } else if (repo.behind) add("repo.sync", "warn", `config is ${repo.behind} commits behind`, "agents sync");
-    else if (repo.ahead) {
+    } else if (repo.behind) {
+      add("repo.sync", "warn", `config is ${repo.behind} commits behind`, "agents sync --fetch", [
+        actionStep("sync-fetch"),
+        verifyStep,
+      ]);
+    } else if (repo.ahead) {
       add("repo.sync", "warn", `${repo.ahead} local commits not pushed`, `git -C ${shortHome(REPO)} push`);
     } else add("repo.sync", "ok", `in sync with ${repo.upstream} (${repo.head})`);
     if (repo.dirty) {

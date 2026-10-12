@@ -4,6 +4,7 @@ import { lstat } from "../../lib/fs.ts";
 import { AGENTS_SKILLS } from "../../lib/paths.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
+import { installRepair } from "../repair.ts";
 
 /** The external skills folder. */
 export async function agentsChecks(): Promise<Check[]> {
@@ -14,6 +15,7 @@ export async function agentsChecks(): Promise<Check[]> {
       "warn",
       "~/.agents/skills is missing: external skills are unavailable on this machine",
       "agents install creates it",
+      installRepair,
     );
   }
   return c;

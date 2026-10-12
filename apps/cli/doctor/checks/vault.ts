@@ -8,6 +8,7 @@ import { ACCOUNTS } from "../../mcp/registry.ts";
 import { probeKept } from "../../vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
+import { verifyStep } from "../repair.ts";
 
 /**
  * Pure: whether a probe's detail says the service refused the credential (HTTP 401 or 403), as
@@ -32,14 +33,16 @@ export async function vaultChecks(): Promise<Check[]> {
         initialised
           ? "this machine is not paired with the secret vault: account-backed MCP servers cannot work"
           : "no secret vault yet: account-backed MCP servers cannot work",
-        initialised ? "agents vault pair (in a terminal, with the recovery code)" : "agents vault init (in a terminal)",
+        initialised
+          ? "console › Connections: open the vault with its recovery code (or agents vault pair)"
+          : "console › Connections: create the vault (or agents vault init)",
       );
     } else if (!(await keyMatches(key))) {
       add(
         "vault",
         "fail",
         "this machine's vault key does not open the vault",
-        "agents vault pair (with the right recovery code)",
+        "console › Connections: open the vault with the right recovery code (or agents vault pair)",
       );
     } else {
       const l = await listSecrets(key);
@@ -103,6 +106,7 @@ export async function vaultChecks(): Promise<Check[]> {
           "warn",
           `no answer to check the key of ${silent.map(name).join(", ")}`,
           "agents doctor (later)",
+          [verifyStep],
         );
       }
       if (checked.length && !refused.length && !silent.length) {

@@ -23,7 +23,7 @@ function age(s: number | null): string {
   return t("cc.age", { a });
 }
 
-function BlockerList({ list }: { list: Blocker[] }) {
+export function BlockerList({ list }: { list: Blocker[] }) {
   return (
     <ul class="cc-list">
       {list.map((b) => (
@@ -78,6 +78,8 @@ export function CloseClaude({ plan, onSettled, onLater }: {
   const settle = async (profiles: string[]) => {
     setPhase({ k: "text", msg: t("cc.updating") });
     const r = await runSettle();
+    // 3: still waiting — what is left open is in the console's own tree, which it never closes
+    if (r.code === 3) return setPhase({ k: "text", msg: t("cc.onlyProtected") });
     setPhase({ k: "done", out: r.output || t("act.noOutput") });
     setReopen(profiles);
     onSettled?.(r, profiles);

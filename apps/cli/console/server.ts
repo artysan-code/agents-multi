@@ -32,7 +32,7 @@ import { broadcast, eventStream, onTopic, type Topic, TOPICS, watchBrain, watchT
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
 import { cancelJob, jobStream, startJob } from "./jobs.ts";
-import { closePlan, closeSessions, reopen } from "./close-claude.ts";
+import { closePlan, closeSessions, parsePurpose, reopen } from "./close-claude.ts";
 import { launchList, launchOne } from "./picker.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
@@ -247,14 +247,20 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/plugins/details": {
       get: async ({ url }) => json({ text: await details(url.searchParams.get("id") ?? "") }),
     },
-    // «Close Claude and update»: who holds the waiting install, then SIGTERM, SIGKILL, reopen. The PIDs
-    // are always the server's own; the page only names a step (and the profiles to reopen)
+    // «Close Claude and update»: who holds the waiting install (or, `for=mcp`, the MCP sync), then
+    // SIGTERM, SIGKILL, reopen. The PIDs are always the server's own; the page only names a step, what
+    // it is for, and the profiles to reopen
     "/api/close-claude": {
-      get: async () => json(await closePlan()),
+      get: async ({ url }) => {
+        const why = parsePurpose(url.searchParams.get("for"));
+        return why ? json(await closePlan(why)) : json({ ok: false, message: "unknown purpose" }, 400);
+      },
       post: async ({ req }) => {
-        const b = await body(req) as { step?: string; profiles?: string[] };
+        const b = await body(req) as { step?: string; for?: string; profiles?: string[] };
         if (b.step === "term" || b.step === "kill") {
-          const r = await closeSessions(b.step === "term" ? "SIGTERM" : "SIGKILL");
+          const why = parsePurpose(b.for);
+          if (!why) return json({ ok: false, message: "unknown purpose" }, 400);
+          const r = await closeSessions(b.step === "term" ? "SIGTERM" : "SIGKILL", why);
           status.invalidate();
           broadcast("state");
           return json(r);

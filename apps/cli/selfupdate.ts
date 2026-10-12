@@ -193,14 +193,17 @@ async function settleInstall(head: string, say: (s: string) => void): Promise<bo
 }
 
 /** `self-update --settle`: the install a round left waiting, now — what the console's «Close Claude
- *  and update» runs once the sessions are closed. Still waits if something is open. */
+ *  and update» runs once the sessions are closed. Still waits if something is open, and then exits 3:
+ *  the console must not report an install that did not happen (a Claude in its own tree is never
+ *  closed by it). */
 export async function settlePending(): Promise<number> {
   const head = await installWaiting();
   if (!head) {
     console.log(row("ok", "", T.nothingPending));
     return 0;
   }
-  return await settleInstall(head, console.log) ? 0 : 1;
+  if (!(await settleInstall(head, console.log))) return 1;
+  return (await installWaiting()) ? 3 : 0;
 }
 
 /**

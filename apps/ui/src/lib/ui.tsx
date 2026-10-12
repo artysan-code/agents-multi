@@ -115,15 +115,10 @@ export async function runAction(action: string, opts: string[] = []): Promise<vo
   }
 }
 
-/** The fixes the doctor prints that the console can run itself. */
+/** The one-word fixes the doctor prints that the console can run itself; a fix of more steps is a
+ *  check's `repair` (doctor/repair.ts), which wins over these. */
 export const FIX_ACTIONS: Record<string, string> = {
   "agents install": "install",
-  "agents mcp sync": "mcp-sync",
-  "agents doctor": "doctor",
-  "agents sync --fetch": "sync-fetch",
-  "agents usage ingest": "usage-ingest",
-  "agents update --auto": "update-now",
-  "agents update --check": "update-check",
   "agents ui build": "ui-build",
 };
 

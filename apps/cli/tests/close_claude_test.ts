@@ -10,6 +10,7 @@ import {
   type Deps,
   listBlockers,
   parentFromStat,
+  parsePurpose,
   reopen,
 } from "../console/close-claude.ts";
 
@@ -41,9 +42,9 @@ Deno.test("close claude: blockers per profile, busy by recent transcript, Deskto
 
 Deno.test("close claude: the button shows only for an install waiting on open Claude instances", () => {
   const bs = listBlockers(running, ["a"], new Set(), new Map(), NOW);
-  assertEquals(closeOffer("abc123", bs), true);
-  assertEquals(closeOffer(null, bs), false); // update skipped for another reason: nothing pending
-  assertEquals(closeOffer("abc123", []), false); // nothing open: Update now is enough
+  assertEquals(closeOffer(true, bs), true);
+  assertEquals(closeOffer(false, bs), false); // update skipped for another reason: nothing pending
+  assertEquals(closeOffer(true, []), false); // nothing open: Update now is enough
 });
 
 Deno.test("close claude: parent pid out of /proc stat, whatever the name holds", () => {
@@ -65,6 +66,7 @@ function deps(over: Partial<Deps> = {}) {
     protectedPids: () => Promise.resolve(new Set([11])), // the console runs under session 11
     ages: () => Promise.resolve(new Map()),
     pending: () => Promise.resolve("abc123"),
+    mcpKeys: () => Promise.resolve(["desktop:b"]),
     signal: (pid, sig) => {
       sent.push([pid, sig]);
       if (sig === "SIGKILL" || pid !== 12) alive.delete(pid); // 12 ignores TERM
@@ -81,20 +83,20 @@ function deps(over: Partial<Deps> = {}) {
 
 Deno.test("close claude: the plan lists the console's own tree as protected", async () => {
   const { d } = deps();
-  const p = await closePlan(d);
+  const p = await closePlan("install", d);
   assertEquals(p.offer, true);
   assertEquals(p.blockers.filter((b) => b.protected).map((b) => b.pid), [11]);
 });
 
 Deno.test("close claude: TERM spares the console's tree, reports who did not go, KILL finishes them and Desktop is reopened", async () => {
   const { d, sent, notes } = deps();
-  const t = await closeSessions("SIGTERM", 1000, d);
+  const t = await closeSessions("SIGTERM", "install", 1000, d);
   assertEquals(sent.map(([p]) => p).sort(), [10, 12, 20]); // never 11
   assertEquals(t.remaining.map((b) => b.pid), [12]);
   assertEquals(t.closed.map((b) => b.pid).sort(), [10, 20]);
   assertEquals(t.reopen, ["b"]);
   assertEquals(notes[0][0], "closed");
-  const k = await closeSessions("SIGKILL", 1000, d);
+  const k = await closeSessions("SIGKILL", "install", 1000, d);
   assertEquals(sent.filter(([, s]) => s === "SIGKILL").map(([p]) => p), [12]);
   assertEquals(k.remaining, []);
   assertEquals(notes[1][0], "force-closed");
@@ -103,14 +105,46 @@ Deno.test("close claude: TERM spares the console's tree, reports who did not go,
 
 Deno.test("close claude: nothing is signalled when no install is waiting", async () => {
   const { d, sent } = deps({ pending: () => Promise.resolve(null) });
-  const r = await closeSessions("SIGTERM", 1000, d);
+  const r = await closeSessions("SIGTERM", "install", 1000, d);
   assertEquals([r.ok, sent], [false, []]);
 });
 
 Deno.test("close claude: closed by hand while the dialog was open, the step succeeds and the install goes on", async () => {
   const { d, sent } = deps({ running: () => Promise.resolve({ cli: [], desktop: [] }) });
-  const r = await closeSessions("SIGKILL", 1000, d);
+  const r = await closeSessions("SIGKILL", "install", 1000, d);
   assertEquals([r.ok, r.remaining, sent], [true, [], []]);
+});
+
+Deno.test("close claude: for the MCP sync only the surfaces it would write are listed and closed", async () => {
+  const { d, sent } = deps({ pending: () => Promise.resolve(null) });
+  const p = await closePlan("mcp", d);
+  assertEquals([p.offer, p.blockers.map((b) => b.pid)], [true, [20]]);
+  const r = await closeSessions("SIGTERM", "mcp", 1000, d);
+  assertEquals([r.ok, sent, r.reopen], [true, [[20, "SIGTERM"]], ["b"]]);
+});
+
+Deno.test("close claude: with nothing for the MCP sync to write, nothing is offered or signalled", async () => {
+  const { d, sent } = deps({ mcpKeys: () => Promise.resolve([]) });
+  assertEquals((await closePlan("mcp", d)).offer, false);
+  const r = await closeSessions("SIGTERM", "mcp", 1000, d);
+  assertEquals([r.ok, sent], [false, []]);
+});
+
+Deno.test("close claude: a Desktop rollback closes every Desktop, a rebuild only its profile's", async () => {
+  const { d, sent } = deps({ pending: () => Promise.resolve(null) });
+  assertEquals((await closePlan("desktop", d)).blockers.map((b) => b.pid), [20]);
+  assertEquals((await closePlan("desktop:a", d)).offer, false);
+  await closeSessions("SIGTERM", "desktop:b", 1000, d);
+  assertEquals(sent, [[20, "SIGTERM"]]);
+});
+
+Deno.test("close claude: only purposes the server knows are accepted", () => {
+  assertEquals([parsePurpose(undefined), parsePurpose("mcp"), parsePurpose("desktop:otacon")], [
+    "install",
+    "mcp",
+    "desktop:otacon",
+  ]);
+  assertEquals([parsePurpose("desktop:../x"), parsePurpose("all"), parsePurpose(3)], [null, null, null]);
 });
 
 Deno.test("close claude: reopen starts only profiles the manifests declare, through the one launcher", async () => {

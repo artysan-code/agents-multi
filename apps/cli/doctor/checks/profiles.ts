@@ -6,7 +6,7 @@ import { commandOf, KINDS, ownItems, profileInfo, runtimeProfiles } from "../../
 import { settingsState } from "../../settings.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
-import { userStep, verifyStep } from "../repair.ts";
+import { loginStep, verifyStep } from "../repair.ts";
 
 /** Every declared profile (links, manifest, settings, credentials, leftovers) and orphan runtime directories. */
 export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -138,7 +138,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
     const cmd = info.manifest.command;
     if (!info.credentials.present) {
       add(`profile.${p}.login`, "warn", `${p}: no stored credentials, sign-in needed`, `${cmd ?? "claude"} → /login`, [
-        userStep(`Open a terminal, run ${commandOf(p, info.manifest)}, then type /login and finish the sign-in`),
+        loginStep(p, commandOf(p, info.manifest)),
         verifyStep,
       ]);
     } else if (info.credentials.mode !== "600") {

@@ -12,6 +12,7 @@ import { appUpdate, appUpdateAction, appUpdateChannel } from "../../shell/app-up
 import { appState } from "./app-state.ts";
 import { COMPONENTS, desktopNext, type MachineExtra, pendingUpdates, type RepoExtra, type Report } from "./updates-lib.tsx";
 import { openCloseClaude } from "./updates-close.tsx";
+import { rollbackDesktop } from "./health-repair.tsx";
 import { UpdateReady } from "./update-ready.tsx";
 
 function Card({ name, current, lines, rollback, extra }: {
@@ -30,7 +31,15 @@ function Card({ name, current, lines, rollback, extra }: {
         {lines.filter(Boolean).map((l) => <div class="sub" key={l}>{l}</div>)}
       </div>
       {extra}
-      {rollback && <button type="button" class="btn sm" onClick={() => void runAction(rollback)}>{t("up.rollback")}</button>}
+      {rollback && (
+        <button
+          type="button"
+          class="btn sm"
+          onClick={() => rollback === "rollback-desktop" ? rollbackDesktop() : void runAction(rollback)}
+        >
+          {t("up.rollback")}
+        </button>
+      )}
     </div>
   );
 }

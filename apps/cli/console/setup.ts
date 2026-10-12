@@ -46,10 +46,11 @@ export function setupRoutes(status: Pick<StatusCache, "invalidate">): Record<str
     status.invalidate();
     broadcast("state");
   };
-  /** A POST of the wizard: refused once the setup is over, its body handed on, the page told after. */
-  const step = (fn: (b: Body) => Promise<Result>): Route => ({
+  /** A POST of the wizard: refused once the setup is over (unless `always`: the same operation, offered
+   *  again by Connections and the doctor's repairs), its body handed on, the page told after. */
+  const step = (fn: (b: Body) => Promise<Result>, always = false): Route => ({
     post: async ({ req }) => {
-      if (!(await setupOpen())) return json({ ok: false, message: "the setup is finished" }, 409);
+      if (!always && !(await setupOpen())) return json({ ok: false, message: "the setup is finished" }, 409);
       const b = await req.json().catch(() => ({})) as Body;
       let r: Result;
       try {
@@ -63,6 +64,23 @@ export function setupRoutes(status: Pick<StatusCache, "invalidate">): Record<str
     },
   });
 
+  const vaultOp = async (b: Body): Promise<Result> => {
+    if (b.mode === "init") return { ok: true, code: await initVault() };
+    if (b.mode === "pair") {
+      await pairVault(String(b.code ?? ""));
+      if (await setupOpen()) await passStep({ step: "vault" });
+      return { ok: true };
+    }
+    return { ok: false, message: "mode: init or pair" };
+  };
+  const login = async (b: Body): Promise<Result> => {
+    const cmd = await loginCommand(b.profile);
+    if (!cmd) return { ok: false, message: `${String(b.profile)} is not an installed profile` };
+    const r = await openTerminal(HOME, [cmd, "auth", "login"]);
+    if (r.ok) watchFor(`${SETUP_PATHS.runtime}/${String(b.profile)}/.credentials.json`, changed);
+    return r;
+  };
+
   return {
     "/api/setup": { get: async () => json(await setupView()) },
     "/api/setup/owner": step((b) => setOwner(b)),
@@ -70,23 +88,13 @@ export function setupRoutes(status: Pick<StatusCache, "invalidate">): Record<str
     "/api/setup/profiles": step(async (b) => setProfiles(b, writeProfile, SETUP_PATHS, await reserved())),
     "/api/setup/pass": step((b) => passStep(b)),
     // the recovery code leaves the server once, in the answer to the vault's creation
-    "/api/setup/vault": step(async (b) => {
-      if (b.mode === "init") return { ok: true, code: await initVault() };
-      if (b.mode === "pair") {
-        await pairVault(String(b.code ?? ""));
-        await passStep({ step: "vault" });
-        return { ok: true };
-      }
-      return { ok: false, message: "mode: init or pair" };
-    }),
+    "/api/setup/vault": step(vaultOp),
+    // after the setup, Connections creates or pairs the vault the same way (initVault refuses a second one)
+    "/api/vault": step(vaultOp, true),
     // Claude Code's own sign-in, in a terminal: the page is told when the profile's credentials appear
-    "/api/setup/login": step(async (b) => {
-      const cmd = await loginCommand(b.profile);
-      if (!cmd) return { ok: false, message: `${String(b.profile)} is not an installed profile` };
-      const r = await openTerminal(HOME, [cmd, "auth", "login"]);
-      if (r.ok) watchFor(`${SETUP_PATHS.runtime}/${String(b.profile)}/.credentials.json`, changed);
-      return r;
-    }),
+    "/api/setup/login": step(login),
+    // the same for a profile whose login the doctor finds missing or broken
+    "/api/login": step(login, true),
     // the brain's account in accounts.json, then its sign-in page (brain-login.ts), as Connections does
     "/api/setup/brain": step(async (b) => {
       const u = checkBrainUrl(b.url);

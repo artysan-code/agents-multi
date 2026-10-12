@@ -5,7 +5,7 @@ import { health } from "../../mcp/health.ts";
 import { loadRegistry, registryProblems } from "../../mcp/registry.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
-import { actionStep, userStep, verifyStep } from "../repair.ts";
+import { actionStep, closeStep, verifyStep } from "../repair.ts";
 
 /** The MCP registry against the surfaces, its validity, and the health of each server. */
 export async function mcpChecks(): Promise<Check[]> {
@@ -13,15 +13,14 @@ export async function mcpChecks(): Promise<Check[]> {
   // --- MCP: registry against the surfaces, plus dependencies
   try {
     const { changes } = await plan();
+    const keys = [...new Set(changes.map((x) => x.target.managedKey))];
     if (!changes.length) add("mcp.sync", "ok", "MCP registry applied on CLI and Desktop");
     else {add(
         "mcp.sync",
         "warn",
-        `MCP registry out of sync: ${changes.length} changes (${
-          [...new Set(changes.map((x) => x.target.managedKey))].join(", ")
-        })`,
+        `MCP registry out of sync: ${changes.length} changes (${keys.join(", ")})`,
         "agents mcp sync (with Claude closed)",
-        [userStep("Close every Claude session and Desktop window"), actionStep("mcp-sync"), verifyStep],
+        [closeStep(keys), actionStep("mcp-sync"), verifyStep],
       );}
     const problems = registryProblems(await loadRegistry());
     if (problems.length) {

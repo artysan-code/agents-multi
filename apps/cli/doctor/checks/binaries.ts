@@ -6,6 +6,7 @@ import { has } from "../../lib/proc.ts";
 import { launchers } from "../../lib/profiles.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList, type DoctorCtx } from "../context.ts";
+import { actionStep, verifyStep } from "../repair.ts";
 
 /** Launchers and wrappers in ~/.local/bin, jq, and the Claude Code binary. */
 export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
@@ -67,8 +68,12 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
       "install jq with the system package manager (pacman -S jq, apt install jq, dnf install jq)",
     );
   }
-  if (!m.cliVersion) add("bin.claude-bin", "fail", "claude-bin resolves to no version", "agents update --cli");
-  else {
+  if (!m.cliVersion) {
+    add("bin.claude-bin", "fail", "claude-bin resolves to no version", "agents update --cli", [
+      actionStep("claude-code"),
+      verifyStep,
+    ]);
+  } else {
     add(
       "bin.claude-bin",
       m.cliVersions.length > 2 ? "warn" : "ok",
@@ -76,6 +81,7 @@ export async function binariesChecks(ctx: DoctorCtx): Promise<Check[]> {
         m.cliVersions.length > 1 ? ` (+${m.cliVersions.length - 1} cached, rollback available)` : ""
       }`,
       m.cliVersions.length > 2 ? "agents update --cli (prunes past N-1)" : undefined,
+      m.cliVersions.length > 2 ? [actionStep("claude-code"), verifyStep] : undefined,
     );
   }
   return c;

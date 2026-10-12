@@ -198,6 +198,8 @@ export interface Blocker {
   ageSec: number | null;
   protected: boolean;
 }
+/** What Claude is closed for: an install waiting, or a repair's «close» step. */
+export type ClosePurpose = "install" | Extract<RepairStep, { kind: "close" }>["for"];
 export interface Plan {
   offer: boolean;
   /** the build or commit an install is waiting with; null when none is */
@@ -230,7 +232,7 @@ export const api = {
   launch: (profile: string) => post<Result>("/api/launch", { profile }),
   /** Asks Claude (NDJSON, `AskLine`s); aborting `signal` stops claude -p on the server. */
   ask: (body: Record<string, unknown>, signal: AbortSignal) => postRaw("/api/ask", body, signal),
-  closePlan: () => get<Plan>("/api/close-claude"),
+  closePlan: (why: ClosePurpose = "install") => get<Plan>(`/api/close-claude?for=${encodeURIComponent(why)}`),
   /** The model Claude answers with, shared by the ask bar and the Hey window. */
   askModel: () => get<ModelState>("/api/ask/model"),
   setAskModel: (model: string) => post("/api/ask/model", { model }),

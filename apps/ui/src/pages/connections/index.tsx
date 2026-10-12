@@ -10,6 +10,7 @@ import { openAccountForm } from "./form.tsx";
 import { t } from "../../i18n.ts";
 import { runAction, toast, toastErr } from "../../lib/ui.tsx";
 import { useTopic } from "../../state.ts";
+import { syncMcp } from "../system/health-repair.tsx";
 
 /** How the last Google connection or brain sign-in ended, shown once when the browser comes back. */
 let seenConnect: string | undefined;
@@ -80,7 +81,7 @@ export function Connections() {
     <div class="sub-view">
       <h1 class="pg-h">{t("nav.connections")}</h1>
       <p class="lede">{t("conn.lede")}</p>
-      <VaultCard v={view.vault} />
+      <VaultCard v={view.vault} reload={load} />
       {wantsGoogle && <GoogleClientCard reload={load} />}
       {pending > 0 && (
         <div class="status-card update" style={{ marginTop: "12px" }}>
@@ -89,7 +90,7 @@ export function Connections() {
             <b>{t("conn.apply.title", { n: pending })}</b>
             <div class="sub">{t("conn.apply.how")}</div>
           </div>
-          <button type="button" class="btn" onClick={() => runAction("mcp-sync")}>{t("conn.apply")}</button>
+          <button type="button" class="btn" onClick={() => void syncMcp()}>{t("conn.apply")}</button>
         </div>
       )}
       <div class="conn-bar">
