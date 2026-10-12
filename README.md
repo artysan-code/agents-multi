@@ -643,15 +643,23 @@ stays set everywhere: the updates are driven from here, not by each binary on it
 
 ```bash
 deno task check   # type-check the CLI and tests, bash -n every script, the app's Rust
-deno task test    # usage (rates, dedupe, turns), notifications,
-                  # mcp, manifests, changelog, prelaunch against real git repositories
+deno task test    # usage (rates, dedupe, turns), notifications, guards, mcp, manifests, changelog,
+                  # prelaunch against real git repositories; files in parallel (scripts/test.sh)
+deno task ci      # the whole gate (scripts/ci.sh): its steps at once, failures named at the end
 ```
 
 - **Pre-commit** (`.githooks/pre-commit`, wired up by `install`): blocks staged state or credential
-  files and added lines that look like tokens, then runs `deno task check` when scripts or
-  TypeScript changed. Deliberate bypass: `git commit --no-verify`.
-- **CI** (`.forgejo/workflows/ci.yml`): check, test and a secret scan of the whole tree on every
-  push. Needs a runner with the `docker` label.
+  files and added lines that look like tokens, then runs `deno task check` and the tests together
+  when code changed. Deliberate bypass: `git commit --no-verify`.
+- **Pre-push** (`.githooks/pre-push`): the whole gate, the site build only when the pushed commits
+  touch the site or the brain.
+- **CI** (`.forgejo/workflows/ci.yml`): the same gate on every push to `dev`. Needs a runner with the
+  `docker` label.
+- **Guards for Claude** (`shared/hooks/`): `branch-guard.sh` lets pushes to work branches through and
+  asks before anything that reaches production — a protected branch, a stable version tag, a deleted or
+  rewritten ref, `--no-verify`, `ship stable`; `destructive-blocker.sh` asks before broad deletions, lost
+  work, destructive SQL and Docker volume removal, and denies what cannot be undone. Both are tested in
+  `apps/cli/tests/guards_test.ts`.
 - Every new invariant goes in `apps/cli/doctor/` — the README describes, the doctor verifies. Every new
   pure function gets a test in `apps/cli/tests/`.
 
