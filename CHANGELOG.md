@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.1.0-rc.9] - 2026-10-13
+
+### Fixed
+
+- **release**: ship stable lets beta take what CI left on release, so release can fast-forward (35e0f53)
+
 ## [1.1.0-rc.8] - 2026-10-13
 
 ### Fixed
