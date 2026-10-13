@@ -1,19 +1,19 @@
 {
-  "version": "1.1.0-rc.8",
-  "notes": "### Fixed\n\n- **doctor**: warn when a running console has no token file (528a409)",
-  "pub_date": "2026-10-13T14:01:03Z",
+  "version": "1.1.0-rc.9",
+  "notes": "### Fixed\n\n- **release**: ship stable lets beta take what CI left on release, so release can fast-forward (35e0f53)",
+  "pub_date": "2026-10-13T15:34:13Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.8/agents-multi_1.1.0-rc.8_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjhtQWFaTzJyd1ZnVEtGNGtaY0dNQ3pGQjJJVXVsYkVYaGNHNnpBYzFIS3ZqTjI0T1VXWkVnYXBka3JBY1NmaHFsS3NxT2RJM2h0SlM5U3NhYWxLdXc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTAwMDYyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuOF9hbWQ2NC5kZWIJdmVyc2lvbjoxLjEuMC1yYy44CnhZVGpPYkFSdnFURzRBanZlN214UStwemJscWxMNFRJWXFYNlBpalR5Q3JMeDU2V2hPV2xBY1FjYjMxV1JJRmthR29uY2Uva2dvd3RIb3ZNRUhaRkRnPT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.9/agents-multi_1.1.0-rc.9_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjFOTlhaUktJbnJJM1VLbGh0aXVxaksrbTYrLzBYc1VFd0JrRlZRSGp6bmp6UFo0SVAvcFIrWkRtRGluZnZzYkkwQlhOZWZWbnByNmFjb0ZsZVVSb1FZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTA1NjUyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuOV9hbWQ2NC5kZWIJdmVyc2lvbjoxLjEuMC1yYy45CnBQWEVucTYxRm1ZSnd6VFdkenBzTmdTU0k4eE9sNkFqbVVYME5KeDRxNWZvWjZwZ0J6TTVWTUF0N1lLUzJWYXhNems3aEV3T29LMUZ6MjZ2aHFOakRnPT0K"
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.8/agents-multi_1.1.0-rc.8_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tnp3ZHMxbHNuMG55QzFUbGd5QWZHdEZtSm50LzlUUG5YL0Y5S3hnSG9lenZhRVRVSFNYN04vZE9qeXRKd3FpQlZuNlJkbFBMZ1FTcHVFNlpxTWhnQ1FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTAwMDYyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuOF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjgKaVM5Nys1bDBJYVNpVkR0TEcrZ0FrRlFKc3A0emlORWViMmFaTExtZ2orcm1nZ0tqZWdkWExUR01RN3p2U0Z1M295Mkt2ZWV6bExNV2FzYzFSWFFHQ2c9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.9/agents-multi_1.1.0-rc.9_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tit4SXppUk1hMmd1N2hoSWVIYUg5TWxKRUdyRHF1TTM1a0Jud3JvaXVQSmFRWkhqcXpDMmR3UEVSaHFmL3FqcTdHek5sNTBTa2o1enhtUWdiNEx4endvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTA1NjUyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuOV9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjkKaFYzU3BuMk9XQi9kbTZEZXhXNGkvdXd0emFyb2U1dmRIeWxwUVJFSVFqSHZSaisyd0VtMFhkN1BqMDNLeFlmNXNOV1k4TXlMS3YrdGl4aVJVdnBVREE9PQo="
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.8/agents-multi_1.1.0-rc.8_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tnp3ZHMxbHNuMG55QzFUbGd5QWZHdEZtSm50LzlUUG5YL0Y5S3hnSG9lenZhRVRVSFNYN04vZE9qeXRKd3FpQlZuNlJkbFBMZ1FTcHVFNlpxTWhnQ1FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTAwMDYyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuOF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjgKaVM5Nys1bDBJYVNpVkR0TEcrZ0FrRlFKc3A0emlORWViMmFaTExtZ2orcm1nZ0tqZWdkWExUR01RN3p2U0Z1M295Mkt2ZWV6bExNV2FzYzFSWFFHQ2c9PQo="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.1.0-rc.9/agents-multi_1.1.0-rc.9_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0Tit4SXppUk1hMmd1N2hoSWVIYUg5TWxKRUdyRHF1TTM1a0Jud3JvaXVQSmFRWkhqcXpDMmR3UEVSaHFmL3FqcTdHek5sNTBTa2o1enhtUWdiNEx4endvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTA1NjUyCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4xLjAtcmMuOV9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMS4wLXJjLjkKaFYzU3BuMk9XQi9kbTZEZXhXNGkvdXd0emFyb2U1dmRIeWxwUVJFSVFqSHZSaisyd0VtMFhkN1BqMDNLeFlmNXNOV1k4TXlMS3YrdGl4aVJVdnBVREE9PQo="
     }
   }
 }
