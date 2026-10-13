@@ -38,6 +38,14 @@ export function shipSteps(kind: Kind, aim?: string): Step[] {
     ];
   }
   return [
+    // CI commits each rc's update manifest on release; dev has merged it, beta has not: without this,
+    // release could never fast-forward to beta
+    { run: ["git", "checkout", "-q", "-B", "beta", "origin/beta"], why: "beta as the remote has it" },
+    {
+      run: ["git", "merge", "--ff-only", "dev"],
+      why: "beta takes what CI left on release (merges and manifests only)",
+    },
+    { run: ["git", "push", "origin", "beta"], why: "" },
     { run: ["git", "checkout", "-q", "-B", "release", "origin/release"], why: "release as the remote has it" },
     { run: ["git", "merge", "--ff-only", "origin/beta"], why: "release moves to beta by fast-forward" },
     { run: ["release"], why: "the version: manifests, CHANGELOG, commit, tag" },
@@ -60,6 +68,11 @@ export function parseArgs(args: string[]): { kind: Kind; aim?: string; dry: bool
     return `only a beta takes a target (beta major | minor | patch), not ${kind} ${aim}`;
   }
   return { kind, aim, dry: args.includes("--dry-run"), yes: args.includes("--yes") };
+}
+
+/** Pure: the subjects (merges excluded) that `beta` would take from `dev` which are not update manifests. */
+export function untried(subjects: string[]): string[] {
+  return subjects.filter((s) => s && !s.startsWith("chore(updates):"));
 }
 
 const show = (s: Step) => `  ${s.run.join(" ")}${s.why ? `   # ${s.why}` : ""}`;
@@ -119,6 +132,15 @@ async function main(args: string[]) {
   await gitIn(".", "merge", "-q", "--ff-only", "origin/dev");
   for (const b of ["origin/release", "origin/beta"]) {
     if (!(await contains(b))) await gitIn(".", "merge", "--no-edit", b);
+  }
+  if (a.kind === "stable") {
+    // beta takes dev below: only if dev adds nothing an rc has not tried
+    const rest = untried((await git("log", "--no-merges", "--format=%s", "origin/beta..dev")).split("\n"));
+    if (rest.length) {
+      throw new Error(
+        `dev has commits no rc has tried (ship an rc first), nothing was shipped:\n  ${rest.join("\n  ")}`,
+      );
+    }
   }
   // the gate once here; the pushes below skip it (same commits, or only the release commit on top)
   const gate = await new Deno.Command("bash", { args: ["scripts/ci.sh"], stdout: "inherit", stderr: "inherit" })

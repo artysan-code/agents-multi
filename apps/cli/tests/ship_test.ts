@@ -1,6 +1,6 @@
 // Tests for scripts/ship.ts: the arguments it takes and the steps a version goes out with.
 import { assertEquals } from "jsr:@std/assert@1";
-import { parseArgs, shipSteps } from "../../../scripts/ship.ts";
+import { parseArgs, shipSteps, untried } from "../../../scripts/ship.ts";
 
 Deno.test("ship: a beta or an rc is cut on beta from dev and comes back to dev by fast-forward", () => {
   const runs = shipSteps("beta", "minor").map((s) => s.run.join(" "));
@@ -13,7 +13,10 @@ Deno.test("ship: a beta or an rc is cut on beta from dev and comes back to dev b
 
 Deno.test("ship: a stable version is cut on release from beta, and beta and dev take it after", () => {
   const runs = shipSteps("stable").map((s) => s.run.join(" "));
-  assertEquals(runs.slice(0, 4), [
+  assertEquals(runs.slice(0, 7), [
+    "git checkout -q -B beta origin/beta",
+    "git merge --ff-only dev",
+    "git push origin beta",
     "git checkout -q -B release origin/release",
     "git merge --ff-only origin/beta",
     "release",
@@ -21,6 +24,13 @@ Deno.test("ship: a stable version is cut on release from beta, and beta and dev 
   ]);
   assertEquals(runs.includes("git merge --ff-only release"), true);
   assertEquals(runs.at(-1), "git push origin dev");
+});
+
+Deno.test("ship: beta takes from dev for a stable only update manifests and merges", () => {
+  assertEquals(untried(["", "chore(updates): v1.1.0-rc.8 on its update channels"]), []);
+  assertEquals(untried(["fix(ui): a thing", "chore(updates): v1.1.0-rc.8 on its update channels"]), [
+    "fix(ui): a thing",
+  ]);
 });
 
 Deno.test("ship: only the kinds and targets release.ts knows", () => {
