@@ -5,6 +5,55 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.1.0] - 2026-10-13
+
+### Added
+
+- **mcp**: Slack as the person, one server per workspace (df44a12)
+- **mcp**: gitea-guard reads the method of write tools; tracker writes run unasked (0c591ae)
+- **statusline**: two lines with the folder's tasks from the brain (6e9ac05)
+- **mcp**: reads run unasked, production writes ask, base safety lists hold everywhere (eedb412)
+- **hooks**: branch-guard asks for what reaches production, not for the branch checked out (705554b)
+- **console**: repairs close the Claudes in the way, and sign-in and vault work from the page (ce493f3)
+- **release**: deno task ship cuts and pushes a beta, rc or stable version in one command (84ebda8)
+- **ui**: follow the console's token in the page and the dev server (ec74409)
+- **desktop**: enter the console with its token and send it from the tray (1510598)
+- **console**: require a per-start token on every request but the liveness probe (1d039df)
+
+### Fixed
+
+- **release**: ship stable lets beta take what CI left on release, so release can fast-forward (35e0f53)
+- **doctor**: warn when a running console has no token file (528a409)
+- **ci**: coolify's test feeds its guard a made-up credential, not a leak (9c23ce3)
+- **mcp**: our servers say when they could not look, instead of answering empty or green (a50b450)
+- **mcp**: n8n-mcp 2.92.1 without telemetry, and installed programs checked against their version (7bc6fd4)
+- **mcp**: every tool of every server classified, and the probe tells when the lists drift (c6a3d72)
+- **release**: retry GitHub's failures and replace a draft's files with this build's (5ed5349)
+- **live**: renew an expired token through Claude Code before reading the limits (57a776e)
+- **release**: ship checks the version can be cut before the gate and any branch move (1d7a6ce)
+- **mcp**: a guard hook is quoted, ignores the project's deno.json, and asks when it cannot run (434cc96)
+- **security**: tool arguments stay one path segment, calls time out, the brain builds from the lock (c862d7e)
+- **ui**: select options take the theme's colours, readable in the dark theme (#13) (04acb10)
+- **ui**: the update screen leaves «Restarting» as soon as the new console answers (8b7c73f)
+- **cli**: a command that fails says why in one line, not with Deno's stack (bbfad5c)
+- **ui**: a step not needed fills its arc of the update ring, as the share counts it (d30d258)
+
+### Performance
+
+- **statusline**: one jq and two git calls, about 260 ms to 40 ms a refresh (ddbf23b)
+- **hooks**: guards parse once and match in bash, dead hooks and duplicated agents go (a76a6d9)
+- **ci**: the gate's steps and the test files run at once (207b51b)
+
+### Changed
+
+- **tasks**: the task library in modules (96aab06)
+- **coolify**: the server in modules, one per section of tools (d7195b4)
+- no import cycles; shared helpers in one place (025022b)
+
+### Documentation
+
+- **site**: MCP permission lists and the production guards (0250269)
+
 ## [1.1.0-rc.9] - 2026-10-13
 
 ### Fixed
