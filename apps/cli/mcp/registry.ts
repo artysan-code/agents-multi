@@ -228,6 +228,14 @@ export function selectServers(reg: RawRegistry, everyone: string[], name: string
 export const isHttp = (cfg: Record<string, unknown>) =>
   cfg.type === "http" || cfg.type === "sse" || (!cfg.command && typeof cfg.url === "string");
 
+/** Pure: what is wrong with the servers as written, before loadRegistry fills in what it derives
+ *  (withNpm sets `command: "node"` on every `_npm` server, so only the raw entries can tell a mistake). */
+export function rawProblems(servers: Record<string, ServerCfg>): string[] {
+  return Object.entries(servers).filter(([, c]) => c._npm && c.command).map(([name]) =>
+    `${name}: _npm is the command (node on the package's bin): drop "command"`
+  );
+}
+
 /** Pure: what is wrong with the registry as written. The doctor reports it; sync still runs, and
  *  what it writes can at worst hold a literal "{secret}", never a secret. */
 export function registryProblems(reg: Pick<Registry, "servers">): string[] {
@@ -243,7 +251,6 @@ export function registryProblems(reg: Pick<Registry, "servers">): string[] {
         out.push(`${name}: ${t} is in more than one of _allow, _deny, _ask, _auto`);
       }
     }
-    if (cfg._npm && cfg.command) out.push(`${name}: _npm is the command (node on the package's bin): drop "command"`);
     if (!_perAccount) continue;
     if (!cfg._service) out.push(`${name}: _perAccount needs _service (whose accounts?)`);
     if (isHttp(cfg) && _perAccount.env) out.push(`${name}: an http server takes _perAccount.headers, not env`);

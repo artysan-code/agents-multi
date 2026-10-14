@@ -3,7 +3,7 @@
 import { plan } from "../../mcp/apply.ts";
 import { staleLaunchConfigs } from "../../mcp/config.ts";
 import { health } from "../../mcp/health.ts";
-import { loadRegistry, registryProblems } from "../../mcp/registry.ts";
+import { loadRegistry, rawProblems, rawRegistry, registryProblems } from "../../mcp/registry.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 
@@ -30,7 +30,7 @@ export async function mcpChecks(): Promise<Check[]> {
         ? `${changes.length} MCP changes for Desktop, written when it is next opened`
         : "MCP servers of Claude Desktop match the registry",
     );
-    const problems = registryProblems(await loadRegistry());
+    const problems = [...rawProblems((await rawRegistry()).servers), ...registryProblems(await loadRegistry())];
     if (problems.length) {
       add(
         "mcp.registry",

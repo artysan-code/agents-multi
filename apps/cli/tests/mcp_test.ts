@@ -15,6 +15,7 @@ import {
 import { hasDesktop, targets } from "../mcp/apply.ts";
 import { launchConfig, withoutManaged } from "../mcp/config.ts";
 import {
+  rawProblems,
   type RawRegistry,
   REGISTRY,
   type Registry,
@@ -451,12 +452,21 @@ Deno.test("withNpm: an _npm server runs node on the installed bin, its args afte
   assertEquals(placed.n, { command: "node", args: ["/t/node_modules/.bin/b"] });
 });
 
-Deno.test("registryProblems: _npm is the command, so a command next to it is a mistake", () => {
-  assertEquals(registryProblems({ servers: { n: { _npm: { package: "p", version: "1", bin: "b" } } } }), []);
-  assertEquals(
-    registryProblems({ servers: { n: { command: "npx", _npm: { package: "p", version: "1", bin: "b" } } } }).length,
-    1,
-  );
+Deno.test("rawProblems: _npm is the command, so a command next to it is a mistake", () => {
+  const npm = { package: "p", version: "1", bin: "b" };
+  assertEquals(rawProblems({ n: { _npm: npm } }), []);
+  assertEquals(rawProblems({ n: { command: "npx", _npm: npm } }).length, 1);
+});
+
+Deno.test("an _npm server expanded by withNpm is not a problem (the doctor reads the raw entries)", () => {
+  const raw = { n: { _npm: { package: "p", version: "1", bin: "b" } } };
+  assertEquals(registryProblems({ servers: withNpm(raw, "/t") }), []);
+  assertEquals(rawProblems(raw), []);
+});
+
+Deno.test("the shipped registry has no _npm server with a command of its own", async () => {
+  const raw = JSON.parse(await Deno.readTextFile(REGISTRY)) as RawRegistry;
+  assertEquals(rawProblems(raw.servers), []);
 });
 
 Deno.test("the registry: no server goes through npx (its npm exec parent stays alive for the session)", async () => {
