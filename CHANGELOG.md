@@ -5,6 +5,35 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.0-beta.1] - 2026-10-14
+
+### Added
+
+- **agents**: Codex as a second provider: pinned CLI, per-profile account, hub child, limits (3428626)
+- **mcp**: keep the registry's servers in .claude.json for profiles with Desktop (200153c)
+- **mcp**: hand the CLI its servers at launch with --mcp-config, not a copy in .claude.json (ca626a8)
+
+### Fixed
+
+- **agents**: make a Codex account's folder before codex runs (67ba797)
+- **agents**: a child or run without a project belongs to its folder's project (c35fecd)
+- **agents**: isolate the hub's children and runs by project (5388fd1)
+
+### Performance
+
+- **mcp**: third-party npm servers installed at their pin and started with node, not npx (a956d61)
+- **mcp**: launch.sh execs the server after the vault secret is resolved, no Deno wrapper left alive (cf4f119)
+- **ci**: jq and shellcheck as pinned, sha256-verified binaries fetched beside gitleaks, no apt-get (d6a96d0)
+- **cli**: run the doctor's groups and the status reads together (e4aaae1)
+- **ci**: release runs only the Rust half of the gate, without jq and shellcheck; caches corepack (5a0e767)
+- **ci**: check.sh runs its Deno, shell and Rust groups at once, with a --desktop mode (0de1446)
+
+### Documentation
+
+- **adr**: Codex provider is ADR 0007 (0d03a0c)
+- **mcp**: ADR 0006, README, site and onboarding on MCP at launch (9a16ddb)
+- **agents**: group AGENTS.md rules by topic and tighten the wording (73553a9)
+
 ## [1.1.0] - 2026-10-13
 
 ### Added
