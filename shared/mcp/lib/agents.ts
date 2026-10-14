@@ -321,20 +321,23 @@ export function whatOf(tool: string, input: Record<string, unknown>): string {
   return `${tool}: ${one.replace(/\s+/g, " ").slice(0, 300)}`;
 }
 
-/** Pure: a child's state from its events, the requests already answered, and whether it still runs. */
-export function stateOf(lines: string[], answered: Set<string>, alive: boolean, now = Date.now()): ChildState {
-  const st: ChildState = {
-    phase: "working",
-    session: null,
-    pending: [],
-    said: [],
-    turns: 0,
-    lastResult: null,
-    error: null,
-    costUsd: 0,
-  };
-  const open = new Map<string, Pending>();
-  let busy = true;
+/** What `stateOf` has made of the lines so far: the part that depends on the events only, so a reader
+ *  that sees new lines can go on from there instead of from the first one. */
+interface Fold {
+  st: ChildState;
+  open: Map<string, Pending>;
+  busy: boolean;
+}
+
+const newFold = (): Fold => ({
+  st: { phase: "working", session: null, pending: [], said: [], turns: 0, lastResult: null, error: null, costUsd: 0 },
+  open: new Map(),
+  busy: true,
+});
+
+/** Pure: takes more lines of a child's events into a fold. */
+function foldLines(f: Fold, lines: string[], answered: Set<string>, now: number) {
+  const { st, open } = f;
   for (const line of lines) {
     let e: Record<string, unknown>;
     try {
@@ -345,10 +348,13 @@ export function stateOf(lines: string[], answered: Set<string>, alive: boolean, 
     const type = e.type;
     if (type === "system" && e.subtype === "init" && typeof e.session_id === "string") st.session = e.session_id;
     else if (type === "assistant") {
-      busy = true;
+      f.busy = true;
       const content = (e.message as { content?: unknown[] })?.content ?? [];
       for (const c of content as Record<string, unknown>[]) {
-        if (c.type === "text" && typeof c.text === "string" && c.text.trim()) st.said.push(c.text.trim());
+        if (c.type === "text" && typeof c.text === "string" && c.text.trim()) {
+          st.said.push(c.text.trim());
+          if (st.said.length > SAID) st.said.shift();
+        }
       }
     } else if (type === "control_request") {
       const r = e.request as Record<string, unknown>;
@@ -371,17 +377,30 @@ export function stateOf(lines: string[], answered: Set<string>, alive: boolean, 
       }
     } else if (type === "control_cancel_request") open.delete(String(e.request_id ?? ""));
     else if (type === "result") {
-      busy = false;
+      f.busy = false;
       st.turns++;
       st.lastResult = typeof e.result === "string" ? e.result : String(e.subtype ?? "");
       if (e.is_error) st.error = st.lastResult;
       if (typeof e.total_cost_usd === "number") st.costUsd = e.total_cost_usd;
-    } else if (type === "user") busy = true;
+    } else if (type === "user") f.busy = true;
   }
-  st.pending = [...open.values()];
-  st.said = st.said.slice(-5);
-  st.phase = !alive ? "ended" : st.pending.length ? "waiting" : busy ? "working" : "idle";
-  return st;
+}
+
+/** Pure: the state a fold stands for, with the requests answered since and whether the child still runs. */
+function stateOfFold(f: Fold, answered: Set<string>, alive: boolean): ChildState {
+  const pending = [...f.open.values()].filter((p) => !answered.has(p.request));
+  const phase = !alive ? "ended" : pending.length ? "waiting" : f.busy ? "working" : "idle";
+  return { ...f.st, said: [...f.st.said], pending, phase };
+}
+
+/** How many of a child's last words a state keeps. */
+const SAID = 5;
+
+/** Pure: a child's state from its events, the requests already answered, and whether it still runs. */
+export function stateOf(lines: string[], answered: Set<string>, alive: boolean, now = Date.now()): ChildState {
+  const f = newFold();
+  foldLines(f, lines, answered, now);
+  return stateOfFold(f, answered, alive);
 }
 
 /** What needs the owner: a request or a question to answer, a turn finished, a child gone. */
@@ -515,23 +534,85 @@ export async function readChild(id: string, runs = runsDir()): Promise<Child | n
   if (!meta) return null;
   // a child older than the scope belongs to the project of its own folder
   meta.project ??= await projectOf(meta.dir ?? "/").catch(() => undefined);
-  const state = stateOf(await lines(`${dir}/out.jsonl`), await answeredOf(dir), await childAlive(dir));
-  const err = (await Deno.readTextFile(`${dir}/err.log`).catch(() => "")).trim();
-  if (state.phase === "ended" && !state.turns && err) state.error = err.split("\n").slice(-3).join(" ");
+  const state = stateOfFold(await foldOf(`${dir}/out.jsonl`), await answeredOf(dir), await childAlive(dir));
+  if (state.phase === "ended" && !state.turns) {
+    const err = (await Deno.readTextFile(`${dir}/err.log`).catch(() => "")).trim();
+    if (err) state.error = err.split("\n").slice(-3).join(" ");
+  }
   return { meta, state };
+}
+
+/** The fold of each child's `out.jsonl` and how far into the file it has read: a reader that comes back
+ *  (a watch looks every second) takes only the lines added since, not the whole file again (a long child's
+ *  is tens of MB). Small: one state per child. */
+const folds = new Map<string, { fold: Fold; offset: number }>();
+
+const looking = new Map<string, Promise<unknown>>();
+
+/** A child's events folded up to now. Looks at one file go one after the other: two readers starting at the
+ *  same offset would count its lines twice. */
+function foldOf(file: string): Promise<Fold> {
+  const turn = (looking.get(file) ?? Promise.resolve()).then(() => foldFrom(file));
+  const queued = turn.catch(() => {}).finally(() => {
+    if (looking.get(file) === queued) looking.delete(file);
+  });
+  looking.set(file, queued);
+  return turn;
+}
+
+/** Reads from where the last look stopped, and only whole lines. */
+async function foldFrom(file: string): Promise<Fold> {
+  let have = folds.get(file);
+  let f: Deno.FsFile;
+  try {
+    f = await Deno.open(file);
+  } catch {
+    folds.delete(file);
+    return newFold();
+  }
+  try {
+    const size = (await f.stat()).size;
+    if (!have || size < have.offset) folds.set(file, have = { fold: newFold(), offset: 0 });
+    // in chunks, so a file that grew a lot meanwhile is never held whole
+    const buf = new Uint8Array(1 << 20);
+    let carry = new Uint8Array(0);
+    await f.seek(have.offset, Deno.SeekMode.Start);
+    for (let n = await f.read(buf); n; n = await f.read(buf)) {
+      const data = new Uint8Array(carry.length + n);
+      data.set(carry);
+      data.set(buf.subarray(0, n), carry.length);
+      const end = data.lastIndexOf(10) + 1; // a line still being written waits for its end
+      if (end) {
+        foldLines(
+          have.fold,
+          new TextDecoder().decode(data.subarray(0, end)).split("\n").filter(Boolean),
+          new Set(),
+          Date.now(),
+        );
+        have.offset += end;
+      }
+      carry = data.slice(end);
+    }
+  } finally {
+    f.close();
+  }
+  return have.fold;
 }
 
 export async function listChildren(runs = runsDir(), scope?: Scope): Promise<Child[]> {
   const out: Child[] = [];
+  const present = new Set<string>();
   try {
     for await (const e of Deno.readDir(runs)) {
       if (!e.isDirectory) continue;
+      present.add(`${runs}/${e.name}/out.jsonl`);
       const c = await readChild(e.name, runs);
       if (!c) continue;
       if (!scope) out.push(c);
       else if (inScope(c.meta, scope)) out.push({ ...c, access: accessOf(c.meta, scope) });
     }
   } catch { /* no child yet */ }
+  for (const file of folds.keys()) if (file.startsWith(`${runs}/`) && !present.has(file)) folds.delete(file);
   return out.sort((a, b) => a.meta.started.localeCompare(b.meta.started));
 }
 

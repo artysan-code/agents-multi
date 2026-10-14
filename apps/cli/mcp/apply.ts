@@ -1,6 +1,7 @@
 // apply.ts — the registry's projection for Claude Desktop: its config file (claude_desktop_config.json)
 // and, for a profile that has Desktop, the profile's .claude.json too, which the Claude Code embedded in
-// Desktop (the Code tab) reads. Neither can be handed its servers at launch. Everywhere else the CLI's
+// Desktop (the Code tab) reads — with the launch config's entries, the gateway's http ones included (the Code
+// tab is Claude Code). Neither can be handed its servers at launch. Everywhere else the CLI's
 // servers are not copied anywhere: config.ts generates a file per profile that bin/claude passes with
 // --mcp-config.
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
@@ -13,8 +14,9 @@ import { readJson, writeAtomic } from "../lib/fs.ts";
 import { CACHE, RUNTIME, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
+import { launchServers } from "./gateway.ts";
 import { type Target, wanted } from "./placement.ts";
-import { loadRegistry } from "./registry.ts";
+import { loadRegistry, type Registry } from "./registry.ts";
 
 export interface Change {
   target: Target;
@@ -53,6 +55,12 @@ export async function targets(): Promise<Target[]> {
   }
   return t;
 }
+/** Pure: the `mcpServers` a target should hold. A profile's `.claude.json` (what the Code tab's Claude reads)
+ *  gets what the launch config gets — the gateway's http entries for the servers that go through it, stdio
+ *  for the rest or all of them when the gateway is off (ADR 0008); Desktop's own file only takes commands. */
+export const projected = (reg: Registry, t: Pick<Target, "profile" | "surface">) =>
+  t.surface === "cli" ? launchServers(reg, t.profile) : wanted(reg, t);
+
 /** Which servers each target had managed at the last write (`desktop:<p>`, `cli:<p>`). */
 export async function loadState(): Promise<Record<string, string[]>> {
   return await readJson<Record<string, string[]>>(STATE_FILE) ?? {};
@@ -76,7 +84,7 @@ export async function plan(): Promise<{ changes: Change[]; skipped: Target[] }> 
       continue;
     }
     const current = conf.mcpServers ?? {};
-    const want = wanted(reg, t);
+    const want = projected(reg, t);
     for (const [name, cfg] of Object.entries(want)) {
       if (!(name in current)) changes.push({ target: t, name, kind: "add" });
       else if (!eq(current[name], cfg)) changes.push({ target: t, name, kind: "update" });
@@ -137,7 +145,7 @@ export async function apply(): Promise<{ changes: Change[]; deferred: string[] }
       deferred.push(t.managedKey);
       continue;
     }
-    const want = wanted(reg, t);
+    const want = projected(reg, t);
     if (mine.length) {
       const merged: Record<string, unknown> = { ...(conf.mcpServers ?? {}) };
       for (const c of mine) if (c.kind === "remove") delete merged[c.name];

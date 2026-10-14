@@ -69,9 +69,12 @@ Spikes (Claude Code 2.1.299) settled what a design may rely on:
   session variable (`CLAUDE_CONFIG_DIR` included: the profile is the entry's `AGENTS_MULTI_PROFILE`, never
   inherited) and its working folder is the home.
 - **Stays stdio**: the `agents` hub (`_gateway: false`: it needs its session's folder and identity), servers with
-  `_bind` (launch.ts reads the project binding from the session's folder), remote `http` servers, and everything
-  Desktop reads — its own config file and the `.claude.json` projection for its Code tab are still built from
-  `wanted()`, untouched.
+  `_bind` (launch.ts reads the project binding from the session's folder), remote `http` servers, and Desktop's
+  chat file (`claude_desktop_config.json`: commands only). The Code tab's Claude is Claude Code and reads the
+  profile's `.claude.json`: that projection (ADR 0006) holds the launch config's entries, so the same http
+  entries as `mcp.json` (checked with the Claude Code bundled in Desktop, 2.1.295: `type: http` and
+  `headersHelper` work from `.claude.json`), stdio for the two cases above, and all of it stdio when the gateway
+  is off. Without that each Code-tab session started its own copy of every server (about 0.7 GB).
 - **Kill switch and default**: `<config>/gateway.json` — `enabled` (default: on in app mode, where the console is
   always up; off in dev mode), `idleMinutes`, `port`. Off, the launch config is regenerated with the plain
   stdio entries.

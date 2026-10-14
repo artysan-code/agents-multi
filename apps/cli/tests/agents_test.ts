@@ -420,6 +420,49 @@ async function withCoordinators(
   }
 }
 
+Deno.test("agents: a child's file is read from where the last look stopped — appended lines, a line half written, an answer, a file that restarted", async () => {
+  const runs = await Deno.makeTempDir();
+  try {
+    const dir = `${runs}/inc-0101`;
+    await Deno.mkdir(dir);
+    await Deno.writeTextFile(`${dir}/meta.json`, JSON.stringify({ id: "inc-0101", started: "2026-01-01T00:00:00Z" }));
+    await Deno.writeTextFile(`${dir}/child.pid`, `${Deno.pid}\n`); // alive: this process
+    const out = `${dir}/out.jsonl`;
+    const say = (t: string) => ev({ type: "assistant", message: { content: [{ type: "text", text: t }] } });
+    const done = ev({ type: "result", subtype: "success", result: "done", total_cost_usd: 0.5 });
+    const state = async () => (await readChild("inc-0101", runs))!.state;
+
+    await Deno.writeTextFile(out, `${ev({ type: "system", subtype: "init", session_id: "s" })}\n${say("one")}\n`);
+    assertEquals([(await state()).session, (await state()).said], ["s", ["one"]]);
+    // a second look at the same file counts nothing twice
+    await Deno.writeTextFile(out, `${done}\n`, { append: true });
+    assertEquals([(await state()).turns, (await state()).turns, (await state()).phase], [1, 1, "idle"]);
+    // a line still being written waits for its end
+    const half = ask("r1");
+    await Deno.writeTextFile(out, half.slice(0, 20), { append: true });
+    assertEquals((await state()).pending, []);
+    await Deno.writeTextFile(out, `${half.slice(20)}\n`, { append: true });
+    assertEquals((await state()).pending.map((p) => p.request), ["r1"]);
+    // answered since: not pending any more, with no new line in the events
+    await Deno.writeTextFile(`${dir}/answers.jsonl`, `${ev({ request: "r1" })}\n`);
+    assertEquals([(await state()).pending, (await state()).phase], [[], "idle"]);
+    // several looks at once go one after the other
+    await Deno.writeTextFile(out, `${say("two")}\n${done}\n`, { append: true });
+    const all = await Promise.all([state(), state(), state()]);
+    assertEquals(all.map((x) => x.turns), [2, 2, 2]);
+    // more than the saying a state keeps, and a file that started over
+    for (let i = 0; i < 8; i++) await Deno.writeTextFile(out, `${say(`s${i}`)}\n`, { append: true });
+    assertEquals((await state()).said, ["s3", "s4", "s5", "s6", "s7"]);
+    await Deno.writeTextFile(out, `${say("again")}\n`);
+    assertEquals([(await state()).said, (await state()).turns], [["again"], 0]);
+    // a child that is gone is no more kept
+    await Deno.remove(dir, { recursive: true });
+    assertEquals(await listChildren(runs), []);
+  } finally {
+    await Deno.remove(runs, { recursive: true });
+  }
+});
+
 Deno.test("agents: accessOf and the scope filters — own, peer, orphan, other project, all", async () => {
   await withCoordinators(({ a, b, gone }) => {
     const here: Scope = { project: "/p/a", me: a };

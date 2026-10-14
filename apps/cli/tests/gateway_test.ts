@@ -3,7 +3,8 @@
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { backendEnv } from "../../../shared/mcp/gateway/backend.ts";
 import { gatewayDenyRules, runtimeNames } from "../mcp/gateway-settings.ts";
-import { permissionRules } from "../mcp/placement.ts";
+import { projected } from "../mcp/apply.ts";
+import { permissionRules, wanted } from "../mcp/placement.ts";
 import { serverDirOf } from "../codeversion.ts";
 import {
   bearer,
@@ -178,6 +179,19 @@ Deno.test("launchServers: the kill switch gives the plain stdio entries back", (
   // and the config text follows
   assert(launchConfig(off, A).includes('"command": "deno"'));
   assert(launchConfig(reg(), A).includes('"headersHelper"'));
+});
+
+Deno.test("projected: a profile's .claude.json (the Code tab) gets the launch config's entries, Desktop's file keeps commands", () => {
+  const on = reg();
+  // the Code tab's Claude is Claude Code: the gateway's http entries, stdio only where the registry keeps it
+  assertEquals(projected(on, { profile: A, surface: "cli" }), launchServers(on, A));
+  assertEquals((projected(on, { profile: A, surface: "cli" }).tasks as { type: string }).type, "http");
+  assertEquals(projected(on, { profile: A, surface: "cli" }).hub, { command: "deno", args: ["run", "s.ts"] });
+  // the kill switch gives it the plain commands back, as they were before
+  const off = reg({ gateway: { ...G, enabled: false } });
+  assertEquals(projected(off, { profile: A, surface: "cli" }), wanted(off, { profile: A, surface: "cli" }));
+  // Desktop's own file is never the gateway's
+  assertEquals(projected(on, { profile: A, surface: "desktop" }), wanted(on, { profile: A, surface: "desktop" }));
 });
 
 Deno.test("codexToolsConfig: of each server only its _allow tools, none for a server without any", () => {
