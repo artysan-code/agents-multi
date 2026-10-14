@@ -59,7 +59,7 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
  */
 export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
   const ctx = await makeContext(opts);
-  const out: Check[] = [];
-  for (const group of GROUPS) out.push(...await group(ctx));
-  return out;
+  // the groups only read, so they run together (the network probes of the vault group no longer hold
+  // up the rest); Promise.all keeps the report in the order of GROUPS
+  return (await Promise.all(GROUPS.map((group) => group(ctx)))).flat();
 }

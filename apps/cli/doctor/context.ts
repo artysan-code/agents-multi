@@ -28,16 +28,14 @@ export interface DoctorCtx {
 
 /** Reads the shared facts. */
 export async function makeContext(opts: { probe?: boolean }): Promise<DoctorCtx> {
-  const inst = await installation();
-  return {
-    m: await machine(),
-    repo: await repoState(),
-    installed: inst.code,
-    mode: inst.mode,
-    declared: await profileNames(),
-    inv: await sharedInventory(),
-    probe: !!opts.probe,
-  };
+  const [inst, m, repo, declared, inv] = await Promise.all([
+    installation(),
+    machine(),
+    repoState(),
+    profileNames(),
+    sharedInventory(),
+  ]);
+  return { m, repo, installed: inst.code, mode: inst.mode, declared, inv, probe: !!opts.probe };
 }
 
 /** A fresh check list and the `add` that appends to it (`fix` and `repair` are optional). */

@@ -19,9 +19,18 @@ import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { lastBackup } from "./brain-backup.ts";
 
 export async function status(opts: { withDoctor?: boolean } = { withDoctor: true }) {
-  const [m, repo, inst, inv] = await Promise.all([machine(), repoState(), running(), sharedInventory()]);
-  const profiles: Record<string, Awaited<ReturnType<typeof profileInfo>>> = {};
-  for (const p of await profileNames()) profiles[p] = await profileInfo(p);
+  // the doctor is the longest read: it starts with the rest, not after it
+  const checks = opts.withDoctor ? doctor() : Promise.resolve([]);
+  const [m, repo, inst, inv, names] = await Promise.all([
+    machine(),
+    repoState(),
+    running(),
+    sharedInventory(),
+    profileNames(),
+  ]);
+  const profiles: Record<string, Awaited<ReturnType<typeof profileInfo>>> = Object.fromEntries(
+    await Promise.all(names.map(async (p) => [p, await profileInfo(p)] as const)),
+  );
   const sync = await readJson(`${CACHE}/sync.json`);
   const update = await readJson<
     {
@@ -53,7 +62,7 @@ export async function status(opts: { withDoctor?: boolean } = { withDoctor: true
     running: inst,
     // the brain this machine uses and its last copy here (the doctor says whether the token still works)
     brain: await brainState(),
-    doctor: opts.withDoctor ? await doctor() : [],
+    doctor: await checks,
   };
 }
 async function brainState() {
