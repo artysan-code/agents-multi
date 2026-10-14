@@ -17,16 +17,35 @@ import {
   startChild,
   stopChild,
 } from "./agents.ts";
+import {
+  accountId,
+  type AccountRef,
+  alternatives,
+  blockedAmong,
+  type LimitEvent,
+  limitsDir,
+  listProposals,
+  loadRules,
+  markApplied,
+  parseAccountId,
+  projectAccount,
+  propose,
+  readEvents,
+  readSnapshot,
+  setProjectAccount,
+} from "./limitrules.ts";
 import { DENY_TOOLS, isolate, loadPolicy, type Policy } from "./policy.ts";
+import { listAccounts, type ProviderName } from "./providers.ts";
 import { listRuns, type Plan, readRun, startRun } from "./runs.ts";
 
 export type Trigger =
   | { kind: "cron"; expr: string }
   | { kind: "at"; at: string }
-  | { kind: "event"; on: "run-done" | "run-failed"; plan?: string };
+  | { kind: "event"; on: "run-done" | "run-failed"; plan?: string }
+  | { kind: "event"; on: "limit-reset"; account?: string };
 
 export type Action =
-  | { kind: "agent"; profile: string; task: string; model?: string }
+  | { kind: "agent"; profile: string; provider?: ProviderName; task: string; model?: string }
   | { kind: "workflow"; plan: string; task?: string };
 
 export interface Routine {
@@ -66,8 +85,10 @@ export interface RoutineState {
   /** an `at` routine, once it has been dealt with */
   status?: "fired" | "missed";
   lastFired?: string;
-  /** a firing waiting for room under the policy's concurrency */
+  /** a firing waiting for room under the policy's concurrency, or for an account under its limit */
   queued?: string;
+  /** the accounts it is held for (blocked by the limits manager), announced once */
+  held?: string[];
   /** workflow runs already seen (event triggers) */
   seen?: string[];
   runs: Fired[];
@@ -94,7 +115,9 @@ export function routineErrors(r: Routine): string[] {
   } else if (t?.kind === "at") {
     if (Number.isNaN(Date.parse(t.at))) errs.push("at is not a date");
   } else if (t?.kind === "event") {
-    if (t.on !== "run-done" && t.on !== "run-failed") errs.push("event is run-done or run-failed");
+    if (!["run-done", "run-failed", "limit-reset"].includes(t.on)) {
+      errs.push("event is run-done, run-failed or limit-reset");
+    }
   } else errs.push("trigger is cron, at or event");
   if (r.action?.kind === "agent") {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(r.action.profile ?? "")) errs.push("a profile is needed");
@@ -142,13 +165,33 @@ export function eventRuns(
   seen: string[],
 ): string[] {
   const t = r.trigger;
-  if (t.kind !== "event" || !r.enabled) return [];
+  if (t.kind !== "event" || t.on === "limit-reset" || !r.enabled) return [];
   const want = t.on === "run-done" ? "done" : "stopped";
   return runs
     .filter((x) =>
       x.status === want && !seen.includes(x.id) && x.project === r.project && (!t.plan || x.plan.name === t.plan)
     )
     .map((x) => x.id);
+}
+
+/** Pure: the limit resets a `limit-reset` routine fires for: events it has not seen, of the account it names
+ *  (any account when it names none). */
+export function resetEvents(r: Routine, events: LimitEvent[], seen: string[]): string[] {
+  const t = r.trigger;
+  if (t.kind !== "event" || t.on !== "limit-reset" || !r.enabled) return [];
+  return events.filter((e) => e.kind === "reset" && !seen.includes(e.id) && (!t.account || e.account === t.account))
+    .map((e) => e.id);
+}
+
+/** Pure: the accounts a routine's work would use: its child's, or its plan's steps'. */
+export function accountsOfPlan(r: Routine, plan?: Plan): AccountRef[] {
+  const out = new Map<string, AccountRef>();
+  const add = (profile: string | undefined, provider?: ProviderName) => {
+    if (profile) out.set(`${profile}/${provider ?? "claude"}`, { profile, provider: provider ?? "claude" });
+  };
+  if (r.action.kind === "agent") add(r.action.profile, r.action.provider);
+  else for (const s of plan?.steps ?? []) add(s.profile, s.provider);
+  return [...out.values()];
 }
 
 // ---------------------------------------------------------------- the store
@@ -197,6 +240,7 @@ export async function addRoutine(
   i: NewRoutine,
   dir = routinesDir(),
   home = Deno.env.get("HOME") ?? "",
+  config?: string,
 ): Promise<Routine> {
   const given = i.folder.replace(/^~(?=\/|$)/, home);
   const folder = await Deno.realPath(given).catch(() => null);
@@ -206,6 +250,18 @@ export async function addRoutine(
   const project = await projectOf(folder);
   if (!(await Deno.stat(`${project}/.git`).catch(() => null))) {
     throw new Error("the folder must be in a git repository: a run works on its own branch in its own worktree");
+  }
+  if (i.action.kind === "agent" && !i.action.profile) {
+    const account = await projectAccount(project, config, home);
+    if (!account) throw new Error("no profile given and no default account for this project (agents account default)");
+    i = {
+      ...i,
+      action: {
+        ...i.action,
+        profile: account.profile,
+        ...(account.provider === "codex" ? { provider: "codex" as const } : {}),
+      },
+    };
   }
   const label = i.name?.trim() ||
     (i.action.kind === "agent" ? i.action.task : i.action.plan.split("/").pop() ?? "routine");
@@ -298,6 +354,7 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
   if (r.action.kind === "agent") {
     const m = await startChild({
       profile: r.action.profile,
+      provider: r.action.provider,
       dir: where,
       task: `${preamble(r, id, iso.branch, policy, iso.path)}\n\n${r.action.task}`,
       model: r.action.model,
@@ -370,9 +427,27 @@ export interface Deps {
   stop: (f: Fired) => Promise<void>;
   /** workflow runs, for the event triggers */
   runs: () => Promise<{ id: string; project?: string; plan: { name: string }; status: string }[]>;
+  /** the routine's accounts that the limits manager holds back (blocked), with the window that does */
+  held: (r: Routine) => Promise<{ account: string; by: { window: string; used: number; resetsAt: number | null } }[]>;
+  /** other accounts that could take the work instead of a blocked one, best first */
+  elsewhere: (blocked: string) => Promise<string[]>;
+  /** raises the proposal "use `to` instead of `from`" for a routine; the owner decides */
+  propose: (r: Routine, from: string, to: string, reason: string) => Promise<void>;
+  /** the limits manager's events (resets wake `limit-reset` routines) */
+  limitEvents: () => Promise<LimitEvent[]>;
+  /** how long a firing held for a limit waits before it counts as missed */
+  holdMaxMin: () => Promise<number>;
   notify: (title: string, body: string) => void | Promise<void>;
   log: (s: string) => void;
 }
+
+const planOf = async (r: Routine): Promise<Plan | undefined> => {
+  if (r.action.kind !== "workflow") return undefined;
+  const file = r.action.plan.replace(/^~(?=\/|$)/, Deno.env.get("HOME") ?? "");
+  return await Deno.readTextFile(file.startsWith("/") ? file : `${r.folder}/${file}`).then(JSON.parse).catch(() =>
+    undefined
+  );
+};
 
 export const realDeps = (notify: Deps["notify"], log: Deps["log"]): Deps => ({
   now: () => new Date(),
@@ -382,6 +457,27 @@ export const realDeps = (notify: Deps["notify"], log: Deps["log"]): Deps => ({
   stop: stopFired,
   runs: async () =>
     (await listRuns()).map((x) => ({ id: x.id, project: x.project, plan: x.plan, status: x.state.status })),
+  held: async (r) =>
+    blockedAmong(
+      await readSnapshot(),
+      accountsOfPlan(r, await planOf(r)).map(accountId),
+      Date.now() / 1000,
+    ),
+  elsewhere: async (blocked) =>
+    alternatives(
+      await readSnapshot(),
+      (await listAccounts()).map((a) => ({ id: a.id, provider: a.provider })),
+      blocked,
+      Date.now() / 1000,
+    ),
+  propose: async (r, from, to, reason) => {
+    await propose(
+      { scope: "routine", project: r.project, routine: r.id, from, to, reason, by: "console" },
+      (await listAccounts()).map((a) => a.id),
+    );
+  },
+  limitEvents: () => readEvents(),
+  holdMaxMin: async () => (await loadRules()).holdMaxMin,
   notify,
   log,
 });
@@ -438,8 +534,10 @@ export async function tick(dir: string, deps: Deps): Promise<void> {
     }
     if (r.trigger.kind === "event") {
       // what ended before the routine looked is history, not an event
-      st.seen ??= runs.filter((x) => x.status !== "running").map((x) => x.id);
-      const fresh = eventRuns(r, runs, st.seen);
+      const limits = r.trigger.on === "limit-reset";
+      const events = limits ? await deps.limitEvents() : [];
+      st.seen ??= limits ? events.map((e) => e.id) : runs.filter((x) => x.status !== "running").map((x) => x.id);
+      const fresh = limits ? resetEvents(r, events, st.seen) : eventRuns(r, runs, st.seen);
       if (fresh.length) {
         st.seen = [...st.seen, ...fresh].slice(-300);
         go = true;
@@ -461,17 +559,40 @@ export async function tick(dir: string, deps: Deps): Promise<void> {
       }
     }
     if (st.queued && !go) {
-      if (now.getTime() - Date.parse(st.queued) > (r.grace ?? DEFAULT_GRACE[r.trigger.kind]) * 6e4) {
+      // held for a limit it waits for the window to reset (holdMaxMin); for room, its grace
+      const wasHeld = !!st.held?.length;
+      const waitMin = wasHeld ? await deps.holdMaxMin() : r.grace ?? DEFAULT_GRACE[r.trigger.kind];
+      if (now.getTime() - Date.parse(st.queued) > waitMin * 6e4) {
         delete st.queued;
+        delete st.held;
         await deps.notify(
           `Routine ${r.name} missed`,
-          "There was no room for it under the policy's concurrency before its grace ran out.",
+          wasHeld
+            ? "Its account stayed at its limit for too long."
+            : "There was no room for it under the policy's concurrency before its grace ran out.",
         );
       } else go = true;
     }
     if (go) {
       const p = await policyOf(r.project);
-      if (running >= p.maxConcurrent) {
+      const blocked = await deps.held(r);
+      if (blocked.length) {
+        st.queued ??= now.toISOString();
+        const ids = blocked.map((b) => b.account);
+        if (JSON.stringify(st.held) !== JSON.stringify(ids)) {
+          st.held = ids;
+          const b = blocked[0];
+          const alt = r.action.kind === "agent" ? (await deps.elsewhere(b.account))[0] : undefined;
+          const why = `${b.account} is at ${Math.round(b.by.used)}% of its ${b.by.window} window`;
+          await deps.notify(
+            `Routine ${r.name} is held`,
+            `${why}: it starts when the window resets.` +
+              (alt ? ` ${alt} has room: a proposal waits for you (agents account proposals).` : ""),
+          );
+          if (alt) await deps.propose(r, b.account, alt, why);
+        }
+        deps.log(`routine ${r.id}: held for ${ids.join(", ")}`);
+      } else if (running >= p.maxConcurrent) {
         st.queued ??= now.toISOString();
         deps.log(`routine ${r.id}: waits for room (${running}/${p.maxConcurrent} running)`);
       } else {
@@ -480,18 +601,60 @@ export async function tick(dir: string, deps: Deps): Promise<void> {
           st.runs = [...st.runs.slice(-19), f];
           st.lastFired = f.at;
           delete st.queued;
+          delete st.held;
           delete st.lastError;
           running++;
           deps.log(`routine ${r.id}: started ${f.child ?? f.run} on ${f.branch}`);
         } catch (e) {
           st.lastError = (e as Error).message;
           delete st.queued;
+          delete st.held;
           await deps.notify(`Routine ${r.name} failed to start`, st.lastError);
         }
       }
     }
     if (JSON.stringify(st) !== before) await writeState(r.id, st, dir);
   }
+}
+
+/** Applies the proposals the owner accepted (the console and the CLI only: the project defaults live in the
+ *  owner's configuration, which the MCP server may not write). A routine proposal changes that routine's
+ *  account, a project one the project's default. Nothing else ever changes an account. */
+export async function applyProposals(
+  notify: Deps["notify"],
+  dir = routinesDir(),
+  limits = limitsDir(),
+  config?: string,
+  home?: string,
+): Promise<number> {
+  let n = 0;
+  for (const p of (await listProposals(limits)).filter((x) => x.status === "accepted")) {
+    const to = parseAccountId(p.to);
+    if (!to) continue;
+    try {
+      if (p.scope === "project") await setProjectAccount(p.project, to, config, home);
+      else {
+        const r = p.routine ? await readRoutine(p.routine, dir) : null;
+        if (!r) throw new Error(`no routine ${p.routine}`);
+        if (r.action.kind !== "agent") throw new Error("a plan's accounts are its steps': change the plan");
+        const { provider: _, ...rest } = r.action;
+        await writeJson(`${dir}/${r.id}.json`, {
+          ...r,
+          action: { ...rest, profile: to.profile, ...(to.provider === "codex" ? { provider: "codex" } : {}) },
+        });
+      }
+      await markApplied(p, limits);
+      await notify(
+        "Account changed",
+        `${p.scope === "project" ? p.project : p.routine}: ${p.from} → ${p.to}, as you accepted.`,
+      );
+      n++;
+    } catch (e) {
+      await notify("Could not apply a proposal", `${p.id}: ${(e as Error).message}`);
+      await markApplied({ ...p, status: "declined" }, limits);
+    }
+  }
+  return n;
 }
 
 /** Starts the backend's routine loop; the returned function stops it. */
@@ -501,6 +664,7 @@ export function startRoutines(notify: Deps["notify"], log: Deps["log"] = console
     if (busy) return;
     busy = true;
     try {
+      await applyProposals(notify);
       await tick(routinesDir(), realDeps(notify, log));
     } catch (e) {
       log(`routines: ${(e as Error).message}`);

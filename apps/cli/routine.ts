@@ -19,8 +19,9 @@ import {
 import { loadPolicy } from "../../shared/mcp/lib/policy.ts";
 
 const USAGE =
-  `agents routine add [--name n] (--cron "m h dom mon dow" | --at <2026-10-15T02:00|02:00|+90m> | --on run-done|run-failed [--plan name])
-                   (--workflow <plan.json> | --profile p) [--folder dir] [--model m] [--grace minutes] [task…]
+  `agents routine add [--name n] (--cron "m h dom mon dow" | --at <2026-10-15T02:00|02:00|+90m> | --on run-done|run-failed [--plan name] | --on limit-reset [--account profile[/provider]])
+                   [--workflow <plan.json>] [--profile p [--provider codex]] [--folder dir] [--model m] [--grace minutes] [task…]
+                                               without --profile the project's default account runs it (agents account default)
                                                schedules an unattended job in a worktree of the repository (docs/adr/0010)
 agents routine list [--project] [--all]        the routines of your project: trigger, next time, what it started
 agents routine rm <id>                         removes it (what it started stays)
@@ -31,7 +32,11 @@ orphans and may adopt and answer them. They work on agent/<run> in a worktree be
 push that branch and the development branch, never main/release (the repository's run policy).`;
 
 export const describeTrigger = (t: Trigger) =>
-  t.kind === "cron" ? `cron ${t.expr}` : t.kind === "at" ? `at ${t.at}` : `on ${t.on}${t.plan ? ` (${t.plan})` : ""}`;
+  t.kind === "cron"
+    ? `cron ${t.expr}`
+    : t.kind === "at"
+    ? `at ${t.at}`
+    : `on ${t.on}${t.on === "limit-reset" ? (t.account ? ` (${t.account})` : "") : t.plan ? ` (${t.plan})` : ""}`;
 
 const mine = (r: Routine, scope: Scope) => r.project === scope.project;
 
@@ -54,13 +59,16 @@ export async function routineCommand(args: string[]): Promise<number> {
       case "add": {
         const cron = opt("--cron"), at = opt("--at"), on = opt("--on"), plan = opt("--plan");
         const workflow = opt("--workflow"), profile = opt("--profile"), model = opt("--model");
+        const provider = opt("--provider"), account = opt("--account");
         const name = opt("--name"), folder = opt("--folder") ?? Deno.cwd(), grace = opt("--grace");
         const triggers = [cron, at, on].filter((x) => x !== undefined).length;
-        if (triggers !== 1 || (!workflow && !profile)) break;
+        if (triggers !== 1 || (provider !== undefined && provider !== "claude" && provider !== "codex")) break;
         const trigger: Trigger = cron !== undefined
           ? { kind: "cron", expr: cron }
           : at !== undefined
           ? { kind: "at", at: parseAt(at, new Date()) }
+          : on === "limit-reset"
+          ? { kind: "event", on, ...(account ? { account } : {}) }
           : { kind: "event", on: on as "run-done" | "run-failed", ...(plan ? { plan } : {}) };
         const task = rest.join(" ");
         const scope = await scopeOf();
@@ -71,7 +79,8 @@ export async function routineCommand(args: string[]): Promise<number> {
           grace: grace === undefined ? undefined : Number(grace),
           action: workflow ? { kind: "workflow", plan: workflow, task: task || undefined } : {
             kind: "agent",
-            profile: profile!,
+            profile: profile ?? "",
+            ...(provider === "codex" ? { provider } : {}),
             task,
             model,
           },

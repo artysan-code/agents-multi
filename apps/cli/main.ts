@@ -7,6 +7,7 @@ import { tasksCommand } from "./tasks.ts";
 import { agentCommand } from "./agent.ts";
 import { runCommand } from "./run.ts";
 import { routineCommand } from "./routine.ts";
+import { accountCommand } from "./account.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
 import { ANSI, printDoctor } from "./lib/output.ts";
@@ -230,6 +231,9 @@ switch (cmd) {
   case "routine":
     Deno.exit(await routineCommand(rest));
     break;
+  case "account":
+    Deno.exit(await accountCommand(rest));
+    break;
   case "brain-backup":
     Deno.exit(await brainBackup(flag("--force")));
     break;
@@ -297,6 +301,7 @@ switch (cmd) {
   run     start|list|status|answer|resume   workflow runs: a plan of steps, each a child, with HANDOFFs and a
           team channel (agents run, alone, says how)
   routine add|list|rm|run   unattended jobs (cron, at, a run's end) on their own branch, under the repo's policy
+  account status|default|proposals|propose|accept|decline|events   the limit rules per account, a project's default account, and the owner's yes to a switch
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows

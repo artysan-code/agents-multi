@@ -41,7 +41,7 @@ Deno.test("routines: what is wrong with one is said before it is kept", () => {
   ]);
   assertEquals(routineErrors(routine({ action: { kind: "workflow", plan: "" } })), ["a plan file is needed"]);
   assertEquals(routineErrors(routine({ trigger: { kind: "event", on: "x" as "run-done" } })), [
-    "event is run-done or run-failed",
+    "event is run-done, run-failed or limit-reset",
   ]);
 });
 
@@ -201,6 +201,11 @@ function harness(over: Partial<Deps> = {}) {
     watch: () => Promise.resolve({ requests: [], ended: false } as Watch),
     stop: (f) => (stopped.push(f.id), Promise.resolve()),
     runs: () => Promise.resolve([]),
+    held: () => Promise.resolve([]),
+    elsewhere: () => Promise.resolve([]),
+    propose: () => Promise.resolve(),
+    limitEvents: () => Promise.resolve([]),
+    holdMaxMin: () => Promise.resolve(720),
     notify: (t, b) => (told.push(`${t} | ${b}`), undefined),
     log: (s) => log.push(s),
     ...over,
@@ -395,5 +400,115 @@ Deno.test("tick: a routine's own workflow run never triggers a routine", async (
     runs = [{ id: "wfrun", project: ev.project, plan: { name: "p" }, status: "done" }];
     await tick(dir, h.deps);
     assertEquals(started.map((x) => x.id), [wf.id]);
+  });
+});
+
+Deno.test("tick: a routine whose account is at its limit is held, tells the owner once, proposes another, and starts when released", async () => {
+  await withHome(async (home, dir) => {
+    const r = await addAt(home, dir, "2026-10-15T00:00:00.000Z");
+    let blocked = true;
+    const by = { window: "5h", used: 91, resetsAt: null };
+    const proposed: string[] = [];
+    const h = harness({
+      held: () => Promise.resolve(blocked ? [{ account: "personal/claude", by }] : []),
+      elsewhere: () => Promise.resolve(["otacon/claude"]),
+      propose: (_r, from, to) => (proposed.push(`${from}>${to}`), Promise.resolve()),
+    });
+    await tick(dir, h.deps);
+    await tick(dir, h.deps);
+    assertEquals(h.fired, []);
+    assertEquals(proposed, ["personal/claude>otacon/claude"]);
+    assertEquals(h.told.filter((t) => t.includes("is held")).length, 1);
+    assertStringIncludes(h.told[0], "91%");
+    const st = await readState(r.id, dir);
+    assertEquals([st.held, !!st.queued], [["personal/claude"], true]);
+    // the window resets: the same routine goes, nothing was lost
+    blocked = false;
+    h.at("2026-10-15T01:00:00Z");
+    await tick(dir, h.deps);
+    assertEquals(h.fired.map((x) => x.id), [r.id]);
+    const after = await readState(r.id, dir);
+    assertEquals([after.held, after.queued], [undefined, undefined]);
+  });
+});
+
+Deno.test("tick: held for a limit it waits for the window (holdMaxMin), not its short grace, then it is missed", async () => {
+  await withHome(async (home, dir) => {
+    const r = await addAt(home, dir, "2026-10-15T00:00:00.000Z", { grace: 10 });
+    const by = { window: "5h", used: 90, resetsAt: null };
+    const h = harness({
+      held: () => Promise.resolve([{ account: "personal/claude", by }]),
+      holdMaxMin: () => Promise.resolve(120),
+    });
+    await tick(dir, h.deps);
+    h.at("2026-10-15T01:00:00Z"); // far past its 10 minutes of grace, inside the 120 of the hold
+    await tick(dir, h.deps);
+    assert((await readState(r.id, dir)).queued);
+    h.at("2026-10-15T02:30:00Z");
+    await tick(dir, h.deps);
+    const st = await readState(r.id, dir);
+    assertEquals([st.queued, st.held], [undefined, undefined]);
+    assert(h.told.some((t) => t.includes("stayed at its limit")));
+    assertEquals(h.fired, []);
+  });
+});
+
+Deno.test("tick: a plan that is held proposes nothing (its accounts are its steps')", async () => {
+  await withHome(async (home, dir) => {
+    await addRoutine(
+      {
+        name: "flow",
+        trigger: { kind: "at", at: "2026-10-15T00:00:00.000Z" },
+        action: { kind: "workflow", plan: "plan.json" },
+        folder: "~/repo",
+      },
+      dir,
+      home,
+    );
+    const proposed: string[] = [];
+    const h = harness({
+      held: () => Promise.resolve([{ account: "a/claude", by: { window: "5h", used: 90, resetsAt: null } }]),
+      elsewhere: () => Promise.resolve(["b/claude"]),
+      propose: (_r, f, t) => (proposed.push(f + t), Promise.resolve()),
+    });
+    await tick(dir, h.deps);
+    assertEquals([h.fired, proposed], [[], []]);
+    assertEquals(h.told.length, 1);
+  });
+});
+
+Deno.test("tick: a `limit-reset` routine ignores the past and fires when its account resets", async () => {
+  await withHome(async (home, dir) => {
+    const r = await addRoutine(
+      {
+        name: "resume",
+        trigger: { kind: "event", on: "limit-reset", account: "personal/claude" },
+        action: { kind: "agent", profile: "personal", task: "t" },
+        folder: "~/repo",
+      },
+      dir,
+      home,
+    );
+    const ev = (id: string, account: string, kind: "reset" | "blocked") => ({
+      id,
+      at: "",
+      kind,
+      account,
+      window: "5h",
+      used: null,
+      resetsAt: null,
+      detail: "",
+    });
+    let events = [ev("old", "personal/claude", "reset")];
+    const h = harness({ limitEvents: () => Promise.resolve(events) });
+    await tick(dir, h.deps);
+    assertEquals(h.fired, [], "an old reset is history");
+    events = [...events, ev("o2", "otacon/claude", "reset"), ev("b1", "personal/claude", "blocked")];
+    await tick(dir, h.deps);
+    assertEquals(h.fired, [], "another account's reset, or a block, is not it");
+    events = [...events, ev("r2", "personal/claude", "reset")];
+    await tick(dir, h.deps);
+    await tick(dir, h.deps);
+    assertEquals(h.fired.map((x) => x.id), [r.id]);
   });
 });
