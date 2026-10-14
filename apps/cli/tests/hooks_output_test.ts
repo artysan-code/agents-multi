@@ -33,20 +33,13 @@ async function fire(hook: string, payload: unknown, env: Record<string, string>,
   return JSON.parse(out).hookSpecificOutput as { hookEventName: string; additionalContext: string };
 }
 
-Deno.test("hooks: graphify-nudge (once per session), agents-md-nested and brain-nudge print parseable JSON when they fire", async () => {
+Deno.test("hooks: agents-md-nested and brain-nudge print parseable JSON when they fire", async () => {
   const home = await Deno.makeTempDir();
   try {
     const proj = `${home}/work/acme/site`;
-    await Deno.mkdir(`${proj}/graphify-out`, { recursive: true });
-    await Deno.mkdir(`${proj}/sub`);
-    await Deno.writeTextFile(`${proj}/graphify-out/graph.json`, "{}");
+    await Deno.mkdir(`${proj}/sub`, { recursive: true });
     await Deno.writeTextFile(`${proj}/sub/AGENTS.md`, '# rules with "quotes" and `ticks`');
     const env = { HOME: home, XDG_RUNTIME_DIR: home, CLAUDE_PROJECT_DIR: proj, PATH: Deno.env.get("PATH") ?? "" };
-
-    const search = { session_id: "s1", tool_name: "Bash", tool_input: { command: "grep -rn x ." } };
-    const g = await fire("graphify-nudge.sh", search, env, proj);
-    assertStringIncludes(g.additionalContext, 'graphify query "<question>"');
-    assertEquals(await output("graphify-nudge.sh", search, env, proj), "", "once per session");
 
     const a = await fire(
       "agents-md-nested.sh",

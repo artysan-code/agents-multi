@@ -65,20 +65,7 @@
           },
           {
             "type": "command",
-            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/graphify-nudge.sh"
-          },
-          {
-            "type": "command",
             "command": "bash \"$HOME\"/.agents-multi/shared/hooks/commit-trailer-guard.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "Grep|Glob",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME\"/.agents-multi/shared/hooks/graphify-nudge.sh"
           }
         ]
       },
