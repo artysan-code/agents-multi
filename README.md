@@ -212,25 +212,26 @@ closed, then run `agents install` and `agents doctor`.
 
 ## Commands
 
-| Command                                                         | What it does                                                                                                                                                  |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claude`                                                        | Claude Code on the default profile                                                                                                                            |
-| `claude-work`, `claude-client`                                  | Claude Code on that profile (each profile declares its own `command`)                                                                                         |
-| `agents install [--app] [--dry-run]`                            | materialise runtime, wrappers, desktop entries (and in dev mode the systemd units) from the manifests. Idempotent. `--app`: from the app's code, copied first |
-| `agents settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                        |
-| `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears           |
-| `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console  |
-| `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                               |
-| `agents mcp check\|sync\|health`                                | write the MCP launch configs and Desktop's servers; `health` verifies binaries, files and dependencies, `--probe` really starts each server                   |
-| `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                    |
-| `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                        |
-| `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                         |
-| `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                        |
-| `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                          |
-| `agents tasks brief\|add\|done\|remind`                         | the task list from the terminal; `remind` is what the timer runs                                                                                              |
-| `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                            |
-| `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                    |
-| `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                |
+| Command                                                         | What it does                                                                                                                                                   |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude`                                                        | Claude Code on the default profile                                                                                                                             |
+| `claude-work`, `claude-client`                                  | Claude Code on that profile (each profile declares its own `command`)                                                                                          |
+| `agents install [--app] [--dry-run]`                            | materialise runtime, wrappers, desktop entries (and in dev mode the systemd units) from the manifests. Idempotent. `--app`: from the app's code, copied first  |
+| `agents settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                         |
+| `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears            |
+| `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console   |
+| `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                |
+| `agents mcp check\|sync\|warm\|health`                          | write the MCP launch configs and Desktop's servers; `warm` builds the gateway's tool lists; `health` verifies binaries and files, `--probe` starts each server |
+| `agents gateway [status\|run]`                                  | the lazy MCP gateway (below): what it is doing, or run it in the foreground on a machine with no console                                                       |
+| `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                     |
+| `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                         |
+| `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                          |
+| `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                         |
+| `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                           |
+| `agents tasks brief\|add\|done\|remind`                         | the task list from the terminal; `remind` is what the timer runs                                                                                               |
+| `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                             |
+| `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                     |
+| `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                 |
 
 `claude update` inside a wrapper is redirected to `agents update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -417,6 +418,30 @@ native modules built for the wrong Node ABI, missing environment, cold-start cra
 each stdio server for `tools/list` and warns when the entry's lists disagree with it (a tool in no
 list, a listed tool the server does not offer), and when a program installed outside the repository
 reports another version than the entry's `_version`, the one its lists were checked against.
+
+### The lazy gateway
+
+A session used to start its own copy of every MCP server, used or not. With the **gateway**
+([ADR 0008](docs/adr/0008-mcp-gateway.md)) the profile's `mcp.json` holds, for each stdio server that can
+go through it, an `http` entry with the server's own name (so `mcp__<server>__<tool>` and the
+`_allow`/`_ask`/`_deny` rules do not change) pointing at `http://127.0.0.1:7332/p/<profile>/<server>`. One
+gateway process per machine (`shared/mcp/gateway/`, Deno, loopback only) answers `tools/list` from a cache,
+starts the real stdio server on the **first call**, shares it between every session of that profile and
+account, and stops it after ten idle minutes. The console keeps the gateway up (no systemd); a gateway that
+restarts is picked up by Claude on its next call.
+
+- It is on by default in app mode and off in dev mode. `<config>/gateway.json`:
+  `{ "enabled": false }` is the kill switch (the launch config goes back to plain stdio entries at the next
+  launch, or `agents mcp sync`), `idleMinutes` and `port` tune it.
+- Each profile has a token in `~/.agents-multi/<profile>/mcp-token` (mode 0600), sent by `headersHelper`
+  (`shared/mcp/gateway/headers.sh`); a token opens its own profile's paths and no other. The token is never
+  in an argument or in `mcp.json`. The gateway itself refuses the tools in a server's `_deny`. The generated
+  settings add deny rules for the port in use and the token files: a barrier against error, not against a
+  hostile agent (Claude Code's sandbox is the real one: ADR 0008, _What protects what_).
+- Tool lists are cached per server, start command (the tool filters) and version, in
+  `~/.agents-multi/gateway/cache/`; the first real start fills them, `agents mcp warm` fills them now (`--force`: all again).
+- Not through the gateway: the `agents` hub (it needs its session's folder), servers with `_bind` (the project
+  binding is read from the session's folder), remote servers, and everything Desktop reads.
 
 Servers written in-house live in `shared/mcp/<name>/` (Deno, least privilege). The ones that work on
 an external service share `shared/mcp/lib/`: `coolify` and `google` today. n8n is not ours any more: it runs n8n-mcp, one server per account (below).

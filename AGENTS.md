@@ -45,6 +45,11 @@ a console, and a desktop app that carries it all. **This repository is the sourc
   patched executable sets app_id, tray tooltip and tinted icons; `install` writes its `.desktop` from
   `desktop/entry.desktop.in`, never by hand. **Never call `app.setName()`**: Electron keys the keyring
   on the app name and the stored token would become unreachable.
+- **MCP servers go through the lazy gateway where they can** ([ADR 0008](docs/adr/0008-mcp-gateway.md)): the
+  launch config names the same servers as `http` entries on `127.0.0.1:7332`, one gateway process (kept up
+  by the console) starts each stdio backend on its first call and stops it when idle. The hub, `_bind`
+  servers and Desktop's files stay stdio; a new server that needs its session's folder or identity says
+  `_gateway: false`. Kill switch: `gateway.json` `enabled: false`.
 - **Changing `~/.agents-multi` under an open Claude session moves the ground under it**: run `install`
   with Claude closed. The MCP servers are not part of that: the CLI gets them at launch from a generated
   `<profile>/mcp.json` (`--mcp-config`, `apps/cli/mcp/config.ts`), never copied into `.claude.json`; only

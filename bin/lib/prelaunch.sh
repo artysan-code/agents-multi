@@ -98,7 +98,7 @@ regen_settings() {
     [[ -d "$runtime/$p" && ! -f "$runtime/$p/mcp.json" ]] && force=1
   done < <(cm_profiles)
   [[ -n "${AGENTS_MULTI_DESKTOP_LAUNCH:-}" && -e "$CACHE/desktop-mcp.pending" ]] && force=1
-  if (( force == 0 )) && [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/shared/mcp/servers.json" "$config"/settings.json "$config"/profiles "$config"/servers.json "$config"/accounts.json \
+  if (( force == 0 )) && [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/shared/mcp/servers.json" "$config"/settings.json "$config"/profiles "$config"/servers.json "$config"/accounts.json "$config"/gateway.json \
         "$runtime"/*/settings.json "$runtime"/*/plugins/synced -newer "$stamp" -print -quit 2>/dev/null)" ]]; then
     return 0
   fi

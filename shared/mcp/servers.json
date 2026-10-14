@@ -163,6 +163,7 @@
       "_surfaces": [
         "cli"
       ],
+      "_gateway": false,
       "_note": "The hub's children for a coordinator (shared/mcp/lib/agents.ts): sessions of any profile at work in a project, every permission they need answered by the owner. No profile by default: a person's servers.json names the coordinator's (_profiles). Starting a child of another profile uses that profile's account. agent_answer and workflow_answer are in no list on purpose: they answer a child's permission request, which the owner decides first (AskUserQuestion); the permission mode judges the call, and the same for agent_adopt and workflow_adopt (taking an orphan: only when the owner wants it carried on).",
       "_allow": [
         "agent_list",

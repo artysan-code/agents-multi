@@ -35,6 +35,8 @@
 //              another one in its initialize answer
 //   _auto      tool names left to the permission mode on purpose: in no list, and the checks that look
 //              for unlisted tools (mcp health --probe, mcp_tools_test.ts) know it
+//   _gateway   false: the server stays a stdio entry of the launch config when the lazy gateway is on (the hub:
+//              it needs its session's folder and identity). `_bind` servers stay too, for the same reason
 //   _guard     { tool, hook }: a PreToolUse hook of shared/hooks that decides on each call of that tool
 //              (allow / ask / deny), wired by the same generated settings
 
@@ -45,6 +47,7 @@ import { CONFIG, HOME, MCP_TOOLS, REPO, RUNTIME } from "../lib/paths.ts";
 import { installation, type Mode } from "../lib/mode.ts";
 import { diffPatch, mergePatch } from "../lib/json-patch.ts";
 import { loadManifest, profileNames } from "../lib/profiles.ts";
+import { type GatewaySettings, loadGatewaySettings } from "./gateway-settings.ts";
 
 interface PerAccount {
   env?: Record<string, string>;
@@ -71,6 +74,8 @@ export type ServerCfg = Record<string, unknown> & {
   /** an npm package, installed at this version into MCP_TOOLS by `agents install`: the command is `node`
    *  on its `bin` (withNpm), `args` are the arguments after it */
   _npm?: NpmPackage;
+  /** false: this server stays a stdio entry of the profile's launch config, never behind the gateway */
+  _gateway?: boolean;
 };
 export interface NpmPackage {
   package: string;
@@ -96,6 +101,8 @@ export interface Registry {
   bus?: string;
   brainScopes?: Record<string, string>;
   launch?: LaunchPaths;
+  /** the lazy gateway (ADR 0008): when enabled, the servers that can go through it do */
+  gateway?: GatewaySettings;
 }
 /** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
 export interface RawRegistry {
@@ -166,7 +173,8 @@ export function withDeno(servers: Record<string, ServerCfg>, deno: string): Reco
  */
 export async function loadRegistry(): Promise<Registry> {
   const raw = await rawRegistry();
-  const deno = denoFor((await installation()).mode);
+  const mode = (await installation()).mode;
+  const deno = denoFor(mode);
   const r = { ...raw, servers: withNpm(withDeno(expandHome(raw.servers), deno), MCP_TOOLS) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) {
@@ -180,6 +188,7 @@ export async function loadRegistry(): Promise<Registry> {
     bus: Deno.env.get("DBUS_SESSION_BUS_ADDRESS"),
     brainScopes,
     launch: launchPaths(deno),
+    gateway: await loadGatewaySettings(mode),
   };
 }
 
