@@ -1,27 +1,35 @@
 // mcp.ts — The MCP registry against the surfaces, its validity, and the health of each server.
 
 import { plan } from "../../mcp/apply.ts";
+import { staleLaunchConfigs } from "../../mcp/config.ts";
 import { health } from "../../mcp/health.ts";
 import { loadRegistry, registryProblems } from "../../mcp/registry.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
-import { actionStep, closeStep, verifyStep } from "../repair.ts";
 
-/** The MCP registry against the surfaces, its validity, and the health of each server. */
+/** The MCP launch configs and Desktop's servers against the registry, its validity, and the health of each server. */
 export async function mcpChecks(): Promise<Check[]> {
   const [c, add] = checkList();
-  // --- MCP: registry against the surfaces, plus dependencies
+  // --- MCP: the CLI gets its servers at launch (mcp.json), Desktop's are written while it is closed
   try {
+    // out of date is not wrong: bin/claude rebuilds the file before it starts Claude (prelaunch.sh)
+    const stale = await staleLaunchConfigs();
+    add(
+      "mcp.launch",
+      "ok",
+      stale.length
+        ? `MCP launch config rebuilt at the next launch of ${stale.join(", ")}`
+        : "MCP launch config of every profile matches the registry",
+    );
+    // waiting for Desktop to be closed is not wrong either: claude-launch applies it when it opens the app
     const { changes } = await plan();
-    const keys = [...new Set(changes.map((x) => x.target.managedKey))];
-    if (!changes.length) add("mcp.sync", "ok", "MCP registry applied on CLI and Desktop");
-    else {add(
-        "mcp.sync",
-        "warn",
-        `MCP registry out of sync: ${changes.length} changes (${keys.join(", ")})`,
-        "agents mcp sync (with Claude closed)",
-        [closeStep(keys), actionStep("mcp-sync"), verifyStep],
-      );}
+    add(
+      "mcp.desktop",
+      "ok",
+      changes.length
+        ? `${changes.length} MCP changes for Desktop, written when it is next opened`
+        : "MCP servers of Claude Desktop match the registry",
+    );
     const problems = registryProblems(await loadRegistry());
     if (problems.length) {
       add(
@@ -32,7 +40,7 @@ export async function mcpChecks(): Promise<Check[]> {
       );
     }
   } catch (e) {
-    add("mcp.sync", "fail", `MCP registry: ${(e as Error).message}`);
+    add("mcp.registry", "fail", `MCP registry: ${(e as Error).message}`);
   }
   c.push(...await health());
   return c;

@@ -1,12 +1,14 @@
-// apply.ts — sync of the registry into each target's config file: plan the differences, apply them
-// with a backup, and say who could rewrite the file meanwhile.
+// apply.ts — the registry's projection into Claude Desktop's config files (claude_desktop_config.json),
+// the one surface that cannot be handed its servers at launch. The CLI's servers are not copied anywhere:
+// config.ts generates a file per profile that bin/claude passes with --mcp-config.
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
-// State (which servers were managed per target) lives in XDG state: it is per-machine, not in the repo.
-// Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory,
-// because .claude.json holds oauthAccount and backups left there have leaked through file sync before.
+// A Desktop that is running is skipped, never an error: the projection lands the next time it is
+// closed (claude-launch runs it just before opening the app). State (which servers were managed per
+// target) lives in XDG state: it is per-machine, not in the repo.
+// Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory.
 
 import { readJson, writeAtomic } from "../lib/fs.ts";
-import { RUNTIME, STATE } from "../lib/paths.ts";
+import { CACHE, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 import { type Target, wanted } from "./placement.ts";
@@ -21,15 +23,16 @@ export interface Change {
 const STATE_FILE = `${STATE}/mcp-state.json`;
 const BACKUPS = `${STATE}/mcp-sync-backups`;
 const KEEP = 5;
+/** Present while a Desktop projection waits for its app to be closed: claude-launch looks for it (prelaunch.sh). */
+const PENDING = `${CACHE}/desktop-mcp.pending`;
 
 /**
- * Every config file the sync manages: per profile, its CLI `.claude.json` and its Desktop
- * `claude_desktop_config.json`. The files may not exist (profile or Desktop not installed).
+ * Every Desktop config file the projection manages, one per profile. The files may not exist
+ * (profile or Desktop not installed).
  */
 export async function targets(): Promise<Target[]> {
   const t: Target[] = [];
   for (const p of await profileNames()) {
-    t.push({ profile: p, surface: "cli", path: `${RUNTIME}/${p}/.claude.json`, managedKey: `cli:${p}` });
     t.push({
       profile: p,
       surface: "desktop",
@@ -39,8 +42,14 @@ export async function targets(): Promise<Target[]> {
   }
   return t;
 }
-async function loadState(): Promise<Record<string, string[]>> {
+/** Which servers each target had managed at the last write (`desktop:<p>`; `cli:<p>` is the old
+ *  projection into .claude.json, which config.ts retires). */
+export async function loadState(): Promise<Record<string, string[]>> {
   return await readJson<Record<string, string[]>>(STATE_FILE) ?? {};
+}
+export async function saveState(state: Record<string, string[]>) {
+  await Deno.mkdir(STATE, { recursive: true });
+  await Deno.writeTextFile(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
 }
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -69,7 +78,8 @@ export async function plan(): Promise<{ changes: Change[]; skipped: Target[] }> 
   return { changes, skipped };
 }
 
-async function backup(t: Target) {
+/** A copy of a config file before it is rewritten, in XDG state (600, the last 5 of each key). */
+export async function backup(t: Pick<Target, "path" | "managedKey">) {
   await Deno.mkdir(BACKUPS, { recursive: true, mode: 0o700 });
   const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
   const dest = `${BACKUPS}/${t.managedKey.replace(":", "-")}.${stamp}.json`;
@@ -81,7 +91,8 @@ async function backup(t: Target) {
   for (const n of old) await Deno.remove(`${BACKUPS}/${n}`);
 }
 
-/** Who could rewrite the file underneath us: the profile's CLI/embedded sessions, or the Desktop app. */
+/** Who could rewrite a config underneath us, or be hurt by the code being replaced: every open CLI/embedded
+ *  session (`cli:<profile>`) and Desktop (`desktop:<profile>`) — what an update waits on. */
 export async function blockers(): Promise<Record<string, string[]>> {
   const r = await running();
   const out: Record<string, string[]> = {};
@@ -95,29 +106,27 @@ export async function blockers(): Promise<Record<string, string[]>> {
 }
 
 /**
- * Writes the registry into every existing target: merges only the managed servers, backs up each
- * file first, writes atomically and records which servers it manages.
+ * Writes the registry's Desktop servers into every existing Desktop config: merges only the managed
+ * servers, backs up each file first, writes atomically and records which servers it manages. A
+ * profile whose Desktop is running is left for later.
  *
- * @param opts.force skip the check for running instances that would rewrite the config
- * @param opts.mode the installation's mode to place servers for (loadRegistry)
- * @returns the changes applied
- * @throws when running instances would rewrite a touched config (without `force`)
+ * @returns the changes applied, and the targets skipped because their Desktop was open
  */
-export async function apply(opts: { force?: boolean } = {}) {
+export async function apply(): Promise<{ changes: Change[]; deferred: string[] }> {
   const reg = await loadRegistry();
   const state = await loadState();
   const { changes } = await plan();
-  const block = opts.force ? {} : await blockers();
-  const touched = new Set(changes.map((c) => c.target.managedKey));
-  const blocked = [...touched].filter((k) => block[k]);
-  if (blocked.length) {
-    const msg = blocked.map((k) => `${k} (${block[k].join(", ")})`).join("; ");
-    throw new Error(`running instances would rewrite this config: ${msg}. Close them and retry, or pass --force.`);
-  }
+  const open = new Set(Object.keys(await blockers()));
+  const done: Change[] = [];
+  const deferred: string[] = [];
   for (const t of await targets()) {
-    const mine = changes.filter((c) => c.target.managedKey === t.managedKey);
     const conf = await readJson<Record<string, unknown> & { mcpServers?: Record<string, unknown> }>(t.path);
     if (!conf) continue;
+    const mine = changes.filter((c) => c.target.managedKey === t.managedKey);
+    if (mine.length && open.has(t.managedKey)) {
+      deferred.push(t.managedKey);
+      continue;
+    }
     const want = wanted(reg, t);
     if (mine.length) {
       const merged: Record<string, unknown> = { ...(conf.mcpServers ?? {}) };
@@ -126,12 +135,16 @@ export async function apply(opts: { force?: boolean } = {}) {
       conf.mcpServers = merged;
       await backup(t);
       await writeAtomic(t.path, JSON.stringify(conf, null, 2) + "\n");
+      done.push(...mine);
     }
     state[t.managedKey] = Object.keys(want).sort();
   }
-  await Deno.mkdir(STATE, { recursive: true });
-  await Deno.writeTextFile(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
-  return changes;
+  await saveState(state);
+  if (deferred.length) {
+    await Deno.mkdir(CACHE, { recursive: true });
+    await Deno.writeTextFile(PENDING, deferred.join("\n") + "\n");
+  } else await Deno.remove(PENDING).catch(() => {});
+  return { changes: done, deferred };
 }
 
 /** One line for a change: target key, +/~/− and the server name. */

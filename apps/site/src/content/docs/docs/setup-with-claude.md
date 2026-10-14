@@ -27,7 +27,7 @@ install, Claude Desktop, the brain and the final checks.
 - **It asks before anything hard to undo**, and shows the plan first (`agents install --dry-run`).
 - **It never sees your secrets.** Passphrases, tokens, TOTP secrets and the vault's recovery code are
   typed by you, in your own terminal; the session never asks for them in chat.
-- **It stops when Claude has to be closed.** `install` and `agents mcp sync` run with every Claude
+- **It stops when Claude has to be closed.** `install` runs with every Claude
   closed, that session included: it gives you the commands and you run them. A new session picks up
   from `agents doctor`.
 - **It backs up first.** Your existing Claude Code settings move aside, never deleted.

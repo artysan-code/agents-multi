@@ -7,8 +7,8 @@ export type RepairStep =
   | { kind: "action"; action: string; args?: Record<string, string>; cmd: string }
   /** Claude closed where something would write under it: the console lists who (close-claude.ts) and
    *  closes them on request, or waits for the person to; `text` is the same said by hand. `for` is the
-   *  MCP sync, every Desktop, or one profile's (`desktop:<profile>`). */
-  | { kind: "close"; for: "install" | "mcp" | "desktop" | `desktop:${string}`; text: string }
+   *  install a round left waiting, every Desktop, or one profile's (`desktop:<profile>`). */
+  | { kind: "close"; for: "install" | "desktop" | `desktop:${string}`; text: string }
   /** Claude Code's sign-in for a profile, in a terminal the console opens; `text` is the same by hand. */
   | { kind: "login"; profile: string; text: string }
   | { kind: "verify" };

@@ -66,7 +66,6 @@ function deps(over: Partial<Deps> = {}) {
     protectedPids: () => Promise.resolve(new Set([11])), // the console runs under session 11
     ages: () => Promise.resolve(new Map()),
     pending: () => Promise.resolve("abc123"),
-    mcpKeys: () => Promise.resolve(["desktop:b"]),
     signal: (pid, sig) => {
       sent.push([pid, sig]);
       if (sig === "SIGKILL" || pid !== 12) alive.delete(pid); // 12 ignores TERM
@@ -115,21 +114,6 @@ Deno.test("close claude: closed by hand while the dialog was open, the step succ
   assertEquals([r.ok, r.remaining, sent], [true, [], []]);
 });
 
-Deno.test("close claude: for the MCP sync only the surfaces it would write are listed and closed", async () => {
-  const { d, sent } = deps({ pending: () => Promise.resolve(null) });
-  const p = await closePlan("mcp", d);
-  assertEquals([p.offer, p.blockers.map((b) => b.pid)], [true, [20]]);
-  const r = await closeSessions("SIGTERM", "mcp", 1000, d);
-  assertEquals([r.ok, sent, r.reopen], [true, [[20, "SIGTERM"]], ["b"]]);
-});
-
-Deno.test("close claude: with nothing for the MCP sync to write, nothing is offered or signalled", async () => {
-  const { d, sent } = deps({ mcpKeys: () => Promise.resolve([]) });
-  assertEquals((await closePlan("mcp", d)).offer, false);
-  const r = await closeSessions("SIGTERM", "mcp", 1000, d);
-  assertEquals([r.ok, sent], [false, []]);
-});
-
 Deno.test("close claude: a Desktop rollback closes every Desktop, a rebuild only its profile's", async () => {
   const { d, sent } = deps({ pending: () => Promise.resolve(null) });
   assertEquals((await closePlan("desktop", d)).blockers.map((b) => b.pid), [20]);
@@ -139,12 +123,12 @@ Deno.test("close claude: a Desktop rollback closes every Desktop, a rebuild only
 });
 
 Deno.test("close claude: only purposes the server knows are accepted", () => {
-  assertEquals([parsePurpose(undefined), parsePurpose("mcp"), parsePurpose("desktop:otacon")], [
+  assertEquals([parsePurpose(undefined), parsePurpose("desktop"), parsePurpose("desktop:otacon")], [
     "install",
-    "mcp",
+    "desktop",
     "desktop:otacon",
   ]);
-  assertEquals([parsePurpose("desktop:../x"), parsePurpose("all"), parsePurpose(3)], [null, null, null]);
+  assertEquals([parsePurpose("desktop:../x"), parsePurpose("all"), parsePurpose("mcp")], [null, null, null]);
 });
 
 Deno.test("close claude: reopen starts only profiles the manifests declare, through the one launcher", async () => {

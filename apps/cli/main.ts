@@ -19,7 +19,8 @@ import { install } from "./install.ts";
 import { init } from "./init.ts";
 import { syncAllSettings } from "./settings.ts";
 import { printStatus, status } from "./status.ts";
-import { apply, blockers, describe, plan } from "./mcp/apply.ts";
+import { describe, plan } from "./mcp/apply.ts";
+import { staleLaunchConfigs } from "./mcp/config.ts";
 import { health } from "./mcp/health.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
 import { serve } from "./console/server.ts";
@@ -111,31 +112,32 @@ switch (cmd) {
   case "mcp": {
     const sub = rest[0] ?? "check";
     if (sub === "health") Deno.exit(printDoctor(await health({ live: flag("--probe") })));
-    const { changes, skipped } = await plan();
-    for (const t of skipped) console.log(`  ${ANSI.d}skipping ${t.managedKey}: ${t.path} is missing${ANSI.x}`);
-    if (!changes.length) {
-      console.log("MCP registry already applied on every surface");
+    if (sub === "check") {
+      // the launch configs against the registry, Desktop's servers against what Desktop has
+      const stale = await staleLaunchConfigs();
+      for (const p of stale) {
+        console.log(`  cli:${p.padEnd(13)} launch config out of date (rebuilt at the next launch)`);
+      }
+      const { changes, skipped } = await plan();
+      for (const t of skipped) console.log(`  ${ANSI.d}skipping ${t.managedKey}: ${t.path} is missing${ANSI.x}`);
+      for (const c of changes) console.log(`  ${describe(c)}`);
+      if (!stale.length && !changes.length) console.log("MCP launch configs and Desktop servers match the registry");
+      else console.log(`\nagents mcp sync brings them up to date (no Claude needs closing)`);
       break;
-    }
-    for (const c of changes) console.log(`  ${describe(c)}`);
-    if (sub === "check" || flag("--dry-run")) {
-      console.log(`\n${changes.length} pending changes → agents mcp sync (with Claude closed)`);
-      Deno.exit(1);
     }
     if (sub !== "sync") {
       console.error(`mcp: unknown subcommand "${sub}" (check|sync|health)`);
       Deno.exit(2);
     }
-    try {
-      await apply({ force: flag("--force") });
-      // the registry's _deny/_ask live in each profile's generated settings.json
-      for (const r of await syncAllSettings()) if (r.wrote) console.log(`  ${r.profile}/settings.json regenerated`);
-      console.log(`\n${changes.length} changes applied. Restart the affected Claude instances to load them.`);
-    } catch (e) {
-      console.error(`\n! ${(e as Error).message}`);
-      const b = await blockers();
-      if (Object.keys(b).length) console.error(`  running: ${JSON.stringify(b)}`);
-      Deno.exit(2);
+    for (const r of await syncAllSettings()) {
+      if (r.wrote) console.log(`  ${r.profile}/settings.json regenerated`);
+      if (r.mcp?.wrote) console.log(`  ${r.profile}/mcp.json regenerated`);
+      if (r.mcp?.retired.length) console.log(`  ${r.profile}: took ${r.mcp.retired.join(", ")} out of .claude.json`);
+      if (r.mcp?.error) console.error(`  ${r.profile}: ${r.mcp.error}`);
+    }
+    const left = await plan();
+    if (left.changes.length) {
+      console.log(`  Desktop: ${left.changes.length} changes wait for its window to be closed (applied when it opens)`);
     }
     break;
   }
@@ -242,7 +244,7 @@ switch (cmd) {
           --probe: one tiny request per profile, to see that its Claude Code login works
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
-  mcp     check|sync|health [--probe]   MCP registry to .claude.json (cli) and claude_desktop_config.json (desktop); --force ignores running instances; --probe really starts each server and waits for initialize
+  mcp     check|sync|health [--probe]   MCP registry to each profile's mcp.json (cli, passed with --mcp-config) and claude_desktop_config.json (desktop, while closed); --probe really starts each server and waits for initialize
   update  [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and agents-multi itself (--auto: what the timer runs)
   self-update [--check [--json]] [--settle] [--quiet]   agents-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]

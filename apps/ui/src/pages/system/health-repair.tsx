@@ -78,15 +78,10 @@ const openLogin = (profile: string) =>
 
 const action = (name: string, cmd: string): RepairStep => ({ kind: "action", action: name, cmd });
 
-/** «Apply» the MCP registry: straight away when nothing is in the way, else through the steps that
- *  close the Claudes whose configuration the sync writes. */
-export async function syncMcp(): Promise<void> {
-  const p = await api.closePlan("mcp").catch(() => null);
-  if (!p?.offer) return runAction("mcp-sync");
-  openSteps(t("cmd.mcpSync"), t("rep.mcpMsg"), [
-    { kind: "close", for: "mcp", text: "Close the Claudes in the way" },
-    action("mcp-sync", "agents mcp sync"),
-  ], { auto: true });
+/** «Apply» the MCP registry: the launch configs are rebuilt and Claude picks them up at its next start,
+ *  so nothing has to be closed. */
+export function syncMcp(): Promise<void> {
+  return runAction("mcp-sync");
 }
 
 /** Claude Desktop back to the previous version, every Desktop closed first. */
@@ -254,9 +249,7 @@ function Repair({ id, msg, steps, auto }: { id: string | null; msg: string; step
               : s.kind === "login"
               ? t("rep.loginStep", { p: s.profile })
               : s.kind === "close"
-              ? (s.for === "mcp"
-                ? t("rep.closeStep")
-                : s.for === "install"
+              ? (s.for === "install"
                 ? t("rep.closeAll")
                 : t("rep.closeDesktop", { p: s.for.slice("desktop:".length) || t("rep.every") }))
               : t("rep.verifyStep")}
@@ -271,7 +264,7 @@ function Repair({ id, msg, steps, auto }: { id: string | null; msg: string; step
             )}
             {state[i] === "waiting" && s.kind === "close" && holders && (
               <div class="rep-close">
-                <p class="sub">{t(holders.stuck ? "cc.stuck" : s.for === "mcp" ? "rep.closeIntro" : s.for === "install" ? "cc.intro" : "rep.closeIntroDesktop")}</p>
+                <p class="sub">{t(holders.stuck ? "cc.stuck" : s.for === "install" ? "cc.intro" : "rep.closeIntroDesktop")}</p>
                 <BlockerList list={holders.list} />
                 {holders.stuck && <p class="sub">{t("cc.forceWarn")}</p>}
                 {holders.list.every((b) => b.protected) && <p class="sub">{t("rep.onlyProtected")}</p>}

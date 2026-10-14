@@ -22,7 +22,7 @@ export const ACTIONS: Record<string, ActionDef> = {
   "doctor": { args: ["doctor"] },
   "sync-fetch": { args: ["sync", "--fetch"], timeoutMs: 30000 },
   "mcp-check": { args: ["mcp", "check"] },
-  "mcp-sync": { args: ["mcp", "sync"], opts: { force: ["--force"] } },
+  "mcp-sync": { args: ["mcp", "sync"] },
   "install-dry": { args: ["install", "--dry-run"] },
   // a first install builds the console's interface in a checkout and seeds the Deno cache in the app
   "install": { args: ["install"], timeoutMs: 300000 },

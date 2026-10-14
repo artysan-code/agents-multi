@@ -10,7 +10,11 @@
 # 2. pin CLAUDE_CONFIG_DIR to the profile and disable the native auto-updater
 # 3. with `disableAccountMcp` in the manifest, pass a --settings overlay that switches off the
 #    claude.ai connectors and the organisation's synced plugins
-# 4. `<launcher> update` is redirected to `agents update`: the native updater would rewrite
+# 4. pass the profile's MCP servers with --mcp-config (the generated <profile>/mcp.json, rebuilt by
+#    prelaunch.sh when the registry, accounts or profiles change): nothing is copied into Claude's own
+#    files, so there is no registry to keep in step with them. Not --strict-mcp-config: the project's
+#    .mcp.json, the plugins' servers and any the person added by hand stay.
+# 5. `<launcher> update` is redirected to `agents update`: the native updater would rewrite
 #    ~/.local/bin/claude and leave claude-bin behind
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -49,4 +53,7 @@ if cm_flag "$PROFILE" disableAccountMcp &&
    cm_account_mcp_settings "$CONFIG_DIR" > "$CONFIG_DIR/account-mcp-off.settings.json" 2>/dev/null; then
   OVERLAY=(--settings "$CONFIG_DIR/account-mcp-off.settings.json")
 fi
-exec env CLAUDE_CONFIG_DIR="$CONFIG_DIR" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "${OVERLAY[@]}" "$@"
+# If prelaunch could not build it (no Deno), Claude starts without the registry's servers.
+MCP=()
+[[ -f "$CONFIG_DIR/mcp.json" ]] && MCP=(--mcp-config "$CONFIG_DIR/mcp.json")
+exec env CLAUDE_CONFIG_DIR="$CONFIG_DIR" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "${OVERLAY[@]}" "${MCP[@]}" "$@"

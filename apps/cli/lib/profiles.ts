@@ -102,7 +102,7 @@ export async function ownItems(p: Profile, kind: Kind) {
 export async function profileInfo(p: Profile) {
   const dir = `${RUNTIME}/${p}`;
   const link = async (name: string) => await readlink(`${dir}/${name}`);
-  const conf = await readJson<{ mcpServers?: Record<string, unknown>; oauthAccount?: { emailAddress?: string } }>(
+  const conf = await readJson<{ oauthAccount?: { emailAddress?: string } }>(
     `${dir}/.claude.json`,
   );
   const plugins = await readJson<{ plugins?: Record<string, unknown> }>(`${dir}/plugins/installed_plugins.json`);
@@ -141,6 +141,7 @@ export async function profileInfo(p: Profile) {
     }
   }
   const deskDir = await desktopDir(p, manifest);
+  const launchConf = await readJson<{ mcpServers?: Record<string, unknown> }>(`${dir}/mcp.json`);
   const desktopConf = await readJson<{ mcpServers?: Record<string, unknown> }>(`${deskDir}/claude_desktop_config.json`);
   return {
     dir,
@@ -154,7 +155,8 @@ export async function profileInfo(p: Profile) {
     mounted,
     credentials: creds ? { present: true, mode: mode(creds) } : { present: false, mode: null },
     account: conf?.oauthAccount?.emailAddress ?? null,
-    mcp: Object.keys(conf?.mcpServers ?? {}),
+    /** the servers its launch config mounts (mcp/config.ts), not what is in .claude.json */
+    mcp: Object.keys(launchConf?.mcpServers ?? {}),
     mcpDesktop: Object.keys(desktopConf?.mcpServers ?? {}),
     /** false until this profile's Desktop has been opened once: no config to apply servers to yet */
     desktopConfig: !!desktopConf,
