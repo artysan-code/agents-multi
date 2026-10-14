@@ -65,7 +65,7 @@ Without the wizard (or guided by a Claude Code session following [ONBOARDING.md]
 5. Optionally your own brain: an instance of `apps/brain/` on your server (`apps/brain/README.md`), its
    address as a `brain` account in `accounts.json`, then `agents brain-login` (or Sign in, console ›
    Connections) puts its token and backup key in the vault.
-6. `agents mcp sync` with Claude closed, then `agents doctor`.
+6. `agents mcp sync`, then `agents doctor` (no Claude needs closing for the sync).
 
 `install` is idempotent and reversible: it never deletes real content, it moves it aside to
 `*.pre-repo-<stamp>` and says so; `install --dry-run` shows the plan. OAuth credentials are
@@ -221,7 +221,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears           |
 | `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console  |
 | `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                               |
-| `agents mcp check\|sync\|health`                                | apply the MCP registry to every profile and surface; `health` verifies binaries, files and dependencies, `--probe` really starts each server                  |
+| `agents mcp check\|sync\|health`                                | write the MCP launch configs and Desktop's servers; `health` verifies binaries, files and dependencies, `--probe` really starts each server                   |
 | `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                    |
 | `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                        |
 | `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                         |
@@ -389,13 +389,23 @@ template nobody uses is not checked by the doctor or `mcp health`, so a missing 
 someone does not use is not their problem. A test keeps the catalogue off for a fresh configuration.
 Per server, `_profiles` (default: all) and `_surfaces`:
 
-- `cli` → the profile's `.claude.json`, read by Claude Code and by the copy embedded in Desktop
-- `desktop` → that profile's `claude_desktop_config.json`, read by the Desktop chat
+- `cli` → the profile's generated `~/.agents-multi/<profile>/mcp.json`, which `bin/claude` passes with
+  `--mcp-config` at every start (so the hub's children get it too, they start through the launcher).
+  Nothing is copied into Claude's own `.claude.json`: there is no copy to fall out of step. Claude merges
+  it over its own servers, the project's `.mcp.json` and the plugins' (no `--strict-mcp-config`), and
+  on a name clash the registry wins. The file is rebuilt before Claude starts whenever the registry,
+  `accounts.json` or the profiles change (`prelaunch.sh`, with the settings).
+- `desktop` → that profile's `claude_desktop_config.json`, read by the Desktop chat. Desktop cannot be
+  handed servers at launch, so this one is still a projection: a non-destructive merge (registry-managed
+  servers only, hand-added ones survive), written while that Desktop is closed — never an error when it
+  is open: `claude-launch` applies it just before opening the app.
 
-`agents mcp sync` applies the registry to every surface with a non-destructive merge: only
-registry-managed servers are touched, hand-added ones survive. It refuses to run while an instance
-that would rewrite the file is open (`--force` overrides), backs up into
-`~/.local/state/agents-multi/`, and keeps its per-machine state out of the repository.
+`agents mcp sync` rebuilds the launch configs and Desktop's servers at once (no Claude needs closing;
+a Desktop that is open waits), and on first run takes the servers an older version projected into
+`.claude.json` out of it (only those its per-machine state names, with a backup into
+`~/.local/state/agents-multi/`, and only while no Claude of that profile is open). `agents mcp check`
+shows what differs. The Claude Code that Desktop embeds (its Code tab) no longer sees the registry's
+servers: it reads `.claude.json`, not the launch config.
 
 `mcp health` checks binaries, files, lock files and dependencies. `mcp health --probe` actually
 starts each server and waits for its `initialize` reply, which catches what static checks cannot —
