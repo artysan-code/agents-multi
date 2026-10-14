@@ -74,7 +74,7 @@ jobs:
 
       - name: the version is the tag's
         run: |
-          # Deno, not jq: the image has no jq until the tools step
+          # Deno: the image has no jq
           version="$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("apps/desktop/package.json")).version)')"
           [[ "v$version" == "$GITHUB_REF_NAME" ]] || { echo "the tag $GITHUB_REF_NAME is not v$version" >&2; exit 1; }
           echo "VERSION=$version" >>"$GITHUB_ENV"
@@ -87,7 +87,7 @@ jobs:
       - name: tools
         run: |
           apt-get update -qq
-          apt-get install -y -qq --no-install-recommends jq shellcheck file patchelf \
+          apt-get install -y -qq --no-install-recommends file patchelf \
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev \
             libayatana-appindicator3-dev zstd >/dev/null
           curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
@@ -101,18 +101,19 @@ jobs:
           path: |
             ~/.cache/deno
             ~/.local/share/pnpm/store
+            ~/.cache/node/corepack
             ~/.cargo/registry
             apps/desktop/src-tauri/target
             !apps/desktop/src-tauri/target/release/bundle
           key: app-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock') }}
           restore-keys: app-
 
-      # The static gate only (formatting, lint, types, shellcheck, and the Rust's fmt and clippy, which
-      # only this job can run: it has WebKitGTK). Tests, the MCP probe, the secret scan and the UI and
-      # site builds already passed on these commits: in CI on `dev`, and in `deno task ship` before the
-      # tag; the release commit on top changes only the manifests and the CHANGELOG.
+      # The Rust's fmt and clippy only: this job alone has WebKitGTK. Everything else in the gate (formatting,
+      # lint, types, shellcheck, tests, the MCP probe, the secret scan, the UI and site builds) already passed
+      # on these commits: in CI on `dev`, and in `deno task ship` before the tag; the release commit on top
+      # changes only the manifests and the CHANGELOG.
       - name: check
-        run: bash scripts/check.sh
+        run: bash scripts/check.sh --desktop
 
       - name: build
         env:
@@ -148,7 +149,7 @@ jobs:
             git checkout --quiet -B release origin/release
             deno run --allow-read --allow-write "$tag_scripts/app-release.ts" channels dist-app/latest.json
             if [[ "$VERSION" != *-beta.* && "$VERSION" != *-rc.* ]]; then
-              if [[ -n "$(jq -r '.license // ""' apps/desktop/release.json)" ]]; then
+              if [[ -n "$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("apps/desktop/release.json")).license ?? "")')" ]]; then
                 deno run --allow-read --allow-write "$tag_scripts/aur.ts" render "$VERSION" \
                   "$(sha256sum "dist-app/agents-multi_${VERSION}_amd64.deb" | cut -d' ' -f1)"
               else
