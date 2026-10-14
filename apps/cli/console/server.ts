@@ -40,6 +40,7 @@ import { UI_DIST } from "../ui.ts";
 import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
 import { answer, type Auth, gate, newToken, publishToken, Tickets, tokenPath } from "./token.ts";
 import { jobsFor, startSchedule } from "./schedule.ts";
+import { superviseGateway } from "./gateway.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
@@ -400,6 +401,8 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     }));
     ac.signal.addEventListener("abort", stop);
   }
+  // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
+  superviseGateway(ac.signal, code);
   if (opts.open) {
     // a one-use ticket, not the token: the command line of xdg-open is readable by other users
     const entryUrl = `${url}/?k=${auth.tickets.issue()}`;

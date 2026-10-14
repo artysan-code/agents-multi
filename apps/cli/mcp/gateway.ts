@@ -3,13 +3,14 @@
 // cache. The gateway itself is shared/mcp/gateway/; the console keeps it running (console/gateway.ts).
 
 import {
-  bearer as _bearer,
+  type CachedList,
   cacheFile,
   cacheKey,
   type GatewayConfig,
   gatewayUrl,
   usableCache,
 } from "../../../shared/mcp/gateway/core.ts";
+import { describe, startBackend } from "../../../shared/mcp/gateway/backend.ts";
 import { writeAtomic } from "../lib/fs.ts";
 import { newToken } from "../console/token.ts";
 import { isHttp, type Registry } from "./registry.ts";
@@ -153,4 +154,53 @@ export function gatewayCommand(g: GatewaySettings, deno: string, home: string): 
     `${dir}/server.ts`,
     backendsPath(g.runtime),
   ];
+}
+
+/** Builds the tool lists the cache lacks by starting each server once and asking it (what the gateway does
+ *  on a first start, without waiting for a session to pay for it). Lists no entry names are removed.
+ *  @returns what was built, and what could not be (name: reason) */
+export async function warmCache(
+  cfg: GatewayConfig,
+  runtime: string,
+  opts: { dry?: boolean } = {},
+): Promise<{ built: string[]; failed: string[]; removed: string[] }> {
+  const dir = cacheDirOf(runtime);
+  const out = { built: [] as string[], failed: [] as string[], removed: [] as string[] };
+  const seen = new Set<string>();
+  for (const p of Object.values(cfg.profiles)) {
+    for (const [name, s] of Object.entries(p.servers)) {
+      const file = cacheFile(dir, name, s.key);
+      if (seen.has(file)) continue;
+      seen.add(file);
+      if (usableCache(JSON.parse(await Deno.readTextFile(file).catch(() => "null")), s.key)) continue;
+      if (opts.dry) {
+        out.built.push(name);
+        continue;
+      }
+      try {
+        const r = await startBackend(s, Deno.env.toObject());
+        try {
+          const list = await describe(r.client);
+          await Deno.mkdir(dir, { recursive: true });
+          const body: CachedList = { key: s.key, at: new Date().toISOString(), ...list };
+          await Deno.writeTextFile(`${file}.tmp`, JSON.stringify(body));
+          await Deno.rename(`${file}.tmp`, file);
+          out.built.push(`${name} (${list.tools.length} tools)`);
+        } finally {
+          await r.close();
+        }
+      } catch (e) {
+        out.failed.push(`${name}: ${(e as Error).message}`);
+      }
+    }
+  }
+  const files: string[] = [];
+  try {
+    for await (const e of Deno.readDir(dir)) if (e.isFile) files.push(e.name);
+  } catch { /* no cache folder yet */ }
+  for (const f of staleCacheFiles(files, cfg)) {
+    if (!opts.dry) await Deno.remove(`${dir}/${f}`).catch(() => {});
+    out.removed.push(f);
+  }
+  return out;
 }

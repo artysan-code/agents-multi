@@ -24,6 +24,10 @@ import { staleLaunchConfigs } from "./mcp/config.ts";
 import { health } from "./mcp/health.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
 import { serve } from "./console/server.ts";
+import { gatewayCli } from "./console/gateway.ts";
+import { gatewayConfig, syncGateway, warmCache } from "./mcp/gateway.ts";
+import { loadRegistry } from "./mcp/registry.ts";
+import { codeVersion } from "./codeversion.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
 import { codexCommand } from "./codex.ts";
@@ -126,8 +130,26 @@ switch (cmd) {
       else console.log(`\nagents mcp sync brings them up to date (no Claude needs closing)`);
       break;
     }
+    if (sub === "warm") {
+      // the gateway's tool lists, built now instead of by the first session that needs them (ADR 0008)
+      const reg = await loadRegistry();
+      if (!reg.gateway?.enabled) {
+        console.log("the MCP gateway is off: nothing to warm");
+        break;
+      }
+      await syncGateway(reg, await codeVersion());
+      const r = await warmCache(await gatewayConfig(reg, await codeVersion()), reg.gateway.runtime, {
+        dry: flag("--dry-run"),
+      });
+      for (const b of r.built) console.log(`  ${flag("--dry-run") ? "would build" : "built"} ${b}`);
+      for (const f of r.failed) console.error(`  failed ${f}`);
+      for (const f of r.removed) console.log(`  ${flag("--dry-run") ? "would remove" : "removed"} cache/${f}`);
+      if (!r.built.length && !r.failed.length && !r.removed.length) console.log("every tool list is cached");
+      if (r.failed.length) Deno.exit(1);
+      break;
+    }
     if (sub !== "sync") {
-      console.error(`mcp: unknown subcommand "${sub}" (check|sync|health)`);
+      console.error(`mcp: unknown subcommand "${sub}" (check|sync|health|warm)`);
       Deno.exit(2);
     }
     for (const r of await syncAllSettings()) {
@@ -142,6 +164,9 @@ switch (cmd) {
     }
     break;
   }
+  case "gateway":
+    Deno.exit(await gatewayCli(rest));
+    break;
   case "codex":
     Deno.exit(await codexCommand(rest));
     break;
@@ -248,7 +273,7 @@ switch (cmd) {
           --probe: one tiny request per profile, to see that its Claude Code login works
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
-  mcp     check|sync|health [--probe]   MCP registry to each profile's mcp.json (cli, passed with --mcp-config) and claude_desktop_config.json (desktop, while closed); --probe really starts each server and waits for initialize
+  mcp     check|sync|warm|health [--probe]   MCP registry to each profile's mcp.json (cli, passed with --mcp-config) and claude_desktop_config.json (desktop, while closed); --probe really starts each server and waits for initialize
   update  [--cli|--desktop|--codex|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and agents-multi itself (--auto: what the timer runs)
   self-update [--check [--json]] [--settle] [--quiet]   agents-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
   codex   <profile> [args…] | limits <profile>   Codex (OpenAI) with a profile's own account (login: agents codex <profile> login); its usage windows
@@ -265,6 +290,7 @@ switch (cmd) {
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
+  gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)
   serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
   version                     the version of agents-multi (also --version, -V)
 
