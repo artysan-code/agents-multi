@@ -16,18 +16,23 @@ export function registerRoutineTools(server: McpServer) {
   server.registerTool("routine_add", {
     description: "Schedule an unattended job: a child (`profile`, `task`) or a saved plan (`workflow`: a plan.json) " +
       "in `folder` (a git repository under home), at a time. Triggers: `at` (one-shot: `02:00` is the next 02:00, " +
-      "`2026-10-15T02:00`, `+90m`), `cron` (five fields, local time), `on` (`run-done` / `run-failed`, a workflow " +
-      "run of the project ending). It runs in a worktree on its own branch under the repository's run policy: " +
+      "`2026-10-15T02:00`, `+90m`), `cron` (five fields, local time), `on` (`run-done` / `run-failed`, a workflow run of the project ending; `limit-reset`, an account's window resetting). It runs in a worktree on its own branch under the repository's run policy: " +
       "commits yes; push only to that branch and the development branch, never main or release; outward actions " +
       "wait for the owner. Ask the owner before you schedule.",
     inputSchema: {
       name: z.string().optional(),
       at: z.string().optional(),
       cron: z.string().optional(),
-      on: z.enum(["run-done", "run-failed"]).optional(),
+      on: z.enum(["run-done", "run-failed", "limit-reset"]).optional(),
+      account: z.string().optional().describe(
+        "with `on: limit-reset`: only when this account (profile/provider) resets",
+      ),
       plan_name: z.string().optional().describe("with `on`: only runs of the plan with this name"),
       folder: z.string().describe("the repository's folder, e.g. ~/work/acme/site"),
-      profile: z.string().optional().describe("the profile whose account runs the child"),
+      profile: z.string().optional().describe(
+        "the profile whose account runs the child; without it the project's default account (account_status)",
+      ),
+      provider: z.enum(["claude", "codex"]).optional(),
       model: z.string().optional(),
       workflow: z.string().optional().describe("a plan.json (path, relative to the folder): {{task}} in its prompts"),
       task: z.string().optional().describe("what the child has to do, complete"),
@@ -37,10 +42,12 @@ export function registerRoutineTools(server: McpServer) {
     name?: string;
     at?: string;
     cron?: string;
-    on?: "run-done" | "run-failed";
+    on?: "run-done" | "run-failed" | "limit-reset";
+    account?: string;
     plan_name?: string;
     folder: string;
     profile?: string;
+    provider?: "claude" | "codex";
     model?: string;
     workflow?: string;
     task?: string;
@@ -50,7 +57,6 @@ export function registerRoutineTools(server: McpServer) {
       if ([i.at, i.cron, i.on].filter((x) => x !== undefined).length !== 1) {
         throw new Error("exactly one of at, cron, on");
       }
-      if (!i.workflow && !i.profile) throw new Error("a profile (for a child) or a workflow (a plan)");
       const scope = await scopeOf();
       const r = await addRoutine({
         name: i.name,
@@ -60,10 +66,12 @@ export function registerRoutineTools(server: McpServer) {
           ? { kind: "cron", expr: i.cron }
           : i.at !== undefined
           ? { kind: "at", at: parseAt(i.at, new Date()) }
+          : i.on === "limit-reset"
+          ? { kind: "event", on: i.on, ...(i.account ? { account: i.account } : {}) }
           : { kind: "event", on: i.on!, ...(i.plan_name ? { plan: i.plan_name } : {}) },
         action: i.workflow
           ? { kind: "workflow", plan: i.workflow, task: i.task }
-          : { kind: "agent", profile: i.profile!, task: i.task ?? "", model: i.model },
+          : { kind: "agent", profile: i.profile ?? "", provider: i.provider, task: i.task ?? "", model: i.model },
         by: scope.me,
       });
       if (r.project !== scope.project && scope.me) {

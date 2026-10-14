@@ -5,7 +5,9 @@
 // stopped. Its output goes to the backend's (the app's backend.log).
 
 import { desktopNotify } from "../notify.ts";
-import { RUNTIME } from "../lib/paths.ts";
+import { CONFIG, RUNTIME, STATE } from "../lib/paths.ts";
+import { allLimits } from "../../../shared/mcp/lib/providers.ts";
+import { loadRules, scan } from "../../../shared/mcp/lib/limitrules.ts";
 import { startRoutines } from "../../../shared/mcp/lib/routines.ts";
 
 export interface Job {
@@ -123,4 +125,37 @@ export function startRoutineSchedule(log: (s: string) => void = console.log): ()
   const stop = startRoutines((title, body) => void desktopNotify(title, body).catch(() => {}), log);
   log("schedule: routines");
   return stop;
+}
+
+/** The limits manager (ADR 0010): every minute it reads each account's windows the passive way (providers.ts),
+ *  runs the owner's rules over them, keeps the snapshot the routines consult and the events, and tells the
+ *  owner of each new one (blocked, expiring, reset) once. It never switches an account. */
+export function startLimitsScan(log: (s: string) => void = console.log, everyMs = 60_000): () => void {
+  let busy = false;
+  const places = { config: CONFIG, runtime: RUNTIME, live: `${STATE}/live` };
+  const once = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await scan({
+        now: () => Date.now() / 1000,
+        read: async () =>
+          (await allLimits(places)).map(({ account, windows }) => ({
+            account: account.id,
+            provider: account.provider,
+            windows,
+          })),
+        rules: () => loadRules(CONFIG),
+        notify: (title, body) => void desktopNotify(title, body).catch(() => {}),
+      });
+    } catch (e) {
+      log(`limits: ${(e as Error).message}`);
+    } finally {
+      busy = false;
+    }
+  };
+  void once();
+  const t = setInterval(once, everyMs);
+  log("schedule: limits");
+  return () => clearInterval(t);
 }

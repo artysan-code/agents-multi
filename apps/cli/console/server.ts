@@ -39,7 +39,7 @@ import { accountOp, accountsView, recordConnect } from "./accounts.ts";
 import { UI_DIST } from "../ui.ts";
 import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
 import { answer, type Auth, gate, newToken, publishToken, Tickets, tokenPath } from "./token.ts";
-import { jobsFor, startRoutineSchedule, startSchedule } from "./schedule.ts";
+import { jobsFor, startLimitsScan, startRoutineSchedule, startSchedule } from "./schedule.ts";
 import { superviseGateway } from "./gateway.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
@@ -402,6 +402,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     ac.signal.addEventListener("abort", stop);
   }
   // the routines (ADR 0010), in both modes
+  ac.signal.addEventListener("abort", startLimitsScan());
   ac.signal.addEventListener("abort", startRoutineSchedule());
   // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
   superviseGateway(ac.signal);

@@ -1,4 +1,4 @@
-# 0010 — Scheduler and run policy
+# 0010 — Scheduler, run policy and limits manager
 
 - Status: accepted
 - Date: 2026-10-14
@@ -58,4 +58,33 @@ The console's backend already ran internal jobs in app mode (`apps/cli/console/s
 - The worktree and branch of a run stay after it ends, for review and merge; cleaning them is the owner's.
 - A workflow routine's children are started by the runner of ADR 0005, which does not pass the deny rules; the
   hook still holds.
-- Not here (part 2 of phase D): the limits manager, account routing, limit events.
+
+## Part 2 — the limits manager and account routing
+
+ADR 0009 (16–17): usage windows per account, rules over them, events, and a default account per project the
+owner confirms. Built on phase C's providers (`Provider.limits`, ADR 0007): nothing is read from a vendor or a
+login here; the one place that does stays `apps/cli/live.ts`.
+
+- **Scan.** Every minute the console reads each account's running windows through `allLimits` (the status line's
+  snapshots for Claude, Codex's session logs), runs the owner's rules (`config/limits.json`, defaults below) over
+  them (pure: `evaluate`), and keeps `<runs>/limits/state.json` (what routines consult) and `events.jsonl`. A
+  scan older than 30 minutes blocks nobody: unknown is never a guess.
+- **Rules**, per account, over its windows: `stopAt` 80 — at that % of any window the account takes no new
+  unattended work (`blocked`); `expiringMin` 60 and `roomPercent` 30 — a window resetting within the hour with
+  30 % free is `expiring` (the owner is told; a coordinator can offer queued work); a window whose time passes
+  or comes back later is `reset`. Each event has a stable id and is announced once, with `desktopNotify()`;
+  `agents account events` and `account_status` show them.
+- **Routines honour them.** Before a firing starts, its accounts (the child's, or the plan's steps') are checked
+  against the last scan: a blocked one **holds** it (queued, the owner told once). A held firing waits for the
+  window (`holdMaxMin`, 12 h), not for its short grace, and goes on the tick after the account is released; a
+  `limit-reset` trigger (`--on limit-reset [--account p/claude]`) wakes a routine on a reset. Work the owner or a
+  coordinator starts by hand is not stopped: the rules are for what runs unattended.
+- **Accounts are the owner's.** A project's default is `config/projects.json` (folder under home → `{profile,
+  provider}`; the longest folder wins, so a sub-project inherits); a routine without `--profile` runs on it. The
+  console never switches an account on its own. A held routine, or a coordinator (`account_propose`), raises a
+  **proposal** — "use B instead of A", for one routine or as the project's default — that stays pending until
+  the owner says yes through the coordinator's question (`account_accept` / `account_decline`) or
+  `agents account accept`. The `agents` MCP server may write only the hub's state, so an accepted proposal is
+  applied by the console (or the CLI), which alone writes the owner's configuration and the routine's file.
+  A plan's accounts are its steps' own, so a held plan raises no proposal: change the plan.
+- **Not here:** an accounts page in the console (phase E), and routing of work the owner starts by hand.

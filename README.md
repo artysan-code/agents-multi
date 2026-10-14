@@ -212,30 +212,31 @@ closed, then run `agents install` and `agents doctor`.
 
 ## Commands
 
-| Command                                                         | What it does                                                                                                                                                   |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claude`                                                        | Claude Code on the default profile                                                                                                                             |
-| `claude-work`, `claude-client`                                  | Claude Code on that profile (each profile declares its own `command`)                                                                                          |
-| `agents install [--app] [--dry-run]`                            | materialise runtime, wrappers, desktop entries (and in dev mode the systemd units) from the manifests. Idempotent. `--app`: from the app's code, copied first  |
-| `agents settings [--dry-run]`                                   | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                         |
-| `agents doctor [--json\|--notify]`                              | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears            |
-| `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console   |
-| `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                |
-| `agents mcp check\|sync\|warm\|health`                          | write the MCP launch configs and Desktop's servers; `warm` builds the gateway's tool lists; `health` verifies binaries and files, `--probe` starts each server |
-| `agents limits [--json]`                                        | every account's usage windows (5h, 7d, 30d…): Claude's from the status line, Codex's from its session logs                                                     |
-| `agents codex <profile> [args…]\|limits <profile>`              | Codex (OpenAI) with that profile's own account; its login and usage windows                                                                                    |
-| `agents agent start\|list\|status\|say\|answer\|stop\|events`   | the hub's children from a terminal: sessions of any profile and provider at work in a project, their permission requests answered here                         |
-| `agents gateway [status\|run]`                                  | the lazy MCP gateway (below): what it is doing, or run it in the foreground on a machine with no console                                                       |
-| `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                     |
-| `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                         |
-| `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                          |
-| `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                         |
-| `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                           |
-| `agents routine add\|list\|rm\|run`                             | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
-| `agents tasks brief\|add\|done\|remind`                         | the task list from the terminal; `remind` is what the timer runs                                                                                               |
-| `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                             |
-| `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                     |
-| `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                 |
+| Command                                                                       | What it does                                                                                                                                                   |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude`                                                                      | Claude Code on the default profile                                                                                                                             |
+| `claude-work`, `claude-client`                                                | Claude Code on that profile (each profile declares its own `command`)                                                                                          |
+| `agents install [--app] [--dry-run]`                                          | materialise runtime, wrappers, desktop entries (and in dev mode the systemd units) from the manifests. Idempotent. `--app`: from the app's code, copied first  |
+| `agents settings [--dry-run]`                                                 | regenerate each profile's `settings.json`, adopting into `config/profiles/<p>/settings.json` what Claude wrote into it                                         |
+| `agents doctor [--json\|--notify]`                                            | verify every invariant and say how to fix it; `--notify` raises a desktop notification only when a _new_ failure appears, or when everything clears            |
+| `agents status [--json]`                                                      | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console   |
+| `agents sync [--fetch]`                                                       | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                |
+| `agents mcp check\|sync\|warm\|health`                                        | write the MCP launch configs and Desktop's servers; `warm` builds the gateway's tool lists; `health` verifies binaries and files, `--probe` starts each server |
+| `agents limits [--json]`                                                      | every account's usage windows (5h, 7d, 30d…): Claude's from the status line, Codex's from its session logs                                                     |
+| `agents codex <profile> [args…]\|limits <profile>`                            | Codex (OpenAI) with that profile's own account; its login and usage windows                                                                                    |
+| `agents agent start\|list\|status\|say\|answer\|stop\|events`                 | the hub's children from a terminal: sessions of any profile and provider at work in a project, their permission requests answered here                         |
+| `agents gateway [status\|run]`                                                | the lazy MCP gateway (below): what it is doing, or run it in the foreground on a machine with no console                                                       |
+| `agents update [--cli\|--desktop\|--self\|--check\|--rollback]`               | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                     |
+| `agents usage [--by …] [--since …]`                                           | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                         |
+| `agents serve [--no-open]`                                                    | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                          |
+| `agents ui build`                                                             | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                         |
+| `agents vault status\|init\|pair\|set\|delete\|run`                           | the secret vault the MCP servers read their credentials from (below)                                                                                           |
+| `agents routine add\|list\|rm\|run`                                           | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
+| `agents account status\|default\|proposals\|propose\|accept\|decline\|events` | the limit rules per account, a project's default account, and the owner's yes to a switch (below)                                                              |
+| `agents tasks brief\|add\|done\|remind`                                       | the task list from the terminal; `remind` is what the timer runs                                                                                               |
+| `agents google client <file.json>\|connect <account>`                         | the Google OAuth client, and connecting an account                                                                                                             |
+| `claude-launch <profile>`                                                     | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                     |
+| `claude-multi-app [--tray\|--hey\|--pick]`                                    | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                 |
 
 ### Providers
 
@@ -391,6 +392,13 @@ chat ("do this tonight at 2").
   commits allowed; a `pre-push` hook set for that worktree alone lets only `agent/<id>` and the development branch
   (`dev`) through, never `main`, `master` or `release`, tags or deletions; at most two runs at once, two hours each.
   Your defaults are `config/policy.json`; a repository's `.agents/policy.json` can only tighten them.
+- **Limits and accounts** ([ADR 0010](docs/adr/0010-scheduler-and-run-policy.md), part 2). Every minute the
+  console reads each account's windows (the status line's, Codex's logs) and applies `config/limits.json`
+  (`stopAt` 80 %, `expiringMin` 60, `roomPercent` 30, `holdMaxMin` 720): an account at 80 % takes no new unattended
+  work, a window about to reset with room left is announced, a reset wakes what waited (`--on limit-reset`). A
+  routine whose account is blocked is held and a **proposal** appears; a project's default account is
+  `config/projects.json` (`agents account default <profile>[/codex]`). Nothing switches an account without your yes:
+  the coordinator proposes (`account_propose`), you accept, the console applies. `agents account status|events`.
 - **Outward actions** (a permission the child's mode does not grant) wait; you get a desktop notification, and the
   request is answered from a coordinator of the project once it adopts the child.
 

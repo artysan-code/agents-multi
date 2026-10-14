@@ -6,6 +6,7 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
 import { registerAgentTools } from "./tools.ts";
+import { registerAccountTools } from "./account-tools.ts";
 import { registerRoutineTools } from "./routine-tools.ts";
 
 const instructions =
@@ -50,9 +51,16 @@ const instructions =
   "which repository). The console fires it later, unattended, in a worktree on its own branch agent/<run>; it " +
   "may push that branch and the development branch, never main or release. Its children belong to the project " +
   "with no session: they show as orphans (`orphan: true`), and whatever they ask waits — tell the owner, and " +
-  "adopt only when they want it carried on.";
+  "adopt only when they want it carried on.\n" +
+  "Limits: the console watches every account against the owner's rules (stop giving work at 80% of a window, " +
+  "tell when a window is about to reset with room left, wake what waited when it resets). account_status shows " +
+  "it; a routine whose account is blocked is held and a proposal appears. You PROPOSE another account " +
+  "(account_propose) and never apply one: put each proposal to the owner with AskUserQuestion, then carry " +
+  "their answer with account_accept / account_decline — the console applies an accepted one. A project's " +
+  "default account is the owner's; an organisation's account is never swapped for another without that yes.";
 
 const server = new McpServer({ name: "agents", version: "0.1.0" }, { instructions });
 registerAgentTools(server);
 registerRoutineTools(server);
+registerAccountTools(server);
 await server.connect(new StdioServerTransport());
