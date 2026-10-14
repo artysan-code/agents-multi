@@ -31,7 +31,7 @@ import {
   viaGateway,
 } from "../mcp/gateway.ts";
 import { gatewaySettings } from "../mcp/gateway-settings.ts";
-import { launchConfig } from "../mcp/config.ts";
+import { codexToolsConfig, launchConfig } from "../mcp/config.ts";
 import { type Registry } from "../mcp/registry.ts";
 import { profileNames } from "../lib/profiles.ts";
 import { gatewayTokenProblem } from "../doctor/checks/gateway.ts";
@@ -178,6 +178,13 @@ Deno.test("launchServers: the kill switch gives the plain stdio entries back", (
   // and the config text follows
   assert(launchConfig(off, A).includes('"command": "deno"'));
   assert(launchConfig(reg(), A).includes('"headersHelper"'));
+});
+
+Deno.test("codexToolsConfig: of each server only its _allow tools, none for a server without any", () => {
+  const r = reg({
+    servers: { tasks: stdio({ _allow: ["tasks_list", "tasks_brief"] }), hub: stdio({ _ask: ["x"] }), other: stdio() },
+  });
+  assertEquals(JSON.parse(codexToolsConfig(r, A)), { tools: { tasks: ["tasks_brief", "tasks_list"] } });
 });
 
 Deno.test("gatewayConfig: each profile its token file and the servers behind the gateway, keyed", async () => {

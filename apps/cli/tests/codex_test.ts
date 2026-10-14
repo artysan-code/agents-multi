@@ -144,10 +144,12 @@ Deno.test("codex: a whole round through the hub, with a stand-in for codex", asy
       JSON.stringify({
         mcpServers: {
           brain: { type: "http", url: "http://127.0.0.1:7332/cx/brain", headersHelper: "bash x" },
+          writer: { type: "http", url: "http://127.0.0.1:7332/cx/writer" },
           agents: { type: "stdio", command: "deno", args: ["hub"] },
         },
       }),
     );
+    await Deno.writeTextFile(`${runtime}/cx/mcp-codex.json`, JSON.stringify({ tools: { brain: ["tasks_list"] } }));
     await Deno.writeTextFile(`${runtime}/cx/mcp-token`, "fake-token\n");
 
     const meta = await start();
@@ -178,7 +180,11 @@ Deno.test("codex: a whole round through the hub, with a stand-in for codex", asy
     for (const c of calls) {
       assert(c.includes('-c mcp_servers.brain.url="http://127.0.0.1:7332/cx/brain"'), "the gateway entry");
       assert(c.includes('bearer_token_env_var="AGENTS_MULTI_MCP_TOKEN"'), "the token's variable, not its value");
-      assert(!c.includes("mcp_servers.agents"), "never the hub");
+      assert(c.includes('mcp_servers.brain.enabled_tools=["tasks_list"]'), "only the allowed tools");
+      assert(
+        !c.includes("mcp_servers.agents") && !c.includes("mcp_servers.writer"),
+        "never the hub, nor a server with no allowed tool",
+      );
       assert(c.endsWith("|token=fake-token"), "the token reaches Codex through its environment only");
     }
     assert(!(await Deno.readTextFile(`${runs}/${meta.id}/meta.json`)).includes("fake-token"));
@@ -193,23 +199,29 @@ Deno.test("codex: a whole round through the hub, with a stand-in for codex", asy
   }
 });
 
-Deno.test("codex: a profile's launch config as -c overrides, the token only by variable", () => {
-  const { config, token } = codexMcpOverrides({
+Deno.test("codex: a profile's launch config as -c overrides: allowed tools only, the token only by variable", () => {
+  const servers = {
     brain: { type: "http", url: "http://127.0.0.1:7332/p/brain", headersHelper: "bash h t" },
     remote: { type: "http", url: "https://example.com/mcp", headersHelper: "bash other" },
     "n8n-x": { type: "stdio", command: "node", args: ["a.js", "--x"], env: { K: "v" } },
+    writer: { type: "stdio", command: "w" },
     agents: { type: "stdio", command: "deno", args: ["hub"] },
     "bad name": { command: "x" },
-  });
+  };
+  const tools = { brain: ["a", "b"], remote: ["r"], "n8n-x": ["get"], agents: ["agent_start"], "bad name": ["x"] };
+  const { config, token } = codexMcpOverrides(servers, tools);
   assertEquals(config, [
     'mcp_servers.brain.url="http://127.0.0.1:7332/p/brain"',
     'mcp_servers.brain.bearer_token_env_var="AGENTS_MULTI_MCP_TOKEN"',
+    'mcp_servers.brain.enabled_tools=["a","b"]',
     'mcp_servers.n8n-x.command="node"',
+    'mcp_servers.n8n-x.enabled_tools=["get"]',
     'mcp_servers.n8n-x.args=["a.js","--x"]',
     'mcp_servers.n8n-x.env.K="v"',
   ]);
   assert(token);
-  assertEquals(codexMcpOverrides({ n: { command: "x" } }).token, false);
+  assertEquals(codexMcpOverrides({ n: { command: "x" } }, { n: ["t"] }).token, false);
+  assertEquals(codexMcpOverrides(servers, {}), { config: [], token: false });
   assertEquals(
     codexArgs({ sandbox: "read-only", prompt: "p", config: ["a.b=1"] }).slice(-6, -2),
     ["-c", 'approval_policy="never"', "-c", "a.b=1"],

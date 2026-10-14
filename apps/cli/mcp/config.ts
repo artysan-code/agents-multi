@@ -11,9 +11,24 @@ import { profileNames } from "../lib/profiles.ts";
 import { running } from "../lib/processes.ts";
 import { backup, hasDesktop, loadState, saveState } from "./apply.ts";
 import { launchServers, syncGateway } from "./gateway.ts";
+import { servers } from "./placement.ts";
 import { loadRegistry, type Registry } from "./registry.ts";
 
 export const mcpConfigPath = (profile: string) => `${RUNTIME}/${profile}/mcp.json`;
+/** What a Codex child may use of that config: per server, its `_allow` tools (shared/mcp/lib/codex.ts). */
+export const codexToolsPath = (profile: string) => `${RUNTIME}/${profile}/mcp-codex.json`;
+
+/** Pure: the file Codex children read beside the launch config. A Codex child never asks the owner, so it
+ *  gets no tool the registry puts behind a question or a refusal: of each server only its `_allow` tools
+ *  (its reads), and a server without any is not given. */
+export function codexToolsConfig(reg: Registry, profile: string): string {
+  const tools: Record<string, string[]> = {};
+  for (const p of servers(reg, { profile, surface: "cli" })) {
+    const allow = reg.servers[p.entry]._allow ?? [];
+    if (allow.length) tools[p.name] = [...allow].sort();
+  }
+  return JSON.stringify({ tools }, null, 2) + "\n";
+}
 
 /** Pure: the file a profile's launcher passes, as text. */
 export function launchConfig(reg: Registry, profile: string): string {
@@ -40,10 +55,14 @@ export async function syncLaunchConfig(profile: string, reg?: Registry): Promise
   // the gateway's token and configuration first: the config below points at them
   if (reg.gateway?.enabled) await syncGateway(reg);
   const text = launchConfig(reg, profile);
-  const have = await Deno.readTextFile(path).catch(() => null);
-  if (have === text) return false;
-  await writeAtomic(path, text);
-  return true;
+  const tools = codexToolsConfig(reg, profile);
+  let wrote = false;
+  for (const [file, body] of [[path, text], [codexToolsPath(profile), tools]]) {
+    if (await Deno.readTextFile(file).catch(() => null) === body) continue;
+    await writeAtomic(file, body);
+    wrote = true;
+  }
+  return wrote;
 }
 
 /**
@@ -86,7 +105,10 @@ export async function staleLaunchConfigs(): Promise<string[]> {
   const out: string[] = [];
   for (const p of await profileNames()) {
     if (!(await Deno.stat(`${RUNTIME}/${p}`).catch(() => null))) continue;
-    if (await Deno.readTextFile(mcpConfigPath(p)).catch(() => null) !== launchConfig(reg, p)) out.push(p);
+    if (
+      await Deno.readTextFile(mcpConfigPath(p)).catch(() => null) !== launchConfig(reg, p) ||
+      await Deno.readTextFile(codexToolsPath(p)).catch(() => null) !== codexToolsConfig(reg, p)
+    ) out.push(p);
   }
   return out;
 }

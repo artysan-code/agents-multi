@@ -146,7 +146,10 @@ const codexProvider: Provider = {
   async exec(i) {
     const driver = new URL("../agents/codex-driver.ts", import.meta.url).pathname;
     const launch = await Deno.readTextFile(`${i.runtime}/${i.profile}/mcp.json`).then(JSON.parse).catch(() => null);
-    const mcp = codexMcpOverrides(launch?.mcpServers ?? {});
+    const allowed = await Deno.readTextFile(`${i.runtime}/${i.profile}/mcp-codex.json`).then(JSON.parse).catch(() =>
+      null
+    );
+    const mcp = codexMcpOverrides(launch?.mcpServers ?? {}, allowed?.tools ?? {});
     const env: Record<string, string> = {
       D: driver,
       CODEX_BIN: i.command,

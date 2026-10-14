@@ -58,7 +58,11 @@ const NOT_FOR_CHILDREN = new Set(["agents"]);
  *  the gateway's token from the environment variable `MCP_TOKEN_VAR`, never from a file or an argument;
  *  stdio servers keep their command, arguments and environment. An entry that needs more (an http server
  *  with its own header helper) or has a name TOML cannot take bare is left out. */
-export function codexMcpOverrides(servers: Record<string, Record<string, unknown>>): {
+export function codexMcpOverrides(
+  servers: Record<string, Record<string, unknown>>,
+  /** per server, the tools a Codex child may use (`mcp-codex.json`); a server not in it is not given */
+  tools: Record<string, string[]>,
+): {
   config: string[];
   token: boolean;
 } {
@@ -66,18 +70,19 @@ export function codexMcpOverrides(servers: Record<string, Record<string, unknown
   let token = false;
   const t = (v: unknown) => JSON.stringify(v);
   for (const [name, cfg] of Object.entries(servers)) {
-    if (NOT_FOR_CHILDREN.has(name) || !/^[A-Za-z0-9_-]+$/.test(name)) continue;
+    if (NOT_FOR_CHILDREN.has(name) || !/^[A-Za-z0-9_-]+$/.test(name) || !tools[name]?.length) continue;
     const key = `mcp_servers.${name}`;
+    const only = `${key}.enabled_tools=${t(tools[name])}`;
     if (typeof cfg.url === "string") {
       let host = "";
       try {
         host = new URL(cfg.url).hostname;
       } catch { /* not an address */ }
       if (host !== "127.0.0.1") continue;
-      config.push(`${key}.url=${t(cfg.url)}`, `${key}.bearer_token_env_var=${t(MCP_TOKEN_VAR)}`);
+      config.push(`${key}.url=${t(cfg.url)}`, `${key}.bearer_token_env_var=${t(MCP_TOKEN_VAR)}`, only);
       token = true;
     } else if (typeof cfg.command === "string") {
-      config.push(`${key}.command=${t(cfg.command)}`);
+      config.push(`${key}.command=${t(cfg.command)}`, only);
       const args = Array.isArray(cfg.args) ? cfg.args.map(String) : [];
       if (args.length) config.push(`${key}.args=${t(args)}`);
       for (const [k, v] of Object.entries((cfg.env ?? {}) as Record<string, unknown>)) {
