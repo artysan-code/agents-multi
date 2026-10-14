@@ -231,6 +231,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents serve [--no-open]`                                      | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                          |
 | `agents ui build`                                               | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                         |
 | `agents vault status\|init\|pair\|set\|delete\|run`             | the secret vault the MCP servers read their credentials from (below)                                                                                           |
+| `agents routine add\|list\|rm\|run`                             | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
 | `agents tasks brief\|add\|done\|remind`                         | the task list from the terminal; `remind` is what the timer runs                                                                                               |
 | `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                             |
 | `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                     |
@@ -370,6 +371,28 @@ quits with the last one; `--tray` waits a minute for a tray to appear, then exit
 doctor says why.
 
 ---
+
+### Routines and the run policy
+
+A **routine** is a job that runs when you are not there: a child (`--profile`, a task) or a saved plan
+(`--workflow plan.json`, with `{{task}}` in its prompts) in a git repository under home, started by a trigger:
+`--at 02:00` (the next 02:00; or `2026-10-15T02:00`, `+90m`), `--cron "0 9 * * 1-5"` (local time), or
+`--on run-done|run-failed [--plan name]` (a workflow run of the project ending). Each is a file in the hub's
+state; the console's backend ticks over them every 15 seconds, so they survive restarts. `agents routine
+add|list|rm|run`, and `routine_add|list|rm|run` in the `agents` MCP server, so the coordinator can schedule from
+chat ("do this tonight at 2").
+
+- **Missed.** An `at` the console missed by more than its grace (6 h) is not run late: it is marked missed and
+  you are told. A cron that went by while the console was down is skipped to its next time (grace 15 min).
+- **Isolation.** A firing works in a worktree beside the repository (`<repo>-wt/agent-<id>`) on a branch
+  `agent/<id>`. Its children belong to the project with no coordinator: any coordinator of the project sees them
+  as orphans and may adopt and answer them ([ADR 0005](docs/adr/0005-agent-workflows.md)).
+- **Run policy**, enforced by git and the runner, not the prompt ([ADR 0010](docs/adr/0010-scheduler-and-run-policy.md)):
+  commits allowed; a `pre-push` hook set for that worktree alone lets only `agent/<id>` and the development branch
+  (`dev`) through, never `main`, `master` or `release`, tags or deletions; at most two runs at once, two hours each.
+  Your defaults are `config/policy.json`; a repository's `.agents/policy.json` can only tighten them.
+- **Outward actions** (a permission the child's mode does not grant) wait; you get a desktop notification, and the
+  request is answered from a coordinator of the project once it adopts the child.
 
 ## Consumption
 

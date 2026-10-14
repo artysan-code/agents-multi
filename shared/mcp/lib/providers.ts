@@ -56,6 +56,8 @@ export interface ExecInput {
   runtime: string;
   mcpConfig?: string;
   allowedTools?: string[];
+  /** rules it is denied whatever its mode (Claude only) */
+  disallowedTools?: string[];
 }
 
 export interface Provider {
@@ -101,8 +103,10 @@ const claudeProvider: Provider = {
     if (i.model) env.M = i.model;
     if (i.mcpConfig) env.C = i.mcpConfig;
     if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
+    if (i.disallowedTools?.length) env.X = i.disallowedTools.join(",");
     return {
       line: 'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
+        '${X:+--disallowedTools "$X"} ' +
         "--input-format stream-json --output-format stream-json --verbose " +
         '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
       env,
