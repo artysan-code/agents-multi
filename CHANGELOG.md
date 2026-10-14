@@ -5,6 +5,28 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.0-beta.4] - 2026-10-14
+
+### Added
+
+- **limits**: limits manager, account proposals and per-project default accounts (a5cd6cf)
+- **hub**: routines (cron, at, run events) and the unattended run policy (4473070)
+- **codex**: a Codex child gets the profile's MCP servers, allowed tools only (28ee180)
+- **providers**: one Provider interface, unified limits, agents limits and a limits tool (110cab4)
+
+### Fixed
+
+- **codex**: approve the allowed MCP tools; tasks reads are the Codex child's tools (615bef6)
+
+### Performance
+
+- **mcp**: the Code tab's .claude.json gets the gateway's http entries (28e11d0)
+- **agents**: a child's events are read from where the last look stopped (f31cbac)
+
+### Documentation
+
+- **providers**: ADR 0007 closes the MCP and limits issues, README on providers and limits (a1c710a)
+
 ## [1.2.0-beta.3] - 2026-10-14
 
 ### Fixed
