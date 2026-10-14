@@ -13,6 +13,12 @@ export const codexBin = (runtime: string) => `${codexPrefix(runtime)}/node_modul
 /** A profile's Codex account: its `CODEX_HOME`, in the profile's runtime folder beside Claude's config. */
 export const codexHome = (runtime: string, profile: string) => `${runtime}/${profile}/codex`;
 
+/** Makes a Codex account's folder (private) when it is not there: `codex login` refuses a `CODEX_HOME`
+ *  that does not exist. */
+export async function ensureCodexHome(home: string): Promise<void> {
+  await Deno.mkdir(home, { recursive: true, mode: 0o700 });
+}
+
 /** Pure: the sandbox a child's mode gives its commands. `codex exec` cannot ask the owner (it never
  *  waits on an approval), so where Claude would ask for a write, Codex gets no write: only a mode that
  *  lets Claude edit the project (`auto`, `acceptEdits`) gets `workspace-write` — the project's folder

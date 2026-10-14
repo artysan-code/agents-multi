@@ -37,6 +37,7 @@ import {
   profileNames,
 } from "./lib/profiles.ts";
 import { ZSH_BEGIN, ZSH_END, zshBlock } from "./lib/shell.ts";
+import { codexHome } from "../../shared/mcp/lib/codex.ts";
 import { doctor } from "./doctor/index.ts";
 import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
@@ -310,6 +311,7 @@ export async function install(
     await ensureDir(`${dir}/plugins`);
     await ensureSymlink("../../marketplaces", `${dir}/plugins/marketplaces`, `${p}/plugins/marketplaces`);
     const manifest = await loadManifest(p);
+    if (manifest.codex) await ensureDir(codexHome(RUNTIME, p), 0o700);
     for (const k of KINDS) await materializeKind(p, k, manifest[k]);
     const creds = await lstat(`${dir}/.credentials.json`);
     if (creds && mode(creds) !== "600") {

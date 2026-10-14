@@ -10,6 +10,7 @@ import {
   codexLimitsOf,
   codexLines,
   codexSandbox,
+  ensureCodexHome,
   readCodexLimits,
   type Turn,
 } from "../../../shared/mcp/lib/codex.ts";
@@ -170,5 +171,19 @@ Deno.test("codex: a whole round through the hub, with a stand-in for codex", asy
     assertEquals((await readChild(meta.id, runs))?.state.phase, "ended");
   } finally {
     await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("codex: the account's folder is made, private, and left alone when there", async () => {
+  const root = await Deno.makeTempDir();
+  try {
+    const home = codexHome(root, "cx");
+    await ensureCodexHome(home);
+    assertEquals((await Deno.stat(home)).mode! & 0o777, 0o700);
+    await Deno.writeTextFile(`${home}/auth.json`, "{}");
+    await ensureCodexHome(home);
+    assert((await Deno.stat(`${home}/auth.json`)).isFile);
+  } finally {
+    await Deno.remove(root, { recursive: true });
   }
 });

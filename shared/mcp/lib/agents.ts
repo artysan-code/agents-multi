@@ -625,7 +625,8 @@ const codexProvider: Provider = {
     };
     if (i.model) env.CODEX_MODEL = i.model;
     return {
-      line: 'exec deno run --quiet --no-config --no-lock --allow-read="$R" --allow-write="$R" ' +
+      line: 'mkdir -p -m 700 "$CODEX_HOME"\n' +
+        'exec deno run --quiet --no-config --no-lock --allow-read="$R" --allow-write="$R" ' +
         '--allow-run="$CODEX_BIN" --allow-env=CODEX_BIN,CODEX_SANDBOX,CODEX_MODEL "$D" "$R" > /dev/null 2>> "$R/err.log"',
       env,
     };

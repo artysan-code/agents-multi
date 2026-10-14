@@ -2,7 +2,7 @@
 // session never touches another profile's (or the machine's own `~/.codex`). `agents codex limits
 // <profile>` prints what the account's session logs say about its usage windows.
 
-import { codexBin, codexHome, readCodexLimits } from "../../shared/mcp/lib/codex.ts";
+import { codexBin, codexHome, ensureCodexHome, readCodexLimits } from "../../shared/mcp/lib/codex.ts";
 import { RUNTIME } from "./lib/paths.ts";
 import { loadManifest, profileNames } from "./lib/profiles.ts";
 
@@ -36,7 +36,7 @@ export async function codexCommand(args: string[]): Promise<number> {
     console.error("Codex is not installed: agents update --codex");
     return 1;
   }
-  await Deno.mkdir(home, { recursive: true, mode: 0o700 });
+  await ensureCodexHome(home);
   const p = new Deno.Command(bin, {
     args: args.slice(1),
     env: { CODEX_HOME: home },
