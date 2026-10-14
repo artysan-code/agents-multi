@@ -102,7 +102,11 @@ Deno.test("policy: a worktree's hook lets the branch and dev through and stops m
     GIT_COMMITTER_NAME: "t",
     GIT_COMMITTER_EMAIL: "t@example.invalid",
   };
-  const saved = Object.fromEntries(Object.keys(env).map((k) => [k, Deno.env.get(k)]));
+  // a hook (pre-commit, pre-push) runs the gate with GIT_DIR, GIT_INDEX_FILE and the like set: they would
+  // point isolate()'s git at the repository being committed, not at ours
+  const ambient = Object.keys(Deno.env.toObject()).filter((k) => k.startsWith("GIT_") && !(k in env));
+  const saved = Object.fromEntries([...Object.keys(env), ...ambient].map((k) => [k, Deno.env.get(k)]));
+  for (const k of ambient) Deno.env.delete(k);
   for (const [k, v] of Object.entries(env)) Deno.env.set(k, v); // isolate() runs git with this process's environment
   try {
     const repo = `${real}/repo`, remote = `${real}/remote.git`;
