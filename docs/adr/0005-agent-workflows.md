@@ -176,15 +176,33 @@ mirrors them under `agents run`. The server's instructions say how to follow and
 - What stays open: a console page for the runs (with the widgets, in 1.1); runs across machines (with
   the relay, issue #11); a budget per run.
 
-## Amendment 2026-10-14 — isolated by project
+## Amendment 2026-10-14 — isolated by project, then by coordinator session
 
 The hub is shared by every coordinator on the machine, and each saw (and could answer) the others'
-children. Now each child (`meta.json`: `project`, `session`) and each run (`owner.json`) records the
-coordinator that started it: its **project** — the main repository's root of the coordinator's folder, a
-worktree resolving to the repository it hangs from, a folder with no repository being itself — and its
-Claude session id (`CLAUDE_CODE_SESSION_ID`) when the environment has it. List, status, events, wait and
-`follow` show only the caller's project (`--mine`: only its own session); answer, say, stop and
-`workflow_answer` refuse another project's child or run with an error saying whose it is; `--all` (MCP: `all`)
-reads every project's, never writes. A child or run recorded before this has no project: it belongs to
-the project of its own folder (`readChild`, `readRun`), so the coordinator of that project sees and
-controls it. Pure parts (`projectOf`, `inScope`) are in `shared/mcp/lib/agents.ts`.
+children. A child (`meta.json`) and a run (`owner.json`) now records whose it is: its **project** — the
+main repository's root of the coordinator's folder, a worktree resolving to the repository it hangs from,
+a folder with no repository being itself — and its **coordinator**, a process.
+
+**A coordinator is its `claude` process, not a session id.** `CLAUDE_CODE_SESSION_ID` is inherited by
+whatever a session starts, so a session inside another names the wrong one. The MCP server is a stdio
+child of the coordinator's `claude`, and the CLI run from its Bash tool has it as an ancestor: both walk
+up the process table to the nearest process named `claude*` (`coordinatorFrom`, `shared/mcp/lib/proc.ts`),
+and the identity is its pid plus its start time (a pid alone is reused). The
+session id, when the environment has one, is only a note on the record. A caller under no `claude` (a
+plain terminal) has no coordinator: the person is the coordinator of the project's children.
+
+|                                                                                   | own | orphan of the project             | other live session, same project         | other project                    |
+| --------------------------------------------------------------------------------- | --- | --------------------------------- | ---------------------------------------- | -------------------------------- |
+| list, status, events, follow, wait                                                | yes | yes, marked `orphan`              | `--project` (`project: true`), read-only | `--all` (`all: true`), read-only |
+| answer, say, stop, `workflow_answer`                                              | yes | no: adopt first                   | never                                    | never                            |
+| adopt (`agents agent adopt`, `agent_adopt`; `agents run adopt`, `workflow_adopt`) | —   | yes: the owner becomes the caller | refused: it has a live coordinator       | refused: never across projects   |
+
+An **orphan** is a child or run whose owner process is gone: its pid is not there, or it has another start
+time. A child or run recorded before owners (project only, or nothing: then the project of its own
+folder) has no coordinator, so it is an orphan of its project. Adopting a run adopts its children; the
+runner reads the owner again when it starts a step. Events of an orphan carry `orphan: true`: the
+coordinator tells the owner and adopts only when they want it carried on. Pure parts (`accessOf`,
+`inScope`, `mayAct`, `mayAdopt`, `projectOf`) are in `shared/mcp/lib/agents.ts`; the process table is read
+in `shared/mcp/lib/proc.ts` alone, through `ps` (Deno lets only `--allow-all` read `/proc`, and the server
+has `ps`), so the platform layer ports one file. `ps` gives a start time to the second, derived from the boot
+time, so two starts within three seconds are the same process.

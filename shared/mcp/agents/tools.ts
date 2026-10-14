@@ -2,6 +2,7 @@
 import type { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { z } from "npm:zod@4.6.5";
 import {
+  adoptChild,
   answer,
   type Child,
   childIn,
@@ -14,6 +15,7 @@ import {
   type Verdict,
 } from "../lib/agents.ts";
 import {
+  adoptRun,
   answerRun,
   type Choice,
   listRuns,
@@ -24,11 +26,12 @@ import {
   startRun,
 } from "../lib/runs.ts";
 
-/** The caller's scope: the project of the folder this server was started in (the coordinator's), and its
- *  session when the environment has it. `all` reads everything, never writes. */
+/** The caller's scope: the coordinator this server runs under (its `claude` process) and the project of
+ *  the folder it was started in. By default its own session's, and the project's orphans; `project` and
+ *  `all` read more, never write. */
 const scopeArgs = {
-  all: z.boolean().optional().describe("read-only: every project's, not only this session's project"),
-  mine: z.boolean().optional().describe("only the ones this very session started"),
+  project: z.boolean().optional().describe("read-only: also the project's other live sessions' children and runs"),
+  all: z.boolean().optional().describe("read-only: every project's"),
 };
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
@@ -44,6 +47,8 @@ const view = (c: Child, full = false) => ({
   provider: c.meta.provider ?? "claude",
   folder: c.meta.dir,
   project: c.meta.project ?? null,
+  access: c.access ?? null,
+  orphan: c.access === "orphan",
   task: full ? c.meta.task : c.meta.task.slice(0, 200),
   started: c.meta.started,
   phase: c.state.phase,
@@ -98,21 +103,37 @@ export function registerAgentTools(server: McpServer) {
   server.registerTool(
     "agent_list",
     {
-      description: "The children of this session's project (not other projects': use `all` to read them, read-only): " +
-        "its phase (working, waiting on a request, idle after a turn, ended), what it waits for, the last thing it said.",
+      description: "The children this session started, and the orphans of its project (their session is gone: " +
+        "`orphan: true`, adopt one with agent_adopt to act on it). `project` also lists the project's other " +
+        "sessions' children, `all` every project's: read-only. Its phase (working, waiting on a request, idle " +
+        "after a turn, ended), what it waits for, the last thing it said.",
       inputSchema: scopeArgs,
     },
-    async (i: { all?: boolean; mine?: boolean }) =>
+    async (i: { all?: boolean; project?: boolean }) =>
       text((await listChildren(undefined, await scopeOf(i))).map((c) => view(c))),
   );
 
   server.registerTool("agent_status", {
     description:
       "One child in full: its task, the last things it said, its pending requests with their ids, how its last turn ended.",
-    inputSchema: { id: z.string(), all: scopeArgs.all },
-  }, async ({ id, all }: { id: string; all?: boolean }) => {
+    inputSchema: { id: z.string(), ...scopeArgs },
+  }, async ({ id, ...scope }: { id: string; all?: boolean; project?: boolean }) => {
     try {
-      return text(view(await childIn(id, await scopeOf({ all })), true));
+      return text(view(await childIn(id, await scopeOf(scope)), true));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  server.registerTool("agent_adopt", {
+    description: "Take an orphan: a child of this project whose coordinator (the session that started it) is " +
+      "gone. It becomes this session's, so you can answer, say to and stop it. Never another project's, never " +
+      "one whose session is alive.",
+    inputSchema: { id: z.string() },
+  }, async ({ id }: { id: string }) => {
+    try {
+      await adoptChild(id, await scopeOf());
+      return text({ adopted: id });
     } catch (e) {
       return fail(e);
     }
@@ -197,16 +218,18 @@ export function registerAgentTools(server: McpServer) {
 
   server.registerTool("workflow_list", {
     description: "The saved workflows a folder can use (the project's, then the owner's: read the SKILL.md to " +
-      "fill a plan) and the runs of this session's project with their steps' state (`all`: other projects' too, " +
-      "read-only).",
+      "fill a plan) and the runs this session started, with their steps' state, and the project's orphan runs " +
+      "(adopt one with workflow_adopt to act on it). `project`, `all`: other sessions' and projects', read-only.",
     inputSchema: { folder: z.string().optional(), ...scopeArgs },
-  }, async ({ folder, ...scope }: { folder?: string; all?: boolean; mine?: boolean }) =>
+  }, async ({ folder, ...scope }: { folder?: string; all?: boolean; project?: boolean }) =>
     text({
       saved: await savedWorkflows(folder),
       runs: (await listRuns(undefined, await scopeOf(scope))).map((r) => ({
         id: r.id,
         name: r.plan.name,
         status: r.state.status,
+        access: r.access ?? null,
+        orphan: r.access === "orphan",
         runner: r.alive,
         steps: Object.fromEntries(Object.entries(r.state.steps).map(([k, v]) => [k, v.status])),
       })),
@@ -214,11 +237,24 @@ export function registerAgentTools(server: McpServer) {
 
   server.registerTool("workflow_status", {
     description: "One run in full: its plan, each step's state, child and HANDOFF, and what happened.",
-    inputSchema: { id: z.string(), all: scopeArgs.all },
-  }, async ({ id, all }: { id: string; all?: boolean }) => {
+    inputSchema: { id: z.string(), ...scopeArgs },
+  }, async ({ id, ...scope }: { id: string; all?: boolean; project?: boolean }) => {
     try {
-      const r = await runIn(id, await scopeOf({ all }));
+      const r = await runIn(id, await scopeOf(scope));
       return text({ ...r, events: (await runEvents(id)).slice(-30) });
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  server.registerTool("workflow_adopt", {
+    description: "Take an orphan run of this project (its coordinator is gone), and its children with it: it " +
+      "becomes this session's, so you can answer it. Never another project's, never one whose session is alive.",
+    inputSchema: { id: z.string() },
+  }, async ({ id }: { id: string }) => {
+    try {
+      await adoptRun(id, await scopeOf());
+      return text({ adopted: id });
     } catch (e) {
       return fail(e);
     }

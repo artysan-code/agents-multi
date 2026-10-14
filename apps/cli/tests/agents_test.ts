@@ -3,20 +3,29 @@
 // Claude — started detached, a permission asked, answered, the turn ended, a message, the stop.
 import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import {
+  accessOf,
+  adoptable,
+  adoptChild,
   answer,
   answerLine,
+  type Attention,
   attentionBetween,
   attentionOf,
   childId,
   childIn,
   childMode,
   type ChildState,
+  type Coordinator,
   inScope,
   isUnder,
   listChildren,
+  mayAct,
+  mayAdopt,
+  type Owned,
   projectOf,
   questionsOf,
   readChild,
+  refusal,
   rootFromGitFile,
   runsBy,
   sayTo,
@@ -26,9 +35,11 @@ import {
   stateOf,
   stopChild,
   validId,
+  waitForAttention,
   whatOf,
 } from "../../../shared/mcp/lib/agents.ts";
-import { answerRun, follow, listRuns, runIn } from "../../../shared/mcp/lib/runs.ts";
+import { forgetProcs, type ProcReader, procReader } from "../../../shared/mcp/lib/proc.ts";
+import { adoptRun, answerRun, follow, listRuns, runIn } from "../../../shared/mcp/lib/runs.ts";
 import { REPO } from "../lib/paths.ts";
 
 const ev = (o: unknown) => JSON.stringify(o);
@@ -391,119 +402,265 @@ Deno.test("agents: projectOf — a repository's subfolder, its worktree, a plain
   }
 });
 
-Deno.test("agents: inScope — same project, other project, unknown project, all, mine", () => {
-  const here: Scope = { project: "/p/a", session: "s1" };
-  assert(inScope({ project: "/p/a", session: "s2" }, here));
-  assert(inScope({ project: "/p/a" }, here));
-  assert(!inScope({ project: "/p/b", session: "s1" }, here));
-  assert(!inScope({}, here), "with no project at all (an unreadable folder), only all sees it");
-  assert(!inScope(undefined, here));
-  assert(inScope({}, { ...here, all: true }), "all sees what has no project too");
-  assert(inScope({ project: "/p/b" }, { ...here, all: true }));
-  assert(!inScope({ project: "/p/a", session: "s2" }, { ...here, mine: true }));
-  assert(inScope({ project: "/p/a", session: "s1" }, { ...here, mine: true }));
-  assert(
-    inScope({ project: "/p/a", session: "s2" }, { project: "/p/a", mine: true }),
-    "no session: mine narrows nothing",
-  );
+/** Two live processes to be coordinators, and a coordinator that is gone (a live pid, another start time:
+ *  a pid that was reused). Real processes: the hub reads /proc. */
+async function withCoordinators(
+  f: (who: { a: Coordinator; b: Coordinator; gone: Coordinator }) => Promise<void>,
+): Promise<void> {
+  const sleepers = [0, 1].map(() => new Deno.Command("sleep", { args: ["60"], stdout: "null" }).spawn());
+  try {
+    forgetProcs();
+    const [a, b] = sleepers.map((p) => ({ pid: p.pid, start: procReader(p.pid)!.start }));
+    await f({ a, b, gone: { pid: a.pid, start: "1" } });
+  } finally {
+    for (const p of sleepers) {
+      p.kill();
+      await p.status;
+    }
+  }
+}
+
+Deno.test("agents: accessOf and the scope filters — own, peer, orphan, other project, all", async () => {
+  await withCoordinators(({ a, b, gone }) => {
+    const here: Scope = { project: "/p/a", me: a };
+    const at = (project: string | undefined, owner?: Coordinator): Owned => ({ project, owner });
+    assertEquals(accessOf(at("/p/a", a), here), "own");
+    assertEquals(accessOf(at("/p/a", { ...a, session: "x" }), { ...here, me: { ...a, session: "y" } }), "own");
+    assertEquals(accessOf(at("/p/a", b), here), "peer");
+    assertEquals(accessOf(at("/p/a", gone), here), "orphan", "pid reused: another start time");
+    assertEquals(accessOf(at("/p/a"), here), "orphan", "no owner recorded (older than owners)");
+    assertEquals(accessOf(at("/p/b", a), here), "other");
+    assertEquals(accessOf(at(undefined, a), here), "other", "no project at all");
+    assertEquals(accessOf(undefined, here), "other");
+    // default: own and the project's orphans; project adds the peers; all adds everything
+    const seen = (v: Scope["view"]) =>
+      [at("/p/a", a), at("/p/a", b), at("/p/a", gone), at("/p/b", a), at(undefined)].map((o) =>
+        inScope(o, { ...here, view: v })
+      );
+    assertEquals(seen("mine"), [true, false, true, false, false]);
+    assertEquals(seen(undefined), [true, false, true, false, false]);
+    assertEquals(seen("project"), [true, true, true, false, false]);
+    assertEquals(seen("all"), [true, true, true, true, true]);
+    // acting: only on its own — an orphan is adopted first, a peer's and another project's never
+    assertEquals([at("/p/a", a), at("/p/a", b), at("/p/a", gone), at("/p/b", a)].map((o) => mayAct(o, here)), [
+      true,
+      false,
+      false,
+      false,
+    ]);
+    assert(mayAct(at("/p/a", a), { ...here, view: "all" }), "the view does not change who owns");
+    assertEquals([at("/p/a", a), at("/p/a", b), at("/p/a", gone), at("/p/b", gone)].map((o) => mayAdopt(o, here)), [
+      false,
+      false,
+      true,
+      false,
+    ]);
+    // a person at a plain terminal (no coordinator) is the coordinator of the project's children
+    const person: Scope = { project: "/p/a" };
+    assertEquals([at("/p/a", b), at("/p/a", gone), at("/p/a"), at("/p/b", b)].map((o) => mayAct(o, person)), [
+      true,
+      true,
+      true,
+      false,
+    ]);
+    assertEquals(mayAdopt(at("/p/a", gone), person), false, "nobody to adopt it for");
+    assertEquals(adoptable("x", at("/p/a", gone), here), a);
+    assertThrows(() => adoptable("x", at("/p/a", gone), person), Error, "no `claude` process");
+    assertThrows(() => adoptable("x", at("/p/a", b), here), Error, "live coordinator");
+    assertThrows(() => adoptable("x", at("/p/a", a), here), Error, "already yours");
+    assertThrows(() => adoptable("x", at("/p/b", gone), here), Error, "across projects");
+    assert(refusal("x", at("/p/a", b), here).includes("another live session"));
+    return Promise.resolve();
+  });
 });
 
-Deno.test("agents: a child's owner is recorded, and list, answer, say and stop keep to the caller's project", async () => {
+Deno.test("agents: a fake process table — accessOf needs no real process", () => {
+  const table = new Map([[10, { ppid: 1, comm: "claude-bin", start: "500" }]]);
+  const read: ProcReader = (pid) => table.get(pid) ?? null;
+  const me: Coordinator = { pid: 10, start: "500" };
+  const scope: Scope = { project: "/p", me };
+  assertEquals(accessOf({ project: "/p", owner: me }, scope, read), "own");
+  table.set(10, { ppid: 1, comm: "claude-bin", start: "900" });
+  assertEquals(accessOf({ project: "/p", owner: me }, scope, read), "orphan", "same pid, new process");
+  table.delete(10);
+  assertEquals(accessOf({ project: "/p", owner: me }, scope, read), "orphan", "gone");
+});
+
+Deno.test("agents: children of two sessions in one project — each sees its own, orphans adoptable, never across projects", async () => {
   const t = await Deno.realPath(await Deno.makeTempDir());
   const runs = `${t}/runs`;
   try {
-    for (
-      const [id, project] of [["a-one-0101", "/p/a"], ["b-two-0101", "/p/b"], ["old-0101", undefined], [
-        "old-b-0101",
-        undefined,
-      ]]
-    ) {
-      await Deno.mkdir(`${runs}/${id}`, { recursive: true });
-      const dir = id === "old-0101" ? "/p/a" : id === "old-b-0101" ? "/p/b" : "/";
-      const meta = { id, profile: "x", command: "x", dir, task: "t", started: "2026-01-01T00:00:00Z", project };
-      await Deno.writeTextFile(`${runs}/${id}/meta.json`, JSON.stringify(meta));
-    }
-    const a: Scope = { project: "/p/a" };
-    // an old child (no project in its meta) belongs to the project of its own folder
-    assertEquals((await listChildren(runs, a)).map((c) => c.meta.id).sort(), ["a-one-0101", "old-0101"]);
-    assertEquals((await listChildren(runs, { ...a, all: true })).length, 4);
-    assertEquals((await listChildren(runs)).length, 4, "no scope (the runner's own view) sees all");
-    assertEquals((await childIn("old-0101", a, runs)).meta.project, "/p/a");
-    await assertRejects(() => childIn("b-two-0101", a, runs), Error, "another project");
-    await assertRejects(() => childIn("old-b-0101", a, runs), Error, "another project");
-    await assertRejects(() => sayTo("b-two-0101", "hi", runs, a), Error, "another project");
-    await assertRejects(
-      () => answer("b-two-0101", "r", "allow", undefined, runs, undefined, a),
-      Error,
-      "another project",
-    );
-    await assertRejects(() => stopChild("b-two-0101", false, runs, a), Error, "another project");
-    // the read-only view of another project's child works with all, and a write still does not
-    assertEquals((await childIn("b-two-0101", { ...a, all: true }, runs)).meta.project, "/p/b");
+    await withCoordinators(async ({ a, b, gone }) => {
+      const make = async (id: string, project: string | undefined, owner?: Coordinator) => {
+        await Deno.mkdir(`${runs}/${id}`, { recursive: true });
+        const meta = {
+          id,
+          profile: "x",
+          command: "x",
+          dir: project ?? "/p/a",
+          task: "t",
+          started: "2026-01-01T00:00:00Z",
+          project,
+          owner,
+        };
+        await Deno.writeTextFile(`${runs}/${id}/meta.json`, JSON.stringify(meta));
+      };
+      await make("by-a-0101", "/p/a", a);
+      await make("by-b-0101", "/p/a", b);
+      await make("dead-0101", "/p/a", gone);
+      await make("legacy-0101", undefined); // older than projects: its folder's project, no owner
+      await make("elsewhere-0101", "/p/b", gone);
+      const ids = async (s: Scope) => (await listChildren(runs, s)).map((c) => c.meta.id).sort();
+      const sa: Scope = { project: "/p/a", me: a };
+      const sb: Scope = { project: "/p/a", me: b };
+      assertEquals(await ids(sa), ["by-a-0101", "dead-0101", "legacy-0101"]);
+      assertEquals(await ids(sb), ["by-b-0101", "dead-0101", "legacy-0101"]);
+      assertEquals(await ids({ ...sa, view: "project" }), ["by-a-0101", "by-b-0101", "dead-0101", "legacy-0101"]);
+      assertEquals((await ids({ ...sa, view: "all" })).length, 5);
+      assertEquals((await listChildren(runs)).length, 5, "no scope (the runner's own view) sees all");
+      const access = Object.fromEntries((await listChildren(runs, sa)).map((c) => [c.meta.id, c.access]));
+      assertEquals(access, { "by-a-0101": "own", "dead-0101": "orphan", "legacy-0101": "orphan" });
+      // a peer's: not even read, but with project read-only; never written
+      await assertRejects(() => childIn("by-b-0101", sa, runs), Error, "another live session");
+      assertEquals((await childIn("by-b-0101", { ...sa, view: "project" }, runs)).access, "peer");
+      await assertRejects(() => sayTo("by-b-0101", "hi", runs, { ...sa, view: "project" }), Error, "another live");
+      await assertRejects(() => stopChild("by-b-0101", false, runs, sa), Error, "another live");
+      await assertRejects(
+        () => answer("by-b-0101", "r", "allow", undefined, runs, undefined, { ...sa, view: "all" }),
+        Error,
+        "another live",
+      );
+      // another project's
+      await assertRejects(() => childIn("elsewhere-0101", sa, runs), Error, "another project");
+      assertEquals((await childIn("elsewhere-0101", { ...sa, view: "all" }, runs)).access, "other");
+      await assertRejects(() => adoptChild("elsewhere-0101", sa, runs), Error, "across projects");
+      // an orphan: seen and marked, not acted on until adopted
+      await assertRejects(() => sayTo("dead-0101", "hi", runs, sa), Error, "adopt it first");
+      await assertRejects(() => adoptChild("by-b-0101", sa, runs), Error, "live coordinator");
+      await assertRejects(() => adoptChild("by-a-0101", sa, runs), Error, "already yours");
+      await adoptChild("dead-0101", sa, runs);
+      await adoptChild("legacy-0101", sa, runs);
+      assertEquals((await readChild("dead-0101", runs))?.meta.owner, a);
+      assertEquals((await readChild("legacy-0101", runs))?.meta.project, "/p/a");
+      assertEquals(await ids(sa), ["by-a-0101", "dead-0101", "legacy-0101"]);
+      assertEquals(await ids(sb), ["by-b-0101"], "adopted: no longer b's to see");
+      assertEquals((await childIn("dead-0101", sa, runs, true)).access, "own");
+      // the person at a terminal acts on the project's children without adopting
+      const person: Scope = { project: "/p/a" };
+      await assertRejects(() => adoptChild("by-a-0101", person, runs), Error, "no `claude` process");
+      assertEquals((await childIn("by-b-0101", person, runs, true)).meta.id, "by-b-0101");
+      await assertRejects(() => childIn("elsewhere-0101", person, runs, true), Error, "another project");
+    });
   } finally {
     await Deno.remove(t, { recursive: true });
   }
 });
 
-Deno.test("agents: runs keep to their owner's project; an old run (no owner.json) is its folder's project's", async () => {
+Deno.test("agents: runs keep to their coordinator; an orphan run is adopted with its children, an old run is its folder's project's", async () => {
   const t = await Deno.realPath(await Deno.makeTempDir());
   const runs = `${t}/runs`;
   try {
-    for (
-      const [id, owner] of [["r-a", { project: "/p/a" }], ["r-b", { project: "/p/b" }], ["r-old-a", undefined], [
-        "r-old-b",
-        undefined,
-      ]]
-    ) {
-      const dir = `${runs}/runs/${id}`;
-      await Deno.mkdir(dir, { recursive: true });
+    await withCoordinators(async ({ a, b, gone }) => {
+      const run = async (id: string, owned?: Owned, folder?: string) => {
+        const dir = `${runs}/runs/${id}`;
+        await Deno.mkdir(dir, { recursive: true });
+        await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify({ name: id, folder, steps: [] }));
+        await Deno.writeTextFile(`${dir}/state.json`, JSON.stringify({ status: "running", steps: {} }));
+        if (owned) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owned));
+      };
+      await run("r-a", { project: "/p/a", owner: a });
+      await run("r-b", { project: "/p/a", owner: b });
+      await run("r-dead", { project: "/p/a", owner: gone });
+      await run("r-other", { project: "/p/b", owner: gone });
+      await run("r-old", undefined, "/p/a"); // no owner.json: its folder's project, an orphan
+      // a child of the orphan run, orphan too
+      await Deno.mkdir(`${runs}/step-0101`, { recursive: true });
       await Deno.writeTextFile(
-        `${dir}/plan.json`,
+        `${runs}/step-0101/meta.json`,
         JSON.stringify({
-          name: id,
-          folder: id === "r-old-a" ? "/p/a" : id === "r-old-b" ? "/p/b" : undefined,
-          steps: [],
+          id: "step-0101",
+          profile: "x",
+          command: "x",
+          dir: "/p/a",
+          task: "t",
+          started: "2026-01-01T00:00:00Z",
+          project: "/p/a",
+          owner: gone,
+          run: { id: "r-dead", step: "s" },
         }),
       );
-      await Deno.writeTextFile(`${dir}/state.json`, JSON.stringify({ status: "running", steps: {} }));
-      if (owner) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owner));
-    }
-    const a: Scope = { project: "/p/a" };
-    assertEquals((await listRuns(runs, a)).map((r) => r.id), ["r-a", "r-old-a"]);
-    assertEquals((await listRuns(runs, { ...a, all: true })).length, 4);
-    await assertRejects(() => runIn("r-b", a, runs), Error, "another project");
-    await assertRejects(() => answerRun("r-old-b", "stop", undefined, runs, a), Error, "another project");
-    assertEquals((await runIn("r-old-a", a, runs)).owner?.project, "/p/a");
-    assertEquals((await runIn("r-b", { ...a, all: true }, runs)).owner?.project, "/p/b");
+      const sa: Scope = { project: "/p/a", me: a };
+      assertEquals((await listRuns(runs, sa)).map((r) => [r.id, r.access]), [
+        ["r-a", "own"],
+        ["r-dead", "orphan"],
+        ["r-old", "orphan"],
+      ]);
+      assertEquals((await listRuns(runs, { ...sa, view: "project" })).length, 4);
+      assertEquals((await listRuns(runs, { ...sa, view: "all" })).length, 5);
+      await assertRejects(() => runIn("r-b", sa, runs), Error, "another live session");
+      await assertRejects(() => runIn("r-other", sa, runs), Error, "another project");
+      await assertRejects(() => answerRun("r-b", "stop", undefined, runs, { ...sa, view: "project" }), Error, "live");
+      await assertRejects(() => answerRun("r-dead", "stop", undefined, runs, sa), Error, "adopt it first");
+      await assertRejects(() => adoptRun("r-other", sa, runs), Error, "across projects");
+      await assertRejects(() => adoptRun("r-b", sa, runs), Error, "live coordinator");
+      await adoptRun("r-dead", sa, runs);
+      assertEquals((await runIn("r-dead", sa, runs, true)).access, "own");
+      assertEquals((await readChild("step-0101", runs))?.meta.owner, a, "its children come with it");
+      await adoptRun("r-old", sa, runs);
+      assertEquals((await runIn("r-old", sa, runs, true)).project, "/p/a");
+      assertEquals((await listRuns(runs, { project: "/p/a", me: b })).map((r) => r.id), ["r-b"]);
+    });
   } finally {
     await Deno.remove(t, { recursive: true });
   }
 });
 
-Deno.test("agents: follow and waitForAttention show a project's pending requests only, all shows every one", async () => {
+Deno.test("agents: follow and waitForAttention keep to the caller's session, mark an orphan's events, all shows every one", async () => {
   const t = await Deno.realPath(await Deno.makeTempDir());
   const runs = `${t}/runs`;
   try {
-    for (const [id, project] of [["a-one-0101", "/p/a"], ["b-two-0101", "/p/b"]]) {
-      const dir = `${runs}/${id}`;
-      await Deno.mkdir(dir, { recursive: true });
-      const meta = { id, profile: "x", command: "x", dir: "/", task: "t", started: "2026-01-01T00:00:00Z", project };
-      await Deno.writeTextFile(`${dir}/meta.json`, JSON.stringify(meta));
-      await Deno.writeTextFile(`${dir}/out.jsonl`, ask(`req-${id}`) + "\n");
-      await Deno.writeTextFile(`${dir}/claude.pid`, String(Deno.pid));
-    }
-    const first = async (scope: Scope) => {
-      const ac = new AbortController();
-      const got: string[] = [];
-      for await (const a of follow(runs, 50, ac.signal, scope)) {
-        got.push(a.id);
-        if (got.length >= 2) break;
-        setTimeout(() => ac.abort(), 300);
+    await withCoordinators(async ({ a, b, gone }) => {
+      for (
+        const [id, project, owner] of [["a-one-0101", "/p/a", a], ["b-two-0101", "/p/a", b], [
+          "dead-0101",
+          "/p/a",
+          gone,
+        ], ["z-three-0101", "/p/b", a]] as const
+      ) {
+        const dir = `${runs}/${id}`;
+        await Deno.mkdir(dir, { recursive: true });
+        const meta = {
+          id,
+          profile: "x",
+          command: "x",
+          dir: "/",
+          task: "t",
+          started: "2026-01-01T00:00:00Z",
+          project,
+          owner,
+        };
+        await Deno.writeTextFile(`${dir}/meta.json`, JSON.stringify(meta));
+        await Deno.writeTextFile(`${dir}/out.jsonl`, ask(`req-${id}`) + "\n");
+        await Deno.writeTextFile(`${dir}/claude.pid`, String(Deno.pid));
       }
-      return got;
-    };
-    assertEquals(await first({ project: "/p/a" }), ["a-one-0101"]);
-    assertEquals((await first({ project: "/p/a", all: true })).sort(), ["a-one-0101", "b-two-0101"]);
+      const first = async (scope: Scope) => {
+        const ac = new AbortController();
+        const got: Attention[] = [];
+        setTimeout(() => ac.abort(), 400);
+        for await (const x of follow(runs, 50, ac.signal, scope)) {
+          got.push(x);
+          if (got.length >= 4) break;
+        }
+        return got;
+      };
+      const mine = await first({ project: "/p/a", me: a });
+      const byId = (l: Attention[]) => l.toSorted((x, y) => x.id.localeCompare(y.id));
+      assertEquals(byId(mine).map((x) => [x.id, x.orphan]), [["a-one-0101", undefined], ["dead-0101", true]]);
+      assertEquals(byId(await first({ project: "/p/a", me: b })).map((x) => x.id), ["b-two-0101", "dead-0101"]);
+      assertEquals((await first({ project: "/p/a", me: a, view: "all" })).length, 4);
+      const found = await waitForAttention(300, runs, 50, { project: "/p/a", me: a });
+      assertEquals(found, [], "nothing new for it");
+    });
   } finally {
     await Deno.remove(t, { recursive: true });
   }
