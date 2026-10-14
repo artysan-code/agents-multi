@@ -24,19 +24,20 @@ export async function repoState() {
   const g = (...a: string[]) => run("git", ["-C", REPO, ...a]);
   const isRepo = (await g("rev-parse", "--git-dir")).code === 0;
   if (!isRepo) return { path: REPO, isRepo: false as const };
-  const branch = (await g("rev-parse", "--abbrev-ref", "HEAD")).out;
-  const upstream = (await g("rev-parse", "--abbrev-ref", "@{u}")).out || null;
-  const remote = (await g("remote", "get-url", "origin")).out || null;
-  let ahead = 0, behind = 0;
-  if (upstream) {
-    const c = (await g("rev-list", "--left-right", "--count", "@{u}...HEAD")).out.split(/\s+/);
-    behind = Number(c[0] ?? 0);
-    ahead = Number(c[1] ?? 0);
-  }
-  const dirtyFiles = (await g("status", "--porcelain")).out.split("\n").filter(Boolean);
-  const head = (await g("log", "-1", "--format=%h %s")).out;
-  const headDate = (await g("log", "-1", "--format=%cI")).out;
-  const fetchStamp = await lstat(`${CACHE}/fetch.stamp`);
+  // independent reads: one round of git processes, not eight in a row
+  const [branch, upstream, remote, counts, status, head, headDate, fetchStamp] = await Promise.all([
+    g("rev-parse", "--abbrev-ref", "HEAD").then((r) => r.out),
+    g("rev-parse", "--abbrev-ref", "@{u}").then((r) => r.out || null),
+    g("remote", "get-url", "origin").then((r) => r.out || null),
+    g("rev-list", "--left-right", "--count", "@{u}...HEAD").then((r) => r.out.split(/\s+/)),
+    g("status", "--porcelain").then((r) => r.out),
+    g("log", "-1", "--format=%h %s").then((r) => r.out),
+    g("log", "-1", "--format=%cI").then((r) => r.out),
+    lstat(`${CACHE}/fetch.stamp`),
+  ]);
+  // without an upstream the count fails and says nothing
+  const [behind, ahead] = upstream ? [Number(counts[0] ?? 0), Number(counts[1] ?? 0)] : [0, 0];
+  const dirtyFiles = status.split("\n").filter(Boolean);
   const fetchedAt = fetchStamp?.mtime ? fetchStamp.mtime.toISOString() : null;
   return {
     path: REPO,

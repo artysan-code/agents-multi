@@ -9,9 +9,12 @@ import { launchers, type Profile } from "./profiles.ts";
 // mentions "claude/versions" is not a session. /proc is read through readlink/cat (--allow-run)
 // because Deno without --allow-all refuses to read /proc/<pid>/* directly.
 async function procInfo(pid: number) {
-  const exe = (await run("readlink", [`/proc/${pid}/exe`])).out || null;
-  const cwd = (await run("readlink", [`/proc/${pid}/cwd`])).out || null;
-  const env = (await run("cat", [`/proc/${pid}/environ`])).out;
+  const [exeR, cwdR, envR] = await Promise.all([
+    run("readlink", [`/proc/${pid}/exe`]),
+    run("readlink", [`/proc/${pid}/cwd`]),
+    run("cat", [`/proc/${pid}/environ`]),
+  ]);
+  const exe = exeR.out || null, cwd = cwdR.out || null, env = envR.out;
   const m = env.split("\0").find((e) => e.startsWith("CLAUDE_CONFIG_DIR="));
   const profile = m ? m.slice("CLAUDE_CONFIG_DIR=".length).split("/").pop() ?? null : null;
   return { exe, cwd, profile };
@@ -56,13 +59,19 @@ export async function running() {
     "-af",
     "claude/versions/|/claude-bin( |$)|/claude-code/[0-9.]+/claude |claude-desktop[a-z-]*/(versions/[0-9.]+/)?claude-desktop",
   ]);
-  for (const line of pg.out.split("\n").filter(Boolean)) {
-    const [pidS, ...rest] = line.split(" ");
-    const pid = Number(pidS);
-    const cmd = rest.join(" ");
-    if (cmd.includes("--type=")) continue; // Electron child processes
-    const { exe, cwd, profile } = await procInfo(pid);
-    if (!exe) continue;
+  // one process's reads do not wait for another's; the lines keep their order in the result
+  const found = await Promise.all(
+    pg.out.split("\n").filter(Boolean).map(async (line) => {
+      const [pidS, ...rest] = line.split(" ");
+      const pid = Number(pidS);
+      const cmd = rest.join(" ");
+      if (cmd.includes("--type=")) return null; // Electron child processes
+      return { pid, cmd, ...await procInfo(pid) };
+    }),
+  );
+  for (const f of found) {
+    if (!f?.exe) continue;
+    const { pid, cmd, exe, cwd, profile } = f;
     const embedded = exe.match(/\/claude-code\/([0-9.]+)\/claude$/);
     const native = exe.match(/claude\/versions\/([0-9.]+)$/);
     if (embedded || native) {

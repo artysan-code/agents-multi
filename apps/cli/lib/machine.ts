@@ -23,25 +23,30 @@ export async function machine() {
   // Claude Desktop lives in user space (bin/claude-desktop-update); the system package is what a
   // machine had before the migration, and what the doctor asks to remove.
   const droot = `${LIB}/claude-desktop`;
-  const cur = await run("readlink", ["-f", `${droot}/current`]);
-  const desktop = desktopVersions(
-    await listDir(`${droot}/versions`),
-    cur.code === 0 ? cur.out.split("/").pop() ?? null : null,
-  );
-  const desktopPkg = await run("pacman", ["-Q", "claude-desktop"]);
+  const names = await profileNames();
+  // the probes do not depend on each other: they start together
+  const [cur, droots, desktopPkg, systemdEnv, kbuild, cliBin, cliDirs, embeddedDirs] = await Promise.all([
+    run("readlink", ["-f", `${droot}/current`]),
+    listDir(`${droot}/versions`),
+    run("pacman", ["-Q", "claude-desktop"]),
+    has("systemctl").then((ok) => ok ? run("systemctl", ["--user", "show-environment"]) : null),
+    has("kbuildsycoca6"),
+    run("readlink", ["-f", `${BIN}/claude-bin`]),
+    listDir(`${HOME}/.local/share/claude/versions`),
+    Promise.all(names.map(async (p) => listDir(`${await desktopDir(p)}/claude-code`))),
+  ]);
+  const desktop = desktopVersions(droots, cur.code === 0 ? cur.out.split("/").pop() ?? null : null);
   const desktopSystem = desktopPkg.code === 0 ? desktopPkg.out.split(/\s+/)[1]?.split("-")[0] ?? null : null;
   const desktopVersion = desktop.current ?? desktopSystem;
-  const systemd = await has("systemctl") &&
-    managerHome((await run("systemctl", ["--user", "show-environment"])).out) === HOME;
-  const kde = (Deno.env.get("XDG_CURRENT_DESKTOP") ?? "").toUpperCase().includes("KDE") || await has("kbuildsycoca6");
-  const cliBin = await run("readlink", ["-f", `${BIN}/claude-bin`]);
+  const systemd = !!systemdEnv && managerHome(systemdEnv.out) === HOME;
+  const kde = (Deno.env.get("XDG_CURRENT_DESKTOP") ?? "").toUpperCase().includes("KDE") || kbuild;
   const cliVersion = cliBin.code === 0 ? cliBin.out.split("/").pop() ?? null : null;
-  const cliVersions = (await listDir(`${HOME}/.local/share/claude/versions`)).filter((v) => /^\d+\.\d+\.\d+$/.test(v));
+  const cliVersions = cliDirs.filter((v) => /^\d+\.\d+\.\d+$/.test(v));
   const embedded: Record<string, string[]> = {};
-  for (const p of await profileNames()) {
-    const v = (await listDir(`${await desktopDir(p)}/claude-code`)).filter((x) => /^\d+\.\d+\.\d+$/.test(x));
+  names.forEach((p, i) => {
+    const v = embeddedDirs[i].filter((x) => /^\d+\.\d+\.\d+$/.test(x));
     if (v.length) embedded[p] = v;
-  }
+  });
   return {
     hostname: Deno.hostname(),
     graphical,
