@@ -6,7 +6,7 @@
 
 import { REPO } from "./lib/paths.ts";
 
-const ROOTS = ["apps/cli", "shared/mcp/lib", "apps/ui/dist"];
+const ROOTS = ["apps/cli", "shared/mcp", "apps/ui/dist"];
 const SKIP = /\/(tests|node_modules)(\/|$)/;
 
 async function files(root: string, dir: string, out: string[]) {

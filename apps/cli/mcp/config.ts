@@ -10,14 +10,15 @@ import { RUNTIME } from "../lib/paths.ts";
 import { profileNames } from "../lib/profiles.ts";
 import { running } from "../lib/processes.ts";
 import { backup, hasDesktop, loadState, saveState } from "./apply.ts";
-import { wanted } from "./placement.ts";
+import { codeVersion } from "../codeversion.ts";
+import { launchServers, syncGateway } from "./gateway.ts";
 import { loadRegistry, type Registry } from "./registry.ts";
 
 export const mcpConfigPath = (profile: string) => `${RUNTIME}/${profile}/mcp.json`;
 
 /** Pure: the file a profile's launcher passes, as text. */
 export function launchConfig(reg: Registry, profile: string): string {
-  return JSON.stringify({ mcpServers: wanted(reg, { profile, surface: "cli" }) }, null, 2) + "\n";
+  return JSON.stringify({ mcpServers: launchServers(reg, profile) }, null, 2) + "\n";
 }
 
 /** Pure: `.claude.json` without the servers this setup once projected into it (by name: what the
@@ -36,7 +37,10 @@ export function withoutManaged<T extends { mcpServers?: Record<string, unknown> 
 /** Writes the profile's launch config when it differs from what the registry now says; true if it wrote. */
 export async function syncLaunchConfig(profile: string, reg?: Registry): Promise<boolean> {
   const path = mcpConfigPath(profile);
-  const text = launchConfig(reg ?? await loadRegistry(), profile);
+  reg ??= await loadRegistry();
+  // the gateway's token and configuration first: the config below points at them
+  if (reg.gateway?.enabled) await syncGateway(reg, await codeVersion());
+  const text = launchConfig(reg, profile);
   const have = await Deno.readTextFile(path).catch(() => null);
   if (have === text) return false;
   await writeAtomic(path, text);
