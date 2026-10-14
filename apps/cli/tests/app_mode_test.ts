@@ -210,7 +210,13 @@ Deno.test("denoFor and withDeno: app mode runs our servers on the runtime's Deno
 Deno.test("placement: launch.ts and the guard hooks run on the registry's Deno", () => {
   const reg: Registry = {
     profiles: ["p"],
-    launch: { script: "/rt/shared/mcp/lib/launch.ts", read: ["/v"], hooks: "/rt/shared/hooks", deno: "/rt/bin/deno" },
+    launch: {
+      script: "/rt/shared/mcp/lib/launch.ts",
+      shim: "/rt/shared/mcp/lib/launch.sh",
+      read: ["/v"],
+      hooks: "/rt/shared/hooks",
+      deno: "/rt/bin/deno",
+    },
     accounts: [{ service: "flows", name: "acme", url: "https://acme.example" }],
     servers: {
       flows: {
@@ -223,7 +229,8 @@ Deno.test("placement: launch.ts and the guard hooks run on the registry's Deno",
     },
   };
   const s = wanted(reg, { profile: "p", surface: "cli" })["flows-acme"];
-  assertEquals(s.command, "/rt/bin/deno");
+  assertEquals(s.command, "bash");
+  assertEquals((s.args as string[]).slice(0, 3), ["/rt/shared/mcp/lib/launch.sh", "/rt/bin/deno", "run"]);
   assertEquals(
     permissionRules(reg, "p").hooks[0].hooks[0].command,
     guardCommand("/rt/bin/deno", "/rt/shared/hooks/guard.ts"),

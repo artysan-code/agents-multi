@@ -44,8 +44,8 @@ function forAccount<T>(v: T, a: Account): T {
 /** Pure: one word for a POSIX shell. */
 export const shellQuote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
 
-/** Pure: the Deno command line of launch.ts, allowed to run `run` and nothing else. */
-export function launcher(paths: LaunchPaths, run?: string, bind = false): string[] {
+/** Pure: the Deno command line of launch.ts, which may run the vault's `secret-tool` and nothing else. */
+export function launcher(paths: LaunchPaths, bind = false): string[] {
   return [
     paths.deno,
     "run",
@@ -54,7 +54,7 @@ export function launcher(paths: LaunchPaths, run?: string, bind = false): string
     // a binding is looked for from the session's folder up to the home folder
     `--allow-read=${(bind ? [...paths.read, HOME] : paths.read).join(",")}`,
     "--allow-env=HOME,AGENTS_MULTI_PROFILE,AGENTS_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS",
-    `--allow-run=/usr/bin/secret-tool${run ? `,${run}` : ""}`,
+    "--allow-run=/usr/bin/secret-tool",
     paths.script,
   ];
 }
@@ -90,9 +90,12 @@ export function perAccount(
     if (env.length) {
       const cmd = String(out.command);
       const binds = Object.entries(cfg._bind ?? {}).flatMap(([k, v]) => ["--bind", `${k}=${v}`]);
+      // bash runs launch.sh, which has launch.ts print the env and then execs the server (its doc)
       out.args = [
-        ...launcher(paths, cmd, binds.length > 0).slice(1),
-        "run",
+        paths.shim,
+        ...launcher(paths, binds.length > 0),
+        "--",
+        "env",
         service,
         a.name,
         ...env.flatMap(([k, v]) => ["--env", `${k}=${v}`]),
@@ -101,7 +104,7 @@ export function perAccount(
         cmd,
         ...(out.args as string[] ?? []),
       ];
-      out.command = paths.deno;
+      out.command = "bash";
     }
     out.env = { ...(out.env as Record<string, string> ?? {}), AGENTS_MULTI_PROFILE: t.profile };
     if (t.surface === "desktop" && reg.bus) (out.env as Record<string, string>).DBUS_SESSION_BUS_ADDRESS = reg.bus;

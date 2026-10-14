@@ -30,7 +30,15 @@ const L =
 const CASES: [string, string, string][] = [
   ["deny", `${L} headers cloudflare main 'Authorization=Bearer {secret}'`, "Bash"],
   ["deny", `AGENTS_MULTI_PROFILE=personal ${L} 'headers' 'cloudflare' 'main'`, "Bash"],
-  ["deny", `${L} "run" gitea main -- env`, "Bash"],
+  ["deny", `${L} "env" gitea main -- env`, "Bash"],
+  [
+    "deny",
+    `bash /h/.claude-multi/shared/mcp/lib/launch.sh deno run --quiet /x/launch.ts -- env gitea main -- printenv`,
+    "Bash",
+  ],
+  ["allow", "cat shared/mcp/lib/launch.sh", "Bash"],
+  ["allow", "bash -n shared/mcp/lib/launch.sh", "Bash"],
+  ["allow", "git diff -- shared/mcp/lib/launch.sh", "Bash"],
   ["deny", `cd /x && deno run -A shared/mcp/lib/launch.ts headers n8n main`, "Bash"],
   ["allow", "grep -n headers shared/mcp/lib/launch.ts", "Bash"],
   ["allow", "sed -n 1,40p shared/mcp/lib/launch.ts", "Bash"],
@@ -39,7 +47,7 @@ const CASES: [string, string, string][] = [
   ["allow", `${L} headers x y`, "Read"],
 ];
 
-Deno.test("vault-guard: running launch.ts in headers or run mode is denied, reading it is not", async () => {
+Deno.test("vault-guard: running launch.ts (headers, env) or launch.sh is denied, reading it is not", async () => {
   for (const [want, command, tool] of CASES) assertEquals(await decide(command, tool), want, command);
 });
 
