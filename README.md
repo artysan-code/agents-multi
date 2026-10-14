@@ -435,10 +435,11 @@ restarts is picked up by Claude on its next call.
   launch, or `agents mcp sync`), `idleMinutes` and `port` tune it.
 - Each profile has a token in `~/.agents-multi/<profile>/mcp-token` (mode 0600), sent by `headersHelper`
   (`shared/mcp/gateway/headers.sh`); a token opens its own profile's paths and no other. The token is never
-  in an argument or in `mcp.json`, and the shared deny rules keep a session's Bash from reaching either the
-  port or the file.
+  in an argument or in `mcp.json`. The gateway itself refuses the tools in a server's `_deny`. The generated
+  settings add deny rules for the port in use and the token files: a barrier against error, not against a
+  hostile agent (Claude Code's sandbox is the real one: ADR 0008, _What protects what_).
 - Tool lists are cached per server, start command (the tool filters) and version, in
-  `~/.agents-multi/gateway/cache/`; the first real start fills them, `agents mcp warm` fills them now.
+  `~/.agents-multi/gateway/cache/`; the first real start fills them, `agents mcp warm` fills them now (`--force`: all again).
 - Not through the gateway: the `agents` hub (it needs its session's folder), servers with `_bind` (the project
   binding is read from the session's folder), remote servers, and everything Desktop reads.
 
