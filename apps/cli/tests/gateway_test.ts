@@ -26,6 +26,8 @@ import { gatewaySettings } from "../mcp/gateway-settings.ts";
 import { launchConfig } from "../mcp/config.ts";
 import { type Registry } from "../mcp/registry.ts";
 import { profileNames } from "../lib/profiles.ts";
+import { gatewayTokenProblem } from "../doctor/checks/gateway.ts";
+import { isGatewayCmdline } from "../console/gateway.ts";
 
 const [A, B] = await profileNames();
 
@@ -205,4 +207,18 @@ Deno.test("gatewayCommand: loopback only, its folder the only place it writes", 
   assert(cmd.includes("--allow-write=/rt/gateway"));
   assert(cmd.includes("--allow-read=/rt,/home/u/.cache/deno"));
   assertEquals(cmd.slice(-2), ["/rt/shared/mcp/gateway/server.ts", "/rt/gateway/backends.json"]);
+});
+
+Deno.test("gatewayTokenProblem: missing is a wait, readable by others is a failure", () => {
+  assertEquals(gatewayTokenProblem("/t", 0o100600), null);
+  assertEquals(gatewayTokenProblem("/t", null)?.status, "warn");
+  const open = gatewayTokenProblem("/t", 0o100644);
+  assertEquals(open?.status, "fail");
+  assertEquals(open?.fix, "chmod 600 /t");
+});
+
+Deno.test("isGatewayCmdline: only the gateway's own server script", () => {
+  assert(isGatewayCmdline("/rt/bin/deno\0run\0--quiet\0/rt/shared/mcp/gateway/server.ts\0/rt/gateway/backends.json\0"));
+  assert(!isGatewayCmdline("/rt/bin/deno\0run\0/rt/shared/mcp/tasks/server.ts\0"));
+  assert(!isGatewayCmdline(""));
 });

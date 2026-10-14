@@ -42,6 +42,7 @@ export const NON_PROFILE_DIRS = new Set([
   "bin",
   "providers",
   "tools",
+  "gateway",
 ]);
 
 export function expandHome(p: string) {
