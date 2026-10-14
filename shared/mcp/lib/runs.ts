@@ -15,19 +15,27 @@
 import { writeAtomic } from "./fs.ts";
 import { configDir } from "./owner.ts";
 import {
+  type Access,
+  accessOf,
+  adoptable,
+  adoptChild,
   type Attention,
   attentionBetween,
   attentionOf,
   type ChildState,
+  type Coordinator,
   inScope,
   launcherOf,
   lines,
   listChildren,
-  outOfScope,
+  markOrphans,
+  mayAct,
+  type Owned,
   type Owner,
   pidAlive,
   projectOf,
   readChild,
+  refusal,
   runsDir,
   sayTo,
   type Scope,
@@ -234,8 +242,12 @@ export interface Run {
   plan: Plan;
   state: RunState;
   alive: boolean;
-  /** whose it is (`owner.json`, written at the start); a run older than this has its folder's project */
-  owner?: Owner;
+  /** whose it is (`owner.json`, written at the start); a run older than this has its folder's project and
+   *  no owner: an orphan of it */
+  project?: string;
+  owner?: Coordinator;
+  /** how it relates to the caller, when read through a scope */
+  access?: Access;
 }
 
 const runnerAlive = (dir: string) => pidAlive(`${dir}/runner.pid`);
@@ -246,13 +258,13 @@ export async function readRun(id: string, runs = runsDir()): Promise<Run | null>
   const plan = await Deno.readTextFile(`${dir}/plan.json`).then(JSON.parse).catch(() => null) as Plan | null;
   const state = await Deno.readTextFile(`${dir}/state.json`).then(JSON.parse).catch(() => null) as RunState | null;
   if (!plan || !state) return null;
-  let owner = await Deno.readTextFile(`${dir}/owner.json`).then(JSON.parse).catch(() => undefined) as
-    | Owner
+  const o = await Deno.readTextFile(`${dir}/owner.json`).then(JSON.parse).catch(() => undefined) as
+    | Owned
     | undefined;
   // a run older than the scope belongs to the project of its folder
   const folder = plan.folder ?? plan.steps?.find((s) => s.folder)?.folder;
-  if (!owner && folder) owner = { project: await projectOf(folder) };
-  return { id, plan, state, alive: await runnerAlive(dir), owner };
+  const project = o?.project ?? (folder ? await projectOf(folder) : undefined);
+  return { id, plan, state, alive: await runnerAlive(dir), project, owner: o?.owner };
 }
 
 export async function listRuns(runs = runsDir(), scope?: Scope): Promise<Run[]> {
@@ -260,18 +272,37 @@ export async function listRuns(runs = runsDir(), scope?: Scope): Promise<Run[]> 
   try {
     for await (const e of Deno.readDir(runsRoot(runs))) {
       const r = e.isDirectory ? await readRun(e.name, runs) : null;
-      if (r && (!scope || inScope(r.owner, scope))) out.push(r);
+      if (!r) continue;
+      if (!scope) out.push(r);
+      else if (inScope(r, scope)) out.push({ ...r, access: accessOf(r, scope) });
     }
   } catch { /* no run yet */ }
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** A run the scope may act on (read or write); throws otherwise, with why. */
-export async function runIn(id: string, scope: Scope | undefined, runs = runsDir()): Promise<Run> {
+/** A run the scope may see; with `act`, one it may also act on (its own): throws otherwise, with why. */
+export async function runIn(id: string, scope: Scope | undefined, runs = runsDir(), act = false): Promise<Run> {
   const r = await readRun(id, runs);
   if (!r) throw new Error(`no run ${id}`);
-  if (scope && !inScope(r.owner, scope)) throw new Error(outOfScope(`run ${id}`, r.owner, scope));
-  return r;
+  if (!scope) return r;
+  if (!(act ? mayAct(r, scope) : inScope(r, scope))) throw new Error(refusal(`run ${id}`, r, scope));
+  return { ...r, access: accessOf(r, scope) };
+}
+
+/** Takes an orphan run of the caller's project, and its children with it: their owner becomes the
+ *  caller's coordinator. */
+export async function adoptRun(id: string, scope: Scope, runs = runsDir()): Promise<Coordinator> {
+  const r = await readRun(id, runs);
+  if (!r) throw new Error(`no run ${id}`);
+  const me = adoptable(`run ${id}`, r, scope);
+  await Deno.writeTextFile(
+    `${runsRoot(runs)}/${id}/owner.json`,
+    JSON.stringify({ project: r.project, owner: me }, null, 2),
+  );
+  for (const c of await listChildren(runs)) {
+    if (c.meta.run?.id === id && accessOf(c.meta, scope) === "orphan") await adoptChild(c.meta.id, scope, runs);
+  }
+  return me;
 }
 
 export const runEvents = (id: string, runs = runsDir()) =>
@@ -360,7 +391,7 @@ export async function answerRun(
   runs = runsDir(),
   scope?: Scope,
 ): Promise<void> {
-  const r = await runIn(id, scope, runs);
+  const r = await runIn(id, scope, runs, true);
   if (step && !r.state.steps[step]) throw new Error(`no step ${step} in ${id}`);
   if (step && choice !== "stop") {
     const want = choice === "go" ? "confirm" : "failed";
@@ -467,7 +498,8 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
         task: stepPrompt(plan, s, id, handoffOf),
         model: s.model,
         run: { id, step: sid },
-        owner: r.owner,
+        // read again: the run may have been adopted since the runner started
+        owner: await readRun(id, runs).then((x) => ({ project: x?.project ?? r.project ?? "/", owner: x?.owner })),
         mcpConfig: team,
         allowedTools: ["mcp__team__team_send"],
       },
@@ -578,6 +610,8 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
 
 // ---------------------------------------------------------------- what needs the owner
 
+const orphanRuns = (r: Run) => new Set(r.access === "orphan" ? [r.id] : []);
+
 /** What needs the owner, as it happens: first what waits now — every request and question of a child
  *  still running, every step to confirm or that failed — so a watch started again loses none; then each
  *  new request, question, finished turn, child gone, and each run's own events. A child of a run reports
@@ -593,11 +627,14 @@ export async function* follow(
     return {
       states: new Map(children.map((c) => [c.meta.id, c.state] as [string, ChildState])),
       ofRun: new Set(children.filter((c) => c.meta.run).map((c) => c.meta.id)),
+      orphans: new Set(children.filter((c) => c.access === "orphan").map((c) => c.meta.id)),
     };
   };
   let before = await look();
   for (const [id, st] of before.states) {
-    if (st.phase !== "ended") { for (const p of st.pending) yield attentionOf(id, p); }
+    if (st.phase !== "ended") {
+      for (const p of st.pending) yield* markOrphans([attentionOf(id, p)], before.orphans);
+    }
   }
   const seen = new Map<string, number>();
   // a running run whose runner is gone, for this many looks in a row (one start takes less), is news once
@@ -608,20 +645,20 @@ export async function* follow(
     if (r.state.status !== "running") continue;
     for (const [step, s] of Object.entries(r.state.steps)) {
       if (s.status === "confirm" || s.status === "failed") {
-        yield {
+        yield* markOrphans([{
           id: r.id,
           kind: s.status === "confirm" ? "run-confirm" : "run-failed",
           detail: s.status === "failed" ? `${step}: ${s.error ?? ""}` : `${step} is ready`,
           run: r.id,
           step,
-        };
+        }], orphanRuns(r));
       }
     }
   }
   while (!signal?.aborted) {
     await new Promise((res) => setTimeout(res, everyMs));
     const now = await look();
-    for (const a of attentionBetween(before.states, now.states)) {
+    for (const a of markOrphans(attentionBetween(before.states, now.states), now.orphans)) {
       if (!(now.ofRun.has(a.id) && (a.kind === "done" || a.kind === "ended"))) yield a;
     }
     before = now;
@@ -629,7 +666,7 @@ export async function* follow(
       const events = await runEvents(r.id, runs);
       for (const e of events.slice(seen.get(r.id) ?? 0)) {
         const a = attentionOfEvent(e);
-        if (a) yield a;
+        if (a) yield* markOrphans([a], orphanRuns(r));
       }
       seen.set(r.id, events.length);
       if (r.state.status !== "running" || r.alive) {
@@ -640,12 +677,12 @@ export async function* follow(
       gone.set(r.id, n);
       if (n === GONE) {
         const why = await runnerTail(`${runsRoot(runs)}/${r.id}`);
-        yield {
+        yield* markOrphans([{
           id: r.id,
           kind: "run-failed",
           detail: `its runner stopped${why ? `: ${why}` : ""} — retry without a step starts it again`,
           run: r.id,
-        };
+        }], orphanRuns(r));
       }
     }
   }

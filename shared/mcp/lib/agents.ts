@@ -20,6 +20,7 @@
 // whichever provider: the name is older than the second one.)
 
 import { configDir } from "./owner.ts";
+import { myCoordinator, type Proc, procAlive, type ProcReader, procReader, sameStart } from "./proc.ts";
 import { codexBin, codexHome, codexSandbox } from "./codex.ts";
 
 interface Meta {
@@ -38,26 +39,43 @@ interface Meta {
   mode?: ChildMode;
   /** the workflow run and step it is (runs.ts), when it is one */
   run?: { id: string; step: string };
-  /** whose it is: the project of the coordinator that started it, and that coordinator's session when
-   *  known. Absent in a child older than this: `readChild` gives it the project of its folder. */
+  /** whose it is (`Owned`). Absent in a child older than this: `readChild` gives it the project of its folder. */
   project?: string;
+  owner?: Coordinator;
+}
+
+/** The coordinator that owns a child or a run: its `claude` process (pid and start time, proc.ts) and, as
+ *  a note, the session id the environment gave it. */
+export interface Coordinator extends Proc {
   session?: string;
 }
 
-/** Who started a child or a run: the coordinator's project (the main repository's root) and session. */
+/** What says whose a child or a run is: the project of the coordinator that started it (the main
+ *  repository's root) and the coordinator. Without an `owner` it is an orphan of its project. */
+export interface Owned {
+  project?: string;
+  owner?: Coordinator;
+}
+
+/** Who starts a child or a run: a project always, a coordinator when there is one. */
 export interface Owner {
   project: string;
-  session?: string;
+  owner?: Coordinator;
 }
 
-/** What a caller may see and touch: its project, optionally narrowed to its own session (`mine`), or
- *  everything read-only (`all`). */
+/** What a caller may see and touch. By default its own session's children (and the orphans of its project,
+ *  which it can adopt); `project` also shows the project's other live coordinators' (read-only); `all` every
+ *  project's (read-only). `me` is the caller's coordinator; without one (a plain terminal) the person is
+ *  the coordinator of every child of the project. */
 export interface Scope {
   project: string;
-  session?: string;
-  mine?: boolean;
-  all?: boolean;
+  me?: Coordinator;
+  view?: "mine" | "project" | "all";
 }
+
+/** How something is related to a caller: `own` its own, `orphan` its project's with no live owner,
+ *  `peer` its project's under another live coordinator, `other` another project's. */
+export type Access = "own" | "orphan" | "peer" | "other";
 
 /** Pure: the main repository's root from a `.git` file's text (a linked worktree or a submodule), given
  *  the folder that holds it. A worktree's gitdir is `<main>/.git/worktrees/<name>`; a submodule's is
@@ -91,37 +109,65 @@ export async function projectOf(folder: string): Promise<string> {
   }
 }
 
-/** A caller's scope: its folder's project and its session (CLAUDE_CODE_SESSION_ID, when the environment
- *  has it: not having it never breaks anything, `mine` just narrows nothing). */
+/** A caller's scope: its folder's project, the coordinator it runs under, and what it asks to see. */
 export async function scopeOf(
-  opts: { all?: boolean; mine?: boolean; cwd?: string; session?: string } = {},
+  opts: { all?: boolean; project?: boolean; cwd?: string; me?: Coordinator | null; session?: string } = {},
 ): Promise<Scope> {
+  const found = opts.me === undefined ? myCoordinator() : opts.me;
   const session = opts.session ?? (Deno.env.get("CLAUDE_CODE_SESSION_ID") || undefined);
   return {
     project: await projectOf(opts.cwd ?? Deno.cwd()),
-    session,
-    mine: !!opts.mine && !!session,
-    all: !!opts.all,
+    me: found ? { ...found, ...(session ? { session } : {}) } : undefined,
+    view: opts.all ? "all" : opts.project ? "project" : "mine",
   };
 }
 
 /** The owner a caller's children and runs get. */
-export const ownerOf = (s: Scope): Owner =>
-  s.session ? { project: s.project, session: s.session } : { project: s.project };
+export const ownerOf = (s: Scope): Owner => s.me ? { project: s.project, owner: s.me } : { project: s.project };
 
-/** Pure: whether something owned by `owner` is the caller's to see and touch. One without a project
- *  is nobody's but `all`'s. `mine` also needs the same session. */
-export function inScope(owner: { project?: string; session?: string } | undefined, scope: Scope): boolean {
-  if (scope.all) return true;
-  if (!owner?.project || owner.project !== scope.project) return false;
-  return !(scope.mine && scope.session && owner.session !== scope.session);
+/** Pure: how something owned by `o` relates to the caller. A thing with no live owner process (none
+ *  recorded, pid gone, or the pid reused: another start time) is an orphan. */
+export function accessOf(o: Owned | undefined, scope: Scope, read: ProcReader = procReader): Access {
+  if (!o?.project || o.project !== scope.project) return "other";
+  if (!procAlive(o.owner, read)) return "orphan";
+  if (!scope.me) return "own";
+  return o.owner!.pid === scope.me.pid && sameStart(o.owner!.start, scope.me.start) ? "own" : "peer";
 }
 
-/** Why a caller may not touch something: its owner's project, or that it has none. */
-export const outOfScope = (what: string, owner: { project?: string } | undefined, scope: Scope) =>
-  `${what} belongs to ${
-    owner?.project ? `another project (${owner.project})` : "no known project (started before projects were recorded)"
-  }, this session is in ${scope.project}: only the coordinator of its project may act on it`;
+/** Pure: whether the caller may see it: its own and its project's orphans by default, with `project` the
+ *  other coordinators' of the project too, with `all` everything. */
+export function inScope(o: Owned | undefined, scope: Scope, read: ProcReader = procReader): boolean {
+  if (scope.view === "all") return true;
+  const a = accessOf(o, scope, read);
+  return a === "own" || a === "orphan" || (a === "peer" && scope.view === "project");
+}
+
+/** Pure: whether the caller may act on it (answer, say, stop): what is its own — and, for a person at a
+ *  plain terminal (no coordinator), any child of the project, an orphan included. An orphan is adopted first. */
+export function mayAct(o: Owned | undefined, scope: Scope, read: ProcReader = procReader): boolean {
+  const a = accessOf(o, scope, read);
+  return a === "own" || (!scope.me && a === "orphan");
+}
+
+/** Why a caller may not act on something. */
+export function refusal(what: string, o: Owned | undefined, scope: Scope, read: ProcReader = procReader): string {
+  switch (accessOf(o, scope, read)) {
+    case "other":
+      return `${what} belongs to another project (${o?.project ?? "unknown"}), this session is in ${scope.project}: ` +
+        "only the coordinator of its project may act on it";
+    case "peer":
+      return `${what} belongs to another live session of this project (pid ${o?.owner?.pid}): only that session ` +
+        "may act on it";
+    default:
+      return `${what} is an orphan (its coordinator is gone): adopt it first (\`agents agent adopt\`, or the ` +
+        "adopt tool), then act on it";
+  }
+}
+
+/** Pure: an orphan of the caller's own project is adoptable by a caller that has a coordinator. Adoption
+ *  never crosses projects. */
+export const mayAdopt = (o: Owned | undefined, scope: Scope, read: ProcReader = procReader): boolean =>
+  !!scope.me && accessOf(o, scope, read) === "orphan";
 
 /** The modes a child may run in: the ones where whatever is not allowed comes back as a request. */
 export type ChildMode = "auto" | "acceptEdits" | "default";
@@ -349,6 +395,8 @@ export interface Attention {
   /** for a request: the rule "yes for the session" would add */
   session?: string;
   questions?: Question[];
+  /** the child's coordinator is gone: adopt it before answering */
+  orphan?: true;
 }
 
 /** Pure: a pending request as something that needs the owner. */
@@ -449,6 +497,8 @@ async function answeredOf(dir: string): Promise<Set<string>> {
 export interface Child {
   meta: Meta;
   state: ChildState;
+  /** how it relates to the caller, when read through a scope */
+  access?: Access;
 }
 
 export async function readChild(id: string, runs = runsDir()): Promise<Child | null> {
@@ -470,18 +520,58 @@ export async function listChildren(runs = runsDir(), scope?: Scope): Promise<Chi
     for await (const e of Deno.readDir(runs)) {
       if (!e.isDirectory) continue;
       const c = await readChild(e.name, runs);
-      if (c && (!scope || inScope(c.meta, scope))) out.push(c);
+      if (!c) continue;
+      if (!scope) out.push(c);
+      else if (inScope(c.meta, scope)) out.push({ ...c, access: accessOf(c.meta, scope) });
     }
   } catch { /* no child yet */ }
   return out.sort((a, b) => a.meta.started.localeCompare(b.meta.started));
 }
 
-/** A child the scope may act on (read or write); throws otherwise, with why. */
-export async function childIn(id: string, scope: Scope | undefined, runs = runsDir()): Promise<Child> {
+/** A child the scope may see; with `act`, one it may also act on (its own): throws otherwise, with why. */
+export async function childIn(id: string, scope: Scope | undefined, runs = runsDir(), act = false): Promise<Child> {
   const c = await readChild(id, runs);
   if (!c) throw new Error(`no child ${id}`);
-  if (scope && !inScope(c.meta, scope)) throw new Error(outOfScope(id, c.meta, scope));
-  return c;
+  if (!scope) return c;
+  if (!(act ? mayAct(c.meta, scope) : inScope(c.meta, scope))) throw new Error(refusal(id, c.meta, scope));
+  return { ...c, access: accessOf(c.meta, scope) };
+}
+
+/** Takes an orphan of the caller's project: its owner becomes the caller's coordinator. Never another
+ *  project's, never one whose owner is alive. */
+export async function adoptChild(id: string, scope: Scope, runs = runsDir()): Promise<Coordinator> {
+  const c = await readChild(id, runs);
+  if (!c) throw new Error(`no child ${id}`);
+  const me = adoptable(id, c.meta, scope);
+  const file = `${runs}/${id}/meta.json`;
+  const meta = await Deno.readTextFile(file).then(JSON.parse) as Meta;
+  meta.project = c.meta.project;
+  meta.owner = me;
+  await Deno.writeTextFile(file, JSON.stringify(meta, null, 2));
+  return me;
+}
+
+/** The caller's coordinator when it may adopt `o`; throws with why otherwise. */
+export function adoptable(
+  what: string,
+  o: Owned | undefined,
+  scope: Scope,
+  read: ProcReader = procReader,
+): Coordinator {
+  if (!scope.me) throw new Error("only a coordinator's session adopts: this caller runs under no `claude` process");
+  if (!mayAdopt(o, scope, read)) {
+    const a = accessOf(o, scope, read);
+    throw new Error(
+      a === "own"
+        ? `${what} is already yours`
+        : a === "orphan"
+        ? `${what} cannot be adopted`
+        : a === "peer"
+        ? `${what} has a live coordinator (pid ${o?.owner?.pid}): it is not an orphan`
+        : `${what} belongs to another project (${o?.project ?? "unknown"}): never adopted across projects`,
+    );
+  }
+  return scope.me;
 }
 
 /** Writes a line on a child's stdin; refused when the child is gone (a fifo with no reader would block). */
@@ -665,7 +755,7 @@ export async function startChild(
   if (i.run) meta.run = i.run;
   const owner = i.owner ?? { project: await projectOf(dir) };
   meta.project = owner.project;
-  if (owner.session) meta.session = owner.session;
+  if (owner.owner) meta.owner = owner.owner;
   await Deno.writeTextFile(`${run}/meta.json`, JSON.stringify(meta, null, 2));
   const fifo = await new Deno.Command("mkfifo", { args: [`${run}/in`] }).output();
   if (!fifo.success) throw new Error("could not make the child's stdin");
@@ -701,7 +791,7 @@ export async function startChild(
 }
 
 export async function sayTo(id: string, text: string, runs = runsDir(), scope?: Scope): Promise<void> {
-  await childIn(id, scope, runs);
+  await childIn(id, scope, runs, true);
   if (!text.trim()) throw new Error("nothing to say");
   await send(`${runs}/${id}`, userLine(text));
 }
@@ -716,7 +806,7 @@ export async function answer(
   answers?: Record<string, string>,
   scope?: Scope,
 ) {
-  const c = await childIn(id, scope, runs);
+  const c = await childIn(id, scope, runs, true);
   const p = c.state.pending.find((x) => x.request === request);
   if (!p) throw new Error(`${id} is not waiting on ${request}`);
   await send(`${runs}/${id}`, answerLine(p, verdict, message, answers));
@@ -738,7 +828,7 @@ export async function answer(
 /** Ends a child after its current turn (its stdin closes), or at once with `force`. */
 export async function stopChild(id: string, force = false, runs = runsDir(), scope?: Scope): Promise<void> {
   if (!validId(id)) throw new Error(`no child ${id}`);
-  if (scope) await childIn(id, scope, runs);
+  if (scope) await childIn(id, scope, runs, true);
   const dir = `${runs}/${id}`;
   for (const f of force ? ["holder.pid", "claude.pid"] : ["holder.pid"]) {
     const pid = Number((await Deno.readTextFile(`${dir}/${f}`).catch(() => "")).trim());
@@ -750,8 +840,18 @@ export async function stopChild(id: string, force = false, runs = runsDir(), sco
   }
 }
 
-const look = async (runs: string, scope?: Scope) =>
-  new Map((await listChildren(runs, scope)).map((c) => [c.meta.id, c.state] as const));
+/** The children a scope sees: their states, and which of them are orphans. */
+export async function look(runs: string, scope?: Scope) {
+  const children = await listChildren(runs, scope);
+  return {
+    states: new Map(children.map((c) => [c.meta.id, c.state] as [string, ChildState])),
+    orphans: new Set(children.filter((c) => c.access === "orphan").map((c) => c.meta.id)),
+  };
+}
+
+/** Pure: what needs the owner, with the orphans' marked: their coordinator is gone, adopt before answering. */
+export const markOrphans = (found: Attention[], orphans: Set<string>): Attention[] =>
+  found.map((a) => orphans.has(a.id) ? { ...a, orphan: true as const } : a);
 
 /** Waits until something needs the owner (a request, a finished turn, a child gone), or `timeoutMs`. */
 export async function waitForAttention(
@@ -760,11 +860,12 @@ export async function waitForAttention(
   everyMs = 2000,
   scope?: Scope,
 ): Promise<Attention[]> {
-  const before = await look(runs, scope);
+  const before = (await look(runs, scope)).states;
   for (let t = 0; t < timeoutMs; t += everyMs) {
     await new Promise((r) => setTimeout(r, everyMs));
-    const found = attentionBetween(before, await look(runs, scope));
-    if (found.length) return found;
+    const now = await look(runs, scope);
+    const found = attentionBetween(before, now.states);
+    if (found.length) return markOrphans(found, now.orphans);
   }
   return [];
 }

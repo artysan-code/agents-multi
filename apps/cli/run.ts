@@ -2,6 +2,7 @@
 // plan, see them, answer a step that waits, stop one; `drive` is the runner itself, which `start` launches.
 
 import {
+  adoptRun,
   answerRun,
   type Choice,
   drive,
@@ -15,8 +16,9 @@ import {
 import { ownerOf, scopeOf } from "../../shared/mcp/lib/agents.ts";
 
 const USAGE = `agents run start <plan.json>                  a workflow run from its plan (docs/adr/0005)
-agents run list [--all] [--mine]              the runs of this folder's project, their steps' state
-agents run status <id> [--all]                a run in full, with what happened (--all: another project's, read-only)
+agents run list [--project] [--all]           your session's runs (and the project's orphans), their steps' state
+agents run status <id> [--project] [--all]    a run in full, with what happened (the others': read-only)
+agents run adopt <id>                         takes an orphan run of this project (and its children): its coordinator is gone
 agents run answer <id> [step] go|retry|skip|stop   the owner's decision (stop without a step: the whole run)
 agents run resume <id>                        starts its runner again, when it is gone
 agents run drive <id>                         the runner itself (start launches it)`;
@@ -28,7 +30,10 @@ export async function runCommand(args: string[]): Promise<number> {
     if (i >= 0) rest.splice(i, 1);
     return i >= 0;
   };
-  const flags = () => ({ all: has("--all"), mine: has("--mine") });
+  const flags = () => {
+    has("--mine"); // the default now, still accepted
+    return { all: has("--all"), project: has("--project") };
+  };
   try {
     switch (sub) {
       case "start": {
@@ -42,7 +47,14 @@ export async function runCommand(args: string[]): Promise<number> {
         if (!all.length) console.log("no runs");
         for (const r of all) {
           const steps = Object.entries(r.state.steps).map(([k, v]) => `${k}:${v.status}`).join(" ");
-          console.log(`${r.id}  ${r.state.status}${r.alive ? "" : " (no runner)"}  ${steps}`);
+          const mark = r.access === "orphan"
+            ? " [orphan]"
+            : r.access === "peer"
+            ? " [other session]"
+            : r.access === "other"
+            ? " [other project]"
+            : "";
+          console.log(`${r.id}  ${r.state.status}${r.alive ? "" : " (no runner)"}${mark}  ${steps}`);
         }
         return 0;
       }
@@ -60,9 +72,15 @@ export async function runCommand(args: string[]): Promise<number> {
         console.log(`${choice} → ${id}${step ? `/${step}` : ""}`);
         return 0;
       }
+      case "adopt": {
+        if (!rest[0]) break;
+        const me = await adoptRun(rest[0], await scopeOf());
+        console.log(`adopted ${rest[0]} (session pid ${me.pid})`);
+        return 0;
+      }
       case "resume": {
         if (!rest[0]) break;
-        const r = await runIn(rest[0], await scopeOf());
+        const r = await runIn(rest[0], await scopeOf(), undefined, true);
         if (r.alive || r.state.status !== "running") {
           console.log(r.alive ? `${r.id} has its runner` : `${r.id} is ${r.state.status}`);
           return 0;
