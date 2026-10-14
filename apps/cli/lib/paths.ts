@@ -30,7 +30,7 @@ export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
 
 /** Reserved entries under RUNTIME that are not profiles. */
-export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "config", "app", "bin"]);
+export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "config", "app", "bin", "providers"]);
 
 export function expandHome(p: string) {
   return p.startsWith("~/") ? `${HOME}/${p.slice(2)}` : p;

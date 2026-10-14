@@ -33,6 +33,7 @@ cm_t() {
     updated)      it="aggiornata dalla %s"; en="updated from %s" ;;
     available)    it="c'è la %s"; en="%s is out" ;;
     keep)         it="la %s resta per tornare indietro (agents update --rollback)"; en="%s is kept to roll back to (agents update --rollback)" ;;
+    no_npm)       it="npm non c'è: serve per installare Codex"; en="npm is missing: Codex is installed with it" ;;
     pruned)       it="tolte le versioni vecchie: %s"; en="old versions removed: %s" ;;
     bootstrap)    it="Claude Code non c'è: lo installa l'installer di Anthropic"; en="no Claude Code yet: Anthropic's installer puts it in place" ;;
     wrapper)      it="il comando claude passa di nuovo da agents-multi"; en="the claude command goes through agents-multi again" ;;

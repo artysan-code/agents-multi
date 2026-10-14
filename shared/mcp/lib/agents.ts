@@ -12,8 +12,15 @@
 //   <runs>/<id>/answers.jsonl the requests answered, and how
 //   <runs>/<id>/claude.pid, holder.pid, err.log
 // Closing the fifo's holder ends the session after its current turn.
+//
+// A provider is what differs between children: Claude Code, or Codex (OpenAI). Both speak these files:
+// a Codex child's process is `agents/codex-driver.ts`, which runs `codex exec` turn by turn and writes
+// `out.jsonl` in Claude's stream-json, so sending, reading its state and stopping are the same code.
+// What a provider adds is how its process starts (`Provider`). (`claude.pid` is the child's process,
+// whichever provider: the name is older than the second one.)
 
 import { configDir } from "./owner.ts";
+import { codexBin, codexHome, codexSandbox } from "./codex.ts";
 
 interface Meta {
   id: string;
@@ -24,6 +31,8 @@ interface Meta {
   dir: string;
   task: string;
   started: string;
+  /** which provider runs it; absent in a child older than the second one (Claude) */
+  provider?: ProviderName;
   model?: string;
   /** the permission mode it runs in (`childMode`) */
   mode?: ChildMode;
@@ -115,7 +124,7 @@ export const outOfScope = (what: string, owner: { project?: string } | undefined
   }, this session is in ${scope.project}: only the coordinator of its project may act on it`;
 
 /** The modes a child may run in: the ones where whatever is not allowed comes back as a request. */
-type ChildMode = "auto" | "acceptEdits" | "default";
+export type ChildMode = "auto" | "acceptEdits" | "default";
 
 /** Pure: a child's mode from its profile's `defaultMode`. A bypass, `dontAsk` (which denies without
  *  asking) or `plan` (which acts on nothing) would leave the owner out, so they become `default`. */
@@ -504,6 +513,8 @@ export function childId(profile: string, dir: string, at: Date, rand: string): s
 
 interface StartInput {
   profile: string;
+  /** default Claude */
+  provider?: ProviderName;
   dir: string;
   task: string;
   model?: string;
@@ -539,6 +550,90 @@ export const claudeSessionVars = (names: string[]): string[] =>
 export const isUnder = (home: string, path: string) =>
   home !== "" && (path === home || path.startsWith(`${home.replace(/\/$/, "")}/`));
 
+export type ProviderName = "claude" | "codex";
+
+/** What a provider does for a child: the program it runs, and the last line of the child's script — the
+ *  `exec` that replaces the shell — with the variables that line reads (values never go in the text). */
+interface Provider {
+  /** the program, or why this profile cannot use the provider */
+  command(profile: string, config: string, runtime: string): Promise<string>;
+  exec(
+    i: {
+      command: string;
+      mode: ChildMode;
+      model?: string;
+      profile: string;
+      runtime: string;
+      mcpConfig?: string;
+      allowedTools?: string[];
+    },
+  ): {
+    line: string;
+    env: Record<string, string>;
+  };
+}
+
+const claudeProvider: Provider = {
+  async command(profile, config) {
+    const command = await launcherOf(profile, config);
+    if (!command) throw new Error(`no profile ${profile}`);
+    return command;
+  },
+  exec(i) {
+    const env: Record<string, string> = { L: i.command, P: i.mode };
+    if (i.model) env.M = i.model;
+    if (i.mcpConfig) env.C = i.mcpConfig;
+    if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
+    return {
+      line: 'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
+        "--input-format stream-json --output-format stream-json --verbose " +
+        '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
+      env,
+    };
+  },
+};
+
+/** Codex: the profile declares an account (`"codex": true` in its manifest), whose `CODEX_HOME` is in the
+ *  profile's runtime folder. Differences from Claude: no permission request ever reaches the owner (the
+ *  sandbox is fixed by the profile's mode, `codexSandbox`), a message sent during a turn waits for the next
+ *  one, and the extra MCP servers and allowed tools of a workflow's team channel are not given (Claude's
+ *  flags) — a Codex step has no `team_send`. */
+const codexProvider: Provider = {
+  async command(profile, config, runtime) {
+    const m = await Deno.readTextFile(`${config}/profiles/${profile}/profile.json`).then(JSON.parse).catch(() => null);
+    if (!m) throw new Error(`no profile ${profile}`);
+    if (m.codex !== true) {
+      throw new Error(`profile ${profile} has no Codex account: set "codex": true in its profile.json, then log in`);
+    }
+    const bin = codexBin(runtime);
+    if (!(await Deno.stat(bin).catch(() => null))?.isFile) {
+      throw new Error(`Codex is not installed: run \`agents update --codex\``);
+    }
+    // only whether a login is there, never what it holds
+    if (!(await Deno.stat(`${codexHome(runtime, profile)}/auth.json`).catch(() => null))?.isFile) {
+      throw new Error(`profile ${profile} has no Codex login: the owner runs \`agents codex ${profile} login\``);
+    }
+    return bin;
+  },
+  exec(i) {
+    const driver = new URL("../agents/codex-driver.ts", import.meta.url).pathname;
+    const env: Record<string, string> = {
+      D: driver,
+      CODEX_BIN: i.command,
+      CODEX_HOME: codexHome(i.runtime, i.profile),
+      CODEX_SANDBOX: codexSandbox(i.mode),
+    };
+    if (i.model) env.CODEX_MODEL = i.model;
+    return {
+      line: 'exec deno run --quiet --no-config --no-lock --allow-read="$R" --allow-write="$R" ' +
+        '--allow-run="$CODEX_BIN" --allow-env=CODEX_BIN,CODEX_SANDBOX,CODEX_MODEL "$D" "$R" > /dev/null 2>> "$R/err.log"',
+      env,
+    };
+  },
+};
+
+const providers: Record<ProviderName, Provider> = { claude: claudeProvider, codex: codexProvider };
+
 /** Starts a child: its folder, the fifo held open, the session detached from whoever asked. */
 export async function startChild(
   i: StartInput,
@@ -547,8 +642,10 @@ export async function startChild(
   config = configDir(),
   runtime = `${home}/.agents-multi`,
 ): Promise<Meta> {
-  const command = await launcherOf(i.profile, config);
-  if (!command) throw new Error(`no profile ${i.profile}`);
+  const name = i.provider ?? "claude";
+  const provider = providers[name];
+  if (!provider) throw new Error(`no provider ${name}`);
+  const command = await provider.command(i.profile, config, runtime);
   const given = i.dir.replace(/^~(?=\/|$)/, home);
   if (!(await Deno.stat(given).catch(() => null))?.isDirectory) throw new Error(`no folder ${given}`);
   const dir = await Deno.realPath(given);
@@ -562,6 +659,7 @@ export async function startChild(
   await Deno.mkdir(run, { recursive: true });
   const mode = await modeOf(i.profile, runtime);
   const meta: Meta = { id, profile: i.profile, command, dir, task: i.task, started: new Date().toISOString(), mode };
+  if (name !== "claude") meta.provider = name;
   if (i.model) meta.model = i.model;
   if (i.run) meta.run = i.run;
   const owner = i.owner ?? { project: await projectOf(dir) };
@@ -572,19 +670,23 @@ export async function startChild(
   if (!fifo.success) throw new Error("could not make the child's stdin");
   // values reach the shell as variables, never inside the script's text
   // a child is a session of its own: none of the variables of the Claude session that started the hub
+  const exec = provider.exec({
+    command,
+    mode,
+    model: i.model,
+    profile: i.profile,
+    runtime,
+    mcpConfig: i.mcpConfig,
+    allowedTools: i.allowedTools,
+  });
   const script = [
     'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',
     'sleep infinity > "$R/in" & echo $! > "$R/holder.pid"',
     'cd "$W" || exit 1',
     'echo $$ > "$R/claude.pid"',
-    'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
-    "--input-format stream-json --output-format stream-json --verbose " +
-    '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
+    exec.line,
   ].join("\n");
-  const env: Record<string, string> = { R: run, W: dir, L: command, P: mode, V: CLAUDE_SESSION_VARS };
-  if (i.model) env.M = i.model;
-  if (i.mcpConfig) env.C = i.mcpConfig;
-  if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
+  const env: Record<string, string> = { R: run, W: dir, V: CLAUDE_SESSION_VARS, ...exec.env };
   await new Deno.Command("setsid", {
     args: ["-f", "bash", "-c", script],
     env,

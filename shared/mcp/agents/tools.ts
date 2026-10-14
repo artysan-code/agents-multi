@@ -41,6 +41,7 @@ const fail = (e: unknown) => ({
 const view = (c: Child, full = false) => ({
   id: c.meta.id,
   profile: c.meta.profile,
+  provider: c.meta.provider ?? "claude",
   folder: c.meta.dir,
   project: c.meta.project ?? null,
   task: full ? c.meta.task : c.meta.task.slice(0, 200),
@@ -71,11 +72,23 @@ export function registerAgentTools(server: McpServer) {
       folder: z.string().describe("the project's folder, e.g. ~/work/acme/site"),
       task: z.string().describe("what it has to do, complete: it knows only this and the folder"),
       model: z.string().optional(),
+      provider: z.enum(["claude", "codex"]).optional().describe(
+        "claude (default) or codex: the profile must have a Codex account. A Codex child never asks for a permission: " +
+          "its sandbox follows the profile's mode (read-only, or workspace-write where Claude may edit) and a message " +
+          "sent during a turn waits for the next one",
+      ),
     },
-  }, async (i: { profile: string; folder: string; task: string; model?: string }) => {
+  }, async (i: { profile: string; folder: string; task: string; model?: string; provider?: "claude" | "codex" }) => {
     try {
       const owner = ownerOf(await scopeOf());
-      const m = await startChild({ profile: i.profile, dir: i.folder, task: i.task, model: i.model, owner });
+      const m = await startChild({
+        profile: i.profile,
+        dir: i.folder,
+        task: i.task,
+        model: i.model,
+        provider: i.provider,
+        owner,
+      });
       return text({ started: m.id, profile: m.profile, folder: m.dir });
     } catch (e) {
       return fail(e);

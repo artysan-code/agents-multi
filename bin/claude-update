@@ -2,6 +2,7 @@
 # claude-update: update orchestrator for the whole multi-account Claude setup.
 #
 #   [CLI]     Claude Code    - internal updater, then restores claude-bin and the ~/.local/bin/claude wrapper
+#   [Codex]   Codex CLI      - the pinned @openai/codex (shared/providers/codex.version) in an agents-multi prefix, no root
 #   [Desktop] Claude Desktop - claude-desktop-update: verified official .deb, user space, no root
 #   [Self]    agents-multi   - the repo itself: fast-forward-only pull on a clean working tree, then
 #                              console/app restart if their code changed and install with Claude closed (apps/cli/selfupdate.ts)
@@ -10,6 +11,7 @@
 #   claude-update              # everything: CLI + Desktop + agents-multi
 #   claude-update --cli        # Claude Code only
 #   claude-update --desktop    # Claude Desktop only (all variants)
+#   claude-update --codex      # install or move Codex CLI to the pinned version (the others only update it when present)
 #   claude-update --self       # agents-multi only
 #   claude-update --auto       # what the timer runs: check and update whatever is behind, silently
 #   claude-update --check      # does NOT update: only reports what is outdated (--json for scripts)
@@ -177,6 +179,38 @@ do_cli() (
   true
 )
 
+# --- [Codex] Codex CLI (OpenAI) ---------------------------------------------
+# A provider beside Claude Code: npm's `@openai/codex` at the version the repository pins, installed
+# into an agents-multi-owned prefix (never global, no root). A newer Codex arrives by moving the pin.
+CODEX_PREFIX="$(cm_runtime)/providers/codex"
+codex_pin()     { tr -d '[:space:]' < "$REPO_DIR/shared/providers/codex.version"; }
+codex_current() {
+  sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CODEX_PREFIX/node_modules/@openai/codex/package.json" 2>/dev/null | head -n1
+}
+do_codex() (
+  set -e
+  command -v npm >/dev/null || { note "$(cm_t no_npm)"; exit 1; }
+  mkdir -p "$CODEX_PREFIX"
+  local out
+  out="$(npm install --prefix "$CODEX_PREFIX" --no-audit --no-fund --save-exact "@openai/codex@$(codex_pin)" 2>&1)" ||
+    { printf '%s\n' "$out" | tail -n 4 >> "$NOTES"; exit 1; }
+)
+# a row for Codex: installs or moves it to the pin; `quiet` leaves a machine without Codex alone
+codex_step() {
+  local from now rc
+  from="$(codex_current)"
+  [[ "$1" == quiet && -z "$from" ]] && return 0
+  [[ -n "$from" && "$from" == "$(codex_pin)" ]] && { cm_row ok "Codex" "$from" "$(cm_t latest)"; return 0; }
+  cm_working "Codex"
+  do_codex; rc=$?
+  now="$(codex_current)"
+  if [[ $rc -ne 0 ]]; then
+    cm_row fail "Codex" "$from" "$(cm_t failed)"; cm_update_log codex failed "$from" "" "update failed"; failed=1
+  elif [[ -n "$from" ]]; then cm_row new "Codex" "$now" "$(cm_t updated "$from")"; cm_update_log codex installed "$from" "$now" ""
+  else cm_row new "Codex" "$now" "$(cm_t installed)"; cm_update_log codex installed "" "$now" ""; fi
+  show_notes
+}
+
 # --- [Desktop] Claude Desktop (all variants) ---------------------------------
 # claude-desktop-update downloads, verifies and extracts in user space; the new version is put in
 # use (with the variants rebuilt) only when no Claude Desktop is running. Exit 5 = staged but
@@ -264,6 +298,7 @@ case "${1:-}" in
   ""|--all)    scope="all" ;;
   --cli)       scope="cli" ;;
   --desktop)   scope="desktop" ;;
+  --codex)     scope="codex" ;;
   --self)      scope="self" ;;
   --auto)      scope="auto" ;;
   --check)     do_check "${2:-}"; exit $? ;;
@@ -271,7 +306,7 @@ case "${1:-}" in
     if [[ "${2:-}" == "--desktop" ]]; then "$BIN_DIR/claude-desktop-update" --rollback; exit $?; fi
     take_lock; do_rollback; exit $? ;;
   -h|--help)   sed -n '2,22p' "$0"; exit 0 ;;
-  *) echo "Usage: claude-update [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]  (default: all)" >&2; exit 2 ;;
+  *) echo "Usage: claude-update [--cli|--desktop|--codex|--self|--auto|--check [--json]|--rollback [--desktop]]  (default: all)" >&2; exit 2 ;;
 esac
 
 # --auto: the timer's run. Updates whatever the check finds outdated, without asking and without
@@ -286,6 +321,13 @@ if [[ "$scope" == "auto" ]]; then
     do_cli >/dev/null 2>&1; rc=$?
     if [[ $rc -eq 0 ]]; then cm_update_log cli installed "$from" "$(cli_current)" ""
     else cm_update_log cli failed "$from" "" "$(tail -n 3 "$NOTES")"; cat "$NOTES" >&2; fi
+  fi
+  # Codex, where it is installed and not at the pin (silent like the rest; failures to the log)
+  if [[ -n "$(codex_current)" && "$(codex_current)" != "$(codex_pin)" ]]; then
+    from="$(codex_current)"
+    do_codex >/dev/null 2>&1; crc=$?
+    if [[ $crc -eq 0 ]]; then cm_update_log codex installed "$from" "$(codex_current)" ""
+    else cm_update_log codex failed "$from" "" "auto update failed"; fi
   fi
   QUIET=1 "$BIN_DIR/claude-desktop-update" >/dev/null; rc=$?
   do_check --json >/dev/null 2>&1 || true
@@ -322,6 +364,9 @@ if [[ "$scope" == "all" || "$scope" == "cli" ]]; then
   fi
   show_notes
 fi
+
+[[ "$scope" == "codex" ]] && codex_step now
+[[ "$scope" == "all" ]] && codex_step quiet
 
 if [[ "$scope" == "all" || "$scope" == "desktop" ]]; then
   cm_working "Claude Desktop"

@@ -5,6 +5,7 @@ import { type Check } from "../lib/output.ts";
 import { appChecks } from "./checks/app.ts";
 import { binariesChecks } from "./checks/binaries.ts";
 import { brainChecks } from "./checks/brain.ts";
+import { codexChecks } from "./checks/codex.ts";
 import { configChecks } from "./checks/config.ts";
 import { consoleChecks } from "./checks/console.ts";
 import { desktopChecks, desktopPackagingChecks } from "./checks/desktop.ts";
@@ -47,6 +48,7 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
   desktopPackagingChecks,
   loginChecks,
   agentsChecks,
+  codexChecks,
 ];
 
 /**

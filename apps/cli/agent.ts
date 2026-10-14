@@ -19,7 +19,8 @@ import {
 } from "../../shared/mcp/lib/agents.ts";
 import { follow } from "../../shared/mcp/lib/runs.ts";
 
-const USAGE = `agents agent start <profile> <folder> <task…> [--model m]   a child in that folder, with that profile
+const USAGE =
+  `agents agent start <profile> <folder> <task…> [--model m] [--provider codex]   a child in that folder, with that profile
 agents agent list [--all] [--mine]                  the children of this folder's project: phase, what it waits for
 agents agent status <id> [--all]                    what it said last, its requests
 agents agent say <id> <text…>                       a message, taken between two of its steps
@@ -62,10 +63,12 @@ export async function agentCommand(args: string[]): Promise<number> {
     switch (sub) {
       case "start": {
         const model = opt("--model");
+        const provider = opt("--provider") ?? "claude";
+        if (provider !== "claude" && provider !== "codex") throw new Error("--provider is claude or codex");
         const [profile, dir, ...task] = rest;
         if (!profile || !dir || !task.length) break;
         const owner = ownerOf(await scopeOf());
-        const m = await startChild({ profile, dir, task: task.join(" "), model, owner });
+        const m = await startChild({ profile, dir, task: task.join(" "), model, provider, owner });
         console.log(`started ${m.id}: ${m.command} in ${m.dir}`);
         return 0;
       }
