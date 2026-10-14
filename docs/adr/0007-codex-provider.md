@@ -1,4 +1,4 @@
-# 0006 — Codex as a second provider
+# 0007 — Codex as a second provider
 
 - Status: accepted (step 1 of phase C)
 - Date: 2026-10-14
