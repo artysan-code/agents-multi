@@ -26,6 +26,7 @@ import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./us
 import { serve } from "./console/server.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
+import { codexCommand } from "./codex.ts";
 import { selfCheck, selfCheckRow, selfUpdate, settlePending } from "./selfupdate.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { uiCommand } from "./ui.ts";
@@ -141,6 +142,9 @@ switch (cmd) {
     }
     break;
   }
+  case "codex":
+    Deno.exit(await codexCommand(rest));
+    break;
   case "update": {
     const p = new Deno.Command(`${REPO}/bin/claude-update`, {
       args: rest,
@@ -245,8 +249,9 @@ switch (cmd) {
   status  [--json]            versions, updates, repository sync, profiles and what is mounted, running instances
   sync    [--fetch]           align the repository (fetch when stale, ff-only pull on a clean tree)
   mcp     check|sync|health [--probe]   MCP registry to each profile's mcp.json (cli, passed with --mcp-config) and claude_desktop_config.json (desktop, while closed); --probe really starts each server and waits for initialize
-  update  [--cli|--desktop|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and agents-multi itself (--auto: what the timer runs)
+  update  [--cli|--desktop|--codex|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and agents-multi itself (--auto: what the timer runs)
   self-update [--check [--json]] [--settle] [--quiet]   agents-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
+  codex   <profile> [args…] | limits <profile>   Codex (OpenAI) with a profile's own account (login: agents codex <profile> login); its usage windows
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
   vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,

@@ -28,6 +28,9 @@ export interface Manifest {
    *  these projects (comma-separated folder prefixes, `work/acme`), and no memory pages. Its
    *  conversations belong to that account, so nothing personal goes into them. */
   brainScope?: string;
+  /** The profile has a Codex account (OpenAI), isolated in `<runtime>/<profile>/codex`: the owner logs in
+   *  with `agents codex <profile> login`. */
+  codex?: boolean;
 }
 const MANIFEST_DEFAULT: Manifest = { skills: "all", agents: "all", commands: "all" };
 
