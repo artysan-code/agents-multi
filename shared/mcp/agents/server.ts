@@ -6,6 +6,7 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
 import { registerAgentTools } from "./tools.ts";
+import { registerRoutineTools } from "./routine-tools.ts";
 
 const instructions =
   "You coordinate the owner's agents: Claude Code sessions (children) of any profile, at work in a project's folder " +
@@ -44,8 +45,14 @@ const instructions =
   "Accounts: `limits` shows every account's usage windows (Claude's and Codex's, 5h / 7d / 30d) before you pick a " +
   "profile or a provider for a child; no windows means no reading lately, not an empty account. A child may be " +
   "`provider: codex` where the profile has a Codex account: it never asks a permission, and gets only the reads of " +
-  "the MCP servers. Which account a job uses is the owner's call.";
+  "the MCP servers. Which account a job uses is the owner's call.\n" +
+  'Routines: "do this tonight at 2", "every weekday at 9" → routine_add (after the owner agrees to what runs, when and in ' +
+  "which repository). The console fires it later, unattended, in a worktree on its own branch agent/<run>; it " +
+  "may push that branch and the development branch, never main or release. Its children belong to the project " +
+  "with no session: they show as orphans (`orphan: true`), and whatever they ask waits — tell the owner, and " +
+  "adopt only when they want it carried on.";
 
 const server = new McpServer({ name: "agents", version: "0.1.0" }, { instructions });
 registerAgentTools(server);
+registerRoutineTools(server);
 await server.connect(new StdioServerTransport());

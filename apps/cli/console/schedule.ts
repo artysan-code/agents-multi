@@ -4,7 +4,9 @@
 // job still running when its time comes again is not started twice, and one that runs too long is
 // stopped. Its output goes to the backend's (the app's backend.log).
 
+import { desktopNotify } from "../notify.ts";
 import { RUNTIME } from "../lib/paths.ts";
+import { startRoutines } from "../../../shared/mcp/lib/routines.ts";
 
 export interface Job {
   name: string;
@@ -112,4 +114,13 @@ export function startSchedule(jobs: Job[], log: (s: string) => void = console.lo
     stopped = true;
     for (const t of timers.values()) clearTimeout(t);
   };
+}
+
+/** The routines (ADR 0010): in both modes the backend ticks over the owner's routines, fires what is due in
+ *  a worktree under the repository's run policy, and tells the owner, with a desktop notification, what
+ *  waits for them. Unlike the jobs above it has no systemd timer to replace: it is the backend's only. */
+export function startRoutineSchedule(log: (s: string) => void = console.log): () => void {
+  const stop = startRoutines((title, body) => void desktopNotify(title, body).catch(() => {}), log);
+  log("schedule: routines");
+  return stop;
 }

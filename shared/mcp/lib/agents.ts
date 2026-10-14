@@ -613,6 +613,8 @@ interface StartInput {
   /** more MCP servers for this child (`--mcp-config`, JSON), and tools it may use without asking */
   mcpConfig?: string;
   allowedTools?: string[];
+  /** rules it is denied whatever its mode (`--disallowedTools`; Claude only) */
+  disallowedTools?: string[];
 }
 
 /** The mode a profile's sessions start in: `defaultMode` in its built settings (`<runtime>/<profile>`,
@@ -683,6 +685,7 @@ export async function startChild(
     runtime,
     mcpConfig: i.mcpConfig,
     allowedTools: i.allowedTools,
+    disallowedTools: i.disallowedTools,
   });
   const script = [
     'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',
