@@ -5,6 +5,27 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.0-beta.2] - 2026-10-14
+
+### Added
+
+- **doctor**: gateway checks; deny rules keep a session from calling the gateway by hand (29552bc)
+- **console**: the console supervises the MCP gateway; agents gateway and agents mcp warm (d836f95)
+- **mcp**: lazy gateway core, backend runner and the CLI side of its launch config (5cb92b4)
+- **agents**: isolate the hub by coordinator session, with orphan adoption (f31bdb0)
+
+### Fixed
+
+- **gateway**: own fingerprints, server-side _deny, derived deny rules, file log (e6d491b)
+- **gateway**: shared start, cache, drain and orphans fixed in the server; integration test (8cf8222)
+- **ci**: statusline test finds jq where the runner installs it (8742192)
+
+### Documentation
+
+- **mcp**: ADR 0008 says what protects what; README on deny and warm --force (6f81b63)
+- **agents**: the gateway invariant (29b924a)
+- **mcp**: ADR 0008 and README for the lazy gateway (96b216d)
+
 ## [1.2.0-beta.1] - 2026-10-14
 
 ### Added
