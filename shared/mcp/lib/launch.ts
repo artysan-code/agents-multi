@@ -7,9 +7,11 @@
 // the address, the name. The secret stays a `{secret}` placeholder, and this script fills it in when
 // the server starts, reading the vault (vault.ts) like our own servers do:
 //
-//   launch.ts run <service> <account> [--env NAME=template]… [--bind key=template]… -- <command> [args…]
-//       a stdio server: starts <command> with those variables set, and stands between it and the
-//       client only as a pipe (stdio inherited, signals forwarded, its exit code returned).
+//   launch.ts env <service> <account> [--env NAME=template]… [--bind key=template]… -- <command> [args…]
+//       a stdio server: resolves the variables and the arguments the project's binding adds, prints
+//       them as NUL-ended records on stdout (envRecords) and exits. It never starts <command>: that is
+//       launch.sh, which reads the records, exports the variables and `exec`s the command, so no
+//       wrapper stays alive between Claude and the server (a Deno process cannot exec).
 //       --bind ties the server to what a project chose for it: the nearest .claude/claude-multi.json
 //       from the folder Claude started in, upwards, holds { "<service>": { "<key>": value } }; each
 //       key set there adds its template as an argument, {value} filled in (true adds it as it is,
@@ -27,7 +29,7 @@ import { getSecret } from "./vault.ts";
 import { amEnv } from "./env.ts";
 
 interface LaunchArgs {
-  mode: "run" | "headers";
+  mode: "env" | "headers";
   service: string;
   account: string;
   /** name → template, `{secret}` still in it */
@@ -41,7 +43,7 @@ interface LaunchArgs {
 /** Pure: the command line, or an error that says what is wrong with it. */
 export function parseLaunchArgs(argv: string[]): LaunchArgs {
   const [mode, service, account, ...rest] = argv;
-  if (mode !== "run" && mode !== "headers") throw new Error(`usage: launch.ts run|headers <service> <account> …`);
+  if (mode !== "env" && mode !== "headers") throw new Error(`usage: launch.ts env|headers <service> <account> …`);
   if (!service || !account) throw new Error("launch.ts: service and account are required");
   const vars: Record<string, string> = {}, binds: Record<string, string> = {};
   const pair = (into: Record<string, string>) => (s: string) => {
@@ -58,16 +60,26 @@ export function parseLaunchArgs(argv: string[]): LaunchArgs {
     if ((rest[i] !== "--env" && rest[i] !== "--bind") || i + 1 >= rest.length) {
       throw new Error(`launch.ts: unexpected "${rest[i]}" before --`);
     }
-    pair(rest[i] === "--env" ? vars : binds)(rest[++i]);
+    const isEnv = rest[i] === "--env";
+    pair(isEnv ? vars : binds)(rest[++i]);
+    const name = rest[i].slice(0, rest[i].indexOf("="));
+    if (isEnv && !/^[A-Za-z_]\w*$/.test(name)) throw new Error(`launch.ts: "${name}" is not a variable name`);
   }
   const [command, ...args] = rest.slice(i + 1);
-  if (!command) throw new Error("launch.ts run: the command goes after --");
+  if (!command) throw new Error("launch.ts env: the command goes after --");
   return { mode, service, account, vars, binds, command, args };
 }
 
 /** Pure: the templates with the secret in place. */
 export function fill(vars: Record<string, string>, secret: string): Record<string, string> {
   return Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, v.replaceAll("{secret}", secret)]));
+}
+
+/** Pure: what `env` prints for launch.sh — one NUL-ended record per variable (`E` NAME=value) and per
+ *  argument the binding adds (`A` arg). NUL cannot be in a value, so no quoting and nothing to eval. */
+export function envRecords(vars: Record<string, string>, extra: string[]): string {
+  return [...Object.entries(vars).map(([k, v]) => `E${k}=${v}`), ...extra.map((a) => `A${a}`)]
+    .map((r) => `${r}\0`).join("");
 }
 
 /** Where a project keeps what it chose for agents-multi's servers, under its folder. Never committed:
@@ -145,33 +157,19 @@ async function main() {
     console.log(JSON.stringify(vars));
     return;
   }
-  let args = a.args;
+  let extra: string[] = [];
   if (Object.keys(a.binds).length) {
     const found = findBinding(Deno.cwd(), Deno.env.get("HOME") ?? "/nonexistent");
-    const extra = found ? bindArgs(found.binding, a.service, a.binds) : [];
+    extra = found ? bindArgs(found.binding, a.service, a.binds) : [];
     // stderr is the server's log in the client: what it is tied to, or that it is not
     console.error(
       extra.length
         ? `${a.service}-${account.name}: ${extra.join(" ")} (${found!.path})`
         : `${a.service}-${account.name}: not bound to a project (no "${a.service}" in a ${BINDING_FILE} from ${Deno.cwd()} up)`,
     );
-    args = [...args, ...extra];
   }
-  const child = new Deno.Command(a.command!, {
-    args,
-    env: vars,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  }).spawn();
-  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
-    Deno.addSignalListener(sig, () => {
-      try {
-        child.kill(sig);
-      } catch { /* already gone */ }
-    });
-  }
-  Deno.exit((await child.status).code);
+  const out = new TextEncoder().encode(envRecords(vars, extra));
+  for (let n = 0; n < out.length;) n += Deno.stdout.writeSync(out.subarray(n));
 }
 
 if (import.meta.main) {

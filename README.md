@@ -430,12 +430,13 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
 
 ```json
 "n8n": {
-  "_service": "n8n", "type": "stdio", "command": "npx", "args": ["-y", "n8n-mcp@2"],
+  "_service": "n8n", "type": "stdio", "_npm": { "package": "n8n-mcp", "version": "2.92.1", "bin": "n8n-mcp" },
   "_perAccount": { "env": { "N8N_API_URL": "{url}", "N8N_API_KEY": "{secret}" } },
   "_deny": ["n8n_delete_workflow"], "_ask": ["n8n_test_workflow"]
 },
 "supabase": {
-  "_service": "supabase", "type": "stdio", "command": "npx", "args": ["-y", "@supabase/mcp-server-supabase@0.13.0"],
+  "_service": "supabase", "type": "stdio", "args": ["--features=database,docs"],
+  "_npm": { "package": "@supabase/mcp-server-supabase", "version": "0.13.0", "bin": "mcp-server-supabase" },
   "_perAccount": { "env": { "SUPABASE_ACCESS_TOKEN": "{secret}" } },
   "_bind": { "project": "--project-ref={value}", "readOnly": "--read-only" }
 },
@@ -443,9 +444,13 @@ account-backed server. `{url}`, `{host}` and `{name}` anywhere in the entry are 
 ```
 
 - **The secret never enters a config.** `{secret}` stays a placeholder; `shared/mcp/lib/launch.ts`
-  fills it in from the vault when the server starts: as the wrapper of a stdio command (`env`), or
-  as Claude Code's `headersHelper` for an http server (`headers`). It refuses an account the profile
-  does not see.
+  fills it in from the vault when the server starts: for a stdio command (`env`: `launch.sh` reads what
+  it prints, exports it and `exec`s the server, so no wrapper process stays alive), or as Claude Code's
+  `headersHelper` for an http server (`headers`). It refuses an account the profile does not see.
+- **`_npm: { package, version, bin }`**: a third-party npm server is installed by `agents install` at
+  that version into `~/.agents-multi/tools/mcp` (only when a profile reaches it) and started as
+  `node <bin>`, never through `npx` (whose `npm exec` parent stays alive for the whole session). The
+  version is pinned there and nowhere else; the doctor says when it is missing or stale.
 - `"_perAccount": {}` is a server that signs in by itself (OAuth): one per account, each logged in
   once with `/mcp`. Mark those accounts `"auth": "oauth"`: they have nothing in the vault.
 - **`_allow` / `_deny` / `_ask`**: tool names that become `mcp__<server>__<tool>` rules in each

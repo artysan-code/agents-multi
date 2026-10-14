@@ -27,6 +27,9 @@
 //              reads the nearest .claude/claude-multi.json from the folder Claude started in, up to
 //              the home folder; each key the project sets under the service's name adds its argument
 //              ({value} filled in, true as it is). No file: the server is as it always was.
+//   _npm       { package, version, bin }: an npm package installed at that version into tools/mcp by
+//              `agents install` and started as `node <its bin> <args>` — never through npx, whose
+//              `npm exec` parent stays alive for the whole session. The one place the version is pinned
 //   _version   the version of a program installed outside the repository (not pinned by its command)
 //              that the lists were checked against: mcp health --probe warns when the server reports
 //              another one in its initialize answer
@@ -38,7 +41,7 @@
 import { type Account, loadAccounts } from "../../../shared/mcp/lib/accounts.ts";
 import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
 import { readJson } from "../lib/fs.ts";
-import { CONFIG, HOME, REPO, RUNTIME } from "../lib/paths.ts";
+import { CONFIG, HOME, MCP_TOOLS, REPO, RUNTIME } from "../lib/paths.ts";
 import { installation, type Mode } from "../lib/mode.ts";
 import { diffPatch, mergePatch } from "../lib/json-patch.ts";
 import { loadManifest, profileNames } from "../lib/profiles.ts";
@@ -65,7 +68,16 @@ export type ServerCfg = Record<string, unknown> & {
   _bind?: Record<string, string>;
   /** how to install the program the server runs, when it is not part of this repository */
   _install?: string;
+  /** an npm package, installed at this version into MCP_TOOLS by `agents install`: the command is `node`
+   *  on its `bin` (withNpm), `args` are the arguments after it */
+  _npm?: NpmPackage;
 };
+export interface NpmPackage {
+  package: string;
+  version: string;
+  /** the name of the executable the package links in node_modules/.bin */
+  bin: string;
+}
 export type Surface = "cli" | "desktop";
 /** Where launch.ts is and what it may read: the paths of this machine, kept out of the pure code. */
 export interface LaunchPaths {
@@ -74,6 +86,8 @@ export interface LaunchPaths {
   hooks: string;
   /** the Deno our servers and their wrapper run on (denoFor) */
   deno: string;
+  /** launch.sh: execs a server after launch.ts has resolved its secret */
+  shim: string;
 }
 export interface Registry {
   profiles: string[];
@@ -124,6 +138,19 @@ export async function writePersonRegistry(reg: RawRegistry) {
  *  dev mode the `deno` on PATH, as ever. */
 export const denoFor = (mode: Mode, runtime = RUNTIME) => mode === "app" ? `${runtime}/bin/deno` : "deno";
 
+/** Pure: the executable an npm package links, in the tools prefix. */
+export const npmBin = (prefix: string, bin: string) => `${prefix}/node_modules/.bin/${bin}`;
+
+/** Pure: every server with an `_npm` run as `node <installed bin> <args>`. */
+export function withNpm(servers: Record<string, ServerCfg>, prefix: string): Record<string, ServerCfg> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([n, c]) => [
+      n,
+      c._npm ? { ...c, command: "node", args: [npmBin(prefix, c._npm.bin), ...(c.args as string[] ?? [])] } : c,
+    ]),
+  );
+}
+
 /** Pure: every server whose command is `deno` run by `deno` instead. */
 export function withDeno(servers: Record<string, ServerCfg>, deno: string): Record<string, ServerCfg> {
   return Object.fromEntries(
@@ -140,7 +167,7 @@ export function withDeno(servers: Record<string, ServerCfg>, deno: string): Reco
 export async function loadRegistry(): Promise<Registry> {
   const raw = await rawRegistry();
   const deno = denoFor((await installation()).mode);
-  const r = { ...raw, servers: withDeno(expandHome(raw.servers), deno) };
+  const r = { ...raw, servers: withNpm(withDeno(expandHome(raw.servers), deno), MCP_TOOLS) };
   const brainScopes: Record<string, string> = {};
   for (const p of await profileNames()) {
     const s = (await loadManifest(p)).brainScope;
@@ -161,6 +188,7 @@ export function launchPaths(deno = "deno"): LaunchPaths {
   const mcp = `${RUNTIME}/shared/mcp`;
   return {
     script: `${mcp}/lib/launch.ts`,
+    shim: `${mcp}/lib/launch.sh`,
     read: [vaultDir(), `${RUNTIME}/config`, `${HOME}/.cache/deno`],
     hooks: `${RUNTIME}/shared/hooks`,
     deno,
@@ -206,6 +234,7 @@ export function registryProblems(reg: Pick<Registry, "servers">): string[] {
         out.push(`${name}: ${t} is in more than one of _allow, _deny, _ask, _auto`);
       }
     }
+    if (cfg._npm && cfg.command) out.push(`${name}: _npm is the command (node on the package's bin): drop "command"`);
     if (!_perAccount) continue;
     if (!cfg._service) out.push(`${name}: _perAccount needs _service (whose accounts?)`);
     if (isHttp(cfg) && _perAccount.env) out.push(`${name}: an http server takes _perAccount.headers, not env`);

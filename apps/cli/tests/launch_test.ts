@@ -1,12 +1,19 @@
 // Tests for shared/mcp/lib/launch.ts: the command line it takes, where the secret goes, and how a
 // project ties a server to itself.
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
-import { bindArgs, bindingDirs, fill, findBinding, parseLaunchArgs } from "../../../shared/mcp/lib/launch.ts";
+import {
+  bindArgs,
+  bindingDirs,
+  envRecords,
+  fill,
+  findBinding,
+  parseLaunchArgs,
+} from "../../../shared/mcp/lib/launch.ts";
 
-Deno.test("parseLaunchArgs: run takes --env and --bind pairs, then the command after --", () => {
+Deno.test("parseLaunchArgs: env takes --env and --bind pairs, then the command after --", () => {
   assertEquals(
     parseLaunchArgs([
-      "run",
+      "env",
       "n8n",
       "main",
       "--env",
@@ -21,7 +28,7 @@ Deno.test("parseLaunchArgs: run takes --env and --bind pairs, then the command a
       "kept",
     ]),
     {
-      mode: "run",
+      mode: "env",
       service: "n8n",
       account: "main",
       vars: { URL: "https://x", KEY: "{secret}" },
@@ -31,10 +38,10 @@ Deno.test("parseLaunchArgs: run takes --env and --bind pairs, then the command a
     },
   );
   // a value may hold "=" itself
-  assertEquals(parseLaunchArgs(["run", "s", "a", "--env", "Q=a=b", "--", "c"]).vars, { Q: "a=b" });
+  assertEquals(parseLaunchArgs(["env", "s", "a", "--env", "Q=a=b", "--", "c"]).vars, { Q: "a=b" });
   assertEquals(
     parseLaunchArgs([
-      "run",
+      "env",
       "s",
       "a",
       "--env",
@@ -63,11 +70,27 @@ Deno.test("parseLaunchArgs: headers takes NAME=template pairs", () => {
 
 Deno.test("parseLaunchArgs: refuses what it cannot read", () => {
   assertThrows(() => parseLaunchArgs(["exec", "s", "a"]));
-  assertThrows(() => parseLaunchArgs(["run", "s"]));
-  assertThrows(() => parseLaunchArgs(["run", "s", "a", "--env", "K=v"]), Error, "after --");
-  assertThrows(() => parseLaunchArgs(["run", "s", "a", "stray", "--", "c"]));
-  assertThrows(() => parseLaunchArgs(["run", "s", "a", "--bind", "=x", "--", "c"]));
+  assertThrows(() => parseLaunchArgs(["run", "s", "a", "--", "c"])); // the old mode is gone
+  assertThrows(() => parseLaunchArgs(["env", "s"]));
+  assertThrows(() => parseLaunchArgs(["env", "s", "a", "--env", "K=v"]), Error, "after --");
+  assertThrows(() => parseLaunchArgs(["env", "s", "a", "stray", "--", "c"]));
+  assertThrows(() => parseLaunchArgs(["env", "s", "a", "--bind", "=x", "--", "c"]));
+  // a variable name is what the shell exports: nothing else gets into launch.sh's records
+  assertThrows(() => parseLaunchArgs(["env", "s", "a", "--env", "A-B=v", "--", "c"]), Error, "variable name");
   assertThrows(() => parseLaunchArgs(["headers", "s", "a", "=nokey"]));
+});
+
+Deno.test("envRecords: NUL-ended, E for a variable and A for an argument, the value as it is", () => {
+  assertEquals(
+    envRecords({ K: "s e;cr'et\n$(x)", U: "https://x" }, ["--project-ref=abc", "--read-only"]),
+    [
+      "EK=s e;cr'et\n$(x)",
+      "EU=https://x",
+      "A--project-ref=abc",
+      "A--read-only",
+    ].map((r) => `${r}\0`).join(""),
+  );
+  assertEquals(envRecords({}, []), "");
 });
 
 Deno.test("fill: {secret} replaced everywhere it appears, the rest untouched", () => {
