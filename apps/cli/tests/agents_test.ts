@@ -8,14 +8,19 @@ import {
   attentionBetween,
   attentionOf,
   childId,
+  childIn,
   childMode,
   type ChildState,
+  inScope,
   isUnder,
   listChildren,
+  projectOf,
   questionsOf,
   readChild,
+  rootFromGitFile,
   runsBy,
   sayTo,
+  type Scope,
   sessionRule,
   startChild,
   stateOf,
@@ -23,7 +28,7 @@ import {
   validId,
   whatOf,
 } from "../../../shared/mcp/lib/agents.ts";
-import { follow } from "../../../shared/mcp/lib/runs.ts";
+import { answerRun, follow, listRuns, runIn } from "../../../shared/mcp/lib/runs.ts";
 import { REPO } from "../lib/paths.ts";
 
 const ev = (o: unknown) => JSON.stringify(o);
@@ -348,5 +353,141 @@ Deno.test("agents: a child starts without the variables of the Claude session th
   } finally {
     for (const n of [...set, "AGENTS_MULTI_KEEP"]) Deno.env.delete(n);
     await Deno.remove(home, { recursive: true });
+  }
+});
+
+// ---- isolation by project (docs/adr/0005, "Isolated by project")
+
+Deno.test("agents: rootFromGitFile — a worktree resolves to its main repository, a submodule to itself", () => {
+  assertEquals(rootFromGitFile("gitdir: /h/p/main/.git/worktrees/wt\n", "/h/p/wt"), "/h/p/main");
+  assertEquals(rootFromGitFile("gitdir: ../main/.git/worktrees/wt", "/h/p/wt"), "/h/p/main");
+  assertEquals(rootFromGitFile("gitdir: ../.git/modules/sub", "/h/p/sub"), "/h/p/sub");
+  assertEquals(rootFromGitFile("not a gitdir file", "/h/p/x"), "/h/p/x");
+});
+
+Deno.test("agents: projectOf — a repository's subfolder, its worktree, a plain folder", async () => {
+  const t = await Deno.realPath(await Deno.makeTempDir());
+  try {
+    const git = (cwd: string, ...a: string[]) =>
+      new Deno.Command("git", {
+        args: a,
+        cwd,
+        clearEnv: true,
+        env: { PATH: Deno.env.get("PATH") ?? "", HOME: t },
+        stdout: "null",
+        stderr: "null",
+      })
+        .output();
+    await Deno.mkdir(`${t}/repo/src/deep`, { recursive: true });
+    await git(`${t}/repo`, "init", "-q");
+    await git(`${t}/repo`, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x");
+    await git(`${t}/repo`, "worktree", "add", "-q", `${t}/wt`, "-b", "other");
+    await Deno.mkdir(`${t}/plain/sub`, { recursive: true });
+    assertEquals(await projectOf(`${t}/repo/src/deep`), `${t}/repo`);
+    assertEquals(await projectOf(`${t}/wt`), `${t}/repo`);
+    assertEquals(await projectOf(`${t}/plain/sub`), `${t}/plain/sub`);
+  } finally {
+    await Deno.remove(t, { recursive: true });
+  }
+});
+
+Deno.test("agents: inScope — same project, other project, unknown project, all, mine", () => {
+  const here: Scope = { project: "/p/a", session: "s1" };
+  assert(inScope({ project: "/p/a", session: "s2" }, here));
+  assert(inScope({ project: "/p/a" }, here));
+  assert(!inScope({ project: "/p/b", session: "s1" }, here));
+  assert(!inScope({}, here), "an older child, with no project, is not the project's");
+  assert(!inScope(undefined, here));
+  assert(inScope({}, { ...here, all: true }), "all sees what has no project too");
+  assert(inScope({ project: "/p/b" }, { ...here, all: true }));
+  assert(!inScope({ project: "/p/a", session: "s2" }, { ...here, mine: true }));
+  assert(inScope({ project: "/p/a", session: "s1" }, { ...here, mine: true }));
+  assert(
+    inScope({ project: "/p/a", session: "s2" }, { project: "/p/a", mine: true }),
+    "no session: mine narrows nothing",
+  );
+});
+
+Deno.test("agents: a child's owner is recorded, and list, answer, say and stop keep to the caller's project", async () => {
+  const t = await Deno.realPath(await Deno.makeTempDir());
+  const runs = `${t}/runs`;
+  try {
+    for (const [id, project] of [["a-one-0101", "/p/a"], ["b-two-0101", "/p/b"], ["old-0101", undefined]]) {
+      await Deno.mkdir(`${runs}/${id}`, { recursive: true });
+      const meta = { id, profile: "x", command: "x", dir: "/", task: "t", started: "2026-01-01T00:00:00Z", project };
+      await Deno.writeTextFile(`${runs}/${id}/meta.json`, JSON.stringify(meta));
+    }
+    const a: Scope = { project: "/p/a" };
+    assertEquals((await listChildren(runs, a)).map((c) => c.meta.id), ["a-one-0101"]);
+    assertEquals((await listChildren(runs, { ...a, all: true })).map((c) => c.meta.id).sort(), [
+      "a-one-0101",
+      "b-two-0101",
+      "old-0101",
+    ]);
+    assertEquals((await listChildren(runs)).length, 3, "no scope (the runner's own view) sees all");
+    await assertRejects(() => childIn("b-two-0101", a, runs), Error, "another project");
+    await assertRejects(() => childIn("old-0101", a, runs), Error, "no known project");
+    await assertRejects(() => sayTo("b-two-0101", "hi", runs, a), Error, "another project");
+    await assertRejects(
+      () => answer("b-two-0101", "r", "allow", undefined, runs, undefined, a),
+      Error,
+      "another project",
+    );
+    await assertRejects(() => stopChild("b-two-0101", false, runs, a), Error, "another project");
+    // the read-only view of another project's child works with all, and a write still does not
+    assertEquals((await childIn("b-two-0101", { ...a, all: true }, runs)).meta.project, "/p/b");
+  } finally {
+    await Deno.remove(t, { recursive: true });
+  }
+});
+
+Deno.test("agents: runs keep to their owner's project, an old run (no owner.json) only with all", async () => {
+  const t = await Deno.realPath(await Deno.makeTempDir());
+  const runs = `${t}/runs`;
+  try {
+    for (const [id, owner] of [["r-a", { project: "/p/a" }], ["r-b", { project: "/p/b" }], ["r-old", undefined]]) {
+      const dir = `${runs}/runs/${id}`;
+      await Deno.mkdir(dir, { recursive: true });
+      await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify({ name: id, steps: [] }));
+      await Deno.writeTextFile(`${dir}/state.json`, JSON.stringify({ status: "running", steps: {} }));
+      if (owner) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owner));
+    }
+    const a: Scope = { project: "/p/a" };
+    assertEquals((await listRuns(runs, a)).map((r) => r.id), ["r-a"]);
+    assertEquals((await listRuns(runs, { ...a, all: true })).length, 3);
+    await assertRejects(() => runIn("r-b", a, runs), Error, "another project");
+    await assertRejects(() => answerRun("r-old", "stop", undefined, runs, a), Error, "no known project");
+    assertEquals((await runIn("r-b", { ...a, all: true }, runs)).owner?.project, "/p/b");
+  } finally {
+    await Deno.remove(t, { recursive: true });
+  }
+});
+
+Deno.test("agents: follow and waitForAttention show a project's pending requests only, all shows every one", async () => {
+  const t = await Deno.realPath(await Deno.makeTempDir());
+  const runs = `${t}/runs`;
+  try {
+    for (const [id, project] of [["a-one-0101", "/p/a"], ["b-two-0101", "/p/b"]]) {
+      const dir = `${runs}/${id}`;
+      await Deno.mkdir(dir, { recursive: true });
+      const meta = { id, profile: "x", command: "x", dir: "/", task: "t", started: "2026-01-01T00:00:00Z", project };
+      await Deno.writeTextFile(`${dir}/meta.json`, JSON.stringify(meta));
+      await Deno.writeTextFile(`${dir}/out.jsonl`, ask(`req-${id}`) + "\n");
+      await Deno.writeTextFile(`${dir}/claude.pid`, String(Deno.pid));
+    }
+    const first = async (scope: Scope) => {
+      const ac = new AbortController();
+      const got: string[] = [];
+      for await (const a of follow(runs, 50, ac.signal, scope)) {
+        got.push(a.id);
+        if (got.length >= 2) break;
+        setTimeout(() => ac.abort(), 300);
+      }
+      return got;
+    };
+    assertEquals(await first({ project: "/p/a" }), ["a-one-0101"]);
+    assertEquals((await first({ project: "/p/a", all: true })).sort(), ["a-one-0101", "b-two-0101"]);
+  } finally {
+    await Deno.remove(t, { recursive: true });
   }
 });

@@ -175,3 +175,15 @@ mirrors them under `agents run`. The server's instructions say how to follow and
   feels most), then the runner, the plan and the HANDOFFs, then the saved workflows.
 - What stays open: a console page for the runs (with the widgets, in 1.1); runs across machines (with
   the relay, issue #11); a budget per run.
+
+## Amendment 2026-10-14 — isolated by project
+
+The hub is shared by every coordinator on the machine, and each saw (and could answer) the others'
+children. Now each child (`meta.json`: `project`, `session`) and each run (`owner.json`) records the
+coordinator that started it: its **project** — the main repository's root of the coordinator's folder, a
+worktree resolving to the repository it hangs from, a folder with no repository being itself — and its
+Claude session id (`CLAUDE_CODE_SESSION_ID`) when the environment has it. List, status, events, wait and
+`follow` show only the caller's project (`--mine`: only its own session); answer, say, stop and
+`workflow_answer` refuse another project's child or run with an error saying whose it is; `--all` (MCP: `all`)
+reads every project's, never writes. A child or run recorded before this has no project: visible only
+with `--all`. Pure parts (`projectOf`, `inScope`) are in `shared/mcp/lib/agents.ts`.

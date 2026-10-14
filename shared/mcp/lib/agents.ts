@@ -6,7 +6,7 @@
 // the one call, or a rule for the rest of the child's session (`sessionRule`).
 //
 // A child lives in files, so it outlives whoever started it and anyone on the machine can follow it:
-//   <runs>/<id>/meta.json     who, where, what it was asked
+//   <runs>/<id>/meta.json     who, where, what it was asked, whose (the coordinator's project and session)
 //   <runs>/<id>/in            a fifo: its stdin (user messages, answers to its requests)
 //   <runs>/<id>/out.jsonl     its events (stream-json)
 //   <runs>/<id>/answers.jsonl the requests answered, and how
@@ -29,7 +29,90 @@ interface Meta {
   mode?: ChildMode;
   /** the workflow run and step it is (runs.ts), when it is one */
   run?: { id: string; step: string };
+  /** whose it is: the project of the coordinator that started it, and that coordinator's session when
+   *  known. Absent in a child older than this: its project is unknown (see `inScope`). */
+  project?: string;
+  session?: string;
 }
+
+/** Who started a child or a run: the coordinator's project (the main repository's root) and session. */
+export interface Owner {
+  project: string;
+  session?: string;
+}
+
+/** What a caller may see and touch: its project, optionally narrowed to its own session (`mine`), or
+ *  everything read-only (`all`). */
+export interface Scope {
+  project: string;
+  session?: string;
+  mine?: boolean;
+  all?: boolean;
+}
+
+/** Pure: the main repository's root from a `.git` file's text (a linked worktree or a submodule), given
+ *  the folder that holds it. A worktree's gitdir is `<main>/.git/worktrees/<name>`; a submodule's is
+ *  inside its parent's `.git/modules`, and that folder is its own root. */
+export function rootFromGitFile(text: string, holder: string): string {
+  const m = /^gitdir:\s*(.+)$/m.exec(text);
+  if (!m) return holder;
+  const given = m[1].trim();
+  const parts: string[] = [];
+  for (const seg of (given.startsWith("/") ? given : `${holder}/${given}`).split("/")) {
+    if (seg === "..") parts.pop();
+    else if (seg !== "." && seg !== "") parts.push(seg);
+  }
+  const w = /^(.*)\/\.git\/worktrees\/[^/]+$/.exec(`/${parts.join("/")}`);
+  return w ? w[1] : holder;
+}
+
+/** A folder's project: the main repository's root (a worktree resolves to the repository it hangs from),
+ *  or the folder itself when no repository holds it. Real paths, symlinks resolved. */
+export async function projectOf(folder: string): Promise<string> {
+  const given = folder.replace(/^~(?=\/|$)/, Deno.env.get("HOME") ?? "");
+  const start = await Deno.realPath(given).catch(() => given.replace(/\/+$/, "") || "/");
+  for (let d = start;; d = d.slice(0, d.lastIndexOf("/")) || "/") {
+    const st = await Deno.stat(`${d}/.git`).catch(() => null);
+    if (st?.isDirectory) return d;
+    if (st?.isFile) {
+      const file = await Deno.readTextFile(`${d}/.git`).catch(() => "");
+      return rootFromGitFile(file, await Deno.realPath(d).catch(() => d));
+    }
+    if (d === "/") return start;
+  }
+}
+
+/** A caller's scope: its folder's project and its session (CLAUDE_CODE_SESSION_ID, when the environment
+ *  has it: not having it never breaks anything, `mine` just narrows nothing). */
+export async function scopeOf(
+  opts: { all?: boolean; mine?: boolean; cwd?: string; session?: string } = {},
+): Promise<Scope> {
+  const session = opts.session ?? (Deno.env.get("CLAUDE_CODE_SESSION_ID") || undefined);
+  return {
+    project: await projectOf(opts.cwd ?? Deno.cwd()),
+    session,
+    mine: !!opts.mine && !!session,
+    all: !!opts.all,
+  };
+}
+
+/** The owner a caller's children and runs get. */
+export const ownerOf = (s: Scope): Owner =>
+  s.session ? { project: s.project, session: s.session } : { project: s.project };
+
+/** Pure: whether something owned by `owner` is the caller's to see and touch. One without a project
+ *  (older than the scope) is nobody's but `all`'s. `mine` also needs the same session. */
+export function inScope(owner: { project?: string; session?: string } | undefined, scope: Scope): boolean {
+  if (scope.all) return true;
+  if (!owner?.project || owner.project !== scope.project) return false;
+  return !(scope.mine && scope.session && owner.session !== scope.session);
+}
+
+/** Why a caller may not touch something: its owner's project, or that it has none. */
+export const outOfScope = (what: string, owner: { project?: string } | undefined, scope: Scope) =>
+  `${what} belongs to ${
+    owner?.project ? `another project (${owner.project})` : "no known project (started before projects were recorded)"
+  }, this session is in ${scope.project}: only the coordinator of its project may act on it`;
 
 /** The modes a child may run in: the ones where whatever is not allowed comes back as a request. */
 type ChildMode = "auto" | "acceptEdits" | "default";
@@ -370,16 +453,24 @@ export async function readChild(id: string, runs = runsDir()): Promise<Child | n
   return { meta, state };
 }
 
-export async function listChildren(runs = runsDir()): Promise<Child[]> {
+export async function listChildren(runs = runsDir(), scope?: Scope): Promise<Child[]> {
   const out: Child[] = [];
   try {
     for await (const e of Deno.readDir(runs)) {
       if (!e.isDirectory) continue;
       const c = await readChild(e.name, runs);
-      if (c) out.push(c);
+      if (c && (!scope || inScope(c.meta, scope))) out.push(c);
     }
   } catch { /* no child yet */ }
   return out.sort((a, b) => a.meta.started.localeCompare(b.meta.started));
+}
+
+/** A child the scope may act on (read or write); throws otherwise, with why. */
+export async function childIn(id: string, scope: Scope | undefined, runs = runsDir()): Promise<Child> {
+  const c = await readChild(id, runs);
+  if (!c) throw new Error(`no child ${id}`);
+  if (scope && !inScope(c.meta, scope)) throw new Error(outOfScope(id, c.meta, scope));
+  return c;
 }
 
 /** Writes a line on a child's stdin; refused when the child is gone (a fifo with no reader would block). */
@@ -415,6 +506,8 @@ interface StartInput {
   task: string;
   model?: string;
   run?: { id: string; step: string };
+  /** whose it is; without one, the project of its own folder */
+  owner?: Owner;
   /** more MCP servers for this child (`--mcp-config`, JSON), and tools it may use without asking */
   mcpConfig?: string;
   allowedTools?: string[];
@@ -469,6 +562,9 @@ export async function startChild(
   const meta: Meta = { id, profile: i.profile, command, dir, task: i.task, started: new Date().toISOString(), mode };
   if (i.model) meta.model = i.model;
   if (i.run) meta.run = i.run;
+  const owner = i.owner ?? { project: await projectOf(dir) };
+  meta.project = owner.project;
+  if (owner.session) meta.session = owner.session;
   await Deno.writeTextFile(`${run}/meta.json`, JSON.stringify(meta, null, 2));
   const fifo = await new Deno.Command("mkfifo", { args: [`${run}/in`] }).output();
   if (!fifo.success) throw new Error("could not make the child's stdin");
@@ -499,8 +595,8 @@ export async function startChild(
   return meta;
 }
 
-export async function sayTo(id: string, text: string, runs = runsDir()): Promise<void> {
-  if (!validId(id) || !(await readChild(id, runs))) throw new Error(`no child ${id}`);
+export async function sayTo(id: string, text: string, runs = runsDir(), scope?: Scope): Promise<void> {
+  await childIn(id, scope, runs);
   if (!text.trim()) throw new Error("nothing to say");
   await send(`${runs}/${id}`, userLine(text));
 }
@@ -513,9 +609,9 @@ export async function answer(
   message?: string,
   runs = runsDir(),
   answers?: Record<string, string>,
+  scope?: Scope,
 ) {
-  const c = await readChild(id, runs);
-  if (!c) throw new Error(`no child ${id}`);
+  const c = await childIn(id, scope, runs);
   const p = c.state.pending.find((x) => x.request === request);
   if (!p) throw new Error(`${id} is not waiting on ${request}`);
   await send(`${runs}/${id}`, answerLine(p, verdict, message, answers));
@@ -535,8 +631,9 @@ export async function answer(
 }
 
 /** Ends a child after its current turn (its stdin closes), or at once with `force`. */
-export async function stopChild(id: string, force = false, runs = runsDir()): Promise<void> {
+export async function stopChild(id: string, force = false, runs = runsDir(), scope?: Scope): Promise<void> {
   if (!validId(id)) throw new Error(`no child ${id}`);
+  if (scope) await childIn(id, scope, runs);
   const dir = `${runs}/${id}`;
   for (const f of force ? ["holder.pid", "claude.pid"] : ["holder.pid"]) {
     const pid = Number((await Deno.readTextFile(`${dir}/${f}`).catch(() => "")).trim());
@@ -548,14 +645,20 @@ export async function stopChild(id: string, force = false, runs = runsDir()): Pr
   }
 }
 
-const look = async (runs: string) => new Map((await listChildren(runs)).map((c) => [c.meta.id, c.state] as const));
+const look = async (runs: string, scope?: Scope) =>
+  new Map((await listChildren(runs, scope)).map((c) => [c.meta.id, c.state] as const));
 
 /** Waits until something needs the owner (a request, a finished turn, a child gone), or `timeoutMs`. */
-export async function waitForAttention(timeoutMs: number, runs = runsDir(), everyMs = 2000): Promise<Attention[]> {
-  const before = await look(runs);
+export async function waitForAttention(
+  timeoutMs: number,
+  runs = runsDir(),
+  everyMs = 2000,
+  scope?: Scope,
+): Promise<Attention[]> {
+  const before = await look(runs, scope);
   for (let t = 0; t < timeoutMs; t += everyMs) {
     await new Promise((r) => setTimeout(r, everyMs));
-    const found = attentionBetween(before, await look(runs));
+    const found = attentionBetween(before, await look(runs, scope));
     if (found.length) return found;
   }
   return [];

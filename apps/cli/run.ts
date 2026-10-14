@@ -8,30 +8,37 @@ import {
   ensureRunner,
   listRuns,
   type Plan,
-  readRun,
   runEvents,
+  runIn,
   startRun,
 } from "../../shared/mcp/lib/runs.ts";
+import { ownerOf, scopeOf } from "../../shared/mcp/lib/agents.ts";
 
 const USAGE = `agents run start <plan.json>                  a workflow run from its plan (docs/adr/0005)
-agents run list                               every run, its steps' state
-agents run status <id>                        a run in full, with what happened
+agents run list [--all] [--mine]              the runs of this folder's project, their steps' state
+agents run status <id> [--all]                a run in full, with what happened (--all: another project's, read-only)
 agents run answer <id> [step] go|retry|skip|stop   the owner's decision (stop without a step: the whole run)
 agents run resume <id>                        starts its runner again, when it is gone
 agents run drive <id>                         the runner itself (start launches it)`;
 
 export async function runCommand(args: string[]): Promise<number> {
   const [sub, ...rest] = args;
+  const has = (name: string) => {
+    const i = rest.indexOf(name);
+    if (i >= 0) rest.splice(i, 1);
+    return i >= 0;
+  };
+  const flags = () => ({ all: has("--all"), mine: has("--mine") });
   try {
     switch (sub) {
       case "start": {
         if (!rest[0]) break;
         const plan = JSON.parse(await Deno.readTextFile(rest[0])) as Plan;
-        console.log(`started ${await startRun(plan)}`);
+        console.log(`started ${await startRun(plan, undefined, undefined, ownerOf(await scopeOf()))}`);
         return 0;
       }
       case "list": {
-        const all = await listRuns();
+        const all = await listRuns(undefined, await scopeOf(flags()));
         if (!all.length) console.log("no runs");
         for (const r of all) {
           const steps = Object.entries(r.state.steps).map(([k, v]) => `${k}:${v.status}`).join(" ");
@@ -40,8 +47,8 @@ export async function runCommand(args: string[]): Promise<number> {
         return 0;
       }
       case "status": {
-        const r = rest[0] ? await readRun(rest[0]) : null;
-        if (!r) break;
+        if (!rest[0]) break;
+        const r = await runIn(rest[0], await scopeOf(flags()));
         console.log(JSON.stringify({ ...r, events: await runEvents(r.id) }, null, 2));
         return 0;
       }
@@ -49,13 +56,13 @@ export async function runCommand(args: string[]): Promise<number> {
         const choice = rest.pop() as Choice;
         const [id, step] = rest;
         if (!id || !["go", "retry", "skip", "stop"].includes(choice)) break;
-        await answerRun(id, choice, step);
+        await answerRun(id, choice, step, undefined, await scopeOf());
         console.log(`${choice} → ${id}${step ? `/${step}` : ""}`);
         return 0;
       }
       case "resume": {
-        const r = rest[0] ? await readRun(rest[0]) : null;
-        if (!r) break;
+        if (!rest[0]) break;
+        const r = await runIn(rest[0], await scopeOf());
         if (r.alive || r.state.status !== "running") {
           console.log(r.alive ? `${r.id} has its runner` : `${r.id} is ${r.state.status}`);
           return 0;

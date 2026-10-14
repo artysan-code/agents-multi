@@ -5,6 +5,7 @@
 // in the run's events. Nobody but the runner writes its state; others ask it through the control file.
 //
 //   <runs>/runs/<id>/plan.json      the plan as approved, never changed
+//   <runs>/runs/<id>/owner.json     whose it is: the coordinator's project and session (agents.ts `Owner`)
 //   <runs>/runs/<id>/state.json     the run's and each step's state (the runner's alone)
 //   <runs>/runs/<id>/events.jsonl   what happened, one line each
 //   <runs>/runs/<id>/control.jsonl  the owner's answers, read by the runner
@@ -18,13 +19,17 @@ import {
   attentionBetween,
   attentionOf,
   type ChildState,
+  inScope,
   launcherOf,
   lines,
   listChildren,
+  outOfScope,
+  type Owner,
   pidAlive,
   readChild,
   runsDir,
   sayTo,
+  type Scope,
   startChild,
   stopChild,
   validId,
@@ -228,6 +233,8 @@ export interface Run {
   plan: Plan;
   state: RunState;
   alive: boolean;
+  /** whose it is (`owner.json`, written at the start); absent in a run older than this */
+  owner?: Owner;
 }
 
 const runnerAlive = (dir: string) => pidAlive(`${dir}/runner.pid`);
@@ -238,18 +245,29 @@ export async function readRun(id: string, runs = runsDir()): Promise<Run | null>
   const plan = await Deno.readTextFile(`${dir}/plan.json`).then(JSON.parse).catch(() => null) as Plan | null;
   const state = await Deno.readTextFile(`${dir}/state.json`).then(JSON.parse).catch(() => null) as RunState | null;
   if (!plan || !state) return null;
-  return { id, plan, state, alive: await runnerAlive(dir) };
+  const owner = await Deno.readTextFile(`${dir}/owner.json`).then(JSON.parse).catch(() => undefined) as
+    | Owner
+    | undefined;
+  return { id, plan, state, alive: await runnerAlive(dir), owner };
 }
 
-export async function listRuns(runs = runsDir()): Promise<Run[]> {
+export async function listRuns(runs = runsDir(), scope?: Scope): Promise<Run[]> {
   const out: Run[] = [];
   try {
     for await (const e of Deno.readDir(runsRoot(runs))) {
       const r = e.isDirectory ? await readRun(e.name, runs) : null;
-      if (r) out.push(r);
+      if (r && (!scope || inScope(r.owner, scope))) out.push(r);
     }
   } catch { /* no run yet */ }
   return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** A run the scope may act on (read or write); throws otherwise, with why. */
+export async function runIn(id: string, scope: Scope | undefined, runs = runsDir()): Promise<Run> {
+  const r = await readRun(id, runs);
+  if (!r) throw new Error(`no run ${id}`);
+  if (scope && !inScope(r.owner, scope)) throw new Error(outOfScope(`run ${id}`, r.owner, scope));
+  return r;
 }
 
 export const runEvents = (id: string, runs = runsDir()) =>
@@ -297,7 +315,12 @@ export async function ensureRunner(id: string, runs = runsDir(), waitMs = 5000):
 
 /** Checks and writes a plan, then starts its runner. The profiles must exist and the folders be under
  *  the home folder. */
-export async function startRun(plan: Plan, runs = runsDir(), home = Deno.env.get("HOME") ?? ""): Promise<string> {
+export async function startRun(
+  plan: Plan,
+  runs = runsDir(),
+  home = Deno.env.get("HOME") ?? "",
+  owner?: Owner,
+): Promise<string> {
   const errs = planErrors(plan);
   for (const s of plan.steps ?? []) {
     if (s.profile && !(await launcherOf(s.profile, configDir()))) errs.push(`step ${s.id}: no profile ${s.profile}`);
@@ -311,6 +334,7 @@ export async function startRun(plan: Plan, runs = runsDir(), home = Deno.env.get
   const dir = `${runsRoot(runs)}/${id}`;
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify(plan, null, 2));
+  if (owner) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owner, null, 2));
   await writeState(dir, initialState(plan));
   await append(`${dir}/events.jsonl`, {
     at: new Date().toISOString(),
@@ -325,9 +349,14 @@ export async function startRun(plan: Plan, runs = runsDir(), home = Deno.env.get
 /** The owner's answer for a run: go for a step to confirm; retry, skip or stop for one that failed; stop
  *  for the whole run (no step), retry for it (no step) starts its runner again when it is gone. The
  *  runner applies the rest. */
-export async function answerRun(id: string, choice: Choice, step?: string, runs = runsDir()): Promise<void> {
-  const r = await readRun(id, runs);
-  if (!r) throw new Error(`no run ${id}`);
+export async function answerRun(
+  id: string,
+  choice: Choice,
+  step?: string,
+  runs = runsDir(),
+  scope?: Scope,
+): Promise<void> {
+  const r = await runIn(id, scope, runs);
   if (step && !r.state.steps[step]) throw new Error(`no step ${step} in ${id}`);
   if (step && choice !== "stop") {
     const want = choice === "go" ? "confirm" : "failed";
@@ -434,6 +463,7 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
         task: stepPrompt(plan, s, id, handoffOf),
         model: s.model,
         run: { id, step: sid },
+        owner: r.owner,
         mcpConfig: team,
         allowedTools: ["mcp__team__team_send"],
       },
@@ -548,9 +578,14 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
  *  still running, every step to confirm or that failed — so a watch started again loses none; then each
  *  new request, question, finished turn, child gone, and each run's own events. A child of a run reports
  *  through its run: its turns and its end are the runner's to judge, not news for the owner. */
-export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSignal): AsyncGenerator<Attention> {
+export async function* follow(
+  runs = runsDir(),
+  everyMs = 1000,
+  signal?: AbortSignal,
+  scope?: Scope,
+): AsyncGenerator<Attention> {
   const look = async () => {
-    const children = await listChildren(runs);
+    const children = await listChildren(runs, scope);
     return {
       states: new Map(children.map((c) => [c.meta.id, c.state] as [string, ChildState])),
       ofRun: new Set(children.filter((c) => c.meta.run).map((c) => c.meta.id)),
@@ -564,7 +599,7 @@ export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSi
   // a running run whose runner is gone, for this many looks in a row (one start takes less), is news once
   const GONE = 3;
   const gone = new Map<string, number>();
-  for (const r of await listRuns(runs)) {
+  for (const r of await listRuns(runs, scope)) {
     seen.set(r.id, (await runEvents(r.id, runs)).length);
     if (r.state.status !== "running") continue;
     for (const [step, s] of Object.entries(r.state.steps)) {
@@ -586,7 +621,7 @@ export async function* follow(runs = runsDir(), everyMs = 1000, signal?: AbortSi
       if (!(now.ofRun.has(a.id) && (a.kind === "done" || a.kind === "ended"))) yield a;
     }
     before = now;
-    for (const r of await listRuns(runs)) {
+    for (const r of await listRuns(runs, scope)) {
       const events = await runEvents(r.id, runs);
       for (const e of events.slice(seen.get(r.id) ?? 0)) {
         const a = attentionOfEvent(e);

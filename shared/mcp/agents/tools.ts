@@ -4,9 +4,11 @@ import { z } from "npm:zod@4.6.5";
 import {
   answer,
   type Child,
+  childIn,
   listChildren,
-  readChild,
+  ownerOf,
   sayTo,
+  scopeOf,
   startChild,
   stopChild,
   type Verdict,
@@ -16,11 +18,18 @@ import {
   type Choice,
   listRuns,
   type Plan,
-  readRun,
   runEvents,
+  runIn,
   savedWorkflows,
   startRun,
 } from "../lib/runs.ts";
+
+/** The caller's scope: the project of the folder this server was started in (the coordinator's), and its
+ *  session when the environment has it. `all` reads everything, never writes. */
+const scopeArgs = {
+  all: z.boolean().optional().describe("read-only: every project's, not only this session's project"),
+  mine: z.boolean().optional().describe("only the ones this very session started"),
+};
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 const fail = (e: unknown) => ({
@@ -33,6 +42,7 @@ const view = (c: Child, full = false) => ({
   id: c.meta.id,
   profile: c.meta.profile,
   folder: c.meta.dir,
+  project: c.meta.project ?? null,
   task: full ? c.meta.task : c.meta.task.slice(0, 200),
   started: c.meta.started,
   phase: c.state.phase,
@@ -64,26 +74,35 @@ export function registerAgentTools(server: McpServer) {
     },
   }, async (i: { profile: string; folder: string; task: string; model?: string }) => {
     try {
-      const m = await startChild({ profile: i.profile, dir: i.folder, task: i.task, model: i.model });
+      const owner = ownerOf(await scopeOf());
+      const m = await startChild({ profile: i.profile, dir: i.folder, task: i.task, model: i.model, owner });
       return text({ started: m.id, profile: m.profile, folder: m.dir });
     } catch (e) {
       return fail(e);
     }
   });
 
-  server.registerTool("agent_list", {
-    description: "Every child on this machine: its phase (working, waiting on a request, idle after a turn, ended), " +
-      "what it waits for, the last thing it said.",
-    inputSchema: {},
-  }, async () => text((await listChildren()).map((c) => view(c))));
+  server.registerTool(
+    "agent_list",
+    {
+      description: "The children of this session's project (not other projects': use `all` to read them, read-only): " +
+        "its phase (working, waiting on a request, idle after a turn, ended), what it waits for, the last thing it said.",
+      inputSchema: scopeArgs,
+    },
+    async (i: { all?: boolean; mine?: boolean }) =>
+      text((await listChildren(undefined, await scopeOf(i))).map((c) => view(c))),
+  );
 
   server.registerTool("agent_status", {
     description:
       "One child in full: its task, the last things it said, its pending requests with their ids, how its last turn ended.",
-    inputSchema: { id: z.string() },
-  }, async ({ id }: { id: string }) => {
-    const c = await readChild(id);
-    return c ? text(view(c, true)) : fail(new Error(`no child ${id}`));
+    inputSchema: { id: z.string(), all: scopeArgs.all },
+  }, async ({ id, all }: { id: string; all?: boolean }) => {
+    try {
+      return text(view(await childIn(id, await scopeOf({ all })), true));
+    } catch (e) {
+      return fail(e);
+    }
   });
 
   server.registerTool("agent_say", {
@@ -93,7 +112,7 @@ export function registerAgentTools(server: McpServer) {
     inputSchema: { id: z.string(), text: z.string() },
   }, async ({ id, text: t }: { id: string; text: string }) => {
     try {
-      await sayTo(id, t);
+      await sayTo(id, t, undefined, await scopeOf());
       return text({ sent: id });
     } catch (e) {
       return fail(e);
@@ -114,7 +133,7 @@ export function registerAgentTools(server: McpServer) {
     },
   }, async (i: { id: string; request: string; answer: Verdict; answers?: Record<string, string>; reason?: string }) => {
     try {
-      await answer(i.id, i.request, i.answer, i.reason, undefined, i.answers);
+      await answer(i.id, i.request, i.answer, i.reason, undefined, i.answers, await scopeOf());
       return text({ answered: i.request, answer: i.answer });
     } catch (e) {
       return fail(e);
@@ -126,7 +145,7 @@ export function registerAgentTools(server: McpServer) {
     inputSchema: { id: z.string(), force: z.boolean().optional() },
   }, async ({ id, force }: { id: string; force?: boolean }) => {
     try {
-      await stopChild(id, !!force);
+      await stopChild(id, !!force, undefined, await scopeOf());
       return text({ stopping: id });
     } catch (e) {
       return fail(e);
@@ -156,7 +175,7 @@ export function registerAgentTools(server: McpServer) {
     },
   }, async (plan: Plan) => {
     try {
-      const id = await startRun(plan);
+      const id = await startRun(plan, undefined, undefined, ownerOf(await scopeOf()));
       return text({ started: id, steps: plan.steps.map((s) => s.id) });
     } catch (e) {
       return fail(e);
@@ -165,12 +184,13 @@ export function registerAgentTools(server: McpServer) {
 
   server.registerTool("workflow_list", {
     description: "The saved workflows a folder can use (the project's, then the owner's: read the SKILL.md to " +
-      "fill a plan) and the runs on this machine with their steps' state.",
-    inputSchema: { folder: z.string().optional() },
-  }, async ({ folder }: { folder?: string }) =>
+      "fill a plan) and the runs of this session's project with their steps' state (`all`: other projects' too, " +
+      "read-only).",
+    inputSchema: { folder: z.string().optional(), ...scopeArgs },
+  }, async ({ folder, ...scope }: { folder?: string; all?: boolean; mine?: boolean }) =>
     text({
       saved: await savedWorkflows(folder),
-      runs: (await listRuns()).map((r) => ({
+      runs: (await listRuns(undefined, await scopeOf(scope))).map((r) => ({
         id: r.id,
         name: r.plan.name,
         status: r.state.status,
@@ -181,10 +201,14 @@ export function registerAgentTools(server: McpServer) {
 
   server.registerTool("workflow_status", {
     description: "One run in full: its plan, each step's state, child and HANDOFF, and what happened.",
-    inputSchema: { id: z.string() },
-  }, async ({ id }: { id: string }) => {
-    const r = await readRun(id);
-    return r ? text({ ...r, events: (await runEvents(id)).slice(-30) }) : fail(new Error(`no run ${id}`));
+    inputSchema: { id: z.string(), all: scopeArgs.all },
+  }, async ({ id, all }: { id: string; all?: boolean }) => {
+    try {
+      const r = await runIn(id, await scopeOf({ all }));
+      return text({ ...r, events: (await runEvents(id)).slice(-30) });
+    } catch (e) {
+      return fail(e);
+    }
   });
 
   server.registerTool("workflow_answer", {
@@ -198,7 +222,7 @@ export function registerAgentTools(server: McpServer) {
     },
   }, async ({ id, step, choice }: { id: string; step?: string; choice: Choice }) => {
     try {
-      await answerRun(id, choice, step);
+      await answerRun(id, choice, step, undefined, await scopeOf());
       return text({ run: id, step: step ?? null, choice });
     } catch (e) {
       return fail(e);
