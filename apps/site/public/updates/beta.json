@@ -1,19 +1,19 @@
 {
-  "version": "1.2.0-beta.2",
-  "notes": "### Added\n\n- **doctor**: gateway checks; deny rules keep a session from calling the gateway by hand (29552bc)\n- **console**: the console supervises the MCP gateway; agents gateway and agents mcp warm (d836f95)\n- **mcp**: lazy gateway core, backend runner and the CLI side of its launch config (5cb92b4)\n- **agents**: isolate the hub by coordinator session, with orphan adoption (f31bdb0)\n\n### Fixed\n\n- **gateway**: own fingerprints, server-side _deny, derived deny rules, file log (e6d491b)\n- **gateway**: shared start, cache, drain and orphans fixed in the server; integration test (8cf8222)\n- **ci**: statusline test finds jq where the runner installs it (8742192)\n\n### Documentation\n\n- **mcp**: ADR 0008 says what protects what; README on deny and warm --force (6f81b63)\n- **agents**: the gateway invariant (29b924a)\n- **mcp**: ADR 0008 and README for the lazy gateway (96b216d)",
-  "pub_date": "2026-10-14T12:05:30Z",
+  "version": "1.2.0-beta.3",
+  "notes": "### Fixed\n\n- **mcp**: doctor validated _npm servers after withNpm had set command (5f40ca8)\n\n### Documentation\n\n- **adr**: ADR 0009 Agents Multi 2, one agent you talk to (9b0bfc1)",
+  "pub_date": "2026-10-14T12:41:34Z",
   "platforms": {
     "linux-x86_64-deb": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.2.0-beta.2/agents-multi_1.2.0-beta.2_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjlqQW9oY2x3Q2R0ajVrZWFxd3RaV2I5aEx2eEd2dzEzQld4QzZFaUNNSTMvTFBtNHp0TXl0cmYwVFo2bGdGN2ZDT3J6QWptcTlCNU9SMm5Mb2dFMEFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTc5NTI4CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4yLjAtYmV0YS4yX2FtZDY0LmRlYgl2ZXJzaW9uOjEuMi4wLWJldGEuMgpHUE9pbnU0WXU2MWgxTkVzSnBnSlBXWFUzZjM1eHJkQktkR25YTVBNNjh0TTFiMkZzLytmaUhBckVxbGxKbU5kN0FKMFFDc0VVeWhhcm92UVJ0SkhDdz09Cg=="
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.2.0-beta.3/agents-multi_1.2.0-beta.3_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TnpuUGJuUk5lNHhlYmV0dzlQbHo4YXY3R2g4VG5GMmVENjVXL0RNVk5mRnZySzEvUjVBTDd3TExGQ0Zyd0dBWDNuYkFaQXhqakZ3N3IzcEF4WTJoL3drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTgxNjkzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4yLjAtYmV0YS4zX2FtZDY0LmRlYgl2ZXJzaW9uOjEuMi4wLWJldGEuMwp1S0g5MTVyMWxQanROTGhzaEtQd21SdGZrWWFvdWVoY2pnZDlrZ1FYVVZ2dHhlbkJRdWFoSW5UVjN2NGcyaEZSK0VuRlJKT3c4NkRtSUkwdEdQdjJEZz09Cg=="
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.2.0-beta.2/agents-multi_1.2.0-beta.2_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjRsalplNEtLSE10akthWE5jbEJ5VFBpeEVvekk1ZHVIbk0xeURXRjhqb0NwYXdxbHJ4UE12VlVudVg3aUNldXRmNnNPYm93dHNJMHRPdjZ3SGcrQUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTc5NTI4CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4yLjAtYmV0YS4yX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4yLjAtYmV0YS4yCnR2RUhuaWlVYXA4bEVkdUUxMFN6blF5RFhvaTNBWmZNbnZmOWRzczdodlNYSlo3dkRtTW4xL29zTGFYd3ovcG5QK0ZTU1VXRTdSbjZSZXdMVWI3QkR3PT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.2.0-beta.3/agents-multi_1.2.0-beta.3_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjRHSE9PMWpCOUpzT0k4Z01uV3F5RnE0aG9xUWh5KzZ6TDluUklocmx3c29UKy96dFh4c2FOSWFFK3lFWXpFUmZ1ckIxaWxhZ2UvTHdGbVhrdDF2YmdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTgxNjkzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4yLjAtYmV0YS4zX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4yLjAtYmV0YS4zCjl1Q2FZWHZOWnFVMnZWODQ3TW96QngyNUFHQ1hTRVFJc1RrTVV0OTAxN2JkdkRDTjFaK1pQMjRYUTFiM3hmbjJIeDF6MHRUVm5hUHlqRUp3M2Vja0RBPT0K"
     },
     "linux-x86_64": {
-      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.2.0-beta.2/agents-multi_1.2.0-beta.2_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjRsalplNEtLSE10akthWE5jbEJ5VFBpeEVvekk1ZHVIbk0xeURXRjhqb0NwYXdxbHJ4UE12VlVudVg3aUNldXRmNnNPYm93dHNJMHRPdjZ3SGcrQUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTc5NTI4CWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4yLjAtYmV0YS4yX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4yLjAtYmV0YS4yCnR2RUhuaWlVYXA4bEVkdUUxMFN6blF5RFhvaTNBWmZNbnZmOWRzczdodlNYSlo3dkRtTW4xL29zTGFYd3ovcG5QK0ZTU1VXRTdSbjZSZXdMVWI3QkR3PT0K"
+      "url": "https://github.com/artysan-code/agents-multi/releases/download/v1.2.0-beta.3/agents-multi_1.2.0-beta.3_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRKzV4TDUzaUh0TjRHSE9PMWpCOUpzT0k4Z01uV3F5RnE0aG9xUWh5KzZ6TDluUklocmx3c29UKy96dFh4c2FOSWFFK3lFWXpFUmZ1ckIxaWxhZ2UvTHdGbVhrdDF2YmdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTgxNjkzCWZpbGU6bWUuYXJ0eXNhbi5hZ2VudHNfMS4yLjAtYmV0YS4zX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MS4yLjAtYmV0YS4zCjl1Q2FZWHZOWnFVMnZWODQ3TW96QngyNUFHQ1hTRVFJc1RrTVV0OTAxN2JkdkRDTjFaK1pQMjRYUTFiM3hmbjJIeDF6MHRUVm5hUHlqRUp3M2Vja0RBPT0K"
     }
   }
 }
