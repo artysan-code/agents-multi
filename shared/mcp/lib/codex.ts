@@ -72,17 +72,19 @@ export function codexMcpOverrides(
   for (const [name, cfg] of Object.entries(servers)) {
     if (NOT_FOR_CHILDREN.has(name) || !/^[A-Za-z0-9_-]+$/.test(name) || !tools[name]?.length) continue;
     const key = `mcp_servers.${name}`;
+    // `approval_policy="never"` refuses an MCP call that needs approval: the tools the registry allows are approved
     const only = `${key}.enabled_tools=${t(tools[name])}`;
+    const approve = `${key}.default_tools_approval_mode="approve"`;
     if (typeof cfg.url === "string") {
       let host = "";
       try {
         host = new URL(cfg.url).hostname;
       } catch { /* not an address */ }
       if (host !== "127.0.0.1") continue;
-      config.push(`${key}.url=${t(cfg.url)}`, `${key}.bearer_token_env_var=${t(MCP_TOKEN_VAR)}`, only);
+      config.push(`${key}.url=${t(cfg.url)}`, `${key}.bearer_token_env_var=${t(MCP_TOKEN_VAR)}`, only, approve);
       token = true;
     } else if (typeof cfg.command === "string") {
-      config.push(`${key}.command=${t(cfg.command)}`, only);
+      config.push(`${key}.command=${t(cfg.command)}`, only, approve);
       const args = Array.isArray(cfg.args) ? cfg.args.map(String) : [];
       if (args.length) config.push(`${key}.args=${t(args)}`);
       for (const [k, v] of Object.entries((cfg.env ?? {}) as Record<string, unknown>)) {
