@@ -13,6 +13,9 @@ export const RUNTIME = amEnv("ROOT") ?? runtimeRoot(HOME);
  *  the repository, that ~/.agents-multi/config links to (`agents init`). The repository is code. */
 export const CONFIG = amEnv("CONFIG") ?? `${RUNTIME}/config`;
 export const PROFILES = `${CONFIG}/profiles`;
+/** Where the npm packages of the registry's third-party MCP servers are installed (`agents install`),
+ *  at the version their `_npm` pins: started with `node`, so no `npm exec` parent stays alive. */
+export const MCP_TOOLS = `${RUNTIME}/tools/mcp`;
 export const BIN = `${HOME}/.local/bin`;
 export const LIB = `${HOME}/.local/lib`;
 /** The XDG bases; ours is the `agents-multi` folder in each. */
@@ -30,7 +33,16 @@ export const AGENTS_SKILLS = `${HOME}/.agents/skills`; // where external tools (
 export const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15).replace("T", "-");
 
 /** Reserved entries under RUNTIME that are not profiles. */
-export const NON_PROFILE_DIRS = new Set(["shared", "marketplaces", "plugins", "config", "app", "bin", "providers"]);
+export const NON_PROFILE_DIRS = new Set([
+  "shared",
+  "marketplaces",
+  "plugins",
+  "config",
+  "app",
+  "bin",
+  "providers",
+  "tools",
+]);
 
 export function expandHome(p: string) {
   return p.startsWith("~/") ? `${HOME}/${p.slice(2)}` : p;

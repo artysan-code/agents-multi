@@ -2,10 +2,11 @@
 // it points at, and (on request) a real `initialize` round trip.
 
 import { type Check } from "../lib/output.ts";
-import { REPO } from "../lib/paths.ts";
+import { MCP_TOOLS, REPO, shortHome } from "../lib/paths.ts";
 import { readJson, stat } from "../lib/fs.ts";
 import { has } from "../lib/proc.ts";
 import { reachOf, servers } from "./placement.ts";
+import { installedVersion, npmProblem } from "./npm.ts";
 import { loadRegistry, type Registry } from "./registry.ts";
 
 /** Pure: a server's tools against its permission lists — the tools in none of them (left to the
@@ -190,8 +191,12 @@ export async function health(opts: { live?: boolean } = {}): Promise<Check[]> {
     if (missing) {
       problems.push(cfg._install ? `${missing} (install: ${cfg._install.replaceAll("{repo}", REPO)})` : missing);
     }
+    if (cfg._npm) {
+      const bad = npmProblem(cfg._npm, await installedVersion(MCP_TOOLS, cfg._npm.package), shortHome(MCP_TOOLS));
+      if (bad) problems.push(bad);
+    }
     for (const a of args) {
-      if (a.startsWith("/") && /\.(ts|js|py|lock)$/.test(a) && !(await stat(a))) problems.push(`missing file: ${a}`);
+      if (a.startsWith("/") && /\.(ts|js|py|sh|lock)$/.test(a) && !(await stat(a))) problems.push(`missing file: ${a}`);
       const lock = a.match(/^--lock=(.+)$/);
       if (lock && !(await stat(lock[1]))) problems.push(`missing lock file: ${lock[1]}`);
     }

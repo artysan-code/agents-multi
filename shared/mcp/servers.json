@@ -25,11 +25,11 @@
     "n8n": {
       "_service": "n8n",
       "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "n8n-mcp@2.92.1"
-      ],
+      "_npm": {
+        "package": "n8n-mcp",
+        "version": "2.92.1",
+        "bin": "n8n-mcp"
+      },
       "env": {
         "MCP_MODE": "stdio",
         "LOG_LEVEL": "error",
@@ -79,7 +79,7 @@
         "n8n_update_partial_workflow",
         "n8n_workflow_versions"
       ],
-      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05). Telemetry is off (N8N_MCP_TELEMETRY_DISABLED: the package sends sanitised workflows to its author by default), and so are its result cards, which only cost context here."
+      "_note": "n8n-mcp (czlonkowski, MIT), one server per n8n account: n8n-<account>. No deletions: switched off in the server (DISABLED_TOOLS / DISABLED_TOOL_OPERATIONS, the package's own list of destructive operations) and denied in the settings; credentials are not exposed at all (their reads carry secrets). An update to an active workflow republishes it (the package sends no publishIfActive=false): updates and test runs ask first. CLI only: node comes from nvm, which Desktop's bare PATH does not have. Installed by `agents install` at the version in _npm (tools/mcp), started with node: no npx parent process. The version is pinned there: raise it on purpose. Reading a workflow asks too: n8n-mcp returns its nodes as they are, and keys written into a node's parameters instead of a credential come back in clear (13 workflows on one account, audit of 2026-10-05). Telemetry is off (N8N_MCP_TELEMETRY_DISABLED: the package sends sanitised workflows to its author by default), and so are its result cards, which only cost context here."
     },
     "coolify": {
       "_service": "coolify",
@@ -263,10 +263,12 @@
     "supabase": {
       "_service": "supabase",
       "type": "stdio",
-      "command": "npx",
+      "_npm": {
+        "package": "@supabase/mcp-server-supabase",
+        "version": "0.13.0",
+        "bin": "mcp-server-supabase"
+      },
       "args": [
-        "-y",
-        "@supabase/mcp-server-supabase@0.13.0",
         "--features=account,database,debugging,development,docs,functions,branching,storage"
       ],
       "_perAccount": {
@@ -304,7 +306,7 @@
         "delete_branch",
         "reset_branch"
       ],
-      "_note": "Supabase's official MCP (the npm package, the same tools as mcp.supabase.com), one server per Supabase login: supabase-<account>, with that login's personal access token. Unbound it sees every org and project of the login. A project ties it to itself in .claude/claude-multi.json (git-ignored everywhere by install): {\"supabase\": {\"project\": \"<ref>\", \"readOnly\": true|false}} — then it reaches that project only, and the account tools (list_projects…) are gone. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only: npx comes from nvm, which Desktop's bare PATH does not have. The version is pinned: raise it on purpose.",
+      "_note": "Supabase's official MCP (the npm package, the same tools as mcp.supabase.com), one server per Supabase login: supabase-<account>, with that login's personal access token. Unbound it sees every org and project of the login. A project ties it to itself in .claude/claude-multi.json (git-ignored everywhere by install): {\"supabase\": {\"project\": \"<ref>\", \"readOnly\": true|false}} — then it reaches that project only, and the account tools (list_projects…) are gone. Deletions of branches (and their data) are denied; pausing a project is reversible and stays. CLI only: node comes from nvm, which Desktop's bare PATH does not have. Installed by `agents install` at the version in _npm (tools/mcp), started with node: no npx parent process. The version is pinned there: raise it on purpose.",
       "_ask": [
         "apply_migration",
         "create_branch",

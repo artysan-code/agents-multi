@@ -15,6 +15,7 @@ import {
   CONFIG,
   HOME,
   LIB,
+  MCP_TOOLS,
   PROFILES,
   REPO,
   RUNTIME,
@@ -43,6 +44,8 @@ import { syncSettings } from "./settings.ts";
 import { loadAccounts } from "../../shared/mcp/lib/accounts.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { uiBuild, uiStatus } from "./ui.ts";
+import { installNpm, npmPackages } from "./mcp/npm.ts";
+import { loadRegistry } from "./mcp/registry.ts";
 
 let DRY = false;
 /** Where the links point (the installation's code) and where what install reads is read from: the
@@ -345,6 +348,17 @@ export async function install(
     await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
   }
   await ensureDir(LIB);
+
+  // 5a. the npm packages of third-party MCP servers (_npm), at the version the registry pins: they are
+  // started with node, so a session carries no `npm exec` parent. Not a reason to stop the install.
+  {
+    const pkgs = npmPackages(await loadRegistry());
+    if (pkgs.length && !(await has("npm"))) {
+      say(`${ANSI.r}!${ANSI.x} npm not found: MCP servers ${pkgs.map((p) => p.package).join(", ")} stay uninstalled`);
+    } else if (pkgs.length || await lstat(MCP_TOOLS)) {
+      for (const l of await installNpm(pkgs, MCP_TOOLS, DRY)) say(`${ANSI.g}+${ANSI.x} ${l}`);
+    }
+  }
 
   // 5b. the checkout's git hooks (pre-commit: secret guard + type check)
   if (dev && await isCheckout(CODE)) {

@@ -14,7 +14,14 @@ import {
 } from "../mcp/placement.ts";
 import { hasDesktop, targets } from "../mcp/apply.ts";
 import { launchConfig, withoutManaged } from "../mcp/config.ts";
-import { type RawRegistry, REGISTRY, type Registry, registryProblems, selectServers } from "../mcp/registry.ts";
+import {
+  type RawRegistry,
+  REGISTRY,
+  type Registry,
+  registryProblems,
+  selectServers,
+  withNpm,
+} from "../mcp/registry.ts";
 import { missingIgnores } from "../lib/git.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 
@@ -128,6 +135,7 @@ Deno.test("selectServers: an explicit profile list gains a new profile", () => {
 // ---------------------------------------------------------------- one server per account (_perAccount)
 const LAUNCH = {
   script: "/rt/shared/mcp/lib/launch.ts",
+  shim: "/rt/shared/mcp/lib/launch.sh",
   read: ["/vault", "/rt/accounts.json"],
   hooks: "/rt/shared/hooks",
   deno: "deno",
@@ -199,18 +207,21 @@ Deno.test("reach: per account, under the names the servers have; pending, and De
   );
 });
 
-Deno.test("perAccount (stdio): launch.ts wraps the command, the secret stays a placeholder", () => {
+Deno.test("perAccount (stdio): launch.sh wraps the command, the secret stays a placeholder", () => {
   const s = wanted(perAccountReg, t(A, "cli"))["flows-work"];
-  assertEquals(s.command, "deno");
+  assertEquals(s.command, "bash");
   assertEquals(s.args, [
+    "/rt/shared/mcp/lib/launch.sh",
+    "deno",
     "run",
     "--quiet",
     "--no-lock",
     "--allow-read=/vault,/rt/accounts.json",
     "--allow-env=HOME,AGENTS_MULTI_PROFILE,AGENTS_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS",
-    "--allow-run=/usr/bin/secret-tool,npx",
+    "--allow-run=/usr/bin/secret-tool",
     "/rt/shared/mcp/lib/launch.ts",
-    "run",
+    "--",
+    "env",
     "flows",
     "work",
     "--env",
@@ -238,8 +249,8 @@ Deno.test("perAccount (stdio, _bind): the binding keys go to launch.ts, which ma
   };
   const s = wanted(reg, t(A, "cli"))["flows-work"];
   const args = s.args as string[];
-  assertEquals(args[3], `--allow-read=/vault,/rt/accounts.json,${Deno.env.get("HOME")}`);
-  assertEquals(args.slice(args.indexOf("--bind"), args.indexOf("--")), [
+  assertEquals(args[5], `--allow-read=/vault,/rt/accounts.json,${Deno.env.get("HOME")}`);
+  assertEquals(args.slice(args.indexOf("--bind"), args.indexOf("--", args.indexOf("--bind"))), [
     "--bind",
     "project=--project-ref={value}",
     "--bind",
@@ -419,4 +430,36 @@ Deno.test("withoutManaged: nothing to remove returns the same object", () => {
   assertEquals(withoutManaged(conf, ["other"]).conf === conf, true);
   const bare = {};
   assertEquals(withoutManaged(bare, ["x"]), { conf: bare, removed: [] });
+});
+
+Deno.test("withNpm: an _npm server runs node on the installed bin, its args after it, nothing through npx", () => {
+  const out = withNpm({
+    n: { _npm: { package: "@x/mcp", version: "1.2.3", bin: "x-mcp" }, args: ["--features=a"], type: "stdio" },
+    plain: { command: "deno", args: ["run"] },
+  }, "/rt/tools/mcp");
+  assertEquals(out.n.command, "node");
+  assertEquals(out.n.args, ["/rt/tools/mcp/node_modules/.bin/x-mcp", "--features=a"]);
+  assertEquals(out.plain, { command: "deno", args: ["run"] });
+  assertEquals(withNpm({ n: { _npm: { package: "p", version: "1", bin: "b" } } }, "/t").n.args, [
+    "/t/node_modules/.bin/b",
+  ]);
+  // _npm is a private key: it never reaches a config
+  const placed = wanted({
+    profiles: PROFILES,
+    servers: withNpm({ n: { _npm: { package: "p", version: "1", bin: "b" } } }, "/t"),
+  }, t(A, "cli"));
+  assertEquals(placed.n, { command: "node", args: ["/t/node_modules/.bin/b"] });
+});
+
+Deno.test("registryProblems: _npm is the command, so a command next to it is a mistake", () => {
+  assertEquals(registryProblems({ servers: { n: { _npm: { package: "p", version: "1", bin: "b" } } } }), []);
+  assertEquals(
+    registryProblems({ servers: { n: { command: "npx", _npm: { package: "p", version: "1", bin: "b" } } } }).length,
+    1,
+  );
+});
+
+Deno.test("the registry: no server goes through npx (its npm exec parent stays alive for the session)", async () => {
+  const raw = JSON.parse(await Deno.readTextFile(REGISTRY)) as RawRegistry;
+  for (const [name, cfg] of Object.entries(raw.servers)) assertEquals(cfg.command === "npx", false, name);
 });
