@@ -17,23 +17,35 @@ export interface Running {
   close(): Promise<void>;
 }
 
-/** Pure: the environment a backend gets — the gateway's own, as a session's Claude would have given it,
- *  without the variables of a Claude session (a gateway started from one is nobody's child), then the
- *  entry's. */
+/** The variables of a Claude session (and of the profile it runs as: CLAUDE_CONFIG_DIR): what a gateway
+ *  started from a terminal inside one must not hand to the backends of every other profile. Same set as
+ *  `claudeSessionVars` in shared/mcp/lib/agents.ts. */
+const SESSION_VARS =
+  /^(CLAUDECODE|CLAUDE_CONFIG_DIR|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_PROJECT_DIR|CLAUDE_ENV_FILE|CLAUDE_(CODE|AGENT_SDK|PREVIEW)_.*)$/;
+
+/** Pure: the environment a backend gets — the gateway's own without any session's variables, then the
+ *  entry's (which carries AGENTS_MULTI_PROFILE and the account's settings: the profile is the entry's, never
+ *  inherited). */
 export function backendEnv(base: Record<string, string>, spec: BackendSpec): Record<string, string> {
-  const own = Object.fromEntries(
-    Object.entries(base).filter(([k]) => !/^(CLAUDECODE$|CLAUDE_CODE_|CLAUDE_PID$)/.test(k)),
-  );
+  const own = Object.fromEntries(Object.entries(base).filter(([k]) => !SESSION_VARS.test(k)));
   return { ...own, ...spec.env };
 }
 
 /** Starts the server and completes the MCP handshake. @throws when it does not come up. */
-export async function startBackend(spec: BackendSpec, base: Record<string, string>): Promise<Running> {
+export async function startBackend(
+  spec: BackendSpec,
+  base: Record<string, string>,
+  onStderr?: (line: string) => void,
+): Promise<Running> {
   const transport = new StdioClientTransport({
     command: spec.command,
     args: spec.args,
     env: backendEnv(base, spec),
-    stderr: "inherit",
+    cwd: base.HOME || undefined,
+    stderr: "pipe",
+  });
+  transport.stderr?.on("data", (b: Uint8Array) => {
+    for (const l of new TextDecoder().decode(b).split("\n")) if (l.trim()) onStderr?.(l);
   });
   let done!: () => void;
   const gone = new Promise<void>((r) => done = r);

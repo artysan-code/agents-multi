@@ -11,6 +11,8 @@ export interface BackendSpec {
 /** A backend as the gateway is told about it: its spec, and the key of its cached tool list. */
 export interface ServerEntry extends BackendSpec {
   key: string;
+  /** the registry's `_deny` for this server: tools the gateway neither lists nor forwards */
+  deny?: string[];
 }
 export interface ProfileEntry {
   /** a file only this user reads, holding the profile's token */
@@ -72,9 +74,6 @@ export class TokenMap {
     if (!who) return "unauthorized";
     return who === pathProfile ? "ok" : "forbidden";
   }
-  get size() {
-    return this.#byProfile.size;
-  }
 }
 
 /** Pure: the `Bearer` token of an Authorization header, or null. */
@@ -84,11 +83,38 @@ export function bearer(header: string | null | undefined): string | null {
 }
 
 /** Pure: whether the Host header names this listener (a page of another origin reaching 127.0.0.1 by a
- *  name of its own — DNS rebinding — does not), and whether a browser's Origin is absent (it is for a CLI). */
+ *  name of its own — DNS rebinding — does not), and whether a browser's Origin is absent (it is for a CLI).
+ *  The listener is IPv4 loopback only, so `[::1]` is not a name it can be reached by. */
 export function localRequest(host: string | null, origin: string | null, port: number): boolean {
   if (origin) return false;
-  return !!host && [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(host.toLowerCase());
+  return !!host && [`127.0.0.1:${port}`, `localhost:${port}`].includes(host.toLowerCase());
 }
+
+/** Pure: the tools a server offers once the registry's `_deny` ones are left out. */
+export function visibleTools<T extends { name?: unknown }>(tools: T[], deny: string[] | undefined): T[] {
+  return deny?.length ? tools.filter((t) => !deny.includes(String(t.name))) : tools;
+}
+/** Pure: whether a tool may be called through the gateway: the registry's `_deny` is enforced here, on the
+ *  server's side, whatever a client's own permission rules say. (`_ask` cannot be: the gateway has no
+ *  way to know that a person approved a call.) */
+export const toolAllowed = (deny: string[] | undefined, name: string) => !deny?.includes(name);
+
+/** Pure: the start time (clock ticks since boot) in the text of /proc/<pid>/stat, or null. Paired with the
+ *  pid it tells a process from another one that was given the pid later. */
+export function startTimeOf(stat: string): string | null {
+  const rest = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+  return rest[19] ?? null;
+}
+
+/** What the gateway keeps in `children.json`: the backends it started, to find them again after it died. */
+export interface Child {
+  pid: number;
+  start: string;
+  name: string;
+}
+
+/** Pure: whether a log of `size` bytes with `add` more would pass `max`. */
+export const rotateNeeded = (size: number, add: number, max: number) => size + add > max;
 
 /** Pure: a spec with its env in sorted order, so equal specs serialise equally. */
 export function canonical(spec: BackendSpec): string {

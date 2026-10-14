@@ -52,7 +52,6 @@ Deno.test("TokenMap: a token opens its own profile's paths, another's are forbid
   // an unreadable token file (empty) leaves the profile without access
   m.set(A, "");
   assertEquals(m.check("tok-a", A), "unauthorized");
-  assertEquals(m.size, 1);
 });
 
 Deno.test("bearer: only a well-formed Bearer header", () => {
