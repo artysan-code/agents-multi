@@ -12,7 +12,7 @@ import {
   type Target,
   wanted,
 } from "../mcp/placement.ts";
-import { targets } from "../mcp/apply.ts";
+import { hasDesktop, targets } from "../mcp/apply.ts";
 import { launchConfig, withoutManaged } from "../mcp/config.ts";
 import { type RawRegistry, REGISTRY, type Registry, registryProblems, selectServers } from "../mcp/registry.ts";
 import { missingIgnores } from "../lib/git.ts";
@@ -36,15 +36,15 @@ const reg: Registry = {
 const ALL: Target[] = await targets();
 const t = (profile: string, surface: "cli" | "desktop") => ({ profile, surface });
 
-Deno.test("targets: one Desktop config per profile, in its own data dir, with a managed key", async () => {
-  assertEquals(ALL.length, PROFILES.length);
-  assertEquals(ALL.map((x) => x.managedKey).sort(), PROFILES.map((p) => `desktop:${p}`).sort());
+Deno.test("targets: one Desktop config per profile in its own data dir; .claude.json only where Desktop exists", async () => {
+  const desk = ALL.filter((x) => x.surface === "desktop");
+  assertEquals(desk.map((x) => x.managedKey).sort(), PROFILES.map((p) => `desktop:${p}`).sort());
   for (const p of PROFILES) {
     // The desktop target has to land in that profile's own data dir, whatever the manifest says.
-    assertEquals(
-      ALL.find((x) => x.profile === p)!.path,
-      `${await desktopDir(p)}/claude_desktop_config.json`,
-    );
+    assertEquals(desk.find((x) => x.profile === p)!.path, `${await desktopDir(p)}/claude_desktop_config.json`);
+    const code = ALL.find((x) => x.profile === p && x.surface === "cli");
+    assertEquals(!!code, await hasDesktop(p), `${p}: .claude.json target iff Desktop exists`);
+    if (code) assertEquals([code.managedKey, code.path.endsWith(`/${p}/.claude.json`)], [`cli:${p}`, true]);
   }
 });
 

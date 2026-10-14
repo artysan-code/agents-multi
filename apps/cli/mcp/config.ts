@@ -9,7 +9,7 @@ import { readJson, writeAtomic } from "../lib/fs.ts";
 import { RUNTIME } from "../lib/paths.ts";
 import { profileNames } from "../lib/profiles.ts";
 import { running } from "../lib/processes.ts";
-import { backup, loadState, saveState } from "./apply.ts";
+import { backup, hasDesktop, loadState, saveState } from "./apply.ts";
 import { wanted } from "./placement.ts";
 import { loadRegistry, type Registry } from "./registry.ts";
 
@@ -45,7 +45,8 @@ export async function syncLaunchConfig(profile: string, reg?: Registry): Promise
 
 /**
  * Once per profile, takes out of its `.claude.json` the servers the old projection put there (those
- * the state names, nothing else), now that the launch config carries them. Skipped while a Claude of
+ * the state names, nothing else), now that the launch config carries them. A profile that has Desktop
+ * keeps them: the Code tab's embedded Claude reads that file, and apply.ts maintains them. Skipped while a Claude of
  * the profile is open (it rewrites that file: the next run does it) and when the launch config is
  * not there yet (the servers would vanish from the profile).
  *
@@ -55,7 +56,7 @@ export async function retireProjection(profile: string): Promise<string[]> {
   const key = `cli:${profile}`;
   const state = await loadState();
   const managed = state[key];
-  if (!managed) return [];
+  if (!managed || await hasDesktop(profile)) return [];
   if (!(await Deno.stat(mcpConfigPath(profile)).catch(() => null))) return [];
   const path = `${RUNTIME}/${profile}/.claude.json`;
   const conf = await readJson<{ mcpServers?: Record<string, unknown> }>(path);

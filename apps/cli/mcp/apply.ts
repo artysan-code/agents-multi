@@ -1,14 +1,16 @@
-// apply.ts — the registry's projection into Claude Desktop's config files (claude_desktop_config.json),
-// the one surface that cannot be handed its servers at launch. The CLI's servers are not copied anywhere:
-// config.ts generates a file per profile that bin/claude passes with --mcp-config.
+// apply.ts — the registry's projection for Claude Desktop: its config file (claude_desktop_config.json)
+// and, for a profile that has Desktop, the profile's .claude.json too, which the Claude Code embedded in
+// Desktop (the Code tab) reads. Neither can be handed its servers at launch. Everywhere else the CLI's
+// servers are not copied anywhere: config.ts generates a file per profile that bin/claude passes with
+// --mcp-config.
 // The merge is non-destructive: only registry-managed servers are touched, hand-added ones survive.
-// A Desktop that is running is skipped, never an error: the projection lands the next time it is
-// closed (claude-launch runs it just before opening the app). State (which servers were managed per
+// A target in use (that Desktop; or, for .claude.json, any Claude of the profile) is skipped, never an
+// error: the projection lands the next time it is free (claude-launch runs it just before opening the app). State (which servers were managed per
 // target) lives in XDG state: it is per-machine, not in the repo.
 // Every write is preceded by a backup in XDG state (600, last 5) — never in the profile directory.
 
 import { readJson, writeAtomic } from "../lib/fs.ts";
-import { CACHE, STATE } from "../lib/paths.ts";
+import { CACHE, RUNTIME, STATE } from "../lib/paths.ts";
 import { running } from "../lib/processes.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
 import { type Target, wanted } from "./placement.ts";
@@ -26,9 +28,15 @@ const KEEP = 5;
 /** Present while a Desktop projection waits for its app to be closed: claude-launch looks for it (prelaunch.sh). */
 const PENDING = `${CACHE}/desktop-mcp.pending`;
 
+/** Whether a profile has Claude Desktop here: its config file exists (Desktop has been opened once). */
+export async function hasDesktop(p: string): Promise<boolean> {
+  return !!(await Deno.stat(`${await desktopDir(p)}/claude_desktop_config.json`).catch(() => null));
+}
+
 /**
- * Every Desktop config file the projection manages, one per profile. The files may not exist
- * (profile or Desktop not installed).
+ * Every config file the projection manages: per profile its Desktop `claude_desktop_config.json`
+ * (may not exist: Desktop not installed) and, for a profile that has Desktop, its `.claude.json`
+ * (`cli:<p>`, read by the Claude Code Desktop embeds).
  */
 export async function targets(): Promise<Target[]> {
   const t: Target[] = [];
@@ -39,11 +47,13 @@ export async function targets(): Promise<Target[]> {
       path: `${await desktopDir(p)}/claude_desktop_config.json`,
       managedKey: `desktop:${p}`,
     });
+    if (await hasDesktop(p)) {
+      t.push({ profile: p, surface: "cli", path: `${RUNTIME}/${p}/.claude.json`, managedKey: `cli:${p}` });
+    }
   }
   return t;
 }
-/** Which servers each target had managed at the last write (`desktop:<p>`; `cli:<p>` is the old
- *  projection into .claude.json, which config.ts retires). */
+/** Which servers each target had managed at the last write (`desktop:<p>`, `cli:<p>`). */
 export async function loadState(): Promise<Record<string, string[]>> {
   return await readJson<Record<string, string[]>>(STATE_FILE) ?? {};
 }
@@ -106,11 +116,11 @@ export async function blockers(): Promise<Record<string, string[]>> {
 }
 
 /**
- * Writes the registry's Desktop servers into every existing Desktop config: merges only the managed
- * servers, backs up each file first, writes atomically and records which servers it manages. A
- * profile whose Desktop is running is left for later.
+ * Writes the registry's servers into every existing target (Desktop config, and `.claude.json` of a
+ * profile with Desktop): merges only the managed servers, backs up each file first, writes atomically
+ * and records which servers it manages. A target in use (blockers) is left for later.
  *
- * @returns the changes applied, and the targets skipped because their Desktop was open
+ * @returns the changes applied, and the targets skipped because something was open
  */
 export async function apply(): Promise<{ changes: Change[]; deferred: string[] }> {
   const reg = await loadRegistry();

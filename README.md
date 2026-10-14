@@ -391,7 +391,8 @@ Per server, `_profiles` (default: all) and `_surfaces`:
 
 - `cli` → the profile's generated `~/.agents-multi/<profile>/mcp.json`, which `bin/claude` passes with
   `--mcp-config` at every start (so the hub's children get it too, they start through the launcher).
-  Nothing is copied into Claude's own `.claude.json`: there is no copy to fall out of step. Claude merges
+  For a profile without Desktop nothing is copied into Claude's own `.claude.json`: there is no copy to
+  fall out of step. Claude merges
   it over its own servers, the project's `.mcp.json` and the plugins' (no `--strict-mcp-config`), and
   on a name clash the registry wins. The file is rebuilt before Claude starts whenever the registry,
   `accounts.json` or the profiles change (`prelaunch.sh`, with the settings).
@@ -399,13 +400,16 @@ Per server, `_profiles` (default: all) and `_surfaces`:
   handed servers at launch, so this one is still a projection: a non-destructive merge (registry-managed
   servers only, hand-added ones survive), written while that Desktop is closed — never an error when it
   is open: `claude-launch` applies it just before opening the app.
+- a profile **with Desktop** also gets the registry's servers in its `.claude.json` (managed ones only,
+  merged with a backup, `oauthAccount` and hand-added servers untouched), because the Claude Code that
+  Desktop embeds (its Code tab) reads that file, not the launch config. Same non-blocking rule: written
+  when no Claude of that profile is open, otherwise left for the next Desktop launch.
 
 `agents mcp sync` rebuilds the launch configs and Desktop's servers at once (no Claude needs closing;
-a Desktop that is open waits), and on first run takes the servers an older version projected into
-`.claude.json` out of it (only those its per-machine state names, with a backup into
-`~/.local/state/agents-multi/`, and only while no Claude of that profile is open). `agents mcp check`
-shows what differs. The Claude Code that Desktop embeds (its Code tab) no longer sees the registry's
-servers: it reads `.claude.json`, not the launch config.
+a target in use waits), and on first run, for a profile without Desktop, takes the servers an older
+version projected into `.claude.json` out of it (only those its per-machine state names, with a backup
+into `~/.local/state/agents-multi/`, and only while no Claude of that profile is open). `agents mcp check`
+shows what differs.
 
 `mcp health` checks binaries, files, lock files and dependencies. `mcp health --probe` actually
 starts each server and waits for its `initialize` reply, which catches what static checks cannot —

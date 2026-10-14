@@ -38,14 +38,19 @@ a Claude was open, because Claude rewrites `.claude.json` (`oauthAccount`, state
 - **Desktop stays a projection**, as it can only read its own file, but never blocks: written when that
   Desktop is closed, otherwise left, and `claude-launch` applies it just before opening the app (a marker
   in the cache makes prelaunch force the run). The doctor never warns for it.
-- **The old projection is retired once** per profile: the servers the per-machine state recorded
-  (`cli:<profile>`) are taken out of `.claude.json`, with a backup, only when the launch config exists and
-  no Claude of that profile is open.
+- **A profile with Desktop keeps a projection into `.claude.json`** (owner's decision, 2026-10-14): the
+  Claude Code embedded in Desktop (its Code tab) reads that file, not the launch config. Same rule as
+  Desktop's file: managed servers only, merge with backup, `oauthAccount` and hand-added servers
+  untouched, written at the forced run of `claude-launch` when no Claude of the profile is open, else
+  marker and the next occasion. No doctor warning.
+- **For a profile without Desktop the old projection is retired once**: the servers the per-machine state
+  recorded (`cli:<profile>`) are taken out of `.claude.json`, with a backup, only when the launch config
+  exists and no Claude of that profile is open.
 
 ## Consequences
 
 - The class "registry out of sync" is gone for the CLI: no copy, no comparison, no "close Claude".
 - Removed: the CLI target of the sync, its blockers for the MCP repair, the console's "close for MCP"
   purpose, the doctor's `mcp.sync` warning.
-- **The Claude Code embedded in Desktop (its Code tab) reads `.claude.json`, not the launch config**: it no
-  longer sees the registry's servers. Desktop's chat is unaffected.
+- The Desktop surfaces (chat file, and `.claude.json` for the Code tab) remain projections, but never
+  block and never warn; a change reaches them at the next Desktop launch.
