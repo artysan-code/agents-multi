@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A stand-in for `codex exec --json`: the events of a turn, in the shape the CLI prints (thread.started,
 # turn.started, item.*, turn.completed). It records how it was called, in the folder it runs in.
-printf '%s|%s\n' "$CODEX_HOME" "$*" >> "$PWD/calls.txt"
+printf '%s|%s|token=%s\n' "$CODEX_HOME" "$*" "${AGENTS_MULTI_MCP_TOKEN:-}" >> "$PWD/calls.txt"
 prompt="${*: -1}"
 if [[ "$2" == resume ]]; then thread="$(printf '%s\n' "$@" | grep -m1 -E '^[0-9a-f]{8}-')"; verb="resumed"; else thread="0192aaaa-bbbb-cccc-dddd-000000000001"; verb="did"; fi
 echo '{"type":"thread.started","thread_id":"'"$thread"'"}'

@@ -171,6 +171,7 @@
         "agent_start",
         "agent_status",
         "agent_stop",
+        "limits",
         "workflow_list",
         "workflow_start",
         "workflow_status"

@@ -4,7 +4,7 @@
 // resume <thread>` — and writes what happens to `out.jsonl` in Claude's stream-json (`codexLines`), so
 // the hub follows it with the code it has. It ends when `in` closes, after the turn it is in.
 //
-//   deno run codex-driver.ts <run folder>     env: CODEX_BIN, CODEX_HOME, CODEX_SANDBOX, CODEX_MODEL?
+//   deno run codex-driver.ts <run folder>     env: CODEX_BIN, CODEX_HOME, CODEX_SANDBOX, CODEX_MODEL?, CODEX_CONFIG? (JSON: `-c` overrides)
 
 import { codexArgs, codexLines, type Turn } from "../lib/codex.ts";
 
@@ -14,6 +14,8 @@ const out = await Deno.open(`${run}/out.jsonl`, { create: true, append: true });
 const enc = new TextEncoder();
 const put = (o: Record<string, unknown>) => out.write(enc.encode(JSON.stringify(o) + "\n"));
 
+// extra `-c key=value` overrides of the child's MCP servers (providers.ts), as a JSON array in the environment
+const config: string[] = JSON.parse(env("CODEX_CONFIG") || "[]");
 let thread: string | undefined;
 
 /** One turn; resolves when `codex exec` has ended, with its events already in `out.jsonl`. */
@@ -22,7 +24,7 @@ async function turn(prompt: string) {
   const t: Turn = { last: "" };
   let closed = false;
   const p = new Deno.Command(env("CODEX_BIN"), {
-    args: codexArgs({ thread, sandbox: env("CODEX_SANDBOX"), model: env("CODEX_MODEL") || undefined, prompt }),
+    args: codexArgs({ thread, sandbox: env("CODEX_SANDBOX"), model: env("CODEX_MODEL") || undefined, prompt, config }),
     stdin: "null",
     stdout: "piped",
     stderr: "piped",

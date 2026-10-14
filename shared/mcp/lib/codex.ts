@@ -27,7 +27,9 @@ export const codexSandbox = (mode: ChildMode): "read-only" | "workspace-write" =
   mode === "default" ? "read-only" : "workspace-write";
 
 /** Pure: the arguments of one turn: the first (`exec`) or a follow-up (`exec resume <thread>`). */
-export function codexArgs(i: { thread?: string; sandbox: string; model?: string; prompt: string }): string[] {
+export function codexArgs(
+  i: { thread?: string; sandbox: string; model?: string; prompt: string; config?: string[] },
+): string[] {
   const common = [
     "--json",
     "--skip-git-repo-check",
@@ -35,10 +37,55 @@ export function codexArgs(i: { thread?: string; sandbox: string; model?: string;
     `sandbox_mode="${i.sandbox}"`,
     "-c",
     'approval_policy="never"',
+    ...(i.config ?? []).flatMap((c) => ["-c", c]),
     ...(i.model ? ["-m", i.model] : []),
   ];
   // the prompt goes last, after `--`: a task that starts with a dash is still a task
   return i.thread ? ["exec", "resume", ...common, i.thread, "--", i.prompt] : ["exec", ...common, "--", i.prompt];
+}
+
+/** The name of the environment variable a Codex child reads the gateway's token from. Its name has TOKEN
+ *  in it on purpose: Codex keeps such variables out of the environment of the commands it runs. */
+export const MCP_TOKEN_VAR = "AGENTS_MULTI_MCP_TOKEN";
+
+/** The hub's own server: a Codex child never gets it (a child that starts children is the coordinator's
+ *  to decide, not a default). */
+const NOT_FOR_CHILDREN = new Set(["agents"]);
+
+/** Pure: a profile's launch config (`<runtime>/<profile>/mcp.json`'s `mcpServers`, ADR 0006) as the `-c`
+ *  overrides that give the same servers to Codex (which has no `--mcp-config`; its own are in
+ *  `config.toml`, which nothing here writes). Servers behind the gateway (an http entry on 127.0.0.1) get
+ *  the gateway's token from the environment variable `MCP_TOKEN_VAR`, never from a file or an argument;
+ *  stdio servers keep their command, arguments and environment. An entry that needs more (an http server
+ *  with its own header helper) or has a name TOML cannot take bare is left out. */
+export function codexMcpOverrides(servers: Record<string, Record<string, unknown>>): {
+  config: string[];
+  token: boolean;
+} {
+  const config: string[] = [];
+  let token = false;
+  const t = (v: unknown) => JSON.stringify(v);
+  for (const [name, cfg] of Object.entries(servers)) {
+    if (NOT_FOR_CHILDREN.has(name) || !/^[A-Za-z0-9_-]+$/.test(name)) continue;
+    const key = `mcp_servers.${name}`;
+    if (typeof cfg.url === "string") {
+      let host = "";
+      try {
+        host = new URL(cfg.url).hostname;
+      } catch { /* not an address */ }
+      if (host !== "127.0.0.1") continue;
+      config.push(`${key}.url=${t(cfg.url)}`, `${key}.bearer_token_env_var=${t(MCP_TOKEN_VAR)}`);
+      token = true;
+    } else if (typeof cfg.command === "string") {
+      config.push(`${key}.command=${t(cfg.command)}`);
+      const args = Array.isArray(cfg.args) ? cfg.args.map(String) : [];
+      if (args.length) config.push(`${key}.args=${t(args)}`);
+      for (const [k, v] of Object.entries((cfg.env ?? {}) as Record<string, unknown>)) {
+        if (/^[A-Za-z0-9_]+$/.test(k)) config.push(`${key}.env.${k}=${t(String(v))}`);
+      }
+    }
+  }
+  return { config, token };
 }
 
 /** What a turn has told so far, to close it with the last thing said. */

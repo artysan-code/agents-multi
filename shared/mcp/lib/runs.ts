@@ -43,10 +43,13 @@ import {
   stopChild,
   validId,
 } from "./agents.ts";
+import { PROVIDER_NAMES, type ProviderName, providers } from "./providers.ts";
 
 interface PlanStep {
   id: string;
   profile: string;
+  /** the provider that runs it: claude (default) or codex, whose account the profile must have */
+  provider?: ProviderName;
   /** the step's folder; the plan's when absent */
   folder?: string;
   model?: string;
@@ -126,6 +129,9 @@ export function planErrors(p: Plan): string[] {
     if (typeof s.prompt !== "string" || !s.prompt.trim()) errs.push(`step ${s.id}: no prompt`);
     if (!(s.folder ?? p.folder)) errs.push(`step ${s.id}: no folder, and none for the plan`);
     if (s.model !== undefined && !/^[a-z0-9.\[\]-]+$/i.test(s.model)) errs.push(`step ${s.id}: not a model name`);
+    if (s.provider !== undefined && !PROVIDER_NAMES.includes(s.provider)) {
+      errs.push(`step ${s.id}: provider is ${PROVIDER_NAMES.join(" or ")}`);
+    }
   }
   for (const s of p.steps) {
     for (const a of s.after ?? []) if (!ids.has(a)) errs.push(`step ${s.id} is after ${a}, which is not a step`);
@@ -174,7 +180,10 @@ export const finished = (st: RunState) => Object.values(st.steps).every((s) => [
 /** Pure: what a step is told besides its own prompt: the run, the team, the HANDOFFs to read, where to
  *  write its own and what goes in it. */
 export function stepPrompt(p: Plan, step: PlanStep, run: string, handoffOf: (id: string) => string): string {
-  const team = p.steps.filter((s) => s.id !== step.id).map((s) => `- ${s.id} (${s.profile})`);
+  // a Codex step has no team channel (its provider takes no extra MCP flag of Claude's)
+  const team = step.provider === "codex"
+    ? []
+    : p.steps.filter((s) => s.id !== step.id).map((s) => `- ${s.id} (${s.profile})`);
   const read = (step.after ?? []).map((a) => `- ${a}: ${handoffOf(a)}`);
   return [
     step.prompt.trim(),
@@ -359,6 +368,12 @@ export async function startRun(
   const errs = planErrors(plan);
   for (const s of plan.steps ?? []) {
     if (s.profile && !(await launcherOf(s.profile, configDir()))) errs.push(`step ${s.id}: no profile ${s.profile}`);
+    else if (s.provider === "codex") {
+      // the account, the CLI and the login are there before the run starts, not when the step does
+      await providers.codex.command(s.profile, configDir(), `${home}/.agents-multi`).catch((e: Error) =>
+        errs.push(`step ${s.id}: ${e.message}`)
+      );
+    }
     const f = (s.folder ?? plan.folder ?? "").replace(/^~(?=\/|$)/, home);
     if (f && (!f.startsWith(`${home}/`) || f.includes("/../"))) {
       errs.push(`step ${s.id}: the folder must be under home`);
@@ -494,6 +509,7 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
     const m = await startChild(
       {
         profile: s.profile,
+        provider: s.provider,
         dir: folderOf(s),
         task: stepPrompt(plan, s, id, handoffOf),
         model: s.model,
@@ -515,7 +531,11 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
       handoff,
       started: new Date().toISOString(),
     };
-    await event("step", `${sid} started (${s.profile}${s.model ? `, ${s.model}` : ""})`, sid);
+    await event(
+      "step",
+      `${sid} started (${s.profile}${s.provider === "codex" ? ", codex" : ""}${s.model ? `, ${s.model}` : ""})`,
+      sid,
+    );
   };
 
   while (st.status === "running") {

@@ -13,27 +13,20 @@
 // sign-out, so an expired token is renewed by Claude Code itself — one tiny request through the
 // profile's launcher (probeLogin) — never here: two renewers of one token would revoke each other.
 
+import { type Limits, limitsOf } from "../../shared/mcp/lib/limits.ts";
 import { readJson, writeAtomic } from "./lib/fs.ts";
 import { RUNTIME, STATE } from "./lib/paths.ts";
 import { launchers, profileNames } from "./lib/profiles.ts";
 import { isLoginError, probeLogin, recordLogin } from "./login.ts";
 import { openDb, report } from "./usage.ts";
 
+export { type Limit, limitOf, type Limits, limitsOf } from "../../shared/mcp/lib/limits.ts";
+
 const LIVE = `${STATE}/live`;
 /** Snapshots older than this are of sessions long gone: dropped when read. */
 const KEEP_S = 7 * 24 * 3600;
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 
-export interface Limit {
-  /** 0–100, above 100 once exceeded */
-  used: number;
-  /** when the window starts again, epoch seconds */
-  resets: number | null;
-}
-export interface Limits {
-  five_hour?: Limit;
-  seven_day?: Limit;
-}
 export interface Snapshot {
   /** epoch seconds */
   at: number;
@@ -51,35 +44,6 @@ export interface Snapshot {
 export interface LiveView {
   profiles: Record<string, { limits: Limits | null; at: number | null; source: string | null; tokens: number }>;
   sessions: Record<string, { context: Snapshot["context"]; model: string | null; at: number; cwd: string | null }>;
-}
-
-const num = (v: unknown): number | null => typeof v === "number" && Number.isFinite(v) ? v : null;
-
-/** Pure: a window of the limits as Claude Code gives it (the status line: used_percentage and epoch
- *  seconds; the endpoint: utilization and an ISO date or seconds) in one shape. */
-export function limitOf(v: unknown): Limit | undefined {
-  if (!v || typeof v !== "object") return undefined;
-  const o = v as Record<string, unknown>;
-  const used = num(o.used_percentage) ?? num(o.utilization);
-  if (used === null) return undefined;
-  const r = o.resets_at;
-  const resets = typeof r === "number"
-    ? r
-    : typeof r === "string" && r
-    ? Math.round(Date.parse(r) / 1000) || null
-    : null;
-  return { used: Math.round(used * 10) / 10, resets };
-}
-
-/** Pure: the limits out of a status line's rate_limits or the endpoint's answer. */
-export function limitsOf(v: unknown): Limits | undefined {
-  if (!v || typeof v !== "object") return undefined;
-  const o = v as Record<string, unknown>;
-  const l: Limits = {};
-  const f = limitOf(o.five_hour), s = limitOf(o.seven_day);
-  if (f) l.five_hour = f;
-  if (s) l.seven_day = s;
-  return f || s ? l : undefined;
 }
 
 /** Pure: what the page shows, from the snapshots, the profiles and today's tokens by profile. The

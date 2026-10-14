@@ -14,6 +14,7 @@ import {
   stopChild,
   type Verdict,
 } from "../lib/agents.ts";
+import { allLimits, placesFromEnv, providers } from "../lib/providers.ts";
 import {
   adoptRun,
   answerRun,
@@ -65,6 +66,7 @@ const view = (c: Child, full = false) => ({
   last_result: c.state.lastResult?.slice(0, full ? 4000 : 400) ?? null,
   error: c.state.error,
   cost_usd: c.state.costUsd,
+  capabilities: providers[c.meta.provider ?? "claude"].capabilities,
 });
 
 export function registerAgentTools(server: McpServer) {
@@ -95,6 +97,24 @@ export function registerAgentTools(server: McpServer) {
         owner,
       });
       return text({ started: m.id, profile: m.profile, folder: m.dir });
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  server.registerTool("limits", {
+    description: "Every account (a profile's Claude, and its Codex where it has one) with its usage windows: " +
+      "`window` (5h, 7d…), `usedPercent`, `resetsAt` (epoch seconds), `source`, `at` (when it was read). Read the " +
+      "passive way — the status line's snapshots for Claude, Codex's session logs — never from a vendor: an account " +
+      "with no `windows` has not run lately, which is unknown, not empty. Use it to see where room is left before " +
+      "choosing a profile or provider for a child; the owner decides which account a job uses.",
+    inputSchema: {
+      profile: z.string().optional().describe("only this profile's accounts"),
+    },
+  }, async ({ profile }: { profile?: string }) => {
+    try {
+      const all = await allLimits(placesFromEnv());
+      return text(all.filter((a) => !profile || a.account.profile === profile));
     } catch (e) {
       return fail(e);
     }
@@ -190,6 +210,9 @@ export function registerAgentTools(server: McpServer) {
     id: z.string().describe("lowercase, e.g. review"),
     profile: z.string().describe("the profile (so the account) it runs with"),
     folder: z.string().optional().describe("its folder; the plan's when absent"),
+    provider: z.enum(["claude", "codex"]).optional().describe(
+      "claude (default) or codex: the profile must have a Codex account. A Codex step has no team channel and never asks a permission",
+    ),
     model: z.string().optional(),
     prompt: z.string().describe("what it has to do, complete: it knows only this, its folder and the HANDOFFs"),
     after: z.array(z.string()).optional().describe("the steps it waits for"),

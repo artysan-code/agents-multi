@@ -10,18 +10,20 @@
 //   <runs>/<id>/in            a fifo: its stdin (user messages, answers to its requests)
 //   <runs>/<id>/out.jsonl     its events (stream-json)
 //   <runs>/<id>/answers.jsonl the requests answered, and how
-//   <runs>/<id>/claude.pid, holder.pid, err.log
+//   <runs>/<id>/child.pid, holder.pid, err.log
 // Closing the fifo's holder ends the session after its current turn.
 //
 // A provider is what differs between children: Claude Code, or Codex (OpenAI). Both speak these files:
 // a Codex child's process is `agents/codex-driver.ts`, which runs `codex exec` turn by turn and writes
 // `out.jsonl` in Claude's stream-json, so sending, reading its state and stopping are the same code.
-// What a provider adds is how its process starts (`Provider`). (`claude.pid` is the child's process,
-// whichever provider: the name is older than the second one.)
+// What a provider adds is how its process starts (`Provider`, providers.ts). (`child.pid` is the child's
+// process, whichever provider; a child started before the rename has `claude.pid`, read all the same.)
 
 import { configDir } from "./owner.ts";
 import { myCoordinator, type Proc, procAlive, type ProcReader, procReader, sameStart } from "./proc.ts";
-import { codexBin, codexHome, codexSandbox } from "./codex.ts";
+import { launcherOf, type ProviderName, providers } from "./providers.ts";
+
+export { launcherOf, type ProviderName };
 
 interface Meta {
   id: string;
@@ -479,6 +481,11 @@ export const pidAlive = async (pidFile: string) => {
   return !!r?.success && runsBy(new TextDecoder().decode(r.stdout));
 };
 
+/** Whether a child's process runs: `child.pid`, or `claude.pid` in a child started before the name was
+ *  provider-neutral. */
+export const childAlive = async (dir: string) =>
+  await pidAlive(`${dir}/child.pid`) || await pidAlive(`${dir}/claude.pid`);
+
 /** A file's non-empty lines; none when it is missing. */
 export async function lines(file: string): Promise<string[]> {
   return (await Deno.readTextFile(file).catch(() => "")).split("\n").filter(Boolean);
@@ -508,7 +515,7 @@ export async function readChild(id: string, runs = runsDir()): Promise<Child | n
   if (!meta) return null;
   // a child older than the scope belongs to the project of its own folder
   meta.project ??= await projectOf(meta.dir ?? "/").catch(() => undefined);
-  const state = stateOf(await lines(`${dir}/out.jsonl`), await answeredOf(dir), await pidAlive(`${dir}/claude.pid`));
+  const state = stateOf(await lines(`${dir}/out.jsonl`), await answeredOf(dir), await childAlive(dir));
   const err = (await Deno.readTextFile(`${dir}/err.log`).catch(() => "")).trim();
   if (state.phase === "ended" && !state.turns && err) state.error = err.split("\n").slice(-3).join(" ");
   return { meta, state };
@@ -576,21 +583,13 @@ export function adoptable(
 
 /** Writes a line on a child's stdin; refused when the child is gone (a fifo with no reader would block). */
 async function send(dir: string, line: string): Promise<void> {
-  if (!(await pidAlive(`${dir}/claude.pid`))) throw new Error("the child is not running");
+  if (!(await childAlive(dir))) throw new Error("the child is not running");
   const f = await Deno.open(`${dir}/in`, { write: true });
   try {
     await f.write(new TextEncoder().encode(`${line}\n`));
   } finally {
     f.close();
   }
-}
-
-/** The launcher of a profile, from its manifest (`command`), else `claude-<profile>`. */
-export async function launcherOf(profile: string, config = configDir()): Promise<string | null> {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(profile)) return null;
-  const m = await Deno.readTextFile(`${config}/profiles/${profile}/profile.json`).then(JSON.parse).catch(() => null);
-  if (!m) return null;
-  return (typeof m.command === "string" && m.command.trim()) || `claude-${profile}`;
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24);
@@ -640,91 +639,6 @@ export const claudeSessionVars = (names: string[]): string[] =>
 export const isUnder = (home: string, path: string) =>
   home !== "" && (path === home || path.startsWith(`${home.replace(/\/$/, "")}/`));
 
-export type ProviderName = "claude" | "codex";
-
-/** What a provider does for a child: the program it runs, and the last line of the child's script — the
- *  `exec` that replaces the shell — with the variables that line reads (values never go in the text). */
-interface Provider {
-  /** the program, or why this profile cannot use the provider */
-  command(profile: string, config: string, runtime: string): Promise<string>;
-  exec(
-    i: {
-      command: string;
-      mode: ChildMode;
-      model?: string;
-      profile: string;
-      runtime: string;
-      mcpConfig?: string;
-      allowedTools?: string[];
-    },
-  ): {
-    line: string;
-    env: Record<string, string>;
-  };
-}
-
-const claudeProvider: Provider = {
-  async command(profile, config) {
-    const command = await launcherOf(profile, config);
-    if (!command) throw new Error(`no profile ${profile}`);
-    return command;
-  },
-  exec(i) {
-    const env: Record<string, string> = { L: i.command, P: i.mode };
-    if (i.model) env.M = i.model;
-    if (i.mcpConfig) env.C = i.mcpConfig;
-    if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
-    return {
-      line: 'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
-        "--input-format stream-json --output-format stream-json --verbose " +
-        '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
-      env,
-    };
-  },
-};
-
-/** Codex: the profile declares an account (`"codex": true` in its manifest), whose `CODEX_HOME` is in the
- *  profile's runtime folder. Differences from Claude: no permission request ever reaches the owner (the
- *  sandbox is fixed by the profile's mode, `codexSandbox`), a message sent during a turn waits for the next
- *  one, and the extra MCP servers and allowed tools of a workflow's team channel are not given (Claude's
- *  flags) — a Codex step has no `team_send`. */
-const codexProvider: Provider = {
-  async command(profile, config, runtime) {
-    const m = await Deno.readTextFile(`${config}/profiles/${profile}/profile.json`).then(JSON.parse).catch(() => null);
-    if (!m) throw new Error(`no profile ${profile}`);
-    if (m.codex !== true) {
-      throw new Error(`profile ${profile} has no Codex account: set "codex": true in its profile.json, then log in`);
-    }
-    const bin = codexBin(runtime);
-    if (!(await Deno.stat(bin).catch(() => null))?.isFile) {
-      throw new Error(`Codex is not installed: run \`agents update --codex\``);
-    }
-    // only whether a login is there, never what it holds
-    if (!(await Deno.stat(`${codexHome(runtime, profile)}/auth.json`).catch(() => null))?.isFile) {
-      throw new Error(`profile ${profile} has no Codex login: the owner runs \`agents codex ${profile} login\``);
-    }
-    return bin;
-  },
-  exec(i) {
-    const driver = new URL("../agents/codex-driver.ts", import.meta.url).pathname;
-    const env: Record<string, string> = {
-      D: driver,
-      CODEX_BIN: i.command,
-      CODEX_HOME: codexHome(i.runtime, i.profile),
-      CODEX_SANDBOX: codexSandbox(i.mode),
-    };
-    if (i.model) env.CODEX_MODEL = i.model;
-    return {
-      line: 'mkdir -p -m 700 "$CODEX_HOME"\n' +
-        'exec deno run --quiet --no-config --no-lock --allow-read="$R" --allow-write="$R" ' +
-        '--allow-run="$CODEX_BIN" --allow-env=CODEX_BIN,CODEX_SANDBOX,CODEX_MODEL "$D" "$R" > /dev/null 2>> "$R/err.log"',
-      env,
-    };
-  },
-};
-
-const providers: Record<ProviderName, Provider> = { claude: claudeProvider, codex: codexProvider };
-
 /** Starts a child: its folder, the fifo held open, the session detached from whoever asked. */
 export async function startChild(
   i: StartInput,
@@ -761,7 +675,7 @@ export async function startChild(
   if (!fifo.success) throw new Error("could not make the child's stdin");
   // values reach the shell as variables, never inside the script's text
   // a child is a session of its own: none of the variables of the Claude session that started the hub
-  const exec = provider.exec({
+  const exec = await provider.exec({
     command,
     mode,
     model: i.model,
@@ -774,7 +688,7 @@ export async function startChild(
     'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',
     'sleep infinity > "$R/in" & echo $! > "$R/holder.pid"',
     'cd "$W" || exit 1',
-    'echo $$ > "$R/claude.pid"',
+    'echo $$ > "$R/child.pid"',
     exec.line,
   ].join("\n");
   const env: Record<string, string> = { R: run, W: dir, V: CLAUDE_SESSION_VARS, ...exec.env };
@@ -785,7 +699,7 @@ export async function startChild(
     stdout: "null",
     stderr: "null",
   }).output();
-  for (let t = 0; t < 50 && !(await pidAlive(`${run}/claude.pid`)); t++) await new Promise((r) => setTimeout(r, 100));
+  for (let t = 0; t < 50 && !(await childAlive(run)); t++) await new Promise((r) => setTimeout(r, 100));
   await send(run, userLine(i.task));
   return meta;
 }
@@ -830,7 +744,7 @@ export async function stopChild(id: string, force = false, runs = runsDir(), sco
   if (!validId(id)) throw new Error(`no child ${id}`);
   if (scope) await childIn(id, scope, runs, true);
   const dir = `${runs}/${id}`;
-  for (const f of force ? ["holder.pid", "claude.pid"] : ["holder.pid"]) {
+  for (const f of force ? ["holder.pid", "child.pid", "claude.pid"] : ["holder.pid"]) {
     const pid = Number((await Deno.readTextFile(`${dir}/${f}`).catch(() => "")).trim());
     // the `kill` command, not Deno.kill: that needs --allow-run for every program, the server has three
     if (pid > 0) {
