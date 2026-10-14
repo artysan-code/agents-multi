@@ -48,14 +48,12 @@ then type `/login`. `agents doctor --probe` tells you which profiles need it.
 
 ## An MCP server does not show up
 
-With every Claude closed:
-
 ```bash
 agents mcp sync
 agents mcp health --probe
 ```
 
-`sync` applies the registry to every profile; `health --probe` starts each server and waits for it to
+`sync` rebuilds every profile's launch config (and Desktop's servers); `health --probe` starts each server and waits for it to
 answer. Then start Claude again: running instances do not pick up changes. A server that needs an
 account appears only once the account exists in `accounts.json`.
 

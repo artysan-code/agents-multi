@@ -23,7 +23,7 @@ profile picker: the app's tray icon opens a window asking which profile to start
 | `agents doctor` | checks every invariant of the setup and prints the fix for whatever is off |
 | `agents status` | versions, available updates, what each profile has mounted, what is running |
 | `agents install --dry-run` | shows what an install would change; without `--dry-run` it does it (idempotent, never deletes real content) |
-| `agents mcp sync` | applies the MCP servers to every profile, with Claude closed |
+| `agents mcp sync` | rebuilds every profile's MCP launch config and Desktop's servers; no Claude needs closing |
 | `agents init <folder>` | makes your configuration folder, when not using the wizard |
 | `agents serve` | runs the console without the app, on a headless box |
 

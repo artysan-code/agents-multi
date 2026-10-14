@@ -16,8 +16,8 @@ can, ask before anything hard to undo, and follow the rules below without except
   never put them in a file, an argument or an environment variable.
 - **Back up before you move anything.** `install` turns `~/.claude` into a read-only stub and keeps
   every profile under `~/.agents-multi/<profile>`: their current Claude Code state moves aside.
-- **Read before you write**: `install --dry-run` and show the plan; the same for `mcp sync`.
-- **`install` and `mcp sync` run with every Claude closed**, this session included: when you get
+- **Read before you write**: `install --dry-run` and show the plan.
+- **`install` runs with every Claude closed**, this session included: when you get
   there, hand the person the commands and stop; the next session picks up from the doctor.
 - Where you are at any time: `~/.local/src/agents-multi/bin/agents doctor` (once installed,
   `agents doctor`). Resume from the first step whose result is missing.
@@ -133,7 +133,7 @@ The administrator runs their brain instance and gives them its address, passphra
    agents vault set brain brain
    ```
 
-## 8. Finish (with Claude closed)
+## 8. Finish
 
 ```bash
 agents mcp sync

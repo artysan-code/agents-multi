@@ -6,9 +6,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { t, tk } from "../../i18n.ts";
 import { runJob, toast } from "../../lib/ui.tsx";
-import { api, type Blocker } from "../../api.ts";
-import { closeStep } from "../system/api.ts";
-import { BlockerList } from "../system/updates-close.tsx";
 import { type StepRow, StepRows } from "../../lib/steps.tsx";
 import { send, type Step } from "./api.ts";
 import { Nav, type StepProps } from "./nav.tsx";
@@ -217,8 +214,6 @@ export function Done(p: StepProps) {
   const s = useSend(p);
   const f = p.v.facts;
   const [mcp, setMcp] = useState<StepRow["state"]>("running");
-  /** The Claudes that kept the sync from writing, when it failed for them. */
-  const [holders, setHolders] = useState<Blocker[]>([]);
   // the MCP servers, once everything they read is in place (profiles signed in, accounts, the brain)
   const sync = async () => {
     p.busy(true);
@@ -227,16 +222,8 @@ export function Done(p: StepProps) {
     p.busy(false);
     const ok = !("error" in r) && !r.code;
     setMcp(ok ? "done" : "failed");
-    setHolders(ok ? [] : (await api.closePlan("mcp").catch(() => null))?.blockers ?? []);
   };
   useEffect(() => void sync(), []);
-  /** Closes what holds the sync, then tries again. */
-  const closeAndSync = async () => {
-    const r = await closeStep("term", "mcp").catch((e: Error) => ({ ok: false, message: e.message, remaining: [] }));
-    if (!r.ok) return toast(r.message ?? "", true);
-    if (r.remaining.length) return setHolders(r.remaining);
-    await sync();
-  };
   const later = f.record?.later ?? [];
   const row = (step: Step, detail: string): StepRow => ({
     key: step,
@@ -264,12 +251,8 @@ export function Done(p: StepProps) {
       {later.length > 0 && <p class="su-note">{t("su.done.later", { l: later.map((x) => tk(`su.s.${x}`)).join(", ") })}</p>}
       {mcp === "failed" && (
         <>
-          <p class="uw-cause">{t(holders.length ? "su.done.mcpHeld" : "su.done.mcpFail")}</p>
-          {holders.length > 0 && <BlockerList list={holders} />}
+          <p class="uw-cause">{t("su.done.mcpFail")}</p>
           <div class="uw-go">
-            {holders.some((b) => !b.protected) && (
-              <button type="button" class="bt" onClick={() => void closeAndSync()}>{t("su.done.mcpClose")}</button>
-            )}
             <button type="button" class="bt" onClick={() => void sync()}>{t("su.done.mcpRetry")}</button>
           </div>
         </>

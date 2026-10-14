@@ -23,7 +23,8 @@ DESKTOP="${CLAUDE_DESKTOP_ROOT:-$HOME/.local/lib/claude-desktop}/current/claude-
 # Align the config from the agents-multi repo BEFORE the app starts (fetch when stale, ff-only
 # pull, never blocking). Same logic as the CLI launch wrappers.
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-bash "$HERE/lib/prelaunch.sh" || true
+# AGENTS_MULTI_DESKTOP_LAUNCH: Desktop is about to open, the moment its MCP servers can be written
+AGENTS_MULTI_DESKTOP_LAUNCH=1 bash "$HERE/lib/prelaunch.sh" || true
 source "$HERE/lib/profiles.sh"
 
 known="$(cm_profiles | tr '\n' '|')"; known="${known%|}"

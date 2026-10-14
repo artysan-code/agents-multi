@@ -1,9 +1,9 @@
 // close-claude.ts — «Close Claude and update»: when the install a round left waits for every Claude
-// to be closed (selfupdate.ts), the console can close them. The same for the MCP sync's repair, which
-// needs closed only the Claudes whose config it would write (mcp/apply.ts). The PIDs are the server's
+// to be closed (selfupdate.ts), the console can close them. The same for a Desktop rollback or variant
+// rebuild, which needs only the Desktops closed. The PIDs are the server's
 // own reading of /proc, never the page's: a request only says which step (ask, TERM, KILL, reopen) and
 // what for, and every step lists the blockers again. Nothing is signalled unless an install is actually
-// waiting (or the registry has changes to write), and the console's own process tree (it may have been
+// waiting (or a Desktop is to be replaced), and the console's own process tree (it may have been
 // started from a Claude session) is never touched.
 
 import { REPO } from "../lib/paths.ts";
@@ -11,7 +11,6 @@ import { run } from "../lib/proc.ts";
 import { running } from "../lib/processes.ts";
 import { launchers, profileNames } from "../lib/profiles.ts";
 import { installWaiting, log } from "../selfupdate.ts";
-import { plan as mcpPlan } from "../mcp/apply.ts";
 
 type Running = Awaited<ReturnType<typeof running>>;
 
@@ -71,8 +70,8 @@ export function listBlockers(
   return out;
 }
 
-/** Pure: the button shows only when something waits on open Claude instances (an install, the MCP
- *  sync) — not for an update skipped for another reason, nor when nothing is open (the action alone is
+/** Pure: the button shows only when something waits on open Claude instances (an install, a Desktop
+ *  replaced) — not for an update skipped for another reason, nor when nothing is open (the action alone is
  *  enough then). */
 export function closeOffer(due: boolean, blockers: Blocker[]): boolean {
   return due && blockers.length > 0;
@@ -91,8 +90,6 @@ export interface Deps {
   protectedPids: () => Promise<Set<number>>;
   ages: (pids: number[]) => Promise<Map<number, number>>;
   pending: () => Promise<string | null>;
-  /** The surfaces (`cli:<profile>`, `desktop:<profile>`) the MCP sync would write. */
-  mcpKeys: () => Promise<string[]>;
   signal: (pid: number, sig: "SIGTERM" | "SIGKILL") => void;
   sleep: (ms: number) => Promise<void>;
   note: (event: string, head: string, detail: string) => Promise<void>;
@@ -126,7 +123,6 @@ export const real: Deps = {
     return m;
   },
   pending: installWaiting,
-  mcpKeys: async () => [...new Set((await mcpPlan()).changes.map((c) => c.target.managedKey))],
   signal: (pid, sig) => Deno.kill(pid, sig),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   note: (event, head, detail) => log(event, "", head, detail),
@@ -139,27 +135,21 @@ async function current(d: Deps): Promise<Blocker[]> {
   return listBlockers(r, await d.profiles(), protect, await d.ages(pids));
 }
 
-/** What the closing is for: the install a round left waiting, the MCP sync's repair, or a Desktop
- *  rollback or variant rebuild (`desktop`, every Desktop; `desktop:<profile>`, that one). */
-export type Purpose = "install" | "mcp" | "desktop" | `desktop:${string}`;
+/** What the closing is for: the install a round left waiting, or a Desktop rollback or variant
+ *  rebuild (`desktop`, every Desktop; `desktop:<profile>`, that one). */
+export type Purpose = "install" | "desktop" | `desktop:${string}`;
 
 /** Pure: the purpose a request names, or null for one this server does not know. */
 export function parsePurpose(v: unknown): Purpose | null {
   if (v === undefined || v === null || v === "" || v === "install") return "install";
-  if (v === "mcp" || v === "desktop") return v;
+  if (v === "desktop") return v;
   if (typeof v === "string" && /^desktop:[a-z0-9][a-z0-9-]*$/.test(v)) return v as Purpose;
   return null;
 }
 
-/** Who holds what the closing is for: every open Claude for an install, only those of the surfaces
- *  the sync would write for the MCP repair, the Desktops for a rollback or rebuild (a Claude Code
- *  Desktop runs goes down with it). `due` is false when there is nothing to close them for. */
+/** Who holds what the closing is for: every open Claude for an install, the Desktops for a rollback
+ *  or rebuild (a Claude Code Desktop runs goes down with it). `due` is false when there is nothing to close them for. */
 async function holders(d: Deps, why: Purpose): Promise<{ pending: string | null; due: boolean; blockers: Blocker[] }> {
-  if (why === "mcp") {
-    const keys = await d.mcpKeys();
-    const all = keys.length ? await current(d) : [];
-    return { pending: null, due: keys.length > 0, blockers: all.filter((b) => keys.includes(b.key)) };
-  }
   if (why.startsWith("desktop")) {
     const one = why.slice("desktop:".length);
     const all = await current(d);
@@ -200,7 +190,7 @@ interface Closed {
 /**
  * SIGTERM (or, as the second step, SIGKILL) to every blocker outside the console's own tree, then
  * wait up to `waitMs` for them to be gone. Refuses when there is nothing to close them for (no install
- * waiting, no MCP change to write); with nothing left to close (the person closed them by hand while
+ * waiting); with nothing left to close (the person closed them by hand while
  * the dialog was open) it succeeds at once, so the install or the sync goes on.
  */
 export async function closeSessions(
@@ -214,9 +204,7 @@ export async function closeSessions(
   if (!due) {
     return {
       ok: false,
-      message: why === "mcp"
-        ? "the MCP registry has nothing to write"
-        : "no install is waiting for Claude to be closed",
+      message: "no install is waiting for Claude to be closed",
       closed: [],
       remaining: [],
       reopen: [],

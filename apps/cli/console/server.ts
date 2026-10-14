@@ -238,7 +238,7 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/plugins/details": {
       get: async ({ url }) => json({ text: await details(url.searchParams.get("id") ?? "") }),
     },
-    // «Close Claude and update»: who holds the waiting install (or, `for=mcp`, the MCP sync), then
+    // «Close Claude and update»: who holds the waiting install (or a Desktop to replace), then
     // SIGTERM, SIGKILL, reopen. The PIDs are always the server's own; the page only names a step, what
     // it is for, and the profiles to reopen
     "/api/close-claude": {

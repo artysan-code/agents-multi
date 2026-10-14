@@ -75,6 +75,8 @@ main() {
 }
 
 # Every profile has a GENERATED settings.json (apps/cli/settings.ts): shared + profile patch + manifest.
+# The same run writes its GENERATED mcp.json (apps/cli/mcp/config.ts, passed by bin/claude with
+# --mcp-config) and Desktop's servers (apps/cli/mcp/apply.ts, only while that Desktop is closed).
 # It is regenerated when a source is newer than the last generation: a pull, an edit in the repo,
 # a plugin synced from the account, or Claude writing into the generated file (those writes are
 # adopted into the profile patch). Requires Deno: without it, Claude starts with the file as last
@@ -89,7 +91,14 @@ regen_settings() {
   mkdir -p "$CACHE"
   exec 8>"$CACHE/settings.lock"
   flock -n 8 || return 0
-  if [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/shared/mcp/servers.json" "$config"/settings.json "$config"/profiles "$config"/servers.json "$config"/accounts.json \
+  # regenerate regardless of the stamp when a profile has no mcp.json yet (first run after the upgrade),
+  # or when claude-launch is about to open Desktop and its servers are waiting for it to be closed
+  local force=0 p
+  while read -r p; do
+    [[ -d "$runtime/$p" && ! -f "$runtime/$p/mcp.json" ]] && force=1
+  done < <(cm_profiles)
+  [[ -n "${AGENTS_MULTI_DESKTOP_LAUNCH:-}" && -e "$CACHE/desktop-mcp.pending" ]] && force=1
+  if (( force == 0 )) && [[ -f "$stamp" ]] && [[ -z "$(find "$REPO/shared/settings.json" "$REPO/shared/mcp/servers.json" "$config"/settings.json "$config"/profiles "$config"/servers.json "$config"/accounts.json \
         "$runtime"/*/settings.json "$runtime"/*/plugins/synced -newer "$stamp" -print -quit 2>/dev/null)" ]]; then
     return 0
   fi

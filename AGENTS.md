@@ -46,7 +46,9 @@ a console, and a desktop app that carries it all. **This repository is the sourc
   `desktop/entry.desktop.in`, never by hand. **Never call `app.setName()`**: Electron keys the keyring
   on the app name and the stored token would become unreachable.
 - **Changing `~/.agents-multi` under an open Claude session moves the ground under it**: run `install`
-  and `agents mcp sync` with Claude closed.
+  with Claude closed. The MCP servers are not part of that: the CLI gets them at launch from a generated
+  `<profile>/mcp.json` (`--mcp-config`, `apps/cli/mcp/config.ts`), never copied into `.claude.json`; only
+  Desktop's file is a projection (`mcp/apply.ts`), written while it is closed.
 
 ### Security and credentials
 

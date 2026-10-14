@@ -12,7 +12,8 @@ import {
   type Target,
   wanted,
 } from "../mcp/placement.ts";
-import { targets } from "../mcp/apply.ts";
+import { hasDesktop, targets } from "../mcp/apply.ts";
+import { launchConfig, withoutManaged } from "../mcp/config.ts";
 import { type RawRegistry, REGISTRY, type Registry, registryProblems, selectServers } from "../mcp/registry.ts";
 import { missingIgnores } from "../lib/git.ts";
 import { desktopDir, profileNames } from "../lib/profiles.ts";
@@ -31,21 +32,19 @@ const reg: Registry = {
   },
 };
 
-// targets() reads the repo, so it is resolved once and the tests index into the result.
+// targets() reads the repo (Desktop's config files only: the CLI gets its servers at launch).
 const ALL: Target[] = await targets();
-const t = (profile: string, surface: "cli" | "desktop") =>
-  ALL.find((x) => x.profile === profile && x.surface === surface)!;
+const t = (profile: string, surface: "cli" | "desktop") => ({ profile, surface });
 
-Deno.test("targets: one cli and one desktop entry per profile, with path and managed key", async () => {
-  assertEquals(ALL.length, PROFILES.length * 2);
-  assertEquals(
-    ALL.map((x) => x.managedKey).sort(),
-    PROFILES.flatMap((p) => [`cli:${p}`, `desktop:${p}`]).sort(),
-  );
+Deno.test("targets: one Desktop config per profile in its own data dir; .claude.json only where Desktop exists", async () => {
+  const desk = ALL.filter((x) => x.surface === "desktop");
+  assertEquals(desk.map((x) => x.managedKey).sort(), PROFILES.map((p) => `desktop:${p}`).sort());
   for (const p of PROFILES) {
-    assertEquals(t(p, "cli").path.endsWith(`/${p}/.claude.json`), true, `${p}: cli path`);
     // The desktop target has to land in that profile's own data dir, whatever the manifest says.
-    assertEquals(t(p, "desktop").path, `${await desktopDir(p)}/claude_desktop_config.json`);
+    assertEquals(desk.find((x) => x.profile === p)!.path, `${await desktopDir(p)}/claude_desktop_config.json`);
+    const code = ALL.find((x) => x.profile === p && x.surface === "cli");
+    assertEquals(!!code, await hasDesktop(p), `${p}: .claude.json target iff Desktop exists`);
+    if (code) assertEquals([code.managedKey, code.path.endsWith(`/${p}/.claude.json`)], [`cli:${p}`, true]);
   }
 });
 
@@ -389,4 +388,35 @@ Deno.test("guardCommand: quoted, no project config, and a question when the guar
   const r = await new Deno.Command("bash", { args: ["-c", cmd], stdout: "piped", stderr: "null" }).output();
   assertEquals(r.code, 0);
   assertEquals(JSON.parse(new TextDecoder().decode(r.stdout)).hookSpecificOutput.permissionDecision, "ask");
+});
+
+Deno.test("launchConfig: the profile's CLI servers as a .mcp.json, the same ones wanted() gives, ends with a newline", () => {
+  const text = launchConfig(reg, A);
+  assertEquals(text.endsWith("}\n"), true);
+  assertEquals(JSON.parse(text), { mcpServers: wanted(reg, t(A, "cli")) });
+  // Desktop-only servers and other profiles' servers are not in it
+  assertEquals(Object.keys(JSON.parse(launchConfig(reg, B)).mcpServers).sort(), ["chatToo", "everywhere"]);
+});
+
+Deno.test("launchConfig: a profile that gets nothing still has a valid file", () => {
+  assertEquals(JSON.parse(launchConfig({ profiles: [A], servers: {} }, A)), { mcpServers: {} });
+});
+
+Deno.test("withoutManaged: takes out only the servers the state named, keeps hand-added ones and other keys", () => {
+  const conf: { oauthAccount: { emailAddress: string }; mcpServers: Record<string, unknown> } = {
+    oauthAccount: { emailAddress: "a@b" },
+    mcpServers: { mine: { command: "m" }, everywhere: { command: "x" }, gone: { command: "g" } },
+  };
+  const r = withoutManaged(conf, ["everywhere", "gone", "neverThere"]);
+  assertEquals(r.removed, ["everywhere", "gone"]);
+  assertEquals(r.conf, { oauthAccount: { emailAddress: "a@b" }, mcpServers: { mine: { command: "m" } } });
+  // the input is not touched
+  assertEquals(Object.keys(conf.mcpServers), ["mine", "everywhere", "gone"]);
+});
+
+Deno.test("withoutManaged: nothing to remove returns the same object", () => {
+  const conf: { mcpServers: Record<string, unknown> } = { mcpServers: { mine: { command: "m" } } };
+  assertEquals(withoutManaged(conf, ["other"]).conf === conf, true);
+  const bare = {};
+  assertEquals(withoutManaged(bare, ["x"]), { conf: bare, removed: [] });
 });

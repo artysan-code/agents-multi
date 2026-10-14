@@ -7,6 +7,7 @@
 //   config/profiles/<p>/settings.json   that profile's differences, a merge patch over both
 //   the manifest                    what it implies (disableAccountMcp)
 //     → ~/.agents-multi/<p>/settings.json
+// The same run writes the profile's MCP launch config (mcp/config.ts) and Desktop's servers (mcp/apply.ts).
 //
 // Claude Code writes into its settings.json (/plugin, /config, "always allow"): those writes land in
 // the generated file. Before regenerating, the difference between the file and the last generated
@@ -17,6 +18,8 @@
 // Plugins are why this exists: Claude Code installs every plugin `enabledPlugins` marks true when a
 // session starts, so a plugin is off for one profile only if that profile's own file says false.
 
+import { apply as applyDesktop } from "./mcp/apply.ts";
+import { retireProjection, syncLaunchConfig } from "./mcp/config.ts";
 import { permissionRules, type RegistryRules } from "./mcp/placement.ts";
 import { loadRegistry } from "./mcp/registry.ts";
 import { lstat, readJson, writeAtomic } from "./lib/fs.ts";
@@ -126,6 +129,9 @@ interface SettingsResult {
   wrote: boolean;
   /** a regular file with no record of what was generated: kept aside, not adopted */
   orphan?: string;
+  /** the profile's launch config for Claude's `--mcp-config` (mcp/config.ts): rewritten, the servers taken out of
+   *  .claude.json, or why the registry could not be read */
+  mcp?: { wrote: boolean; retired: string[]; error?: string };
 }
 
 /** What every profile gets: the repository's base with the person's settings over it. */
@@ -234,6 +240,11 @@ export async function syncSettings(p: Profile, opts: { adopt?: boolean; dry?: bo
   if (st?.isSymlink) await Deno.remove(rt);
   if (res.wrote) await writeJson(rt, built);
   if (!same(lastBuilt, built)) await writeJson(builtPath(p), built);
+  try {
+    res.mcp = { wrote: await syncLaunchConfig(p), retired: await retireProjection(p) };
+  } catch (e) {
+    res.mcp = { wrote: false, retired: [], error: (e as Error).message };
+  }
   return res;
 }
 
@@ -243,6 +254,8 @@ export async function syncAllSettings(opts: { adopt?: boolean; dry?: boolean } =
     if (!(await lstat(`${RUNTIME}/${p}`))) continue; // not materialised yet: install creates it first
     out.push(await syncSettings(p, opts));
   }
+  // Desktop's servers: written now if it is closed, else when claude-launch next opens it
+  if (!opts.dry) await applyDesktop().catch(() => {});
   return out;
 }
 

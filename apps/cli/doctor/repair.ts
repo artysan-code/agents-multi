@@ -11,12 +11,6 @@ export const actionStep = (action: string, args?: Params): RepairStep => ({
   ...(args ? { args } : {}),
   cmd: manualCommand(action, args),
 });
-/** Close the Claudes of these surfaces (`cli:<profile>`, `desktop:<profile>`) before the MCP sync. */
-export const closeStep = (keys: string[]): RepairStep => ({
-  kind: "close",
-  for: "mcp",
-  text: `Close the Claude sessions and Desktop windows of ${keys.join(", ")}`,
-});
 /** Close Claude Desktop — one profile's, or every one — before its files are replaced. */
 export const closeDesktopStep = (profile?: string): RepairStep => ({
   kind: "close",
