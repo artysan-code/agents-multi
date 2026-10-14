@@ -54,7 +54,8 @@ jobs:
           path: |
             ~/.cache/deno
             ~/.local/share/pnpm/store
-          key: ci-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/site/pnpm-lock.yaml') }}
+            ~/.cache/node/corepack
+          key: ci-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml') }}
           restore-keys: ci-
 
       - name: gate
