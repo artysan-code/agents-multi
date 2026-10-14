@@ -9,7 +9,7 @@ async function line(payload: unknown, home: string): Promise<string> {
     args: [SCRIPT],
     clearEnv: true, // PATH without ~/.local/bin: the script must not start the real `agents` for its cache
     env: {
-      PATH: "/usr/bin:/bin",
+      PATH: "/usr/local/bin:/usr/bin:/bin", // /usr/local/bin: where the CI runner installs jq
       LANG: "en_US.UTF-8",
       TZ: "UTC",
       HOME: home,
