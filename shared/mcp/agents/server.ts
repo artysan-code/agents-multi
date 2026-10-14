@@ -40,7 +40,11 @@ const instructions =
   "(report them); answer with workflow_answer. To save a run the owner wants again as a workflow, write its " +
   "SKILL.md (name, description of when to use it, the steps and a plan to fill) in " +
   "`<project>/.agents/workflows/<name>/`, or in the owner's `workflows/` for every project. A run's " +
-  "steps are only those of the plan: you never add one the owner has not approved.";
+  "steps are only those of the plan: you never add one the owner has not approved.\n" +
+  "Accounts: `limits` shows every account's usage windows (Claude's and Codex's, 5h / 7d / 30d) before you pick a " +
+  "profile or a provider for a child; no windows means no reading lately, not an empty account. A child may be " +
+  "`provider: codex` where the profile has a Codex account: it never asks a permission, and gets only the reads of " +
+  "the MCP servers. Which account a job uses is the owner's call.";
 
 const server = new McpServer({ name: "agents", version: "0.1.0" }, { instructions });
 registerAgentTools(server);

@@ -195,3 +195,17 @@ Deno.test("runs: a running run whose runner is gone reaches the owner once, with
   await it.return(undefined);
   await Deno.remove(runs, { recursive: true });
 });
+
+Deno.test("runs: a step names its provider; a Codex step is told of no team channel", () => {
+  const p = plan({
+    steps: [
+      { id: "a", profile: "funnel", prompt: "x" },
+      { id: "b", profile: "funnel", provider: "codex", prompt: "y", after: ["a"] },
+    ],
+  });
+  assertEquals(planErrors(p), []);
+  const bad = plan({ steps: [{ id: "a", profile: "funnel", provider: "gemini" as "codex", prompt: "x" }] });
+  assertStringIncludes(planErrors(bad).join(";"), "provider is claude or codex");
+  assertStringIncludes(stepPrompt(p, p.steps[0], "r", (id) => `/h/${id}.md`), "team_send");
+  assert(!stepPrompt(p, p.steps[1], "r", (id) => `/h/${id}.md`).includes("team_send"));
+});

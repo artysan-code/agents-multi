@@ -30,6 +30,7 @@ import { loadRegistry } from "./mcp/registry.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
 import { codexCommand } from "./codex.ts";
+import { limitsCommand } from "./limits.ts";
 import { selfCheck, selfCheckRow, selfUpdate, settlePending } from "./selfupdate.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { uiCommand } from "./ui.ts";
@@ -170,6 +171,9 @@ switch (cmd) {
   case "codex":
     Deno.exit(await codexCommand(rest));
     break;
+  case "limits":
+    Deno.exit(await limitsCommand(rest));
+    break;
   case "update": {
     const p = new Deno.Command(`${REPO}/bin/claude-update`, {
       args: rest,
@@ -277,6 +281,7 @@ switch (cmd) {
   update  [--cli|--desktop|--codex|--self|--auto|--check [--json]|--rollback [--desktop]]   update Claude Code, Claude Desktop and agents-multi itself (--auto: what the timer runs)
   self-update [--check [--json]] [--settle] [--quiet]   agents-multi itself: ff-only pull on a clean tree, then restarts what runs old code and installs (with Claude closed)
   codex   <profile> [args…] | limits <profile>   Codex (OpenAI) with a profile's own account (login: agents codex <profile> login); its usage windows
+  limits  [--json]            every account's usage windows (5h, 7d…): Claude's from the status line, Codex's from its logs
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
   vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,

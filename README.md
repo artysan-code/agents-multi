@@ -222,6 +222,9 @@ closed, then run `agents install` and `agents doctor`.
 | `agents status [--json]`                                        | versions, available updates, repository sync, what is mounted per profile, running instances. The JSON contract for the statusline, the tray and the console   |
 | `agents sync [--fetch]`                                         | dev mode: align the repository from the remote (fetch when stale, ff-only pull on a clean tree)                                                                |
 | `agents mcp check\|sync\|warm\|health`                          | write the MCP launch configs and Desktop's servers; `warm` builds the gateway's tool lists; `health` verifies binaries and files, `--probe` starts each server |
+| `agents limits [--json]`                                        | every account's usage windows (5h, 7d, 30d…): Claude's from the status line, Codex's from its session logs                                                     |
+| `agents codex <profile> [args…]\|limits <profile>`              | Codex (OpenAI) with that profile's own account; its login and usage windows                                                                                    |
+| `agents agent start\|list\|status\|say\|answer\|stop\|events`   | the hub's children from a terminal: sessions of any profile and provider at work in a project, their permission requests answered here                         |
 | `agents gateway [status\|run]`                                  | the lazy MCP gateway (below): what it is doing, or run it in the foreground on a machine with no console                                                       |
 | `agents update [--cli\|--desktop\|--self\|--check\|--rollback]` | update Claude Code, Claude Desktop and Agents Multi itself                                                                                                     |
 | `agents usage [--by …] [--since …]`                             | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                         |
@@ -232,6 +235,17 @@ closed, then run `agents install` and `agents doctor`.
 | `agents google client <file.json>\|connect <account>`           | the Google OAuth client, and connecting an account                                                                                                             |
 | `claude-launch <profile>`                                       | the entry point desktop launchers use: repository sync, a staged Desktop version switched in, then the app                                                     |
 | `claude-multi-app [--tray\|--hey\|--pick]`                      | the desktop app (the package's, or on PATH): console window, tray icon, Hey Claude, the profile picker (below)                                                 |
+
+### Providers
+
+A **provider** is Claude Code or Codex (OpenAI), both behind one interface (`shared/mcp/lib/providers.ts`,
+[ADR 0007](docs/adr/0007-codex-provider.md)): how a hub child starts, what it can do (`capabilities`), its
+**accounts** and their **usage windows**. A profile has a Claude account; `"codex": true` in its
+`profile.json` adds a Codex one (`agents codex <profile> login`, the CLI by `agents update --codex`).
+`agents limits` and the hub's read-only `limits` tool show every account's windows at once; they are read
+the passive way (the status line's snapshots, Codex's logs), and a window with no reading is unknown, not
+zero. A workflow step or `agent_start` takes `provider: "codex"`: the child gets the profile's MCP servers
+as the launch config names them, but only each server's `_allow` tools, since it never asks you.
 
 `claude update` inside a wrapper is redirected to `agents update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.

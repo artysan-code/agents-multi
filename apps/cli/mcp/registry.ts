@@ -19,7 +19,8 @@
 //              vault — as the command's wrapper (stdio) or as Claude Code's headersHelper (http).
 //              `{}` is a server that logs in by itself (OAuth): one per account, nothing to fill.
 //              http servers do not go to Desktop, whose config holds commands only.
-//   _allow / _deny / _ask  tool names this server runs without asking (its reads) / must never run /
+//   _allow / _deny / _ask  tool names this server runs without asking (its reads; the only tools a Codex
+//              child is given, which never asks: mcp-codex.json) / must never run /
 //              must ask before running (its writes): they become mcp__<server>__<tool> permission rules
 //              in each profile's generated settings (settings.ts). A tool in none of them is left to
 //              the permission mode (auto: the classifier)

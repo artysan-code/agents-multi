@@ -641,7 +641,7 @@ Deno.test("agents: follow and waitForAttention keep to the caller's session, mar
         };
         await Deno.writeTextFile(`${dir}/meta.json`, JSON.stringify(meta));
         await Deno.writeTextFile(`${dir}/out.jsonl`, ask(`req-${id}`) + "\n");
-        await Deno.writeTextFile(`${dir}/claude.pid`, String(Deno.pid));
+        await Deno.writeTextFile(`${dir}/child.pid`, String(Deno.pid));
       }
       const first = async (scope: Scope) => {
         const ac = new AbortController();
