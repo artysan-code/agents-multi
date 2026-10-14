@@ -25,9 +25,8 @@ import { health } from "./mcp/health.ts";
 import { DB_PATH, type GroupBy, ingest, openDb, printReport, report } from "./usage.ts";
 import { serve } from "./console/server.ts";
 import { gatewayCli } from "./console/gateway.ts";
-import { gatewayConfig, syncGateway, warmCache } from "./mcp/gateway.ts";
+import { gatewayConfig, serverVersion, syncGateway, warmCache } from "./mcp/gateway.ts";
 import { loadRegistry } from "./mcp/registry.ts";
-import { codeVersion } from "./codeversion.ts";
 import { brainBackup } from "./brain-backup.ts";
 import { brainLoginCommand } from "./brain-login.ts";
 import { codexCommand } from "./codex.ts";
@@ -137,9 +136,10 @@ switch (cmd) {
         console.log("the MCP gateway is off: nothing to warm");
         break;
       }
-      await syncGateway(reg, await codeVersion());
-      const r = await warmCache(await gatewayConfig(reg, await codeVersion()), reg.gateway.runtime, {
+      await syncGateway(reg);
+      const r = await warmCache(await gatewayConfig(reg, serverVersion), reg.gateway.runtime, {
         dry: flag("--dry-run"),
+        force: flag("--force"),
       });
       for (const b of r.built) console.log(`  ${flag("--dry-run") ? "would build" : "built"} ${b}`);
       for (const f of r.failed) console.error(`  failed ${f}`);

@@ -402,7 +402,7 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     ac.signal.addEventListener("abort", stop);
   }
   // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
-  superviseGateway(ac.signal, code);
+  superviseGateway(ac.signal);
   if (opts.open) {
     // a one-use ticket, not the token: the command line of xdg-open is readable by other users
     const entryUrl = `${url}/?k=${auth.tickets.issue()}`;

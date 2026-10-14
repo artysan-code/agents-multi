@@ -10,7 +10,6 @@ import { RUNTIME } from "../lib/paths.ts";
 import { profileNames } from "../lib/profiles.ts";
 import { running } from "../lib/processes.ts";
 import { backup, hasDesktop, loadState, saveState } from "./apply.ts";
-import { codeVersion } from "../codeversion.ts";
 import { launchServers, syncGateway } from "./gateway.ts";
 import { loadRegistry, type Registry } from "./registry.ts";
 
@@ -39,7 +38,7 @@ export async function syncLaunchConfig(profile: string, reg?: Registry): Promise
   const path = mcpConfigPath(profile);
   reg ??= await loadRegistry();
   // the gateway's token and configuration first: the config below points at them
-  if (reg.gateway?.enabled) await syncGateway(reg, await codeVersion());
+  if (reg.gateway?.enabled) await syncGateway(reg);
   const text = launchConfig(reg, profile);
   const have = await Deno.readTextFile(path).catch(() => null);
   if (have === text) return false;

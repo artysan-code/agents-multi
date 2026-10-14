@@ -1,6 +1,10 @@
 // The pure parts of the lazy MCP gateway (docs/adr/0008): routing, tokens, cache keys, idle logic, and
 // the launch config the CLI makes for it. Profile names come from the fixture configuration, never literals.
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import { backendEnv } from "../../../shared/mcp/gateway/backend.ts";
+import { gatewayDenyRules, runtimeNames } from "../mcp/gateway-settings.ts";
+import { permissionRules } from "../mcp/placement.ts";
+import { serverDirOf } from "../codeversion.ts";
 import {
   bearer,
   cacheFile,
@@ -10,9 +14,13 @@ import {
   idleDue,
   localRequest,
   parsePath,
+  rotateNeeded,
   sameBackend,
+  startTimeOf,
   TokenMap,
+  toolAllowed,
   usableCache,
+  visibleTools,
 } from "../../../shared/mcp/gateway/core.ts";
 import {
   backendSpec,
@@ -64,6 +72,7 @@ Deno.test("bearer: only a well-formed Bearer header", () => {
 
 Deno.test("localRequest: the Host names this listener and a browser's Origin is refused", () => {
   assert(localRequest("127.0.0.1:7332", null, 7332));
+  assert(!localRequest("[::1]:7332", null, 7332)); // the listener is IPv4 loopback only
   assert(localRequest("localhost:7332", null, 7332));
   assert(!localRequest("evil.example:7332", null, 7332));
   assert(!localRequest("127.0.0.1:9999", null, 7332));
@@ -172,7 +181,7 @@ Deno.test("launchServers: the kill switch gives the plain stdio entries back", (
 });
 
 Deno.test("gatewayConfig: each profile its token file and the servers behind the gateway, keyed", async () => {
-  const cfg = await gatewayConfig(reg(), "code1");
+  const cfg = await gatewayConfig(reg(), () => Promise.resolve("code1"));
   assertEquals(cfg.port, 7332);
   assertEquals(cfg.idleMs, 600_000);
   assertEquals(Object.keys(cfg.profiles[A].servers).sort(), ["npmsrv", "tasks"]);
@@ -181,7 +190,7 @@ Deno.test("gatewayConfig: each profile its token file and the servers behind the
   const t = cfg.profiles[A].servers.tasks;
   assertEquals(t.command, "deno");
   // our servers key on the code's version, an npm one on the package's
-  const next = await gatewayConfig(reg(), "code2");
+  const next = await gatewayConfig(reg(), () => Promise.resolve("code2"));
   assertNotEquals(next.profiles[A].servers.tasks.key, t.key);
   assertEquals(next.profiles[A].servers.npmsrv.key, cfg.profiles[A].servers.npmsrv.key);
   // the same spec in another profile is another entry (its own env says whose it is)
@@ -220,4 +229,75 @@ Deno.test("isGatewayCmdline: only the gateway's own server script", () => {
   assert(isGatewayCmdline("/rt/bin/deno\0run\0--quiet\0/rt/shared/mcp/gateway/server.ts\0/rt/gateway/backends.json\0"));
   assert(!isGatewayCmdline("/rt/bin/deno\0run\0/rt/shared/mcp/tasks/server.ts\0"));
   assert(!isGatewayCmdline(""));
+});
+
+Deno.test("_deny: the gateway neither lists nor forwards a denied tool", () => {
+  const tools = [{ name: "a" }, { name: "n8n_delete_workflow" }, { name: "b" }];
+  assertEquals(visibleTools(tools, ["n8n_delete_workflow"]).map((t) => t.name), ["a", "b"]);
+  assertEquals(visibleTools(tools, undefined), tools);
+  assert(!toolAllowed(["n8n_delete_workflow"], "n8n_delete_workflow"));
+  assert(toolAllowed(["n8n_delete_workflow"], "n8n_list_workflows"));
+  assert(toolAllowed(undefined, "anything"));
+});
+
+Deno.test("gatewayConfig: the registry's _deny and our server's own folder reach the gateway", async () => {
+  const r = reg();
+  r.servers.tasks = stdio({
+    args: ["run", "/h/.agents-multi/shared/mcp/tasks/server.ts"],
+    _deny: ["zz", "aa"],
+  });
+  const seen: (string | null)[] = [];
+  const cfg = await gatewayConfig(r, (dir) => {
+    seen.push(dir);
+    return Promise.resolve(dir ?? "none");
+  });
+  assertEquals(cfg.profiles[A].servers.tasks.deny, ["aa", "zz"]);
+  assertEquals(cfg.profiles[A].servers.npmsrv.deny, undefined);
+  assert(seen.includes("tasks"));
+  // a change of tasks' code is another key; none of anything else's is
+  const other = await gatewayConfig(r, (dir) => Promise.resolve(dir === "tasks" ? "changed" : "none"));
+  assertNotEquals(other.profiles[A].servers.tasks.key, cfg.profiles[A].servers.tasks.key);
+});
+
+Deno.test("serverDirOf: the folder under shared/mcp a command of ours runs", () => {
+  assertEquals(serverDirOf(["run", "--quiet", "/h/.agents-multi/shared/mcp/google/server.ts"]), "google");
+  assertEquals(serverDirOf(["run", "/h/.agents-multi/shared/mcp/syncthing-status/server.ts"]), "syncthing-status");
+  assertEquals(serverDirOf(["/t/node_modules/.bin/n8n-mcp"]), null);
+  assertEquals(serverDirOf([]), null);
+});
+
+Deno.test("startTimeOf: the start time in /proc/<pid>/stat, whatever the command's name holds", () => {
+  const stat = (comm: string) =>
+    `123 (${comm}) S 1 123 123 0 -1 4194560 100 0 0 0 1 2 0 0 20 0 1 0 987654 1000 100 18446744073709551615`;
+  assertEquals(startTimeOf(stat("deno")), "987654");
+  assertEquals(startTimeOf(stat("a) S 9 (b")), "987654");
+  assertEquals(startTimeOf(""), null);
+});
+
+Deno.test("rotateNeeded and backendEnv", () => {
+  assert(!rotateNeeded(10, 5, 15));
+  assert(rotateNeeded(10, 6, 15));
+  const spec = { command: "c", args: [], env: { AGENTS_MULTI_PROFILE: "p", X: "1" } };
+  const env = backendEnv(
+    { HOME: "/h", PATH: "/bin", CLAUDE_CONFIG_DIR: "/rt/other", CLAUDE_CODE_SESSION_ID: "s", CLAUDECODE: "1", X: "0" },
+    spec,
+  );
+  assertEquals(env, { HOME: "/h", PATH: "/bin", AGENTS_MULTI_PROFILE: "p", X: "1" }); // no profile inherited
+});
+
+Deno.test("gatewayDenyRules: from the port that is really used, every name of the runtime", () => {
+  const rules = gatewayDenyRules(7401, runtimeNames("/home/u/.agents-multi", "/home/u"));
+  assert(rules.includes("Bash(*:7401*)"));
+  assert(!rules.some((r) => r.includes("7332")));
+  assert(rules.includes("Read(~/.claude-multi/*/mcp-token)"));
+  assert(rules.includes("Read(~/.agents-multi/*/mcp-token)"));
+  assert(rules.includes("Bash(*headers.sh*)"));
+  assertEquals(runtimeNames("/data/rt", "/home/u")[0], "//data/rt");
+});
+
+Deno.test("permissionRules: the gateway's deny rules ride the profile's settings while it is on", () => {
+  const on = permissionRules(reg(), A).deny;
+  assert(on.includes("Bash(*:7332*)"));
+  assertEquals(on, [...new Set(on)].sort());
+  assert(!permissionRules(reg({ gateway: { ...G, enabled: false } }), A).deny.some((r) => r.includes("mcp-t")));
 });

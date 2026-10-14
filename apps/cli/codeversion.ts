@@ -6,10 +6,14 @@
 
 import { REPO } from "./lib/paths.ts";
 
-const ROOTS = ["apps/cli", "shared/mcp", "apps/ui/dist"];
+const ROOTS = ["apps/cli", "shared/mcp/lib", "apps/ui/dist"];
 const SKIP = /\/(tests|node_modules)(\/|$)/;
 
 async function files(root: string, dir: string, out: string[]) {
+  if (/\.(ts|js)$/.test(dir) && (await Deno.stat(`${root}/${dir}`).catch(() => null))?.isFile) {
+    out.push(dir); // a root may name one file
+    return;
+  }
   let entries: Deno.DirEntry[];
   try {
     entries = [...Deno.readDirSync(`${root}/${dir}`)];
@@ -26,9 +30,9 @@ async function files(root: string, dir: string, out: string[]) {
 
 /** The fingerprint of the code as it is on disk now (the running code's, unless `root` names another
  *  checkout): twelve hex characters. */
-export async function codeVersion(root = REPO): Promise<string> {
+export async function codeVersion(root = REPO, roots: string[] = ROOTS): Promise<string> {
   const list: string[] = [];
-  for (const r of ROOTS) await files(root, r, list);
+  for (const r of roots) await files(root, r, list);
   const enc = new TextEncoder();
   const parts: Uint8Array[] = [];
   for (const f of list) {
@@ -45,3 +49,22 @@ export async function codeVersion(root = REPO): Promise<string> {
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", all));
   return [...h.slice(0, 6)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/** The gateway's own fingerprint: its code and the one library it imports, nothing of the console or the
+ *  page. A console update that leaves the gateway alone leaves it running (and its calls in flight). */
+export const gatewayCodeVersion = (root = REPO) => codeVersion(root, ["shared/mcp/gateway", "shared/mcp/lib/fs.ts"]);
+
+/** Pure: the folder under shared/mcp a server's command runs (`…/shared/mcp/<dir>/server.ts`), or null for
+ *  a command that is not one of ours. */
+export function serverDirOf(args: string[]): string | null {
+  for (const a of args) {
+    const m = /\/shared\/mcp\/([\w-]+)\/server\.ts$/.exec(a);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** The fingerprint of one of our servers: its own folder and the libraries it shares. A change of the
+ *  console, the page or another server leaves its cached tool list alone. */
+export const serverCodeVersion = (dir: string, root = REPO) =>
+  codeVersion(root, [`shared/mcp/${dir}`, "shared/mcp/lib"]);

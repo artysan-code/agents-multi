@@ -1,27 +1,15 @@
 // gateway.ts — The lazy MCP gateway (docs/adr/0008): alive, its configuration and tool-list cache in place,
 // its tokens private, and a session unable to reach it by hand.
 
-import { codeVersion } from "../../codeversion.ts";
-import { gatewayHealth } from "../../console/gateway.ts";
+import { gatewayCodeVersion } from "../../codeversion.ts";
+import { gatewayRunning } from "../../console/gateway.ts";
 import { readJson, stat } from "../../lib/fs.ts";
 import { type Check } from "../../lib/output.ts";
-import { REPO } from "../../lib/paths.ts";
-import { cacheState, gatewayConfig } from "../../mcp/gateway.ts";
-import { backendsPath, tokenFileOf } from "../../mcp/gateway-settings.ts";
+import { HOME } from "../../lib/paths.ts";
+import { cacheState, gatewayConfig, serverVersion } from "../../mcp/gateway.ts";
+import { backendsPath, gatewayDenyRules, runtimeNames, tokenFileOf } from "../../mcp/gateway-settings.ts";
 import { loadRegistry } from "../../mcp/registry.ts";
 import { checkList } from "../context.ts";
-
-/** What a Claude session must not do by hand: the gateway answers any process that holds a profile's token,
- *  and a call made that way would skip the `ask` and `deny` rules the permission system applies to tools. */
-export const GATEWAY_DENY = [
-  "Bash(curl *127.0.0.1:7332*)",
-  "Bash(curl *localhost:7332*)",
-  "Bash(wget *127.0.0.1:7332*)",
-  "Bash(wget *localhost:7332*)",
-  "Read(~/.agents-multi/*/mcp-token)",
-  "Edit(~/.agents-multi/*/mcp-token)",
-  "Bash(*mcp-token*)",
-];
 
 /** Pure: what is wrong with a profile's token file (mode null: it is not there), or null. */
 export function gatewayTokenProblem(
@@ -55,14 +43,10 @@ export async function gatewayChecks(): Promise<Check[]> {
       add("mcp.gateway", "ok", "MCP gateway off: each session starts its own servers (config gateway.json)");
       return c;
     }
-    const h = await gatewayHealth(g.port);
-    if (h) {
-      add(
-        "mcp.gateway",
-        "ok",
-        `MCP gateway running on 127.0.0.1:${g.port} (pid ${h.pid}, ${h.backends} backend(s) up)`,
-      );
-      if (h.code !== await codeVersion()) {
+    const run = await gatewayRunning(g);
+    if (run) {
+      add("mcp.gateway", "ok", `MCP gateway running on 127.0.0.1:${g.port}${run.pid ? ` (pid ${run.pid})` : ""}`);
+      if (run.pid && run.code !== await gatewayCodeVersion()) {
         add("mcp.gateway.code", "warn", "the MCP gateway runs older code than the one on disk", "restart Agents Multi");
       }
     } else {
@@ -73,7 +57,7 @@ export async function gatewayChecks(): Promise<Check[]> {
         "the console starts it within seconds; without one, run: agents gateway run",
       );
     }
-    const want = await gatewayConfig(reg, await codeVersion());
+    const want = await gatewayConfig(reg, serverVersion);
     const have = await readJson<unknown>(backendsPath(g.runtime));
     if (JSON.stringify(have) !== JSON.stringify(want)) {
       add("mcp.gateway.config", "ok", "the gateway's backends.json is rebuilt at the next launch of a profile");
@@ -89,21 +73,36 @@ export async function gatewayChecks(): Promise<Check[]> {
         "agents mcp warm",
       );
     }
+    // the effective files of each profile, not the repository's base: what Claude really loads
+    const rules = gatewayDenyRules(g.port, runtimeNames(g.runtime, HOME));
     for (const profile of Object.keys(want.profiles)) {
       const file = tokenFileOf(profile, g.runtime);
       const p = gatewayTokenProblem(file, (await stat(file))?.mode ?? null);
       if (p) add("mcp.gateway.token", p.status, p.msg, p.fix);
-    }
-    const deny = (await readJson<{ permissions?: { deny?: string[] } }>(`${REPO}/shared/settings.json`))?.permissions
-      ?.deny ?? [];
-    const absent = GATEWAY_DENY.filter((r) => !deny.includes(r));
-    if (absent.length) {
-      add(
-        "mcp.gateway.deny",
-        "fail",
-        `Claude sessions could call the gateway by hand: shared deny lacks ${absent.join(", ")}`,
-        "console › System › Permissions › Denied",
-      );
+      const deny = (await readJson<{ permissions?: { deny?: string[] } }>(`${g.runtime}/${profile}/settings.json`))
+        ?.permissions?.deny ?? [];
+      const absent = rules.filter((r) => !deny.includes(r));
+      if (absent.length) {
+        add(
+          "mcp.gateway.deny",
+          "fail",
+          `${profile}: Claude sessions could call the gateway by hand: its settings.json lacks ${absent.join(", ")}`,
+          "agents settings",
+        );
+      }
+      const urls = Object.values(
+        (await readJson<{ mcpServers?: Record<string, { url?: string }> }>(`${g.runtime}/${profile}/mcp.json`))
+          ?.mcpServers ?? {},
+      ).map((c) => c.url ?? "").filter((u) => u.includes("/p/"));
+      const wrong = urls.filter((u) => !u.startsWith(`http://127.0.0.1:${g.port}/p/${profile}/`));
+      if (wrong.length) {
+        add(
+          "mcp.gateway.port",
+          "fail",
+          `${profile}: mcp.json points at ${wrong[0]}, not at the gateway on port ${g.port}`,
+          "agents mcp sync",
+        );
+      }
     }
   } catch (e) {
     add("mcp.gateway", "fail", `MCP gateway: ${(e as Error).message}`);

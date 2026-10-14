@@ -12,6 +12,7 @@ import {
 } from "../../../shared/mcp/gateway/core.ts";
 import { describe, startBackend } from "../../../shared/mcp/gateway/backend.ts";
 import { writeAtomic } from "../lib/fs.ts";
+import { serverCodeVersion, serverDirOf } from "../codeversion.ts";
 import { newToken } from "../console/token.ts";
 import { isHttp, type Registry } from "./registry.ts";
 import { servers, shellQuote } from "./placement.ts";
@@ -60,7 +61,11 @@ export function backendSpec(cfg: Record<string, unknown>) {
 
 /** The gateway's configuration: for each profile its token file and the servers that go through it, each
  *  with the key of its cached tool list. `code` stands for the version of what our own servers run. */
-export async function gatewayConfig(reg: Registry, code: string): Promise<GatewayConfig> {
+export async function gatewayConfig(
+  reg: Registry,
+  /** the version of what runs, for a server of ours: by its folder under shared/mcp (null: not one of ours) */
+  versionOf: (serverDir: string | null) => Promise<string>,
+): Promise<GatewayConfig> {
   const g = reg.gateway!;
   const profiles: GatewayConfig["profiles"] = {};
   for (const profile of reg.profiles) {
@@ -69,7 +74,12 @@ export async function gatewayConfig(reg: Registry, code: string): Promise<Gatewa
       const def = reg.servers[p.entry];
       if (!viaGateway(p.cfg, def)) continue;
       const spec = backendSpec(p.cfg);
-      entries[p.name] = { ...spec, key: await cacheKey(p.name, spec, def._npm?.version ?? code) };
+      const version = def._npm?.version ?? await versionOf(serverDirOf(spec.args));
+      entries[p.name] = {
+        ...spec,
+        key: await cacheKey(p.name, spec, version),
+        ...(def._deny?.length ? { deny: [...def._deny].sort() } : {}),
+      };
     }
     if (Object.keys(entries).length) {
       profiles[profile] = { tokenFile: tokenFileOf(profile, g.runtime), servers: entries };
@@ -77,6 +87,11 @@ export async function gatewayConfig(reg: Registry, code: string): Promise<Gatewa
   }
   return { port: g.port, idleMs: g.idleMs, profiles };
 }
+
+/** The version of one of our servers, once per folder in a run (it reads the files). */
+const versions = new Map<string, Promise<string>>();
+export const serverVersion = (dir: string | null): Promise<string> =>
+  dir ? versions.get(dir) ?? (versions.set(dir, serverCodeVersion(dir)), versions.get(dir)!) : Promise.resolve("");
 
 /** A profile's token: made once, in a file only this user reads. @returns true when it was made now. */
 export async function ensureToken(path: string): Promise<boolean> {
@@ -88,18 +103,16 @@ export async function ensureToken(path: string): Promise<boolean> {
     return false;
   }
   await Deno.mkdir(path.replace(/\/[^/]*$/, ""), { recursive: true });
-  const tmp = `${path}.tmp`;
-  await Deno.writeTextFile(tmp, newToken() + "\n", { mode: 0o600 });
-  await Deno.rename(tmp, path);
+  await writeAtomic(path, newToken() + "\n", { mode: 0o600 });
   return true;
 }
 
 /** Brings the gateway's files in step with the registry: a token per profile that has a server through it,
  *  and backends.json. @returns true when backends.json changed. */
-export async function syncGateway(reg: Registry, code: string): Promise<boolean> {
+export async function syncGateway(reg: Registry): Promise<boolean> {
   const g = reg.gateway;
   if (!g?.enabled) return false;
-  const cfg = await gatewayConfig(reg, code);
+  const cfg = await gatewayConfig(reg, serverVersion);
   for (const p of Object.keys(cfg.profiles)) await ensureToken(cfg.profiles[p].tokenFile);
   const text = JSON.stringify(cfg, null, 2) + "\n";
   const path = backendsPath(g.runtime);
@@ -107,6 +120,15 @@ export async function syncGateway(reg: Registry, code: string): Promise<boolean>
   await Deno.mkdir(path.replace(/\/[^/]*$/, ""), { recursive: true, mode: 0o700 });
   await writeAtomic(path, text);
   return true;
+}
+
+/** The list in a cache file if it is there, valid, and the one for `key`: a missing or damaged file is none. */
+async function cachedList(file: string, key: string) {
+  try {
+    return usableCache(JSON.parse(await Deno.readTextFile(file)), key);
+  } catch {
+    return null;
+  }
 }
 
 /** Whether each (profile, server) of the gateway's configuration has its tool list cached. */
@@ -118,8 +140,7 @@ export async function cacheState(
   for (const [profile, p] of Object.entries(cfg.profiles)) {
     for (const [name, s] of Object.entries(p.servers)) {
       const file = cacheFile(cacheDirOf(runtime), name, s.key);
-      const hit = usableCache(JSON.parse(await Deno.readTextFile(file).catch(() => "null")), s.key);
-      out.push({ profile, name, key: s.key, cached: !!hit });
+      out.push({ profile, name, key: s.key, cached: !!await cachedList(file, s.key) });
     }
   }
   return out;
@@ -162,7 +183,7 @@ export function gatewayCommand(g: GatewaySettings, deno: string, home: string): 
 export async function warmCache(
   cfg: GatewayConfig,
   runtime: string,
-  opts: { dry?: boolean } = {},
+  opts: { dry?: boolean; force?: boolean } = {},
 ): Promise<{ built: string[]; failed: string[]; removed: string[] }> {
   const dir = cacheDirOf(runtime);
   const out = { built: [] as string[], failed: [] as string[], removed: [] as string[] };
@@ -172,7 +193,7 @@ export async function warmCache(
       const file = cacheFile(dir, name, s.key);
       if (seen.has(file)) continue;
       seen.add(file);
-      if (usableCache(JSON.parse(await Deno.readTextFile(file).catch(() => "null")), s.key)) continue;
+      if (!opts.force && await cachedList(file, s.key)) continue;
       if (opts.dry) {
         out.built.push(name);
         continue;
@@ -183,8 +204,7 @@ export async function warmCache(
           const list = await describe(r.client);
           await Deno.mkdir(dir, { recursive: true });
           const body: CachedList = { key: s.key, at: new Date().toISOString(), ...list };
-          await Deno.writeTextFile(`${file}.tmp`, JSON.stringify(body));
-          await Deno.rename(`${file}.tmp`, file);
+          await writeAtomic(file, JSON.stringify(body));
           out.built.push(`${name} (${list.tools.length} tools)`);
         } finally {
           await r.close();

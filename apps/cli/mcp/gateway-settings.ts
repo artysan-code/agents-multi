@@ -49,3 +49,24 @@ export function gatewaySettings(
 export async function loadGatewaySettings(mode: Mode): Promise<GatewaySettings> {
   return gatewaySettings(await readJson(gatewayFile()), mode, RUNTIME, amEnv("GATEWAY_PORT"));
 }
+
+/** Pure: the deny rules a profile gets while the gateway is on, from the port it really listens on: a Bash
+ *  command that names it, a raw socket, the token files under every name the runtime has, and the
+ *  helper that prints a token. They are a barrier against a session's mistake or an injected prompt that
+ *  has not thought of them, not against an agent that means to get round them (docs/adr/0008). */
+export function gatewayDenyRules(port: number, runtimes: string[]): string[] {
+  const rules = [
+    `Bash(*:${port}*)`,
+    "Bash(*/dev/tcp*)",
+    "Bash(*mcp-t*)",
+    "Bash(*headers.sh*)",
+    ...runtimes.flatMap((r) => [`Read(${r}/*/mcp-token)`, `Edit(${r}/*/mcp-token)`]),
+  ];
+  return [...new Set(rules)].sort();
+}
+
+/** The runtime's names as permission rules write them: under the home as `~/…`, the legacy link included. */
+export function runtimeNames(runtime: string, home: string): string[] {
+  const own = runtime.startsWith(`${home}/`) ? `~${runtime.slice(home.length)}` : `/${runtime}`;
+  return [...new Set([own, "~/.agents-multi", "~/.claude-multi"])];
+}

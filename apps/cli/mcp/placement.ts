@@ -4,6 +4,7 @@
 import { type Account, accountHosts, visibleAccounts } from "../../../shared/mcp/lib/accounts.ts";
 import { HOME } from "../lib/paths.ts";
 import { type Profile } from "../lib/profiles.ts";
+import { gatewayDenyRules, runtimeNames } from "./gateway-settings.ts";
 import { isHttp, type LaunchPaths, launchPaths, type Registry, type ServerCfg, type Surface } from "./registry.ts";
 
 export interface Target {
@@ -283,10 +284,12 @@ export function permissionRules(reg: Registry, profile: string): RegistryRules {
       guarded.set(entry, [...guarded.get(entry) ?? [], ...tools]);
     }
   }
+  // the gateway answers whoever holds a profile's token: a call made by hand would skip the rules above
+  if (reg.gateway?.enabled) deny.push(...gatewayDenyRules(reg.gateway.port, runtimeNames(reg.gateway.runtime, HOME)));
   const { hooks: dir, deno } = reg.launch ?? launchPaths();
   const hooks: GuardHook[] = [...guarded].map(([entry, tools]) => ({
     matcher: `^(${tools.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`,
     hooks: [{ type: "command", command: guardCommand(deno, `${dir}/${reg.servers[entry]._guard!.hook}`) }],
   }));
-  return { allow: allow.sort(), deny: deny.sort(), ask: ask.sort(), hooks };
+  return { allow: allow.sort(), deny: [...new Set(deny)].sort(), ask: ask.sort(), hooks };
 }
