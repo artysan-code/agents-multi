@@ -185,5 +185,6 @@ worktree resolving to the repository it hangs from, a folder with no repository 
 Claude session id (`CLAUDE_CODE_SESSION_ID`) when the environment has it. List, status, events, wait and
 `follow` show only the caller's project (`--mine`: only its own session); answer, say, stop and
 `workflow_answer` refuse another project's child or run with an error saying whose it is; `--all` (MCP: `all`)
-reads every project's, never writes. A child or run recorded before this has no project: visible only
-with `--all`. Pure parts (`projectOf`, `inScope`) are in `shared/mcp/lib/agents.ts`.
+reads every project's, never writes. A child or run recorded before this has no project: it belongs to
+the project of its own folder (`readChild`, `readRun`), so the coordinator of that project sees and
+controls it. Pure parts (`projectOf`, `inScope`) are in `shared/mcp/lib/agents.ts`.

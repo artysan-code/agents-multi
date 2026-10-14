@@ -26,6 +26,7 @@ import {
   outOfScope,
   type Owner,
   pidAlive,
+  projectOf,
   readChild,
   runsDir,
   sayTo,
@@ -233,7 +234,7 @@ export interface Run {
   plan: Plan;
   state: RunState;
   alive: boolean;
-  /** whose it is (`owner.json`, written at the start); absent in a run older than this */
+  /** whose it is (`owner.json`, written at the start); a run older than this has its folder's project */
   owner?: Owner;
 }
 
@@ -245,9 +246,12 @@ export async function readRun(id: string, runs = runsDir()): Promise<Run | null>
   const plan = await Deno.readTextFile(`${dir}/plan.json`).then(JSON.parse).catch(() => null) as Plan | null;
   const state = await Deno.readTextFile(`${dir}/state.json`).then(JSON.parse).catch(() => null) as RunState | null;
   if (!plan || !state) return null;
-  const owner = await Deno.readTextFile(`${dir}/owner.json`).then(JSON.parse).catch(() => undefined) as
+  let owner = await Deno.readTextFile(`${dir}/owner.json`).then(JSON.parse).catch(() => undefined) as
     | Owner
     | undefined;
+  // a run older than the scope belongs to the project of its folder
+  const folder = plan.folder ?? plan.steps?.find((s) => s.folder)?.folder;
+  if (!owner && folder) owner = { project: await projectOf(folder) };
   return { id, plan, state, alive: await runnerAlive(dir), owner };
 }
 

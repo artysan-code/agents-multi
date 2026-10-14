@@ -30,7 +30,7 @@ interface Meta {
   /** the workflow run and step it is (runs.ts), when it is one */
   run?: { id: string; step: string };
   /** whose it is: the project of the coordinator that started it, and that coordinator's session when
-   *  known. Absent in a child older than this: its project is unknown (see `inScope`). */
+   *  known. Absent in a child older than this: `readChild` gives it the project of its folder. */
   project?: string;
   session?: string;
 }
@@ -101,7 +101,7 @@ export const ownerOf = (s: Scope): Owner =>
   s.session ? { project: s.project, session: s.session } : { project: s.project };
 
 /** Pure: whether something owned by `owner` is the caller's to see and touch. One without a project
- *  (older than the scope) is nobody's but `all`'s. `mine` also needs the same session. */
+ *  is nobody's but `all`'s. `mine` also needs the same session. */
 export function inScope(owner: { project?: string; session?: string } | undefined, scope: Scope): boolean {
   if (scope.all) return true;
   if (!owner?.project || owner.project !== scope.project) return false;
@@ -447,6 +447,8 @@ export async function readChild(id: string, runs = runsDir()): Promise<Child | n
   const dir = `${runs}/${id}`;
   const meta = await Deno.readTextFile(`${dir}/meta.json`).then(JSON.parse).catch(() => null) as Meta | null;
   if (!meta) return null;
+  // a child older than the scope belongs to the project of its own folder
+  meta.project ??= await projectOf(meta.dir ?? "/").catch(() => undefined);
   const state = stateOf(await lines(`${dir}/out.jsonl`), await answeredOf(dir), await pidAlive(`${dir}/claude.pid`));
   const err = (await Deno.readTextFile(`${dir}/err.log`).catch(() => "")).trim();
   if (state.phase === "ended" && !state.turns && err) state.error = err.split("\n").slice(-3).join(" ");
