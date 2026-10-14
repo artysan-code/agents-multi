@@ -42,7 +42,8 @@ a Claude was open, because Claude rewrites `.claude.json` (`oauthAccount`, state
   Claude Code embedded in Desktop (its Code tab) reads that file, not the launch config. Same rule as
   Desktop's file: managed servers only, merge with backup, `oauthAccount` and hand-added servers
   untouched, written at the forced run of `claude-launch` when no Claude of the profile is open, else
-  marker and the next occasion. No doctor warning.
+  marker and the next occasion. No doctor warning. What it holds is the launch config's entries, gateway
+  http ones included ([ADR 0008](0008-mcp-gateway.md)).
 - **For a profile without Desktop the old projection is retired once**: the servers the per-machine state
   recorded (`cli:<profile>`) are taken out of `.claude.json`, with a backup, only when the launch config
   exists and no Claude of that profile is open.
