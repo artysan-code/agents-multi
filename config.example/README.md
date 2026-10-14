@@ -15,6 +15,8 @@ stays in the Agents Multi repository.
   patch. Those are templates, all off: an account-backed one turns on with an account in
   `accounts.json`, any other with `"<server>": { "_profiles": null }` here (every profile; or a list).
   Servers of your own go here too, `"<name>": { "command": …, "args": … }`, and stay yours.
+- `gateway.json` — optional: the lazy MCP gateway (docs/adr/0008). `{ "enabled": false }` is the kill switch
+  (on by default in the desktop app, off in a checkout), `idleMinutes` (default 10) and `port` (default 7332).
 - `accounts.json` — the accounts those servers use (no secrets: those go in the vault,
   `agents vault set <service> <account>`).
 - `rules/` — your rules, imported by each profile's `CLAUDE.md`.
