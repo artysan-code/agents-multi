@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
+#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname,loadavg,systemMemoryInfo --allow-net=127.0.0.1:8384,127.0.0.1:7331
 // agents-multi — the CLI of a multi-profile Claude Code / Claude Desktop setup. The commands are
 // dispatched below; `agents help` lists them and is the one place that says what each does.
 
@@ -37,6 +37,7 @@ import { limitsCommand } from "./limits.ts";
 import { selfCheck, selfCheckRow, selfUpdate, settlePending } from "./selfupdate.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { uiCommand } from "./ui.ts";
+import { nodeCommand } from "./node/command.ts";
 import manifest from "../../deno.json" with { type: "json" };
 
 const [cmd = "help", ...rest] = Deno.args;
@@ -215,7 +216,10 @@ switch (cmd) {
     Deno.exit(await uiCommand(rest));
     break;
   case "serve":
-    await serve({ open: !flag("--no-open") });
+    await serve({ open: !flag("--no-open"), headless: flag("--headless") });
+    break;
+  case "node":
+    Deno.exit(await nodeCommand(rest));
     break;
   case "vault":
     Deno.exit(await vaultCommand(rest));
@@ -311,7 +315,10 @@ switch (cmd) {
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)
-  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
+  serve   [--no-open|--headless]   local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health);
+          --headless: a server's agentd (docs/adr/0012), no page, routines and jobs only inside the Bash sandbox
+  node    [status|enable [--headless] [--max N]|disable|probe|key]   this machine as a node of the service: what it
+          announces, turning it on or off, the sandbox probe, the owner's public approval key (for a node with no vault)
   version                     the version of agents-multi (also --version, -V)
 
   agents-multi and claude-multi are other names for the same command (the second is the project's name before Agents Multi).

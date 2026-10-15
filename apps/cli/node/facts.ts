@@ -67,7 +67,14 @@ async function loggedIn(): Promise<string[]> {
 
 /** The memory this node counts with: its container's limit where it has one. */
 async function memory(): Promise<{ total: number; free: number }> {
-  const m = Deno.systemMemoryInfo();
+  // the CLI's and the app's backend's --allow-sys name it (bin/agents, backend.rs); without it, nothing is known
+  const m = (() => {
+    try {
+      return Deno.systemMemoryInfo();
+    } catch {
+      return { total: 0, available: 0 };
+    }
+  })();
   const max = await Deno.readTextFile("/sys/fs/cgroup/memory.max").catch(() => null);
   const total = memoryLimit(max, m.total);
   return { total, free: Math.min(m.available, total) };
@@ -85,7 +92,13 @@ export async function nodeFacts(cfg: NodeConfig, sandbox: boolean | null): Promi
     platform: platformOf(),
     version: manifest.version,
     headless: cfg.headless,
-    load: Math.round(Deno.loadavg()[0] * 100) / 100,
+    load: (() => {
+      try {
+        return Math.round(Deno.loadavg()[0] * 100) / 100;
+      } catch {
+        return 0;
+      }
+    })(),
     memTotal: mem.total,
     memFree: mem.free,
     cap: sessionCap(mem.total, cfg.maxSessions),

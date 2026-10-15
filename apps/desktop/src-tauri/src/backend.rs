@@ -39,7 +39,7 @@ pub const PERMISSIONS: [&str; 6] = [
     "--allow-write",
     "--allow-run",
     "--allow-env",
-    "--allow-sys=hostname",
+    "--allow-sys=hostname,loadavg,systemMemoryInfo",
     "--allow-net",
 ];
 /// How long a stopped backend has to exit after SIGTERM before it is killed.
