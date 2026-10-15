@@ -20,8 +20,10 @@ const SHA = "a".repeat(40);
 Deno.test("policy: the defaults are ADR 0009's — dev yes, main and release never", () => {
   const p = resolvePolicy();
   assertEquals(p, DEFAULT_POLICY);
-  assertEquals(pushableRefs(p, "r1"), ["refs/heads/agent/r1", "refs/heads/dev"]);
+  assertEquals(pushableRefs(p, "r1"), ["refs/heads/agent/r1", "refs/agents/r1", "refs/heads/dev"]);
   assert(pushAllowed("refs/heads/agent/r1", SHA, p, "r1"));
+  assert(pushAllowed("refs/agents/r1", SHA, p, "r1"), "its checkpoint of HANDOFFs");
+  assert(!pushAllowed("refs/agents/r2", SHA, p, "r1"), "never another run's");
   assert(pushAllowed("refs/heads/dev", SHA, p, "r1"));
   for (const b of ["main", "master", "release", "agent/other", "feature/x"]) {
     assert(!pushAllowed(`refs/heads/${b}`, SHA, p, "r1"), b);
@@ -71,7 +73,7 @@ Deno.test("policy: junk in a file is ignored, never trusted", () => {
 
 Deno.test("policy: the hook text names its allow list and the protected branches", () => {
   const h = hookScript(DEFAULT_POLICY, "night-1");
-  assertStringIncludes(h, '"refs/heads/agent/night-1" "refs/heads/dev"');
+  assertStringIncludes(h, '"refs/heads/agent/night-1" "refs/agents/night-1" "refs/heads/dev"');
   assertStringIncludes(h, '"refs/heads/main" "refs/heads/master" "refs/heads/release"');
 });
 
@@ -140,8 +142,16 @@ Deno.test("policy: a worktree's hook lets the branch and dev through and stops m
     const push = (ref: string, from = "HEAD") => git(iso.path, ["push", "origin", `${from}:${ref}`], env);
     assert((await push("refs/heads/agent/night-1")).ok, "its own branch");
     assert((await push("refs/heads/dev")).ok, "the development branch");
+    assert((await push("refs/agents/night-1")).ok, "its checkpoint ref");
     for (
-      const ref of ["refs/heads/main", "refs/heads/release", "refs/heads/master", "refs/heads/other", "refs/tags/v9"]
+      const ref of [
+        "refs/heads/main",
+        "refs/heads/release",
+        "refs/heads/master",
+        "refs/heads/other",
+        "refs/tags/v9",
+        "refs/agents/other",
+      ]
     ) {
       const r = await push(ref);
       assert(!r.ok, `${ref} must be refused`);

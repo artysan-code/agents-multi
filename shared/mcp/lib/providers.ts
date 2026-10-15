@@ -60,6 +60,18 @@ export interface ExecInput {
   disallowedTools?: string[];
   /** rules it must ask for whatever its mode, so that the auto classifier cannot pass them (Claude only) */
   askTools?: string[];
+  /** settings of its own for this session, such as a headless node's sandbox (headless.ts; Claude only) */
+  settings?: Record<string, unknown>;
+}
+
+/** Pure: the session settings of a Claude child (`--settings`): its own, with the ask rules added to theirs. */
+export function sessionSettings(i: Pick<ExecInput, "askTools" | "settings">): Record<string, unknown> | undefined {
+  if (!i.askTools?.length && !i.settings) return undefined;
+  const own = i.settings ?? {};
+  const perms = (own.permissions ?? {}) as Record<string, unknown>;
+  return i.askTools?.length
+    ? { ...own, permissions: { ...perms, ask: [...((perms.ask as string[]) ?? []), ...i.askTools] } }
+    : own;
 }
 
 export interface Provider {
@@ -106,7 +118,8 @@ const claudeProvider: Provider = {
     if (i.mcpConfig) env.C = i.mcpConfig;
     if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
     if (i.disallowedTools?.length) env.X = i.disallowedTools.join(",");
-    if (i.askTools?.length) env.S = JSON.stringify({ permissions: { ask: i.askTools } });
+    const settings = sessionSettings(i);
+    if (settings) env.S = JSON.stringify(settings);
     return {
       line: 'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
         '${X:+--disallowedTools "$X"} ${S:+--settings "$S"} ' +

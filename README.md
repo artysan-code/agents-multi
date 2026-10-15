@@ -222,6 +222,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents vault status\|init\|pair\|set\|delete\|run`                           | the secret vault the MCP servers read their credentials from (below)                                                                                           |
 | `agents routine add\|list\|rm\|run`                                           | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
 | `agents review [rules [folder]]`                                              | what the reviewer allowed, refused or left to you in routines' runs; the rules a project's runs get (below)                                                    |
+| `agents nodes [accept\|decline\|propose]`                                     | the machines and jobs the service sees; `accept` signs a job here, with the vault's approval key (ADR 0012)                                                    |
 | `agents account status\|default\|proposals\|propose\|accept\|decline\|events` | the limit rules per account, a project's default account, and the owner's yes to a switch (below)                                                              |
 | `agents tasks brief\|add\|done\|remind`                                       | the task list from the terminal; `remind` is what the timer runs                                                                                               |
 | `agents google client <file.json>\|connect <account>`                         | the Google OAuth client, and connecting an account                                                                                                             |
@@ -432,6 +433,26 @@ permission syntax:
 - `agents review` lists the decisions (`<state>/agents-multi/agents/reviewer/decisions.jsonl`: what, the rule, the
   verdict, who decided and why); `agents review rules [folder]` shows what a project's runs get. The doctor
   names ignored entries and an `allow` that lets a run do anything (`Bash`, `Bash(*)`, a shell or interpreter).
+
+### Nodes: work that moves between machines
+
+Every machine's console is a node of **the service** — the brain, which also keeps your machines and the jobs
+placed on them ([ADR 0012](docs/adr/0012-agentd-and-the-service.md)). `agents node enable` turns it on
+(`config/node.json`); `agents node` shows what it announces, `agents nodes` every machine and job the service
+sees, and `agents nodes accept <job>` signs one.
+
+- **Outbound only.** Every 30 s the node tells the service its load, its session cap (from its memory, or
+  `maxSessions`), the accounts logged in and whether you are at it, with its own machine token
+  (`agents brain-login`). Nothing listens beyond `127.0.0.1`.
+- **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
+  machines with a key from the vault the service never has: a stolen token or a broken service cannot start an
+  agent. A job taken is a one-shot routine, under the same policy, limits and reviewer.
+- **Resume from the branch.** While a run works, the node pushes its branch `agent/<id>` and its HANDOFFs
+  (`refs/agents/<id>`); a node silent for ten minutes loses its running jobs, and a proposal to resume each on
+  another node (a clone of the same remote under `repoRoots`) waits for your yes.
+- **A server** runs `agents serve --headless` (after `agents node enable --headless`): no page, every child in
+  Claude Code's Bash sandbox, failing closed (`agents node probe`); only the node pushes. With no keyring there,
+  `agents vault pair --file` keeps the vault key in a file only you read.
 
 ## Consumption
 

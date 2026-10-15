@@ -83,10 +83,11 @@ export function resolvePolicy(owner?: unknown, repo?: unknown): Policy {
   return p;
 }
 
-/** The refs a run `id` may push to, as git names them (the hook's allow list). */
+/** The refs a run `id` may push to, as git names them (the hook's allow list): its branch, its checkpoint of
+ *  HANDOFFs (`refs/agents/<id>`, ADR 0012: what lets it resume on another machine), the policy's branches. */
 export function pushableRefs(p: Policy, id: string): string[] {
   if (!p.push) return [];
-  return [`refs/heads/agent/${id}`, ...p.pushBranches.map((b) => `refs/heads/${b}`)];
+  return [`refs/heads/agent/${id}`, `refs/agents/${id}`, ...p.pushBranches.map((b) => `refs/heads/${b}`)];
 }
 
 /** Pure: whether a push of `localSha` to the remote ref is allowed: only to a branch on the list; a
@@ -94,6 +95,7 @@ export function pushableRefs(p: Policy, id: string): string[] {
 export function pushAllowed(remoteRef: string, localSha: string, p: Policy, id: string): boolean {
   if (/^0+$/.test(localSha)) return false;
   const branch = remoteRef.replace(/^refs\/heads\//, "");
+  if (remoteRef === `refs/agents/${id}`) return pushableRefs(p, id).includes(remoteRef);
   if (!remoteRef.startsWith("refs/heads/") || p.protectedBranches.includes(branch)) return false;
   return pushableRefs(p, id).includes(remoteRef);
 }
@@ -114,7 +116,7 @@ export const DENY_TOOLS = [
  *  ref> <remote sha>`) and refuses the push when one names a ref outside the list. */
 export function hookScript(p: Policy, id: string): string {
   const refs = pushableRefs(p, id);
-  if (refs.some((r) => !/^refs\/heads\/[A-Za-z0-9._\/-]+$/.test(r))) {
+  if (refs.some((r) => !/^refs\/(heads|agents)\/[A-Za-z0-9._\/-]+$/.test(r))) {
     throw new Error("a branch name the hook cannot hold");
   }
   const prot = p.protectedBranches.map((b) => `refs/heads/${b}`);
@@ -166,10 +168,11 @@ export const worktreesOf = (project: string) => `${project.replace(/\/+$/, "")}-
 
 /** A dedicated worktree for run `id` on a new branch `agent/<id>`, from the development branch (or HEAD
  *  where the repository has none), with the pre-push hook set for that worktree alone (`config --worktree`,
- *  so the other worktrees and the main checkout are untouched). */
-export async function isolate(project: string, id: string, p: Policy): Promise<Isolated> {
+ *  so the other worktrees and the main checkout are untouched). `from`: a commit to continue instead (a run
+ *  resumed on another machine, ADR 0012), whose branch keeps its name. */
+export async function isolate(project: string, id: string, p: Policy, from?: string): Promise<Isolated> {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) throw new Error(`not a run id: ${id}`);
-  const base = await git(project, ["rev-parse", "--verify", "--quiet", `refs/heads/${p.devBranch}`]).then(
+  const base = from ?? await git(project, ["rev-parse", "--verify", "--quiet", `refs/heads/${p.devBranch}`]).then(
     () => p.devBranch,
     () => "HEAD",
   );
@@ -179,7 +182,7 @@ export async function isolate(project: string, id: string, p: Policy): Promise<I
   const branch = `agent/${id}`;
   await Deno.mkdir(hooks, { recursive: true });
   await Deno.writeTextFile(`${hooks}/pre-push`, hookScript(p, id), { mode: 0o755 });
-  await git(project, ["worktree", "add", "-b", branch, path, base]);
+  await git(project, ["worktree", "add", from ? "-B" : "-b", branch, path, base]);
   await git(project, ["config", "extensions.worktreeConfig", "true"]);
   await git(path, ["config", "--worktree", "core.hooksPath", hooks]);
   return { path, branch, base, hooks };

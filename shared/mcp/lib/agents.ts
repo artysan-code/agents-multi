@@ -23,6 +23,7 @@ import { configDir } from "./owner.ts";
 import { myCoordinator, type Proc, procAlive, type ProcReader, procReader, sameStart } from "./proc.ts";
 import { spawnDetached } from "./platform.ts";
 import { launcherOf, type ProviderName, providers } from "./providers.ts";
+import { childSettings } from "./headless.ts";
 
 export { launcherOf, type ProviderName };
 
@@ -771,6 +772,8 @@ export async function startChild(
     allowedTools: i.allowedTools,
     disallowedTools: i.disallowedTools,
     askTools: i.askTools,
+    // on a headless node every child is sandboxed, whoever starts it (ADR 0012)
+    settings: await childSettings(home, runtime, config),
   });
   const script = [
     'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331
+#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname,loadavg,systemMemoryInfo --allow-net=127.0.0.1:8384,127.0.0.1:7331
 // agents-multi — the CLI of a multi-profile Claude Code / Claude Desktop setup. The commands are
 // dispatched below; `agents help` lists them and is the one place that says what each does.
 
@@ -8,6 +8,7 @@ import { agentCommand } from "./agent.ts";
 import { runCommand } from "./run.ts";
 import { routineCommand } from "./routine.ts";
 import { reviewCommand } from "./review.ts";
+import { nodesCommand } from "./nodes.ts";
 import { accountCommand } from "./account.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
@@ -37,6 +38,7 @@ import { limitsCommand } from "./limits.ts";
 import { selfCheck, selfCheckRow, selfUpdate, settlePending } from "./selfupdate.ts";
 import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
 import { uiCommand } from "./ui.ts";
+import { nodeCommand } from "./node/command.ts";
 import manifest from "../../deno.json" with { type: "json" };
 
 const [cmd = "help", ...rest] = Deno.args;
@@ -215,7 +217,10 @@ switch (cmd) {
     Deno.exit(await uiCommand(rest));
     break;
   case "serve":
-    await serve({ open: !flag("--no-open") });
+    await serve({ open: !flag("--no-open"), headless: flag("--headless") });
+    break;
+  case "node":
+    Deno.exit(await nodeCommand(rest));
     break;
   case "vault":
     Deno.exit(await vaultCommand(rest));
@@ -234,6 +239,9 @@ switch (cmd) {
     break;
   case "review":
     Deno.exit(await reviewCommand(rest));
+    break;
+  case "nodes":
+    Deno.exit(await nodesCommand(rest));
     break;
   case "account":
     Deno.exit(await accountCommand(rest));
@@ -296,7 +304,7 @@ switch (cmd) {
   limits  [--json]            every account's usage windows (5h, 7d…): Claude's from the status line, Codex's from its logs
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
+  vault   [status|init [--file]|pair [--file]|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind]   the task list (in the brain); remind is what claude-tasks.timer runs
@@ -306,12 +314,16 @@ switch (cmd) {
           team channel (agents run, alone, says how)
   routine add|list|rm|run   unattended jobs (cron, at, a run's end) on their own branch, under the repo's policy
   review  [rules [folder]]    what the reviewer allowed, refused or left to you in routines' runs; the rules they get
+  nodes   [accept|decline|propose]  the machines and jobs the service sees; accept signs a job here (ADR 0012)
   account status|default|proposals|propose|accept|decline|events   the limit rules per account, a project's default account, and the owner's yes to a switch
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)
-  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (chat, runs, accounts & limits; the rest under More)
+  serve   [--no-open|--headless]   local console on http://127.0.0.1:${PORT} (chat, runs, accounts & limits; the rest under More);
+          --headless: a server's agentd (docs/adr/0012), no page, routines and jobs only inside the Bash sandbox
+  node    [status|enable [--headless] [--max N]|disable|probe|key]   this machine as a node of the service: what it
+          announces, turning it on or off, the sandbox probe, the owner's public approval key (for a node with no vault)
   version                     the version of agents-multi (also --version, -V)
 
   agents-multi and claude-multi are other names for the same command (the second is the project's name before Agents Multi).

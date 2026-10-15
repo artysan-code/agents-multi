@@ -150,8 +150,25 @@ export async function open(key: VaultKey, id: string, box: { iv: string; ct: str
 // ---------------------------------------------------------------- the keyring
 export class VaultError extends Error {}
 
-/** This machine's vault key, from the keyring. */
+/** Where a machine with no keyring keeps the vault key (ADR 0012: a headless server): a file only the user
+ *  reads. Always under HOME, the one variable every server that opens the vault may read. */
+export function vaultKeyFile(): string {
+  return amEnv("VAULT_KEY_FILE") ?? `${HOME}/.local/state/agents-multi/vault-key`;
+}
+
+/** The key file's content, or null when there is none (or this process may not read it). */
+async function keyFromFile(): Promise<string | null> {
+  try {
+    return (await Deno.readTextFile(vaultKeyFile())).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** This machine's vault key: from the key file where the machine has one, else from the keyring. */
 export async function loadKey(): Promise<VaultKey> {
+  const file = await keyFromFile();
+  if (file) return await importKey(unb64(file));
   let key: string | null;
   try {
     key = await secretStore.lookup(KEY);
@@ -167,7 +184,16 @@ export async function loadKey(): Promise<VaultKey> {
   return await importKey(unb64(key));
 }
 
-async function storeKey(raw: Uint8Array) {
+/** Where the key is kept: the keyring, or the key file (`--file`, for a machine with no keyring). */
+export type KeyPlace = "keyring" | "file";
+
+async function storeKey(raw: Uint8Array, place: KeyPlace = "keyring") {
+  if (place === "file") {
+    const f = vaultKeyFile();
+    await Deno.mkdir(f.slice(0, f.lastIndexOf("/")), { recursive: true, mode: 0o700 });
+    await writeAtomic(f, b64(raw) + "\n", { mode: 0o600 });
+    return;
+  }
   let kept: boolean;
   try {
     kept = await secretStore.store(KEY, "agents vault key", b64(raw));
@@ -196,7 +222,7 @@ export async function keyMatches(key: VaultKey): Promise<boolean> {
 }
 
 /** First machine: a new key, in the keyring, and the check next to the entries. */
-export async function initVault(): Promise<string> {
+export async function initVault(place: KeyPlace = "keyring"): Promise<string> {
   if (await readJson(checkFile())) {
     throw new VaultError(`a vault already exists in ${vaultDir()}: pair this machine with its recovery code instead`);
   }
@@ -204,12 +230,12 @@ export async function initVault(): Promise<string> {
   const key = await importKey(raw);
   await Deno.mkdir(entriesDir(), { recursive: true, mode: 0o700 });
   await writeEntry(checkFile(), JSON.stringify(await seal(key, "key-check", CHECK_TEXT)) + "\n");
-  await storeKey(raw);
+  await storeKey(raw, place);
   return recoveryCode(raw);
 }
 
 /** Any other machine: the key from a recovery code, checked against the vault before it is kept. */
-export async function pairVault(code: string) {
+export async function pairVault(code: string, place: KeyPlace = "keyring") {
   const raw = parseRecoveryCode(code);
   const key = await importKey(raw);
   if (!(await readJson(checkFile()))) {
@@ -218,7 +244,7 @@ export async function pairVault(code: string) {
     );
   }
   if (!(await keyMatches(key))) throw new VaultError("this recovery code does not open the vault");
-  await storeKey(raw);
+  await storeKey(raw, place);
 }
 
 export async function getSecret(

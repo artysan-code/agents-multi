@@ -60,6 +60,15 @@ export const BRAIN_MIGRATIONS: Migration[] = [
       `insert or ignore into meta (k, v) select 'writes_pages', count(*) from revisions where path not like 'tasks/%'`,
     );
   },
+  // the account's machines and the jobs placed on them (fleet.ts, ADR 0012): state, not documents
+  (db) =>
+    db.exec(`
+create table if not exists nodes (name text primary key, info text not null, seen text not null);
+create table if not exists jobs (
+  id text primary key, node text not null, kind text not null, spec text not null, status text not null,
+  reason text, local integer not null default 0, signature text, expires text, created text not null,
+  updated text not null, by text not null, head text, parent text);
+create index if not exists jobs_open on jobs(status) where status in ('proposed', 'accepted', 'running');`),
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */

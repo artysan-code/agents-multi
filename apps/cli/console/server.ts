@@ -45,6 +45,9 @@ import { live, refresh as refreshLimits } from "../live.ts";
 import { limitsNow } from "../limits.ts";
 import { listChats, readChat, removeChat } from "../chats.ts";
 import { runsView } from "./runs.ts";
+import { startAgentd } from "../node/agentd.ts";
+import { loadNodeConfig } from "../../../shared/mcp/lib/headless.ts";
+import { desktopNotify } from "../notify.ts";
 
 /** The routes of the console, given the state they share. */
 /** The usage database, kept open. The transcripts are read into it at most every few seconds, and only
@@ -323,8 +326,13 @@ export function forgetBackendOnly(env: Pick<typeof Deno.env, "get" | "delete"> =
  *  profile, permissions and sandbox for theirs: no keyring, no brain. */
 export { claudeSessionVars };
 
-/** Starts the console and resolves when it stops. `open` opens it in the default browser. */
-export async function serve(opts: { open?: boolean } = { open: true }) {
+/** Starts the console and resolves when it stops. `open` opens it in the default browser; `headless`: a server's
+ *  agentd (ADR 0012), which never opens a page and runs routines and jobs only inside the Bash sandbox. */
+export async function serve(opts: { open?: boolean; headless?: boolean } = { open: true }) {
+  if (opts.headless && !(await loadNodeConfig()).headless) {
+    // the children's sandbox comes from node.json: a headless backend without it would run them unsandboxed
+    throw new Error("serve --headless needs a headless node: agents node enable --headless");
+  }
   forgetBackendOnly();
   for (const n of claudeSessionVars(Object.keys(Deno.env.toObject()))) Deno.env.delete(n);
   const url = `http://127.0.0.1:${PORT}`;
@@ -378,13 +386,22 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     ac.signal.addEventListener("abort", stop);
   }
   if (own) {
-    // the routines (ADR 0010), in both modes
+    // the routines (ADR 0010), in both modes, through agentd (ADR 0012): on a headless node only while the Bash
+    // sandbox works; and when the node is on, its announcements, jobs and checkpoints
     ac.signal.addEventListener("abort", startLimitsScan());
-    ac.signal.addEventListener("abort", startRoutineSchedule());
+    ac.signal.addEventListener(
+      "abort",
+      startAgentd({
+        headless: !!opts.headless,
+        log: console.log,
+        notify: (title, body) => void desktopNotify(title, body).catch(() => {}),
+        startRoutines: () => startRoutineSchedule(),
+      }),
+    );
     // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
     superviseGateway(ac.signal);
   }
-  if (opts.open) {
+  if (opts.open && !opts.headless) {
     // a one-use ticket, not the token: the command line of the opener is readable by other users
     const entryUrl = `${url}/?k=${auth.tickets.issue()}`;
     try {
