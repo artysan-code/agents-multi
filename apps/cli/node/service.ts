@@ -74,7 +74,7 @@ export async function service(
 }
 
 export const announce = (s: Service, a: Announce) =>
-  s.call<{ jobs: Job[]; answers?: PhoneAnswer[] }>("PUT", "/api/node", a);
+  s.call<{ jobs: Job[]; answers?: PhoneAnswer[]; declined?: Job[] }>("PUT", "/api/node", a);
 export const fleet = (s: Service) => s.call<{ nodes: NodeInfo[]; jobs: Job[]; now: string }>("GET", "/api/nodes");
 export const getJob = async (s: Service, id: string) => (await s.call<{ job: Job }>("GET", `/api/jobs/${id}`)).job;
 export const newJob = async (s: Service, body: Record<string, unknown>) =>

@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { validNodeName } from "../../shared/mcp/lib/nodes.ts";
 import {
   b64u,
+  boundWords,
   cleanAssertion,
   clientChallenge,
   MAX_AHEAD_MS,
@@ -23,7 +24,8 @@ export class WaitingError extends Error {
 
 /** A node that has not said what waits on it for this long is not shown as waiting. */
 const STALE_MS = 10 * 60_000;
-const CHALLENGE_MS = 5 * 60_000;
+// a little over the browser's own timeout for the ceremony (below), so the last seconds of it still count
+const CHALLENGE_MS = 6 * 60_000;
 const MAX_PASSKEYS = 20;
 const MAX_REQUESTS = 200;
 const ANSWER_KEEP_MS = 24 * 3600_000;
@@ -38,25 +40,9 @@ export function cleanRequest(raw: unknown): Record<string, unknown> | null {
   const id = str(r.id, 200), child = str(r.child, 100), request = str(r.request, 100);
   if (!SEGMENT.test(child) || !SEGMENT.test(request) || id !== `${child}/${request}`) return null;
   if (r.kind !== "request" && r.kind !== "question") return null;
-  const questions = Array.isArray(r.questions)
-    ? r.questions.slice(0, 4).map((q) => {
-      const x = (q && typeof q === "object" ? q : {}) as Record<string, unknown>;
-      return {
-        question: str(x.question, 500),
-        ...(typeof x.header === "string" ? { header: x.header.slice(0, 60) } : {}),
-        options: Array.isArray(x.options)
-          ? x.options.slice(0, 8).map((o) => {
-            const y = (o && typeof o === "object" ? o : {}) as Record<string, unknown>;
-            return {
-              label: str(y.label, 200),
-              ...(typeof y.description === "string" ? { description: y.description.slice(0, 500) } : {}),
-            };
-          })
-          : [],
-        ...(x.multiSelect === true ? { multiSelect: true } : {}),
-      };
-    })
-    : undefined;
+  // kept exactly as the node relayed them (it bounded them the same way): the phone hashes what it is shown and
+  // the node checks that hash against its own hub's copy, so nothing here may rephrase them
+  const w = boundWords(r.what, r.questions);
   return {
     id,
     child,
@@ -64,8 +50,8 @@ export function cleanRequest(raw: unknown): Record<string, unknown> | null {
     profile: str(r.profile, 60),
     project: str(r.project, 300),
     kind: r.kind,
-    what: str(r.what, 1000),
-    ...(questions ? { questions } : {}),
+    what: w.what,
+    ...(w.questions ? { questions: w.questions } : {}),
   };
 }
 
@@ -126,9 +112,10 @@ export class Waiting {
       user: { id: b64u(new TextEncoder().encode(user)), name: user, displayName: user },
       challenge,
       pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-      timeout: 60_000,
+      timeout: 300_000,
       attestation: "none",
-      authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
+      // a discoverable credential, which password managers and the platform keep and offer again
+      authenticatorSelection: { residentKey: "required", requireResidentKey: true, userVerification: "required" },
       excludeCredentials: this.passkeys().map((p) => ({ type: "public-key", id: p.id })),
     };
   }

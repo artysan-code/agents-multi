@@ -61,22 +61,77 @@ export const MAX_AHEAD_MS = 10 * 60_000;
 const SLACK_MS = 60_000;
 export type Verdict = "allow" | "session" | "deny";
 
-/** The answer the phone signs, and what the node recomputes the challenge from. */
+/** The answer the phone signs, and what the node recomputes the challenge from. `what` is the hash of the
+ *  request's words (`wordsHash`): the phone computes it from what it showed, the node from its own hub's copy. */
 export interface AnswerBody {
   id: string;
   node: string;
   verdict: Verdict;
   answers?: Record<string, string>;
   expires: string;
+  what: string;
 }
-export interface PhoneAnswer extends AnswerBody {
+/** An answer as the service hands it to a node: it carries no `what`, the node has its own. */
+export interface PhoneAnswer extends Omit<AnswerBody, "what"> {
   assertion: PasskeyAssertion;
+}
+
+// ---------------------------------------------------------------- the words a yes is for
+
+/** A question of an AskUserQuestion, bounded as the service keeps it. */
+export interface Words {
+  what: string;
+  questions?: {
+    question: string;
+    header?: string;
+    options: { label: string; description?: string }[];
+    multiSelect?: true;
+  }[];
+}
+
+const clip = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+
+/** Pure: a request's words — what it wants to do and its questions — bounded in size and cut to the known fields.
+ *  The node relays this form and hashes it, the service keeps it as it came, the phone hashes what it shows:
+ *  bounding again changes nothing (it is idempotent), so all three hold the same bytes. */
+export function boundWords(what: unknown, questions?: unknown): Words {
+  const qs = Array.isArray(questions)
+    ? questions.slice(0, 4).map((q) => {
+      const x = (q && typeof q === "object" ? q : {}) as Record<string, unknown>;
+      return {
+        question: clip(x.question, 500),
+        ...(typeof x.header === "string" ? { header: x.header.slice(0, 60) } : {}),
+        options: Array.isArray(x.options)
+          ? x.options.slice(0, 8).map((o) => {
+            const y = (o && typeof o === "object" ? o : {}) as Record<string, unknown>;
+            return {
+              label: clip(y.label, 200),
+              ...(typeof y.description === "string" ? { description: y.description.slice(0, 500) } : {}),
+            };
+          })
+          : [],
+        ...(x.multiSelect === true ? { multiSelect: true as const } : {}),
+      };
+    })
+    : undefined;
+  return { what: clip(what, 1000), ...(qs ? { questions: qs } : {}) };
+}
+
+/** The `what` of an answer: the base64url SHA-256 of the canonical JSON of `{what, questions}`. */
+export async function wordsHash(w: { what: string; questions?: unknown }): Promise<string> {
+  return b64u(await sha256(enc.encode(canonical({ what: w.what, questions: w.questions }))));
 }
 
 // ---------------------------------------------------------------- the challenges and the endorsement
 
-/** Pure: the text the challenge of an answer is the SHA-256 of. */
+/** Pure: the text the challenge of an answer is the SHA-256 of (v2: it binds the request's words). */
 export const answerText = (a: AnswerBody): string =>
+  `agents-multi answer v2\n${
+    canonical({ id: a.id, node: a.node, verdict: a.verdict, answers: a.answers, expires: a.expires, what: a.what })
+  }`;
+
+/** The text of the first format, which no node accepts any more: kept to name it when one arrives. */
+const answerTextV1 = (a: Omit<AnswerBody, "what">): string =>
   `agents-multi answer v1\n${
     canonical({ id: a.id, node: a.node, verdict: a.verdict, answers: a.answers, expires: a.expires })
   }`;
@@ -89,6 +144,17 @@ export async function answerChallenge(a: AnswerBody): Promise<Uint8Array> {
 /** The WebAuthn challenge of a job's acceptance: the SHA-256 of the text the owner's key signs as well. */
 export async function jobChallenge(j: Parameters<typeof signedText>[0]): Promise<Uint8Array> {
   return await sha256(enc.encode(signedText(j)));
+}
+
+/** Pure: the text a decline of a proposed job from the phone signs. */
+export const jobDeclineText = (j: Parameters<typeof signedText>[0]): string =>
+  `agents-multi job decline v1\n${
+    canonical({ id: j.id, node: j.node, kind: j.kind, spec: j.spec, expires: j.expires })
+  }`;
+
+/** The WebAuthn challenge of declining a job. */
+export async function jobDeclineChallenge(j: Parameters<typeof signedText>[0]): Promise<Uint8Array> {
+  return await sha256(enc.encode(jobDeclineText(j)));
 }
 
 /** Pure: what the owner's approval key signs to endorse a passkey. */
@@ -381,6 +447,8 @@ export interface PasskeyCtx {
   /** the owner's public approval key; null when this node has none */
   ownerKey: string | null;
   now: number;
+  /** the credential ids revoked on a desktop (the vault's `passkey-revocations`): refused whatever the service lists */
+  revoked?: ReadonlySet<string>;
 }
 
 /** Why a passkey's assertion over `challenge` does not count, or null when it does: the passkey is known, the
@@ -390,6 +458,7 @@ export async function verifyPasskey(
   challenge: Uint8Array,
   ctx: PasskeyCtx,
 ): Promise<string | null> {
+  if (ctx.revoked?.has(assertion.credential)) return "the passkey was revoked on a desktop";
   if (!ctx.ownerKey) return "this node has no approval key to check the passkey's endorsement";
   const p = ctx.passkeys.find((x) => x.id === assertion.credential);
   if (!p) return "not a passkey of this account";
@@ -404,9 +473,11 @@ export async function answerKey(a: AnswerBody): Promise<string> {
 }
 
 /** Why a node must not apply a phone's answer, or null when the owner's yes holds: it is for this node, a
- *  verdict, not too far ahead nor expired, from an endorsed passkey whose assertion holds, not used before. */
+ *  verdict, not too far ahead nor expired, from an endorsed, unrevoked passkey whose assertion holds over the
+ *  request's words as THIS node has them (`what`, from its own hub, never from the service), not used before. */
 export async function verifyAnswer(
   a: PhoneAnswer,
+  what: string,
   self: string,
   ctx: PasskeyCtx,
   seen: Iterable<string>,
@@ -425,10 +496,31 @@ export async function verifyAnswer(
   if (until > ctx.now + MAX_AHEAD_MS + SLACK_MS) return "it holds longer than ten minutes";
   const asm = cleanAssertion(a.assertion);
   if (!asm) return "the assertion lacks a part";
-  const why = await verifyPasskey(asm, await answerChallenge(a), ctx);
+  const full: AnswerBody = { id: a.id, node: a.node, verdict: a.verdict, answers: a.answers, expires: a.expires, what };
+  if (clientChallenge(asm.clientDataJSON) === b64u(await sha256(enc.encode(answerTextV1(a))))) {
+    return "signed in the old format (v1), which is refused: update the app and answer again";
+  }
+  const why = await verifyPasskey(asm, await answerChallenge(full), ctx);
   if (why) return why;
-  if ([...seen].includes(await answerKey(a))) return "already used";
+  if ([...seen].includes(await answerKey(full))) return "already used";
   return null;
+}
+
+/** Why the phone's decline of a proposed job does not count, or null when it does: the same checks as an
+ *  approval, over the decline's own text, with `expires` stored by the service beside the assertion. The decline
+ *  is read after the fact, so only the time it was made (`at`, the job's last update) frames `expires`. */
+export async function verifyJobDecline(
+  j: Parameters<typeof signedText>[0] & { assertion?: PasskeyAssertion; updated: string },
+  ctx: PasskeyCtx,
+  maxAheadMs = 24 * 3600_000,
+): Promise<string | null> {
+  const asm = cleanAssertion(j.assertion);
+  if (!asm) return "the decline carries no assertion";
+  const until = Date.parse(j.expires ?? ""), at = Date.parse(j.updated);
+  if (!(until > 0) || !(at > 0)) return "no expiry";
+  if (until < at - SLACK_MS) return "the decline had expired when it was made";
+  if (until > at + maxAheadMs + SLACK_MS) return "it holds longer than a day";
+  return await verifyPasskey(asm, await jobDeclineChallenge(j), ctx);
 }
 
 /** Why a job's passkey approval does not count, or null when it does (verifyJob's `viaPasskey`). */

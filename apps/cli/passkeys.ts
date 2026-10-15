@@ -8,9 +8,10 @@ import { fingerprint, type Passkey, signEndorsement, verifyEndorsement } from ".
 import { loadKey } from "../../shared/mcp/lib/vault.ts";
 import { type Service, service } from "./node/service.ts";
 import { getPasskeys } from "./node/waiting.ts";
+import { revokedIds, revokeInVault } from "./node/revocations.ts";
 import { ago } from "./nodes.ts";
 
-export type PasskeyState = "pending" | "endorsed" | "not valid here" | "endorsed (unchecked)";
+export type PasskeyState = "pending" | "endorsed" | "not valid here" | "endorsed (unchecked)" | "revoked";
 
 export interface PasskeyRow {
   id: string;
@@ -22,18 +23,27 @@ export interface PasskeyRow {
 
 /** Pure but for WebCrypto: where a passkey stands as this machine sees it. `ownerKey`: the public approval key
  *  here, null when this machine has no vault (it cannot tell a good endorsement from a forged one). */
-export async function stateOf(p: Passkey, ownerKey: string | null): Promise<PasskeyState> {
+export async function stateOf(
+  p: Passkey,
+  ownerKey: string | null,
+  revoked: ReadonlySet<string> = new Set(),
+): Promise<PasskeyState> {
+  if (revoked.has(p.id)) return "revoked";
   if (!p.endorsement) return "pending";
   if (!ownerKey) return "endorsed (unchecked)";
   return (await verifyEndorsement(p, ownerKey)) ? "endorsed" : "not valid here";
 }
 
-export async function rowsOf(list: Passkey[], ownerKey: string | null): Promise<PasskeyRow[]> {
+export async function rowsOf(
+  list: Passkey[],
+  ownerKey: string | null,
+  revoked: ReadonlySet<string> = new Set(),
+): Promise<PasskeyRow[]> {
   return await Promise.all(list.map(async (p) => ({
     id: p.id,
     name: p.name,
     fingerprint: await fingerprint(p.publicKey),
-    state: await stateOf(p, ownerKey),
+    state: await stateOf(p, ownerKey, revoked),
     created: p.created,
   })));
 }
@@ -83,7 +93,11 @@ export async function passkeysView(): Promise<
   if (typeof s === "string") return { available: false, message: s, canEndorse: false, passkeys: [] };
   const key = await ownerKeyOrNull();
   try {
-    return { available: true, canEndorse: !!key, passkeys: await rowsOf(await getPasskeys(s), key) };
+    return {
+      available: true,
+      canEndorse: !!key,
+      passkeys: await rowsOf(await getPasskeys(s), key, await revokedIds()),
+    };
   } catch (e) {
     return { available: false, message: (e as Error).message, canEndorse: !!key, passkeys: [] };
   }
@@ -109,12 +123,46 @@ export async function endorseOp(id: string, seen: string): Promise<{ ok: boolean
   }
 }
 
+/** Pure: the credential a revoke names — one the service lists (its id, or the start of it), else a whole id
+ *  as it was printed, for a passkey the service no longer lists but a vault should still refuse. */
+export function revokeTarget(list: Passkey[], ref: string): { id: string; name: string; listed: boolean } | string {
+  const p = findPasskey(list, ref);
+  if (typeof p !== "string") return { id: p.id, name: p.name, listed: true };
+  return /^[\w-]{40,}$/.test(ref) && !list.some((x) => x.id.startsWith(ref))
+    ? { id: ref, name: ref.slice(0, 12), listed: false }
+    : p;
+}
+
+/** Revokes a passkey: the revocation goes into the vault first (every machine of the owner has it, and a node
+ *  refuses a revoked passkey whatever the service lists), then the service is told to hide it. The caller has
+ *  had the owner's yes. */
+export async function revoke(s: Service, t: { id: string; listed: boolean }): Promise<void> {
+  await revokeInVault(t.id);
+  if (t.listed) await s.call("DELETE", `/api/passkeys/${encodeURIComponent(t.id)}`);
+}
+
+/** The console's revoke: the page asked the owner first. */
+export async function revokeOp(id: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const s = await service();
+    if (typeof s === "string") return { ok: false, message: s };
+    const t = revokeTarget(await getPasskeys(s), id);
+    if (typeof t === "string") return { ok: false, message: t };
+    await revoke(s, t);
+    return { ok: true, message: t.name };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+}
+
 const USAGE = `agents passkeys                  the phone's passkeys: name, fingerprint, and whether you endorsed them
-agents passkeys endorse <id>     show one, ask yes, sign it here with the approval key and send the endorsement`;
+agents passkeys endorse <id>     show one, ask yes, sign it here with the approval key and send the endorsement
+agents passkeys revoke <id>      ask yes, write the revocation into the vault (every node with it refuses the
+                                 passkey from then on) and have the service drop it`;
 
 export async function passkeysCommand(args: string[]): Promise<number> {
   const [sub, ...rest] = args;
-  if (sub === "--help" || sub === "-h" || (sub && sub !== "list" && sub !== "endorse")) {
+  if (sub === "--help" || sub === "-h" || (sub && sub !== "list" && sub !== "endorse" && sub !== "revoke")) {
     console.log(USAGE);
     return sub === "--help" || sub === "-h" ? 0 : 2;
   }
@@ -125,8 +173,27 @@ export async function passkeysCommand(args: string[]): Promise<number> {
   }
   try {
     const list = await getPasskeys(s);
+    if (sub === "revoke") {
+      const t = revokeTarget(list, rest.find((a) => !a.startsWith("--")) ?? "");
+      if (typeof t === "string") {
+        console.error(`agents passkeys: ${t}`);
+        return 1;
+      }
+      console.log(`passkey ${t.name}\n  id  ${t.id}${t.listed ? "" : "\n  (the service does not list it any more)"}`);
+      console.log("Nothing signed with it will count any more, on any machine that has your vault.");
+      const yes = prompt("Revoke it? Type yes to continue:");
+      if (yes?.trim().toLowerCase() !== "yes") {
+        console.log("not revoked");
+        return 1;
+      }
+      await revoke(s, t);
+      console.log(`${t.name}: revoked, in the vault and on the service`);
+      return 0;
+    }
     if (sub !== "endorse") {
-      console.log(passkeyLines(await rowsOf(list, await ownerKeyOrNull()), Date.now()).join("\n"));
+      console.log(
+        passkeyLines(await rowsOf(list, await ownerKeyOrNull(), await revokedIds()), Date.now()).join("\n"),
+      );
       return 0;
     }
     const p = findPasskey(list, rest.find((a) => !a.startsWith("--")) ?? "");

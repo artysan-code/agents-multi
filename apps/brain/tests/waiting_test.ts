@@ -6,7 +6,13 @@ import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { cleanRequest, Waiting, waitingRoute } from "../waiting.ts";
 import { Fleet, fleetRoute } from "../fleet.ts";
 import { Store } from "../store.ts";
-import { answerChallenge, jobChallenge } from "../../../shared/mcp/lib/webauthn.ts";
+import {
+  answerChallenge,
+  boundWords,
+  jobChallenge,
+  jobDeclineChallenge,
+  wordsHash,
+} from "../../../shared/mcp/lib/webauthn.ts";
 import { Authenticator, SITE } from "../../cli/tests/fixtures/authenticator.ts";
 
 const NOW0 = Date.parse("2026-10-15T20:00:00Z");
@@ -121,7 +127,7 @@ Deno.test("waiting: a registration needs a challenge the service made, once, in 
     (await s.call(null, "POST", "/api/passkeys", { name: "P", credential: reg })).body.error;
   assertMatch(await post(await p.register("never-made")), /unknown or expired/);
   const old = (await s.call(null, "POST", "/api/passkeys/options")).body.challenge;
-  s.tick(6 * 60_000);
+  s.tick(7 * 60_000);
   assertMatch(await post(await p.register(old)), /unknown or expired/);
   const c = (await s.call(null, "POST", "/api/passkeys/options")).body.challenge;
   assertMatch(await post(await p.register(c, { fmt: "packed" })), /none only/);
@@ -141,6 +147,7 @@ Deno.test("waiting: the phone's answer is stored for its node, never decided, an
     node: "srv",
     verdict: "allow" as const,
     expires: new Date(s.now() + 5 * 60_000).toISOString(),
+    what: "words-hash", // the service never looks at it: the node recomputes it from its own hub
     ...x,
   });
   const signed = async (b = body()) => ({
@@ -205,6 +212,7 @@ Deno.test("waiting: a question's answers travel with the verdict, and the same i
     verdict: "allow" as const,
     answers: { "Which?": "A" },
     expires: new Date(s.now() + 60_000).toISOString(),
+    what: "words-hash",
   };
   const r = await s.call(null, "POST", "/api/waiting/c1/r1", {
     ...b,
@@ -249,6 +257,107 @@ Deno.test("jobs: the phone accepts a proposal with an assertion, declines it, an
   const announced = (await s.call("srv", "PUT", "/api/node", { platform: "linux" })).body.jobs;
   assertEquals(announced[0].assertion, assertion);
   // and the phone can decline another
+  // and the phone can decline another, with a passkey's signature (below)
   const other = (await s.call("desk", "POST", "/api/jobs", { kind: "routine", node: "srv", spec })).body.job.id;
-  assertEquals((await s.call(null, "POST", `/api/jobs/${other}`, { op: "decline" }, true)).body.job.status, "declined");
+  const dexp = new Date(s.now() + 5 * 60_000).toISOString();
+  const dasm = await p.assert(
+    await jobDeclineChallenge({ id: other, node: "srv", kind: "routine", spec, expires: dexp }),
+  );
+  const dec = await s.call(null, "POST", `/api/jobs/${other}`, { op: "decline", assertion: dasm, expires: dexp }, true);
+  assertEquals(dec.body.job.status, "declined");
+});
+
+Deno.test("jobs: a decline from the phone is signed, stored with its expiry, and handed to the node to check", async () => {
+  const s = setup();
+  const { p } = await phone(s);
+  const spec = { name: "n", repo: "r", path: "", action: { kind: "agent" } };
+  const mk = async (node = "srv", by = "desk") =>
+    (await s.call(by, "POST", "/api/jobs", { kind: "routine", node, spec })).body.job.id as string;
+  const id = await mk();
+  const expires = new Date(s.now() + 5 * 60_000).toISOString();
+  const assertion = await p.assert(await jobDeclineChallenge({ id, node: "srv", kind: "routine", spec, expires }));
+  const decline = (body: Record<string, unknown>, phone = true, node: string | null = null, job = id) =>
+    s.call(node, "POST", `/api/jobs/${job}`, { op: "decline", ...body }, phone);
+  // the web session cannot decline without the passkey: not bare, not without the expiry, not past a day
+  assertEquals((await decline({})).status, 400);
+  assertMatch((await decline({})).body.error, /passkey's assertion/);
+  assertEquals((await decline({ assertion })).status, 400);
+  assertEquals((await decline({ assertion: {}, expires })).status, 400);
+  assertEquals((await decline({ assertion, expires: new Date(s.now() - 1000).toISOString() })).status, 400);
+  assertEquals((await decline({ assertion, expires: new Date(s.now() + 3 * 86400_000).toISOString() })).status, 400);
+  assertEquals((await s.call("srv", "GET", `/api/jobs/${id}`)).body.job.status, "proposed", "nothing changed");
+  // signed: declined, the assertion and expires kept as given (the service does not check them)
+  const ok = await decline({ assertion, expires, reason: "not now" });
+  assertEquals(ok.status, 200);
+  assertEquals([ok.body.job.status, ok.body.job.reason, ok.body.job.expires], ["declined", "not now", expires]);
+  assertEquals(ok.body.job.assertion, assertion);
+  // the job's node gets it in its announce reply to check; another node does not
+  const announced = (await s.call("srv", "PUT", "/api/node", { platform: "linux" })).body;
+  assertEquals(announced.jobs, []);
+  assertEquals(announced.declined.map((j: { id: string }) => j.id), [id]);
+  assertEquals(announced.declined[0].assertion, assertion);
+  assertEquals((await s.call("other", "PUT", "/api/node", { platform: "linux" })).body.declined, []);
+  // a proposal with nowhere to go yet is checked by the node that raised it
+  const loose = await mk("", "desk");
+  const lexp = new Date(s.now() + 60_000).toISOString();
+  const lasm = await p.assert(await jobDeclineChallenge({ id: loose, node: "", kind: "routine", spec, expires: lexp }));
+  assertEquals((await decline({ assertion: lasm, expires: lexp }, true, null, loose)).status, 200);
+  assertEquals(
+    (await s.call("desk", "PUT", "/api/node", { platform: "linux" })).body.declined.map((j: { id: string }) => j.id),
+    [loose],
+  );
+  // after a day it is no longer handed out
+  s.tick(25 * 3600_000);
+  assertEquals((await s.call("srv", "PUT", "/api/node", { platform: "linux" })).body.declined, []);
+});
+
+Deno.test("jobs: a machine's token declines as before, without a signature, and nothing is handed to check", async () => {
+  const s = setup();
+  const spec = { name: "n", repo: "r", path: "", action: { kind: "agent" } };
+  const id = (await s.call("desk", "POST", "/api/jobs", { kind: "routine", node: "srv", spec })).body.job.id;
+  const r = await s.call("srv", "POST", `/api/jobs/${id}`, { op: "decline", reason: "srv refused it: no clone" });
+  assertEquals([r.status, r.body.job.status, r.body.job.assertion], [200, "declined", undefined]);
+  assertEquals((await s.call("srv", "PUT", "/api/node", { platform: "linux" })).body.declined, []);
+});
+
+Deno.test("waiting: the words reach the phone exactly as the node relayed them, the form it hashes", async () => {
+  const s = setup();
+  const w = boundWords("Which database?".repeat(100), [
+    {
+      question: "Which?",
+      header: "DB",
+      options: [{ label: "A", description: "a" }, { label: "B" }],
+      multiSelect: true,
+    },
+  ]);
+  const relayed = req("c1/r2", { kind: "question", what: w.what, questions: w.questions });
+  await s.call("srv", "PUT", "/api/node/requests", { requests: [relayed] });
+  const got = (await s.call(null, "GET", "/api/waiting")).body.requests[0];
+  assertEquals(got.what, w.what);
+  assertEquals(got.questions, w.questions);
+  assertEquals(await wordsHash(got), await wordsHash(w), "the phone hashes what the node hashes");
+  // a request without questions relays none
+  await s.call("srv", "PUT", "/api/node/requests", { requests: [req("c1/r1")] });
+  const plain = (await s.call(null, "GET", "/api/waiting")).body.requests[0];
+  assertEquals("questions" in plain, false);
+  assertEquals(await wordsHash(plain), await wordsHash(boundWords("Bash: git push")));
+});
+
+Deno.test("waiting: a passkey is asked for as a discoverable credential, ES256, with five minutes to make it", async () => {
+  const s = setup();
+  const first = await phone(s);
+  const o = (await s.call(null, "POST", "/api/passkeys/options")).body;
+  assertEquals(o.authenticatorSelection, {
+    residentKey: "required",
+    requireResidentKey: true,
+    userVerification: "required",
+  });
+  assertEquals(o.timeout, 300000);
+  assertEquals(o.pubKeyCredParams, [{ type: "public-key", alg: -7 }]);
+  assertEquals(o.attestation, "none");
+  assertEquals(
+    o.excludeCredentials,
+    [{ type: "public-key", id: first.p.id }],
+    "an authenticator is not registered twice",
+  );
 });

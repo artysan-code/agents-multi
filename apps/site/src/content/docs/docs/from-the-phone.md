@@ -32,7 +32,8 @@ The first time you open **Waiting**, the app offers to create a passkey on the p
 confirms each answer, and your machines check it themselves. A new passkey is _pending_: it counts only once a desktop
 with your vault has endorsed it. On the desktop run `agents passkeys` (or open _Connections › Passkeys_ in the
 console) and approve it. Until then the buttons stay off and nothing is allowed. Lost the phone? Revoke its passkey in
-**More**.
+**More**, and on a desktop run `agents passkeys revoke <id>` (or _Revoke_ in the console): that writes the revocation
+into your vault, so your machines refuse it even if the service still lists it.
 
 ## Pair a machine
 

@@ -124,6 +124,15 @@ export class Fleet {
     return [...open, ...ended].map(toJob);
   }
 
+  /** The jobs the phone declined with a passkey in the last day that this node must check: its own, or the ones
+   *  it proposed with nowhere to go yet. The service keeps the assertion and decides nothing about it. */
+  declined(name: string): Job[] {
+    const since = new Date(this.now() - JOB_TTL_MS).toISOString();
+    return (this.db.prepare(
+      "select * from jobs where status = 'declined' and assertion is not null and updated >= ? and (node = ? or (node = '' and by = ?)) order by updated",
+    ).all(since, name, name) as unknown as JobRow[]).map(toJob);
+  }
+
   /** A node's announcement; the answer is what has been accepted for it. */
   announce(name: string, a: Announce): Job[] {
     if (!validNodeName(name)) throw new FleetError("not a node name");
@@ -212,7 +221,7 @@ export class Fleet {
 
   /** The owner's answer or a node's step on a job. `accept` stores the signature (and the node it was signed
    *  for, when the proposal had none); `claim` and `report` only from the job's node. */
-  act(id: string, by: string, body: Record<string, unknown>): Job {
+  act(id: string, by: string, body: Record<string, unknown>, phone = false): Job {
     const j = this.get(id);
     if (!j) throw new FleetError("no such job", 404);
     const at = new Date(this.now()).toISOString();
@@ -248,9 +257,28 @@ export class Fleet {
           expires: new Date(until).toISOString(),
         });
       }
-      case "decline":
+      case "decline": {
         if (j.status !== "proposed" && j.status !== "accepted") throw new FleetError(`the job is ${j.status}`, 409);
-        return set({ status: "declined", reason: typeof body.reason === "string" ? body.reason.slice(0, 300) : null });
+        const reason = typeof body.reason === "string" ? body.reason.slice(0, 300) : null;
+        // a machine's or a desktop's decline carries no assertion; the approval's, if the job had one, goes, so
+        // that only a phone's signed decline is ever handed to a node as one
+        if (!phone) return set({ status: "declined", reason, assertion: null });
+        // the phone's decline is signed as its approval is: a stolen web session cannot stop the owner's work
+        // either. The service keeps the assertion and its expiry; the node that owns the job checks them.
+        const asm = cleanAssertion(body.assertion);
+        if (!asm) throw new FleetError("a decline from the phone needs a passkey's assertion");
+        const until = typeof body.expires === "string" ? Date.parse(body.expires) : NaN;
+        if (!(until > this.now() && until <= this.now() + JOB_TTL_MS + 60_000)) {
+          throw new FleetError("expires is within a day");
+        }
+        return set({
+          status: "declined",
+          reason,
+          assertion: JSON.stringify(asm),
+          signature: null,
+          expires: new Date(until).toISOString(),
+        });
+      }
       case "claim":
         if (j.node !== by) throw new FleetError("not this node's job", 403);
         if (j.status !== "accepted") throw new FleetError(`the job is ${j.status}`, 409);
@@ -305,7 +333,8 @@ export async function fleetRoute(
   try {
     if (p === "/api/node" && req.method === "PUT") {
       const me = write();
-      return json({ jobs: fleet.announce(me, cleanAnnounce(await body())), ...alsoToNode(me) });
+      const jobs = fleet.announce(me, cleanAnnounce(await body()));
+      return json({ jobs, declined: fleet.declined(me), ...alsoToNode(me) });
     }
     if (p === "/api/nodes" && req.method === "GET") {
       fleet.sweep();
@@ -322,7 +351,7 @@ export async function fleetRoute(
       // the phone has the account's web session, not a machine's token: it may accept a proposal with a
       // passkey's assertion (which a node checks before it runs anything) or decline one, and nothing else
       if (!node && !(phone && (b.op === "decline" || (b.op === "accept" && b.assertion !== undefined)))) write();
-      return json({ job: fleet.act(one[1], node ?? "", b) });
+      return json({ job: fleet.act(one[1], node ?? "", b, !node) });
     }
   } catch (e) {
     if (e instanceof FleetError) return json({ error: e.message }, e.status);

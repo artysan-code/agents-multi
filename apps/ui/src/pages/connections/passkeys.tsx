@@ -3,7 +3,7 @@
 // phone's and confirms. Shown only when the service has a passkey.
 
 import { useEffect, useState } from "preact/hooks";
-import { endorsePasskey, loadPasskeys, type PasskeyRow, type PasskeysView } from "./api.ts";
+import { endorsePasskey, loadPasskeys, type PasskeyRow, type PasskeysView, revokePasskey } from "./api.ts";
 import { type Key, t } from "../../i18n.ts";
 import { toast, toastErr } from "../../lib/ui.tsx";
 
@@ -18,6 +18,13 @@ export function Passkeys() {
     if (!confirm(t("pk.confirm", { name: p.name, fp: p.fingerprint }))) return;
     const r = await endorsePasskey(p.id, p.fingerprint);
     toast(r.ok ? t("pk.done", { name: p.name }) : r.message ?? "", !r.ok);
+    await load().catch(toastErr);
+  };
+
+  const revoke = async (p: PasskeyRow) => {
+    if (!confirm(t("pk.revoke.confirm", { name: p.name, fp: p.fingerprint }))) return;
+    const r = await revokePasskey(p.id);
+    toast(r.ok ? t("pk.revoked", { name: p.name }) : r.message ?? "", !r.ok);
     await load().catch(toastErr);
   };
 
@@ -37,6 +44,9 @@ export function Passkeys() {
             <span class="dim">{t(`pk.state.${p.state}` as Key)}</span>
             {p.state === "pending" && view.canEndorse && (
               <button type="button" class="btn sm" onClick={() => void endorse(p)}>{t("pk.endorse")}</button>
+            )}
+            {p.state !== "revoked" && view.canEndorse && (
+              <button type="button" class="btn ghost sm" onClick={() => void revoke(p)}>{t("pk.revoke")}</button>
             )}
           </div>
         ))}

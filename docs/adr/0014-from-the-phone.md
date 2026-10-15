@@ -238,11 +238,12 @@ What the building changed in the contract, and what it left open.
 - **Open**:
   - no cancel for a turn: «Stop waiting» on the phone stops watching, the turn stays queued; a turn pinned to an
     offline machine waits for it;
-  - declining a proposed job from the phone is not signed (the contract signs a deny of a request, and is silent on
-    a job's decline): a stolen session can decline work, not start it;
-  - the answer's challenge binds the request's id, not its text: a hostile service could show the phone different
-    words for the same id; binding a hash of `what` is the next revision of the signed text;
-  - revoking a passkey is the service withholding it; the nodes keep no revocation list of their own.
+  - ~~declining a proposed job from the phone is not signed~~, ~~the answer's challenge binds the request's id, not
+    its text~~ and ~~revoking a passkey is the service withholding it~~: closed by the second round below («The yes,
+    tightened»). What stays open of them: a node without the vault (pinned by `approvalKey` alone) cannot read the
+    revocation list, so for it a revoked passkey is only withheld by the service; a phone's decline is checked by the
+    node the job is for (or the one that proposed it, while it has none), after the fact, and a decline that does not
+    hold is answered by proposing the work again, not by undoing it.
 
 ## The API, second round (2026-10-16)
 
@@ -291,3 +292,19 @@ The owner's first use from the phone, and the points left open above.
 - **Passkeys that password managers save**: creation asks for a discoverable credential (`residentKey: "required"`,
   `requireResidentKey: true`), gives the person 5 minutes, and the app shows the browser's exact error (its name and
   message) when it fails.
+
+### As built (the yes, tightened; 2026-10-16)
+
+- `what` is the hash of the words **as the node relays them**: the node bounds them (`boundWords`: `what` to 1000
+  characters, at most 4 questions, 8 options, known fields) before it sends them, the service keeps them as they
+  came (bounding again changes nothing), and the phone hashes what it shows. The service's old rewording is gone.
+- The answer the service hands a node carries no `what`; the node adds its own. An answer whose request the hub no
+  longer waits on is refused («nothing waits on that on this machine any more») and not remembered. The replay key
+  ignores `what` (the node has it only while the request waits). A v1 answer is refused and named as such.
+- A phone's decline is stored with its assertion and `expires` (within a day) and handed back in the announce's
+  reply (`declined`) for 24 hours to the node the job is for, or the one that raised it while it has none; that node
+  checks it once, over `agents-multi job decline v1\n` and the job's canonical text, and when it does not hold it
+  tells the owner and proposes the work again. A decline by a machine's token drops the approval's assertion.
+- Revocations are vault entries: service `passkey-revocations`, account the credential's id, value the date. A node
+  refuses a revoked passkey for an answer, a job's approval and a decline alike.
+- The challenge of a passkey's creation now lives six minutes, a little over the five the browser is given.

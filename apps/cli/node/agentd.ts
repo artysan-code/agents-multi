@@ -19,12 +19,19 @@ import {
   saveRoutine,
 } from "../../../shared/mcp/lib/routines.ts";
 import { parseAccountId } from "../../../shared/mcp/lib/limitrules.ts";
-import { type Passkey, siteOf, verifyJobAssertion } from "../../../shared/mcp/lib/webauthn.ts";
+import {
+  type Passkey,
+  type PasskeyCtx,
+  siteOf,
+  verifyJobAssertion,
+  verifyJobDecline,
+} from "../../../shared/mcp/lib/webauthn.ts";
 import { HOME } from "../lib/paths.ts";
 import { approvalKey, nodeFacts, nodeName } from "./facts.ts";
 import { headlessProbe } from "./probe.ts";
 import { actOn, announce, newJob, type Service, service } from "./service.ts";
 import { getAnswers, getPasskeys, handleAnswers, relayRequests } from "./waiting.ts";
+import { revokedIds } from "./revocations.ts";
 
 export const TICK_MS = 30_000;
 /** how often what waits on this machine is looked at between ticks (ADR 0014): a change is told at once */
@@ -35,6 +42,8 @@ const PROBE_MS = 3600_000;
  *  never taken twice), and for each run it follows, its job on the service and its last checkpoint. */
 export interface NodeState {
   seen: string[];
+  /** the phone's declines already checked (a job id each): a bad one is answered once */
+  declines?: string[];
   runs: Record<string, { job: string; mark: Mark; done?: boolean; error?: string }>;
 }
 
@@ -42,7 +51,7 @@ export const nodeStateFile = (runs = runsDir()) => `${runs}/node/state.json`;
 
 export async function readNodeState(file = nodeStateFile()): Promise<NodeState> {
   const s = await Deno.readTextFile(file).then(JSON.parse).catch(() => null) as Partial<NodeState> | null;
-  return { seen: s?.seen ?? [], runs: s?.runs ?? {} };
+  return { seen: s?.seen ?? [], declines: s?.declines ?? [], runs: s?.runs ?? {} };
 }
 
 async function writeNodeState(st: NodeState, file = nodeStateFile()) {
@@ -51,7 +60,11 @@ async function writeNodeState(st: NodeState, file = nodeStateFile()) {
   const runs = Object.entries(st.runs);
   const keep = Object.fromEntries([...runs.filter(([, r]) => !r.done), ...runs.filter(([, r]) => r.done).slice(-100)]);
   const tmp = `${file}.tmp`;
-  await Deno.writeTextFile(tmp, JSON.stringify({ seen: st.seen.slice(-500), runs: keep }, null, 2) + "\n");
+  await Deno.writeTextFile(
+    tmp,
+    JSON.stringify({ seen: st.seen.slice(-500), declines: (st.declines ?? []).slice(-500), runs: keep }, null, 2) +
+      "\n",
+  );
   await Deno.rename(tmp, file);
 }
 
@@ -130,26 +143,33 @@ export async function nodeTick(
   svc: Service,
   sandbox: boolean | null,
   o: Pick<Agentd, "log" | "notify">,
+  /** where the passkeys revoked on a desktop are read from: the vault (`revokedIds`) unless a test says otherwise */
+  revokedFrom: () => Promise<ReadonlySet<string>> = revokedIds,
 ): Promise<void> {
   const self = nodeName(cfg);
   const st = await readNodeState();
   const facts = await nodeFacts(cfg, sandbox);
-  const { jobs, answers } = await announce(svc, facts);
+  const { jobs, answers, declined } = await announce(svc, facts);
   const key = await approvalKey(cfg);
   // what waits here goes to the phone, and what the phone answered is checked here (waiting.ts)
   await handleAnswers(cfg, svc, answers ?? [], o).catch((e) => o.log(`node: answers: ${(e as Error).message}`));
   await relayRequests(svc, true).catch((e) => o.log(`node: waiting: ${(e as Error).message}`));
   // the account's passkeys, read once and only for a job the phone approved
-  let passkeys: Passkey[] | null = null, unreadable = false;
+  let passkeys: Passkey[] | null = null, unreadable = false, revoked: ReadonlySet<string> | null = null;
+  const passkeyCtx = async (): Promise<PasskeyCtx> => {
+    passkeys ??= await getPasskeys(svc);
+    revoked ??= await revokedFrom();
+    return { site: siteOf(svc.url), passkeys, ownerKey: key, now: Date.now(), revoked };
+  };
   const viaPasskey = async (j: Job) => {
     try {
-      passkeys ??= await getPasskeys(svc);
+      return await verifyJobAssertion(j, await passkeyCtx());
     } catch {
       unreadable = true; // ours to retry next tick, not a reason to refuse the job
       return "the account's passkeys could not be read";
     }
-    return await verifyJobAssertion(j, { site: siteOf(svc.url), passkeys, ownerKey: key, now: Date.now() });
   };
+  await checkDeclines(svc, self, declined ?? [], st, passkeyCtx, o);
   let running = facts.running;
   for (const j of jobs) {
     if (st.seen.includes(j.id)) continue;
@@ -182,6 +202,42 @@ export async function nodeTick(
   }
   await followRuns(svc, st, o.log);
   await writeNodeState(st);
+}
+
+/** The phone's declines of the jobs this machine proposed or was named for are signed like its approvals: this
+ *  machine checks each once. One that does not hold is refused: the owner is told and the job proposed again,
+ *  as the service's word alone declined it. */
+async function checkDeclines(
+  svc: Service,
+  self: string,
+  declined: Job[],
+  st: NodeState,
+  ctx: () => Promise<PasskeyCtx>,
+  o: Pick<Agentd, "log" | "notify">,
+) {
+  st.declines ??= [];
+  for (const j of declined) {
+    if (st.declines.includes(j.id) || (j.node ? j.node !== self : j.by !== self)) continue;
+    let why: string | null;
+    try {
+      const c = await ctx();
+      why = c.ownerKey
+        ? await verifyJobDecline(j, c)
+        : "this node has no approval key to check the passkey's endorsement";
+    } catch {
+      continue; // the passkeys could not be read: ours to retry next tick
+    }
+    st.declines.push(j.id);
+    if (!why) continue;
+    o.log(`node: the decline of job ${j.id} refused: ${why}`);
+    o.notify(`A decline was refused on ${self}`, `${j.spec.name}: ${why}; proposed again`);
+    await newJob(svc, {
+      kind: j.kind,
+      node: j.node,
+      spec: j.spec,
+      reason: `proposed again: the decline of ${j.id} did not hold (${why})`,
+    }).catch((e) => o.log(`node: job ${j.id}: ${(e as Error).message}`));
+  }
 }
 
 /** The runs fired here: each gets its job on the service (the job it came from, or a `local` one), its branch

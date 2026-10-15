@@ -41,7 +41,7 @@ import { closePlan, closeSessions, parsePurpose, reopen } from "./close-claude.t
 import { launchList, launchOne } from "./picker.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
-import { endorseOp, passkeysView } from "../passkeys.ts";
+import { endorseOp, passkeysView, revokeOp } from "../passkeys.ts";
 import { UI_DIST } from "../ui.ts";
 import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
 import { answer, type Auth, gate, newToken, publishToken, Tickets, tokenPath } from "./token.ts";
@@ -179,6 +179,14 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
       post: async ({ req }) => {
         const b = await body(req) as { id?: string; fingerprint?: string };
         const r = await endorseOp(String(b.id ?? ""), String(b.fingerprint ?? ""));
+        if (r.ok) broadcast("state");
+        return json(r);
+      },
+    },
+    "/api/passkeys/revoke": {
+      post: async ({ req }) => {
+        const b = await body(req) as { id?: string };
+        const r = await revokeOp(String(b.id ?? ""));
         if (r.ok) broadcast("state");
         return json(r);
       },

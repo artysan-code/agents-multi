@@ -6,13 +6,17 @@ import {
   type AnswerBody,
   answerChallenge,
   answerKey,
+  answerText as answerTextOf,
   b64u,
+  boundWords,
   cborAt,
   cleanAssertion,
   clientChallenge,
   endorsementText,
   fingerprint,
   jobChallenge,
+  jobDeclineChallenge,
+  jobDeclineText,
   parseRegistration,
   type Passkey,
   type PasskeyCtx,
@@ -25,6 +29,8 @@ import {
   verifyAssertion,
   verifyEndorsement,
   verifyJobAssertion,
+  verifyJobDecline,
+  wordsHash,
 } from "../../../shared/mcp/lib/webauthn.ts";
 import { Authenticator, cbytes, cint, coseKey, ctext, der, head, SITE } from "./fixtures/authenticator.ts";
 import { approvalKeys, type Job, signedText, verifyJob } from "../../../shared/mcp/lib/nodes.ts";
@@ -52,11 +58,15 @@ async function world() {
   return { owner, phone, passkey, ctx };
 }
 
+/** the hash of the words of the request these answers are for: what the phone showed, what the node has */
+const WHAT = await wordsHash(boundWords("Bash: git push origin dev"));
+
 const body = (o: Partial<AnswerBody> = {}): AnswerBody => ({
   id: "child-1/req-7",
   node: "srv",
   verdict: "allow",
   expires: new Date(NOW + 5 * 60_000).toISOString(),
+  what: WHAT,
   ...o,
 });
 
@@ -65,7 +75,8 @@ async function answered(
   b = body(),
   o: Parameters<Authenticator["assert"]>[1] = {},
 ) {
-  return { ...b, assertion: await w.phone.assert(await answerChallenge(b), o) } as PhoneAnswer;
+  const { what: _what, ...rest } = b; // the service hands a node no `what`: the node has its own
+  return { ...rest, assertion: await w.phone.assert(await answerChallenge(b), o) } as PhoneAnswer;
 }
 
 // ---------------------------------------------------------------- the pieces
@@ -188,17 +199,17 @@ Deno.test("an endorsement holds only with the owner's key, for that passkey and 
 
 Deno.test("an endorsed passkey's answer holds, with a DER signature or a raw one", async () => {
   const w = await world();
-  assertEquals(await verifyAnswer(await answered(w), "srv", w.ctx, []), null);
-  assertEquals(await verifyAnswer(await answered(w, body(), { derSig: false }), "srv", w.ctx, []), null);
+  assertEquals(await verifyAnswer(await answered(w), WHAT, "srv", w.ctx, []), null);
+  assertEquals(await verifyAnswer(await answered(w, body(), { derSig: false }), WHAT, "srv", w.ctx, []), null);
   const withAnswers = body({ answers: { "Which?": "A" }, verdict: "allow" });
-  assertEquals(await verifyAnswer(await answered(w, withAnswers), "srv", w.ctx, []), null);
+  assertEquals(await verifyAnswer(await answered(w, withAnswers), WHAT, "srv", w.ctx, []), null);
 });
 
 Deno.test("the challenge is bound to every field of the answer", async () => {
   const w = await world();
   const good = await answered(w);
   const t = async (patch: Partial<PhoneAnswer>) =>
-    await verifyAnswer({ ...good, ...patch }, patch.node ?? "srv", w.ctx, []);
+    await verifyAnswer({ ...good, ...patch }, WHAT, patch.node ?? "srv", w.ctx, []);
   assertMatch((await t({ verdict: "deny" }))!, /challenge/);
   assertMatch((await t({ id: "child-1/req-8" }))!, /challenge/);
   assertMatch((await t({ node: "other" }))!, /challenge/);
@@ -209,46 +220,52 @@ Deno.test("the challenge is bound to every field of the answer", async () => {
 Deno.test("an answer is refused for each way it can be wrong", async () => {
   const w = await world();
   const good = await answered(w);
-  assertEquals(await verifyAnswer(good, "desk", w.ctx, []), "it is for srv, not desk");
+  assertEquals(await verifyAnswer(good, WHAT, "desk", w.ctx, []), "it is for srv, not desk");
   assertEquals(
-    await verifyAnswer({ ...good, verdict: "maybe" as never }, "srv", w.ctx, []),
+    await verifyAnswer({ ...good, verdict: "maybe" as never }, WHAT, "srv", w.ctx, []),
     "the verdict is allow, session or deny",
   );
-  assertMatch((await verifyAnswer({ ...good, answers: { q: 1 } as never }, "srv", w.ctx, []))!, /text by question/);
-  assertMatch((await verifyAnswer({ ...good, expires: "soon" }, "srv", w.ctx, []))!, /no expiry/);
-  assertEquals(await verifyAnswer(good, "srv", { ...w.ctx, now: NOW + 6 * 60_000 }, []), "its approval expired");
+  assertMatch(
+    (await verifyAnswer({ ...good, answers: { q: 1 } as never }, WHAT, "srv", w.ctx, []))!,
+    /text by question/,
+  );
+  assertMatch((await verifyAnswer({ ...good, expires: "soon" }, WHAT, "srv", w.ctx, []))!, /no expiry/);
+  assertEquals(await verifyAnswer(good, WHAT, "srv", { ...w.ctx, now: NOW + 6 * 60_000 }, []), "its approval expired");
   const far = await answered(w, body({ expires: new Date(NOW + 30 * 60_000).toISOString() }));
-  assertEquals(await verifyAnswer(far, "srv", w.ctx, []), "it holds longer than ten minutes");
+  assertEquals(await verifyAnswer(far, WHAT, "srv", w.ctx, []), "it holds longer than ten minutes");
   assertEquals(
-    await verifyAnswer({ ...good, assertion: { ...good.assertion, signature: "" } }, "srv", w.ctx, []),
+    await verifyAnswer({ ...good, assertion: { ...good.assertion, signature: "" } }, WHAT, "srv", w.ctx, []),
     "the assertion lacks a part",
   );
-  assertEquals(await verifyAnswer(good, "srv", w.ctx, [await answerKey(good)]), "already used");
+  assertEquals(
+    await verifyAnswer(good, WHAT, "srv", w.ctx, [await answerKey({ ...good, what: WHAT })]),
+    "already used",
+  );
 });
 
 Deno.test("an answer needs a known passkey the owner endorsed, and a node that can check it", async () => {
   const w = await world();
   const good = await answered(w);
-  assertEquals(await verifyAnswer(good, "srv", { ...w.ctx, passkeys: [] }, []), "not a passkey of this account");
+  assertEquals(await verifyAnswer(good, WHAT, "srv", { ...w.ctx, passkeys: [] }, []), "not a passkey of this account");
   assertEquals(
-    await verifyAnswer(good, "srv", { ...w.ctx, passkeys: [{ ...w.passkey, endorsement: null }] }, []),
+    await verifyAnswer(good, WHAT, "srv", { ...w.ctx, passkeys: [{ ...w.passkey, endorsement: null }] }, []),
     "the passkey has not been endorsed on a desktop",
   );
   // the service (or a thief with its token) endorses with a key of its own
   const thief = await approvalKeys(crypto.getRandomValues(new Uint8Array(32)));
   const forged = { ...w.passkey, endorsement: await signEndorsement(w.passkey.id, w.passkey.publicKey, thief.sign) };
   assertEquals(
-    await verifyAnswer(good, "srv", { ...w.ctx, passkeys: [forged] }, []),
+    await verifyAnswer(good, WHAT, "srv", { ...w.ctx, passkeys: [forged] }, []),
     "the passkey's endorsement is not the owner's",
   );
-  assertMatch((await verifyAnswer(good, "srv", { ...w.ctx, ownerKey: null }, []))!, /no approval key/);
+  assertMatch((await verifyAnswer(good, WHAT, "srv", { ...w.ctx, ownerKey: null }, []))!, /no approval key/);
   // another passkey's signature on the same challenge, claiming the endorsed passkey's id
   const mallory = await Authenticator.make();
   const swapped = {
     ...good,
     assertion: { ...(await mallory.assert(await answerChallenge(body()))), credential: w.phone.id },
   };
-  assertEquals(await verifyAnswer(swapped, "srv", w.ctx, []), "the signature is not the passkey's");
+  assertEquals(await verifyAnswer(swapped, WHAT, "srv", w.ctx, []), "the signature is not the passkey's");
 });
 
 Deno.test("the assertion's own checks: type, origin, frame, rpIdHash, presence, verification, signature", async () => {
@@ -339,4 +356,145 @@ Deno.test("a job's signature still counts, and wins when both are there", async 
     await verifyJob({ ...j, signature: j.signature.slice(0, -2) + "AA" }, w.owner.public, "srv", NOW, []),
     "the signature is not the owner's",
   );
+});
+
+// ---------------------------------------------------------------- the tighter yes (ADR 0014, second round)
+
+Deno.test("the challenge of an answer is v2 and binds the request's words", async () => {
+  const b = body();
+  assert(answerTextOf(b).startsWith("agents-multi answer v2\n"));
+  assertEquals(
+    answerTextOf(b),
+    `agents-multi answer v2\n{"expires":"${b.expires}","id":"child-1/req-7","node":"srv","verdict":"allow","what":"${WHAT}"}`,
+  );
+  assertEquals(b64u(await answerChallenge(b)), b64u(await sha(answerTextOf(b))));
+});
+
+Deno.test("a service that showed the phone other words gets a signature that fails", async () => {
+  const w = await world();
+  // the node's hub waits on this; the phone was shown something else under the same id
+  const real = await wordsHash(boundWords("Bash: git push origin dev"));
+  const shown = await wordsHash(boundWords("Bash: git status"));
+  assert(real !== shown);
+  const signedOnOtherWords = await answered(w, body({ what: shown }));
+  assertMatch((await verifyAnswer(signedOnOtherWords, real, "srv", w.ctx, []))!, /challenge/);
+  assertEquals(
+    await verifyAnswer(signedOnOtherWords, shown, "srv", w.ctx, []),
+    null,
+    "the same answer holds for the words it was signed on",
+  );
+  // the questions count as words as well, option by option
+  const q = (label: string) => boundWords("Which?", [{ question: "Which?", options: [{ label }, { label: "B" }] }]);
+  assert((await wordsHash(q("A"))) !== (await wordsHash(q("C"))));
+  assert((await wordsHash(boundWords("Which?"))) !== (await wordsHash(q("A"))));
+  const withQuestions = await answered(w, body({ what: await wordsHash(q("A")) }));
+  assertEquals(await verifyAnswer(withQuestions, await wordsHash(q("A")), "srv", w.ctx, []), null);
+  assertMatch((await verifyAnswer(withQuestions, await wordsHash(q("C")), "srv", w.ctx, []))!, /challenge/);
+});
+
+Deno.test("the words are bounded once and hashed the same by whoever holds them", async () => {
+  const long = boundWords("x".repeat(5000), [
+    {
+      question: "q".repeat(900),
+      header: "h".repeat(90),
+      options: Array.from({ length: 12 }, (_, i) => ({ label: `o${i}`, extra: 1 })),
+      extra: 1,
+    },
+    ...Array.from({ length: 6 }, () => ({ question: "more", options: [] })),
+  ]);
+  assertEquals(long.what.length, 1000);
+  assertEquals(long.questions!.length, 4);
+  assertEquals(long.questions![0].question.length, 500);
+  assertEquals(long.questions![0].header!.length, 60);
+  assertEquals(long.questions![0].options.length, 8);
+  assertEquals(boundWords(long.what, long.questions), long, "bounding what is bounded changes nothing");
+  // the node relays JSON; the service stores it; the phone parses it: the hash survives all of it
+  const trip = JSON.parse(JSON.stringify(long));
+  assertEquals(await wordsHash(trip), await wordsHash(long));
+  assertEquals(await wordsHash({ what: "a" }), await wordsHash({ what: "a", questions: undefined }));
+  assertEquals(boundWords(7 as never), { what: "" });
+});
+
+Deno.test("an answer in the first format (v1) is refused, named as such", async () => {
+  const w = await world();
+  const b = body();
+  const v1 = `agents-multi answer v1\n{"expires":"${b.expires}","id":"${b.id}","node":"srv","verdict":"allow"}`;
+  const { what: _w, ...rest } = b;
+  const old = { ...rest, assertion: await w.phone.assert(await sha(v1)) } as PhoneAnswer;
+  assertMatch((await verifyAnswer(old, WHAT, "srv", w.ctx, []))!, /old format \(v1\)/);
+});
+
+Deno.test("a passkey revoked on a desktop is refused whatever the service lists", async () => {
+  const w = await world();
+  const good = await answered(w);
+  assertEquals(await verifyAnswer(good, WHAT, "srv", { ...w.ctx, revoked: new Set(["another"]) }, []), null);
+  assertEquals(
+    await verifyAnswer(good, WHAT, "srv", { ...w.ctx, revoked: new Set([w.passkey.id]) }, []),
+    "the passkey was revoked on a desktop",
+  );
+  // a job it approved, and a decline it signed, go the same way
+  const j = job();
+  j.assertion = await w.phone.assert(await jobChallenge(j));
+  assertEquals(
+    await verifyJobAssertion(j, { ...w.ctx, revoked: new Set([w.passkey.id]) }),
+    "the passkey was revoked on a desktop",
+  );
+});
+
+// ---------------------------------------------------------------- declining a job from the phone
+
+const declined = async (w: Awaited<ReturnType<typeof world>>, o: Partial<Job> = {}, sign: Partial<Job> = {}) => {
+  const j = job({ status: "declined", node: "srv", updated: new Date(NOW).toISOString(), ...o });
+  const signed = { ...j, ...sign };
+  j.assertion = await w.phone.assert(await jobDeclineChallenge(signed));
+  return j as Job & { updated: string };
+};
+
+Deno.test("a decline from the phone is signed over its own text", async () => {
+  const w = await world();
+  assert(jobDeclineText(job()).startsWith("agents-multi job decline v1\n"));
+  assert(jobDeclineText(job()) !== signedText(job()), "not the text of an approval");
+  const j = await declined(w);
+  assertEquals(await verifyJobDecline(j, w.ctx), null);
+  // every field of the job is in it
+  assertMatch((await verifyJobDecline({ ...j, spec: { ...j.spec, name: "other" } }, w.ctx))!, /challenge/);
+  assertMatch((await verifyJobDecline({ ...j, node: "desk" }, w.ctx))!, /challenge/);
+  assertMatch((await verifyJobDecline({ ...j, id: "j-2" }, w.ctx))!, /challenge/);
+  assertMatch((await verifyJobDecline({ ...j, expires: new Date(NOW + 60_000).toISOString() }, w.ctx))!, /challenge/);
+});
+
+Deno.test("an approval cannot be passed off as a decline, nor a decline as an approval", async () => {
+  const w = await world();
+  const j = job({ status: "declined", updated: new Date(NOW).toISOString() });
+  j.assertion = await w.phone.assert(await jobChallenge(j)); // the phone said yes to this job
+  assertMatch((await verifyJobDecline(j as never, w.ctx))!, /challenge/);
+  const d = await declined(w);
+  assertMatch((await verifyJobAssertion(d, w.ctx))!, /challenge/);
+});
+
+Deno.test("a decline needs a passkey the owner endorsed and does not wait on the clock of the node", async () => {
+  const w = await world();
+  const j = await declined(w);
+  assertEquals(await verifyJobDecline({ ...j, assertion: undefined }, w.ctx), "the decline carries no assertion");
+  assertEquals(await verifyJobDecline({ ...j, expires: undefined }, w.ctx), "no expiry");
+  assertEquals(
+    await verifyJobDecline(j, { ...w.ctx, passkeys: [{ ...w.passkey, endorsement: null }] }),
+    "the passkey has not been endorsed on a desktop",
+  );
+  assertEquals(await verifyJobDecline(j, { ...w.ctx, passkeys: [] }), "not a passkey of this account");
+  assertMatch((await verifyJobDecline(j, { ...w.ctx, ownerKey: null }))!, /no approval key/);
+  // read a day later by a node that was off: it still holds
+  assertEquals(await verifyJobDecline(j, { ...w.ctx, now: NOW + 20 * 3600_000 }), null);
+  // but it was never valid if it had run out when it was made, or reached for more than a day
+  const past = await declined(w, { expires: new Date(NOW - 10 * 60_000).toISOString() });
+  assertEquals(await verifyJobDecline(past, w.ctx), "the decline had expired when it was made");
+  const far = await declined(w, { expires: new Date(NOW + 3 * 24 * 3600_000).toISOString() });
+  assertEquals(await verifyJobDecline(far, w.ctx), "it holds longer than a day");
+  // someone else's key signing under the passkey's id
+  const mallory = await Authenticator.make();
+  const swapped = {
+    ...j,
+    assertion: { ...(await mallory.assert(await jobDeclineChallenge(j))), credential: w.phone.id },
+  };
+  assertEquals(await verifyJobDecline(swapped, w.ctx), "the signature is not the passkey's");
 });

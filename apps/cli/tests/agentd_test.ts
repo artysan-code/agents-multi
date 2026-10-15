@@ -10,7 +10,7 @@ import type { Service } from "../node/service.ts";
 import { Fleet, fleetRoute } from "../../brain/fleet.ts";
 import { Waiting, waitingRoute } from "../../brain/waiting.ts";
 import { Authenticator, SITE } from "./fixtures/authenticator.ts";
-import { jobChallenge, signEndorsement } from "../../../shared/mcp/lib/webauthn.ts";
+import { jobChallenge, jobDeclineChallenge, signEndorsement } from "../../../shared/mcp/lib/webauthn.ts";
 import { Store } from "../../brain/store.ts";
 import { approvalKeys, type Job, type JobSpec, normalRemote, signJob } from "../../../shared/mcp/lib/nodes.ts";
 import { cleanNodeConfig } from "../../../shared/mcp/lib/headless.ts";
@@ -222,12 +222,45 @@ Deno.test("agentd: a tick takes the owner's job, refuses a forged one, and follo
       const assertion = await ph.assert(await jobChallenge({ id: p.id, node: "srv", kind: "routine", spec, expires }));
       return fleet.act(p.id, "", { op: "accept", assertion, expires });
     };
+    const none = () => Promise.resolve(new Set<string>()); // the test never opens the owner's vault
     const viaGood = await byPhone(await makePasskey(true));
     const viaBad = await byPhone(await makePasskey(false));
-    await nodeTick(cfg, as("srv"), null, o);
+    await nodeTick(cfg, as("srv"), null, o, none);
     assertEquals(fleet.get(viaGood.id)!.status, "running", "the phone's yes, endorsed, starts the job");
     assertEquals(fleet.get(viaBad.id)!.status, "declined", "an unendorsed passkey's does not");
     assertStringIncludes(fleet.get(viaBad.id)!.reason!, "has not been endorsed");
+
+    // a passkey revoked in the vault no longer approves, though the service lists it endorsed
+    const revokedPhone = await makePasskey(true);
+    const viaRevoked = await byPhone(revokedPhone);
+    await nodeTick(cfg, as("srv"), null, o, () => Promise.resolve(new Set([revokedPhone.id])));
+    assertEquals(fleet.get(viaRevoked.id)!.status, "declined");
+    assertStringIncludes(fleet.get(viaRevoked.id)!.reason!, "was revoked on a desktop");
+
+    // the phone's decline of a proposal is checked here: a signed one stands, one without the owner's passkey is
+    // refused and the work is proposed again
+    const goodPhone = await makePasskey(true), strayPhone = await makePasskey(false);
+    const decline = async (ph: Authenticator) => {
+      const p = fleet.create("desk", { kind: "routine", node: "srv", spec });
+      const expires = new Date(Date.now() + 300_000).toISOString();
+      const assertion = await ph.assert(
+        await jobDeclineChallenge({ id: p.id, node: "srv", kind: "routine", spec, expires }),
+      );
+      return fleet.act(p.id, "", { op: "decline", assertion, expires }, true);
+    };
+    const real = await decline(goodPhone), fake = await decline(strayPhone);
+    const before = fleet.jobs().filter((j) => j.status === "proposed").length;
+    const toldBefore = told.length;
+    await nodeTick(cfg, as("srv"), null, o, none);
+    assertEquals(fleet.get(real.id)!.status, "declined");
+    const again = fleet.jobs().filter((j) => j.status === "proposed");
+    assertEquals(again.length, before + 1, "only the decline that did not hold is proposed again");
+    assertEquals([again[0].node, again[0].spec.name, again[0].by], ["srv", "nightly", "srv"]);
+    assertStringIncludes(again[0].reason!, `the decline of ${fake.id} did not hold`);
+    assertEquals(told.length, toldBefore + 1, "the owner is told of it");
+    await nodeTick(cfg, as("srv"), null, o, none);
+    assertEquals(fleet.jobs().filter((j) => j.status === "proposed").length, before + 1, "checked once");
+    assert((await readNodeState()).declines!.includes(fake.id));
   } finally {
     for (const [k, v] of Object.entries(saved)) v === undefined ? Deno.env.delete(k) : Deno.env.set(k, v);
     await Deno.remove(tmp, { recursive: true });

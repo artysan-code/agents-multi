@@ -9,14 +9,17 @@ import { answer as hubAnswer, type Child, listChildren, runsDir } from "../../..
 import type { NodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import {
   answerKey,
+  boundWords,
   type Passkey,
   type PasskeyCtx,
   type PhoneAnswer,
   siteOf,
   type Verdict,
   verifyAnswer,
+  wordsHash,
 } from "../../../shared/mcp/lib/webauthn.ts";
 import { approvalKey, nodeName } from "./facts.ts";
+import { revokedIds } from "./revocations.ts";
 import type { Service } from "./service.ts";
 
 /** What the service is told about a pending request (ADR 0014): `id` is `<child>/<request>`. */
@@ -34,17 +37,30 @@ export interface Relayed {
 /** Pure: the requests and questions the children of this machine wait on, as the service is told. */
 export function requestsOf(children: Child[]): Relayed[] {
   return children.filter((c) => c.state.phase !== "ended").flatMap((c) =>
-    c.state.pending.map((p): Relayed => ({
-      id: `${c.meta.id}/${p.request}`,
-      child: c.meta.id,
-      request: p.request,
-      profile: c.meta.profile,
-      project: c.meta.project ?? c.meta.dir,
-      kind: p.kind,
-      what: p.what,
-      ...(p.questions ? { questions: p.questions } : {}),
-    }))
+    c.state.pending.map((p): Relayed => {
+      // the words go out bounded (boundWords), the form the phone hashes and this node hashes again to check a yes
+      const w = boundWords(p.what, p.questions);
+      return {
+        id: `${c.meta.id}/${p.request}`,
+        child: c.meta.id,
+        request: p.request,
+        profile: c.meta.profile,
+        project: c.meta.project ?? c.meta.dir,
+        kind: p.kind,
+        what: w.what,
+        ...(w.questions ? { questions: w.questions } : {}),
+      };
+    })
   );
+}
+
+/** Pure but for WebCrypto: the `what` of an answer for a request, from this hub's own copy of it — never from
+ *  what the service sends back. Null when nothing of that child waits on that request. */
+export async function wordsOf(children: Child[], child: string, request: string): Promise<string | null> {
+  const p = children.find((c) => c.meta.id === child && c.state.phase !== "ended")?.state.pending.find((x) =>
+    x.request === request
+  );
+  return p ? await wordsHash(boundWords(p.what, p.questions)) : null;
 }
 
 /** Pure: the child and the request an id names, or null. */
@@ -121,6 +137,10 @@ export interface AnswerDeps {
   now: () => number;
   /** the account's passkeys, read once and only when an answer needs them */
   passkeys: () => Promise<Passkey[]>;
+  /** the credential ids revoked on a desktop (the vault's `passkey-revocations`); empty on a node with no vault */
+  revoked: () => Promise<ReadonlySet<string>>;
+  /** the hash of the words of what this hub waits on (`wordsOf`); null when it waits on nothing of the sort */
+  words: (child: string, request: string) => Promise<string | null>;
   /** the hub's answer; throws when the child is not waiting on that request */
   answer: (child: string, request: string, verdict: Verdict, answers?: Record<string, string>) => Promise<void>;
 }
@@ -132,7 +152,8 @@ export async function applyAnswers(list: PhoneAnswer[], st: AnswerState, d: Answ
   let ctx: PasskeyCtx | null = null;
   for (const a of list) {
     if (!a || typeof a.id !== "string") continue;
-    const key = await answerKey(a).catch(() => null);
+    // the key ignores `what` (the node has it only while the request waits): a repeat is told what happened
+    const key = await answerKey({ ...a, what: "" }).catch(() => null);
     if (!key) {
       out.push({ id: a.id, ok: false, why: "not an answer" });
       continue;
@@ -143,22 +164,32 @@ export async function applyAnswers(list: PhoneAnswer[], st: AnswerState, d: Answ
     }
     if (!ctx) {
       try {
-        ctx = { site: siteOf(d.url), passkeys: await d.passkeys(), ownerKey: d.ownerKey, now: d.now() };
+        ctx = {
+          site: siteOf(d.url),
+          passkeys: await d.passkeys(),
+          ownerKey: d.ownerKey,
+          now: d.now(),
+          revoked: await d.revoked(),
+        };
       } catch {
         continue;
       }
     }
-    const refused = await verifyAnswer(a, d.self, { ...ctx, now: d.now() }, []);
+    const target = splitId(a.id);
+    const what = target ? await d.words(target.child, target.request) : null;
+    if (what === null) {
+      out.push({ id: a.id, ok: false, why: "nothing waits on that on this machine any more" });
+      continue;
+    }
+    const refused = await verifyAnswer(a, what, d.self, { ...ctx, now: d.now() }, []);
     if (refused) {
       // not remembered: a copy of an answer with a wrong signature must not use up the genuine one's key
       out.push({ id: a.id, ok: false, why: refused });
       continue;
     }
     let why: string | null = null;
-    const target = splitId(a.id);
     try {
-      if (!target) throw new Error("not a request id");
-      await d.answer(target.child, target.request, a.verdict, a.answers);
+      await d.answer(target!.child, target!.request, a.verdict, a.answers);
     } catch (e) {
       why = (e as Error).message;
     }
@@ -188,6 +219,8 @@ export function handleAnswers(
       ownerKey: await approvalKey(cfg),
       now: Date.now,
       passkeys: () => getPasskeys(svc),
+      revoked: revokedIds,
+      words: async (child, request) => await wordsOf(await listChildren(), child, request),
       answer: (child, request, verdict, answers) => hubAnswer(child, request, verdict, undefined, runsDir(), answers),
     });
     await writeAnswerState(st);

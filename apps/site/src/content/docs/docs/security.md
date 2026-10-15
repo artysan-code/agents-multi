@@ -63,6 +63,26 @@ command for you to run.
 More in [The brain](/docs/brain/) and the brain's
 [README](https://github.com/artysan-code/agents-multi/tree/release/apps/brain#readme).
 
+## The phone's yes
+
+The phone is not trusted with your machines: a stolen web session or a broken service must not be able to start
+or stop an agent. What the phone can say is signed with a **passkey**, and your machines check it themselves.
+
+- A passkey counts only once a desktop with your vault has **endorsed** it, comparing its fingerprint with the
+  phone's. The service can register one but never make one count.
+- The signed answer binds **the request's own words**: a hash of what the agent asked to do. The machine recomputes
+  that hash from its own copy of the request, never from what the service sends back, so words the service
+  showed you that differ from the real ones give a signature that fails.
+- Accepting a job and **declining** one from the phone are signed the same way; a decline that does not hold is
+  refused by the machine, which tells you and proposes the work again.
+- Answers expire in minutes, work once, and are bound to a machine. The first format of the signed text is refused.
+- **Revoking** a passkey (`agents passkeys revoke <id>`, or _Revoke_ in the console) writes the revocation into your
+  vault, which every machine of yours has: they refuse that passkey whatever the service lists. A machine without
+  the vault relies on the service dropping it.
+
+More in [From the phone](/docs/from-the-phone/) and
+[ADR 0014](https://github.com/artysan-code/agents-multi/blob/release/docs/adr/0014-from-the-phone.md).
+
 ## Updates
 
 - The desktop app updates through Tauri's **signed updater**: a new version is verified against the

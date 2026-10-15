@@ -110,7 +110,7 @@ export interface PasskeyRow {
   id: string;
   name: string;
   fingerprint: string;
-  state: "pending" | "endorsed" | "not valid here" | "endorsed (unchecked)";
+  state: "pending" | "endorsed" | "not valid here" | "endorsed (unchecked)" | "revoked";
   created: string;
 }
 
@@ -128,3 +128,6 @@ export const loadPasskeys = () => get<PasskeysView>("/api/passkeys");
 /** The fingerprint the owner said yes to goes with it: the backend signs only a key that still has it. */
 export const endorsePasskey = (id: string, fingerprint: string) =>
   post("/api/passkeys", { id, fingerprint }).catch(failed);
+
+/** Revokes one: written into the vault here, then dropped on the service. The page has asked the owner first. */
+export const revokePasskey = (id: string) => post("/api/passkeys/revoke", { id }).catch(failed);

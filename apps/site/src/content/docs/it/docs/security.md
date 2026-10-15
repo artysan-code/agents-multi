@@ -67,6 +67,28 @@ quindi lì viene rifiutato e ti viene dato il comando da lanciare.
 Altro in [Il brain](/it/docs/brain/) e nel
 [README](https://github.com/artysan-code/agents-multi/tree/release/apps/brain#readme) del brain.
 
+## Il sì dal telefono
+
+Il telefono non ha fiducia cieca sulle tue macchine: una sessione web rubata o un servizio manomesso non devono poter
+avviare o fermare un agente. Quello che il telefono può dire è firmato con una **passkey**, e le tue macchine lo
+controllano da sole.
+
+- Una passkey vale solo quando un desktop con il tuo vault l'ha **avallata**, confrontandone l'impronta con quella
+  del telefono. Il servizio ne può registrare una ma non farla mai valere.
+- La risposta firmata lega **le parole stesse della richiesta**: un hash di ciò che l'agente ha chiesto di fare. La
+  macchina ricalcola quell'hash dalla propria copia della richiesta, mai da ciò che rimanda il servizio, quindi se
+  le parole che il servizio ti ha mostrato differiscono da quelle vere la firma non regge.
+- Accettare un job e **rifiutarlo** dal telefono si firma allo stesso modo; un rifiuto che non regge viene scartato
+  dalla macchina, che te lo dice e ripropone il lavoro.
+- Le risposte scadono in pochi minuti, valgono una volta e sono legate a una macchina. Il primo formato del testo
+  firmato è rifiutato.
+- **Revocare** una passkey (`agents passkeys revoke <id>`, o _Revoca_ nella console) scrive la revoca nel tuo
+  vault, che ha ogni tua macchina: quelle rifiutano la passkey qualunque cosa elenchi il servizio. Una macchina
+  senza vault si affida al servizio che la toglie.
+
+Altro in [Dal telefono](/it/docs/from-the-phone/) e nell'
+[ADR 0014](https://github.com/artysan-code/agents-multi/blob/release/docs/adr/0014-from-the-phone.md).
+
 ## Aggiornamenti
 
 - L'app desktop si aggiorna con l'**updater firmato** di Tauri: una nuova versione viene verificata con

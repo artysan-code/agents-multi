@@ -34,7 +34,8 @@ La prima volta che apri **In attesa**, l'app ti propone di creare una passkey su
 confermano ogni risposta, e le tue macchine la controllano da sole. Una passkey nuova è _in attesa_: vale solo
 quando un desktop con il tuo vault l'ha avallata. Sul desktop lancia `agents passkeys` (o apri _Connessioni ›
 Passkey_ nella console) e approvala. Fino ad allora i pulsanti restano spenti e non è permesso nulla. Perso il
-telefono? Revoca la sua passkey in **Altro**.
+telefono? Revoca la sua passkey in **Altro** e, su un desktop, lancia `agents passkeys revoke <id>` (o _Revoca_ nella
+console): scrive la revoca nel tuo vault, così le tue macchine la rifiutano anche se il servizio la elenca ancora.
 
 ## Collega una macchina
 
