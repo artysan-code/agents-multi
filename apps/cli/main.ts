@@ -194,9 +194,9 @@ switch (cmd) {
       const r = await ingest(db, { full: flag("--full") });
       if (rest[0] === "ingest" || r.files) {
         console.error(
-          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged (${
-            ((Date.now() - t0) / 1000).toFixed(1)
-          }s) → ${DB_PATH}`,
+          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged, ${
+            (r.bytes / 1e6).toFixed(1)
+          } MB read (${((Date.now() - t0) / 1000).toFixed(1)}s) → ${DB_PATH}`,
         );
       }
       if (rest[0] === "ingest") break;

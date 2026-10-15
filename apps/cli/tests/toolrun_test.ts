@@ -1,7 +1,7 @@
 // Tests for apps/cli/toolrun.ts: which commands reach the tool with the token, which need a person, the
 // profile a command runs in, and the filter that keeps the token out of the output.
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
-import { hiding, parseRun, profileFrom, wranglerDestructive } from "../toolrun.ts";
+import { findTool, hiding, parseRun, profileFrom, wranglerDestructive } from "../toolrun.ts";
 import { HIDDEN } from "../../../shared/mcp/lib/mask.ts";
 
 Deno.test("parseRun: only the service's own tool, never its login", () => {
@@ -75,4 +75,58 @@ Deno.test("hiding: the token is replaced even when split across chunks", async (
     await new Response(ReadableStream.from([enc.encode("tok_")]).pipeThrough(hiding(secret))).text(),
     "tok_",
   );
+});
+
+Deno.test("findTool: only the project's own node_modules/<tool>, never above its root, never a link out", async () => {
+  const base = await Deno.makeTempDir();
+  try {
+    const pkg = async (dir: string, bin: unknown = { wrangler: "bin/wrangler.js" }) => {
+      await Deno.mkdir(`${dir}/bin`, { recursive: true });
+      await Deno.writeTextFile(`${dir}/package.json`, JSON.stringify({ name: "wrangler", bin }));
+      await Deno.writeTextFile(`${dir}/bin/wrangler.js`, "#!/usr/bin/env node\n");
+    };
+    // a wrangler in a parent's node_modules, a project below it with none
+    await pkg(`${base}/node_modules/wrangler`);
+    await Deno.mkdir(`${base}/proj/src`, { recursive: true });
+    await Deno.writeTextFile(`${base}/proj/package.json`, "{}");
+    assertEquals(await findTool("wrangler", `${base}/proj/src`), null);
+    // the project's own, found from a subfolder
+    await pkg(`${base}/proj/node_modules/wrangler`);
+    const own = await Deno.realPath(`${base}/proj/node_modules/wrangler/bin/wrangler.js`);
+    assertEquals(await findTool("wrangler", `${base}/proj/src`), own);
+    // a string bin works too
+    await pkg(`${base}/str/node_modules/wrangler`, "bin/wrangler.js");
+    await Deno.writeTextFile(`${base}/str/package.json`, "{}");
+    assertEquals(
+      await findTool("wrangler", `${base}/str`),
+      await Deno.realPath(`${base}/str/node_modules/wrangler/bin/wrangler.js`),
+    );
+    // no package.json anywhere up: no root, no tool
+    const loose = await Deno.makeTempDir();
+    try {
+      await pkg(`${loose}/node_modules/wrangler`);
+      assertEquals(await findTool("wrangler", loose), null);
+    } finally {
+      await Deno.remove(loose, { recursive: true });
+    }
+    // a node_modules/wrangler that is a link out of the project's node_modules
+    await Deno.mkdir(`${base}/evil/node_modules`, { recursive: true });
+    await Deno.writeTextFile(`${base}/evil/package.json`, "{}");
+    await pkg(`${base}/elsewhere`);
+    await Deno.symlink(`${base}/elsewhere`, `${base}/evil/node_modules/wrangler`);
+    assertEquals(await findTool("wrangler", `${base}/evil`), null);
+    // a pnpm-style link inside node_modules (.pnpm store) is fine
+    await pkg(`${base}/pn/node_modules/.pnpm/wrangler@1/node_modules/wrangler`);
+    await Deno.writeTextFile(`${base}/pn/package.json`, "{}");
+    await Deno.symlink(
+      `${base}/pn/node_modules/.pnpm/wrangler@1/node_modules/wrangler`,
+      `${base}/pn/node_modules/wrangler`,
+    );
+    assertEquals(
+      await findTool("wrangler", `${base}/pn`),
+      await Deno.realPath(`${base}/pn/node_modules/wrangler/bin/wrangler.js`),
+    );
+  } finally {
+    await Deno.remove(base, { recursive: true });
+  }
 });

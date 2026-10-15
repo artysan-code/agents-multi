@@ -29,7 +29,16 @@ import { owner } from "../../../shared/mcp/lib/owner.ts";
 import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
 import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { hasCsrfHeader, isLocalHost, json, jsonText, uiFile } from "./http.ts";
-import { broadcast, eventStream, onTopic, type Topic, TOPICS, watchBrain, watchTree } from "./events.ts";
+import {
+  broadcast,
+  eventStream,
+  onTopic,
+  takeChangedTranscripts,
+  type Topic,
+  TOPICS,
+  watchBrain,
+  watchTree,
+} from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
 import { cancelJob, jobStream, startJob } from "./jobs.ts";
@@ -49,18 +58,24 @@ import type { Route } from "./http.ts";
 import { live, refresh as refreshLimits } from "../live.ts";
 
 /** The routes of the console, given the state they share. */
-/** The usage database, kept open, and the transcripts read into it at most every few seconds: an
- *  ingest looks at every transcript of every profile, and a busy session asks for the list often. */
+/** The usage database, kept open. The transcripts are read into it at most every few seconds, and only
+ *  the ones the watcher saw change (events.ts), from where each was read to; every ten minutes, and
+ *  when nothing watches, all of them are looked at again, in case an event was missed. */
 const usage = (() => {
-  let db: ReturnType<typeof openDb> | null = null, at = 0, running: Promise<unknown> | null = null;
+  let db: ReturnType<typeof openDb> | null = null, at = 0, scanned = 0, running: Promise<unknown> | null = null;
   return {
     async fresh() {
       db ??= openDb();
       if (Date.now() - at > 3000) {
-        running ??= ingest(db, { quiet: true }).finally(() => {
-          at = Date.now();
-          running = null;
-        });
+        if (!running) {
+          const now = Date.now(), changed = takeChangedTranscripts();
+          const all = !scanned || !changed || now - scanned > 10 * 60_000;
+          if (all) scanned = now;
+          running = ingest(db, { quiet: true, ...(all ? {} : { only: changed! }) }).finally(() => {
+            at = Date.now();
+            running = null;
+          });
+        }
         await running;
       }
       return db;

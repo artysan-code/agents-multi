@@ -2,8 +2,8 @@
 #
 # The job runs in the runner's default image for the `docker` label (node:22-bookworm), not in
 # denoland/deno: actions/checkout is a JavaScript action and needs node inside the job container.
-# Deno comes from setup-deno; the linters the gate requires in CI come from apt and from a pinned,
-# checksummed gitleaks, jq and shellcheck releases (no apt-get: its index fetch alone cost more than the tools).
+# Deno comes from setup-deno; the tools the gate requires in CI are pinned, sha256-checked
+# gitleaks, jq and shellcheck releases (no apt-get: its index fetch alone cost more than the tools).
 #
 # Only `dev` is gated here: `beta` and `release` move by fast-forward to commits `dev` already passed,
 # and what is committed on `release` itself (the version bump, the update manifests) is gated by the

@@ -690,7 +690,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   with the secret on stdin. A secret is never a command-line argument and never a tool result.
 - **A service's own command-line tool** gets the same token: `agents vault run cloudflare
   [account] -- wrangler deploy` (`apps/cli/toolrun.ts`). Only that tool runs (the project's
-  `node_modules/.bin`, else PATH; `pnpm add -D wrangler` in the project), the token is in its
+  `node_modules/wrangler` under the project's root — the nearest package.json, never above it, never
+  PATH; `pnpm add -D wrangler` in the project), the token is in its
   environment and hidden if it ever reaches the output, and its own login is refused. What deletes,
   rolls back, applies remote migrations or runs DROP/DELETE/TRUNCATE/ALTER on a remote D1 asks for a
   typed "yes" on a terminal: a Claude session has none, so there it is refused with the command to
