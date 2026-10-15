@@ -471,6 +471,18 @@ sees, and `agents nodes accept <job>` signs one.
   Code's subprocess scrub keeping it from what they run (checked before the node takes work). Such a token makes
   model requests only: no claude.ai connectors on a server.
 
+### From the phone
+
+The service also serves a small web app at `/app` ([ADR 0014](docs/adr/0014-from-the-phone.md)): open
+`https://<your service>/app` on the phone, sign in as on `/account`, and add it to the home screen (it is a PWA,
+the shell and push only: no data is kept offline). It has **Chat** (the conversations by day, answers streaming as
+they are written, with the changes Claude made), **Tasks** (today with its times, overdue, done today), **Brain**
+(search and read) and **Machines** (the account's nodes, and which one answers the chat), and in **Settings** the
+switch for notifications (Web Push; on iPhone and iPad they work once the app is on the home screen). The app
+runs nothing itself: a chat is answered by one of your paired machines. It is `apps/ui`'s second entry
+(`vite.web.config.ts`, strings in `src/i18n/web.ts`), built into the brain's image and served by
+`apps/brain/webapp.ts`.
+
 ## Consumption
 
 `agents usage` reports tokens by profile, model, project, agent, day, skill or command, with

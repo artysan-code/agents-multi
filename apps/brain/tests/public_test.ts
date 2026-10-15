@@ -35,7 +35,18 @@ Deno.test("public: a path maps to a file of the site, never outside it nor onto 
   assertEquals(sitePath("/docs/../../data"), null);
   assertEquals(sitePath("/%E0%A4%A"), null);
   for (
-    const p of ["/mcp", "/mcp/x", "/api/tasks", "/backup", "/tasks", "/account/login", "/privacy", "/.well-known/x"]
+    const p of [
+      "/mcp",
+      "/mcp/x",
+      "/api/tasks",
+      "/backup",
+      "/tasks",
+      "/app",
+      "/app/assets/a.js",
+      "/account/login",
+      "/privacy",
+      "/.well-known/x",
+    ]
   ) assertEquals(sitePath(p), null, p);
   assertEquals(sitePath("/mcpx/"), "mcpx/index.html");
 });

@@ -16,6 +16,19 @@ COPY apps/site/ ./
 COPY CHANGELOG.md /CHANGELOG.md
 RUN pnpm build
 
+# the web app (apps/ui, its second entry: vite.web.config.ts), served by the brain under /app. The two shared
+# files it imports (the task file format, the node shapes) keep their repository paths, so its relative imports hold
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS webapp
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+WORKDIR /repo/apps/ui
+COPY apps/ui/package.json apps/ui/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY apps/ui/ ./
+COPY shared/mcp/lib/tasks/format.ts shared/mcp/lib/tasks/types.ts /repo/shared/mcp/lib/tasks/
+COPY shared/mcp/lib/nodes.ts /repo/shared/mcp/lib/
+RUN pnpm exec vite build --config vite.web.config.ts
+
 FROM denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432
 
 WORKDIR /app
@@ -26,6 +39,7 @@ COPY shared/mcp/lib/tasks/ shared/mcp/lib/tasks/
 COPY shared/mcp/lib/tasks.ts shared/mcp/lib/mask.ts shared/mcp/lib/owner.ts shared/mcp/lib/env.ts shared/mcp/lib/fs.ts shared/mcp/lib/nodes.ts shared/mcp/lib/
 COPY shared/mcp/tasks/tools.ts shared/mcp/tasks/tools.ts
 COPY --from=site /site/dist apps/site/dist
+COPY --from=webapp /repo/apps/ui/dist-web apps/ui/dist-web
 RUN deno cache --frozen apps/brain/main.ts apps/brain/admin.ts apps/brain/site.ts
 # `brain-admin <command>` in a shell of the container: apps/brain/admin.ts with the service's own permissions
 RUN printf '#!/bin/sh\nexec deno run --allow-net=127.0.0.1 --allow-env --allow-read=/app,/data,/deno-dir --allow-write=/data /app/apps/brain/admin.ts "$@"\n' > /usr/local/bin/brain-admin \
@@ -37,5 +51,5 @@ VOLUME /data
 EXPOSE 8080
 # a probe over bash's /dev/tcp: a few milliseconds, where `deno eval` started a runtime every 30 s
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=2s CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && read -r l <&3 && [[ $l == *' 200 '* ]]"]
-# reads only its code, the site, its cache and its data
+# reads only its code, the site and the web app, its cache and its data
 CMD ["run", "--allow-net", "--allow-env", "--allow-read=/app,/data,/deno-dir", "--allow-write=/data", "apps/brain/main.ts"]

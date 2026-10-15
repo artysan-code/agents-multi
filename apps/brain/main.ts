@@ -38,6 +38,7 @@ import { loadSite, privacyPage, type Site, siteAnswer, siteFile, siteMoved, site
 import { log, logRequest } from "./log.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
+import { isWebPath, loadWebapp, webAnswer, webSize } from "./webapp.ts";
 import { bodyLimit, Buckets, capped, clientIp, fromOwnPages, hardened, isTooLarge } from "./guard.ts";
 import { snapshot } from "./backup.ts";
 import { startBackups } from "./backups.ts";
@@ -197,7 +198,7 @@ const SECURE = HTTPS ? "; Secure" : "";
 const SESSION_COOKIE = (s: string, age = SESSION_SECONDS) =>
   `brain_session=${s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${SECURE}`;
 /** Pure: a page of this service to go back to after signing in, or the account page. */
-const nextPage = (n: string | null) => n && /^\/(account|tasks)(\/[\w-]*)*(\?[^\s]*)?$/.test(n) ? n : "/account";
+const nextPage = (n: string | null) => n && /^\/(account|tasks|app)(\/[\w-]*)*(\?[^\s]*)?$/.test(n) ? n : "/account";
 const LOCKED = "Troppi tentativi: riprova tra un quarto d'ora.";
 const BUSY = "Troppi accessi in corso: riprova tra qualche secondo.";
 const refused = (r: "wrong" | "locked" | "busy") => r === "locked" ? LOCKED : r === "busy" ? BUSY : SIGNED_OUT_ERROR;
@@ -239,11 +240,15 @@ const SITE_HOST = SITE.siteUrl !== URL_ ? new URL(SITE.siteUrl).host : null;
 // the built site, read once: files, their ETags and headers all stay in memory
 const SITE_FILES = await loadSite(SITE_DIR, SITE);
 log.info("site loaded", { dir: SITE_DIR, files: SITE_FILES.size, bytes: siteSize(SITE_FILES) });
+// the web app (apps/ui, built into dist-web), read once as the site is
+const WEBAPP_DIR = env("BRAIN_WEBAPP", fromFileUrl(new URL("../ui/dist-web", import.meta.url)))!;
+const WEBAPP_FILES = await loadWebapp(WEBAPP_DIR);
+log.info("web app loaded", { dir: WEBAPP_DIR, files: WEBAPP_FILES.size, bytes: webSize(WEBAPP_FILES) });
 const otpauth = (id: string, secret: string) =>
   `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 /** The API paths a web session may use (the rest of /api/ is for tokens). */
-const WEB_API = /^\/api\/(chats(\/|$)|push\/|settings\/)/;
+const WEB_API = /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$)/;
 
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
@@ -355,7 +360,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
     }
     const id = await auth.session(req);
     const me = id ? users.get(id) : null;
-    if (!me) return html(signInPage(TOTP));
+    if (!me) return html(signInPage(TOTP, "", nextPage(u.searchParams.get("next"))));
     if (p === "/account/logout" && req.method === "POST") {
       await auth.endSession(req);
       return new Response(null, {
@@ -424,6 +429,9 @@ async function handle(req: Request, ip: string): Promise<Response> {
     return await as(me, "web", () => boardRoute(req, u, me, html));
   }
 
+  // ---------------- the web app, the phone's face (apps/brain/webapp.ts): its page needs the session
+  if (isWebPath(p)) return webAnswer(WEBAPP_FILES, req, async () => !!(await auth.session(req)));
+
   // ---------------- agents-multi's site: the landing and the docs, built into apps/site/dist
   // (on the brain's address when the site has none of its own; otherwise a visitor is sent there)
   if (req.method === "GET" || req.method === "HEAD") {
@@ -449,6 +457,8 @@ async function handle(req: Request, ip: string): Promise<Response> {
       who = { user: id, label: "web" };
     }
   }
+  // and, read only, its tasks, brain and machines
+  who ??= await webCaller(req, u);
   if (!who) {
     if (p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup")) return withCors(auth.challenge());
     return SITE_HOST
@@ -457,6 +467,15 @@ async function handle(req: Request, ip: string): Promise<Response> {
   }
   const user = users.get(who.user)!;
   return await as(user, who.label, () => served(req, u, who));
+}
+
+/** The account signed in on the web app, for its reads of the tasks, the brain and the machines (the chats, push
+ *  and settings are chat.ts's and push.ts's own: ADR 0014). It holds the session cookie, not a token, and only
+ *  reads: it is «web», never a machine, and a change goes through the board's own routes (/tasks). */
+async function webCaller(req: Request, u: URL): Promise<Caller | null> {
+  if (req.method !== "GET" || !/^\/api\/(tasks(\/|$)|brain\/|nodes$)/.test(u.pathname)) return null;
+  const id = await auth.session(req);
+  return id ? { user: id, label: "web" } : null;
 }
 
 /** What a request with a valid token gets, already running as its account. */
