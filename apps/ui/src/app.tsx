@@ -14,6 +14,8 @@ import { closeScreen } from "./pages/system/close-plan.ts";
 // the pages Chat and the shell do not need to draw come in their own chunks, when first shown
 const Runs = lazy(() => import("./pages/runs/index.tsx").then((m) => m.Runs));
 const Limits = lazy(() => import("./pages/limits/index.tsx").then((m) => m.Limits));
+const Tasks = lazy(() => import("./pages/tasks/index.tsx").then((m) => m.Tasks));
+const Brain = lazy(() => import("./pages/brain/index.tsx").then((m) => m.Brain));
 const Connections = lazy(() => import("./pages/connections/index.tsx").then((m) => m.Connections));
 const System = lazy(() => import("./pages/system/index.tsx").then((m) => m.System));
 const UpdateWizardHost = lazy(() => import("./pages/system/wizard.tsx").then((m) => m.UpdateWizardHost));
@@ -23,6 +25,8 @@ const PAGES: Record<View, FunctionComponent> = {
   chat: Chat,
   runs: Runs,
   limits: Limits,
+  tasks: Tasks,
+  brain: Brain,
   connections: Connections,
   system: System,
 };

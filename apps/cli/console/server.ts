@@ -21,10 +21,19 @@ import { assetsApi, claudeAssets } from "../claude-assets.ts";
 import { permissionsOp, permissionsView, type PermOp } from "../permissions.ts";
 import { claudeSessionVars } from "../../../shared/mcp/lib/agents.ts";
 import { owner } from "../../../shared/mcp/lib/owner.ts";
-import { brief, listTasks } from "../../../shared/mcp/lib/tasks.ts";
-import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
+import { brief, listTasks, updateTask } from "../../../shared/mcp/lib/tasks.ts";
+import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { hasCsrfHeader, isLocalHost, json, jsonText, uiFile } from "./http.ts";
-import { broadcast, eventStream, onTopic, takeChangedTranscripts, type Topic, TOPICS, watchTree } from "./events.ts";
+import {
+  broadcast,
+  eventStream,
+  onTopic,
+  takeChangedTranscripts,
+  type Topic,
+  TOPICS,
+  watchBrain,
+  watchTree,
+} from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
 import { cancelJob, jobStream, startJob } from "./jobs.ts";
@@ -45,6 +54,8 @@ import { live, refresh as refreshLimits } from "../live.ts";
 import { limitsNow } from "../limits.ts";
 import { listChats, readChat, removeChat } from "../chats.ts";
 import { runsView } from "./runs.ts";
+import { memoryApi } from "../memory.ts";
+import { tasksView } from "./tasks-view.ts";
 import { startAgentd } from "../node/agentd.ts";
 import { loadNodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { desktopNotify } from "../notify.ts";
@@ -192,6 +203,31 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
         return json({ ...b, earlier, calendarErrors: cal.errors });
       },
     },
+    // the Tasks view: the day with its times, what is late, the rest by project (tasks-view.ts)
+    "/api/tasks/view": {
+      get: async () => {
+        try {
+          const cal = await calendarAsTasks();
+          return json({ ...tasksView([...await listTasks(), ...cal.tasks], new Date()), calendarErrors: cal.errors });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 502);
+        }
+      },
+    },
+    // the one write the view makes: a task is done (a repeating one makes its next)
+    "/api/tasks/done": {
+      post: async ({ req }) => {
+        try {
+          const id = String(((await body(req)) as { id?: unknown }).id ?? "");
+          if (!id) return json({ ok: false, message: "no task" });
+          await updateTask(id, { status: "done" });
+          broadcast("brain");
+          return json({ ok: true });
+        } catch (e) {
+          return json({ ok: false, message: (e as Error).message });
+        }
+      },
+    },
     // whose console this is: the chat greets them
     "/api/owner": { get: () => json(owner()) },
     // the chats with Claude (chats.ts): the list, one in full, forgetting one; a turn is kept by /api/ask
@@ -305,7 +341,8 @@ export function createHandler(
         if (route.get) return await route.get({ req, url: u });
         return json({ error: "POST required" }, 405);
       }
-      const delegated = await assetsApi(u) ?? await askApi(req, u, json);
+      const delegated = await assetsApi(u) ?? await askApi(req, u, json) ??
+        (req.method === "GET" ? await memoryApi(u) : null);
       if (delegated) return delegated;
       return await uiFile(uiDist, u.pathname);
     } catch (e) {
@@ -370,6 +407,7 @@ export async function serve(opts: { open?: boolean; headless?: boolean } = { ope
   console.log(`${ANSI.b}agents serve${ANSI.x} — ${entry}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   if (entry === url) console.log(`${ANSI.d}access key: ${file}${ANSI.x}`);
   void watchTree(ac.signal);
+  void watchBrain(ac.signal, connectTasks() === "brain");
   void app.follow(ac.signal);
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
   // only the machine's console runs its jobs and keeps the gateway: a second one (another port) would run

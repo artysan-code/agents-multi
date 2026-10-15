@@ -9,6 +9,8 @@ import { machineLang } from "./state.ts";
 import * as shell from "./i18n/shell.ts";
 import * as chat from "./i18n/chat.ts";
 import * as runs from "./i18n/runs.ts";
+import * as tasks from "./i18n/tasks.ts";
+import * as brain from "./i18n/brain.ts";
 import * as limits from "./i18n/limits.ts";
 import * as connections from "./i18n/connections.ts";
 import * as system from "./i18n/system.ts";
@@ -21,6 +23,8 @@ const en = {
   ...shell.en,
   ...chat.en,
   ...runs.en,
+  ...tasks.en,
+  ...brain.en,
   ...limits.en,
   ...connections.en,
   ...system.en,
@@ -36,6 +40,8 @@ const it: Record<Key, string> = {
   ...shell.it,
   ...chat.it,
   ...runs.it,
+  ...tasks.it,
+  ...brain.it,
   ...limits.it,
   ...connections.it,
   ...system.it,

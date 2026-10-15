@@ -302,14 +302,18 @@ Italian formats open in Italian — and the preferences override it per browser.
   on such a reading), and today's tokens. The windows are what `agents limits` reads (`GET /api/limits`):
   the status line's snapshots and Codex's session logs; «Ask for the limits now» asks Anthropic for
   Claude's with each profile's login, read for that request only (`apps/cli/live.ts`).
-- **More** — **Connections** (`#connections`: every MCP server in the registry, which profiles see it
+- **More** — **Tasks** (`#tasks`: today with its times first, what is overdue marked, then the open tasks by
+  project; marking one done is the only write, `POST /api/tasks/done`) and **Brain** (`#brain`: search the
+  brain and read a page, Markdown with its `[[links]]`, read only; the token stays in the console,
+  `apps/cli/memory.ts`), both from the brain service and redrawn on the `brain` event, each with a link to
+  the brain's own web board (`/board`) for everything else; **Connections** (`#connections`: every MCP server in the registry, which profiles see it
   and where, the accounts and the vault, the calendars the picker reads), and **Profiles**,
   **Permissions** (the shared allow / ask / deny rules and default mode, what each profile adds or
   leaves out — "always allow" answers land there — and a button to move a profile's own rules to every
   profile), **Updates** (versions, and what is pending), **Health** (every doctor check, with a button
   for the fixes that map to a known action) under `#system/<tab>`.
 
-The tasks and the brain have their own pages on the brain's site and in every chat; the full
+Adding and editing tasks, and writing the brain, stay in the chats and on the brain's board; the full
 consumption report stays in the terminal: `agents usage`.
 
 `⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the

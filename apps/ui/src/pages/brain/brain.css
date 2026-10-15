@@ -1,0 +1,56 @@
+/* brain.css — Brain (pages/brain/*): a search field, the hits as a list, a page as a reading column. */
+
+.bn-sub {
+  margin: 0 0 14px;
+  max-width: 72ch;
+  color: var(--dim);
+}
+.bn-q {
+  display: flex;
+  gap: 8px;
+  max-width: 640px;
+  margin-bottom: 18px;
+}
+.bn-q input {
+  flex: 1;
+  min-width: 0;
+}
+.bn-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 760px;
+}
+.bn-hits li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line, color-mix(in srgb, var(--text) 12%, transparent));
+}
+.bn-hits small {
+  margin-left: 8px;
+  color: var(--faint);
+}
+.bn-hits p {
+  margin: 4px 0 0;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+.bn-page {
+  max-width: 820px;
+  padding: 16px 20px;
+}
+.bn-meta {
+  margin: 10px 0 12px;
+  font: 12px var(--sans);
+  color: var(--faint);
+}
+.bn-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 18px 0 0;
+  font-size: 13px;
+}
+.bn-links b {
+  color: var(--faint);
+  font-weight: 600;
+}

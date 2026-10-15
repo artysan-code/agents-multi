@@ -1,6 +1,6 @@
 // rail.tsx — the navigation beside every page: a strip of icons that opens over the page while the
 // pointer is on it (or the keyboard is in it), so every page is one click away and none of the width is
-// taken. The three views (Chat, Runs, Accounts & limits), then «More» with the rest (Connections,
+// taken. The three views (Chat, Runs, Accounts & limits), then «More» with the rest (Tasks, Brain, Connections,
 // Profiles, Permissions, Updates, Health), each with its own sign (an update waiting, the checks that
 // need someone); at the bottom the one action that can wait for you — «Update» — the console's
 // reachability when it is lost, the commands, the preferences (theme, language, shortcuts) and the clock.
@@ -39,6 +39,16 @@ const ICON: Record<string, ComponentChildren> = {
       <circle cx="6" cy="12" r="1.2" />
       <circle cx="12" cy="12" r="1.2" />
       <circle cx="18" cy="12" r="1.2" />
+    </>
+  ),
+  tasks: <path d="M5 6.5l1.5 1.5L9 5.5M5 12.5l1.5 1.5 2.5-2.5M5 18.5l1.5 1.5 2.5-2.5M12 7h8M12 13h8M12 19h8" />,
+  brain: (
+    <>
+      <circle cx="12" cy="12" r="2.2" />
+      <circle cx="5.5" cy="6" r="1.5" />
+      <circle cx="18.5" cy="7" r="1.5" />
+      <circle cx="17" cy="18.5" r="1.5" />
+      <path d="M6.7 7l3.6 3.6M17.3 8.3l-3.6 2.5M15.9 17.2l-2.6-3.4" />
     </>
   ),
   connections: (
@@ -189,8 +199,10 @@ function Prefs({ close }: { close: () => void }) {
   );
 }
 
-/** The pages behind «More»: Connections, then System's. */
+/** The pages behind «More»: Tasks, Brain, Connections, then System's. */
 const MORE: { hash: string; icon: string; label: () => string; tab?: Tab }[] = [
+  { hash: "tasks", icon: "tasks", label: () => t("nav.tasks") },
+  { hash: "brain", icon: "brain", label: () => t("nav.brain") },
   { hash: "connections", icon: "connections", label: () => t("nav.connections") },
   ...TABS.map((x) => ({ hash: `system/${x}`, icon: x, label: () => t(`sys.${x}`), tab: x })),
 ];

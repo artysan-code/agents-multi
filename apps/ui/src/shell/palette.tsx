@@ -22,6 +22,8 @@ interface Cmd {
 const cmds = (): Cmd[] => [
   ...MAIN.map((x): Cmd => ({ s: "pal.goto", n: t(`nav.${x}`), d: x, f: () => go(x) })),
   { s: "pal.do", n: t("chat.new"), d: "chat", f: () => request("chat.new", "chat") },
+  { s: "pal.goto", n: `${t("nav.more")} · ${t("nav.tasks")}`, d: "tasks", f: () => go("tasks") },
+  { s: "pal.goto", n: `${t("nav.more")} · ${t("nav.brain")}`, d: "brain", f: () => go("brain") },
   { s: "pal.goto", n: `${t("nav.more")} · ${t("nav.connections")}`, d: "connections", f: () => go("connections") },
   ...TABS.map((x): Cmd => ({
     s: "pal.goto",
