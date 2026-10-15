@@ -2,15 +2,21 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   attentionOfEvent,
+  fillPlan,
   finished,
   follow,
   frontmatterOf,
   initialState,
+  loadWorkflow,
+  placeholdersOf,
   type Plan,
   planErrors,
+  planOfSkill,
   readySteps,
   runId,
   savedWorkflows,
+  saveWorkflow,
+  skillText,
   stepPrompt,
   teamLine,
 } from "../../../shared/mcp/lib/runs.ts";
@@ -208,4 +214,67 @@ Deno.test("runs: a step names its provider; a Codex step is told of no team chan
   assertStringIncludes(planErrors(bad).join(";"), "provider is claude or codex");
   assertStringIncludes(stepPrompt(p, p.steps[0], "r", (id) => `/h/${id}.md`), "team_send");
   assert(!stepPrompt(p, p.steps[1], "r", (id) => `/h/${id}.md`).includes("team_send"));
+});
+
+const templ = (): Plan => ({
+  name: "rf",
+  folder: "{{folder}}",
+  steps: [
+    { id: "review", profile: "funnel", prompt: "Review {{target}}" },
+    { id: "fix", profile: "funnel", after: ["review"], prompt: "Fix {{target}} ({{folder}})" },
+  ],
+});
+
+Deno.test("runs: a skill carries its plan; placeholders are found and filled, or named when missing", () => {
+  const text = skillText("rf", "review then fix", templ(), "Some notes.");
+  assertEquals(frontmatterOf(text), { name: "rf", description: "review then fix" });
+  assertEquals(planOfSkill(text), templ());
+  assertEquals(planOfSkill("---\nname: x\n---\nno plan here"), null);
+  assertEquals(planOfSkill("```json\n{nope\n```"), null);
+  assertEquals(placeholdersOf(templ()), ["folder", "target"]);
+  const filled = fillPlan(templ(), { folder: "~/work/site", target: "PR 4" });
+  assertEquals(filled.folder, "~/work/site");
+  assertEquals(filled.steps[1].prompt, "Fix PR 4 (~/work/site)");
+  assertEquals(planErrors(filled), []);
+  let msg = "";
+  try {
+    fillPlan(templ(), { folder: "x" });
+  } catch (e) {
+    msg = (e as Error).message;
+  }
+  assertEquals(msg, "to fill: {{target}}");
+});
+
+Deno.test("runs: save a workflow as a skill, find it by name, the project's wins, no silent overwrite", async () => {
+  const project = await Deno.makeTempDir();
+  const config = await Deno.makeTempDir();
+  const save = (scope: "project" | "user", description: string, overwrite?: boolean) =>
+    saveWorkflow({ name: "rf", description, plan: templ(), scope, folder: project, overwrite }, config);
+  const user = await save("user", "the owner's");
+  assertEquals(user, `${config}/workflows/rf/SKILL.md`);
+  assertEquals((await loadWorkflow("rf", project, { target: "T" }, config)).scope, "user");
+  const mine = await save("project", "the project's");
+  assertEquals(mine, `${project}/.agents/workflows/rf/SKILL.md`);
+  const got = await loadWorkflow("rf", project, { target: "T" }, config);
+  assertEquals(got.scope, "project");
+  assertEquals(got.plan.folder, project); // {{folder}} is the folder asked about
+  assertEquals((await savedWorkflows(project, config)).map((w) => w.description), ["the project's"]);
+  let err = "";
+  await save("project", "again").catch((e) => err = e.message);
+  assertStringIncludes(err, "saved already");
+  await save("project", "again", true);
+  for (
+    const bad of [
+      () => saveWorkflow({ name: "Bad Name", description: "x", plan: templ(), scope: "user" }, config),
+      () => saveWorkflow({ name: "ok", description: " ", plan: templ(), scope: "user" }, config),
+      () => saveWorkflow({ name: "ok", description: "x", plan: { name: "p", steps: [] }, scope: "user" }, config),
+      () => saveWorkflow({ name: "ok", description: "x", plan: templ(), scope: "project" }, config),
+      () => loadWorkflow("nothing", project, {}, config),
+      () => loadWorkflow("rf", project, {}, config), // {{target}} left unfilled
+    ]
+  ) {
+    let failed = false;
+    await bad().catch(() => failed = true);
+    assert(failed);
+  }
 });

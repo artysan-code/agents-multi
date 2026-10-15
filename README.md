@@ -249,6 +249,16 @@ the passive way (the status line's snapshots, Codex's logs), and a window with n
 zero. A workflow step or `agent_start` takes `provider: "codex"`: the child gets the profile's MCP servers
 as the launch config names them, but only each server's `_allow` tools, since it never asks you.
 
+### Saved workflows
+
+A workflow the owner wants again is a **skill** ([ADR 0005](docs/adr/0005-agent-workflows.md)): a folder with a
+`SKILL.md`: a name, when to use it, the steps as prose and the plan as a `json` block with `{{placeholders}}`.
+The project's lives in `<project>/.agents/workflows/<name>/` (kept out of git like the HANDOFFs), the owner's for every
+project in `~/.agents-multi/config/workflows/<name>/` (an example comes with `agents init`); on a name in both, the
+project's wins. `workflow_save` prepares one (the coordinator writes the file: the hub's server writes only its own state), `workflow_list` lists them, `workflow_load` fills one by name for the
+owner to approve before `workflow_start`. From a terminal: `agents run save <plan.json> <name> "<when>" [--user]`,
+`agents run saved`, `agents run start <name> --var target="PR 4"`.
+
 `claude update` inside a wrapper is redirected to `agents update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 

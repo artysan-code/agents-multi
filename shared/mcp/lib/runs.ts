@@ -428,16 +428,16 @@ export async function teamSend(id: string, from: string, text: string, to?: stri
   await append(`${runsRoot(runs)}/${id}/channel.jsonl`, { at: new Date().toISOString(), from, to: to ?? null, text });
 }
 
-/** Where a step's HANDOFF goes: in its folder's repository, under .agents/ (kept out of git through the
- *  repository's own exclude file), else in the run's folder. */
-async function handoffDir(folder: string, run: string, runDir: string): Promise<string> {
+/** The top of the repository a folder is in, with `.agents/` added to its own exclude file (nothing
+ *  committed); "" when the folder is in no repository. */
+async function excludeAgents(folder: string): Promise<string> {
   const git = async (...args: string[]) => {
     const r = await new Deno.Command("git", { args: ["-C", folder, ...args], stdout: "piped", stderr: "null" })
       .output().catch(() => null);
     return r?.success ? new TextDecoder().decode(r.stdout).trim() : "";
   };
   const top = await git("rev-parse", "--show-toplevel");
-  if (!top) return `${runDir}/handoffs`;
+  if (!top) return "";
   const ex = await git("rev-parse", "--path-format=absolute", "--git-path", "info/exclude");
   if (ex) {
     const now = await Deno.readTextFile(ex).catch(() => "");
@@ -446,7 +446,14 @@ async function handoffDir(folder: string, run: string, runDir: string): Promise<
       await Deno.writeTextFile(ex, `${now && !now.endsWith("\n") ? "\n" : ""}.agents/\n`, { append: true });
     }
   }
-  return `${top}/.agents/runs/${run}`;
+  return top;
+}
+
+/** Where a step's HANDOFF goes: in its folder's repository, under .agents/ (kept out of git through the
+ *  repository's own exclude file), else in the run's folder. */
+async function handoffDir(folder: string, run: string, runDir: string): Promise<string> {
+  const top = await excludeAgents(folder);
+  return top ? `${top}/.agents/runs/${run}` : `${runDir}/handoffs`;
 }
 
 // ---------------------------------------------------------------- the runner
@@ -745,4 +752,117 @@ export async function savedWorkflows(folder?: string, config = configDir()): Pro
   if (folder) await scan(`${folder.replace(/^~(?=\/|$)/, home)}/.agents/workflows`, "project");
   await scan(`${config}/workflows`, "user");
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Pure: the plan a SKILL.md carries, in its first ```json block; null when there is none or it is not JSON. */
+export function planOfSkill(text: string): Plan | null {
+  const m = /```json[^\S\n]*\n([\s\S]*?)\n```/.exec(text);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]) as Plan;
+  } catch {
+    return null;
+  }
+}
+
+/** Pure: the `{{names}}` a plan leaves to fill, in order of appearance. */
+export function placeholdersOf(p: Plan): string[] {
+  return [...new Set([...JSON.stringify(p).matchAll(/\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/g)].map((m) => m[1]))];
+}
+
+/** Pure: the plan with each `{{name}}` replaced; throws naming those `vars` leaves unfilled. */
+export function fillPlan(p: Plan, vars: Record<string, string> = {}): Plan {
+  const missing = placeholdersOf(p).filter((k) => vars[k] === undefined);
+  if (missing.length) throw new Error(`to fill: ${missing.map((k) => `{{${k}}}`).join(", ")}`);
+  return JSON.parse(
+    JSON.stringify(p),
+    (_, v) => typeof v === "string" ? v.replace(/\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/g, (_m, k) => vars[k]) : v,
+  );
+}
+
+const WORKFLOW_NAME = /^[a-z0-9][a-z0-9-]*$/;
+
+/** Pure: a saved workflow's SKILL.md — the frontmatter Claude's skills have, the steps as prose, the plan. */
+export function skillText(name: string, description: string, p: Plan, notes = ""): string {
+  const steps = p.steps.map((s) =>
+    `- **${s.id}** (${s.profile}${s.after?.length ? `, after ${s.after.join(", ")}` : ""})`
+  );
+  return [
+    "---",
+    `name: ${name}`,
+    `description: ${description.replace(/\s+/g, " ").trim()}`,
+    "---",
+    "",
+    `# ${name}`,
+    "",
+    ...(notes.trim() ? [notes.trim(), ""] : []),
+    "Steps:",
+    "",
+    ...steps,
+    "",
+    "## Plan",
+    "",
+    "Fill the `{{placeholders}}` from the conversation, show the plan to the owner, start it only on their yes.",
+    "",
+    "```json",
+    JSON.stringify(p, null, 2),
+    "```",
+    "",
+  ].join("\n");
+}
+
+export interface SaveWorkflow {
+  name: string;
+  description: string;
+  plan: Plan;
+  /** "project" needs `folder`; "user" is for every project */
+  scope: SavedWorkflow["scope"];
+  folder?: string;
+  notes?: string;
+  overwrite?: boolean;
+}
+
+/** Checks a workflow to save and says where its SKILL.md goes and what is in it: `<folder>/.agents/workflows/<name>/`
+ *  or `<config>/workflows/<name>/`. Writes nothing. */
+export function skillToSave(w: SaveWorkflow, config = configDir()): { path: string; content: string } {
+  if (!WORKFLOW_NAME.test(w.name)) throw new Error(`workflow name "${w.name}": lowercase letters, digits, -`);
+  if (!w.description?.trim()) throw new Error("say when to use it: a workflow needs a description");
+  const errs = planErrors(w.plan);
+  if (errs.length) throw new Error(`the plan cannot run: ${errs.join("; ")}`);
+  if (w.scope === "project" && !w.folder) throw new Error("a project's workflow needs its folder");
+  const root = w.scope === "project"
+    ? `${w.folder!.replace(/^~(?=\/|$)/, Deno.env.get("HOME") ?? "")}/.agents/workflows`
+    : `${config}/workflows`;
+  return { path: `${root}/${w.name}/SKILL.md`, content: skillText(w.name, w.description, w.plan, w.notes) };
+}
+
+/** Saves a plan as a skill (see `skillToSave`); a project's has `.agents/` kept out of git. Returns the path.
+ *  Refuses to overwrite unless `overwrite`. For the CLI: the hub's server may not write there. */
+export async function saveWorkflow(w: SaveWorkflow, config = configDir()): Promise<string> {
+  const { path, content } = skillToSave(w, config);
+  if (!w.overwrite && await Deno.stat(path).then(() => true, () => false)) {
+    throw new Error(`${w.name} is saved already (${path}); overwrite it only if the owner says so`);
+  }
+  if (w.scope === "project") await excludeAgents(path.replace(/\/\.agents\/.*$/, ""));
+  await Deno.mkdir(path.replace(/\/[^/]+$/, ""), { recursive: true });
+  await writeAtomic(path, content);
+  return path;
+}
+
+/** The plan of a saved workflow, by name, for a folder (the project's wins), with its placeholders
+ *  filled from `vars`. Not started: the owner approves it first. */
+export async function loadWorkflow(
+  name: string,
+  folder?: string,
+  vars: Record<string, string> = {},
+  config = configDir(),
+): Promise<{ plan: Plan; path: string; scope: SavedWorkflow["scope"] }> {
+  const found = (await savedWorkflows(folder, config)).find((w) => w.name === name);
+  if (!found) throw new Error(`no saved workflow ${name} (workflow_list shows them)`);
+  const raw = planOfSkill(await Deno.readTextFile(found.path));
+  if (!raw) throw new Error(`${found.path} has no \`\`\`json plan`);
+  const plan = fillPlan(raw, { ...(folder ? { folder } : {}), ...vars });
+  const errs = planErrors(plan);
+  if (errs.length) throw new Error(`the plan of ${name} cannot run: ${errs.join("; ")}`);
+  return { plan, path: found.path, scope: found.scope };
 }
