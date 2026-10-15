@@ -449,6 +449,25 @@ permission syntax:
   verdict, who decided and why); `agents review rules [folder]` shows what a project's runs get. The doctor
   names ignored entries and an `allow` that lets a run do anything (`Bash`, `Bash(*)`, a shell or interpreter).
 
+### Nodes: work that moves between machines
+
+Every machine's console is a node of **the service** — the brain, which also keeps your machines and the jobs
+placed on them ([ADR 0012](docs/adr/0012-agentd-and-the-service.md)). `agents node enable` turns it on
+(`config/node.json`); `agents node` shows what it announces.
+
+- **Outbound only.** Every 30 s the node tells the service its load, its session cap (from its memory, or
+  `maxSessions`), the accounts logged in and whether you are at it, with its own machine token
+  (`agents brain-login`). Nothing listens beyond `127.0.0.1`.
+- **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
+  machines with a key from the vault the service never has: a stolen token or a broken service cannot start an
+  agent. A job taken is a one-shot routine, under the same policy, limits and reviewer.
+- **Resume from the branch.** While a run works, the node pushes its branch `agent/<id>` and its HANDOFFs
+  (`refs/agents/<id>`); a node silent for ten minutes loses its running jobs, and a proposal to resume each on
+  another node (a clone of the same remote under `repoRoots`) waits for your yes.
+- **A server** runs `agents serve --headless` (after `agents node enable --headless`): no page, every child in
+  Claude Code's Bash sandbox, failing closed (`agents node probe`); only the node pushes. With no keyring there,
+  `agents vault pair --file` keeps the vault key in a file only you read.
+
 ## Consumption
 
 `agents usage` reports tokens by profile, model, project, agent, day, skill or command, with
