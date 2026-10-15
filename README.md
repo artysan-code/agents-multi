@@ -450,8 +450,14 @@ sees, and `agents nodes accept <job>` signs one.
 
 - **Outbound only.** Every 30 s the node tells the service its load, its session cap (from its memory, or
   `maxSessions`), the accounts logged in and whether you are at it, with its own machine token
-  (`agents node login`, kept in a file of this machine only: the vault's brain token travels to every machine,
-  and the service names a node after its token). Nothing listens beyond `127.0.0.1`.
+  (kept in a file of this machine only: the vault's brain token travels to every machine, and the service
+  names a node after its token). Nothing listens beyond `127.0.0.1`.
+- **Pairing with a code.** `agents node pair` asks the service for a code (eight characters, `XXXX-XXXX`, good
+  for ten minutes, one use), shows it big and waits. In the web app, _Machines › Pair_, you type it; the
+  service makes this machine's own token for your account and hands it over on the next poll, and the node is
+  turned on. No browser on the machine, no address to paste: it works on a server and from the phone. The
+  console has the same as _Connections › Pair with a code_. Five wrong codes lock pairing for fifteen
+  minutes. `agents node login` stays for scripts.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
   machines with a key from the vault the service never has: a stolen token or a broken service cannot start an
   agent. A job taken is a one-shot routine, under the same policy, limits and reviewer.
@@ -461,7 +467,10 @@ sees, and `agents nodes accept <job>` signs one.
 - **It answers your chat from the phone** ([ADR 0014](docs/adr/0014-from-the-phone.md)). A node that is on holds a
   long poll open to the service (outbound, its own token), runs each chat turn written there with the console's
   own Claude (`claude -p`, resumed per chat, the same fixed tools) and sends the answer back as it comes. On a
-  server the turn runs sandboxed with the account's token, like any headless child.
+  server the turn runs sandboxed with the account's token, like any headless child. The console's own Chat
+  uses the same path when the machine is a node: its questions become turns pinned to this machine, its list
+  shows the service's chats (so a conversation started on the phone is there), and without a brain account
+  or when the service does not answer it keeps its local chats.
 - **A server** runs `agents serve --headless`: no page, every child in Claude Code's Bash sandbox, failing closed
   (`agents node probe`); only the node pushes. It is given your configuration and the vault, read only, as
   Syncthing folders of their own (`agents config move` puts the configuration in `~/agents-multi-config`), and

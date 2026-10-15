@@ -18,6 +18,7 @@ import { owner } from "../../shared/mcp/lib/owner.ts";
 import { parentPid } from "../../shared/mcp/lib/platform.ts";
 import { recordLogin } from "./login.ts";
 import { type Act, CHAT_ID, readChat, saveTurn } from "./chats.ts";
+import { serviceChats } from "./svc-chat.ts";
 
 type Json = (v: unknown, code?: number) => Response;
 
@@ -500,10 +501,17 @@ export async function askApi(req: Request, u: URL, json: Json, saved: () => void
   if (p === "/api/ask") {
     const text = String(b.text ?? "").trim().slice(0, MAX_TEXT);
     if (!text) return json({ error: "empty" }, 400);
-    const chat = typeof b.chat === "string" && CHAT_ID.test(b.chat) ? b.chat : null;
-    return new Response(ask(text, chat, saved), {
-      headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
-    });
+    const given = typeof b.chat === "string" ? b.chat : null;
+    const chat = given && CHAT_ID.test(given) ? given : null;
+    const headers = { "content-type": "application/x-ndjson", "cache-control": "no-store" };
+    // a new chat, or one of the service's, goes to the service when this machine is a node of it (svc-chat.ts, ADR
+    // 0014 G1b); a local chat stays local, and so does everything when there is no service or it does not answer
+    if (!chat) {
+      const own = given && /^[\w-]{1,64}$/.test(given) ? given : null;
+      const relayed = await serviceChats.ask(text, own, new AbortController().signal, saved);
+      if (relayed) return new Response(relayed, { headers });
+    }
+    return new Response(ask(text, chat, saved), { headers });
   }
 
   if (p === "/api/terminal") {

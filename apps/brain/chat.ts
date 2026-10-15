@@ -31,6 +31,8 @@ export interface Turn {
   state: TurnState;
   node: string | null;
   error: string | null;
+  /** the folder Claude named for work inside a project's files (`[[code:PATH]]`), when it did */
+  code?: string;
   created: string;
   ended: string | null;
 }
@@ -39,6 +41,8 @@ export interface ChatSummary {
   title: string;
   updated: string;
   node: string | null;
+  /** how many turns the chat has, in any state */
+  turns: number;
 }
 export interface Orchestrator {
   node: string | null;
@@ -149,6 +153,9 @@ interface TurnRow {
   created: string;
   ended: string | null;
   beat: number | null;
+  /** the only node that may take it, when the asker pinned one */
+  pin: string | null;
+  code: string | null;
 }
 
 const toTurn = (r: TurnRow): Turn => ({
@@ -159,6 +166,7 @@ const toTurn = (r: TurnRow): Turn => ({
   state: r.state as TurnState,
   node: r.node,
   error: r.error,
+  ...(r.code ? { code: r.code } : {}),
   created: r.created,
   ended: r.ended,
 });
@@ -213,13 +221,15 @@ export class Chats {
     this.reclaim();
     return (this.db.prepare(
       `select c.id, c.title, c.updated,
-        (select t.node from chat_turns t where t.chat = c.id order by t.rowid desc limit 1) as node
+        (select t.node from chat_turns t where t.chat = c.id order by t.rowid desc limit 1) as node,
+        (select count(*) from chat_turns t where t.chat = c.id) as turns
        from chats c order by c.updated desc, c.rowid desc`,
     ).all() as unknown as ChatSummary[]).map((c) => ({
       id: c.id,
       title: c.title,
       updated: c.updated,
       node: c.node ?? null,
+      turns: Number(c.turns),
     }));
   }
 
@@ -241,12 +251,16 @@ export class Chats {
 
   // ---------------------------------------------------------------- writing
 
-  /** A new turn, in a new chat when `chat` is absent. */
-  post(text: unknown, chat?: unknown): { chat: ChatSummary; turn: Turn } {
+  /** A new turn, in a new chat when `chat` is absent. `pin`: the one node that may answer it (any caller of the
+   *  account may pin; the answering node of the account's setting does not apply to a pinned turn). */
+  post(text: unknown, chat?: unknown, pin?: unknown): { chat: ChatSummary; turn: Turn } {
     if (typeof text !== "string" || !text.trim()) throw new ChatError("text is the request");
     if (text.length > MAX_TEXT) throw new ChatError(`text is at most ${MAX_TEXT} characters`, 413);
     if (chat !== undefined && chat !== null && (typeof chat !== "string" || !/^[\w-]{1,64}$/.test(chat))) {
       throw new ChatError("not a chat id");
+    }
+    if (pin !== undefined && pin !== null && pin !== "" && !validNodeName(pin)) {
+      throw new ChatError("node is a node name");
     }
     const at = this.iso();
     let id = typeof chat === "string" ? chat : "";
@@ -264,11 +278,12 @@ export class Chats {
           at,
         );
       }
-      this.db.prepare("insert into chat_turns (id, chat, q, created) values (?, ?, ?, ?)").run(
+      this.db.prepare("insert into chat_turns (id, chat, q, created, pin) values (?, ?, ?, ?, ?)").run(
         `u-${this.newId()}`,
         id,
         text,
         at,
+        pin ? String(pin) : null,
       );
       this.db.exec("commit");
     } catch (e) {
@@ -340,16 +355,18 @@ export class Chats {
   }
 
   /** The waiting turns this node answers for: at most `max`, the oldest of each chat, and none in a chat whose
-   *  earlier turn is still running. Claimed: running, on this node. */
+   *  earlier turn is still running. A turn pinned to this node is its own whatever the account's setting says; an
+   *  unpinned one is its own when it is the answering node; a turn pinned to another is never. Claimed: running,
+   *  on this node. */
   claim(node: string, max = 1): Claimed[] {
     this.reclaim();
-    if (!this.answers(node)) return [];
     const rows = this.db.prepare(
       `select * from chat_turns t where t.state = 'waiting'
+         and (t.pin = ? or (t.pin is null and ?))
          and not exists (select 1 from chat_turns r where r.chat = t.chat and r.state = 'running')
          and t.rowid = (select min(w.rowid) from chat_turns w where w.chat = t.chat and w.state = 'waiting')
        order by t.rowid limit ?`,
-    ).all(Math.max(1, Math.min(20, max))) as unknown as TurnRow[];
+    ).all(node, this.answers(node) ? 1 : 0, Math.max(1, Math.min(20, max))) as unknown as TurnRow[];
     const out: Claimed[] = [];
     for (const t of rows) {
       this.db.prepare("update chat_turns set state = 'running', node = ?, beat = ? where id = ?").run(
@@ -422,11 +439,16 @@ export class Chats {
     const t = this.mine(id, node);
     const error = typeof b.error === "string" && b.error ? b.error.slice(0, 500) : null;
     const text = typeof b.text === "string" ? b.text.slice(0, MAX_ANSWER) : t.a;
-    const code = typeof b.code === "number" && Number.isFinite(b.code) ? b.code : undefined;
+    // the folder the answer named for work in a project (a string), or an exit code (a number)
+    const code = typeof b.code === "string" && b.code.trim()
+      ? b.code.trim().slice(0, 300)
+      : typeof b.code === "number" && Number.isFinite(b.code)
+      ? b.code
+      : undefined;
     const at = this.iso();
     this.db.prepare(
-      "update chat_turns set state = ?, a = ?, error = ?, ended = ?, beat = null where id = ?",
-    ).run(error ? "failed" : "done", text, error, at, id);
+      "update chat_turns set state = ?, a = ?, error = ?, code = ?, ended = ?, beat = null where id = ?",
+    ).run(error ? "failed" : "done", text, error, !error && typeof code === "string" ? code : null, at, id);
     this.db.prepare("update chats set updated = ? where id = ?").run(at, t.chat);
     this.publish(t.chat, "turn", {
       turn: id,
@@ -482,7 +504,7 @@ export async function chatRoute(
     if (p === "/api/chats" && m === "GET") return json({ chats: chats.list() });
     if (p === "/api/chats" && m === "POST") {
       const b = await body();
-      return json(chats.post(b.text, b.chat));
+      return json(chats.post(b.text, b.chat, b.node));
     }
     const one = p.match(/^\/api\/chats\/([\w-]{1,64})$/);
     if (one && m === "GET") {

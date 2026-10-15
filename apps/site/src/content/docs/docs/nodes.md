@@ -10,21 +10,42 @@ off. Nothing moves without your yes.
 ## Turning a machine into a node
 
 ```bash
-agents node login
-agents node enable
+agents node pair
 agents node
 agents nodes
 ```
 
-`agents node enable` turns on this machine only (its own file, never synced); `agents node` shows what this machine announces; `agents nodes`
-shows every machine and job the service sees.
+`agents node pair` pairs this machine with a code (below) and turns it on; `agents node` shows what this machine
+announces; `agents nodes` shows every machine and job the service sees. (`agents node enable` turns on this
+machine only, its own file, never synced.)
+
+## Pairing with a code
+
+No browser is needed on the machine, so this works on a server and from your phone:
+
+1. On the machine, run `agents node pair`. It asks the service for a code, shows it big (`XXXX-XXXX`), and
+   waits. The code is good for ten minutes and one use. In the console it is the _Pair with a code_ button in
+   Connections.
+2. In the web app, open _Machines_, type the code under _Pair a machine_.
+3. The machine receives its own token on its next poll, keeps it in a file of that machine only, and turns the
+   node on.
+
+Five wrong codes in a row lock pairing for that account for fifteen minutes. `agents node login`, which signs
+in with a browser, stays for scripts.
 
 - **Outbound only.** Every 30 seconds the node tells the service its load, how many sessions it may run (from
   its memory, or `maxSessions`), which accounts are logged in and whether you are at it. It uses its own machine
-  token (`agents node login`, kept on that machine only). Nothing listens beyond `127.0.0.1`.
+  token (made by pairing, kept on that machine only). Nothing listens beyond `127.0.0.1`.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
   machines with a key derived from the vault, which the service never has: a stolen token or a broken service
   cannot start an agent.
+
+## The console's chat
+
+When this machine is a node, the console's Chat uses the service too: a question becomes a turn pinned to this
+machine, the list shows your chats from the service (so a conversation begun on the phone is there to continue),
+and the answer streams back as before. Without a brain account, or when the service does not answer, the chats
+stay local.
 
 ## Accepting a job
 

@@ -264,3 +264,59 @@ Deno.test("chats: one account's stream never hears another's chat", () => {
   off();
   assertEquals(got, ["done"]);
 });
+
+Deno.test("chats: a turn pinned to a node is only that node's, whatever the account's setting says", async () => {
+  const { call, online } = setup();
+  online("desk");
+  online("srv", { headless: true });
+  // a pin must be a node name
+  assertEquals((await call(null, "POST", "/api/chats", { text: "x", node: "../x" })).status, 400);
+  const pinned = (await call(null, "POST", "/api/chats", { text: "from the desk", node: "desk" })).body;
+  assertEquals(pinned.turn.state, "waiting");
+  // srv is the answering node (first online headless one), but the turn is pinned to desk
+  assertEquals((await call("srv", "GET", "/api/node/turns")).body.turns, []);
+  const got = (await call("desk", "GET", "/api/node/turns")).body.turns;
+  assertEquals(got.map((t: { id: string }) => t.id), [pinned.turn.id]);
+  // an unpinned turn still follows the setting, and a pin on an offline node waits for it
+  const free = (await call(null, "POST", "/api/chats", { text: "anyone" })).body;
+  assertEquals((await call("desk", "GET", "/api/node/turns")).body.turns, []);
+  assertEquals((await call("srv", "GET", "/api/node/turns")).body.turns.map((t: { id: string }) => t.id), [
+    free.turn.id,
+  ]);
+  const away = (await call(null, "POST", "/api/chats", { text: "elsewhere", node: "laptop" })).body;
+  assertEquals((await call("srv", "GET", "/api/node/turns")).body.turns, []);
+  assertEquals((await call("laptop", "GET", "/api/node/turns")).body.turns.map((t: { id: string }) => t.id), [
+    away.turn.id,
+  ]);
+});
+
+Deno.test("chats: a pinned turn lost by a silent node goes back to waiting, still pinned", async () => {
+  const { call, online, tick } = setup();
+  online("desk");
+  const t = (await call(null, "POST", "/api/chats", { text: "x", node: "desk" })).body.turn.id;
+  assertEquals((await call("desk", "GET", "/api/node/turns")).body.turns.length, 1);
+  tick(RECLAIM_MS + 1000);
+  online("srv", { headless: true });
+  assertEquals((await call("srv", "GET", "/api/node/turns")).body.turns, []);
+  assertEquals((await call("desk", "GET", "/api/node/turns")).body.turns.map((x: { id: string }) => x.id), [t]);
+});
+
+Deno.test("chats: the list counts the turns, and the folder an answer named is kept with it", async () => {
+  const { call, online, hub } = setup();
+  online("desk");
+  const c = (await call(null, "POST", "/api/chats", { text: "look at the site" })).body;
+  assertEquals((await call(null, "GET", "/api/chats")).body.chats[0].turns, 1);
+  const seen: { event: string; data: Record<string, unknown> }[] = [];
+  hub.subscribe("u1", c.chat.id, (e) => seen.push(e));
+  const t = (await call("desk", "GET", "/api/node/turns")).body.turns[0];
+  await call("desk", "POST", `/api/turns/${t.id}/done`, { text: "Open the site.", code: "~/work/acme/site" });
+  assertEquals(seen.find((e) => e.event === "done")!.data, {
+    turn: t.id,
+    a: "Open the site.",
+    code: "~/work/acme/site",
+  });
+  const turn = (await call(null, "GET", `/api/chats/${c.chat.id}`)).body.chat.turns[0];
+  assertEquals([turn.state, turn.code], ["done", "~/work/acme/site"]);
+  await call(null, "POST", "/api/chats", { text: "more", chat: c.chat.id });
+  assertEquals((await call(null, "GET", "/api/chats")).body.chats[0].turns, 2);
+});

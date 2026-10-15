@@ -82,6 +82,14 @@ create index if not exists chat_turns_open on chat_turns(state) where state in (
 create table if not exists push_subs (
   endpoint text primary key, p256dh text not null, auth text not null, device text not null default '',
   created text not null);`),
+  // a turn may be pinned to one machine (the console's chat asks for its own, ADR 0014 G1b)
+  // and may carry the project folder its answer named (the console's chat opens a terminal there)
+  (db) => {
+    const cols = db.prepare("pragma table_info(chat_turns)").all() as { name: string }[];
+    for (const c of ["pin", "code"]) {
+      if (!cols.some((x) => x.name === c)) db.exec(`alter table chat_turns add column ${c} text`);
+    }
+  },
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */
