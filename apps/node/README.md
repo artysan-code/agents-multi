@@ -40,16 +40,28 @@ service token and the vault key file are made once in the container's terminal a
 
 3. **The vault, on this server.** The vault (`~/agents-multi-vault` on your machines) is a Syncthing folder of
    its own: share **that folder alone** with this server's Syncthing as a **trusted** device (no encryption
-   password), so the MCP servers of the node's jobs can open their accounts. The rest of your Syncthing folders
-   stay encrypted there. Its entries are sealed with the vault key; the key arrives in step 5. Note the folder's
-   path **on the host** (with Syncthing in Docker, inside its data volume): it is `NODE_VAULT_DIR` below.
+   password), receive only, so the MCP servers of the node's jobs can open their accounts. The rest of your
+   Syncthing folders stay encrypted there. Its entries are sealed with the vault key; the key arrives in step 5.
+   Note the folder's path **on the host** (with Syncthing in Docker, inside its data volume:
+   `docker volume inspect -f '{{.Mountpoint}}' <its data volume>`), and make it the node's user's before anything
+   mounts it, or Docker makes it root's and Syncthing can no longer write there:
+   `install -d -o 1000 -g 1000 -m 700 <folder>`.
 
 4. **Coolify: the service.** A new resource from the repository, _Docker Compose_, base directory `/apps/node`,
-   compose file `/compose.yaml` (it builds the image from the repository's root). Variables: `NODE_VAULT_DIR`
-   (the host folder of step 3, mounted read only; unset, the node has no vault and runs no job that needs a
-   service's secret), `NODE_MEMORY` (default `8g`; the node's session cap is `(memory − 2 GiB) / 1.5 GiB`, so 8g
-   is 4 sessions), `NODE_NAME`, `NODE_TIMEZONE`. Deploy: the container starts and waits, unconfigured. To run it
-   without Coolify: `docker compose up -d --build` in this folder.
+   compose file `/compose.yaml` (it builds the image from the repository's root). Variables: `NODE_MEMORY`
+   (default `8g`; the node's session cap is `(memory − 2 GiB) / 1.5 GiB`, so 8g is 4 sessions), `NODE_NAME`,
+   `NODE_TIMEZONE`. Deploy: the container starts and waits, unconfigured. **The vault**: Coolify reads the
+   compose file itself and mounts the named volume `<uuid>_node-vault`, empty, whatever `NODE_VAULT_DIR` says;
+   once the vault has arrived, make that volume a bind of the folder of step 3, then deploy again (a deploy keeps
+   it):
+
+   ```sh
+   sudo apps/node/vault-volume.sh <uuid>_node-vault <folder>
+   ```
+
+   Without Coolify, `NODE_VAULT_DIR=<folder> docker compose up -d --build` in this folder mounts it directly.
+   With neither, the node has no vault and runs no job that needs a service's secret (the doctor's `node.vault`
+   says so).
 
 5. **In the container's terminal** (`docker exec -it <container> bash`; Coolify has a terminal for it): make the
    configuration, then restart the container so that the code is installed:

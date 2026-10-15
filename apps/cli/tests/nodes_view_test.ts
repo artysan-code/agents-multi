@@ -148,4 +148,8 @@ Deno.test("doctor node: only loopback on our ports; the key file the user's alon
     "node.sandbox:fail",
   ]);
   assertEquals(ids(nodeFindings({ ...ready, sandbox: { ok: true } })).at(-1), "node.sandbox:ok");
+  // a headless node whose vault mount came up empty says so; a desktop is not asked
+  assertEquals(ids(nodeFindings({ ...ready, vault: false })).at(-1), "node.vault:warn");
+  assertEquals(ids(nodeFindings({ ...ready, vault: true })).at(-1), "node.vault:ok");
+  assertEquals(ids(nodeFindings({ ...ready, vault: null })).at(-1), "node.token:ok");
 });

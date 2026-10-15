@@ -49,7 +49,8 @@ export const LEGACY_VAULT_DIR = `${HOME}/vault/claude-multi`;
 export const pickVaultDir = (hasNew: boolean, hasLegacy: boolean): string =>
   hasNew || !hasLegacy ? VAULT_DIR : LEGACY_VAULT_DIR;
 
-const hasVault = (dir: string): boolean => {
+/** A vault is in this folder: its key check is there (and this process may read it). */
+export const hasVault = (dir: string): boolean => {
   try {
     return Deno.statSync(`${dir}/key-check.json`).isFile;
   } catch {

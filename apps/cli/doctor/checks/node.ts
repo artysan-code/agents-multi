@@ -4,7 +4,7 @@
 import { brainAccount } from "../../../../shared/mcp/lib/brain-tasks.ts";
 import { loadNodeConfig, type NodeConfig } from "../../../../shared/mcp/lib/headless.ts";
 import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
-import { loadKey, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
+import { hasVault, loadKey, vaultDir, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { exposedListeners, type Probe, sandboxProbe } from "../../node/probe.ts";
 import { nodeTokenFile } from "../../node/service.ts";
@@ -31,6 +31,8 @@ export interface NodeFacts {
   sandbox: Probe | null;
   /** this machine's own node token file: its mode (`& 0o777`), null when there is none */
   tokenMode?: number | null;
+  /** a vault in sight, on a headless node (null elsewhere: a desktop's vault has its own checks) */
+  vault?: boolean | null;
 }
 
 /** Pure: what the doctor says of this machine as a node. */
@@ -90,6 +92,14 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "apps/node/README.md: the seccomp profile, systempaths=unconfined and, with AppArmor, its profile",
     );
   } else if (f.sandbox) add("node.sandbox", "ok", "headless node: the Bash sandbox starts");
+  if (f.vault === false) {
+    add(
+      "node.vault",
+      "warn",
+      `headless node, but no vault in ${vaultDir()}: its jobs open no service's account`,
+      "apps/node/README.md, «The vault»: the Syncthing folder mounted at ~/agents-multi-vault",
+    );
+  } else if (f.vault) add("node.vault", "ok", "headless node: the vault is in sight (read only)");
   if (!f.approval) {
     add(
       "node.approval",
@@ -127,6 +137,7 @@ export async function nodeChecks(): Promise<Check[]> {
     service: account?.url ?? null,
     approval,
     sandbox: cfg.enabled && cfg.headless ? await sandboxProbe() : null,
+    vault: cfg.enabled && cfg.headless ? hasVault(vaultDir()) : null,
     tokenMode: await Deno.stat(nodeTokenFile()).then((s) => s.mode != null ? s.mode & 0o777 : 0o600, () => null),
   });
 }
