@@ -473,15 +473,31 @@ sees, and `agents nodes accept <job>` signs one.
 
 ### From the phone
 
-The service also serves a small web app at `/app` ([ADR 0014](docs/adr/0014-from-the-phone.md)): open
+The service also serves a web app at `/app` ([ADR 0014](docs/adr/0014-from-the-phone.md)): open
 `https://<your service>/app` on the phone, sign in as on `/account`, and add it to the home screen (it is a PWA,
-the shell and push only: no data is kept offline). It has **Chat** (the conversations by day, answers streaming as
-they are written, with the changes Claude made), **Tasks** (today with its times, overdue, done today), **Brain**
-(search and read) and **Machines** (the account's nodes, and which one answers the chat), and in **Settings** the
-switch for notifications (Web Push; on iPhone and iPad they work once the app is on the home screen). The app
-runs nothing itself: a chat is answered by one of your paired machines. It is `apps/ui`'s second entry
+the shell and push only: no data is kept offline). It is made for one hand: a tab bar under the thumb (**Chat**,
+**Waiting** with a badge, **Tasks**, **Brain**, **More**), a calm light and dark theme that follows the device (or
+the choice in More), and on a wide screen the chat list beside the conversation.
+
+- **Chat**: the conversations by day with the machine that answered; your messages as compact bubbles, answers as
+  full-width text (Markdown, code blocks with a copy button, lists, links), the changes Claude made as chips under
+  the answer, a live cursor while it writes, _Stop waiting_ and _Try again_ when a machine does not answer, and a
+  composer that stays over the keyboard (Enter sends on a desktop, a new line on a touch screen). The machine that
+  answers can be changed in place, for the next messages.
+- **Waiting**: what the agents on your machines ask (permissions and questions) and the jobs proposed to them, each
+  answered with **a passkey**: _Yes_, _Yes for the session_, _No_. The first run creates the passkey; it counts only
+  once a desktop with your vault has endorsed it (`agents passkeys`), and until then it is shown as pending.
+- **Tasks** (today with its times, overdue, done today) and **Brain** (search, recent pages, a page in the serif
+  face), with loading skeletons, error banners with a retry, an offline banner, and pull to refresh.
+- **More**: Machines (state, load and accounts of each node, which one answers, **pair a machine** with the code
+  `agents node pair` shows), notifications (Web Push; on iPhone and iPad once the app is on the home screen), the
+  passkeys (list, revoke), theme, language, sign out.
+
+The app runs nothing itself: a chat is answered by one of your paired machines. It is `apps/ui`'s second entry
 (`vite.web.config.ts`, strings in `src/i18n/web.ts`), built into the brain's image and served by
-`apps/brain/webapp.ts`.
+`apps/brain/webapp.ts`. To look at it without a service: `pnpm exec vite build --config vite.web.config.ts`, then
+`deno run --allow-net --allow-read apps/ui/scripts/web-fixture.ts` serves it with made-up data (a streaming answer
+included) on `http://127.0.0.1:8799/app/`.
 
 ## Consumption
 
