@@ -346,6 +346,8 @@ Deno.test("verifyJob takes a job approved by an endorsed passkey as well as the 
   assertEquals(signedText(j).startsWith("agents-multi job v1\n"), true);
 });
 
+const flip = (s: string, i = 10) => s.slice(0, i) + (s[i] === "A" ? "B" : "A") + s.slice(i + 1);
+
 Deno.test("a job's signature still counts, and wins when both are there", async () => {
   const w = await world();
   const j = job();
@@ -353,7 +355,8 @@ Deno.test("a job's signature still counts, and wins when both are there", async 
   j.signature = await signJob(j, w.owner.sign);
   assertEquals(await verifyJob(j, w.owner.public, "srv", NOW, []), null);
   assertEquals(
-    await verifyJob({ ...j, signature: j.signature.slice(0, -2) + "AA" }, w.owner.public, "srv", NOW, []),
+    // one character changed in the middle: the end of a base64 text may carry bits nobody reads
+    await verifyJob({ ...j, signature: flip(j.signature) }, w.owner.public, "srv", NOW, []),
     "the signature is not the owner's",
   );
 });

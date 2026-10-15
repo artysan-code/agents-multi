@@ -10,6 +10,7 @@ import {
   forgetNode,
   forgetRoute,
   MAX_AUDIO,
+  MAX_VOICE_OPEN,
   readLimited,
   readVoiceForm,
   RECLAIM_MS,
@@ -178,10 +179,17 @@ Deno.test("voice: a pinned voice note is only its node's, and only if that node 
   assertEquals((await call("a", "GET", "/api/node/turns")).body.turns.map((t: { id: string }) => t.id), [
     pinned.body.turn.id,
   ]);
-  // pinned to a node that cannot: nobody takes it
+  // pinned to a node known not to transcribe: refused, not left waiting
   const stuck = await voice(null, { node: "c", chat: pinned.body.chat.id });
-  assert(stuck.status === 200);
+  assertEquals(stuck.status, 409);
   assertEquals((await call("c", "GET", "/api/node/turns")).body.turns, []);
+});
+
+Deno.test("voice: at most a few notes wait with their audio at once", async () => {
+  const { voice, audioRows } = setup();
+  for (let i = 0; i < MAX_VOICE_OPEN; i++) assertEquals((await voice(null)).status, 200);
+  assertEquals((await voice(null)).status, 429);
+  assertEquals(audioRows(), MAX_VOICE_OPEN);
 });
 
 Deno.test("voice: the audio is the holder's alone, the transcript becomes the question, the audio goes with the turn", async () => {
@@ -214,6 +222,12 @@ Deno.test("voice: the audio is the holder's alone, the transcript becomes the qu
   assertEquals(seen.filter((s) => s.startsWith("transcript:")), [
     `transcript:{"turn":"${id}","text":"ricordami di chiamare Anna\\nalle dieci"}`,
   ]);
+  // a second transcript changes nothing
+  await call("a", "POST", `/api/turns/${id}/events`, { events: [{ t: "transcript", text: "altro" }] });
+  assertEquals(
+    (await call(null, "GET", `/api/chats/${chat}`)).body.chat.turns[0].q,
+    "ricordami di chiamare Anna\nalle dieci",
+  );
   // a text turn has no transcript; an empty one is refused
   const text = await call(null, "POST", "/api/chats", { text: "x" });
   await call("a", "GET", "/api/node/turns");

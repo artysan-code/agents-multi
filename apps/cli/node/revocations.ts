@@ -4,17 +4,16 @@
 // credential's id, value the date. Without a vault (a node pinned by `approvalKey` alone) there is nothing to
 // read, and the service's withholding is all there is.
 
-import { listSecrets, setSecret } from "../../../shared/mcp/lib/vault.ts";
+import { hasVault, listSecrets, setSecret, vaultDir } from "../../../shared/mcp/lib/vault.ts";
 
 export const REVOCATIONS = "passkey-revocations";
 
-/** The credential ids revoked in this machine's vault; empty when there is no vault to open. */
+/** The credential ids revoked in this machine's vault; empty when this machine has no vault. A vault that is there
+ *  but cannot be opened now (a locked keyring, a read error) throws: a node then retries next tick rather than
+ *  take a revoked passkey for a good one. */
 export async function revokedIds(): Promise<ReadonlySet<string>> {
-  try {
-    return new Set((await listSecrets()).entries.filter((e) => e.service === REVOCATIONS).map((e) => e.account));
-  } catch {
-    return new Set();
-  }
+  if (!hasVault(vaultDir())) return new Set();
+  return new Set((await listSecrets()).entries.filter((e) => e.service === REVOCATIONS).map((e) => e.account));
 }
 
 /** Writes the revocation of a passkey into the vault; throws when this machine has none. */

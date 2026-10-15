@@ -97,6 +97,7 @@ export const en = {
 
   "tasks.title": "Tasks",
   "tasks.doneShort": "Done",
+  "tasks.marked": "Task done",
   "tasks.none": "Nothing due today.",
   "tasks.clear": "Everything for today is done.",
   "tasks.open": "{n} open",
@@ -322,6 +323,7 @@ export const it: Record<keyof typeof en, string> = {
 
   "tasks.title": "Task",
   "tasks.doneShort": "Fatta",
+  "tasks.marked": "Task fatta",
   "tasks.none": "Niente in scadenza oggi.",
   "tasks.clear": "Tutto fatto per oggi.",
   "tasks.open": "{n} aperte",

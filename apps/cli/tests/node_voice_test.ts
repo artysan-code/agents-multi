@@ -151,6 +151,9 @@ Deno.test("audio to text: the arguments, the extension by type, the cleaned tran
   const f = ffmpegArgs("/t/in.webm", "/t/out.wav");
   assertEquals(f.slice(-9), ["-i", "/t/in.webm", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", "/t/out.wav"]);
   assert(f.includes("-nostdin"));
+  // local files only, the container by its type: a playlist sent as audio/webm is read as Matroska and fails
+  assertEquals(f.slice(5, 9), ["-protocol_whitelist", "file", "-f", "matroska"]);
+  assertEquals(ffmpegArgs("/t/in.m4a", "/t/o.wav").slice(7, 9), ["-f", "mov"]);
   assertEquals(whisperArgs("/m.bin", "/t/out.wav", "it"), [
     "-m",
     "/m.bin",
@@ -170,6 +173,8 @@ Deno.test("audio to text: the arguments, the extension by type, the cleaned tran
     cmd: "/usr/bin/bwrap",
     args: [
       "--unshare-net",
+      "--unshare-pid",
+      "--die-with-parent",
       "--ro-bind",
       "/",
       "/",
@@ -222,9 +227,11 @@ Deno.test("transcribeAudio: on a confined node whisper runs inside the wrapper; 
     ...setup,
     confine: (t) => confineWith("/usr/bin/bwrap", t),
   }, f.io);
-  assertEquals(f.calls[0].cmd, "ffmpeg"); // the converter reads a recording, it is not confined
+  // both run inside the wrapper: the converter reads what the phone sent
+  assertEquals(f.calls[0].cmd, "/usr/bin/bwrap");
+  assert(f.calls[0].args.includes("ffmpeg"));
   assertEquals(f.calls[1].cmd, "/usr/bin/bwrap");
-  assertEquals(f.calls[1].args.slice(0, 2), ["--unshare-net", "--ro-bind"]);
+  assertEquals(f.calls[1].args.slice(0, 3), ["--unshare-net", "--unshare-pid", "--die-with-parent"]);
   assert(f.calls[1].args.includes("--bind") && f.calls[1].args.includes("/w/whisper-cli"));
 
   const bad = fakeIO((cmd) => cmd === "ffmpeg" ? { code: 1, stderr: "Invalid data found" } : { code: 0 });

@@ -96,7 +96,7 @@ export async function passkeysView(): Promise<
     return {
       available: true,
       canEndorse: !!key,
-      passkeys: await rowsOf(await getPasskeys(s), key, await revokedIds()),
+      passkeys: await rowsOf(await getPasskeys(s), key, await revokedIds().catch(() => new Set<string>())),
     };
   } catch (e) {
     return { available: false, message: (e as Error).message, canEndorse: !!key, passkeys: [] };
@@ -192,7 +192,10 @@ export async function passkeysCommand(args: string[]): Promise<number> {
     }
     if (sub !== "endorse") {
       console.log(
-        passkeyLines(await rowsOf(list, await ownerKeyOrNull(), await revokedIds()), Date.now()).join("\n"),
+        passkeyLines(
+          await rowsOf(list, await ownerKeyOrNull(), await revokedIds().catch(() => new Set<string>())),
+          Date.now(),
+        ).join("\n"),
       );
       return 0;
     }

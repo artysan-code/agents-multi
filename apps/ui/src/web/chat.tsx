@@ -32,12 +32,12 @@ const COPY = () => ({ label: t("copy"), done: t("copied") });
 const seeded = new Map<string, Turn[]>();
 
 // ---- deleting a chat from the list waits a few seconds for an Undo; the delete itself is the service's, and goes at once
-// if the page is closing
+// if the page is closing. Only closing: a phone hides the page for a lock screen, another app or the password manager,
+// and the Undo must still work when it comes back (a page killed while hidden keeps the chat, the safe side).
 const UNDO_MS = 6000;
 const pendingDeletes = new Map<string, () => void>();
 const flushDeletes = () => [...pendingDeletes.values()].forEach((run) => run());
 addEventListener("pagehide", flushDeletes);
-document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flushDeletes());
 
 /** The chat goes from the list now and from the account when the Undo has run out. `restore` puts it back in view. */
 function scheduleDelete(c: ChatHead, restore: () => void) {
@@ -46,12 +46,13 @@ function scheduleDelete(c: ChatHead, restore: () => void) {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    dismiss();
     pendingDeletes.delete(c.id);
     deleteChat(c.id).then(() => void chatsTick.value++, (e: Error) => (toast(e.message), restore()));
   };
   const timer = setTimeout(run, UNDO_MS);
   pendingDeletes.set(c.id, run);
-  toast(t("chat.deleted"), {
+  const dismiss = toast(t("chat.deleted"), {
     label: t("undo"),
     run: () => {
       if (settled) return;

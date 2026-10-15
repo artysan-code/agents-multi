@@ -1,13 +1,20 @@
 // tasks.tsx — Tasks on the phone: today with its times, what is overdue, what was done today, in compact rows.
 // «Done» is the one change (the board's own route, where the repeat and the other rules run), by the circle or
-// by swiping the row to the right.
+// by swiping the row to the right. It reaches the board after a few seconds with an Undo (a swipe can be a slip), or
+// at once when the page closes.
 
 import { useEffect, useState } from "preact/hooks";
 import { markDone, taskFiles } from "./api.ts";
 import { parseTasks, type Task, taskSections } from "./lib.ts";
 import { dateOf, t } from "./t.ts";
 import { Swipe } from "./swipe.tsx";
-import { Empty, Failure, Header, Icon, Skeleton, usePull } from "./ui.tsx";
+import { Empty, Failure, Header, Icon, Skeleton, toast, usePull } from "./ui.tsx";
+
+const UNDO_MS = 6000;
+/** Tasks shown done whose «done» has not been sent yet: id → send it now. */
+const pendingDone = new Map<string, () => void>();
+addEventListener("pagehide", () => [...pendingDone.values()].forEach((run) => run()));
+const asDone = (x: Task): Task => ({ ...x, status: "done", done: new Date().toISOString() });
 
 /** One task: a title at a readable size cut at two lines, and under it one small line (time, reference, project,
  *  how late it is, what it waits on). Swiping it to the right marks it done; the circle does the same. */
@@ -51,7 +58,11 @@ function Row({ task, late, onDone }: { task: Task; late?: boolean; onDone?: (t: 
 export function Tasks() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [err, setErr] = useState("");
-  const load = () => taskFiles().then((f) => (setTasks(parseTasks(f)), setErr("")), (e: Error) => setErr(e.message));
+  const load = () =>
+    taskFiles().then(
+      (f) => (setTasks(parseTasks(f).map((x) => (pendingDone.has(x.id) ? asDone(x) : x))), setErr("")),
+      (e: Error) => setErr(e.message),
+    );
   const pull = usePull(load);
   useEffect(() => {
     void load();
@@ -60,10 +71,26 @@ export function Tasks() {
     return () => document.removeEventListener("visibilitychange", again);
   }, []);
 
-  const done = async (task: Task) => {
-    // shown done at once; read again from the service, which is the one that knows the next of a repeating task
-    setTasks((all) => all?.map((x) => (x.id === task.id ? { ...x, status: "done", done: new Date().toISOString() } : x)) ?? null);
-    await markDone(task.id).then(load, (e: Error) => (setErr(e.message), load()));
+  const done = (task: Task) => {
+    // shown done at once, sent when the Undo has run out; read again from the service, which is the one that knows
+    // the next of a repeating task
+    setTasks((all) => all?.map((x) => (x.id === task.id ? asDone(x) : x)) ?? null);
+    let settled = false;
+    const settle = () => {
+      if (settled) return false;
+      settled = true;
+      clearTimeout(timer);
+      pendingDone.delete(task.id);
+      return true;
+    };
+    const run = () => {
+      if (!settle()) return;
+      dismiss();
+      void markDone(task.id).then(load, (e: Error) => (setErr(e.message), load()));
+    };
+    const timer = setTimeout(run, UNDO_MS);
+    pendingDone.set(task.id, run);
+    const dismiss = toast(t("tasks.marked"), { label: t("undo"), run: () => void (settle() && load()) }, UNDO_MS);
   };
 
   const now = new Date();

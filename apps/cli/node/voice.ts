@@ -2,8 +2,9 @@
 // the audio until the turn ends, and a node that has whisper.cpp and ffmpeg takes the turn: it fetches the audio,
 // converts it to 16 kHz mono WAV in a temporary folder, transcribes it locally in the account's language and posts
 // the text as the turn's first event. The audio never leaves the person's machines but for the service's copy.
-// Both programs run with an empty environment (no secrets, a headless node's token included) and, where the
-// sandbox tool is there, with no network at all. Everything that touches the machine goes through `VoiceIO`, so the
+// Both programs run with an empty environment (no secrets, a headless node's token included); ffmpeg reads local
+// files only, with the container named by the recording's type, never guessed from its content; and, where the
+// sandbox tool is there, both run with no network at all. Everything that touches the machine goes through `VoiceIO`, so the
 // tests run the whole flow with a fake whisper and a fake ffmpeg.
 
 import { type VoiceConfig, voicePath } from "../../../shared/mcp/lib/headless.ts";
@@ -200,14 +201,29 @@ export function audioExt(type: string): string {
   return "m4a"; // mp4 audio from iOS, x-m4a
 }
 
-/** Pure: ffmpeg's arguments: any input to 16 kHz mono 16-bit WAV, the format whisper.cpp reads. */
-export function ffmpegArgs(input: string, output: string): string[] {
+/** Pure: ffmpeg's demuxer for a file of `audioExt`: the recording is read as what its type says, so a playlist or a
+ *  concat list sent with an audio type is not followed. */
+export function audioDemuxer(ext: string): string {
+  return ({ webm: "matroska", ogg: "ogg", mp3: "mp3", wav: "wav", aac: "aac" } as Record<string, string>)[ext] ?? "mov";
+}
+
+/** Pure: ffmpeg's arguments: any input to 16 kHz mono 16-bit WAV, the format whisper.cpp reads. Local files only
+ *  (`-protocol_whitelist file`), the container forced by its type. */
+export function ffmpegArgs(
+  input: string,
+  output: string,
+  demuxer = audioDemuxer(input.split(".").pop() ?? ""),
+): string[] {
   return [
     "-nostdin",
     "-hide_banner",
     "-loglevel",
     "error",
     "-y",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    demuxer,
     "-i",
     input,
     "-ar",
@@ -237,19 +253,38 @@ export interface VoiceSetup {
   cfg: VoiceConfig;
   /** whisper's language code */
   language: string;
-  /** a node with the sandbox tool runs whisper with no network; given the temporary folder, the one place it writes */
+  /** a node with the sandbox tool runs both programs with no network; given the temporary folder, the one place they
+   *  write */
   confine?: (tmp: string) => Wrap;
 }
 type Wrap = (cmd: string, args: string[]) => { cmd: string; args: string[] };
 
-/** Pure: the sandbox tool's wrapper (bubblewrap): the same filesystem, read only but for the temporary folder,
- *  and no network. */
+/** Pure: the sandbox tool's wrapper (bubblewrap): the same filesystem, read only but for the temporary folder, no
+ *  network, its own processes, and gone with the node's process (a cancelled note stops the program, not only the
+ *  wrapper). */
 export function confineWith(bwrap: string, tmp: string) {
   return (cmd: string, args: string[]) => ({
     cmd: bwrap,
-    args: ["--unshare-net", "--ro-bind", "/", "/", "--dev", "/dev", "--bind", tmp, tmp, "--", cmd, ...args],
+    args: [
+      "--unshare-net",
+      "--unshare-pid",
+      "--die-with-parent",
+      "--ro-bind",
+      "/",
+      "/",
+      "--dev",
+      "/dev",
+      "--bind",
+      tmp,
+      tmp,
+      "--",
+      cmd,
+      ...args,
+    ],
   });
 }
+
+export const TRANSCRIBE_MS = 30 * 60_000;
 
 /** One voice note to text: the temporary folder is made and removed here, whatever happens. Throws with what went
  *  wrong (the turn then ends with it). An empty result is a note with no speech in it: "" . */
@@ -264,7 +299,12 @@ export async function transcribeAudio(
     const input = `${dir}/note.${audioExt(audio.type)}`, wav = `${dir}/note.wav`;
     await io.write(input, audio.data);
     const wrap: Wrap = setup.confine?.(dir) ?? ((cmd, args) => ({ cmd, args }));
-    const conv = await io.run("ffmpeg", ffmpegArgs(input, wav), { signal });
+    // a note is five minutes at most: half an hour is a program that hangs
+    signal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(TRANSCRIBE_MS)])
+      : AbortSignal.timeout(TRANSCRIBE_MS);
+    const f = wrap("ffmpeg", ffmpegArgs(input, wav));
+    const conv = await io.run(f.cmd, f.args, { signal });
     if (conv.code !== 0) throw new Error(`ffmpeg could not read the recording: ${conv.stderr.trim().slice(-300)}`);
     const w = wrap(setup.cfg.bin, whisperArgs(setup.cfg.model, wav, setup.language));
     const r = await io.run(w.cmd, w.args, { signal });

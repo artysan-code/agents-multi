@@ -306,7 +306,11 @@ The owner's first use from the phone, and the points left open above.
   checks it once, over `agents-multi job decline v1\n` and the job's canonical text, and when it does not hold it
   tells the owner and proposes the work again. A decline by a machine's token drops the approval's assertion.
 - Revocations are vault entries: service `passkey-revocations`, account the credential's id, value the date. A node
-  refuses a revoked passkey for an answer, a job's approval and a decline alike.
+  refuses a revoked passkey for an answer, a job's approval and a decline alike. A vault that is there but cannot be
+  opened right now refuses nothing and accepts nothing: the node tries again at the next tick.
+- A phone's decline is checked after the service has marked it: what a node that holds no such decline does is tell
+  the owner and propose the work again (detection and a second chance, not prevention). A job with no node, raised by
+  the service or by a machine that is gone, has nobody to check its decline.
 - The challenge of a passkey's creation now lives six minutes, a little over the five the browser is given.
 
 ## As built (second round: voice, the chat's actions, forgetting a machine; 2026-10-16)
@@ -315,8 +319,9 @@ The owner's first use from the phone, and the points left open above.
   ends in any way (done, failed, cancelled) and with its chat. `chat_turns.voice` marks the turn; its `q` is empty until
   the `transcript` event, which also renames the chat from «Voice note» to the transcript's first words. A voice turn
   is claimed only by a node whose announcement says `voice: true`; unpinned, it goes to the account's answering node
-  _among the voice nodes_ (the setting's choice, then its fallbacks, then the first online). A turn pinned to a machine
-  that cannot transcribe waits there until cancelled: the service accepts it, it does not guess.
+  _among the voice nodes_ (the setting's choice, then its fallbacks, then the first online). A note pinned to a machine
+  known not to transcribe is refused (409); at most five notes wait with their audio at once per account (429). Only the
+  first `transcript` of a turn counts.
 - **Limits.** 10 MB of audio (the body is read with a cap, declared or not), types `audio/webm`, `mp4`, `x-m4a`, `m4a`,
   `aac`, `ogg`, `mpeg`, `wav`, `x-wav` and `video/webm`, `video/mp4` (what browsers call a recording), anything else 415.
   The five minutes are the app's to enforce.
@@ -327,7 +332,8 @@ The owner's first use from the phone, and the points left open above.
 - **Forget.** `DELETE /api/nodes/<name>` answers `{ok, node, turns, tokens}` (404 when there was nothing); the turns it
   held wait again, those pinned to it fail with «the machine was forgotten»; its jobs stay as history. Any token or
   session of the account may do it, a forgotten machine's own token included.
-- **The node.** `voice` is a machine field of `node.json`; both programs run with an empty environment and, on a
-  headless node with bubblewrap, whisper runs with the network unshared and the filesystem read only but for its
-  temporary folder. Transcription is silent for the service, so the heartbeat keeps the turn ours meanwhile.
+- **The node.** `voice` is a machine field of `node.json`; both programs run with an empty environment; ffmpeg reads local files only
+  (`-protocol_whitelist file`) with the container forced by the recording's type, so a playlist sent as audio is not
+  followed; on a headless node with bubblewrap both run with the network and the processes unshared, the filesystem
+  read only but for their temporary folder, and die with the node's process; half an hour is the most a note may take. Transcription is silent for the service, so the heartbeat keeps the turn ours meanwhile.
 - **Not here.** Speech recognition in the browser and the recorder are the web app's.

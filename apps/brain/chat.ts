@@ -19,6 +19,8 @@ const HISTORY = 10;
 const KEEPALIVE_MS = 20_000;
 /** A voice note: at most 10 MB of audio (5 minutes of Opus or AAC is far below), of these types. */
 export const MAX_AUDIO = 10 * 1024 * 1024;
+/** Voice notes not yet ended, per account: each holds its audio until then. */
+export const MAX_VOICE_OPEN = 5;
 export const AUDIO_TYPES = [
   "audio/webm",
   "audio/mp4",
@@ -295,6 +297,13 @@ export class Chats {
     if (!AUDIO_TYPES.includes(type)) throw new ChatError(`audio is one of ${AUDIO_TYPES.join(", ")}`, 415);
     if (!audio.data.byteLength) throw new ChatError("the audio is empty");
     if (audio.data.byteLength > MAX_AUDIO) throw new ChatError("the audio is at most 10 MB", 413);
+    if ((this.db.prepare("select count(*) n from turn_audio").get() as { n: number }).n >= MAX_VOICE_OPEN) {
+      throw new ChatError(`${MAX_VOICE_OPEN} voice notes are already waiting: let them end first`, 429);
+    }
+    if (typeof pin === "string" && pin) {
+      const n = new Fleet(this.db, this.now).nodes().find((x) => x.name === pin);
+      if (n && n.voice !== true) throw new ChatError(`${pin} cannot transcribe a voice note`, 409);
+    }
     return this.insert("", chat, pin, { type, data: audio.data });
   }
 
@@ -573,7 +582,8 @@ export class Chats {
         session = e.id;
       } else if (e?.t === "transcript" && typeof e.text === "string" && e.text.trim()) {
         if (!t.voice) throw new ChatError("only a voice turn has a transcript");
-        transcript = e.text.trim().slice(0, MAX_TEXT);
+        // the first one is the question; a later one changes nothing
+        if (!t.q && transcript === null) transcript = e.text.trim().slice(0, MAX_TEXT);
       } else throw new ChatError("an event is text, tool or session");
     }
     this.db.prepare("update chat_turns set a = ?, acts = ?, session = ?, beat = ? where id = ?").run(
