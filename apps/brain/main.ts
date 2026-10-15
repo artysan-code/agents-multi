@@ -45,6 +45,8 @@ import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/own
 import { masterKey, type User, Users } from "./users.ts";
 import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
 import { Fleet, fleetRoute } from "./fleet.ts";
+import { ChatHub, chatRoute, Chats } from "./chat.ts";
+import { loadVapid, noticeOf, pushAll, pushRoute, Subscriptions } from "./push.ts";
 import { nodeNameOf } from "../../shared/mcp/lib/nodes.ts";
 
 if (Deno.args[0] === "totp") {
@@ -71,6 +73,9 @@ if (!env("BRAIN_MASTER_KEY")) {
 }
 const DATA = env("BRAIN_DATA", "/data")!;
 await Deno.mkdir(DATA, { recursive: true });
+// the keys that sign this service's Web Push messages: made on the first start, kept in the data folder (push.ts)
+const vapid = await loadVapid(DATA, URL_);
+const chatHub = new ChatHub();
 
 const accountsDb = new DatabaseSync(`${DATA}/accounts.db`);
 accountsDb.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 5000;");
@@ -236,6 +241,9 @@ const SITE_FILES = await loadSite(SITE_DIR, SITE);
 log.info("site loaded", { dir: SITE_DIR, files: SITE_FILES.size, bytes: siteSize(SITE_FILES) });
 const otpauth = (id: string, secret: string) =>
   `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
+
+/** The API paths a web session may use (the rest of /api/ is for tokens). */
+const WEB_API = /^\/api\/(chats(\/|$)|push\/|settings\/)/;
 
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
@@ -429,7 +437,18 @@ async function handle(req: Request, ip: string): Promise<Response> {
   }
 
   // ---------------- everything below needs a token, and runs as its account
-  const who: Caller | null = await auth.caller(req);
+  let who: Caller | null = await auth.caller(req);
+  // the web app (apps/ui, at /app) has the person's session and no token: it reaches its chats, its push
+  // subscriptions and its settings, and only from this service's own pages
+  if (!who && WEB_API.test(p)) {
+    const id = await auth.session(req);
+    if (id && users.get(id)) {
+      if (req.method !== "GET" && req.method !== "HEAD" && !fromOwnPages(req.headers, URL_)) {
+        return json({ error: "cross-origin request refused" }, 403);
+      }
+      who = { user: id, label: "web" };
+    }
+  }
   if (!who) {
     if (p === "/mcp" || p.startsWith("/api/") || p.startsWith("/backup")) return withCors(auth.challenge());
     return SITE_HOST
@@ -489,6 +508,21 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   if (p === "/api/node" || p === "/api/nodes" || p.startsWith("/api/jobs")) {
     const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
     const r = await fleetRoute(req, u, node, new Fleet(store.db));
+    if (r) return r;
+  }
+  // the chats, the node's turn loop, the answering node's setting (chat.ts, ADR 0014) and Web Push (push.ts):
+  // a machine acts as its token's name; the web session and any other token write turns and read them
+  if (/^\/api\/(chats(\/|$)|node\/turns$|turns\/|settings\/orchestrator$)/.test(p)) {
+    const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
+    const chats = new Chats(store.db, chatHub, {
+      user: who.user,
+      notify: (n) => void pushAll(vapid, store.db, noticeOf(n)).catch((e) => log.error("push failed", { err: e })),
+    });
+    const r = await chatRoute(req, u, node, chats, chatHub, who.user);
+    if (r) return r;
+  }
+  if (p.startsWith("/api/push/")) {
+    const r = await pushRoute(req, u, vapid, new Subscriptions(store.db));
     if (r) return r;
   }
   // the memory read over HTTP, for the console's Brain page (apps/brain/api.ts): only reads

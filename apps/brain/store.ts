@@ -69,6 +69,19 @@ create table if not exists jobs (
   reason text, local integer not null default 0, signature text, expires text, created text not null,
   updated text not null, by text not null, head text, parent text);
 create index if not exists jobs_open on jobs(status) where status in ('proposed', 'accepted', 'running');`),
+  // the chats and their turns, and the devices that get a push (chat.ts, push.ts, ADR 0014)
+  (db) =>
+    db.exec(`
+create table if not exists chats (id text primary key, title text not null, created text not null, updated text not null);
+create table if not exists chat_turns (
+  id text primary key, chat text not null references chats(id) on delete cascade, q text not null,
+  a text not null default '', acts text not null default '[]', state text not null default 'waiting',
+  node text, error text, session text, created text not null, ended text, beat integer);
+create index if not exists chat_turns_chat on chat_turns(chat);
+create index if not exists chat_turns_open on chat_turns(state) where state in ('waiting', 'running');
+create table if not exists push_subs (
+  endpoint text primary key, p256dh text not null, auth text not null, device text not null default '',
+  created text not null);`),
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */

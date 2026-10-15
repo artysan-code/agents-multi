@@ -216,6 +216,23 @@ tasks, its attachments, and every field to change. Plain forms, no script; every
 the task rules of `shared/mcp/lib/tasks.ts`, as the chats' do (a repeating task done here makes the
 next one), and an edit made on a task someone changed meanwhile is refused rather than overwriting it.
 
+## Chats and push
+
+The phone's path (`chat.ts`, `push.ts`, [ADR 0014](../../docs/adr/0014-from-the-phone.md)). The service runs no
+agent: a turn written on the web app waits in the account's own database until the node that answers for the
+account takes it. Web session or any token of the account (`/app` signs in by the session cookie):
+
+- `GET /api/chats`, `GET /api/chats/<id>`, `POST /api/chats` `{text, chat?}`, `DELETE /api/chats/<id>`;
+  `GET /api/chats/<id>/events` is the chat's Server-Sent Events (`turn`, `text`, `act`, `done`).
+- `GET|PUT /api/settings/orchestrator` `{node, order}`: the node that answers, then the fallbacks; with none set,
+  the first online headless node, else the first online one.
+- Only a node's own token: `GET /api/node/turns?wait=25[&max=n]` (the long poll that claims turns; by default one),
+  `POST /api/turns/<id>/events` (`{events: []}` is a heartbeat) and `POST /api/turns/<id>/done`. A turn whose node
+  is silent for 90 s goes back to `waiting`.
+- Push: `GET /api/push/key`, `POST|DELETE /api/push/subscriptions`. The VAPID key is made at the first start into
+  `vapid.json` in the data folder (owner-only; keep it with the backups: lose it and every device must subscribe
+  again). A subscription its push service answers 404 or 410 is removed.
+
 ## The public pages
 
 What anyone can open without an account (`public.ts`): Agents Multi's site, the landing (`/`, `/it/`)
