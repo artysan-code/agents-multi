@@ -5,6 +5,12 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.0-beta.6] - 2026-10-15
+
+### Fixed
+
+- **node**: the node image runs the official Node 24 LTS, pinned and checked, not Debian's Node 20 (faa2d4b)
+
 ## [1.2.0-beta.5] - 2026-10-15
 
 ### Added
