@@ -3,7 +3,14 @@
 // repository's `.agents/reviewer.json`; the console's backend is what decides.
 
 import { projectOf } from "../../shared/mcp/lib/agents.ts";
-import { broadAllows, cleanRules, type Decision, forcedRules, readDecisions } from "../../shared/mcp/lib/reviewer.ts";
+import {
+  broadAllows,
+  cleanRules,
+  type Decision,
+  forcedRules,
+  readDecisions,
+  teamBlockers,
+} from "../../shared/mcp/lib/reviewer.ts";
 import { CONFIG } from "./lib/paths.ts";
 
 const USAGE = `agents review [-n 20] [--json]     the reviewer's last decisions on routines' requests (docs/adr/0011)
@@ -44,6 +51,7 @@ export async function reviewCommand(args: string[]): Promise<number> {
     console.log(`a routine's child always asks for: ${forced.ask.join(", ") || "—"}`);
     for (const r of rejected) console.log(`ignored: ${r}`);
     for (const r of broadAllows(rules)) console.log(`warning: allow ${r} lets an unattended run do anything`);
+    for (const r of teamBlockers(rules)) console.log(`warning: ${r} covers a workflow's team channel (team_send)`);
     return 0;
   }
   if (sub && !sub.startsWith("-")) {

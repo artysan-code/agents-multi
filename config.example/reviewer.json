@@ -1,0 +1,32 @@
+{
+  "_": "The reviewer of unattended runs (docs/adr/0011-reviewer.md): what a routine's child asks for is denied, asked or allowed by these rules, in Claude Code's permission syntax; the most restrictive wins, and what no rule names is an ask (you are told; refused after askMin minutes). To let a judge decide mail replies, take mcp__google__gmail_send out of ask and rename _review to review.",
+  "deny": [
+    "mcp__*__*delete*",
+    "mcp__*__*destroy*",
+    "mcp__*__*publish*",
+    "Bash(npm publish:*)",
+    "Bash(pnpm publish:*)",
+    "Bash(deno publish:*)",
+    "Bash(cargo publish:*)",
+    "Bash(docker push:*)",
+    "Bash(gh release create:*)",
+    "Bash(gh release delete:*)",
+    "Bash(gh repo delete:*)"
+  ],
+  "ask": [
+    "mcp__google__gmail_send",
+    "mcp__*__*deploy",
+    "mcp__*__deploy_*",
+    "Bash(wrangler deploy:*)",
+    "Bash(gh pr merge:*)"
+  ],
+  "allow": [],
+  "_review": [
+    {
+      "match": "mcp__google__gmail_send",
+      "criterion": "only a reply in a thread already open, to that thread's own participants, with nothing attached"
+    }
+  ],
+  "askMin": 30,
+  "judge": { "model": "haiku", "maxPerDay": 50 }
+}

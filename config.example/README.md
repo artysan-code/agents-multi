@@ -17,6 +17,9 @@ stays in the Agents Multi repository.
   Servers of your own go here too, `"<name>": { "command": …, "args": … }`, and stay yours.
 - `gateway.json` — optional: the lazy MCP gateway (docs/adr/0008). `{ "enabled": false }` is the kill switch
   (on by default in the desktop app, off in a checkout), `idleMinutes` (default 10) and `port` (default 7332).
+- `reviewer.json` — the rules for what unattended runs (routines) ask for: `deny`, `ask`, `allow` and
+  `review` (a judge decides by your criterion), in Claude Code's permission syntax (docs/adr/0011). The
+  example denies deletes and publishing and asks for the rest; `agents review rules` shows what a project gets.
 - `accounts.json` — the accounts those servers use (no secrets: those go in the vault,
   `agents vault set <service> <account>`).
 - `rules/` — your rules, imported by each profile's `CLAUDE.md`.

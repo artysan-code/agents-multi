@@ -47,7 +47,10 @@ The owner chose (2026-10-15), among the options weighed:
   `domain:host` (a glob on the host). File tools: a path glob (`/abs/**`, `~/x`, or relative, matched at the
   end of the path). Any other tool: a glob on the line a person reads (`whatOf`). Junk is dropped and the
   doctor names it (`reviewer.rules`), as it does an `allow` that lets a run do anything (`Bash`, `Bash(*)`, a
-  shell or an interpreter).
+  shell or an interpreter, `reviewer.broad`) and a pattern that covers a workflow's team channel,
+  `mcp__team__team_send` (`reviewer.team`: forced as an ask, it would stop the steps talking).
+- `config.example/reviewer.json` is the conservative start `agents init` copies: deletes and publishing
+  denied, sends, deploys and merges asked for, nothing allowed, and a mail-reply `review` left as an example.
 
 ### How a request is matched
 
@@ -75,9 +78,14 @@ The owner chose (2026-10-15), among the options weighed:
 - **What reaches it**: whatever the child's mode did not grant. So that a rule is not skipped by the auto
   classifier, a routine's child is started with every `allow`, `ask` and `review` pattern as a session `ask`
   rule (`--settings`, Claude Code then always asks the hub) and every `deny` pattern added to its
-  `--disallowedTools` (refused in the client, no round trip). A tool-name wildcard Claude Code does not read
-  forces nothing; the reviewer still decides what reaches it. A workflow's children are started by the
-  runner and get neither (ADR 0010's limit for deny rules); Codex children never ask (ADR 0007).
+  `--disallowedTools` (refused in the client, no round trip). A workflow routine's step children get the same
+  through the runner of ADR 0005: the firing writes them, with the run policy's deny rules, in the run's
+  `guard.json`, and the runner starts each step under it (a run started by hand has none). Codex children
+  never ask (ADR 0007).
+- **Tool-name globs are Claude Code's own**, so nothing is expanded at launch. Checked on 2026-10-15 with a
+  stdio MCP server of two tools and a Haiku child in auto mode: without a rule it called `x_delete` unasked;
+  with `mcp__*__*delete*` (as with `mcp__probe__*` or the exact name) it asked the hub for
+  `mcp__probe__x_delete` (`decision_reason_type: rule`) and still called `x_read` unasked.
 - **The console's backend** looks every 5 s (beside the routine tick, its own loop, so a slow judge never
   delays a firing) and answers through the hub's `answer`: `allow` the one call, or `deny` with the reason.
   An `ask` is announced once with `desktopNotify()`; a coordinator of the project can adopt the child and

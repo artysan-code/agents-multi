@@ -432,7 +432,9 @@ permission syntax:
   data — masked, cut at 4000 characters — and says allow, deny or ask. Anything else, a failure, an account at its
   limit or the daily cap (`maxPerDay`, 0 turns it off) is an ask; the same request is judged once a day.
 - Every pattern named in the rules is given to a routine's child as an `ask` rule (a deny one as refused), so the
-  auto classifier cannot let it through unseen. A workflow's step children do not get them; Codex never asks.
+  auto classifier cannot let it through unseen — a workflow routine's step children too, through its runner;
+  Codex never asks. A glob that covers `mcp__team__team_send` would stop a workflow's steps talking: the doctor
+  names it. `config.example/reviewer.json` is a conservative start (deletes and publishing denied, the rest asked).
 - `agents review` lists the decisions (`<state>/agents-multi/agents/reviewer/decisions.jsonl`: what, the rule, the
   verdict, who decided and why); `agents review rules [folder]` shows what a project's runs get. The doctor
   names ignored entries and an `allow` that lets a run do anything (`Bash`, `Bash(*)`, a shell or interpreter).

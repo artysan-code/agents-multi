@@ -56,8 +56,8 @@ The console's backend already ran internal jobs in app mode (`apps/cli/console/s
 
 - No unit file and no systemd: app and dev mode behave alike.
 - The worktree and branch of a run stay after it ends, for review and merge; cleaning them is the owner's.
-- A workflow routine's children are started by the runner of ADR 0005, which does not pass the deny rules; the
-  hook still holds.
+- A workflow routine's children are started by the runner of ADR 0005; the firing hands it the deny rules (and
+  the reviewer's, [ADR 0011](0011-reviewer.md)) in the run's `guard.json`, which it applies to each step.
 
 ## Part 2 — the limits manager and account routing
 

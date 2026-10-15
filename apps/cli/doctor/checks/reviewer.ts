@@ -1,12 +1,13 @@
 // reviewer.ts — The owner's rules for the reviewer of unattended runs (config/reviewer.json, ADR 0011).
 
-import { broadAllows, cleanRules } from "../../../../shared/mcp/lib/reviewer.ts";
+import { broadAllows, cleanRules, teamBlockers } from "../../../../shared/mcp/lib/reviewer.ts";
 import { CONFIG } from "../../lib/paths.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 
 /** Pure: what the doctor says of the reviewer's rules: none (every request of a routine waits for the owner,
- *  then is refused), a file that is not JSON, entries it drops, and `allow`s that let a run do anything. */
+ *  then is refused), a file that is not JSON, entries it drops, `allow`s that let a run do anything, and a
+ *  pattern that would stop a workflow's team channel. */
 export function reviewerFindings(text: string | null): Check[] {
   const [c, add] = checkList();
   const fix =
@@ -54,6 +55,15 @@ export function reviewerFindings(text: string | null): Check[] {
       "warn",
       `reviewer.json allows ${broad.join(", ")}: an unattended run could do anything with it`,
       "allow the exact commands or tools instead (Bash(wrangler deploy --env dev:*))",
+    );
+  }
+  const team = teamBlockers(rules);
+  if (team.length) {
+    add(
+      "reviewer.team",
+      "warn",
+      `reviewer.json: ${team.join(", ")} covers mcp__team__team_send: a routine's workflow steps could not talk`,
+      "narrow the pattern (mcp__google__gmail_send rather than mcp__*__*send*)",
     );
   }
   return c;

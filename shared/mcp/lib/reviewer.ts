@@ -129,6 +129,16 @@ const RUNS_ANYTHING = new Set([
   "ssh",
 ]);
 
+const TEAM_TOOL = "mcp__team__team_send";
+
+/** Pure: the rules that would hold back a workflow's team channel (`mcp__team__team_send`): every pattern is
+ *  forced on a routine's children as an ask or a deny, so one that covers it stops the steps talking. */
+export function teamBlockers(rules: Rules): string[] {
+  return [...rules.deny, ...rules.ask, ...rules.review, ...rules.allow]
+    .filter((r) => ruleMatches(r, TEAM_TOOL, {}, false))
+    .map((r) => r.text);
+}
+
 /** Pure: the `allow` rules that let an unattended run do anything (the doctor warns about them). */
 export function broadAllows(rules: Rules): string[] {
   return rules.allow.filter((r) => {

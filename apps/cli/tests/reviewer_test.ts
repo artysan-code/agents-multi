@@ -22,6 +22,7 @@ import {
   reviewPass,
   type ReviewState,
   type Rules,
+  teamBlockers,
 } from "../../../shared/mcp/lib/reviewer.ts";
 import { reviewerFindings } from "../doctor/checks/reviewer.ts";
 import { HIDDEN } from "../../../shared/mcp/lib/mask.ts";
@@ -126,6 +127,30 @@ Deno.test("reviewer: what a routine's child is started with, and the allows the 
     deny: ["Bash(npm publish:*)"],
   });
   assertEquals(broadAllows(r), ["Bash(bash:*)", "Bash", "mcp__*"]);
+});
+
+Deno.test("reviewer: the example configuration is clean, conservative, and leaves the team channel alone", async () => {
+  const raw = JSON.parse(await Deno.readTextFile(new URL("../../../config.example/reviewer.json", import.meta.url)));
+  const { rules: r, rejected } = cleanRules(raw);
+  assertEquals([rejected, broadAllows(r), teamBlockers(r), r.allow, r.review], [[], [], [], [], []]);
+  assertEquals(decide(r, "mcp__google__calendar_delete", {}).verdict, "deny");
+  assertEquals(decide(r, "Bash", bash("npm publish --tag next")).verdict, "deny");
+  assertEquals(decide(r, "mcp__coolify__coolify_deploy", {}).verdict, "ask");
+  assertEquals(decide(r, "mcp__google__gmail_send", {}).verdict, "ask");
+  // the example review rule, as its note says: out of ask (which would win), _review renamed
+  const ask = raw.ask.filter((x: string) => x !== "mcp__google__gmail_send");
+  const on = cleanRules({ ...raw, ask, review: raw._review }).rules;
+  assertEquals(decide(on, "mcp__google__gmail_send", {}).verdict, "review");
+  assertEquals(reviewerFindings(JSON.stringify(raw)).map((c) => c.status), ["ok"]);
+});
+
+Deno.test("reviewer: a pattern that covers the team channel is named", () => {
+  const r = rules({ ask: ["mcp__*__*send*", "mcp__google__gmail_send"], allow: ["mcp__team__*"] });
+  assertEquals(teamBlockers(r), ["mcp__*__*send*", "mcp__team__*"]);
+  assertEquals(
+    reviewerFindings(JSON.stringify({ ask: ["mcp__*__*send*"] })).map((c) => c.id),
+    ["reviewer.rules", "reviewer.team"],
+  );
 });
 
 Deno.test("reviewer: the doctor names a missing file, junk and broad allows", () => {

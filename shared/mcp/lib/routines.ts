@@ -367,9 +367,11 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
   const owner: Owner = { project: r.project };
   const where = iso.path + r.folder.slice(r.project.length);
   const out: Fired = { id, at: new Date().toISOString(), branch: iso.branch, worktree: iso.path, told: [] };
+  // what a reviewer rule names always comes to the hub, and what it denies never runs (ADR 0011): for a
+  // child here, for a workflow's children through its runner (the run's guard)
+  const forced = forcedRules(await loadReviewRules(r.project));
+  const deny = [...DENY_TOOLS, ...forced.deny];
   if (r.action.kind === "agent") {
-    // what a reviewer rule names always comes to the hub, and what it denies never runs (ADR 0011)
-    const forced = forcedRules(await loadReviewRules(r.project));
     const m = await startChild({
       profile: r.action.profile,
       provider: r.action.provider,
@@ -377,7 +379,7 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
       task: `${preamble(r, id, iso.branch, policy, iso.path)}\n\n${r.action.task}`,
       model: r.action.model,
       owner,
-      disallowedTools: [...DENY_TOOLS, ...forced.deny],
+      disallowedTools: deny,
       askTools: forced.ask,
     });
     out.child = m.id;
@@ -385,7 +387,10 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
     const home = Deno.env.get("HOME") ?? "";
     const file = r.action.plan.replace(/^~(?=\/|$)/, home);
     const plan = JSON.parse(await Deno.readTextFile(file.startsWith("/") ? file : `${r.folder}/${file}`)) as Plan;
-    out.run = await startRun(planIn(plan, r.project, iso.path, r.action.task), undefined, undefined, owner);
+    out.run = await startRun(planIn(plan, r.project, iso.path, r.action.task), undefined, undefined, owner, {
+      ask: forced.ask,
+      deny,
+    });
   }
   return out;
 }
