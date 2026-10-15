@@ -1,17 +1,27 @@
-// limits/index.tsx — Accounts & limits: one card per profile, the account it is signed in as, its usage
-// limits (the five hours and the week, with when each starts again), today's tokens and how old the
-// reading is, and its Claude Desktop (a click opens it or brings it forward). The limits come from the
-// status line at each turn (apps/cli/live.ts); «Ask now» asks Anthropic for them with each profile's
-// own login, only when the person asks.
+// limits/index.tsx — Accounts & limits: one card per profile, the account it is signed in as and its
+// Claude Desktop (a click opens it or brings it forward), then each of its accounts — Claude, and Codex
+// where the profile has it — with its usage windows (when each starts again) and how old the reading is,
+// «stale» past half an hour (the limits manager's rule: it does not act on such a reading), and today's
+// tokens. The windows are what `agents limits` reads (/api/limits): the status line's snapshots and
+// Codex's session logs; «Ask for the limits now» asks Anthropic for Claude's with each profile's own
+// login, only when the person asks.
 
 import { useState } from "preact/hooks";
 import type { Result } from "../../api.ts";
-import { lang, t } from "../../i18n.ts";
+import { lang, t, tk } from "../../i18n.ts";
 import { ago } from "../../lib/format.ts";
 import { useThrottled } from "../../lib/throttle.ts";
 import { pcolor, toast } from "../../lib/ui.tsx";
 import { status, useTopic } from "../../state.ts";
-import { type Limit, loadLive, type LiveView, openDesktop, refreshLive } from "./api.ts";
+import {
+  type AccountLimits,
+  loadLimits,
+  loadLive,
+  type LiveView,
+  openDesktop,
+  refreshLive,
+  type Window,
+} from "./api.ts";
 import "./limits.css";
 
 /** Tokens as a person reads them: 950, 12k, 3.4M. */
@@ -26,19 +36,42 @@ function resetsAt(sec: number | null): string {
   return d.toDateString() === now.toDateString() ? hm : `${d.toLocaleDateString(lang(), { weekday: "short" })} ${hm}`;
 }
 
-export const level = (pct: number) => (pct >= 80 ? "crit" : pct >= 50 ? "warn" : "ok");
+const level = (pct: number) => (pct >= 80 ? "crit" : pct >= 50 ? "warn" : "ok");
 
-function LimitBar({ label, l }: { label: string; l?: Limit }) {
-  if (!l) return null;
-  const pct = Math.max(0, Math.min(100, l.used));
+/** A window's name as a person reads it: "5 h", "week", or as the vendor names it. */
+const windowLabel = (w: string) => (w === "5h" ? t("now.5h") : w === "7d" ? t("now.7d") : w);
+
+function LimitBar({ w }: { w: Window }) {
+  const pct = Math.max(0, Math.min(100, w.usedPercent));
   return (
-    <div class={`lim ${level(l.used)}`}>
-      <span class="lim-l">{label}</span>
+    <div class={`lim ${level(w.usedPercent)}${w.stale ? " stale" : ""}`}>
+      <span class="lim-l">{windowLabel(w.window)}</span>
       <span class="lim-bar">
         <i style={{ width: `${pct}%` }} />
       </span>
-      <b>{Math.round(l.used)}%</b>
-      <small>{l.resets ? t("now.resets", { w: resetsAt(l.resets) }) : ""}</small>
+      <b>{Math.round(w.usedPercent)}%</b>
+      <small>{w.resetsAt ? t("now.resets", { w: resetsAt(w.resetsAt) }) : ""}</small>
+    </div>
+  );
+}
+
+/** One account of a profile: its windows, and how old its oldest reading is. */
+function Account({ a, tokensToday }: { a: AccountLimits; tokensToday?: number }) {
+  const ats = a.windows.map((w) => w.at).filter((x): x is number => x !== null);
+  const oldest = ats.length ? Math.min(...ats) : null;
+  const stale = a.windows.some((w) => w.stale);
+  return (
+    <div class="lm-acct">
+      <div class="lm-ah">
+        <span>{tk(`lm.p.${a.account.provider}`)}</span>
+        <span class="hd-sp" />
+        {oldest !== null && <small>{t("lm.read", { d: ago(new Date(oldest * 1000).toISOString()) })}</small>}
+        {stale && <span class="lm-stale" title={t("lm.stale.hint")}>{t("lm.stale")}</span>}
+      </div>
+      {a.windows.length
+        ? a.windows.map((w) => <LimitBar key={w.window} w={w} />)
+        : <small class="lm-none">{t(a.account.provider === "codex" ? "lm.noCodex" : "now.noLimits")}</small>}
+      {!!tokensToday && <div class="lm-f">{t("now.tokens", { n: tokens(tokensToday) })}</div>}
     </div>
   );
 }
@@ -52,12 +85,14 @@ export function Limits() {
   const s = status.value;
   const profiles = Object.keys(s?.profiles ?? {});
   const open = new Set(s?.running.desktop.map((d) => d.variant) ?? []);
-  const [view, setView] = useState<LiveView | null>(null);
+  const [accounts, setAccounts] = useState<AccountLimits[] | null>(null);
+  const [live, setLive] = useState<LiveView | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // the status line writes at every turn: read again at most every 15 s, the last change included
   const load = useThrottled(async () => {
-    const v = await loadLive().catch(() => null);
-    if (v) setView(v);
+    const [l, v] = await Promise.all([loadLimits().catch(() => null), loadLive().catch(() => null)]);
+    if (l) setAccounts(l.accounts);
+    if (v) setLive(v);
   }, 15000);
   useTopic(load, ["state", "usage"]);
 
@@ -67,9 +102,11 @@ export function Limits() {
       toast(e.message, true);
       return null;
     });
+    const l = await loadLimits().catch(() => null);
     setRefreshing(false);
+    if (l) setAccounts(l.accounts);
     if (!v) return;
-    setView(v);
+    setLive(v);
     const errs = Object.entries(v.errors ?? {});
     if (errs.length) toast(errs.map(([p, e]) => `${p}: ${e}`).join(" · "), true);
   };
@@ -88,9 +125,8 @@ export function Limits() {
       <p class="sub lm-sub">{t("lm.sub")}</p>
       <div class="lm-grid">
         {profiles.map((p) => {
-          const v = view?.profiles[p];
           const on = open.has(p);
-          const account = s?.profiles[p]?.account;
+          const mine = accounts?.filter((a) => a.account.profile === p) ?? [];
           return (
             <article class="card lm" key={p} style={{ "--k": pcolor(p) }}>
               <div class="lm-h">
@@ -110,20 +146,14 @@ export function Limits() {
                   </svg>
                 </button>
               </div>
-              <div class="lm-acc">{account ?? t("lm.noAccount")}</div>
-              {v?.limits
-                ? (
-                  <>
-                    <LimitBar label={t("now.5h")} l={v.limits.five_hour} />
-                    <LimitBar label={t("now.7d")} l={v.limits.seven_day} />
-                  </>
-                )
-                : <small class="lm-none">{t("now.noLimits")}</small>}
-              <div class="lm-f">
-                {!!v?.tokens && <span>{t("now.tokens", { n: tokens(v.tokens) })}</span>}
-                <span class="hd-sp" />
-                {v?.at && <span>{t("lm.read", { d: ago(new Date(v.at * 1000).toISOString()) })}</span>}
-              </div>
+              <div class="lm-acc">{s?.profiles[p]?.account ?? t("lm.noAccount")}</div>
+              {mine.map((a) => (
+                <Account
+                  key={a.account.id}
+                  a={a}
+                  tokensToday={a.account.provider === "claude" ? live?.profiles[p]?.tokens : undefined}
+                />
+              ))}
             </article>
           );
         })}

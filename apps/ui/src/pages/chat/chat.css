@@ -398,12 +398,59 @@
   stroke: none;
 }
 
-/* a narrow window: the list goes, the thread takes the width */
+/* the button that opens the list, and the veil under it: a narrow window only */
+.cht-tg,
+.cht-tg-bar,
+.cht-veil {
+  display: none;
+}
+
+/* a narrow window: the thread takes the width, the list folds into a button and opens over it */
 @media (max-width: 760px) {
   .cht {
+    position: relative;
     grid-template-columns: minmax(0, 1fr);
   }
   .chl {
-    display: none;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    width: min(280px, 85%);
+    box-shadow: var(--pop);
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition: transform .18s ease, visibility 0s linear .18s;
+  }
+  .cht.list-open .chl {
+    transform: none;
+    visibility: visible;
+    transition: transform .18s ease;
+  }
+  .cht-veil {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(20, 20, 18, .18);
+  }
+  .cht-tg {
+    display: grid;
+  }
+  .cht-tg-bar {
+    display: block;
+    position: absolute;
+    top: 10px;
+    left: 12px;
+  }
+  .cht-main.empty {
+    position: relative;
+  }
+  .cht-h {
+    padding: 8px 12px;
+  }
+  .cht-scroll,
+  .cht-foot {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }

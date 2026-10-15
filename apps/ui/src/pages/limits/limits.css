@@ -79,6 +79,41 @@
   stroke-width: 1.6;
   fill: none;
 }
+/* one account of the profile: Claude, Codex */
+.lm-acct {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.lm-ah {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 11px var(--sans);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.lm-ah small {
+  font: 500 11px var(--mono);
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* a reading past half an hour: the limits manager does not act on it */
+.lm-stale {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 500 10.5px var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--warn);
+  background: var(--warn-wash);
+}
+.lim.stale {
+  opacity: .55;
+}
 .lm-none {
   font-size: 12px;
   color: var(--faint);
@@ -94,7 +129,8 @@
 /* a usage window: its name, the bar, its share, when it starts again */
 .lim {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 38px auto;
+  /* the reset gets a fixed column, so every bar of a card is as long as the others */
+  grid-template-columns: 52px minmax(0, 1fr) 38px 118px;
   align-items: center;
   gap: 10px;
   font-size: 12px;
@@ -116,4 +152,6 @@
   font-size: 11px;
   color: var(--faint);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

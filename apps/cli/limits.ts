@@ -22,14 +22,34 @@ export function inHours(resetsAt: number | null, now: number): string {
   return m ? `in ${m}m` : "now";
 }
 
-/** Pure: how old a reading is, "read 4m ago" / "read 3h ago", marked stale past STALE_S: the limits manager
- *  does not act on it (refresh: the console's Accounts & limits). */
+/** Pure: whether a reading is older than STALE_S: the limits manager does not act on it. */
+export const isStale = (at: number | null, now: number): boolean => at !== null && now - at > STALE_S;
+
+/** Pure: how old a reading is, "read 4m ago" / "read 3h ago", marked stale past STALE_S (refresh: the
+ *  console's Accounts & limits). */
 export function readAgo(at: number | null, now: number): string {
   if (at === null) return "read —";
   const s = Math.max(0, now - at);
   const d = Math.floor(s / 86400), h = Math.floor(s / 3600), m = Math.floor(s / 60);
   const ago = d ? `${d}d` : h ? `${h}h` : m ? `${m}m` : "now";
-  return `read ${ago === "now" ? "now" : `${ago} ago`}${s > STALE_S ? ", stale" : ""}`;
+  return `read ${ago === "now" ? "now" : `${ago} ago`}${isStale(at, now) ? ", stale" : ""}`;
+}
+
+/** Pure: every account's windows as the console shows them, each marked stale or not by the same rule. */
+export function limitsView(all: AccountView[], now: number) {
+  return {
+    now,
+    accounts: all.map(({ account, windows }) => ({
+      account,
+      windows: windows.map((w) => ({ ...w, stale: isStale(w.at, now) })),
+    })),
+  };
+}
+
+/** GET /api/limits: what `agents limits` reads, for the console. */
+export async function limitsNow() {
+  const now = Math.round(Date.now() / 1000);
+  return limitsView(await allLimits({ config: CONFIG, runtime: RUNTIME, live: `${STATE}/live` }, now), now);
 }
 
 /** Pure: the table a person reads, one line per window, and a line for an account with none. */

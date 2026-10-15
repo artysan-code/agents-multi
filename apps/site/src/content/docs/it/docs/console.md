@@ -11,42 +11,41 @@ creato a ogni avvio e tenuto in un file leggibile solo da te. La finestra dell'a
 `agents serve` apre entrano con quel token una volta sola; a un browser che non ce l'ha viene detto da
 dove entrare.
 
-Gli aggiornamenti sono **spinti, non richiesti a intervalli**: il server tiene d'occhio le trascrizioni
-e la configurazione condivisa, chiede al brain se le sue task o le sue pagine sono cambiate, e la
-pagina ridisegna la vista che stai guardando. È fatta con Preact e TypeScript, compilata una volta con
-la release e portata dall'app (da un checkout la compili con pnpm sulla macchina); non si carica nulla
-da fuori, quindi funziona anche su una macchina che non è mai stata online. Inglese o italiano, secondo
-la lingua del computer.
+Gli aggiornamenti sono **spinti, non richiesti a intervalli**: il server tiene d'occhio le trascrizioni,
+la configurazione condivisa, gli agenti e le chat, e la pagina ridisegna la vista che stai guardando. È
+fatta con Preact e TypeScript, compilata una volta con la release e portata dall'app (da un checkout la
+compili con pnpm sulla macchina); non si carica nulla da fuori, quindi funziona anche su una macchina che
+non è mai stata online. Inglese o italiano, secondo la lingua del computer.
 
 ## Sezioni
 
-Una barra a sinistra contiene tutte le pagine: le icone si aprono in nomi quando il puntatore ci passa
-sopra. In fondo, la salute della macchina (verde, gialla o rossa; apre la pagina Health),
-l'aggiornamento quando ce n'è uno in attesa, i comandi e le preferenze.
+Tre viste in una barra a sinistra, e **Altro** per il resto: le icone si aprono in nomi quando il
+puntatore ci passa sopra. In fondo, la salute della macchina (verde, gialla o rossa; apre la pagina
+Salute), l'aggiornamento quando ce n'è uno in attesa, i comandi e le preferenze.
 
-- **Today** — la barra per chiedere a Claude; la giornata come scheda principale, con un'agenda e le
-  ore lungo la scheda per gli appuntamenti e per le task con un orario (quelle in scadenza oggi senza
-  orario stanno in una fascia sopra); accanto, le task come semplice elenco, e **Claude now**: i limiti
-  d'uso di ogni account (le cinque ore e la settimana) con i token di oggi, e quanto contesto usa ogni
-  sessione in corso, poi le ultime sessioni per cartella con il comando che riapre ciascuna.
-- **Tasks** — una bacheca, un elenco ordinabile, un calendario mensile con gli eventi di Google, una
-  bacheca per progetto.
-- **Brain** — le pagine del brain ad albero, la ricerca per parole e per significato, ogni versione, i
-  collegamenti nei due sensi, e tutto il brain come grafo in tempo reale.
-- **Connections** — ogni server MCP, quali profili lo vedono, e se ciascuno l'ha montato.
-- **System** — profili, permessi, plugin e skill, aggiornamenti, e ogni controllo del doctor con la sua correzione.
+- **Chat** — parlare con Claude come in Claude Desktop: le tue chat per giorno, le risposte che arrivano
+  man mano, e sotto ogni risposta le modifiche che Claude ha fatto (una task, un evento, una pagina del
+  brain). Legge task, calendario, posta, Drive e brain, tiene aggiornate le task e il brain da quello che
+  scrivi, e non manda mai posta né cancella. Una chat può continuare in un terminale; il lavoro sui file
+  di un progetto apre Claude Code in quella cartella. In una finestra stretta l'elenco delle chat si
+  chiude in un pulsante.
+- **Lavori** — le sessioni di Claude Code aperte, con quanto contesto usa ciascuna; gli agenti e i
+  workflow avviati dall'hub; le ultime sessioni per cartella, ognuna da riaprire con un clic.
+- **Account e limiti** — gli account di ogni profilo, Claude e Codex, con i loro limiti d'uso (le
+  cinque ore e la settimana), quanto è vecchia ogni lettura — scaduta oltre la mezz'ora — e i token di
+  oggi.
+- **Altro** — Connessioni (ogni server MCP, quali profili lo vedono, gli account e il vault), e
+  profili, permessi, aggiornamenti, e ogni controllo del doctor con la sua correzione.
 
 `Ctrl-K` apre una tavolozza dei comandi con ogni vista e ogni azione.
 
-La barra per chiedere a Claude non ha niente da scegliere: Claude capisce se stai facendo una domanda,
-dicendo una cosa da fare (diventa una task, con un orario quando si adatta alla tua giornata) o
-raccontando qualcosa che vale la pena ricordare (finisce nel brain), e ogni modifica che fa compare
-sotto la risposta. I limiti arrivano dalla riga di stato di Claude Code mentre una sessione lavora; il
-pulsante di aggiornamento su **Claude now** li chiede subito ad Anthropic, con il login di ciascun
-profilo, che la console legge solo per quella richiesta.
+I limiti arrivano dalla riga di stato di Claude Code mentre una sessione lavora e dai log di Codex;
+«Chiedi i limiti adesso» li chiede subito ad Anthropic, con il login di ciascun profilo, che la console
+legge solo per quella richiesta. Le task e il brain hanno le loro pagine sul sito del brain.
 
 ## L'app desktop
 
 L'app nel tray fa della console un'applicazione: una finestra con la sua icona, un puntino nel tray
 che diventa rosso solo quando un controllo fallisce, un selettore di profilo e **Hey Claude** — un campo
-fluttuante che interroga il profilo predefinito e mostra la risposta mentre arriva.
+fluttuante che interroga il profilo predefinito e mostra la risposta mentre arriva; la conversazione
+compare anche in Chat.

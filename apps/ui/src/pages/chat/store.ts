@@ -56,6 +56,8 @@ const EMPTY: Open = { id: null, title: "", session: null, turns: [] };
 export const chats = signal<ChatHead[] | null>(null);
 export const current = signal<Open>(EMPTY);
 export const live = signal<Live | null>(null);
+/** In a narrow window the list is a panel over the thread: open or not. */
+export const listOpen = signal(false);
 /** Puts the cursor in the composer: a new chat, a suggestion taken. */
 export const focusComposer = signal(0);
 
@@ -70,6 +72,7 @@ export async function loadChats(): Promise<void> {
 export async function openChat(id: string): Promise<void> {
   const c = await get<Open & { id: string }>(`/api/chat?id=${encodeURIComponent(id)}`);
   current.value = { id: c.id, title: c.title, session: c.session, turns: c.turns };
+  listOpen.value = false;
 }
 
 /** Reads the open chat again when another window (Hey) added to it; never under an answer being written. */
@@ -87,6 +90,7 @@ export async function syncOpen(): Promise<void> {
 
 export function newChat(): void {
   current.value = EMPTY;
+  listOpen.value = false;
   focusComposer.value++;
 }
 

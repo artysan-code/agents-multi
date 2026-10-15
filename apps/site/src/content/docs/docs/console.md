@@ -26,11 +26,11 @@ the update when one is waiting, the commands and the preferences.
   each change Claude made (a task, an event, a page of the brain) shown under its answer. It reads your
   tasks, calendar, mail, Drive and brain, keeps the tasks and the brain from what you write, and never
   sends mail or deletes. A chat can go on in a terminal; work inside a project's files opens Claude Code
-  in that folder.
+  in that folder. In a narrow window the list of chats folds into a button.
 - **Runs** — the Claude Code sessions running, with how much context each uses; the agents and the
   workflow runs the hub started; the last sessions per folder, each reopened with one click.
-- **Accounts & limits** — each profile's account and usage limits (the five hours and the week) with
-  today's tokens.
+- **Accounts & limits** — each profile's accounts, Claude and Codex, with their usage limits (the five
+  hours and the week), how old each reading is — stale past half an hour — and today's tokens.
 - **More** — Connections (every MCP server, which profiles see it, the accounts and the vault), and
   profiles, permissions, updates, and every doctor check with its fix.
 

@@ -4,7 +4,8 @@
 // read in a line; the answer being written streams in place, and Stop keeps what came so far. Below, the
 // composer: Enter sends, Shift Enter goes to a new line, the model is chosen beside it. A chat can go on
 // in a terminal (Claude Code resumes its session), and an answer that names a project's folder opens
-// Claude Code there. The state lives in store.ts, so an answer goes on while another view is on screen.
+// Claude Code there. In a narrow window the list folds into a button and opens over the thread. The
+// state lives in store.ts, so an answer goes on while another view is on screen.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api, type Result } from "../../api.ts";
@@ -23,6 +24,7 @@ import {
   current,
   focusComposer,
   forget,
+  listOpen,
   live,
   loadChats,
   newChat,
@@ -95,7 +97,7 @@ function ChatList() {
     groups.set(g, [...groups.get(g) ?? [], c]);
   }
   return (
-    <aside class="chl" aria-label={t("chat.list")}>
+    <aside class="chl" id="chat-list" aria-label={t("chat.list")}>
       <button type="button" class="chl-new" onClick={newChat}>
         <svg viewBox="0 0 16 16">
           <path d="M8 3v10M3 8h10" />
@@ -328,12 +330,31 @@ export function Chat() {
 
   const retry = (q: string) => () => void send(q);
 
+  const toggle = (
+    <button
+      type="button"
+      class="ib cht-tg"
+      aria-controls="chat-list"
+      aria-expanded={listOpen.value}
+      title={t("chat.list")}
+      aria-label={t("chat.list")}
+      onClick={() => (listOpen.value = !listOpen.value)}
+    >
+      <svg viewBox="0 0 24 24">
+        <path d="M4 6h16M4 12h16M4 18h10" />
+      </svg>
+    </button>
+  );
+
   return (
-    <div class="cht">
+    <div class={`cht${listOpen.value ? " list-open" : ""}`}>
       <ChatList />
+      {listOpen.value && <div class="cht-veil" onClick={() => (listOpen.value = false)} />}
       <main class={`cht-main${empty ? " empty" : ""}`}>
+        {empty && <div class="cht-tg-bar">{toggle}</div>}
         {!empty && (
           <header class="cht-h">
+            {toggle}
             <h1>{c.title || t("chat.new")}</h1>
             {c.session && !showLive && (
               <button type="button" class="bt sm ghost" onClick={() => void terminal({ resume: c.session })}>

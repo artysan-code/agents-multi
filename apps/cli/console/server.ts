@@ -42,6 +42,7 @@ import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
 import type { Route } from "./http.ts";
 import { live, refresh as refreshLimits } from "../live.ts";
+import { limitsNow } from "../limits.ts";
 import { listChats, readChat, removeChat } from "../chats.ts";
 import { runsView } from "./runs.ts";
 
@@ -87,6 +88,8 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/live": { get: async () => json(await live()) },
     // the limits asked of Anthropic now, with each profile's login: only when the person asks
     "/api/live/refresh": { post: async () => json({ errors: await refreshLimits(), ...(await live()) }) },
+    // every account's usage windows, Claude's and Codex's, each with its age (limits.ts, as `agents limits`)
+    "/api/limits": { get: async () => json(await limitsNow()) },
     "/api/sessions": {
       get: async ({ url }) => {
         const db = await usage.fresh();

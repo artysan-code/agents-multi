@@ -290,14 +290,17 @@ Italian formats open in Italian — and the preferences override it per browser.
   every chat (`apps/cli/chats.ts`, one file each in the state folder) with the Claude Code session it
   resumes: a chat can go on in a terminal, and a request that needs work inside a project's files
   becomes one button that opens Claude Code in that folder. Hey Claude's conversations show here too.
+  In a narrow window the list of chats folds into a button.
 - **Runs** (`#runs`) — what works now: the Claude Code sessions running, with their context and
   whether they are working (a click brings the window forward); the agents the hub started and the
   workflow runs with their steps (`GET /api/runs`, read only: they are acted on by their coordinator
   or `agents run`); and the last sessions per folder, each reopened in a terminal with one click.
-- **Accounts & limits** (`#limits`) — each profile's account and usage windows (five hours, week)
-  with when they start again, today's tokens and its Claude Desktop. The limits come from the status
-  line (`apps/cli/live.ts`); «Ask for the limits now» asks Anthropic with each profile's login, read
-  for that request only.
+- **Accounts & limits** (`#limits`) — each profile's account and Claude Desktop, then each of its
+  accounts (Claude, and Codex where the profile has it) with its usage windows, when they start again
+  and how old the reading is, **stale** past half an hour (the limits manager's rule: it does not act
+  on such a reading), and today's tokens. The windows are what `agents limits` reads (`GET /api/limits`):
+  the status line's snapshots and Codex's session logs; «Ask for the limits now» asks Anthropic for
+  Claude's with each profile's login, read for that request only (`apps/cli/live.ts`).
 - **More** — **Connections** (`#connections`: every MCP server in the registry, which profiles see it
   and where, the accounts and the vault, the calendars the picker reads), and **Profiles**,
   **Permissions** (the shared allow / ask / deny rules and default mode, what each profile adds or
