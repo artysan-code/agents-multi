@@ -62,6 +62,14 @@ export type JobStatus =
   | "failed"
   | "interrupted";
 
+/** A passkey's answer (WebAuthn, ADR 0014): the parts of an assertion, base64url; `credential` is the passkey's id. */
+export interface PasskeyAssertion {
+  credential: string;
+  authenticatorData: string;
+  clientDataJSON: string;
+  signature: string;
+}
+
 export interface Job {
   id: string;
   /** the node it is for ("" while a proposal found nowhere to go) */
@@ -75,6 +83,8 @@ export interface Job {
   local?: boolean;
   /** base64url Ed25519 over `signedText`, and until when it holds */
   signature?: string;
+  /** or, from the phone, an endorsed passkey's assertion over the same text (webauthn.ts), and until when */
+  assertion?: PasskeyAssertion;
   expires?: string;
   created: string;
   updated: string;
@@ -279,20 +289,23 @@ export async function signJob(j: Parameters<typeof signedText>[0], key: CryptoKe
   return b64u(new Uint8Array(await crypto.subtle.sign("Ed25519", key, enc.encode(signedText(j)))));
 }
 
-/** Why a node must not run a job, or null when the owner's yes holds: signed with the owner's key, for this
- *  node, not expired, not run before. A local job is never taken from the service. */
+/** Why a node must not run a job, or null when the owner's yes holds: signed with the owner's key, or approved
+ *  by an endorsed passkey (`viaPasskey` checks that, webauthn.ts), for this node, not expired, not run before. A
+ *  local job is never taken from the service. */
 export async function verifyJob(
   j: Job,
   publicKey: string,
   self: string,
   now: number,
   seen: Iterable<string>,
+  viaPasskey?: (j: Job) => Promise<string | null>,
 ): Promise<string | null> {
   if (j.local) return "a local job is not taken from the service";
   if (j.node !== self) return `it is for ${j.node || "no node"}, not ${self}`;
-  if (!j.signature || !j.expires) return "not signed";
+  if ((!j.signature && !j.assertion) || !j.expires) return "not signed";
   if (!(now < Date.parse(j.expires))) return "its approval expired";
   if ([...seen].includes(j.id)) return "already run here";
+  if (!j.signature) return viaPasskey ? await viaPasskey(j) : "approved by a passkey, which this node cannot check";
   try {
     const pub = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x: publicKey }, "Ed25519", false, [
       "verify",
