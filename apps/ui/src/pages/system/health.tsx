@@ -8,7 +8,7 @@ import { loadStatus, status } from "../../state.ts";
 import { useIntent } from "../../router.ts";
 import { type Key, t } from "../../i18n.ts";
 import { toast, toastErr } from "../../lib/ui.tsx";
-import { FixControl } from "./health-repair.tsx";
+import { FixControl, isManualFix, ManualFix } from "./health-repair.tsx";
 
 type Area = "brain" | "mcp" | "desktop" | "profiles" | "setup";
 type Row = Omit<Check, "status"> & { status: Check["status"] | "run" };
@@ -31,6 +31,7 @@ function CheckRow({ c }: { c: Row }) {
       <div>
         <div class="name">{c.msg}</div>
         <div class="msg">{c.id}</div>
+        {c.status !== "ok" && !c.repair?.length && c.fix && isManualFix(c.fix) && <ManualFix fix={c.fix} />}
       </div>
       {c.status !== "ok" && (c.repair?.length || c.fix) ? <FixControl c={c} /> : <span />}
     </div>

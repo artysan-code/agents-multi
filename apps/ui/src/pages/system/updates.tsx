@@ -5,6 +5,7 @@
 
 import type { ComponentChildren } from "preact";
 import { signal } from "@preact/signals";
+import type { Result } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
 import { lang, t, tk } from "../../i18n.ts";
 import { runAction, runJob, toast } from "../../lib/ui.tsx";
@@ -96,10 +97,15 @@ function AppCard() {
   if (!a?.app) return null;
   const busy = ["checking", "downloading", "installing", "restarting"].includes(a.state);
   const line = appState(a);
+  const refused = (r: Result) => toast(r.message ?? (typeof r.error === "string" ? r.error : t("up.app.refused")), true);
   const choose = async (c: "stable" | "beta") => {
     if (c === a.channel) return;
     const r = await appUpdateChannel(c);
-    if (!r.ok) toast(r.message ?? (typeof r.error === "string" ? r.error : t("up.app.refused")), true);
+    if (!r.ok) refused(r);
+  };
+  const check = async () => {
+    const r = await appUpdateAction("check");
+    if (!r.ok) refused(r);
   };
   return (
     <Card
@@ -118,7 +124,7 @@ function AppCard() {
               </button>
             ))}
           </div>
-          <button type="button" class="btn sm" disabled={busy} onClick={() => void appUpdateAction("check")}>
+          <button type="button" class="btn sm" disabled={busy} onClick={() => void check()}>
             {t("up.app.check")}
           </button>
         </div>

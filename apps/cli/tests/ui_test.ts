@@ -38,3 +38,12 @@ Deno.test("uiFile: the page, its hashed assets, nothing else; a missing build sa
     await Deno.remove(dist, { recursive: true });
   }
 });
+
+Deno.test("errorText: a refusal's message for the page, not its JSON", async () => {
+  const { errorText } = await import("../../ui/src/lib/http-error.ts");
+  assertEquals(errorText(400, '{"ok":false,"message":"is not an installed profile"}'), "is not an installed profile");
+  assertEquals(errorText(500, '{"error":"boom"}'), "boom");
+  assertEquals(errorText(502, "bad gateway"), "bad gateway");
+  assertEquals(errorText(404, ""), "HTTP 404");
+  assertEquals(errorText(409, "[1]"), "[1]");
+});

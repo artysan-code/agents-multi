@@ -120,6 +120,11 @@ export async function runAction(action: string, opts: string[] = []): Promise<vo
 export const FIX_ACTIONS: Record<string, string> = {
   "agents install": "install",
   "agents ui build": "ui-build",
+  "agents mcp sync": "mcp-sync",
+  "agents sync --fetch": "sync-fetch",
+  "agents update --check": "update-check",
+  // the update goes through its wizard (it closes Claude first), not through this action alone
+  "agents update --auto": "update-now",
 };
 
 type JobEnd = { code: number; cancelled?: boolean } | { error: string };

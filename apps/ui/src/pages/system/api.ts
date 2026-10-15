@@ -1,5 +1,5 @@
 // api.ts — what the System pages read and write beyond the shared report: the permission rules, the
-// plugins (table, catalog, one operation at a time), the profile form and the step that closes Claude
+// profile form and the step that closes Claude
 // before an install.
 
 import { api, type Blocker, type ClosePurpose, get, post, type Result } from "../../api.ts";
@@ -23,66 +23,10 @@ export const permissionOp = (body: Record<string, string>) =>
     message: e.message,
   }));
 
-/* ---------------- plugins ---------------- */
-
-/** One profile's view of a plugin: `override` is what that profile's own settings say (none = inherits). */
-export interface Cell {
-  enabled: boolean;
-  installed: boolean;
-  broken?: boolean;
-  version?: string;
-  override?: boolean | null;
-}
-interface PluginRow {
-  id: string;
-  name: string;
-  marketplace: string;
-  synced?: boolean;
-  shared?: boolean | null;
-  profiles: Record<string, Cell>;
-}
-interface Marketplace {
-  name: string;
-  source: string;
-  declared: boolean;
-  known: string[];
-}
-export interface PluginsView {
-  profiles: string[];
-  plugins: PluginRow[];
-  marketplaces: Marketplace[];
-  syncedSkills: Record<string, string[]>;
-}
-export interface CatEntry {
-  id: string;
-  name: string;
-  marketplace: string;
-  description: string;
-  installs?: number;
-}
-export interface Catalog {
-  total: number;
-  entries: CatEntry[];
-  marketplaces: string[];
-}
-interface OpResult {
-  ok: boolean;
-  message: string;
-  log?: string[];
-  confirm?: { command: string; sha256: string };
-}
-export type PluginBody = Record<string, unknown>;
-
-export const loadPluginsView = (fresh = false) => get<PluginsView>("/api/plugins" + (fresh ? "?fresh" : ""));
-export const loadCatalogPage = (qs: URLSearchParams) => get<Catalog>("/api/plugins/catalog?" + qs);
-export const pluginOp = (body: PluginBody) => post<OpResult>("/api/plugins", body);
-export const pluginDetails = (id: string) =>
-  get<{ text?: string }>(`/api/plugins/details?id=${encodeURIComponent(id)}`);
-
 /* ---------------- profiles ---------------- */
 
 /** Writes the profile's manifest and runs install on the server. */
-export const saveProfile = (body: unknown) => post<{ message?: string; output?: string }>("/api/profile", body);
+export const saveProfile = (body: unknown) => post<{ message?: string; output?: string; failed?: boolean }>("/api/profile", body);
 
 /* ---------------- closing Claude before an install ---------------- */
 

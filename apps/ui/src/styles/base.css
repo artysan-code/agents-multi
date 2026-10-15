@@ -1007,6 +1007,16 @@ tbody tr[aria-selected="true"] {
   background: var(--accent);
   color: var(--on-accent);
 }
+.chk .fixline {
+  font-size: 12px;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.chk .fixline code {
+  font: 400 11.5px var(--mono);
+  color: var(--fg);
+  user-select: all;
+}
 .spin {
   display: inline-block;
   animation: sp 1s linear infinite;

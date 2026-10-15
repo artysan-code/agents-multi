@@ -89,7 +89,7 @@ function Palette() {
             const head = c.s !== lastSec ? <div class="pal-sec">{t(c.s)}</div> : null;
             lastSec = c.s;
             return (
-              <Fragment key={c.d}>
+              <Fragment key={`${c.s}/${c.d}`}>
                 {head}
                 <div class="pal-i" data-sel={i === sel ? 1 : 0} onClick={() => run(c)}>
                   <svg viewBox="0 0 24 24">

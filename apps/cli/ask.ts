@@ -10,7 +10,7 @@
 // never sends mail or deletes.
 
 import { readJson } from "./lib/fs.ts";
-import { BIN, expandHome, HOME, STATE } from "./lib/paths.ts";
+import { BIN, expandHome, HOME, shortHome, STATE } from "./lib/paths.ts";
 import { has } from "./lib/proc.ts";
 import { running } from "./lib/processes.ts";
 import { launchers } from "./lib/profiles.ts";
@@ -352,6 +352,17 @@ async function graphicalEnv(): Promise<Record<string, string>> {
 
 /** Opens a terminal in `workdir` running `argv` (/api/terminal, and the first-run wizard's sign-in). */
 export async function openTerminal(workdir: string, argv: string[]): Promise<{ ok: boolean; message?: string }> {
+  const r = await openTerminalNow(workdir, argv);
+  return r.ok ? r : { ...r, message: `${r.message}. By hand, in a terminal: ${byHand(workdir, argv)}` };
+}
+
+/** Pure: the command line that does what a terminal the console could not open would have done. */
+export function byHand(workdir: string, argv: string[]): string {
+  const q = (s: string) => /^[\w@%+=:,./~-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
+  return `cd ${q(shortHome(workdir))} && ${argv.map((a) => q(shortHome(a))).join(" ")}`;
+}
+
+async function openTerminalNow(workdir: string, argv: string[]): Promise<{ ok: boolean; message?: string }> {
   const cmd = await terminalArgv(workdir, argv);
   if (!cmd) return { ok: false, message: "no terminal found (konsole, kitty, alacritty, wezterm)" };
   const env = await graphicalEnv();
