@@ -132,8 +132,8 @@ const it: Dict = {
   callTitle: "Open source, <em>AGPL.</em>",
   callText: "Il codice è pubblico: leggilo, provalo, cambialo. Domande, o vuoi una mano a installarlo? Scrivimi.",
   callContact: "Scrivimi",
-  callDocs: "Leggi la documentazione (EN)",
-  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione (EN)", signin: "Entra", license: "Open source sotto GNU AGPL-3.0.", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
+  callDocs: "Leggi la documentazione",
+  footer: { made: "Fatto da", privacy: "Privacy", docs: "Documentazione", signin: "Entra", license: "Open source sotto GNU AGPL-3.0.", legal: "Agents Multi è un progetto indipendente e non ufficiale, non affiliato né approvato da Anthropic. Claude, Claude Code e Claude Desktop sono marchi di Anthropic, PBC." },
 };
 
 export const dict: Record<Lang, Dict> = { en, it };

@@ -1,5 +1,5 @@
 // The public site of agents-multi: the landing (src/pages, English on /, Italian on /it/) and the
-// documentation (Starlight, on /docs). Static: the brain's image builds it and serves dist/ (apps/brain/public.ts).
+// documentation (Starlight, on /docs and /it/docs). Static: the brain's image builds it and serves dist/ (apps/brain/public.ts).
 // Its address is a placeholder the brain replaces with the real one when it serves a page: nothing of
 // one instance is built in.
 import { defineConfig } from "astro/config";
@@ -15,10 +15,15 @@ export default defineConfig({
       logo: { src: "./src/assets/mark.svg" },
       favicon: "/favicon.svg",
       customCss: ["./src/styles/fonts.css", "./src/styles/docs.css"],
+      defaultLocale: "root",
+      locales: {
+        root: { label: "English", lang: "en" },
+        it: { label: "Italiano", lang: "it" },
+      },
       sidebar: [
-        { label: "Start here", items: ["docs", "docs/getting-started", "docs/setup-with-claude"] },
-        { label: "Concepts", items: ["docs/profiles", "docs/configuration", "docs/console", "docs/brain", "docs/self-hosting", "docs/mcp-and-vault", "docs/updates", "docs/security"] },
-        { label: "Reference", items: ["docs/commands", "docs/troubleshooting", "docs/faq", "docs/changelog"] },
+        { label: "Start here", translations: { it: "Per cominciare" }, items: ["docs", "docs/getting-started", "docs/setup-with-claude"] },
+        { label: "Concepts", translations: { it: "Concetti" }, items: ["docs/profiles", "docs/configuration", "docs/console", "docs/brain", "docs/self-hosting", "docs/mcp-and-vault", "docs/updates", "docs/security"] },
+        { label: "Reference", translations: { it: "Riferimento" }, items: ["docs/commands", "docs/troubleshooting", "docs/faq", "docs/changelog"] },
       ],
       head: [
         { tag: "meta", attrs: { property: "og:image", content: "https://site.invalid/og.jpg" } },
