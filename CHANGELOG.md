@@ -5,6 +5,24 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.1-rc.4] - 2026-10-15
+
+### Added
+
+- **web**: swipe tabs and rows, compact tasks, chat actions, voice, forget a machine, v2 yes (c76e20e)
+- **brain**: voice notes, cancel a turn, rename a chat, forget a machine (6f7a8c8)
+- **trust**: the yes binds the request's words, signed job declines, revocations in the vault (50a3305)
+
+### Fixed
+
+- **node**: confine ffmpeg, cap voice notes, keep the undo when the phone hides the page (4bd3755)
+
+### Documentation
+
+- **web**: from the phone covers swipe, voice, chat actions, forgetting a machine; tests (b35787f)
+- **adr**: 0014, as built for voice, cancel and forget (d1e0c36)
+- **adr**: 0014, second round: voice, the chat's actions, forgetting a machine, a tighter yes (8670f08)
+
 ## [1.2.1-rc.3] - 2026-10-15
 
 ### Added
