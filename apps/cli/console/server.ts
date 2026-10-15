@@ -7,7 +7,7 @@
 
 import { openUrl } from "../../../shared/mcp/lib/platform.ts";
 import { ANSI } from "../lib/output.ts";
-import { PORT, REPO, SYNCTHING_CONFIG } from "../lib/paths.ts";
+import { DEFAULT_PORT, machineConsole, PORT, REPO, SYNCTHING_CONFIG } from "../lib/paths.ts";
 import { codeVersion } from "../codeversion.ts";
 import { whatsNew } from "../lib/changelog.ts";
 import { summarize } from "../status.ts";
@@ -363,8 +363,12 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   void watchTree(ac.signal);
   void app.follow(ac.signal);
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
+  // only the machine's console runs its jobs and keeps the gateway: a second one (another port) would run
+  // every schedule twice and restart the shared gateway with its own code
+  const own = machineConsole(PORT);
+  if (!own) console.log(`${ANSI.d}not on port ${DEFAULT_PORT}: no schedules, routines or gateway here${ANSI.x}`);
   // app mode: the timers' jobs are the backend's (schedule.ts); dev mode keeps its systemd timers
-  if ((await installation()).mode === "app") {
+  if (own && (await installation()).mode === "app") {
     const stop = startSchedule(jobsFor({
       repo: REPO,
       graphical: !!(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY")),
@@ -373,11 +377,13 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
     }));
     ac.signal.addEventListener("abort", stop);
   }
-  // the routines (ADR 0010), in both modes
-  ac.signal.addEventListener("abort", startLimitsScan());
-  ac.signal.addEventListener("abort", startRoutineSchedule());
-  // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
-  superviseGateway(ac.signal);
+  if (own) {
+    // the routines (ADR 0010), in both modes
+    ac.signal.addEventListener("abort", startLimitsScan());
+    ac.signal.addEventListener("abort", startRoutineSchedule());
+    // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
+    superviseGateway(ac.signal);
+  }
   if (opts.open) {
     // a one-use ticket, not the token: the command line of the opener is readable by other users
     const entryUrl = `${url}/?k=${auth.tickets.issue()}`;
