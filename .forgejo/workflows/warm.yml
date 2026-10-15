@@ -1,0 +1,99 @@
+# warm — keeps the release's caches where a tag can read them.
+#
+# Forgejo, as GitHub, scopes a cache to the ref that saved it: what the release job of tag v1.2.1-rc.2 saved is not
+# readable by v1.2.1-rc.3, only what the default branch (`release`) saved is. So each tag compiled the app from
+# nothing (four minutes) and fetched apt and Rust again. This job runs on `release` — at each stable version, each
+# night, and by hand — with the same tools, keys and paths as the release's `app` job, compiles the app without
+# bundling it, and saves the caches there, for every tag after it. It is never on a release's path.
+name: warm
+on:
+  push:
+    branches: [release]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: warm
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: v2.9.7
+
+jobs:
+  caches:
+    runs-on: heavy
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "true"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      RUST_VERSION: "1.99.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: https://github.com/denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      # the same three caches as release.yml's `app` job: same keys, same paths (a key is only shared when it is
+      # the same)
+      - name: tools cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/apt-cache
+            ~/.rustup
+            ~/.cargo/bin
+          key: tools-${{ env.RUST_VERSION }}-${{ hashFiles('.forgejo/workflows/release.yml') }}
+          restore-keys: tools-${{ env.RUST_VERSION }}-
+
+      - name: tools
+        run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          mkdir -p ~/apt-cache/archives/partial ~/apt-cache/lists/partial
+          apt="-o Dir::Cache::Archives=$HOME/apt-cache/archives -o Dir::State::Lists=$HOME/apt-cache/lists"
+          # shellcheck disable=SC2086
+          apt-get $apt update -qq
+          # shellcheck disable=SC2086
+          apt-get $apt install -y -qq --no-install-recommends file patchelf \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev \
+            libayatana-appindicator3-dev zstd >/dev/null
+          if ! "$HOME/.cargo/bin/rustc" --version 2>/dev/null | grep -q " $RUST_VERSION "; then
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
+              --default-toolchain "$RUST_VERSION" --component rustfmt,clippy
+          fi
+          echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
+          corepack enable
+
+      - name: cache (Rust)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+            !apps/desktop/src-tauri/target/release/bundle
+          key: rust-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            rust-
+            app-
+
+      - name: cache (Deno, pnpm)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.local/share/pnpm/store
+            ~/.cache/node/corepack
+          key: js-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml') }}
+          restore-keys: js-
+
+      # the release's build without its bundles and signatures: what the cache needs is the compiled target
+      - name: compile
+        run: |
+          deno eval 'import { uiCommand } from "./apps/cli/ui.ts"; Deno.exit(await uiCommand(["build"]));'
+          cd apps/desktop
+          pnpm install --frozen-lockfile
+          pnpm release --no-bundle
