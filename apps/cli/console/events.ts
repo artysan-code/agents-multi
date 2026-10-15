@@ -1,19 +1,15 @@
 // events.ts — live updates. The page holds one EventSource on /api/events; the console watches the
-// files it displays and the brain, and sends a topic when something it shows has changed.
+// files it displays, and sends a topic when something it shows has changed.
 
 import { lstat } from "../lib/fs.ts";
 import { HOME, NON_PROFILE_DIRS, REPO, RUNTIME, STATE } from "../lib/paths.ts";
 import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
-import { listTasks, tasksRoot } from "../../../shared/mcp/lib/tasks.ts";
-import { memoryVersion } from "../memory.ts";
 
-export const TOPICS = ["usage", "state", "brain", "tasks", "app-update"] as const;
+export const TOPICS = ["usage", "state", "agents", "chats", "app-update"] as const;
 export type Topic = typeof TOPICS[number];
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
  *  rather than repainting every row as busy. */
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
-/** The open pages alone (clients also holds the server's own listeners): nobody looking, nothing to poll. */
-const pages = new Set<unknown>();
 
 /** The transcripts the watcher saw change since the usage ingest last asked; null when nothing watches
  *  them (the watcher failed or has not started), which means every transcript must be looked at. */
@@ -70,16 +66,15 @@ const CHURN = new Set([
   "todos",
   "uploads",
 ]);
-/** The state folder's parts that move with every turn: the agents hub's children and the status line. */
-const STATE_CHURN = new Set(["agents", "live"]);
+/** The state folder's parts that are news of their own: the agents hub's children and runs, the chats. */
+const STATE_TOPIC: Record<string, Topic> = { agents: "agents", chats: "chats" };
 
 /** Pure: the topic a changed path is news for, or null when the console shows nothing of it. */
 export function topicOf(
   p: string,
-  roots: { runtime: string; state: string; tasks: string },
+  roots: { runtime: string; state: string },
 ): { topic: Topic; session?: string } | null {
   if (p.endsWith(".tmp") || p.includes("/.git/") || p.includes("/.obsidian/")) return null;
-  if (p.startsWith(`${roots.tasks}/`)) return { topic: "tasks" };
   if (p.includes("/projects/") && p.endsWith(".jsonl")) {
     // the file is named after the session, which is what the page needs to mark it as working
     const id = p.slice(p.lastIndexOf("/") + 1, -6);
@@ -90,7 +85,12 @@ export function topicOf(
     const [, entry = ""] = p.slice(roots.runtime.length + 1).split("/");
     if (CHURN.has(entry) || entry.startsWith(".claude.json.")) return null;
   }
-  if (p.startsWith(`${roots.state}/`) && STATE_CHURN.has(p.slice(roots.state.length + 1).split("/")[0])) return null;
+  if (p.startsWith(`${roots.state}/`)) {
+    // the status line writes at every turn, and the page reads it on `usage`
+    const [entry] = p.slice(roots.state.length + 1).split("/");
+    if (entry === "live") return null;
+    if (STATE_TOPIC[entry]) return { topic: STATE_TOPIC[entry] };
+  }
   return { topic: "state" };
 }
 
@@ -122,8 +122,8 @@ async function profileDirs(): Promise<string[]> {
  * relayed by app-update.ts).
  * `usage`  new transcript lines — running and recent sessions
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
- * `brain`  a page of the brain changed (anywhere: watchBrain asks it every half minute)
- * `tasks`  a task changed: a chat, another machine, the console
+ * `agents` the agents hub's children and runs — the Runs page
+ * `chats`  a chat kept a turn, or was forgotten — the Chat page
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
  * second is plenty for a dashboard.
@@ -134,7 +134,7 @@ export async function watchTree(signal: AbortSignal) {
   // (updates.jsonl): the Updates tab follows both. watchFs refuses a path that does not exist, so
   // those are watched only where they are.
   // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
-  const deep = [...plan.deep, `${REPO}/shared`, `${HOME}/.cache/claude-update`, STATE, vaultDir(), tasksRoot()];
+  const deep = [...plan.deep, `${REPO}/shared`, `${HOME}/.cache/claude-update`, STATE, vaultDir()];
   const exists = async (paths: string[]) => {
     const out: string[] = [];
     for (const d of paths) if (await lstat(d)) out.push(d);
@@ -156,7 +156,7 @@ export async function watchTree(signal: AbortSignal) {
       } catch { /* already closed */ }
     }
   });
-  const roots = { runtime: RUNTIME, state: STATE, tasks: tasksRoot() };
+  const roots = { runtime: RUNTIME, state: STATE };
   const pending = new Set<Topic>();
   const sessions = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -190,7 +190,7 @@ export async function watchTree(signal: AbortSignal) {
 
 /** The SSE response for one page. `code` is the fingerprint of the code serving it: a page loaded
  *  from an older console reloads itself. `only`: the topics a listener follows (the tray: `state`);
- *  it gets nothing else, and it is not a page — the brain is not watched for it. */
+ *  it gets nothing else. */
 export function eventStream(code: string, only?: Topic[]): Response {
   let send: ((topic: Topic, sessions?: string[]) => void) | null = null;
   let ping: ReturnType<typeof setInterval> | null = null;
@@ -201,7 +201,6 @@ export function eventStream(code: string, only?: Topic[]): Response {
     }
     if (send) {
       clients.delete(send);
-      pages.delete(send);
       send = null;
     }
   };
@@ -224,7 +223,6 @@ export function eventStream(code: string, only?: Topic[]): Response {
         }
       };
       clients.add(send);
-      if (!only) pages.add(send);
       // A proxy or a sleeping laptop can drop a silent connection: a comment every 25s keeps it
       // alive and gives the page a heartbeat to time its "last update" indicator against.
       ping = setInterval(() => write(`: ping ${Date.now()}\n\n`), 25000);
@@ -234,31 +232,4 @@ export function eventStream(code: string, only?: Topic[]): Response {
   return new Response(body, {
     headers: { "content-type": "text/event-stream", "cache-control": "no-store", "connection": "keep-alive" },
   });
-}
-
-/** The brain changes elsewhere (the phone, a chat on another machine) and touches no file here:
- *  every half minute its tasks and its memory version are read, and a `tasks` or `brain` event goes
- *  out when one differs. The console's own task writes broadcast at once, through taskApi. */
-export async function watchBrain(signal: AbortSignal, tasks: boolean) {
-  let lastTasks = "", lastMemory: string | null = null;
-  while (!signal.aborted) {
-    // with no page open there is nobody to tell: the next look after one opens sets the baseline again
-    if (!pages.size) {
-      lastTasks = "";
-      lastMemory = null;
-      await new Promise((r) => setTimeout(r, 5_000));
-      continue;
-    }
-    if (tasks) {
-      try {
-        const now = JSON.stringify((await listTasks()).map((t) => [t.id, t.updated]).sort());
-        if (lastTasks && now !== lastTasks) broadcast("tasks");
-        lastTasks = now;
-      } catch { /* the brain is away: the panels say so when they ask */ }
-    }
-    const memory = await memoryVersion().catch(() => null);
-    if (memory && lastMemory && memory !== lastMemory) broadcast("brain");
-    if (memory) lastMemory = memory;
-    await new Promise((r) => setTimeout(r, 30_000));
-  }
 }

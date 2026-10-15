@@ -65,7 +65,7 @@ a console, and a desktop app that carries it all. **This repository is the sourc
   `kwallet-query`, `vault recovery-code` and the vault folder keep a session from the keyring's vault
   key (the doctor checks them).
 - **A profile's Claude login is read in one place only**: `apps/cli/live.ts`, when the person asks to
-  refresh usage limits (Today › Claude now). Used for that request to Anthropic, never kept, logged or
+  refresh usage limits (the console's Accounts & limits). Used for that request to Anthropic, never kept, logged or
   sent elsewhere; the limits otherwise come from the status line.
 - **Billing is not monitored, on purpose** (removed 2026-09-30): the cost in `usage` is a list-price
   equivalent, not a charge; no spending thresholds or notifications.

@@ -7,9 +7,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import { t } from "../i18n.ts";
-import { view } from "../router.ts";
 import { leaving, live, status } from "../state.ts";
-import { board } from "../pages/tasks/model.ts";
 
 /** How long the console may be silent before the screen covers the page, and before it says so. */
 const QUIET_MS = 2500, LOST_MS = 30000;
@@ -32,8 +30,8 @@ const settled = () =>
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 120)));
   });
 
-/** The pages that draw the task board want it before they show. */
-const ready = () => !!status.value && (!["today", "tasks"].includes(view.value) || !!board.value);
+/** The page has what it draws from: the report. */
+const ready = () => !!status.value;
 
 export function Boot() {
   const [quiet, setQuiet] = useState<"" | "reconnect" | "lost">("");

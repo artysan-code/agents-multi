@@ -99,6 +99,11 @@ export const en = {
   "uw.done": "Done",
   "uw.showOut": "Details",
   "uw.hideOut": "Hide details",
+  "sc.later": "Later",
+  "sc.staged": "already downloaded",
+  "sc.commits": "{n} new commits",
+  "sc.note": "Claude Desktop restarts ({p}) to take its new version.",
+  "sc.note.busy": "Claude Desktop restarts ({p}): {n} sessions are working there, it asks first.",
 } as const;
 
 export const it: Record<keyof typeof en, string> = {
@@ -199,4 +204,9 @@ export const it: Record<keyof typeof en, string> = {
   "uw.done": "Fatto",
   "uw.showOut": "Dettagli",
   "uw.hideOut": "Nascondi i dettagli",
+  "sc.later": "Più tardi",
+  "sc.staged": "già scaricato",
+  "sc.commits": "{n} commit nuovi",
+  "sc.note": "Claude Desktop si riavvia ({p}) per passare alla versione nuova.",
+  "sc.note.busy": "Claude Desktop si riavvia ({p}): {n} sessioni ci lavorano, ti chiede prima.",
 };

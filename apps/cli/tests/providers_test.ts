@@ -14,7 +14,7 @@ import {
 } from "../../../shared/mcp/lib/providers.ts";
 import { codexHome } from "../../../shared/mcp/lib/codex.ts";
 import { tokenFileOf } from "../mcp/gateway-settings.ts";
-import { inHours, limitsTable, readAgo } from "../limits.ts";
+import { inHours, limitsTable, limitsView, readAgo } from "../limits.ts";
 
 const NOW = 1_800_000_000;
 
@@ -143,6 +143,23 @@ Deno.test("limits: a reading's age as a person reads it, stale past half an hour
     "read 3h ago, stale",
     "read 2d ago, stale",
   ]);
+});
+
+Deno.test("limitsView: every window marked stale by the same rule as the table, half an hour", () => {
+  const w = (at: number | null) => ({
+    window: "5h",
+    usedPercent: 40,
+    resetsAt: NOW + 600,
+    source: "statusline" as const,
+    at,
+  });
+  const v = limitsView([
+    { account: { id: "a/claude", profile: "a", provider: "claude" }, windows: [w(NOW - 60), w(NOW - 1801), w(null)] },
+    { account: { id: "a/codex", profile: "a", provider: "codex" }, windows: [] },
+  ], NOW);
+  assertEquals(v.now, NOW);
+  assertEquals(v.accounts[0].windows.map((x) => x.stale), [false, true, false]);
+  assertEquals(v.accounts[1].windows, []);
 });
 
 Deno.test("limits: a reset as a person reads it", () => {

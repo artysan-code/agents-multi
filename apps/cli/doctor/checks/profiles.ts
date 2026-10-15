@@ -131,7 +131,7 @@ export async function profileChecks(ctx: DoctorCtx): Promise<Check[]> {
         `profile.${p}.plugins`,
         "fail",
         `${p}: installed plugins whose files are gone (they fail to load): ${info.brokenPlugins.join(", ")}`,
-        "console → Plugins: Remove, then install again (or claude plugin install <id> in that profile)",
+        "in that profile: claude plugin uninstall <id>, then claude plugin install <id>",
       );
     }
     if (info.stalePlugins.length) {

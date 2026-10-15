@@ -30,8 +30,8 @@ Deno.test("owner: the variables win over the file, the file over the defaults", 
 });
 
 Deno.test("promptFor: the owner's name and language, nobody else's", () => {
-  const p = promptFor("ask", "now", null, false, { id: "ann", name: "Ann", language: "German" });
-  assertEquals([p.includes("Ann's console"), p.includes("Answer in German"), p.includes("Alice")], [
+  const p = promptFor("now", { id: "ann", name: "Ann", language: "German" });
+  assertEquals([p.includes("Ann's chat"), p.includes("Answer in German"), p.includes("Alice")], [
     true,
     true,
     false,

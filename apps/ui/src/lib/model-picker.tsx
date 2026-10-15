@@ -1,7 +1,7 @@
 // model-picker.tsx — the model Claude answers with, chosen from a popover in the app's style: a button
 // with the model's dot and name, and a list with a hint and an effort gauge for each model, the default
 // marked. Alt M opens it; ↑ ↓, Enter, 1–3 and Esc work inside. The choice is one, kept by the server
-// (/api/ask/model) and shared by the console's ask bar and the Hey window. With `host` the list is drawn
+// (/api/ask/model) and shared by the console's Chat and the Hey window. With `host` the list is drawn
 // there, in the page's flow, instead of over the page: the Hey window is as tall as its page, and a
 // list over the page would fall outside it.
 

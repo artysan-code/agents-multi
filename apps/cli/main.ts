@@ -311,7 +311,7 @@ switch (cmd) {
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)
-  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
+  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (chat, runs, accounts & limits; the rest under More)
   version                     the version of agents-multi (also --version, -V)
 
   agents-multi and claude-multi are other names for the same command (the second is the project's name before Agents Multi).
