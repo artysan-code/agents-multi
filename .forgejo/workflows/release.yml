@@ -125,7 +125,10 @@ jobs:
             apps/desktop/src-tauri/target
             !apps/desktop/src-tauri/target/release/bundle
           key: rust-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
-          restore-keys: rust-
+          # app-: the single cache of the releases before this split, which holds the same build
+          restore-keys: |
+            rust-
+            app-
 
       - name: cache (Deno, pnpm)
         uses: actions/cache@v4
