@@ -4,6 +4,7 @@
 // outside.
 
 import type { ComponentChildren, VNode } from "preact";
+import { useState } from "preact/hooks";
 
 type OnPage = (target: string) => void;
 
@@ -69,14 +70,44 @@ export function inline(s: string, onPage?: OnPage): ComponentChildren[] {
   return scan(s, TOKENS, emph, onPage);
 }
 
+/** Labels for the copy button of a code block; without them a block is a plain `<pre>`. */
+export interface CopyLabels {
+  label: string;
+  done: string;
+}
+
+/** A fenced block with its language and a button that copies the code (the web app's answers). */
+function CodeBlock({ lang, code, copy }: { lang: string; code: string; copy: CopyLabels }) {
+  const [copied, setCopied] = useState(false);
+  const run = () => {
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, () => {});
+  };
+  return (
+    <div class="code">
+      <div class="code-bar">
+        <span>{lang}</span>
+        <button type="button" onClick={run} aria-live="polite">{copied ? copy.done : copy.label}</button>
+      </div>
+      <pre><code>{code}</code></pre>
+    </div>
+  );
+}
+
 /** The block forms: headings, rules, lists (with task boxes and a depth), tables, quotes, fenced code. */
-export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
+export function renderMarkdown(src: string, onPage?: OnPage, copy?: CopyLabels): VNode[] {
   const out: VNode[] = [];
   type List = { kind: "ul" | "ol"; items: VNode[] };
   // set and cleared inside flush(), which narrowing cannot follow: hence the casts on reading
   let list = null as List | null;
   let table: VNode[] | null = null;
   let code: string[] | null = null;
+  let lang = "";
+  const block = (lines: string[]) =>
+    copy ? <CodeBlock lang={lang} code={lines.join("\n")} copy={copy} /> : <pre>{lines.join("\n")}</pre>;
   const flush = () => {
     if (list) out.push(list.kind === "ul" ? <ul>{list.items}</ul> : <ol>{list.items}</ol>);
     if (table) out.push(<table><tbody>{table}</tbody></table>);
@@ -86,7 +117,7 @@ export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
   for (const line of src.split("\n")) {
     if (code !== null) {
       if (line.startsWith("```")) {
-        out.push(<pre>{code.join("\n")}</pre>);
+        out.push(block(code));
         code = null;
       } else code.push(line);
       continue;
@@ -94,6 +125,7 @@ export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
     if (line.startsWith("```")) {
       flush();
       code = [];
+      lang = line.slice(3).trim().split(/\s/)[0];
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.*)/);
@@ -145,10 +177,10 @@ export function renderMarkdown(src: string, onPage?: OnPage): VNode[] {
     else if (line.trim()) out.push(<p>{inline(line, onPage)}</p>);
   }
   flush();
-  if (code) out.push(<pre>{(code as string[]).join("\n")}</pre>);
+  if (code) out.push(block(code as string[]));
   return out;
 }
 
-export function Markdown({ src, onPage, class: cls = "md" }: { src: string; onPage?: OnPage; class?: string }) {
-  return <div class={cls}>{renderMarkdown(src, onPage)}</div>;
+export function Markdown({ src, onPage, class: cls = "md", copy }: { src: string; onPage?: OnPage; class?: string; copy?: CopyLabels }) {
+  return <div class={cls}>{renderMarkdown(src, onPage, copy)}</div>;
 }

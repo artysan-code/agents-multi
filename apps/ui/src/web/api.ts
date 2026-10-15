@@ -1,7 +1,8 @@
 // api.ts — what the web app asks of the service (ADR 0014, «The API»): same origin, the session cookie, JSON.
 // It talks to nothing else. A 401 is a session that ended: back to the sign-in, which returns here.
 
-import type { ChatHead, Turn } from "./lib.ts";
+import type { ChatHead, Passkey, Turn, WaitingState } from "./lib.ts";
+import type { Assertion, Verdict } from "./webauthn-core.ts";
 
 const SIGN_IN = "/account?next=/app";
 
@@ -33,11 +34,16 @@ const send = (method: string, path: string, body?: unknown) =>
 export const listChats = () => call<{ chats: ChatHead[] }>("/api/chats").then((r) => r.chats);
 export const getChat = (id: string) =>
   call<{ chat: { id: string; title: string; turns: Turn[] } }>(`/api/chats/${encodeURIComponent(id)}`).then((r) => r.chat);
-/** A turn written: the contract says `{chat, turn}`, the chat's id or the chat itself; the id is what is kept. */
-export async function sendTurn(text: string, chat?: string): Promise<{ chat: string; turn: string }> {
-  const r = await send("POST", "/api/chats", chat ? { text, chat } : { text }) as { chat: string | { id: string }; turn: unknown };
+/** A turn written: the contract says `{chat, turn}`, both objects as `GET` gives them; the chat's id and the turn
+ *  (null when the service sent only its id) are what is kept. */
+export async function sendTurn(text: string, chat?: string, node?: string): Promise<{ chat: string; turn: Turn | null }> {
+  const r = await send("POST", "/api/chats", { text, ...(chat ? { chat } : {}), ...(node ? { node } : {}) }) as {
+    chat: string | { id: string };
+    turn: Turn | string;
+  };
   const id = typeof r.chat === "string" ? r.chat : r.chat.id;
-  return { chat: id, turn: typeof r.turn === "string" ? r.turn : String((r.turn as { id?: string })?.id ?? "") };
+  const turn = r.turn && typeof r.turn === "object" ? { ...r.turn, acts: r.turn.acts ?? [], a: r.turn.a ?? "" } : null;
+  return { chat: id, turn };
 }
 export const deleteChat = (id: string) => send("DELETE", `/api/chats/${encodeURIComponent(id)}`);
 export const eventsOf = (id: string) => new EventSource(`/api/chats/${encodeURIComponent(id)}/events`);
@@ -90,3 +96,30 @@ export const pushKey = () => call<{ key: string }>("/api/push/key").then((r) => 
 export const subscribePush = (s: { endpoint: string; keys: { p256dh: string; auth: string }; device: string }) =>
   send("POST", "/api/push/subscriptions", s);
 export const unsubscribePush = (endpoint: string) => send("DELETE", "/api/push/subscriptions", { endpoint });
+
+// ---- pairing a machine (G4)
+export const claimPairing = (code: string) => send("POST", "/api/pair/claim", { code }) as Promise<{ node: string | { name: string } }>;
+
+// ---- what waits (G5)
+export const loadWaiting = () => call<WaitingState>("/api/waiting");
+export const answerRequest = (id: string, body: { verdict: Verdict; answers?: Record<string, string>; expires: string; assertion: Assertion }) =>
+  send("POST", `/api/waiting/${encodeURIComponent(id)}`, body);
+export const acceptJob = (id: string, expires: string, assertion: Assertion) =>
+  send("POST", `/api/jobs/${encodeURIComponent(id)}`, { op: "accept", expires, assertion });
+export const declineJob = (id: string) => send("POST", `/api/jobs/${encodeURIComponent(id)}`, { op: "decline" });
+
+// ---- passkeys (G5)
+export const listPasskeys = () => call<Passkey[] | { passkeys: Passkey[] }>("/api/passkeys").then((r) => (Array.isArray(r) ? r : r.passkeys));
+export const passkeyOptions = () => send("POST", "/api/passkeys/options");
+export const addPasskey = (name: string, credential: Record<string, unknown>) =>
+  send("POST", "/api/passkeys", { name, credential }) as Promise<{ id: string; state: string }>;
+export const revokePasskey = (id: string) => send("DELETE", `/api/passkeys/${encodeURIComponent(id)}`);
+
+export interface PageHead {
+  path: string;
+  title: string;
+  area?: string;
+  updated: string;
+}
+/** The most recently changed pages, newest first (the service lists them all; the phone shows the first few). */
+export const loadPages = () => call<{ pages: PageHead[] }>("/api/brain/pages").then((r) => r.pages.slice(0, 12));

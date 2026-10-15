@@ -2,23 +2,45 @@
 // the day groups, the task sections, the hash routes, the node order and the notification advice.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
+  actKind,
+  answersOf,
   applyEvent,
   deviceName,
+  endorsed,
   groupByDay,
   hashOf,
   isIos,
   keyBytes,
   localDay,
+  memUsed,
   moved,
+  normalizeCode,
   online,
   orderOf,
   parseHash,
   parseTasks,
+  type Passkey,
+  pending,
   pushAdvice,
+  retryable,
+  sendsOnEnter,
+  showCode,
+  tabOf,
   taskSections,
-  tidyCode,
+  themeOf,
   type Turn,
+  waitingCount,
 } from "../../ui/src/web/lib.ts";
+import {
+  answerChallenge,
+  answerText,
+  b64u,
+  creationOptions,
+  expiryFrom,
+  jobChallenge,
+  unb64u,
+} from "../../ui/src/web/webauthn-core.ts";
+import { canonical, signedText } from "../../../shared/mcp/lib/nodes.ts";
 import { toFile } from "../../../shared/mcp/lib/tasks/format.ts";
 import type { Task } from "../../../shared/mcp/lib/tasks/types.ts";
 
@@ -134,6 +156,9 @@ Deno.test("web: the hash names a view, and a chat or a brain page", () => {
   assertEquals(parseHash("#chat/new"), { view: "chat", id: "new" });
   assertEquals(parseHash("#brain/progetti%2Fagents-multi"), { view: "brain", id: "progetti/agents-multi" });
   assertEquals(parseHash("#/machines"), { view: "machines" });
+  assertEquals(parseHash("#waiting"), { view: "waiting" });
+  assertEquals(parseHash("#more"), { view: "more" });
+  assertEquals(parseHash("#settings"), { view: "chat" }); // the old name of More
   assertEquals(parseHash("#tasks/ignored"), { view: "tasks" });
   assertEquals(parseHash("#nowhere"), { view: "chat" });
   assertEquals(parseHash("#brain/%E0%A4%A"), { view: "brain" });
@@ -194,10 +219,157 @@ Deno.test("web: the VAPID key is URL-safe base64 turned into bytes", () => {
   assertEquals(keyBytes("").length, 0);
 });
 
-Deno.test("web: a pairing code is tidied as it is typed", () => {
-  assertEquals(tidyCode("abcd"), "ABCD");
-  assertEquals(tidyCode("abcde"), "ABCD-E");
-  assertEquals(tidyCode("ab cd-23 45"), "ABCD-2345");
-  assertEquals(tidyCode("ABCD-2345-9999"), "ABCD-2345");
-  assertEquals(tidyCode("!?"), "");
+Deno.test("web: Machines belongs to the More tab, every other view to its own", () => {
+  assertEquals(tabOf("machines"), "more");
+  assertEquals(tabOf("waiting"), "waiting");
+  assertEquals(tabOf("chat"), "chat");
+});
+
+Deno.test("web: what waits is the requests plus the jobs only proposed", () => {
+  const job = (status: string) => ({ id: status, status }) as never;
+  const req = { id: "a/b" } as never;
+  assertEquals(waitingCount(null), 0);
+  assertEquals(waitingCount({ requests: [req, req], jobs: [job("proposed"), job("accepted"), job("declined")] }), 3);
+  assertEquals(waitingCount({ requests: [], jobs: [job("running")] }), 0);
+});
+
+Deno.test("web: a passkey with no endorsement is pending and cannot answer", () => {
+  const k = (id: string, endorsement: string | null): Passkey => ({
+    id,
+    name: id,
+    publicKey: "p",
+    endorsement,
+    created: "2026-10-15T10:00:00Z",
+  });
+  const keys = [k("a", "sig"), k("b", null), k("c", "sig")];
+  assertEquals(endorsed(keys).map((x) => x.id), ["a", "c"]);
+  assertEquals(pending(keys).map((x) => x.id), ["b"]);
+});
+
+Deno.test("web: the answers of a question are complete only when every question has one", () => {
+  const qs = [
+    { question: "Which database?", options: [{ label: "SQLite" }, { label: "Postgres" }] },
+    { question: "Which tags?", multiSelect: true, options: [{ label: "a" }, { label: "b" }] },
+  ];
+  assertEquals(answersOf(qs, {}), null);
+  assertEquals(answersOf(qs, { "Which database?": ["SQLite"] }), null);
+  assertEquals(answersOf(qs, { "Which database?": ["SQLite"], "Which tags?": ["a", "b"] }), {
+    "Which database?": "SQLite",
+    "Which tags?": "a, b",
+  });
+  assertEquals(answersOf([], {}), {});
+});
+
+Deno.test("web: a change is of the kind its tool says, and only a failed turn is retried", () => {
+  assertEquals(actKind("tasks_add"), "task");
+  assertEquals(actKind("brain_edit"), "brain");
+  assertEquals(actKind("calendar_create"), "calendar");
+  assertEquals(actKind("gmail_draft"), "mail");
+  assertEquals(actKind("routine_add"), "job");
+  assertEquals(actKind("Bash"), "other");
+  assertEquals(retryable({ state: "failed" }), true);
+  assertEquals(retryable({ state: "done" }), false);
+});
+
+Deno.test("web: the theme is light, dark or the device's", () => {
+  assertEquals([themeOf("light"), themeOf("dark"), themeOf(null), themeOf("blue")], [
+    "light",
+    "dark",
+    "system",
+    "system",
+  ]);
+});
+
+Deno.test("web: Enter sends on a desktop and breaks the line on a touch screen; Ctrl or Cmd+Enter sends anywhere", () => {
+  const e = (over = {}) => ({ key: "Enter", shiftKey: false, ctrlKey: false, metaKey: false, ...over });
+  assertEquals(sendsOnEnter(e(), true), true);
+  assertEquals(sendsOnEnter(e({ shiftKey: true }), true), false);
+  assertEquals(sendsOnEnter(e(), false), false);
+  assertEquals(sendsOnEnter(e({ ctrlKey: true }), false), true);
+  assertEquals(sendsOnEnter(e({ metaKey: true }), false), true);
+  assertEquals(sendsOnEnter(e({ isComposing: true }), true), false); // an IME choosing a character
+  assertEquals(sendsOnEnter(e({ key: "a" }), true), false);
+});
+
+Deno.test("web: a pairing code is read as Crockford base32 and shown in two groups of four", () => {
+  assertEquals(normalizeCode("abcd-ef12"), "ABCDEF12");
+  assertEquals(normalizeCode("o0il 1l"), "0011" + "11");
+  assertEquals(normalizeCode("ABCD EFGH JKMN"), "ABCDEFGH"); // at most eight
+  assertEquals(showCode("ABCD"), "ABCD");
+  assertEquals(showCode("ABCDEF"), "ABCD-EF");
+  assertEquals(showCode(normalizeCode("abcdef12")), "ABCD-EF12");
+});
+
+Deno.test("web: memory in use is a percentage, and 0 when the node did not say", () => {
+  assertEquals(memUsed({ memTotal: 32e9, memFree: 16e9 }), 50);
+  assertEquals(memUsed({ memTotal: 8e9, memFree: 9e9 }), 0); // free cannot exceed total
+  assertEquals(memUsed({ memTotal: 0, memFree: 0 }), 0);
+});
+
+const sha = async (text: string) =>
+  new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+
+Deno.test("web: base64url round-trips bytes, without padding", () => {
+  const bytes = Uint8Array.from([0, 250, 251, 252, 253, 254, 255, 1]);
+  const text = b64u(bytes);
+  assert(!/[+/=]/.test(text));
+  assertEquals(unb64u(text), bytes);
+  assertEquals(b64u(new Uint8Array([]).buffer), "");
+});
+
+Deno.test("web: the challenge of an answer is SHA-256 of the contract's text, keys in order, no answers when there are none", async () => {
+  const body = { id: "ch-1/rq-1", node: "studio", verdict: "allow" as const, expires: "2026-10-15T10:05:00.000Z" };
+  assertEquals(
+    answerText(body),
+    'agents-multi answer v1\n{"expires":"2026-10-15T10:05:00.000Z","id":"ch-1/rq-1","node":"studio","verdict":"allow"}',
+  );
+  assertEquals(await answerChallenge(body), await sha(answerText(body)));
+  const withAnswers = { ...body, answers: { "Which?": "SQLite" } };
+  assertEquals(
+    answerText(withAnswers),
+    `agents-multi answer v1\n${
+      canonical({
+        answers: { "Which?": "SQLite" },
+        expires: body.expires,
+        id: body.id,
+        node: body.node,
+        verdict: "allow",
+      })
+    }`,
+  );
+  // another verdict, another challenge: a yes cannot be replayed as a no
+  assert(b64u(await answerChallenge({ ...body, verdict: "deny" })) !== b64u(await answerChallenge(body)));
+});
+
+Deno.test("web: the challenge of accepting a job is SHA-256 of the text the desktop signs", async () => {
+  const job = {
+    id: "j-1",
+    node: "hetzner",
+    kind: "routine" as const,
+    spec: { name: "Backup", repo: "git@x:me/b.git", path: "", action: { kind: "child" } },
+  };
+  const expires = "2026-10-15T10:05:00.000Z";
+  assertEquals(await jobChallenge(job, expires), await sha(signedText({ ...job, expires } as never)));
+});
+
+Deno.test("web: an answer expires five minutes ahead, inside the contract's ten", () => {
+  assertEquals(expiryFrom(new Date("2026-10-15T10:00:00.000Z")), "2026-10-15T10:05:00.000Z");
+});
+
+Deno.test("web: the creation options of the service become the bytes WebAuthn takes, bare or inside publicKey", () => {
+  const raw = {
+    challenge: b64u(Uint8Array.from([1, 2, 3])),
+    rp: { name: "Agents Multi" },
+    user: { id: b64u(Uint8Array.from([9, 8])), name: "me" },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+    excludeCredentials: [{ id: b64u(Uint8Array.from([7])), type: "public-key" }],
+  };
+  for (const input of [raw, { publicKey: raw }]) {
+    const o = creationOptions(input);
+    assertEquals(o.challenge, Uint8Array.from([1, 2, 3]));
+    assertEquals(o.user.id, Uint8Array.from([9, 8]));
+    assertEquals(o.user.displayName, "me");
+    assertEquals(o.excludeCredentials[0].id, Uint8Array.from([7]));
+    assertEquals(o.rp, { name: "Agents Multi" });
+  }
 });
