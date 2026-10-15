@@ -1,4 +1,4 @@
-// profiles-types.ts — the part of a profile's report the Overview and Profiles tabs read beyond what
+// profiles-types.ts — the part of a profile's report the Profiles tab reads beyond what
 // api.ts declares: its manifest and what is mounted from the shared set.
 
 import type { ProfileView, StatusView } from "../../api.ts";

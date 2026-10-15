@@ -24,7 +24,11 @@ export const CACHE = `${XDG.cache}/${XDG_NAME}`;
 export const STATE = `${XDG.state}/${XDG_NAME}`;
 export const DATA = `${XDG.data}/${XDG_NAME}`;
 /** The local console's port on 127.0.0.1 (`agents serve`). */
-export const PORT = Number(amEnv("PORT") ?? 7331);
+export const DEFAULT_PORT = 7331;
+export const PORT = Number(amEnv("PORT") ?? DEFAULT_PORT);
+/** Pure: whether a console on `port` is the machine's own, the one that runs its schedules and keeps the
+ *  MCP gateway up; one on another port (a second console, a test of a checkout) only serves its pages. */
+export const machineConsole = (port: number): boolean => port === DEFAULT_PORT;
 // stignore-gen runs only where Syncthing does; its git template is what init.templateDir points at.
 export const SYNCTHING_CONFIG = `${HOME}/.local/state/syncthing/config.xml`;
 /** The template's place in the code: install and the doctor find it in the installed one (lib/mode.ts). */

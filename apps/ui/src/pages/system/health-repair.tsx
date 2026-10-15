@@ -23,7 +23,6 @@ type StepState = "todo" | "running" | "waiting" | "done" | "failed";
 /** Where a fix that names a page of the console («console › Connections …») goes. */
 const PAGES: [RegExp, string, Key][] = [
   [/console (›|→) System › Permissions/, "system/permissions", "sys.permissions"],
-  [/console (›|→) Plugins/, "system/plugins", "sys.plugins"],
   [/console (›|→) Connections/, "connections", "nav.connections"],
 ];
 

@@ -194,9 +194,9 @@ switch (cmd) {
       const r = await ingest(db, { full: flag("--full") });
       if (rest[0] === "ingest" || r.files) {
         console.error(
-          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged (${
-            ((Date.now() - t0) / 1000).toFixed(1)
-          }s) → ${DB_PATH}`,
+          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged, ${
+            (r.bytes / 1e6).toFixed(1)
+          } MB read (${((Date.now() - t0) / 1000).toFixed(1)}s) → ${DB_PATH}`,
         );
       }
       if (rest[0] === "ingest") break;
@@ -311,7 +311,7 @@ switch (cmd) {
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)
-  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health)
+  serve   [--no-open]         local console on http://127.0.0.1:${PORT} (chat, runs, accounts & limits; the rest under More)
   version                     the version of agents-multi (also --version, -V)
 
   agents-multi and claude-multi are other names for the same command (the second is the project's name before Agents Multi).

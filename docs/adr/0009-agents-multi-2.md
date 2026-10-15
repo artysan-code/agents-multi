@@ -131,7 +131,7 @@ Sizes only. The brain's tasks carry them (label `2.0`).
 | B     | Platform layer for Mac and Windows: `secretStore`, `spawnDetached`, `listProcesses`, `notify`, `openUrl`                       | medium | —     |
 | C     | Provider interface completion (CLI, accounts, headless run, limits, optional desktop, one shape per provider) (done: ADR 0007) | medium | —     |
 | D     | Scheduler, run policy and limits manager (routines, night policy, rules of 16–19)                                              | large  | C     |
-| E     | UI cut to three views (Chat, Runs, Accounts & limits) and "More"                                                               | medium | —     |
+| E     | UI cut to three views (Chat, Runs, Accounts & limits) and "More" (done)                                                        | medium | —     |
 | F     | `agentd` headless on the server, node announcement and job placement, resume from branch                                       | large  | D, B  |
 | G     | Web app (PWA, push, brain login) and the Telegram adapter                                                                      | large  | F     |
 | H     | Reviewer agent (approve, block, ask) ([ADR 0011](0011-reviewer.md))                                                            | medium | D     |

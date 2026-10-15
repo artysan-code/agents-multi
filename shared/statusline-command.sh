@@ -4,7 +4,7 @@
 # Line 2: profile │ model │ ctx bar % tokens │ 5h and 7d limits │ cost │ cfg (repo agents-multi) │ ⬆ update
 # The tasks come from the brain through a cache that `agents tasks statusline-cache` rewrites in the
 # background when it is a minute old: this script never waits for the network.
-# It also keeps a snapshot of the session for the console's «Claude now» (apps/cli/live.ts): the context
+# It also keeps a snapshot of the session for the console's «Accounts & limits» (apps/cli/live.ts): the context
 # and the account's rate limits Claude Code hands it, in <state>/agents-multi/live/<session>.json.
 #
 # It runs at every refresh of the prompt: one jq for the payload, two git calls, bash for the rest

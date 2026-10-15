@@ -1,7 +1,7 @@
 // rail.tsx — the navigation beside every page: a strip of icons that opens over the page while the
 // pointer is on it (or the keyboard is in it), so every page is one click away and none of the width is
-// taken. The pages (Today, Tasks, Brain; then System's: Connections, Overview, Profiles, Permissions,
-// Plugins, Updates, Health), each with its own sign (the tasks due, an update waiting, the checks that
+// taken. The three views (Chat, Runs, Accounts & limits), then «More» with the rest (Connections,
+// Profiles, Permissions, Updates, Health), each with its own sign (an update waiting, the checks that
 // need someone); at the bottom the one action that can wait for you — «Update» — the console's
 // reachability when it is lost, the commands, the preferences (theme, language, shortcuts) and the clock.
 
@@ -11,9 +11,8 @@ import { type Key, langPref, setLangPref, t } from "../i18n.ts";
 import { minute } from "../lib/clock.ts";
 import { hhmm } from "../lib/format.ts";
 import { openDrawer } from "../lib/ui.tsx";
-import { type Tab, tab, type View, view } from "../router.ts";
+import { MAIN, type Tab, tab, TABS, type View, view } from "../router.ts";
 import { status } from "../state.ts";
-import { board, isOpen } from "../pages/tasks/model.ts";
 import { UpdateNow } from "../pages/system/update-now.tsx";
 import { paletteOpen } from "./palette.tsx";
 import { setTheme, type Theme, theme } from "./prefs.ts";
@@ -25,29 +24,25 @@ const LANG_NAMES: Record<string, string> = { it: "Italiano", en: "English" };
 
 /** The icons, 24×24 strokes. */
 const ICON: Record<string, ComponentChildren> = {
-  today: (
+  chat: <path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />,
+  runs: (
     <>
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M4 10h16M9 3v4M15 3v4" />
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="6" cy="18" r="2" />
+      <circle cx="18" cy="12" r="2" />
+      <path d="M8 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 2 2.8M8 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 2-2.8" />
     </>
   ),
-  tasks: <path d="M10 6h10M10 12h10M10 18h10M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17" />,
-  brain: (
+  limits: <path d="M4 18a8 8 0 1 1 16 0M12 18l4-6M7.5 13.5l-1-.6M12 10V9M16.5 13.5l1-.6" />,
+  more: (
     <>
-      <path d="M6 4h9a3 3 0 0 1 3 3v13H9a3 3 0 0 1-3-3z" />
-      <path d="M6 17a3 3 0 0 1 3-3h9M10 8h4" />
+      <circle cx="6" cy="12" r="1.2" />
+      <circle cx="12" cy="12" r="1.2" />
+      <circle cx="18" cy="12" r="1.2" />
     </>
   ),
   connections: (
     <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-  ),
-  overview: (
-    <>
-      <rect x="4" y="4" width="7" height="7" rx="1.5" />
-      <rect x="13" y="4" width="7" height="7" rx="1.5" />
-      <rect x="4" y="13" width="7" height="7" rx="1.5" />
-      <rect x="13" y="13" width="7" height="7" rx="1.5" />
-    </>
   ),
   profiles: (
     <>
@@ -56,7 +51,6 @@ const ICON: Record<string, ComponentChildren> = {
     </>
   ),
   permissions: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z M9 12l2 2 4-4" />,
-  plugins: <path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4" />,
   updates: <path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" />,
   health: <path d="M3 12h4l2-5 4 10 2-5h6" />,
   update: <path d="M12 19V6M6 12l6-6 6 6" />,
@@ -80,20 +74,14 @@ const ICON: Record<string, ComponentChildren> = {
 
 const Ic = ({ name }: { name: string }) => <svg viewBox="0 0 24 24" aria-hidden="true">{ICON[name]}</svg>;
 
-/** What is due today or late, mine or not: the number beside «Tasks». */
-function dueCount(): number | null {
-  const b = board.value;
-  if (!b) return null;
-  return b.tasks.filter((x) => isOpen(x) && x.status !== "waiting" && x.due && x.due <= b.today).length;
-}
-
 /** A page in the rail: its icon, its name (shown when the rail is open), and its sign. */
-function Item({ hash, icon, label, current, sign }: {
+function Item({ hash, icon, label, current, sign, onClick }: {
   hash: string;
   icon: string;
   label: string;
   current: boolean;
   sign?: { text?: string; tone?: string };
+  onClick?: () => void;
 }) {
   return (
     <a
@@ -101,6 +89,7 @@ function Item({ hash, icon, label, current, sign }: {
       class="rl-i"
       aria-current={current ? "page" : undefined}
       title={label}
+      onClick={onClick}
     >
       <Ic name={icon} />
       <span class="rl-t">{label}</span>
@@ -131,10 +120,10 @@ function Shortcuts() {
       {row(["Ctrl", "K"], "keys.palette")}
       {row(["Esc"], "keys.close")}
       {row(["?"], "keys.help")}
-      <h4 class="lbl">{t("keys.tasks")}</h4>
-      {row(["J", "K"], "keys.move")}
-      {row(["↵"], "keys.expand")}
-      {row(["X"], "keys.done")}
+      <h4 class="lbl">{t("keys.chat")}</h4>
+      {row(["↵"], "keys.send")}
+      {row(["Shift", "↵"], "keys.newline")}
+      {row(["Esc"], "keys.stop")}
     </dl>
   );
 }
@@ -200,38 +189,30 @@ function Prefs({ close }: { close: () => void }) {
   );
 }
 
-const SYSTEM: Tab[] = [
-  "overview",
-  "profiles",
-  "permissions",
-  "plugins",
-  "updates",
+/** The pages behind «More»: Connections, then System's. */
+const MORE: { hash: string; icon: string; label: () => string; tab?: Tab }[] = [
+  { hash: "connections", icon: "connections", label: () => t("nav.connections") },
+  ...TABS.map((x) => ({ hash: `system/${x}`, icon: x, label: () => t(`sys.${x}`), tab: x })),
 ];
-const SYS_ICON: Record<Tab, string> = {
-  overview: "overview",
-  profiles: "profiles",
-  permissions: "permissions",
-  plugins: "plugins",
-  updates: "updates",
-  health: "health",
-};
 
 export function Rail() {
-  const [prefs, setPrefs] = useState(false);
+  // the popover open: the preferences, or «More»
+  const [pop, setPop] = useState<"" | "prefs" | "more">("");
   const box = useRef<HTMLDivElement>(null);
   const v: View = view.value;
   const s = sys.value;
-  const n = dueCount();
   const down = s.level === "down";
   const fails = s.problems.some((c) => c.status === "fail");
+  const inMore = !(MAIN as readonly View[]).includes(v);
+  const toggle = (p: "prefs" | "more") => setPop(pop === p ? "" : p);
 
   useEffect(() => {
-    if (!prefs) return;
+    if (!pop) return;
     const onDown = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setPrefs(false);
+      if (!box.current?.contains(e.target as Node)) setPop("");
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPrefs(false);
+      if (e.key === "Escape") setPop("");
     };
     addEventListener("mousedown", onDown);
     addEventListener("keydown", onKey);
@@ -239,7 +220,7 @@ export function Rail() {
       removeEventListener("mousedown", onDown);
       removeEventListener("keydown", onKey);
     };
-  }, [prefs]);
+  }, [pop]);
 
   // "?" outside a field: the shortcuts
   useEffect(() => {
@@ -269,42 +250,32 @@ export function Rail() {
   };
 
   return (
-    <nav class={`rail${prefs ? " held" : ""}`} aria-label={t("menu.sections")}>
+    <nav class={`rail${pop ? " held" : ""}`} aria-label={t("menu.sections")}>
       <div class="rl-panel" ref={box}>
         <div class="rl-brand">
           <Mark />
           <span class="rl-t">Agents Multi</span>
         </div>
         <div class="rl-g">
-          {(["today", "tasks", "brain"] as const).map((x) => (
-            <Item
-              key={x}
-              hash={x}
-              icon={x}
-              label={t(`nav.${x}`)}
-              current={v === x}
-              sign={x === "tasks" && n ? { text: String(n) } : undefined}
-            />
-          ))}
-        </div>
-        <div class="rl-g">
-          <h6 class="rl-h">{t("nav.system")}</h6>
-          <Item
-            hash="connections"
-            icon="connections"
-            label={t("nav.connections")}
-            current={v === "connections"}
-          />
-          {SYSTEM.map((x) => (
-            <Item
-              key={x}
-              hash={`system/${x}`}
-              icon={SYS_ICON[x]}
-              label={t(`sys.${x}`)}
-              current={v === "system" && tab.value === x}
-              sign={signOf(x)}
-            />
-          ))}
+          {MAIN.map((x) => <Item key={x} hash={x} icon={x} label={t(`nav.${x}`)} current={v === x} />)}
+          <button
+            type="button"
+            class="rl-i"
+            aria-haspopup="menu"
+            aria-expanded={pop === "more"}
+            aria-current={inMore ? "page" : undefined}
+            title={t("nav.more")}
+            onClick={() => toggle("more")}
+          >
+            <Ic name="more" />
+            <span class="rl-t">{t("nav.more")}</span>
+            {s.pending.length > 0 && (
+              <>
+                <span class="rl-s up dot" />
+                <span class="rl-b up" aria-hidden="true" />
+              </>
+            )}
+          </button>
         </div>
         <div class="rl-sp" />
         <div class="rl-g rl-foot">
@@ -357,16 +328,31 @@ export function Rail() {
             type="button"
             class="rl-i"
             aria-haspopup="dialog"
-            aria-expanded={prefs}
+            aria-expanded={pop === "prefs"}
             title={t("menu.prefs")}
-            onClick={() => setPrefs(!prefs)}
+            onClick={() => toggle("prefs")}
           >
             <Ic name="prefs" />
             <span class="rl-t">{t("menu.prefs")}</span>
           </button>
           <span class="rl-clock">{hhmm(minute.value)}</span>
         </div>
-        {prefs && <Prefs close={() => setPrefs(false)} />}
+        {pop === "prefs" && <Prefs close={() => setPop("")} />}
+        {pop === "more" && (
+          <div class="menu2 rl-pop rl-more" role="menu" aria-label={t("nav.more")}>
+            {MORE.map((m) => (
+              <Item
+                key={m.hash}
+                hash={m.hash}
+                icon={m.icon}
+                label={m.label()}
+                current={m.tab ? v === "system" && tab.value === m.tab : v === m.hash}
+                sign={m.tab ? signOf(m.tab) : undefined}
+                onClick={() => setPop("")}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </nav>
   );

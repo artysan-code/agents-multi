@@ -52,7 +52,7 @@ export function dedupeEvents(tasks: Task[], uids: Map<string, string>): Task[] {
 /** The choice of calendars changed: the next ask reads them again. */
 export const resetAgenda = () => memo.clear();
 
-/** Today's and tomorrow's events. Kept two minutes: Today asks on every redraw, and Google
+/** Today's and tomorrow's events. Kept two minutes: the picker asks each time it opens, and Google
  *  answers in about a second. */
 const memo = new Map<string, { at: number; value: Promise<{ tasks: Task[]; errors: string[] }> }>();
 export function calendarAsTasks(): Promise<{ tasks: Task[]; errors: string[] }> {

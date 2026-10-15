@@ -107,10 +107,10 @@ pub fn handle_request(app: &AppHandle, request: Request) {
     }
 }
 
-/// The console window on `view` (Today unless another is asked for, as an application opens on its
+/// The console window on `view` (Chat unless another is asked for, as an application opens on its
 /// start page): created when there is none, otherwise shown and moved there without a reload.
 pub fn show_console(app: &AppHandle, view: Option<&str>) -> tauri::Result<()> {
-    let view = view.filter(|v| flags::is_view(v)).unwrap_or("today");
+    let view = view.filter(|v| flags::is_view(v)).unwrap_or("chat");
     let port = port(app);
     let Some(window) = app.get_webview_window(crate::MAIN) else {
         return crate::open_main_window(app, port, view);
@@ -134,7 +134,7 @@ pub fn show_console(app: &AppHandle, view: Option<&str>) -> tauri::Result<()> {
 }
 
 /// The tray icon's left click (Linux, tray/sni.rs), as the tray app does it: the console window hides
-/// when it is shown and has the focus, and is shown (on Today) otherwise.
+/// when it is shown and has the focus, and is shown (on Chat) otherwise.
 pub fn toggle_console(app: &AppHandle) {
     let shown = app.get_webview_window(crate::MAIN).is_some_and(|w| {
         w.is_visible().unwrap_or(false)

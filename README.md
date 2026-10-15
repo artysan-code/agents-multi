@@ -174,23 +174,12 @@ reports a file Claude wrote into and that is not adopted yet, and one that is be
 
 ### Plugins
 
-The console's **Plugins** view is the plugin manager. The repository decides which plugin is on
-where: `enabledPlugins` in `config/settings.json` for every profile (the **All** column), in
-`config/profiles/<p>/settings.json` for one (a profile's column; each cell cycles inherit → on → off). The
-marketplaces are the shared `extraKnownMarketplaces`. Claude Code owns the runtime — plugin cache,
-marketplace clones — and every change there goes through its CLI (`claude plugin … --json`),
-never by editing its files.
-
-- **Install** from the catalog (every marketplace the profiles know, searchable) on every profile
-  or on one; **Update**, **Remove** (from every profile), **Details** (components and token cost).
-- Turning a plugin on installs it right away where the change reaches; otherwise Claude installs
-  it at the next session start. Off means `false` in that profile's file, so it is not reinstalled.
-- A declared marketplace a profile has never registered (a profile not opened since) is
-  registered before installing from it.
-- A marketplace-declared command (a command-source install or update) is shown on the page and
-  runs only if you accept it there: the server never accepts one on its own.
-- The organisation's synced plugins and the claude.ai skills synced into each profile are listed
-  read-only: the plugins follow **Account MCP**.
+The repository decides which plugin is on where: `enabledPlugins` in `config/settings.json` for every
+profile, in `config/profiles/<p>/settings.json` for one. The marketplaces are the shared
+`extraKnownMarketplaces`. Claude Code owns the runtime — plugin cache, marketplace clones — and every
+change there goes through its own `/plugin` or `claude plugin …` in that profile, never by editing
+its files. A plugin turned on is installed by Claude at the next session start; off means `false` in
+that profile's file, so it is not reinstalled.
 
 The doctor fails on an installed plugin whose files are gone (records hold absolute paths, so a
 moved profile directory breaks them). A project or local record whose project directory is gone
@@ -287,45 +276,40 @@ the machine and never committed: `install` and every update that changed `apps/u
 `agents ui build`, a failed build keeps the previous one, and the doctor says when it is missing or
 behind. It needs pnpm.
 
-Five sections, in English or Italian, on a rail of icons that opens into names while the pointer is on
-it; at its foot the machine's health (its colour is the worst check; it opens Health), the update when
-one is waiting, the commands and the preferences. The language follows the machine's locale — the
-regional format (`LC_TIME`) outranks `LANG`, so English messages with Italian formats open in Italian —
-and the preferences override it per browser.
+Three views, in English or Italian, on a rail of icons that opens into names while the pointer is on
+it, and **More** for the rest; at its foot the machine's health (its colour is the worst check; it
+opens Health), the update when one is waiting, the commands and the preferences. The language follows
+the machine's locale — the regional format (`LC_TIME`) outranks `LANG`, so English messages with
+Italian formats open in Italian — and the preferences override it per browser.
 
-- **Today** (`#today`) — the bar to ask Claude; the day as the main card: what is next, then an
-  agenda with the hours down the card (appointments and tasks with a time, side by side when they
-  overlap) and the day's tasks without a time in a strip above it; beside it the tasks as a plain
-  list (project, progress, due) and **Claude now**: each account's limits (five hours, week) with today's tokens,
-  each running session's context, and the last sessions per directory with the command that reopens
-  each one. The limits and the context come from the status line (`apps/cli/live.ts`); its refresh
-  button asks Anthropic with each profile's login, read for that request only.
-- **Tasks** (`#tasks`) — the board (columns by status, drag a card to move it), a sortable list, a
-  month calendar with the Google events, and one small board per project folder. The folder tree
-  on the left filters every view. A task opens as a page: its fields, its steps and their
-  progress, a Markdown description that saves as you type, and its attachments. See [Tasks](#tasks).
-- **Brain** (`#brain`) — the brain service, read through the console with this machine's token
-  (`apps/cli/memory.ts`; the browser never sees it). **Pages**: the seven areas as a tree, search by
-  words at once and by meaning on Enter, a reader with who wrote the page and when, the links both
-  ways (broken ones struck through), every version and what changed since, and the page's
-  neighbourhood as a live graph. **Graph**: the whole brain, laid out by d3-force with each area in
-  its own region (drag, pan, zoom, filter by area). **Diary**: the days as a timeline. **Health**:
-  what `brain_check` finds, with "Fix with Claude". **Archive**: the old wiki (`~/brains/claude`,
-  `AGENTS_MULTI_BRAIN`), read only, with "Bring into the brain". The page does not
-  edit: the field at the bottom asks Claude for a change (ask kind `brain`), with the brain's tools
-  and nothing else, never deletion, running inside the old wiki so the only files it can read are
-  there.
-- **Connections** (`#connections`) — every MCP server in the registry, which profiles see it and
-  where, and whether each profile actually mounted it at its last sync.
-- **System** (`#system/<tab>`) — **Profiles** (what each one mounts and is signed in as; edit or
-  add), **Permissions** (the shared allow / ask / deny rules and default mode, what each profile
-  adds or leaves out — "always allow" answers land there — and a button to move a profile's own
-  rules to every profile), **Plugins & skills**, **Updates** (versions, and what is pending), **Health** (every doctor
-  check, with a button for the fixes that map to a known action).
+- **Chat** (`#chat`) — talking to Claude as in Claude Desktop: the chats on the left by day, the open
+  one on the right, Claude's answers streaming in with the changes it made (a task, an event, a page
+  of the brain) as chips. Each request is `claude -p` in the default profile with a fixed list of
+  tools (`apps/cli/ask.ts`): the tasks, the calendar (create and move events), mail and Drive to read,
+  the brain (never deleting); sending mail or inviting stays a conversation's job. The console keeps
+  every chat (`apps/cli/chats.ts`, one file each in the state folder) with the Claude Code session it
+  resumes: a chat can go on in a terminal, and a request that needs work inside a project's files
+  becomes one button that opens Claude Code in that folder. Hey Claude's conversations show here too.
+  In a narrow window the list of chats folds into a button.
+- **Runs** (`#runs`) — what works now: the Claude Code sessions running, with their context and
+  whether they are working (a click brings the window forward); the agents the hub started and the
+  workflow runs with their steps (`GET /api/runs`, read only: they are acted on by their coordinator
+  or `agents run`); and the last sessions per folder, each reopened in a terminal with one click.
+- **Accounts & limits** (`#limits`) — each profile's account and Claude Desktop, then each of its
+  accounts (Claude, and Codex where the profile has it) with its usage windows, when they start again
+  and how old the reading is, **stale** past half an hour (the limits manager's rule: it does not act
+  on such a reading), and today's tokens. The windows are what `agents limits` reads (`GET /api/limits`):
+  the status line's snapshots and Codex's session logs; «Ask for the limits now» asks Anthropic for
+  Claude's with each profile's login, read for that request only (`apps/cli/live.ts`).
+- **More** — **Connections** (`#connections`: every MCP server in the registry, which profiles see it
+  and where, the accounts and the vault, the calendars the picker reads), and **Profiles**,
+  **Permissions** (the shared allow / ask / deny rules and default mode, what each profile adds or
+  leaves out — "always allow" answers land there — and a button to move a profile's own rules to every
+  profile), **Updates** (versions, and what is pending), **Health** (every doctor check, with a button
+  for the fixes that map to a known action) under `#system/<tab>`.
 
-The bar to ask Claude has no modes: Claude works out whether it is a question, something to do (a
-task, with a time when one fits) or something to remember (the brain), and each change it made shows
-as a chip under the answer. The full consumption report stays in the terminal: `agents usage`.
+The tasks and the brain have their own pages on the brain's site and in every chat; the full
+consumption report stays in the terminal: `agents usage`.
 
 `⌘K` / `Ctrl-K` opens a command palette with every view and every action. Actions run against the
 local CLI through `POST /api/action` behind an allowlist and an anti-CSRF header. Updating and
@@ -344,7 +328,7 @@ dev mode: task reminders every five minutes, the brain backup, Claude Code and D
 
 - **Window** — the console in a window with its own icon and menu entry (`agents-multi`). Links
   that leave it open in the system browser. With the server down it says so and offers to start
-  it. It opens on Today. Closing it hides it for twenty minutes, so reopening is instant; after that
+  it. It opens on Chat. Closing it hides it for twenty minutes, so reopening is instant; after that
   it is destroyed, because the web engine is the heavy part and the tray alone should stay light.
 - **Tray** — the state at a glance, from `/api/summary` (a pure function of `status`, tested):
   no dot when all is well, **red** for a failing doctor check,
@@ -368,7 +352,7 @@ dev mode: task reminders every five minutes, the brain backup, Claude Code and D
   is open. ↑ ↓ or 1–9, Enter, Esc. The per-profile entries are still installed, hidden from the menu
   (`NoDisplay`): the taskbar groups each Desktop under its own, and the default one owns `claude://`.
 
-- **Hey Claude** — `claude-multi-app --hey` (also in the tray menu, and the bar on Today) opens one
+- **Hey Claude** — `claude-multi-app --hey` (also in the tray menu) opens one
   floating field. What you write goes to `claude -p` in the default profile and the answer streams
   under it: the tasks can be changed from there, calendar, mail, Drive and the brain only read
   (sending mail or inviting stays a conversation's job). A follow-up continues the same
@@ -647,22 +631,20 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   repository, relative to the project's folder, a URL, a brain page). The brain holds the card of
   every task; how much detail goes in it is the project's choice.
 - **Projects are folders**: a task's project is its folder under `~` (`work/acme/portal`), or a bare
-  name that resolves to the shallowest folder with that name (`apps/cli/projects.ts`; the roots are
-  `projectRoots` in the settings, by default `personal`, `work`, `university`).
+  name a chat used.
 - The **`tasks` MCP server** is in every profile, on the CLI and in Desktop (the brain connector
   has the same tools on the same list): `tasks_brief` (the
   debrief), `tasks_list` (with `full` for the whole notes, `status: all` for the archive),
   `tasks_get`, `tasks_add`, `tasks_update`, `tasks_done` (it says what it unblocked), `tasks_steps`,
-  `tasks_note`, `tasks_edit` (one passage of the notes), `tasks_attach`. Changes run one at a time per process, and the console refuses to overwrite a
-  task that changed since it was opened. The tasks rule (in your `rules/`) tells every session to keep the
+  `tasks_note`, `tasks_edit` (one passage of the notes), `tasks_attach`. Changes run one at a time per process. The tasks rule (in your `rules/`) tells every session to keep the
   list current from the conversation.
 - **Reminders**: `claude-tasks.timer` runs `agents tasks remind` every five minutes: the
   briefs at the times in `~/brains/tasks/settings.json` (default 08:30, 13:30, 19:00; an empty brief
   is not sent) and a warning before each timed task. Never more than an hour late, never twice.
-- **In the console**: the Tasks tab, and on Today the day's list with a checkbox to complete and a
-  quick add.
+- **In the console**: none of their own — the Chat keeps them from what you write, and «Which
+  Claude?» shows the day's next appointment.
 - **Appointments count too**: today's and tomorrow's events of every connected Google account join
-  the briefs, the warnings and Today (marked as events, not completable; declined and cancelled
+  the briefs, the warnings and the picker (marked as events, not completable; declined and cancelled
   ones left out). The `tasks` server itself stays local: in a chat, the debrief combines
   `tasks_brief` with the google server's `calendar_events`.
 
@@ -690,7 +672,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   with the secret on stdin. A secret is never a command-line argument and never a tool result.
 - **A service's own command-line tool** gets the same token: `agents vault run cloudflare
   [account] -- wrangler deploy` (`apps/cli/toolrun.ts`). Only that tool runs (the project's
-  `node_modules/.bin`, else PATH; `pnpm add -D wrangler` in the project), the token is in its
+  `node_modules/wrangler` under the project's root — the nearest package.json, never above it, never
+  PATH; `pnpm add -D wrangler` in the project), the token is in its
   environment and hidden if it ever reaches the output, and its own login is refused. What deletes,
   rolls back, applies remote migrations or runs DROP/DELETE/TRUNCATE/ALTER on a remote D1 asks for a
   typed "yes" on a terminal: a Claude session has none, so there it is refused with the command to

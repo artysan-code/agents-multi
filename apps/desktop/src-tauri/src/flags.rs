@@ -8,7 +8,7 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
-    /// The console window, on a view (`today`, `system/health`…) or on Today.
+    /// The console window, on a view (`chat`, `system/health`…) or on Chat.
     Show(Option<String>),
     Tray,
     Pick,
@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     fn views_are_plain_words() {
-        assert!(is_view("today"));
+        assert!(is_view("chat"));
         assert!(is_view("system/updates"));
         assert!(!is_view(""));
         assert!(!is_view("x'; alert(1)//"));

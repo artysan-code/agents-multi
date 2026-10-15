@@ -1,12 +1,12 @@
 // palette.tsx — Ctrl K: the views and the commands, searched by name. A command that belongs to a page
-// (a new task, a new profile, the update wizard) is a request the page takes (router.ts, intents).
+// (a new chat, a new profile, the update wizard) is a request the page takes (router.ts, intents).
 
 import { signal } from "@preact/signals";
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { type Key, t } from "../i18n.ts";
 import { runAction } from "../lib/ui.tsx";
-import { go, request, TABS } from "../router.ts";
+import { go, MAIN, request, TABS } from "../router.ts";
 import { cycleLang, cycleTheme } from "./prefs.ts";
 import { syncMcp } from "../pages/system/health-repair.tsx";
 
@@ -20,14 +20,12 @@ interface Cmd {
 }
 
 const cmds = (): Cmd[] => [
-  { s: "pal.goto", n: t("nav.today"), d: "today", f: () => go("today") },
-  { s: "pal.goto", n: t("nav.tasks"), d: "tasks", f: () => go("tasks") },
-  { s: "pal.do", n: t("tb.new"), d: "task", f: () => request("tasks.new", "tasks") },
-  { s: "pal.goto", n: t("nav.brain"), d: "brain", f: () => go("brain") },
-  { s: "pal.goto", n: t("nav.connections"), d: "connections", f: () => go("connections") },
+  ...MAIN.map((x): Cmd => ({ s: "pal.goto", n: t(`nav.${x}`), d: x, f: () => go(x) })),
+  { s: "pal.do", n: t("chat.new"), d: "chat", f: () => request("chat.new", "chat") },
+  { s: "pal.goto", n: `${t("nav.more")} · ${t("nav.connections")}`, d: "connections", f: () => go("connections") },
   ...TABS.map((x): Cmd => ({
     s: "pal.goto",
-    n: `${t("nav.system")} · ${t(`sys.${x}`)}`,
+    n: `${t("nav.more")} · ${t(`sys.${x}`)}`,
     d: `system/${x}`,
     f: () => go(`system/${x}`),
   })),
