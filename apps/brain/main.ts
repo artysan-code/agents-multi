@@ -448,12 +448,11 @@ async function handle(req: Request, ip: string): Promise<Response> {
   return await as(user, who.label, () => served(req, u, who));
 }
 
-/** The account signed in on the web app, for its calls to /api (it holds the session cookie, not a token).
- *  The cookie is SameSite=Lax, which a sibling subdomain still satisfies: a change must come from this
- *  service's own pages. It reads and writes as «web», never as a machine, so the fleet stays read only. */
+/** The account signed in on the web app, for its reads of the tasks, the brain and the machines (the chats, push
+ *  and settings are chat.ts's and push.ts's own: ADR 0014). It holds the session cookie, not a token, and only
+ *  reads: it is «web», never a machine, and a change goes through the board's own routes (/tasks). */
 async function webCaller(req: Request, u: URL): Promise<Caller | null> {
-  if (!u.pathname.startsWith("/api/")) return null;
-  if (req.method !== "GET" && req.method !== "HEAD" && !fromOwnPages(req.headers, URL_)) return null;
+  if (req.method !== "GET" || !/^\/api\/(tasks|brain\/|nodes$)/.test(u.pathname)) return null;
   const id = await auth.session(req);
   return id ? { user: id, label: "web" } : null;
 }
