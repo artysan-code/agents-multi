@@ -11,7 +11,8 @@ import type { Announce, Job, NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 
 export interface Service {
   url: string;
-  call<T>(method: string, path: string, body?: unknown): Promise<T>;
+  /** `timeout` in ms (15 s by default; a long poll asks for more), `signal` to give up when this machine stops */
+  call<T>(method: string, path: string, body?: unknown, o?: { timeout?: number; signal?: AbortSignal }): Promise<T>;
 }
 
 /** Where this machine keeps its node token: a file only the user reads, never synced. */
@@ -45,16 +46,23 @@ export async function service(
   const base = account.url.replace(/\/+$/, "");
   return {
     url: base,
-    async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    async call<T>(
+      method: string,
+      path: string,
+      body?: unknown,
+      o: { timeout?: number; signal?: AbortSignal } = {},
+    ): Promise<T> {
       const r = await fetcher(`${base}${path}`, {
         method,
         headers: { authorization: `Bearer ${token}`, ...(body ? { "content-type": "application/json" } : {}) },
         body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(15_000),
+        signal: o.signal
+          ? AbortSignal.any([o.signal, AbortSignal.timeout(o.timeout ?? 15_000)])
+          : AbortSignal.timeout(o.timeout ?? 15_000),
       });
       const j = await r.json().catch(() => ({})) as Record<string, unknown>;
       if (!r.ok) throw new Error(`${method} ${path}: ${j.error ?? `HTTP ${r.status}`}`);
-      return j as T;
+      return j as unknown as T;
     },
   };
 }

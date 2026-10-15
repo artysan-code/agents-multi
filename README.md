@@ -458,6 +458,10 @@ sees, and `agents nodes accept <job>` signs one.
 - **Resume from the branch.** While a run works, the node pushes its branch `agent/<id>` and its HANDOFFs
   (`refs/agents/<id>`); a node silent for ten minutes loses its running jobs, and a proposal to resume each on
   another node (a clone of the same remote under `repoRoots`) waits for your yes.
+- **It answers your chat from the phone** ([ADR 0014](docs/adr/0014-from-the-phone.md)). A node that is on holds a
+  long poll open to the service (outbound, its own token), runs each chat turn written there with the console's
+  own Claude (`claude -p`, resumed per chat, the same fixed tools) and sends the answer back as it comes. On a
+  server the turn runs sandboxed with the account's token, like any headless child.
 - **A server** runs `agents serve --headless`: no page, every child in Claude Code's Bash sandbox, failing closed
   (`agents node probe`); only the node pushes. It is given your configuration and the vault, read only, as
   Syncthing folders of their own (`agents config move` puts the configuration in `~/agents-multi-config`), and
