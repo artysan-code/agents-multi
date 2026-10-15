@@ -12,8 +12,9 @@
 // `--allow-run`) can import it. Every choice of command is a pure function of the platform name and is
 // tested; the functions that run it are thin. Nothing here prints a secret.
 //
-// Not covered, on purpose: reading another process's /proc files (exe, cwd, environ, cmdline, start ticks),
-// which `running()` in apps/cli/lib/processes.ts, the gateway and `agents ask` still do on Linux only.
+// Reading another process's exe, cwd and environment (`running()` in apps/cli/lib/processes.ts) is Linux
+// only: `requireLinux` says so elsewhere, there being no simple equivalent. The start time, the command line,
+// the parent and the age of a process have one on every platform.
 
 export type Platform = "linux" | "darwin" | "windows";
 
@@ -199,6 +200,109 @@ export function listProcesses(): Map<number, ProcInfo> {
   const r = new Deno.Command(l.cmd, { args: l.args, env: l.env, stdout: "piped", stderr: "null" }).outputSync();
   if (!r.success) throw new Error(`\`${l.cmd}\` failed: cannot tell which processes are alive`);
   return l.parse(dec.decode(r.stdout));
+}
+
+/** Throws `Unsupported` off Linux: for what only /proc can tell (another process's exe, cwd, environment). */
+export function requireLinux(what: string, p: Platform = platformOf()): void {
+  if (p !== "linux") throw new Unsupported(what, p);
+}
+
+/** Pure: the parent pid out of /proc/<pid>/stat: the name between parentheses may hold spaces. */
+export function parentFromStat(stat: string): number | null {
+  const m = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
+  return Number(m[1]) || null;
+}
+
+/** Pure: the start time (clock ticks since boot) in the text of /proc/<pid>/stat, or null. Paired with the
+ *  pid it tells a process from another one that was given the pid later. */
+export function startTimeOf(stat: string): string | null {
+  const rest = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+  return rest[19] ?? null;
+}
+
+/** A file of /proc/<pid>/ as text. Deno without --allow-all refuses to read another process's files
+ *  directly, so a refused read is asked of `cat`; "" when the process is gone. */
+function procFileSync(pid: number, file: "stat" | "cmdline"): string {
+  try {
+    return Deno.readTextFileSync(`/proc/${pid}/${file}`);
+  } catch {
+    try {
+      const r = new Deno.Command("cat", { args: [`/proc/${pid}/${file}`], stdout: "piped", stderr: "null" })
+        .outputSync();
+      return r.success ? dec.decode(r.stdout) : "";
+    } catch {
+      return "";
+    }
+  }
+}
+
+/** The parent of a process; null when it is gone or has none. */
+export function parentPid(pid: number): number | null {
+  if (platformOf() === "linux") return parentFromStat(procFileSync(pid, "stat"));
+  return listProcesses().get(pid)?.ppid || null;
+}
+
+/** What identifies a process among those that had its pid: Linux, the start in clock ticks (/proc); elsewhere
+ *  the start in seconds from the process list. Only ever compared with itself. null: no such process. */
+export function procStartTime(pid: number): string | null {
+  if (platformOf() === "linux") return startTimeOf(procFileSync(pid, "stat"));
+  return listProcesses().get(pid)?.start ?? null;
+}
+
+/** The command line of a process, its arguments separated by NUL; "" when it is gone. Off Linux the
+ *  platform's own text is split on blanks, which is as much as `ps` or PowerShell tell. */
+export function procCmdline(pid: number): string {
+  const p = platformOf();
+  if (p === "linux") return procFileSync(pid, "cmdline");
+  const c = p === "windows"
+    ? {
+      cmd: "powershell",
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `(Get-CimInstance Win32_Process -Filter 'ProcessId=${Math.trunc(pid)}').CommandLine`,
+      ],
+    }
+    : { cmd: "ps", args: ["-ww", "-o", "args=", "-p", String(Math.trunc(pid))] };
+  try {
+    const r = new Deno.Command(c.cmd, { args: c.args, stdout: "piped", stderr: "null" }).outputSync();
+    return r.success ? dec.decode(r.stdout).trim().split(/\s+/).filter(Boolean).join("\0") : "";
+  } catch {
+    return "";
+  }
+}
+
+/** Pure: `ps -o pid=,etimes=` (Linux) as pid → seconds running. */
+export function parseEtimes(out: string): Map<number, number> {
+  const m = new Map<number, number>();
+  for (const l of out.split("\n")) {
+    const [pid, s] = l.trim().split(/\s+/).map(Number);
+    if (pid && Number.isFinite(s)) m.set(pid, s);
+  }
+  return m;
+}
+
+/** How long each of these processes has been running, in seconds (those that are gone are left out). Linux asks
+ *  `ps -o etimes` (not on macOS's ps); elsewhere the age is now minus the start in the process list. */
+export function processAges(pids: number[], now = Date.now()): Map<number, number> {
+  if (!pids.length) return new Map();
+  if (platformOf() === "linux") {
+    const r = new Deno.Command("ps", {
+      args: ["-o", "pid=,etimes=", "-p", pids.join(",")],
+      stdout: "piped",
+      stderr: "null",
+    })
+      .outputSync();
+    return parseEtimes(dec.decode(r.stdout));
+  }
+  const table = listProcesses();
+  const m = new Map<number, number>();
+  for (const pid of pids) {
+    const p = table.get(pid);
+    if (p) m.set(pid, Math.max(0, Math.round(now / 1000 - Number(p.start))));
+  }
+  return m;
 }
 
 /** Whether a process with this pid exists: /proc on Linux (no program to run), the process list elsewhere. */

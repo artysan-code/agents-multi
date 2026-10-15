@@ -6,12 +6,16 @@ import {
   listProcessesCmd,
   notifyCmd,
   openCmd,
+  parentFromStat,
+  parseEtimes,
   parsePs,
   parseWinProcs,
   platformOf,
+  requireLinux,
   secretLookupCmd,
   secretStoreBinary,
   secretStoreCmd,
+  startTimeOf,
   Unsupported,
   WIN_TOAST,
 } from "../../../shared/mcp/lib/platform.ts";
@@ -122,4 +126,23 @@ Deno.test("parseWinProcs: pid,ppid,epoch,name; a name may hold commas; junk is s
   assertEquals(t.size, 3);
   assertEquals(t.get(812), { ppid: 4, comm: "claude.exe", start: "1760000100" });
   assertEquals(t.get(900)?.comm, "a,b.exe");
+});
+
+Deno.test("requireLinux: passes on Linux, says what is not supported elsewhere", () => {
+  requireLinux("reading /proc", "linux");
+  assertThrows(() => requireLinux("reading /proc", "darwin"), Unsupported, "reading /proc is not supported");
+  assertThrows(() => requireLinux("reading /proc", "windows"), Unsupported, "(windows)");
+});
+
+Deno.test("parentFromStat and startTimeOf: the name between parentheses may hold spaces and parentheses", () => {
+  assertEquals(parentFromStat("123 (claude (x) y) S 77 1 2"), 77);
+  assertEquals(parentFromStat("123 (deno) S 0 1 2"), null);
+  const stat = `123 (a) b) S 1 123 123 0 -1 4194560 100 0 0 0 1 2 0 0 20 0 1 0 987654 1000 100 1844`;
+  assertEquals(startTimeOf(stat), "987654");
+  assertEquals(startTimeOf(""), null);
+});
+
+Deno.test("parseEtimes: pid and seconds, junk skipped", () => {
+  const m = parseEtimes("  100   42\n  200 3600\nnoise\n");
+  assertEquals([...m], [[100, 42], [200, 3600]]);
 });

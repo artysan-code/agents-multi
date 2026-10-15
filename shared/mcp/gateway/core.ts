@@ -2,6 +2,8 @@
 // may ask, what makes a cached tool list valid, when an idle backend stops. No I/O: the gateway
 // (server.ts) and the CLI (apps/cli/mcp/gateway.ts) share it, and apps/cli/tests/gateway_test.ts covers it.
 
+import { startTimeOf } from "../lib/platform.ts";
+
 /** How a stdio server is started: the registry entry as the profile's launch config would have it. */
 export interface BackendSpec {
   command: string;
@@ -99,12 +101,7 @@ export function visibleTools<T extends { name?: unknown }>(tools: T[], deny: str
  *  way to know that a person approved a call.) */
 export const toolAllowed = (deny: string[] | undefined, name: string) => !deny?.includes(name);
 
-/** Pure: the start time (clock ticks since boot) in the text of /proc/<pid>/stat, or null. Paired with the
- *  pid it tells a process from another one that was given the pid later. */
-export function startTimeOf(stat: string): string | null {
-  const rest = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-  return rest[19] ?? null;
-}
+export { startTimeOf }; // the platform layer reads it (shared/mcp/lib/platform.ts)
 
 /** What the gateway keeps in `children.json`: the backends it started, to find them again after it died. */
 export interface Child {

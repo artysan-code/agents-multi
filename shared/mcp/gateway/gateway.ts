@@ -22,7 +22,6 @@ import {
   parsePath,
   sameBackend,
   type ServerEntry,
-  startTimeOf,
   TokenMap,
   toolAllowed,
   usableCache,
@@ -30,7 +29,7 @@ import {
 } from "./core.ts";
 import { CALL_TIMEOUT_MS, describe, type Running, startBackend } from "./backend.ts";
 import { writeAtomic } from "../lib/fs.ts";
-import { readProc } from "./proc.ts";
+import { procStartTime } from "../lib/platform.ts";
 
 /** How long a gateway asked to stop waits for the calls in flight (a deploy, a test run) before it cuts them. */
 export const DRAIN_MS = 60_000;
@@ -68,7 +67,7 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const text = (t: string) => ({ content: [{ type: "text", text: t }], isError: true });
 
-const procStart = async (pid: number) => startTimeOf(await readProc(pid, "stat"));
+const procStart = (pid: number) => Promise.resolve(procStartTime(pid));
 
 export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
   const { configPath, log } = opts;

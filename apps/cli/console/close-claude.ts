@@ -6,6 +6,7 @@
 // waiting (or a Desktop is to be replaced), and the console's own process tree (it may have been
 // started from a Claude session) is never touched.
 
+import { parentFromStat, parentPid, processAges } from "../../../shared/mcp/lib/platform.ts";
 import { REPO } from "../lib/paths.ts";
 import { run } from "../lib/proc.ts";
 import { running } from "../lib/processes.ts";
@@ -77,11 +78,7 @@ export function closeOffer(due: boolean, blockers: Blocker[]): boolean {
   return due && blockers.length > 0;
 }
 
-/** The parent pid out of /proc/<pid>/stat: the name between parentheses may hold spaces. */
-export function parentFromStat(stat: string): number | null {
-  const m = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
-  return Number(m[1]) || null;
-}
+export { parentFromStat };
 
 export interface Deps {
   running: () => Promise<Running>;
@@ -95,32 +92,22 @@ export interface Deps {
   note: (event: string, head: string, detail: string) => Promise<void>;
 }
 
-async function procParent(pid: number): Promise<number | null> {
-  const r = await run("cat", [`/proc/${pid}/stat`]);
-  return r.code === 0 ? parentFromStat(r.out) : null;
-}
-
 export const real: Deps = {
   running,
   profiles: profileNames,
+  // deno-lint-ignore require-await
   protectedPids: async () => {
     const seen = new Set<number>();
     let p: number | null = Deno.pid;
     while (p && p > 1 && !seen.has(p)) {
       seen.add(p);
-      p = await procParent(p);
+      p = parentPid(p);
     }
     return seen;
   },
+  // deno-lint-ignore require-await
   ages: async (pids) => {
-    const m = new Map<number, number>();
-    if (!pids.length) return m;
-    const r = await run("ps", ["-o", "pid=,etimes=", "-p", pids.join(",")]);
-    for (const l of r.out.split("\n")) {
-      const [pid, s] = l.trim().split(/\s+/).map(Number);
-      if (pid && Number.isFinite(s)) m.set(pid, s);
-    }
-    return m;
+    return processAges(pids);
   },
   pending: installWaiting,
   signal: (pid, sig) => Deno.kill(pid, sig),

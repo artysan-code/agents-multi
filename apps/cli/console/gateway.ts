@@ -6,7 +6,7 @@
 // not wanted any more (the kill switch) → stop it. No systemd: the console is the supervisor, and it is
 // always up in app mode.
 
-import { readProc } from "../../../shared/mcp/gateway/proc.ts";
+import { procCmdline } from "../../../shared/mcp/lib/platform.ts";
 import { gatewayCodeVersion } from "../codeversion.ts";
 import { cacheState, gatewayCommand, gatewayConfig, serverVersion, syncGateway } from "../mcp/gateway.ts";
 import { backendsPath, gatewayDir, type GatewaySettings, loadGatewaySettings } from "../mcp/gateway-settings.ts";
@@ -43,7 +43,7 @@ export async function gatewayRunning(g: GatewaySettings): Promise<GatewayState |
   if (!await gatewayAnswers(g.port)) return null;
   const st = await readJson<GatewayState>(`${gatewayDir(g.runtime)}/state.json`);
   if (!st || st.port !== g.port) return { pid: 0, code: "", port: g.port };
-  const cmd = await readProc(st.pid, "cmdline");
+  const cmd = procCmdline(st.pid);
   return isGatewayCmdline(cmd) ? st : { pid: 0, code: "", port: g.port };
 }
 
@@ -62,9 +62,10 @@ export async function gatewayBackends(g: GatewaySettings, tokenFile: string): Pr
 }
 
 /** Stops the gateway of pid `pid` (SIGTERM: it drains first), after making sure that is what it is. */
+// deno-lint-ignore require-await
 export async function stopGateway(pid: number): Promise<boolean> {
   if (!pid) return false;
-  const cmd = await readProc(pid, "cmdline");
+  const cmd = procCmdline(pid);
   if (!isGatewayCmdline(cmd)) return false;
   try {
     Deno.kill(pid, "SIGTERM");
