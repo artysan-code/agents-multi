@@ -11,6 +11,7 @@
       "Bash(ncat *)",
       "Bash(secret-tool:*)",
       "Bash(kwallet-query:*)",
+      "Bash(security:*)",
       "Bash(agents vault recovery-code:*)",
       "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",

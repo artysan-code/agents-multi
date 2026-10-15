@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-env --allow-run=notify-send --allow-net=127.0.0.1
+#!/usr/bin/env -S deno run --quiet --allow-read --allow-write --allow-env --allow-run=notify-send,osascript,powershell --allow-net=127.0.0.1
 // stignore-gen — keeps the git-repository section of every Syncthing folder's .stignore-common current.
 //
 // Git owns a repository; Syncthing only carries the files git ignores on purpose, which would otherwise
@@ -22,6 +22,8 @@
 //
 // --apply always asks Syncthing to rescan `.stignore-common`: that is also how a file changed on the
 // other machine gets its rules loaded here without waiting for the hourly full scan.
+
+import { notify } from "../../mcp/lib/platform.ts";
 
 export const MARK_BEGIN = "// >>> stignore-gen: git repositories (generated, do not edit between the markers) >>>";
 export const MARK_END = "// <<< stignore-gen <<<";
@@ -138,11 +140,8 @@ async function rescan(xml: string, folder: string) {
   } catch { /* Syncthing down: the next scan loads the rules anyway */ }
 }
 
-async function notify(body: string) {
-  try {
-    await new Deno.Command("notify-send", { args: ["-a", "Syncthing", "Syncthing: repository excluded", body] })
-      .output();
-  } catch { /* no desktop session */ }
+async function notifyDesktop(body: string) {
+  await notify("Syncthing: repository excluded", body, { app: "Syncthing" }); // false without a desktop: nothing to do
 }
 
 async function main() {
@@ -190,7 +189,7 @@ async function main() {
         );
         await Deno.writeTextFile(file, next);
         if (QUIET) {
-          for (const r of added) await notify(`${f.label}/${r}: git carries it, Syncthing only its .env files`);
+          for (const r of added) await notifyDesktop(`${f.label}/${r}: git carries it, Syncthing only its .env files`);
         }
       }
     }

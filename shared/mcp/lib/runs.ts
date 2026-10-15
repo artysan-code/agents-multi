@@ -43,6 +43,7 @@ import {
   stopChild,
   validId,
 } from "./agents.ts";
+import { spawnDetached } from "./platform.ts";
 import { PROVIDER_NAMES, type ProviderName, providers } from "./providers.ts";
 
 interface PlanStep {
@@ -334,13 +335,9 @@ async function runnerTail(dir: string): Promise<string> {
 /** Starts the runner of a run, detached from whoever asked. */
 async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
   const dir = `${runsRoot(runs)}/${id}`;
-  await new Deno.Command("setsid", {
-    args: ["-f", "bash", "-c", 'exec "$A" run drive "$I" >> "$D/err.log" 2>&1'],
+  await spawnDetached("bash", ["-c", 'exec "$A" run drive "$I" >> "$D/err.log" 2>&1'], {
     env: { A: agentsBin(), I: id, D: dir },
-    stdin: "null",
-    stdout: "null",
-    stderr: "null",
-  }).output();
+  });
 }
 
 /** Starts a run's runner and waits until it is up: a runner that dies at its start throws, with what it

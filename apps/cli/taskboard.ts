@@ -4,6 +4,7 @@
 // and the console change a task the same way; `base` (the version the page holds) keeps the page
 // from overwriting a change a chat made meanwhile.
 
+import { openUrl } from "../../shared/mcp/lib/platform.ts";
 import { HOME } from "./lib/paths.ts";
 import { projectTree, resolveProject } from "./projects.ts";
 import {
@@ -224,7 +225,7 @@ export async function taskApi(req: Request, u: URL, json: Json, changed: () => v
     const { target } = await req.json().catch(() => ({})) as { target?: string };
     const path = await localPath(String(target ?? ""));
     if (!path) return json({ ok: false, message: "not a file or folder this console opens" });
-    new Deno.Command("xdg-open", { args: [path], stdout: "null", stderr: "null" }).spawn();
+    openUrl(path);
     return json({ ok: true });
   }
   return null;

@@ -25,7 +25,7 @@ anything they do not say.
 
 ## Keeping sessions away from the vault
 
-The shared permissions deny a Claude session the ways to the key: `secret-tool`, `kwallet-query`,
+The shared permissions deny a Claude session the ways to the key: `secret-tool`, `kwallet-query`, `security` (the macOS Keychain),
 `agents vault recovery-code`, and reading or editing the vault folder. Reading `.env` files asks first.
 These shared deny and ask lists are added to every profile whatever its own settings say, and
 `agents doctor` fails when a profile's built settings lack one of them.

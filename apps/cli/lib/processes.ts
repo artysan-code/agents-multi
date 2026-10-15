@@ -1,8 +1,10 @@
-// processes.ts — Running Claude Code and Claude Desktop instances, read from /proc (Linux).
+// processes.ts — Running Claude Code and Claude Desktop instances, read from /proc (Linux only: `running()`
+// says so elsewhere, through the platform layer).
 
 import { readJson, stat } from "./fs.ts";
 import { RUNTIME } from "./paths.ts";
 import { run } from "./proc.ts";
+import { requireLinux } from "../../../shared/mcp/lib/platform.ts";
 import { launchers, type Profile } from "./profiles.ts";
 
 // Classified by real executable (/proc/<pid>/exe), not by command line: a shell whose snapshot
@@ -47,6 +49,7 @@ export function desktopVariantOf(exe: string, defaultProfile: string): string | 
   return m ? m[1] ?? defaultProfile : null;
 }
 export async function running() {
+  requireLinux("listing the Claude sessions and apps that are open (it reads their /proc)");
   const cli: CliProc[] = [];
   const ls = await launchers();
   const def = (ls.find((l) => l.command === "claude") ?? ls[0])?.profile ?? "default";

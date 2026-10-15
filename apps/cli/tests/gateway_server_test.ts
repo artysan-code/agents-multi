@@ -3,7 +3,7 @@
 // gateway killed hard. Real processes and real HTTP on a free loopback port.
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { startGateway } from "../../../shared/mcp/gateway/gateway.ts";
-import { readProc } from "../../../shared/mcp/gateway/proc.ts";
+import { listProcesses } from "../../../shared/mcp/lib/platform.ts";
 import { cacheFile, type GatewayConfig, type ServerEntry } from "../../../shared/mcp/gateway/core.ts";
 
 const FAKE = new URL("./fixtures/fake-mcp.ts", import.meta.url).pathname;
@@ -265,10 +265,7 @@ Deno.test({
   },
 });
 
-const alive = async (pid: number) => {
-  const stat = await readProc(pid, "stat");
-  return stat !== "" && !stat.includes(") Z ");
-};
+const alive = (pid: number) => listProcesses().has(pid); // a zombie is left out of the table
 
 Deno.test({
   name: "a gateway killed hard leaves no backend behind once the next one starts",

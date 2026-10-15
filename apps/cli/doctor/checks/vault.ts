@@ -131,6 +131,7 @@ export async function vaultChecks(): Promise<Check[]> {
     const needed = [
       "Bash(secret-tool:*)",
       "Bash(kwallet-query:*)",
+      "Bash(security:*)", // the macOS Keychain's program (platform.ts)
       // the command answers to three names (agents, and the aliases agents-multi and claude-multi kept from before)
       "Bash(agents vault recovery-code:*)",
       "Bash(agents-multi vault recovery-code:*)",

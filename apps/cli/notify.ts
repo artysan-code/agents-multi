@@ -6,7 +6,7 @@
 import { readJson } from "./lib/fs.ts";
 import { type Check } from "./lib/output.ts";
 import { STATE } from "./lib/paths.ts";
-import { has, run } from "./lib/proc.ts";
+import { notify } from "../../shared/mcp/lib/platform.ts";
 
 const STATE_FILE = `${STATE}/doctor-last.json`;
 interface DoctorDiff {
@@ -68,26 +68,15 @@ export async function notifyDoctor(current: Check[], opts: { dryRun?: boolean } 
 }
 
 /**
- * The one way agents-multi reaches the desktop. Never `-u critical`: on KDE a critical notification
- * ignores its expiry and stays on screen until dismissed. Eight seconds, then it waits in the notification centre.
+ * The one way agents-multi reaches the desktop (the platform layer picks the program). Never `-u critical`: on
+ * KDE a critical notification ignores its expiry and stays on screen until dismissed. Eight seconds, then it
+ * waits in the notification centre.
  * No --wait: the timer's unit must not hang, so there is no clickable action and the body carries
  * whatever the reader needs to act. True if something was shown (or printed).
  */
 export async function desktopNotify(title: string, body: string, opts: { dryRun?: boolean } = {}) {
-  if (opts.dryRun || !(await has("notify-send"))) {
-    console.log(`[notification${opts.dryRun ? " dry-run" : " (notify-send missing)"}] ${title}\n${body}`);
-    return true;
+  if (opts.dryRun || !(await notify(title, body))) {
+    console.log(`[notification${opts.dryRun ? " dry-run" : " (no desktop to show it on)"}] ${title}\n${body}`);
   }
-  await run("notify-send", [
-    "-a",
-    "agents-multi",
-    "-i",
-    "claude-desktop",
-    "-u",
-    "normal",
-    "--expire-time=8000",
-    title,
-    body,
-  ]);
   return true;
 }
