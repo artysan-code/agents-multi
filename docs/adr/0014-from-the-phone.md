@@ -243,3 +243,51 @@ What the building changed in the contract, and what it left open.
   - the answer's challenge binds the request's id, not its text: a hostile service could show the phone different
     words for the same id; binding a hash of `what` is the next revision of the signed text;
   - revoking a passkey is the service withholding it; the nodes keep no revocation list of their own.
+
+## The API, second round (2026-10-16)
+
+The owner's first use from the phone, and the points left open above.
+
+### Voice
+
+- **Dictation** in the composer where the browser has speech recognition (`webkitSpeechRecognition`): the words
+  appear in the box as they are said, in the account's language, and are sent as text. The app says that the audio
+  goes to the phone's own service (Apple, Google) for this.
+- **A voice note**: the app records (`MediaRecorder`: Opus in WebM, or AAC in MP4 on iOS), at most 5 minutes and 10
+  MB, and sends it: `POST /api/chats/voice` (multipart: `audio`, `chat?`, `node?`) → `{chat, turn}`; the turn has
+  `voice: true` and no text yet. The audio is kept by the service only until the turn ends, then deleted.
+- **Only a machine that can transcribe takes a voice turn**: a node announces `voice: true` when it has whisper.cpp
+  (`voice: {bin, model}` in this machine's `node.json`, found by `agents node voice` among the usual places, or set
+  with `agents node voice --bin <whisper-cli> --model <ggml model>`) and ffmpeg. The poll's turn carries `voice:
+  true`; the node fetches `GET /api/turns/<id>/audio` (its token), converts it to 16 kHz mono WAV, transcribes it
+  locally in the account's language, posts `{t: "transcript", text}` as the turn's first event (the service stores it
+  as the turn's question and relays it as an SSE `transcript` event), then answers it as any turn. The audio never
+  leaves the person's machines but for the service's copy.
+
+### The chat's own actions
+
+- `PATCH /api/chats/<id>` `{title}` renames; the list is searchable in the app (titles and questions, local).
+- **Cancel a turn**: `POST /api/turns/<id>/cancel` (any caller of the account): a waiting turn becomes `cancelled` at
+  once; a running one is marked, and the node's next `events` or heartbeat is answered `409 {cancelled: true}`, on
+  which the node stops Claude and ends the turn. SSE `turn` state `cancelled`. «Stop waiting» becomes «Cancel».
+
+### Machines
+
+- **Forget a machine**: `DELETE /api/nodes/<name>` (signed in): the node, what waits on it and its claimed turns go,
+  and its personal tokens named after it are revoked: a forgotten machine cannot come back without pairing again.
+  `agents nodes forget <name>` does the same from a desktop.
+
+### The yes, tightened
+
+- **The challenge binds the request's words**: `agents-multi answer v2\n` + canonical JSON of `{id, node, verdict,
+  answers, expires, what}`, where `what` is the base64url SHA-256 of the canonical JSON of `{what, questions}` as the
+  node relayed them. The node recomputes it from its own hub's copy, so a service that showed the phone other words
+  gets a signature that fails. v1 answers are refused.
+- **Declining a proposed job from the phone is signed** as accepting is (`{op: "decline", assertion, expires}`,
+  challenge over `agents-multi job decline v1` and the job's canonical text); a desktop's token declines as before.
+- **Revocation the nodes check**: `agents passkeys revoke <id>` (and the console's button) writes the revocation
+  into the vault (`passkey-revocations`), which every machine of the owner has; a node with the vault refuses a
+  revoked passkey whatever the service lists. The service's `DELETE /api/passkeys/<id>` still hides it.
+- **Passkeys that password managers save**: creation asks for a discoverable credential (`residentKey: "required"`,
+  `requireResidentKey: true`), gives the person 5 minutes, and the app shows the browser's exact error (its name and
+  message) when it fails.
