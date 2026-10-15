@@ -107,6 +107,18 @@ create table if not exists passkey_challenges (challenge text primary key, expir
       if (!cols.some((x) => x.name === c)) db.exec(`alter table chat_turns add column ${c} text`);
     }
   },
+  // a voice note: the turn has no text until the node transcribes it, its audio is kept until the turn ends; a turn
+  // may be marked cancelled while a node runs it (chat.ts, ADR 0014 second round)
+  (db) => {
+    const cols = db.prepare("pragma table_info(chat_turns)").all() as { name: string }[];
+    for (const c of ["voice", "cancel"]) {
+      if (!cols.some((x) => x.name === c)) db.exec(`alter table chat_turns add column ${c} integer not null default 0`);
+    }
+    db.exec(`
+create table if not exists turn_audio (
+  turn text primary key references chat_turns(id) on delete cascade, type text not null, data blob not null,
+  created text not null);`);
+  },
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */

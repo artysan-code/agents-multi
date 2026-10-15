@@ -12,12 +12,30 @@ import { Fleet } from "./fleet.ts";
 /** A node silent this long loses the turns it claimed. */
 export const RECLAIM_MS = 90_000;
 const MAX_TEXT = 20_000;
+const MAX_TITLE = 120;
 const MAX_ANSWER = 200_000;
 const MAX_ACTS = 200;
 const HISTORY = 10;
 const KEEPALIVE_MS = 20_000;
+/** A voice note: at most 10 MB of audio (5 minutes of Opus or AAC is far below), of these types. */
+export const MAX_AUDIO = 10 * 1024 * 1024;
+export const AUDIO_TYPES = [
+  "audio/webm",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/m4a",
+  "audio/aac",
+  "audio/ogg",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "video/webm",
+  "video/mp4",
+];
+/** What the chat is called until the node has transcribed its first voice note. */
+export const VOICE_TITLE = "Voice note";
 
-export type TurnState = "waiting" | "running" | "done" | "failed";
+export type TurnState = "waiting" | "running" | "done" | "failed" | "cancelled";
 export interface Act {
   k: string;
   n: string;
@@ -33,6 +51,8 @@ export interface Turn {
   error: string | null;
   /** the folder Claude named for work inside a project's files (`[[code:PATH]]`), when it did */
   code?: string;
+  /** a voice note: `q` is empty until the node has transcribed it */
+  voice?: true;
   created: string;
   ended: string | null;
 }
@@ -55,14 +75,17 @@ export interface Claimed {
   text: string;
   session: string | null;
   history: { q: string; a: string }[];
+  /** a voice note: fetch `GET /api/turns/<id>/audio`, transcribe, post a `transcript` event first */
+  voice?: true;
 }
 export type NodeEvent =
   | { t: "text"; d: string }
   | { t: "tool"; k: string; n: string; d?: string }
-  | { t: "session"; id: string };
+  | { t: "session"; id: string }
+  | { t: "transcript"; text: string };
 
 export interface SseEvent {
-  event: "turn" | "text" | "act" | "done";
+  event: "turn" | "text" | "act" | "done" | "transcript";
   data: Record<string, unknown>;
 }
 
@@ -76,7 +99,7 @@ export interface PushNotice {
 }
 
 export class ChatError extends Error {
-  constructor(message: string, readonly status = 400) {
+  constructor(message: string, readonly status = 400, readonly extra: Record<string, unknown> = {}) {
     super(message);
   }
 }
@@ -156,6 +179,8 @@ interface TurnRow {
   /** the only node that may take it, when the asker pinned one */
   pin: string | null;
   code: string | null;
+  voice: number;
+  cancel: number;
 }
 
 const toTurn = (r: TurnRow): Turn => ({
@@ -167,6 +192,7 @@ const toTurn = (r: TurnRow): Turn => ({
   node: r.node,
   error: r.error,
   ...(r.code ? { code: r.code } : {}),
+  ...(r.voice ? { voice: true as const } : {}),
   created: r.created,
   ended: r.ended,
 });
@@ -256,6 +282,28 @@ export class Chats {
   post(text: unknown, chat?: unknown, pin?: unknown): { chat: ChatSummary; turn: Turn } {
     if (typeof text !== "string" || !text.trim()) throw new ChatError("text is the request");
     if (text.length > MAX_TEXT) throw new ChatError(`text is at most ${MAX_TEXT} characters`, 413);
+    return this.insert(text, chat, pin);
+  }
+
+  /** A voice note: a turn with no text yet, and the audio kept until the turn ends. */
+  postVoice(
+    audio: { type: string; data: Uint8Array },
+    chat?: unknown,
+    pin?: unknown,
+  ): { chat: ChatSummary; turn: Turn } {
+    const type = audio.type.split(";")[0].trim().toLowerCase();
+    if (!AUDIO_TYPES.includes(type)) throw new ChatError(`audio is one of ${AUDIO_TYPES.join(", ")}`, 415);
+    if (!audio.data.byteLength) throw new ChatError("the audio is empty");
+    if (audio.data.byteLength > MAX_AUDIO) throw new ChatError("the audio is at most 10 MB", 413);
+    return this.insert("", chat, pin, { type, data: audio.data });
+  }
+
+  private insert(
+    text: string,
+    chat: unknown,
+    pin: unknown,
+    audio?: { type: string; data: Uint8Array },
+  ): { chat: ChatSummary; turn: Turn } {
     if (chat !== undefined && chat !== null && (typeof chat !== "string" || !/^[\w-]{1,64}$/.test(chat))) {
       throw new ChatError("not a chat id");
     }
@@ -273,18 +321,28 @@ export class Chats {
         id = `c-${this.newId()}`;
         this.db.prepare("insert into chats (id, title, created, updated) values (?, ?, ?, ?)").run(
           id,
-          titleFrom(text),
+          audio ? VOICE_TITLE : titleFrom(text),
           at,
           at,
         );
       }
-      this.db.prepare("insert into chat_turns (id, chat, q, created, pin) values (?, ?, ?, ?, ?)").run(
-        `u-${this.newId()}`,
+      const turnId = `u-${this.newId()}`;
+      this.db.prepare("insert into chat_turns (id, chat, q, created, pin, voice) values (?, ?, ?, ?, ?, ?)").run(
+        turnId,
         id,
         text,
         at,
         pin ? String(pin) : null,
+        audio ? 1 : 0,
       );
+      if (audio) {
+        this.db.prepare("insert into turn_audio (turn, type, data, created) values (?, ?, ?, ?)").run(
+          turnId,
+          audio.type,
+          audio.data,
+          at,
+        );
+      }
       this.db.exec("commit");
     } catch (e) {
       this.db.exec("rollback");
@@ -303,20 +361,92 @@ export class Chats {
     return Number(r.changes) > 0;
   }
 
+  /** Renames a chat. */
+  rename(id: string, title: unknown): ChatSummary {
+    if (typeof title !== "string") throw new ChatError("title is the new name");
+    const t = title.trim().replace(/\s+/g, " ");
+    if (!t || t.length > MAX_TITLE) throw new ChatError(`title is 1 to ${MAX_TITLE} characters`);
+    const r = this.db.prepare("update chats set title = ? where id = ?").run(t, id);
+    if (!Number(r.changes)) throw new ChatError("no such chat", 404);
+    return this.list().find((c) => c.id === id)!;
+  }
+
+  /** Cancels a turn: a waiting one ends at once; a running one is marked, and its node is told at its next call. */
+  cancel(id: string): TurnState {
+    this.reclaim();
+    const t = this.turn(id);
+    if (!t) throw new ChatError("no such turn", 404);
+    if (t.state === "waiting") {
+      this.end(t, "cancelled");
+      return "cancelled";
+    }
+    if (t.state === "running") {
+      this.db.prepare("update chat_turns set cancel = 1 where id = ?").run(id);
+      return "running";
+    }
+    throw new ChatError(`the turn is ${t.state}`, 409);
+  }
+
+  /** A turn that ends without an answer (cancelled, or failed by the service): its audio goes with it. */
+  private end(t: TurnRow, state: "cancelled" | "failed", error?: string) {
+    const at = this.iso();
+    this.db.prepare("update chat_turns set state = ?, error = ?, ended = ?, beat = null where id = ?").run(
+      state,
+      error ?? null,
+      at,
+      t.id,
+    );
+    this.db.prepare("delete from turn_audio where turn = ?").run(t.id);
+    this.db.prepare("update chats set updated = ? where id = ?").run(at, t.chat);
+    this.publish(t.chat, "turn", { turn: t.id, state, node: t.node, ...(error ? { error } : {}) });
+  }
+
+  /** What a forgotten machine leaves: the turns it held go back to waiting (or end, when they were pinned to it
+   *  or marked cancelled). Returns how many. */
+  releaseNode(node: string): number {
+    const rows = this.db.prepare(
+      "select * from chat_turns where (state = 'running' and node = ?) or (state = 'waiting' and pin = ?)",
+    ).all(node, node) as unknown as TurnRow[];
+    for (const t of rows) {
+      if (t.state === "waiting" || t.pin === node) this.end(t, "failed", "the machine was forgotten");
+      else if (t.cancel) this.end(t, "cancelled");
+      else this.restart(t);
+    }
+    this.hub.wake(this.o.user);
+    return rows.length;
+  }
+
+  private restart(t: { id: string; chat: string }) {
+    this.db.prepare(
+      "update chat_turns set state = 'waiting', node = null, beat = null, a = '', acts = '[]', session = null where id = ?",
+    ).run(t.id);
+    this.publish(t.chat, "turn", { turn: t.id, state: "waiting", node: null });
+  }
+
+  /** The audio of a voice turn, for the node that holds it. */
+  audio(id: string, node: string): { type: string; data: Uint8Array<ArrayBuffer> } {
+    const t = this.turn(id);
+    if (!t) throw new ChatError("no such turn", 404);
+    if (!t.voice) throw new ChatError("not a voice turn", 404);
+    if (t.state !== "running" || t.node !== node) throw new ChatError("not this node's turn", 403);
+    const a = this.db.prepare("select type, data from turn_audio where turn = ?").get(id) as
+      | { type: string; data: Uint8Array }
+      | undefined;
+    if (!a) throw new ChatError("the audio is gone", 404);
+    return { type: a.type, data: new Uint8Array(a.data) };
+  }
+
   // ---------------------------------------------------------------- the node's side
 
   /** Turns claimed by a node silent for 90 s go back to waiting, from the top. */
   reclaim(): number {
-    const lost = this.db.prepare("select id, chat from chat_turns where state = 'running' and beat < ?").all(
+    const lost = this.db.prepare("select * from chat_turns where state = 'running' and beat < ?").all(
       this.now() - RECLAIM_MS,
-    ) as unknown as { id: string; chat: string }[];
+    ) as unknown as TurnRow[];
     if (!lost.length) return 0;
-    const reset = this.db.prepare(
-      "update chat_turns set state = 'waiting', node = null, beat = null, a = '', acts = '[]', session = null where id = ?",
-    );
     for (const t of lost) {
-      reset.run(t.id);
-      this.publish(t.chat, "turn", { turn: t.id, state: "waiting", node: null });
+      if (t.cancel) this.end(t, "cancelled"); // asked to stop, and its node is gone: it does not start over
+      else this.restart(t);
     }
     this.hub.wake(this.o.user);
     return lost.length;
@@ -360,13 +490,26 @@ export class Chats {
    *  on this node. */
   claim(node: string, max = 1): Claimed[] {
     this.reclaim();
+    // a voice note goes only to a machine that announced it can transcribe (a pinned one too), and when it is not
+    // pinned, to the account's answering node among those
+    const nodes = new Fleet(this.db, this.now).nodes();
+    const voice = nodes.find((n) => n.name === node)?.voice === true;
+    const ansVoice = voice &&
+      answeringNode(nodes.filter((n) => n.voice === true), this.orchestrator(), this.now(), node) === node;
     const rows = this.db.prepare(
       `select * from chat_turns t where t.state = 'waiting'
-         and (t.pin = ? or (t.pin is null and ?))
+         and (t.voice = 0 or ?)
+         and (t.pin = ? or (t.pin is null and (case when t.voice = 1 then ? else ? end)))
          and not exists (select 1 from chat_turns r where r.chat = t.chat and r.state = 'running')
          and t.rowid = (select min(w.rowid) from chat_turns w where w.chat = t.chat and w.state = 'waiting')
        order by t.rowid limit ?`,
-    ).all(node, this.answers(node) ? 1 : 0, Math.max(1, Math.min(20, max))) as unknown as TurnRow[];
+    ).all(
+      voice ? 1 : 0,
+      node,
+      ansVoice ? 1 : 0,
+      this.answers(node) ? 1 : 0,
+      Math.max(1, Math.min(20, max)),
+    ) as unknown as TurnRow[];
     const out: Claimed[] = [];
     for (const t of rows) {
       this.db.prepare("update chat_turns set state = 'running', node = ?, beat = ? where id = ?").run(
@@ -386,6 +529,7 @@ export class Chats {
         text: t.q,
         session: before && before.node === node ? before.session : null,
         history,
+        ...(t.voice ? { voice: true as const } : {}),
       });
       this.publish(t.chat, "turn", { turn: t.id, state: "running", node });
     }
@@ -398,6 +542,11 @@ export class Chats {
     if (!t) throw new ChatError("no such turn", 404);
     if (t.node !== node && t.state !== "waiting") throw new ChatError("not this node's turn", 403);
     if (t.state !== "running" || t.node !== node) throw new ChatError(`the turn is ${t.state}`, 409);
+    if (t.cancel) {
+      // asked to stop: the node learns it here, stops Claude and has no more to report
+      this.end(t, "cancelled");
+      throw new ChatError("the turn was cancelled", 409, { cancelled: true });
+    }
     return t;
   }
 
@@ -405,7 +554,7 @@ export class Chats {
   events(id: string, node: string, events: unknown): void {
     const t = this.mine(id, node);
     if (!Array.isArray(events) || events.length > 500) throw new ChatError("events is a list");
-    let a = t.a, session = t.session;
+    let a = t.a, session = t.session, transcript: string | null = null;
     const acts: Act[] = JSON.parse(t.acts);
     const relay: [SseEvent["event"], Record<string, unknown>][] = [];
     for (const e of events as Record<string, unknown>[]) {
@@ -422,6 +571,9 @@ export class Chats {
         relay.push(["act", { turn: id, ...act }]);
       } else if (e?.t === "session" && typeof e.id === "string" && /^[\w.-]{1,100}$/.test(e.id)) {
         session = e.id;
+      } else if (e?.t === "transcript" && typeof e.text === "string" && e.text.trim()) {
+        if (!t.voice) throw new ChatError("only a voice turn has a transcript");
+        transcript = e.text.trim().slice(0, MAX_TEXT);
       } else throw new ChatError("an event is text, tool or session");
     }
     this.db.prepare("update chat_turns set a = ?, acts = ?, session = ?, beat = ? where id = ?").run(
@@ -431,6 +583,16 @@ export class Chats {
       this.now(),
       id,
     );
+    if (transcript !== null) {
+      // the question of the turn; the chat, named for the voice note until now, takes its first words
+      this.db.prepare("update chat_turns set q = ? where id = ?").run(transcript, id);
+      this.db.prepare("update chats set title = ? where id = ? and title = ?").run(
+        titleFrom(transcript),
+        t.chat,
+        VOICE_TITLE,
+      );
+      relay.unshift(["transcript", { turn: id, text: transcript }]);
+    }
     for (const [ev, data] of relay) this.publish(t.chat, ev, data);
   }
 
@@ -449,6 +611,7 @@ export class Chats {
     this.db.prepare(
       "update chat_turns set state = ?, a = ?, error = ?, code = ?, ended = ?, beat = null where id = ?",
     ).run(error ? "failed" : "done", text, error, !error && typeof code === "string" ? code : null, at, id);
+    this.db.prepare("delete from turn_audio where turn = ?").run(id);
     this.db.prepare("update chats set updated = ? where id = ?").run(at, t.chat);
     this.publish(t.chat, "turn", {
       turn: id,
@@ -472,6 +635,96 @@ export class Chats {
       node: t.node,
     }));
   }
+}
+
+/** The body of a request, read up to `max` bytes: more is refused before it is all in memory. */
+export async function readLimited(req: Request, max: number): Promise<Uint8Array<ArrayBuffer>> {
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) throw new ChatError("the request is too large", 413);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = req.body?.getReader();
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > max) {
+        await reader.cancel().catch(() => {});
+        throw new ChatError("the request is too large", 413);
+      }
+      chunks.push(value);
+    }
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) (out.set(c, at), at += c.byteLength);
+  return out;
+}
+
+/** A voice note's form (multipart: `audio`, `chat?`, `node?`), parsed within the size limit. */
+export async function readVoiceForm(
+  req: Request,
+): Promise<{ audio: { type: string; data: Uint8Array }; chat?: string; node?: string }> {
+  const type = req.headers.get("content-type") ?? "";
+  if (!/^multipart\/form-data\s*;/i.test(type)) throw new ChatError("a multipart form is expected", 415);
+  const bytes = await readLimited(req, MAX_AUDIO + 64 * 1024);
+  let form: FormData;
+  try {
+    form = await new Response(bytes, { headers: { "content-type": type } }).formData();
+  } catch {
+    throw new ChatError("not a valid multipart form");
+  }
+  const a = form.get("audio");
+  if (!(a instanceof File)) throw new ChatError("audio is the recording");
+  const field = (k: string) => {
+    const v = form.get(k);
+    return typeof v === "string" && v ? v : undefined;
+  };
+  return {
+    audio: { type: a.type, data: new Uint8Array(await a.arrayBuffer()) },
+    chat: field("chat"),
+    node: field("node"),
+  };
+}
+
+/** `DELETE /api/nodes/<name>`: a machine forgotten. The node and what waits on it go, the turns it held go back
+ *  to waiting, and its personal tokens are revoked (`revoke` returns how many), so it cannot come back unpaired. */
+export function forgetNode(
+  fleet: Fleet,
+  chats: Chats,
+  revoke: (node: string) => number,
+  name: string,
+): { node: boolean; turns: number; tokens: number } {
+  const node = fleet.forget(name);
+  const turns = chats.releaseNode(name);
+  return { node, turns, tokens: revoke(name) };
+}
+
+export function forgetRoute(
+  req: Request,
+  u: URL,
+  fleet: Fleet,
+  chats: Chats,
+  revoke: (node: string) => number,
+): Response | null {
+  const m = u.pathname.match(/^\/api\/nodes\/([^/]{1,64})$/);
+  if (!m || req.method !== "DELETE") return null;
+  const json = (v: unknown, status = 200) =>
+    new Response(JSON.stringify(v), {
+      status,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  let name: string;
+  try {
+    name = decodeURIComponent(m[1]);
+  } catch {
+    return json({ error: "not a node name" }, 400);
+  }
+  if (!validNodeName(name)) return json({ error: "not a node name" }, 400);
+  const r = forgetNode(fleet, chats, revoke, name);
+  if (!r.node && !r.tokens && !r.turns) return json({ error: "no such node" }, 404);
+  return json({ ok: true, ...r });
 }
 
 /** The chats' routes, for a caller signed in to the account. `node`: the machine whose token it is (null for a web
@@ -506,11 +759,16 @@ export async function chatRoute(
       const b = await body();
       return json(chats.post(b.text, b.chat, b.node));
     }
+    if (p === "/api/chats/voice" && m === "POST") {
+      const f = await readVoiceForm(req);
+      return json(chats.postVoice(f.audio, f.chat, f.node));
+    }
     const one = p.match(/^\/api\/chats\/([\w-]{1,64})$/);
     if (one && m === "GET") {
       const c = chats.get(one[1]);
       return c ? json({ chat: c }) : json({ error: "no such chat" }, 404);
     }
+    if (one && m === "PATCH") return json({ chat: chats.rename(one[1], (await body()).title) });
     if (one && m === "DELETE") return chats.remove(one[1]) ? json({ ok: true }) : json({ error: "no such chat" }, 404);
     const ev = p.match(/^\/api\/chats\/([\w-]{1,64})\/events$/);
     if (ev && m === "GET") {
@@ -533,6 +791,13 @@ export async function chatRoute(
         w.cancel();
       }
     }
+    const cx = p.match(/^\/api\/turns\/([\w-]{1,64})\/cancel$/);
+    if (cx && m === "POST") return json({ ok: true, state: chats.cancel(cx[1]) });
+    const au = p.match(/^\/api\/turns\/([\w-]{1,64})\/audio$/);
+    if (au && m === "GET") {
+      const a = chats.audio(au[1], nodeOnly());
+      return new Response(a.data, { headers: { "content-type": a.type, "cache-control": "no-store" } });
+    }
     const t = p.match(/^\/api\/turns\/([\w-]{1,64})\/(events|done)$/);
     if (t && m === "POST") {
       const me = nodeOnly(), b = await body();
@@ -546,7 +811,7 @@ export async function chatRoute(
     }
     if (p === "/api/settings/orchestrator" && m === "PUT") return json(chats.setOrchestrator(await body()));
   } catch (e) {
-    if (e instanceof ChatError) return json({ error: e.message }, e.status);
+    if (e instanceof ChatError) return json({ ...e.extra, error: e.message }, e.status);
     throw e;
   }
   return null;

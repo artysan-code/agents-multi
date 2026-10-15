@@ -13,6 +13,16 @@ import { CONFIG, HOME, RUNTIME, shortHome } from "../lib/paths.ts";
 import { CONFIG_HOME } from "../init.ts";
 import { readStdin } from "../vault.ts";
 import { readNodeToken } from "./service.ts";
+import {
+  downloadModel,
+  findOnPath,
+  findWhisperBin,
+  findWhisperModel,
+  modelDir,
+  MODELS,
+  realFindIO,
+  voiceReady,
+} from "./voice.ts";
 
 const ok = (m: string) => console.log(`${ANSI.g}✓${ANSI.x} ${m}`);
 const todo = (m: string) => console.log(`${ANSI.y}!${ANSI.x} ${m}`);
@@ -43,6 +53,43 @@ async function run(cmd: string, args: string[], env?: Record<string, string>, qu
 
 // the forge's host key is taken the first time it is seen, never asked about (the node has no one to ask)
 const GIT_ENV = { GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes" };
+
+const MiB = (n: number) => `${Math.round(n / 2 ** 20)} MiB`;
+
+async function voiceStep(current: Parameters<typeof voiceReady>[0], nodeCommand: (args: string[]) => Promise<number>) {
+  const find = realFindIO();
+  if (await voiceReady(current, find)) return ok("voice notes: whisper.cpp and its model are ready");
+  const [bin, ffmpeg] = [await findWhisperBin(find), await findOnPath(find, "ffmpeg")];
+  if (!bin || !ffmpeg) {
+    return todo(`voice notes (optional): ${!bin ? "no whisper-cli" : "no ffmpeg"} here, so this node takes none`);
+  }
+  let model = await findWhisperModel(find);
+  if (!model) {
+    if (!Deno.stdin.isTerminal()) {
+      return todo("voice notes: no model; run `agents node setup` in a terminal to choose one");
+    }
+    const choices = MODELS.map((m) => `${m.name[0]} = ${m.name} (${MiB(m.bytes)}, ${m.note})`).join("; ");
+    const a =
+      (await ask(`\nVoice notes need a speech model. Download one into this node's volume? ${choices}; Enter = no: `))
+        .toLowerCase();
+    const pick = MODELS.find((m) => a !== "" && (a === m.name || a === m.name[0]));
+    if (!pick) return todo("voice notes: no model chosen; run `agents node setup` again to download one");
+    const dest = `${modelDir()}/${pick.file}`;
+    console.log(`downloading ${pick.file} (${MiB(pick.bytes)}) from Hugging Face, checked against its SHA-256…`);
+    let shown = -1;
+    const r = await downloadModel(pick, dest, {
+      progress: (done) => {
+        const pct = Math.floor((done / pick.bytes) * 10) * 10;
+        if (pct !== shown) (shown = pct, Deno.stdout.writeSync(new TextEncoder().encode(`\r  ${pct}%`)));
+      },
+    });
+    console.log();
+    if (!r.ok) return todo(`voice notes: ${r.why}`);
+    model = dest;
+    ok(`${pick.file}: downloaded, checksum verified`);
+  }
+  if ((await nodeCommand(["voice", "--bin", bin, "--model", model])) === 0) ok("voice notes are on");
+}
 
 export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>): Promise<number> {
   console.log(`${ANSI.b}agents node setup${ANSI.x} — this machine as a server node (ADR 0013)\n`);
@@ -141,7 +188,11 @@ export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>
     else todo(`${remote}: not cloned (the forge refused it): run setup again`);
   }
 
-  // 7. on, headless: the entry point sees it and starts serving
+  // 7. voice notes, when whisper.cpp and ffmpeg are here (the image has both): the model is the owner's to accept,
+  // downloaded once into the volume and kept only if its checksum matches
+  await voiceStep(cfg.voice, nodeCommand);
+
+  // 8. on, headless: the entry point sees it and starts serving
   if (!(cfg.enabled && cfg.headless)) {
     if ((await nodeCommand(["enable", "--headless"])) !== 0) return stop("the node could not be turned on");
   }

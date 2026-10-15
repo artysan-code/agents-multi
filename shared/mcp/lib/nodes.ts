@@ -25,6 +25,8 @@ export interface Announce {
   present: boolean;
   /** the Bash sandbox works here (null: not probed, a desktop that does not need it) */
   sandbox: boolean | null;
+  /** it can transcribe a voice note (whisper.cpp and ffmpeg here): the only kind of node that takes a voice turn */
+  voice?: boolean;
 }
 
 export interface NodeInfo extends Announce {

@@ -44,6 +44,26 @@ login`, che fa l'accesso dal browser, resta per gli script.
   con quella del telefono; il nodo controlla poi l'avallo, la firma della passkey e la scadenza prima di rispondere
   a qualsiasi cosa, così il servizio può portare la risposta ma non farla mai valere.
 
+## Note vocali
+
+Dal telefono puoi registrare una nota vocale (fino a cinque minuti) invece di scrivere. Il servizio tiene
+l'audio solo finché il turno non finisce; una tua macchina lo trascrive e risponde. Prende una nota vocale solo
+una macchina che sa trascrivere, quindi prepara quella che risponde:
+
+```bash
+agents node voice
+```
+
+Cerca nei posti consueti il `whisper-cli` di whisper.cpp, un modello `ggml-*.bin` multilingue (il small è il
+miglior compromesso su CPU) e ffmpeg, e salva quello che trova nel `node.json` di questa macchina; `--bin` e
+`--model` li indicano a mano, `--off` spegne la voce. Il nodo allora annuncia che prende note vocali.
+Converte la registrazione in WAV mono a 16 kHz in una cartella temporanea, la trascrive in locale nella lingua
+del tuo account, con un ambiente vuoto (nessun segreto) e, su un server, senza rete, mostra il testo come tua
+domanda e risponde. Niente viene mandato a un servizio di riconoscimento vocale.
+
+Nell'immagine del server whisper.cpp è compilato (solo CPU, a un commit fissato). `agents node setup` propone di
+scaricare un modello nel volume e ne controlla lo SHA-256 prima di tenerlo.
+
 ## La chat della console
 
 Quando questa macchina è un nodo, anche la Chat della console passa dal servizio: una domanda diventa un turno
@@ -68,6 +88,16 @@ revisore di tutte le altre.
 Mentre un run lavora, il suo nodo pusha il branch `agent/<id>` e i suoi handoff (`refs/agents/<id>`). Un nodo
 che tace per dieci minuti perde i job in corso, e per ognuno ti aspetta una proposta di ripresa su un altro nodo,
 cioè un clone dello stesso remote.
+
+## Dimenticare una macchina
+
+```bash
+agents nodes forget <nome>
+```
+
+(oppure _Macchine_ nella web app) toglie il nodo, ciò che aspetta su di lui e le sue risposte in sospeso, ridà
+agli altri tuoi nodi i turni che teneva e revoca i token che portano il suo nome. Una macchina dimenticata non
+può tornare finché non viene collegata di nuovo.
 
 ## Un nodo server
 

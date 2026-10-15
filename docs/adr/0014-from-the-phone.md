@@ -308,3 +308,26 @@ The owner's first use from the phone, and the points left open above.
 - Revocations are vault entries: service `passkey-revocations`, account the credential's id, value the date. A node
   refuses a revoked passkey for an answer, a job's approval and a decline alike.
 - The challenge of a passkey's creation now lives six minutes, a little over the five the browser is given.
+
+## As built (second round: voice, the chat's actions, forgetting a machine; 2026-10-16)
+
+- **Voice routing.** The audio is a row of `turn_audio` (a blob in the account's database), deleted when the turn
+  ends in any way (done, failed, cancelled) and with its chat. `chat_turns.voice` marks the turn; its `q` is empty until
+  the `transcript` event, which also renames the chat from «Voice note» to the transcript's first words. A voice turn
+  is claimed only by a node whose announcement says `voice: true`; unpinned, it goes to the account's answering node
+  _among the voice nodes_ (the setting's choice, then its fallbacks, then the first online). A turn pinned to a machine
+  that cannot transcribe waits there until cancelled: the service accepts it, it does not guess.
+- **Limits.** 10 MB of audio (the body is read with a cap, declared or not), types `audio/webm`, `mp4`, `x-m4a`, `m4a`,
+  `aac`, `ogg`, `mpeg`, `wav`, `x-wav` and `video/webm`, `video/mp4` (what browsers call a recording), anything else 415.
+  The five minutes are the app's to enforce.
+- **Cancel.** A running turn gets `cancel = 1`; the node's next `events` or `done` finishes it as `cancelled` (SSE `turn`,
+  audio deleted) and is answered `409 {error, cancelled: true}`; a marked turn whose node went silent is reclaimed as
+  `cancelled`, not `waiting`. A finished answer arriving after the mark is dropped. Anything else the service says
+  about a turn that is not running is a plain 409 without `cancelled`.
+- **Forget.** `DELETE /api/nodes/<name>` answers `{ok, node, turns, tokens}` (404 when there was nothing); the turns it
+  held wait again, those pinned to it fail with «the machine was forgotten»; its jobs stay as history. Any token or
+  session of the account may do it, a forgotten machine's own token included.
+- **The node.** `voice` is a machine field of `node.json`; both programs run with an empty environment and, on a
+  headless node with bubblewrap, whisper runs with the network unshared and the filesystem read only but for its
+  temporary folder. Transcription is silent for the service, so the heartbeat keeps the turn ours meanwhile.
+- **Not here.** Speech recognition in the browser and the recorder are the web app's.

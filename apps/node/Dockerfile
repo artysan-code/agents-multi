@@ -31,14 +31,33 @@ RUN cd /out/repo && deno cache --quiet --frozen apps/cli/main.ts \
   done \
   && rm -rf "$DENO_DIR/gen" "$DENO_DIR"/*_cache_v*
 
+# whisper.cpp for voice notes (ADR 0014): `whisper-cli`, CPU only, built from a pinned commit (v1.9.5) as one static
+# program, portable across CPUs (no -march=native) and with no OpenMP runtime to carry. The speech model is not in the
+# image: `agents node setup` offers to download one into the volume and checks its SHA-256.
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS whisper
+ARG WHISPER_CPP_COMMIT=d1be6fde11ac6e0407606b4e42fe72d34add8037
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+RUN git init /src && cd /src \
+  && git fetch --depth 1 https://github.com/ggml-org/whisper.cpp "$WHISPER_CPP_COMMIT" \
+  && git checkout --quiet FETCH_HEAD \
+  && test "$(git rev-parse HEAD)" = "$WHISPER_CPP_COMMIT" \
+  && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF \
+    -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON \
+  && cmake --build build -j"$(nproc)" --target whisper-cli \
+  && strip build/bin/whisper-cli \
+  && test -x build/bin/whisper-cli
+
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 
 # bubblewrap and socat: Claude Code's Bash sandbox (the filesystem and the network); git and ssh: the clones and
 # the branches agentd pushes; iproute2: the node checks with `ss` that nothing of ours listens beyond loopback;
-# jq and python3: the launchers and bin/agents read the brain's host from accounts.json.
+# jq and python3: the launchers and bin/agents read the brain's host from accounts.json; ffmpeg: a voice note's
+# recording to the WAV whisper.cpp reads.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bubblewrap socat git openssh-client ca-certificates curl \
-    iproute2 procps jq python3-minimal \
+    iproute2 procps jq python3-minimal ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
 # Node, for Claude Code (>= 22) and the third-party MCP servers `agents install` pulls in: the official build of
@@ -68,6 +87,7 @@ ARG CLAUDE_CODE_VERSION=2.1.300
 RUN npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
   && claude --version
 
+COPY --from=whisper /src/build/bin/whisper-cli /usr/local/bin/whisper-cli
 COPY --from=code /out /opt/agents-multi
 COPY apps/node/entrypoint.sh /opt/agents-multi/entrypoint.sh
 COPY apps/node/probe.sh /usr/local/bin/node-probe

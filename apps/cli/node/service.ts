@@ -10,6 +10,17 @@ import { getSecret } from "../../../shared/mcp/lib/vault.ts";
 import type { Announce, Job, NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 import type { PhoneAnswer } from "../../../shared/mcp/lib/webauthn.ts";
 
+/** A call the service refused: its HTTP status and the JSON it answered (`cancelled: true` on a turn stopped). */
+export class ServiceError extends Error {
+  constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
+    super(message);
+  }
+}
+
+/** Whether an error is the service saying the turn was cancelled (409 with `cancelled: true`). */
+export const isCancelled = (e: unknown): boolean =>
+  e instanceof ServiceError && e.status === 409 && e.body.cancelled === true;
+
 export interface Service {
   url: string;
   /** `timeout` in ms (15 s by default; a long poll asks for more), `signal` to give up when this machine stops */
@@ -17,6 +28,8 @@ export interface Service {
   /** A GET whose body is read as it arrives (Server-Sent Events), with the same token; no overall timeout, `signal`
    *  ends it. Absent on the stand-ins of tests that never stream. */
   stream?(path: string, signal: AbortSignal): Promise<Response>;
+  /** A GET of a file (a voice note's audio), with its type. Absent on the stand-ins of tests that fetch none. */
+  bytes?(path: string, o?: { timeout?: number; signal?: AbortSignal }): Promise<{ type: string; data: Uint8Array }>;
 }
 
 /** Where this machine keeps its node token: a file only the user reads, never synced. */
@@ -65,8 +78,21 @@ export async function service(
           : AbortSignal.timeout(o.timeout ?? 15_000),
       });
       const j = await r.json().catch(() => ({})) as Record<string, unknown>;
-      if (!r.ok) throw new Error(`${method} ${path}: ${j.error ?? `HTTP ${r.status}`}`);
+      if (!r.ok) throw new ServiceError(`${method} ${path}: ${j.error ?? `HTTP ${r.status}`}`, r.status, j);
       return j as unknown as T;
+    },
+    async bytes(path: string, o: { timeout?: number; signal?: AbortSignal } = {}) {
+      const r = await fetcher(`${base}${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: o.signal
+          ? AbortSignal.any([o.signal, AbortSignal.timeout(o.timeout ?? 60_000)])
+          : AbortSignal.timeout(o.timeout ?? 60_000),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({})) as Record<string, unknown>;
+        throw new ServiceError(`GET ${path}: ${j.error ?? `HTTP ${r.status}`}`, r.status, j);
+      }
+      return { type: r.headers.get("content-type") ?? "", data: new Uint8Array(await r.arrayBuffer()) };
     },
     stream: (path: string, signal: AbortSignal) =>
       fetcher(`${base}${path}`, { headers: { authorization: `Bearer ${token}`, accept: "text/event-stream" }, signal }),

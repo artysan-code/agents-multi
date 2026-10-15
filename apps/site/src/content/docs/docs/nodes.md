@@ -45,6 +45,26 @@ in with a browser, stays for scripts.
   phone's; the node then checks the endorsement, the passkey's signature and its expiry before it answers
   anything, so the service can carry the answer but never make one count.
 
+## Voice notes
+
+From the phone you can record a voice note (up to five minutes) instead of typing. The service keeps the audio only
+until the turn ends; a machine of yours transcribes it and answers. Only a machine that can transcribe takes a
+voice note, so set that up on the machine that answers:
+
+```bash
+agents node voice
+```
+
+It looks for whisper.cpp's `whisper-cli`, a multilingual `ggml-*.bin` model (the small one is the best compromise
+on a CPU) and ffmpeg in the usual places and saves what it finds in this machine's `node.json`; `--bin` and
+`--model` name them by hand, `--off` turns voice off. The node then announces that it takes voice notes. It
+converts the recording to 16 kHz mono WAV in a temporary folder, transcribes it locally in your account's
+language, with an empty environment (no secrets) and, on a server, with no network, shows the text as your
+question and answers it. Nothing is sent to a speech service.
+
+On the server image whisper.cpp is built in (CPU only, at a pinned commit). `agents node setup` offers to
+download a model into the volume and checks its SHA-256 before it keeps it.
+
 ## The console's chat
 
 When this machine is a node, the console's Chat uses the service too: a question becomes a turn pinned to this
@@ -68,6 +88,16 @@ taken runs as a one-shot routine, under the same run policy, limits and reviewer
 While a run works, its node pushes the branch `agent/<id>` and its handoffs (`refs/agents/<id>`). A node
 silent for ten minutes loses its running jobs, and a proposal to resume each one on another node — a clone of the
 same remote — waits for you.
+
+## Forgetting a machine
+
+```bash
+agents nodes forget <name>
+```
+
+(or _Machines_ in the web app) drops the node, what waits on it and its pending answers, gives the turns it held
+back to your other machines and revokes the tokens named after it. A forgotten machine cannot come back until it is
+paired again.
 
 ## A server node
 

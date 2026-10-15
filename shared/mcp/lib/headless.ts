@@ -29,10 +29,26 @@ export interface NodeConfig {
   approvalKey?: string;
   /** the repositories a server clones when it is set up (`agents node setup`): their remotes */
   repos: string[];
+  /** this machine transcribes voice notes: whisper.cpp's `whisper-cli` and a ggml model (`agents node voice`) */
+  voice?: VoiceConfig;
+}
+
+export interface VoiceConfig {
+  bin: string;
+  model: string;
+}
+
+/** Pure: a path a voice setting may hold: absolute or under `~/`, no control characters, no way out by `..`. */
+export function voicePath(v: unknown): string | null {
+  if (typeof v !== "string" || v.length > 500) return null;
+  if (!(v.startsWith("/") || v.startsWith("~/"))) return null;
+  if ([...v].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)) return null;
+  if (v.split("/").includes("..")) return null;
+  return v;
 }
 
 /** What is this machine's alone: the rest of a node's settings is the owner's. */
-export const MACHINE_FIELDS = ["enabled", "headless", "name", "maxSessions"] as const;
+export const MACHINE_FIELDS = ["enabled", "headless", "name", "maxSessions", "voice"] as const;
 
 /** What a headless child's commands may reach by default: the code hosts and package registries a build needs. */
 export const DEFAULT_DOMAINS = [
@@ -64,6 +80,9 @@ export function cleanNodeConfig(raw: unknown): NodeConfig {
   if (typeof r.maxSessions === "number" && Number.isInteger(r.maxSessions) && r.maxSessions >= 0) {
     out.maxSessions = Math.min(r.maxSessions, 64);
   }
+  const v = (r.voice && typeof r.voice === "object" ? r.voice : {}) as Record<string, unknown>;
+  const bin = voicePath(v.bin), model = voicePath(v.model);
+  if (bin && model) out.voice = { bin, model };
   if (typeof r.approvalKey === "string" && /^[\w-]{43}$/.test(r.approvalKey)) out.approvalKey = r.approvalKey;
   return out;
 }
