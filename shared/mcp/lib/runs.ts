@@ -782,6 +782,9 @@ export function fillPlan(p: Plan, vars: Record<string, string> = {}): Plan {
 
 const WORKFLOW_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
+/** Pure: whether a `--workflow` value names a saved workflow (else it is a plan file's path). */
+export const isWorkflowName = (s: string): boolean => WORKFLOW_NAME.test(s);
+
 /** Pure: a saved workflow's SKILL.md — the frontmatter Claude's skills have, the steps as prose, the plan. */
 export function skillText(name: string, description: string, p: Plan, notes = ""): string {
   const steps = p.steps.map((s) =>

@@ -224,3 +224,5 @@ letters, digits and `-`; the project's wins on a name.
   <name> --var k=v` is the owner's own act in a terminal and starts at once.
 - Example: `config.example/workflows/review-and-fix/`, copied by `agents init`.
 - Pure parts (`planOfSkill`, `placeholdersOf`, `fillPlan`, `skillText`) in `shared/mcp/lib/runs.ts`.
+- A routine's `--workflow` (and `routine_add`'s `workflow` + `vars`) takes a saved workflow by name as well as a
+  plan file; the placeholders (and `{{task}}`) are checked when the routine is added, not when it fires.

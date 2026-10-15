@@ -386,7 +386,7 @@ doctor says why.
 ### Routines and the run policy
 
 A **routine** is a job that runs when you are not there: a child (`--profile`, a task) or a saved plan
-(`--workflow plan.json`, with `{{task}}` in its prompts) in a git repository under home, started by a trigger:
+(`--workflow plan.json`, with `{{task}}` in its prompts, or the name of a saved workflow with `--var k=v` for its placeholders: a missing one is refused when you add it) in a git repository under home, started by a trigger:
 `--at 02:00` (the next 02:00; or `2026-10-15T02:00`, `+90m`), `--cron "0 9 * * 1-5"` (local time), or
 `--on run-done|run-failed [--plan name]` (a workflow run of the project ending). Each is a file in the hub's
 state; the console's backend ticks over them every 15 seconds, so they survive restarts. `agents routine

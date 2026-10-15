@@ -38,7 +38,7 @@ import {
 } from "./limitrules.ts";
 import { DENY_TOOLS, isolate, loadPolicy, type Policy } from "./policy.ts";
 import { listAccounts, type ProviderName } from "./providers.ts";
-import { listRuns, type Plan, readRun, startRun } from "./runs.ts";
+import { isWorkflowName, listRuns, loadWorkflow, type Plan, readRun, startRun } from "./runs.ts";
 
 export type Trigger =
   | { kind: "cron"; expr: string }
@@ -48,7 +48,9 @@ export type Trigger =
 
 export type Action =
   | { kind: "agent"; profile: string; provider?: ProviderName; task: string; model?: string }
-  | { kind: "workflow"; plan: string; task?: string };
+  /** `plan`: a plan.json (path) or the name of a saved workflow (project first, then the owner's); `vars` fill its
+   *  `{{placeholders}}`, `task` is `{{task}}` */
+  | { kind: "workflow"; plan: string; task?: string; vars?: Record<string, string> };
 
 export interface Routine {
   id: string;
@@ -265,6 +267,9 @@ export async function addRoutine(
       },
     };
   }
+  if (i.action.kind === "workflow" && isWorkflowName(i.action.plan)) {
+    await routinePlan({ action: i.action, folder }, config); // a missing workflow or placeholder is an error now
+  }
   const label = i.name?.trim() ||
     (i.action.kind === "agent" ? i.action.task : i.action.plan.split("/").pop() ?? "routine");
   const r: Routine = {
@@ -342,6 +347,21 @@ export function planIn(
   };
 }
 
+/** The plan of a workflow routine: the file, or the saved workflow by name with its placeholders filled
+ *  (`{{folder}}` is the routine's folder, `{{task}}` its task). Throws what is missing. */
+export async function routinePlan(
+  r: { action: Extract<Action, { kind: "workflow" }>; folder: string },
+  config?: string,
+): Promise<Plan> {
+  const a = r.action;
+  if (isWorkflowName(a.plan)) {
+    const vars = { ...a.vars, ...(a.task ? { task: a.task } : {}) };
+    return (await loadWorkflow(a.plan, r.folder, vars, config)).plan;
+  }
+  const file = a.plan.replace(/^~(?=\/|$)/, Deno.env.get("HOME") ?? "");
+  return JSON.parse(await Deno.readTextFile(file.startsWith("/") ? file : `${r.folder}/${file}`)) as Plan;
+}
+
 /** Starts a routine's work now: its worktree and branch under the policy, then the child or the run, as
  *  the project's with no coordinator. Returns what it started. */
 export async function fire(r: Routine, p?: Policy): Promise<Fired> {
@@ -365,9 +385,7 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
     });
     out.child = m.id;
   } else {
-    const home = Deno.env.get("HOME") ?? "";
-    const file = r.action.plan.replace(/^~(?=\/|$)/, home);
-    const plan = JSON.parse(await Deno.readTextFile(file.startsWith("/") ? file : `${r.folder}/${file}`)) as Plan;
+    const plan = await routinePlan({ action: r.action, folder: r.folder });
     out.run = await startRun(planIn(plan, r.project, iso.path, r.action.task), undefined, undefined, owner);
   }
   return out;
@@ -455,10 +473,7 @@ export interface Deps {
 
 const planOf = async (r: Routine): Promise<Plan | undefined> => {
   if (r.action.kind !== "workflow") return undefined;
-  const file = r.action.plan.replace(/^~(?=\/|$)/, Deno.env.get("HOME") ?? "");
-  return await Deno.readTextFile(file.startsWith("/") ? file : `${r.folder}/${file}`).then(JSON.parse).catch(() =>
-    undefined
-  );
+  return await routinePlan({ action: r.action, folder: r.folder }).catch(() => undefined);
 };
 
 export const realDeps = (notify: Deps["notify"], log: Deps["log"]): Deps => ({
