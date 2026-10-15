@@ -15,10 +15,11 @@ Each version is on the [GitHub releases](https://github.com/artysan-code/agents-
 | System           | File                                  | Install                                                    |
 | ---------------- | ------------------------------------- | ---------------------------------------------------------- |
 | Debian, Ubuntu   | `agents-multi_<version>_amd64.deb`    | `sudo apt install ./agents-multi_<version>_amd64.deb`      |
+| Fedora, openSUSE | `agents-multi-<version>-1.x86_64.rpm` | `sudo dnf install ./agents-multi-<version>-1.x86_64.rpm` (stable versions only)   |
 | Arch             | the AUR package `agents-multi-bin`    | not published yet: take the AppImage meanwhile             |
-| Anywhere else (Fedora, openSUSE too) | `agents-multi_<version>_amd64.AppImage` | `chmod +x` it and run it |
+| Anywhere else    | `agents-multi_<version>_amd64.AppImage` | `chmod +x` it and run it                                 |
 
-The deb brings WebKitGTK as a dependency; the AppImage needs it on the system
+The deb and the rpm bring WebKitGTK as a dependency; the AppImage needs it on the system
 (`webkit2gtk-4.1`). Put the AppImage where it will stay, for example `~/Applications/`: updates
 replace that file in place, and after the first run it is in your application menu.
 

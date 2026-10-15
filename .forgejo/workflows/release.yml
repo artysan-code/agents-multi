@@ -5,7 +5,8 @@
 #
 # `brain-image`: the brain's image on GHCR, after `app` (below).
 #
-# `app`: the desktop app. The static gate, then the Linux bundles (deb, rpm, AppImage) signed for the updater,
+# `app`: the desktop app. The static gate, then the Linux bundles (deb, rpm, AppImage; no rpm for a beta
+# or an rc) signed for the updater,
 # uploaded to the GitHub release of the tag, then the site's update manifests moved to the version and
 # committed on `release`; the site that serves them is in the brain's image (`brain-image`). A stable
 # version also renders the AUR package there, and pushes it when the AUR key is set.
@@ -144,7 +145,10 @@ jobs:
           deno eval 'import { uiCommand } from "./apps/cli/ui.ts"; Deno.exit(await uiCommand(["build"]));'
           cd apps/desktop
           pnpm install --frozen-lockfile
-          pnpm release
+          # a beta or an rc has no rpm: the rpm writer refuses a version with a hyphen (ADR 0004)
+          bundles=()
+          [[ "$VERSION" != *-* ]] || bundles=(--bundles deb,appimage)
+          pnpm release "${bundles[@]}"
           cd ../..
           deno run --allow-read --allow-write scripts/app-release.ts prepare \
             apps/desktop/src-tauri/target/release/bundle dist-app

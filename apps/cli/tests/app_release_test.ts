@@ -7,10 +7,12 @@ import {
   assetPlan,
   bundleKind,
   configProblems,
+  kindsFor,
   type Manifest,
   manifestFor,
   nextChannels,
   older,
+  PUBLISHED,
   retryable,
 } from "../../../scripts/app-release.ts";
 import { DEPENDS, type Package, packageProblems, pkgbuild, srcinfo } from "../../../scripts/aur.ts";
@@ -35,6 +37,13 @@ Deno.test("app release: bundles are found by kind and published under the same n
   assertEquals(assetName("deb", "1.0.0"), "agents-multi_1.0.0_amd64.deb");
   assertEquals(assetName("rpm", "1.1.0-beta.2"), "agents-multi-1.1.0~beta.2-1.x86_64.rpm");
   assertEquals(assetName("appimage", "1.0.0"), "agents-multi_1.0.0_amd64.AppImage");
+});
+
+Deno.test("app release: a stable version publishes the deb, the rpm and the AppImage, a beta or an rc no rpm", () => {
+  assertEquals(PUBLISHED, ["deb", "rpm", "appimage"]);
+  assertEquals(kindsFor("1.2.1"), ["deb", "rpm", "appimage"]);
+  assertEquals(kindsFor("1.2.1-beta.2"), ["deb", "appimage"]);
+  assertEquals(kindsFor("1.2.1-rc.1"), ["deb", "appimage"]);
 });
 
 Deno.test("app release: the manifest has one platform per package kind, and the AppImage for the rest", () => {

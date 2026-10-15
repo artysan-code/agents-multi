@@ -24,9 +24,8 @@ everything it runs, then says what changed.
   `requireSignedVersion`: the signature's trusted comment carries the version (the Tauri CLI writes
   `version:` there), so a tampered manifest cannot pair a version number with another release's file.
 - **The bundle identifier** stays where ADR 0003 put it. Nothing here repeats it: the assets are named
-  `agents-multi_<version>_amd64.deb` and `agents-multi_<version>_amd64.AppImage` whatever the
-  identifier (an rpm, `agents-multi-<version>-1.x86_64.rpm` with a beta's `~beta.N`, is left out for
-  now: Tauri's rpm writer took 13 of the release build's 21 minutes), and the AUR script reads it from
+  `agents-multi_<version>_amd64.deb`, `agents-multi-<version>-1.x86_64.rpm` (a beta's `~beta.N`) and
+  `agents-multi_<version>_amd64.AppImage` whatever the identifier, and the AUR script reads it from
   `tauri.conf.json`. Changing it before 1.0 is still that one change (ADR 0003); after 1.0 it moves the
   app's folders and package names, so it does not change.
 
@@ -190,3 +189,40 @@ built with it must be reinstalled by hand from a release, and the release notes 
   cache; the CI job on pushes stays as it was.
 - Before 1.0: fill `release.json` and the public key, set the secrets, create the GitHub repository and
   its mirror, decide the identifier (ADR 0003) and the licence.
+
+## Amendment (2026-10-15): the rpm is back
+
+The rpm was left out on 2026-10-08 because Tauri's rpm writer took about 90 s at any compression level
+(13 of the release build's 21 minutes on the runner), except with no compression (3 s, but 141 MB).
+
+**Cause.** Not the compression: the `rpm` crate 0.16 that the Tauri CLI's bundler (`tauri-bundler`
+2.10.1, inside `@tauri-apps/cli` 2.12.1) uses. Its `Sha256Writer` hashes the whole buffer it is given
+and then passes it on, and the compressor takes only a few tens of KB per `write`; the cpio writer is
+handed each file whole, so `write_all` calls it again with the remainder and every call hashes the
+remainder again. The work is quadratic in the size of the largest file (the 96 MB Deno sidecar), and
+only a writer that swallows everything in one call, `Compressor::None`, escapes it. Measured with
+`rpm` 0.16.1 on one 192 MB file: none 0.3 s, gzip 1 79 s, gzip 6 67 s, zstd 1 64 s (`gzip -1` itself:
+1.6 s). `rpm` 0.30.2, which `tauri-bundler` 2.10.3 (CLI 2.12.3, 2026-10-14) uses, rewrote the builder
+and no longer has the wrapper: none 1.1 s, gzip 6 2.7 s, zstd 3 1.3 s (80 MB).
+
+**Choice.** Bump `@tauri-apps/cli` to 2.12.3 (pinned in `apps/desktop/package.json` and its lock) and keep
+the `zstd` level 3 setting, the smallest of the fast ones. One version number, no new job, tool or step.
+
+- _An rpm job of its own in parallel:_ the rpm needs the compiled binary, so the job repeats the Rust
+  build or passes artifacts around, and the manifests wait for both: more moving parts for the same bug.
+- _Another tool (nfpm, pinned by version and checksum):_ works on any version, but is a second packager
+  to pin, with its own naming, signing for the updater and dependency list to keep in step with Tauri's.
+- _No compression:_ 3 s but 141 MB downloaded for every update.
+
+The `PUBLISHED` kinds in `scripts/app-release.ts` are `deb`, `rpm`, `appimage` again. The Tauri crates in
+`Cargo.lock` stay at 2.12.1: only the CLI that packs the bundles changes.
+
+**Measured** (`tauri bundle --bundles rpm` on the built app, zstd 3, 50 MB rpm, 16-core workstation): CLI
+2.12.1 56 s, CLI 2.12.3 1.3 s. The release build on the runner loses the 13 minutes it had.
+
+**Betas and release candidates have no rpm.** `rpm` 0.30 validates the version and refuses a hyphen
+(`1.2.1-rc.1`), which 0.16 let through. Writing the rpm with another version would put that version in
+the updater's signature, and `requireSignedVersion` would then reject it against the manifest's.
+`kindsFor(version)` drops the rpm for them, the workflow builds `--bundles deb,appimage` for a tag with a
+hyphen, and `prepare` asks for the same kinds. An rpm install that follows the beta channel gets no beta
+update (the manifest has no `linux-x86_64-rpm` entry); Fedora and openSUSE testers take the AppImage.
