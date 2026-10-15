@@ -20,7 +20,7 @@ import { run } from "./lib/proc.ts";
 import { doctor } from "./doctor/index.ts";
 import { notifyDoctor } from "./notify.ts";
 import { install } from "./install.ts";
-import { init } from "./init.ts";
+import { configMove, init } from "./init.ts";
 import { syncAllSettings } from "./settings.ts";
 import { printStatus, status } from "./status.ts";
 import { describe, plan } from "./mcp/apply.ts";
@@ -59,6 +59,13 @@ globalThis.addEventListener("unhandledrejection", (e) => {
 switch (cmd) {
   case "init":
     Deno.exit(await init(rest));
+    break;
+  case "config":
+    if (rest[0] !== "move") {
+      console.error("usage: agents config move");
+      Deno.exit(2);
+    }
+    Deno.exit(await configMove());
     break;
   case "install":
     Deno.exit(flag("--app") ? await installApp({ dry: flag("--dry-run") }) : await install(flag("--dry-run")));
@@ -291,6 +298,7 @@ switch (cmd) {
     console.log(`agents-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
 
   init    <folder> [--name N] [--language L] [--brain URL]   your configuration (profiles, accounts, rules, preferences), linked from ~/.agents-multi/config
+  config  move                the configuration into ~/agents-multi-config, a Syncthing folder of its own (ADR 0013)
   install [--app] [--dry-run] materialise runtime, wrappers, units and desktop entries (idempotent);
           --app: from the desktop app's code, which becomes the runtime's copy (what the app runs)
   doctor  [--probe] [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only;

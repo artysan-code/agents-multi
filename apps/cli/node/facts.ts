@@ -9,7 +9,7 @@ import {
   presentFrom,
   sessionCap,
 } from "../../../shared/mcp/lib/nodes.ts";
-import { loadNodeConfig, type NodeConfig } from "../../../shared/mcp/lib/headless.ts";
+import { claudeToken, loadNodeConfig, type NodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { listChildren } from "../../../shared/mcp/lib/agents.ts";
 import { listAccounts } from "../../../shared/mcp/lib/providers.ts";
 import { loadKey } from "../../../shared/mcp/lib/vault.ts";
@@ -53,14 +53,16 @@ async function present(): Promise<boolean> {
   return presentFrom(shown.filter((s): s is string => !!s));
 }
 
-/** The accounts this machine can run: each with its login's file in place. */
-async function loggedIn(): Promise<string[]> {
+/** The accounts this machine can run: each with its login's file in place, or, a Claude account on a headless
+ *  node, its long-lived token in the vault (ADR 0013). */
+async function loggedIn(headless: boolean): Promise<string[]> {
   const out: string[] = [];
   for (const a of await listAccounts(CONFIG)) {
     const file = a.provider === "claude"
       ? `${RUNTIME}/${a.profile}/.credentials.json`
       : `${RUNTIME}/${a.profile}/codex/auth.json`;
     if (await lstat(file)) out.push(a.id);
+    else if (headless && a.provider === "claude" && await claudeToken(a.profile)) out.push(a.id);
   }
   return out;
 }
@@ -107,7 +109,7 @@ export async function nodeFacts(cfg: NodeConfig, sandbox: boolean | null): Promi
     memFree: mem.free,
     cap: sessionCap(mem.total, cfg.maxSessions),
     running: await running(),
-    accounts: await loggedIn(),
+    accounts: await loggedIn(cfg.headless),
     present: cfg.headless ? false : await present(),
     sandbox,
   };

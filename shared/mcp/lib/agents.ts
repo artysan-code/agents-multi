@@ -23,7 +23,7 @@ import { configDir } from "./owner.ts";
 import { myCoordinator, type Proc, procAlive, type ProcReader, procReader, sameStart } from "./proc.ts";
 import { spawnDetached } from "./platform.ts";
 import { launcherOf, type ProviderName, providers } from "./providers.ts";
-import { childSettings } from "./headless.ts";
+import { childEnv, childSettings } from "./headless.ts";
 
 export { launcherOf, type ProviderName };
 
@@ -777,12 +777,23 @@ export async function startChild(
   });
   const script = [
     'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',
+    // a headless node's (ADR 0013): kept as shell variables, so that only Claude gets them, never the holder
+    'T="${AM_CLAUDE_TOKEN:-}"; H="${AM_HEADLESS:-}"; unset AM_CLAUDE_TOKEN AM_HEADLESS',
     'sleep infinity > "$R/in" & echo $! > "$R/holder.pid"',
     'cd "$W" || exit 1',
     'echo $$ > "$R/child.pid"',
+    // what outranks the account's token goes; the scrub keeps the token from what the child runs
+    "if [[ -n $H ]]; then unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; export CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1; fi",
+    'if [[ -n $T ]]; then export CLAUDE_CODE_OAUTH_TOKEN="$T"; fi; unset T H',
     exec.line,
   ].join("\n");
-  const env: Record<string, string> = { R: run, W: dir, V: CLAUDE_SESSION_VARS, ...exec.env };
+  const env: Record<string, string> = {
+    R: run,
+    W: dir,
+    V: CLAUDE_SESSION_VARS,
+    ...exec.env,
+    ...await childEnv(i.profile, name, config),
+  };
   await spawnDetached("bash", ["-c", script], { env });
   for (let t = 0; t < 50 && !(await childAlive(run)); t++) await new Promise((r) => setTimeout(r, 100));
   await send(run, userLine(i.task));

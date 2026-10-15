@@ -1,6 +1,6 @@
 # 0013 — A server node without a terminal: shared configuration, Claude's tokens in the vault, pairing
 
-- Status: proposed (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
+- Status: accepted 2026-10-15; part B built (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
 - Date: 2026-10-15
 
 ## Context
@@ -52,9 +52,11 @@ tokens in the vault and the configuration shared; then, in F2, pairing from the 
   - **`config/nodes.json`**, the owner's, the same everywhere: `allowedDomains`, `repoRoots`, `approvalKey`
     (and the repositories a server clones, below);
   - **`<state>/node.json`**, this machine's, never synced: `enabled`, `headless`, `maxSessions`, `name`.
-- Migration: the first run that finds the old `config/node.json` takes the shared fields into `nodes.json` and
-  the machine's fields into its own state file **only on the machine whose hostname the file names** (`name`, or
-  the machine that wrote it last, recorded); every other machine starts off. The old file is then removed.
+- Migration: the first run that finds the old `config/node.json` (the CLI or the console: an MCP server reads
+  it as it is) takes the shared fields into `nodes.json`, and the machine's fields into its own state file **only
+  when the configuration is in no Syncthing folder** (no `.stfolder` above it): there it was this machine's
+  alone. In a synced configuration it was every machine's, so none keeps it, and each is turned on again with
+  `agents node enable` where it should be. The old file is then removed.
 - `agents serve --headless` keeps refusing to start unless this machine's file says `headless`.
 
 ### Claude on a server: a long-lived token per account, in the vault
@@ -118,8 +120,15 @@ _Legal and compliance_):
   of what it starts — Bash commands, hooks, stdio MCP servers — and keeps them for its own requests (it also
   puts Bash in a PID namespace of its own on Linux). Credentials are recognised by name or value; the token
   is not named in the documented table. So: **every headless child gets the scrub on**, and agentd's probe
-  checks it for real — at start, a child with a throwaway token runs `env` through its Bash tool and the node
-  takes no job if `CLAUDE_CODE_OAUTH_TOKEN` is there. Failing closed, as the sandbox does.
+  checks it for real, at start and every hour with the sandbox's (`agents node probe`): Claude Code started as a
+  child is, with a throwaway token, the scrub, a credential canary (`NPM_TOKEN`) and a plain variable, runs a
+  SessionStart hook that counts what it sees; the hook runs before any request, so the probe spends nothing (the
+  request is refused: the token is not real). The node takes no job unless the hook saw the plain variable and
+  neither the token nor the canary. Failing closed, as the sandbox does. Measured on Claude Code 2.1.300: the
+  token never reaches a hook, even without the scrub; the scrub removes the canary. The Bash tool goes through
+  the same scrub, but checking it needs a model request: done once by hand on the first real token.
+- **Where it runs**: Claude Code leaves files where it starts (empty `.env*` and `package.json` were found in the
+  folder of the first manual probe); the probe runs in its own temporary folder, removed after.
 - **Other ways out**: the children's MCP servers are the gateway's (HTTP), started by agentd without the token;
   the sandbox denies reads of the vault folder, the vault key file and the node token; sandboxed commands reach
   only `allowedDomains`; only agentd pushes. What remains is the child's own Read and Edit tools, held by deny
@@ -129,6 +138,10 @@ _Legal and compliance_):
   ordinary use of Claude Code and native applications, and says products and other people's use go through an
   API key. A node runs the owner's own work with the official CLI: that is the first case. An organisation that
   serves other people from its nodes uses API keys (ADR 0009, «only official CLIs»).
+- **How a child gets it**: the start script clears every `CLAUDE_CODE_*` it inherited (a Claude session's), so
+  the token and the scrub are handed to it under names of ours, kept as shell variables (the holder process it
+  starts does not inherit them) and exported just before Claude runs, with `ANTHROPIC_API_KEY` and
+  `ANTHROPIC_AUTH_TOKEN` removed.
 - **Not documented, to measure on the first token**: whether the status line's `rate_limits` and `/usage` read
   a token's limits as they read a `/login`'s (the limits manager of ADR 0010 depends on it); how many tokens one
   account may hold and how one is revoked (the docs say only: make a new one and restart).

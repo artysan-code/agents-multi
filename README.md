@@ -437,8 +437,9 @@ permission syntax:
 ### Nodes: work that moves between machines
 
 Every machine's console is a node of **the service** — the brain, which also keeps your machines and the jobs
-placed on them ([ADR 0012](docs/adr/0012-agentd-and-the-service.md)). `agents node enable` turns it on
-(`config/node.json`); `agents node` shows what it announces, `agents nodes` every machine and job the service
+placed on them ([ADR 0012](docs/adr/0012-agentd-and-the-service.md)). `agents node enable` turns this machine
+on (`~/.local/state/agents-multi/node.json`, this machine's alone; what is the same everywhere — where the clones
+are, what a command may reach — is `config/nodes.json`); `agents node` shows what it announces, `agents nodes` every machine and job the service
 sees, and `agents nodes accept <job>` signs one.
 
 - **Outbound only.** Every 30 s the node tells the service its load, its session cap (from its memory, or
@@ -451,9 +452,14 @@ sees, and `agents nodes accept <job>` signs one.
 - **Resume from the branch.** While a run works, the node pushes its branch `agent/<id>` and its HANDOFFs
   (`refs/agents/<id>`); a node silent for ten minutes loses its running jobs, and a proposal to resume each on
   another node (a clone of the same remote under `repoRoots`) waits for your yes.
-- **A server** runs `agents serve --headless` (after `agents node enable --headless`): no page, every child in
-  Claude Code's Bash sandbox, failing closed (`agents node probe`); only the node pushes. With no keyring there,
-  `agents vault pair --file` keeps the vault key in a file only you read.
+- **A server** runs `agents serve --headless`: no page, every child in Claude Code's Bash sandbox, failing closed
+  (`agents node probe`); only the node pushes. It is given your configuration and the vault, read only, as
+  Syncthing folders of their own (`agents config move` puts the configuration in `~/agents-multi-config`), and
+  set up by one command in its terminal, `agents node setup` ([ADR 0013](docs/adr/0013-a-server-node-without-a-terminal.md)).
+  Nobody signs in to Claude there: `agents node token <profile>`, on your desktop, puts a one-year token of that
+  account (`claude setup-token`) in the vault, and the node gives it to that account's children only, with Claude
+  Code's subprocess scrub keeping it from what they run (checked before the node takes work). Such a token makes
+  model requests only: no claude.ai connectors on a server.
 
 ## Consumption
 

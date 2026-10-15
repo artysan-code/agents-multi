@@ -62,9 +62,12 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
  *  the owner's, no page served to anyone, and the code moves with the image, not with the update check. */
 export const DESKTOP_ONLY = new Set(["console.ui", "app.version", "app.autostart", "zshrc", "update.check"]);
 
-/** Pure: the findings that apply to this machine: on a headless node, the desktop's ones are left out. */
+/** Pure: the findings that apply to this machine: on a headless node, the desktop's ones are left out, and so are
+ *  settings Claude changed there to adopt: its configuration is the owner's, read only (ADR 0013). */
 export const forMachine = (checks: Check[], headless: boolean): Check[] =>
-  headless ? checks.filter((c) => !DESKTOP_ONLY.has(c.id)) : checks;
+  headless
+    ? checks.filter((c) => !DESKTOP_ONLY.has(c.id) && !(c.status === "warn" && /^profile\..+\.settings$/.test(c.id)))
+    : checks;
 
 /**
  * Runs every check group against this machine and returns the verdicts, in a stable order.

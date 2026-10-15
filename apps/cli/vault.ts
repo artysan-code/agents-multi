@@ -28,7 +28,8 @@ import {
 } from "../../shared/mcp/lib/vault.ts";
 import { amEnv } from "../../shared/mcp/lib/env.ts";
 
-async function readStdin(prompt: string): Promise<string> {
+/** A secret from the terminal, not echoed (or from stdin when it is not a terminal). */
+export async function readStdin(prompt: string): Promise<string> {
   if (Deno.stdin.isTerminal()) {
     await Deno.stdout.write(new TextEncoder().encode(prompt));
     // no echo while a secret is typed

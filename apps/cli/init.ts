@@ -5,10 +5,11 @@
 //   agents init ~/personal/claude-multi-config --name Ann --language Italian [--id ann]
 //   agents init <existing folder>     only link it (a second machine)
 //   agents init ~/config --name Ann --brain https://brain.example   a server node: the brain's account comes too
+//   agents config move                 the configuration into ~/agents-multi-config, a Syncthing folder of its own
 
 import { lstat, readlink } from "./lib/fs.ts";
 import { ANSI } from "./lib/output.ts";
-import { CONFIG as CONFIG_DEFAULT, expandHome, REPO, shortHome } from "./lib/paths.ts";
+import { CONFIG as CONFIG_DEFAULT, expandHome, HOME, REPO, shortHome } from "./lib/paths.ts";
 
 /** Pure: an owner id from a name — lower case, letters and digits only. */
 export function idFrom(name: string): string {
@@ -98,6 +99,54 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
   }
   console.log(
     `\nNext: agents install, then agents vault init, then claude in each profile to sign in (README › First run).`,
+  );
+  return 0;
+}
+
+/** Where the configuration lives since 1.2.1 (ADR 0013): a Syncthing folder of its own, so that a server node can
+ *  be given it alone, read only, as it is given the vault. */
+export const CONFIG_HOME = `${HOME}/agents-multi-config`;
+
+/** `agents config move`: the configuration into its own folder, and the link pointed there. On the first machine
+ *  it is copied (the old folder is left, for the others); on a machine where Syncthing has already brought it,
+ *  only the link moves. */
+export async function configMove(CONFIG = CONFIG_DEFAULT, to = CONFIG_HOME): Promise<number> {
+  const cur = await lstat(CONFIG);
+  if (!cur?.isSymlink) {
+    console.error(`${ANSI.r}✗${ANSI.x} ${shortHome(CONFIG)} is not a link to a configuration: agents init first`);
+    return 1;
+  }
+  const from = await readlink(CONFIG) ?? "";
+  if (from === to) {
+    console.log(`${ANSI.d}${shortHome(CONFIG)} already links to ${shortHome(to)}${ANSI.x}`);
+    return 0;
+  }
+  if (await lstat(`${to}/owner.json`)) {
+    console.log(
+      `${ANSI.d}${shortHome(to)} already holds the configuration (Syncthing brought it): only linking it${ANSI.x}`,
+    );
+  } else {
+    const there = await Array.fromAsync(Deno.readDir(to)).catch(() => []);
+    if (there.some((e) => e.name !== ".stfolder" && e.name !== ".stignore")) {
+      console.error(`${ANSI.r}✗${ANSI.x} ${shortHome(to)} holds something else: move it away first`);
+      return 1;
+    }
+    await copyTree(from, to);
+    console.log(`${ANSI.g}+${ANSI.x} configuration copied: ${shortHome(from)} → ${shortHome(to)}`);
+  }
+  // the new link beside the old one, then over it: never a moment with none
+  await Deno.remove(`${CONFIG}.new`).catch(() => {});
+  await Deno.symlink(to, `${CONFIG}.new`);
+  await Deno.rename(`${CONFIG}.new`, CONFIG);
+  console.log(`${ANSI.g}+${ANSI.x} ${shortHome(CONFIG)} → ${shortHome(to)}`);
+  console.log(
+    `\nNext: make ${
+      shortHome(to)
+    } a Syncthing folder of its own, shared with your machines (and, trusted and receive\n` +
+      `only, with a server node); run \`agents config move\` on each of your machines. ${
+        shortHome(from)
+      } is left as it\n` +
+      `was: remove it when every machine links the new one.`,
   );
   return 0;
 }

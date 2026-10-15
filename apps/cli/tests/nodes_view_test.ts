@@ -152,15 +152,30 @@ Deno.test("doctor node: only loopback on our ports; the key file the user's alon
   assertEquals(ids(nodeFindings({ ...ready, vault: false })).at(-1), "node.vault:warn");
   assertEquals(ids(nodeFindings({ ...ready, vault: true })).at(-1), "node.vault:ok");
   assertEquals(ids(nodeFindings({ ...ready, vault: null })).at(-1), "node.token:ok");
+  assertEquals(ids(nodeFindings({ ...ready, outranking: ["ANTHROPIC_API_KEY"] })).at(-1), "node.claude:warn");
 });
 
 Deno.test("doctor on a headless node: the desktop's findings are left out", async () => {
   const { forMachine } = await import("../doctor/index.ts");
-  const checks = ["console.ui", "zshrc", "node.sandbox", "app.version", "vault"].map((id) => ({
+  const checks = ["console.ui", "zshrc", "node.sandbox", "app.version", "vault", "profile.work.settings"].map((id) => ({
     id,
     status: "warn" as const,
     msg: id,
   }));
   assertEquals(forMachine(checks, true).map((c) => c.id), ["node.sandbox", "vault"]);
-  assertEquals(forMachine(checks, false).length, 5);
+  assertEquals(forMachine(checks, false).length, 6);
+});
+
+Deno.test("node setup: a clone's folder from its remote", async () => {
+  const { cloneName } = await import("../node/setup.ts");
+  assertEquals(cloneName("git@git.example:me/agents-multi.git"), "agents-multi");
+  assertEquals(cloneName("ssh://git@git.example:2222/me/site"), "site");
+  assertEquals(cloneName("https://github.com/me/tool.git/"), "tool");
+});
+
+Deno.test("node token: only a setup-token is taken", async () => {
+  const { isSetupToken } = await import("../node/command.ts");
+  assertEquals(isSetupToken("sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123"), true);
+  assertEquals(isSetupToken("sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123"), false);
+  assertEquals(isSetupToken("hello"), false);
 });

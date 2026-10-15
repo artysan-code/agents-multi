@@ -16,7 +16,7 @@ agents node
 agents nodes
 ```
 
-`agents node enable` scrive `config/node.json`; `agents node` mostra cosa annuncia questa macchina; `agents nodes`
+`agents node enable` accende solo questa macchina (un file suo, mai sincronizzato); `agents node` mostra cosa annuncia questa macchina; `agents nodes`
 mostra tutte le macchine e i job che il servizio vede.
 
 - **Solo in uscita.** Ogni 30 secondi il nodo dice al servizio il suo carico, quante sessioni può far girare
@@ -47,6 +47,21 @@ cioè un clone dello stesso remote.
 ## Un nodo server
 
 Un server esegue `agents serve --headless`: nessuna pagina, ogni figlio nella sandbox Bash di Claude Code, che
-se non parte blocca tutto (`agents node probe`), e solo il nodo fa push. Claude Code lì non ha bisogno di un
-desktop (il suo login è un file); ne ha bisogno solo la chiave del vault, quindi `agents vault pair --file` la
-tiene in un file che leggi solo tu. L'immagine del server è in `apps/node/` del repository, con i suoi passi.
+se non parte blocca tutto (`agents node probe`), e solo il nodo fa push. Riceve la tua configurazione e il vault
+in sola lettura, come due cartelle Syncthing a sé (`agents config move` mette la configurazione in
+`~/agents-multi-config`), e lo prepara un solo comando nel suo terminale:
+
+```bash
+agents node setup
+```
+
+Sul server nessuno fa login a Claude. Sul tuo desktop, una volta l'anno per account:
+
+```bash
+agents node token <profilo>
+```
+
+mette nel vault un token di lunga durata di quell'account (il `setup-token` di Claude Code); il nodo lo dà solo ai
+figli di quell'account, e prima di prendere lavoro controlla che quello che eseguono non possa vederlo. Un token
+così fa solo richieste al modello: niente connettori di claude.ai, i tuoi server MCP sì. L'immagine del server è
+in `apps/node/` del repository, con i suoi passi.

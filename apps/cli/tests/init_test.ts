@@ -47,3 +47,26 @@ Deno.test("init --brain: the account is written; a bad address writes nothing", 
     { service: "brain", name: "brain", url: "https://brain.example" },
   ]);
 });
+
+Deno.test("config move: copied and linked on the first machine, only linked where it is already", async () => {
+  const root = await Deno.makeTempDir();
+  const { init, configMove } = await import("../init.ts");
+  const CONFIG = `${root}/runtime/config`;
+  assertEquals(await configMove(CONFIG, `${root}/new`), 1); // no configuration yet
+  assertEquals(await init([`${root}/old`, "--name", "Ann"], CONFIG), 0);
+  assertEquals(await configMove(CONFIG, `${root}/new`), 0);
+  assertEquals(await Deno.readLink(CONFIG), `${root}/new`);
+  assert(await Deno.stat(`${root}/new/profiles/personal/profile.json`));
+  assert(await Deno.stat(`${root}/old/owner.json`)); // left for the other machines
+  assertEquals(await configMove(CONFIG, `${root}/new`), 0); // again: nothing to do
+  // a second machine: Syncthing brought the folder, only the link moves
+  const CONFIG2 = `${root}/runtime2/config`;
+  assertEquals(await init([`${root}/old`], CONFIG2), 0);
+  assertEquals(await configMove(CONFIG2, `${root}/new`), 0);
+  assertEquals(await Deno.readLink(CONFIG2), `${root}/new`);
+  // something else where the configuration would go: refused
+  await Deno.mkdir(`${root}/busy`);
+  await Deno.writeTextFile(`${root}/busy/x`, "");
+  assertEquals(await configMove(CONFIG2, `${root}/busy`), 1);
+  assertEquals(await Deno.readLink(CONFIG2), `${root}/new`);
+});

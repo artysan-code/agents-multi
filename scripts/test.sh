@@ -23,6 +23,9 @@ done
 
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
+# what a test writes in "this machine's state" (a node's file, the hub's runs) lands here, never in the real one
+export XDG_STATE_HOME="$out/state"
+mkdir -p "$XDG_STATE_HOME"
 deno test --quiet "${perms[@]}" "$@" "${serial[@]}" >"$out/serial" 2>&1 &
 s=$!
 deno test --quiet --parallel "${perms[@]}" "$@" "${pool[@]}" >"$out/pool" 2>&1 &

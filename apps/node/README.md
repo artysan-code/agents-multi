@@ -10,7 +10,7 @@ inside the container and failing closed when it cannot.
 | `compose.yaml`              | the service for Coolify: no capability, seccomp + AppArmor profiles, `systempaths=unconfined`, a memory limit                                                                                                                |
 | `seccomp.json`              | Docker's default profile (`moby/profiles` `seccomp/v0.2.4`) plus one rule: `clone`, `mount`, `pivot_root`, `umount2`, `unshare` without the capability; `setns` stays refused. `seccomp.sh` makes it (`--check` verifies it) |
 | `apparmor/agents-node`      | `docker-default` with `mount` and `pivot_root` allowed                                                                                                                                                                       |
-| `entrypoint.sh`, `probe.sh` | what runs at start; `node-probe` in the container tries what the sandbox needs                                                                                                                                               |
+| `entrypoint.sh`, `probe.sh` | what runs at start (it waits for the configuration and for `agents node setup`); `node-probe` in the container tries what the sandbox needs                                                                                  |
 
 No secret is in the image, in `compose.yaml` or in an environment variable: the Claude logins, the git key, the
 service token and the vault key file are made once in the container's terminal and live in its volume.
@@ -38,53 +38,49 @@ service token and the vault key file are made once in the container's terminal a
    names a profile the host does not have does not start: load it first. Docker's own `docker-default` would
    keep the sandbox from starting (`deny mount`): that is why this one exists.
 
-3. **The vault, on this server.** The vault (`~/agents-multi-vault` on your machines) is a Syncthing folder of
-   its own: share **that folder alone** with this server's Syncthing as a **trusted** device (no encryption
-   password), receive only, so the MCP servers of the node's jobs can open their accounts. The rest of your
-   Syncthing folders stay encrypted there. Its entries are sealed with the vault key; the key arrives in step 5.
-   Note the folder's path **on the host** (with Syncthing in Docker, inside its data volume:
-   `docker volume inspect -f '{{.Mountpoint}}' <its data volume>`), and make it the node's user's before anything
-   mounts it, or Docker makes it root's and Syncthing can no longer write there:
+3. **The vault and the configuration, on this server.** Both are Syncthing folders of their own on your machines:
+   `~/agents-multi-vault` and `~/agents-multi-config` (`agents config move` puts the configuration there, ADR 0013).
+   Share **those two alone** with this server's Syncthing as a **trusted** device (no encryption password),
+   receive only: the node runs your profiles, accounts and MCP servers, and its jobs open their accounts. The rest
+   of your Syncthing folders stay encrypted there. Note each folder's path **on the host** (with Syncthing in
+   Docker, inside its data volume: `docker volume inspect -f '{{.Mountpoint}}' <its data volume>`), and make each
+   the node's user's before anything mounts it, or Docker makes it root's and Syncthing can no longer write there:
    `install -d -o 1000 -g 1000 -m 700 <folder>`.
+
+   **Claude's accounts**: on your desktop, once a year per account, `agents node token <profile>` (Claude Code's
+   `setup-token`, one browser sign-in) puts a long-lived token in the vault. The node starts that account's
+   children with it; nobody signs in on the server.
 
 4. **Coolify: the service.** A new resource from the repository, _Docker Compose_, base directory `/apps/node`,
    compose file `/compose.yaml` (it builds the image from the repository's root). Variables: `NODE_MEMORY`
    (default `8g`; the node's session cap is `(memory − 2 GiB) / 1.5 GiB`, so 8g is 4 sessions), `NODE_NAME`,
-   `NODE_TIMEZONE`. Deploy: the container starts and waits, unconfigured. **The vault**: Coolify reads the
-   compose file itself and mounts the named volume `<uuid>_node-vault`, empty, whatever `NODE_VAULT_DIR` says;
-   once the vault has arrived, make that volume a bind of the folder of step 3, then deploy again (a deploy keeps
-   it):
+   `NODE_TIMEZONE`. Deploy: the container starts and waits. **The two folders**: Coolify reads the compose file
+   itself and mounts the named volumes `<uuid>_node-vault` and `<uuid>_node-config`, empty, whatever
+   `NODE_VAULT_DIR` and `NODE_CONFIG_DIR` say; once Syncthing has brought them, make each a bind of its folder,
+   then deploy again (a deploy keeps them):
 
    ```sh
-   sudo apps/node/vault-volume.sh <uuid>_node-vault <folder>
+   sudo apps/node/bind-volume.sh <uuid>_node-vault  <vault folder>
+   sudo apps/node/bind-volume.sh <uuid>_node-config <configuration folder>
    ```
 
-   Without Coolify, `NODE_VAULT_DIR=<folder> docker compose up -d --build` in this folder mounts it directly.
-   With neither, the node has no vault and runs no job that needs a service's secret (the doctor's `node.vault`
-   says so).
+   Without Coolify, `NODE_VAULT_DIR=<folder> NODE_CONFIG_DIR=<folder> docker compose up -d --build` in this
+   folder mounts them directly. Without the vault the node runs no job that needs a service's secret (the doctor's
+   `node.vault` says so); without the configuration it needs one of its own (`agents init ~/config --brain <url>`).
 
-5. **In the container's terminal** (`docker exec -it <container> bash`; Coolify has a terminal for it): make the
-   configuration, then restart the container so that the code is installed:
+5. **In the container's terminal** (`docker exec -it <container> bash`; Coolify has a terminal for it), one
+   command:
 
    ```sh
-   agents init ~/config --name <you> --brain https://<your brain>   # the brain's address: node login needs it
+   agents node setup
    ```
 
-   **Restart, then in the terminal again**, the node's own logins, one by one; each puts its secret in the
-   volume, never in the environment. With no browser here, each prints a link to open on any machine:
-
-   ```sh
-   agents vault pair --file             # the recovery code: the vault key in a file only this user reads (0600)
-   agents node login --no-browser       # this node's own token: open the link, sign in, paste back the address
-   claude                               # per profile with an account: /login; the login is a file in the volume
-   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''   # the git key: add the public one to the forge
-   git clone <remote> ~/<repo>                         # the repositories the node may work on
-   agents node enable --headless
-   ```
-
-   Then restart the container: it runs `agents serve --headless`. Not `agents brain-login`: the vault is read
-   only here, and the service names a node after its own token (ADR 0012). The key and the logins are the
-   owner's to place here, once; whoever has the volume has them («The vault key without a keyring»).
+   It does in order what is missing, and runs again to finish what waited: links the configuration; pairs the
+   vault (it asks for the recovery code: `agents vault recovery-code` on your machine); signs the node in (a link
+   to open anywhere, the address to paste back); checks each Claude account's token and names the missing ones;
+   makes the git key and waits until the forge takes it; clones the repositories `nodes.json` lists (`repos`);
+   turns the node on, headless. The container sees it and starts serving: no restart. The key and the logins live
+   in its volume; whoever has the volume has them («The vault key without a keyring»).
 
 6. **Check the sandbox**, from the host:
 

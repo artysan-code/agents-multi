@@ -21,7 +21,7 @@ import {
 import { parseAccountId } from "../../../shared/mcp/lib/limitrules.ts";
 import { HOME } from "../lib/paths.ts";
 import { approvalKey, nodeFacts, nodeName } from "./facts.ts";
-import { sandboxProbe } from "./probe.ts";
+import { headlessProbe } from "./probe.ts";
 import { actOn, announce, newJob, type Service, service } from "./service.ts";
 
 export const TICK_MS = 30_000;
@@ -219,10 +219,10 @@ export function startAgentd(o: Agentd): () => void {
   let stopped = false, busy = false, said = "";
   const probe = async () => {
     if (!o.headless) return;
-    const p = await sandboxProbe();
+    const p = await headlessProbe();
     sandbox = p.ok;
     if (p.ok && !stopRoutines) {
-      o.log("node: the sandbox works: routines and jobs on");
+      o.log("node: the sandbox works and keeps the token from the children's commands: routines and jobs on");
       stopRoutines = o.startRoutines();
     } else if (!p.ok) {
       o.log(`node: no job and no routine here: ${p.reason}`);

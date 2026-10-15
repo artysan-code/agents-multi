@@ -41,8 +41,11 @@ services:
       # the vault's entries (already sealed with the vault key), read only: the host folder a Syncthing of this
       # server keeps as a trusted device for ~/agents-multi-vault alone (README.md, «The vault»); unset, an empty
       # volume, and the node runs no job that needs a service's secret. Coolify resolves this to the named volume
-      # whatever the variable says: there vault-volume.sh makes that volume a bind of the folder
+      # whatever the variable says: there bind-volume.sh makes that volume a bind of the folder
       - ${NODE_VAULT_DIR:-node-vault}:/home/agent/agents-multi-vault:ro
+      # the owner's configuration (profiles, accounts, rules, settings), read only, the same way (ADR 0013): the
+      # Syncthing folder ~/agents-multi-config; unset, the node needs `agents init` of its own
+      - ${NODE_CONFIG_DIR:-node-config}:/home/agent/agents-multi-config:ro
     environment:
       - TZ=${NODE_TIMEZONE:-Europe/Rome}
     logging:
@@ -54,3 +57,4 @@ services:
 volumes:
   node-home:
   node-vault:
+  node-config:

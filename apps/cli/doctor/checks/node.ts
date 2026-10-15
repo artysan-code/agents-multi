@@ -6,7 +6,7 @@ import { loadNodeConfig, type NodeConfig } from "../../../../shared/mcp/lib/head
 import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
 import { hasVault, loadKey, vaultDir, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
 import { type Check } from "../../lib/output.ts";
-import { exposedListeners, type Probe, sandboxProbe } from "../../node/probe.ts";
+import { exposedListeners, headlessProbe, type Probe } from "../../node/probe.ts";
 import { nodeTokenFile } from "../../node/service.ts";
 import { DEFAULT_PORT } from "../../lib/paths.ts";
 import { checkList } from "../context.ts";
@@ -33,7 +33,19 @@ export interface NodeFacts {
   tokenMode?: number | null;
   /** a vault in sight, on a headless node (null elsewhere: a desktop's vault has its own checks) */
   vault?: boolean | null;
+  /** on a headless node, the variables set here that outrank an account's token (ADR 0013) */
+  outranking?: string[];
 }
+
+/** What Claude Code reads before a long-lived token (its *Authentication precedence*): set where agentd runs, it
+ *  would decide which account a child uses. The script that starts a child clears the first two; the rest are
+ *  CLAUDE_CODE_* and go with the session's variables. */
+export const OUTRANKING = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+];
 
 /** Pure: what the doctor says of this machine as a node. */
 export function nodeFindings(f: NodeFacts): Check[] {
@@ -88,10 +100,10 @@ export function nodeFindings(f: NodeFacts): Check[] {
     add(
       "node.sandbox",
       "fail",
-      `headless node, but the Bash sandbox cannot start: ${f.sandbox.reason}; it takes no job`,
+      `headless node, not ready for work: ${f.sandbox.reason}; it takes no job`,
       "apps/node/README.md: the seccomp profile, systempaths=unconfined and, with AppArmor, its profile",
     );
-  } else if (f.sandbox) add("node.sandbox", "ok", "headless node: the Bash sandbox starts");
+  } else if (f.sandbox) add("node.sandbox", "ok", "headless node: the Bash sandbox starts, the token's scrub holds");
   if (f.vault === false) {
     add(
       "node.vault",
@@ -100,6 +112,14 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "apps/node/README.md, «The vault»: the Syncthing folder mounted at ~/agents-multi-vault",
     );
   } else if (f.vault) add("node.vault", "ok", "headless node: the vault is in sight (read only)");
+  if (f.outranking?.length) {
+    add(
+      "node.claude",
+      "warn",
+      `headless node: ${f.outranking.join(", ")} set here, which Claude Code reads before an account's token`,
+      "remove them from the container's environment: the children start without them, but a session by hand does not",
+    );
+  }
   if (!f.approval) {
     add(
       "node.approval",
@@ -136,8 +156,9 @@ export async function nodeChecks(): Promise<Check[]> {
     exposed: ss === null ? null : exposed(ss),
     service: account?.url ?? null,
     approval,
-    sandbox: cfg.enabled && cfg.headless ? await sandboxProbe() : null,
+    sandbox: cfg.enabled && cfg.headless ? await headlessProbe() : null,
     vault: cfg.enabled && cfg.headless ? hasVault(vaultDir()) : null,
+    outranking: cfg.enabled && cfg.headless ? OUTRANKING.filter((n) => !!Deno.env.get(n)) : [],
     tokenMode: await Deno.stat(nodeTokenFile()).then((s) => s.mode != null ? s.mode & 0o777 : 0o600, () => null),
   });
 }
