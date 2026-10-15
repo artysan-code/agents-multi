@@ -33,7 +33,6 @@ function Pair({ onPaired }: { onPaired: () => void }) {
             placeholder="XXXX-XXXX"
             autocomplete="off"
             autocapitalize="characters"
-            autocorrect="off"
             spellcheck={false}
             maxLength={9}
             aria-describedby="pair-msg"
