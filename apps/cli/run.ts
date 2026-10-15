@@ -8,14 +8,20 @@ import {
   drive,
   ensureRunner,
   listRuns,
+  loadWorkflow,
   type Plan,
   runEvents,
   runIn,
+  savedWorkflows,
+  saveWorkflow,
   startRun,
 } from "../../shared/mcp/lib/runs.ts";
 import { ownerOf, scopeOf } from "../../shared/mcp/lib/agents.ts";
 
-const USAGE = `agents run start <plan.json>                  a workflow run from its plan (docs/adr/0005)
+const USAGE =
+  `agents run start <plan.json|name> [--var k=v]  a workflow run from its plan, or from a saved workflow by name
+agents run save <plan.json> <name> "<when to use it>" [--user|--folder <dir>] [--overwrite]   saves a plan as a skill
+agents run saved [<folder>]                   the saved workflows a folder can use (the project's wins)
 agents run list [--project] [--all]           your session's runs (and the project's orphans), their steps' state
 agents run status <id> [--project] [--all]    a run in full, with what happened (the others': read-only)
 agents run adopt <id>                         takes an orphan run of this project (and its children): its coordinator is gone
@@ -37,9 +43,41 @@ export async function runCommand(args: string[]): Promise<number> {
   try {
     switch (sub) {
       case "start": {
+        const vars: Record<string, string> = {};
+        for (let i = rest.indexOf("--var"); i >= 0; i = rest.indexOf("--var")) {
+          const [k, ...v] = (rest.splice(i, 2)[1] ?? "").split("=");
+          vars[k] = v.join("=");
+        }
         if (!rest[0]) break;
-        const plan = JSON.parse(await Deno.readTextFile(rest[0])) as Plan;
+        const file = await Deno.readTextFile(rest[0]).catch(() => null);
+        const plan = file === null ? (await loadWorkflow(rest[0], Deno.cwd(), vars)).plan : JSON.parse(file) as Plan;
         console.log(`started ${await startRun(plan, undefined, undefined, ownerOf(await scopeOf()))}`);
+        return 0;
+      }
+      case "save": {
+        const user = has("--user");
+        const overwrite = has("--overwrite");
+        const fi = rest.indexOf("--folder");
+        const folder = fi >= 0 ? rest.splice(fi, 2)[1] : user ? undefined : Deno.cwd();
+        const [file, name, description] = rest;
+        if (!file || !name || !description) break;
+        const plan = JSON.parse(await Deno.readTextFile(file)) as Plan;
+        console.log(
+          `saved ${await saveWorkflow({
+            name,
+            description,
+            plan,
+            scope: user ? "user" : "project",
+            folder,
+            overwrite,
+          })}`,
+        );
+        return 0;
+      }
+      case "saved": {
+        const all = await savedWorkflows(rest[0] ?? Deno.cwd());
+        if (!all.length) console.log("no saved workflows");
+        for (const w of all) console.log(`${w.name}  [${w.scope}]  ${w.description}`);
         return 0;
       }
       case "list": {

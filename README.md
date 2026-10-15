@@ -249,6 +249,16 @@ the passive way (the status line's snapshots, Codex's logs), and a window with n
 zero. A workflow step or `agent_start` takes `provider: "codex"`: the child gets the profile's MCP servers
 as the launch config names them, but only each server's `_allow` tools, since it never asks you.
 
+### Saved workflows
+
+A workflow the owner wants again is a **skill** ([ADR 0005](docs/adr/0005-agent-workflows.md)): a folder with a
+`SKILL.md`: a name, when to use it, the steps as prose and the plan as a `json` block with `{{placeholders}}`.
+The project's lives in `<project>/.agents/workflows/<name>/` (kept out of git like the HANDOFFs), the owner's for every
+project in `~/.agents-multi/config/workflows/<name>/` (an example comes with `agents init`); on a name in both, the
+project's wins. `workflow_save` prepares one (the coordinator writes the file: the hub's server writes only its own state), `workflow_list` lists them, `workflow_load` fills one by name for the
+owner to approve before `workflow_start`. From a terminal: `agents run save <plan.json> <name> "<when>" [--user]`,
+`agents run saved`, `agents run start <name> --var target="PR 4"`.
+
 `claude update` inside a wrapper is redirected to `agents update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
 
@@ -376,7 +386,7 @@ doctor says why.
 ### Routines and the run policy
 
 A **routine** is a job that runs when you are not there: a child (`--profile`, a task) or a saved plan
-(`--workflow plan.json`, with `{{task}}` in its prompts) in a git repository under home, started by a trigger:
+(`--workflow plan.json`, with `{{task}}` in its prompts, or the name of a saved workflow with `--var k=v` for its placeholders: a missing one is refused when you add it) in a git repository under home, started by a trigger:
 `--at 02:00` (the next 02:00; or `2026-10-15T02:00`, `+90m`), `--cron "0 9 * * 1-5"` (local time), or
 `--on run-done|run-failed [--plan name]` (a workflow run of the project ending). Each is a file in the hub's
 state; the console's backend ticks over them every 15 seconds, so they survive restarts. `agents routine

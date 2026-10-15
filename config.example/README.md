@@ -19,5 +19,7 @@ stays in the Agents Multi repository.
   (on by default in the desktop app, off in a checkout), `idleMinutes` (default 10) and `port` (default 7332).
 - `accounts.json` — the accounts those servers use (no secrets: those go in the vault,
   `agents vault set <service> <account>`).
+- `workflows/<name>/SKILL.md` — your saved workflows, for every project (a project's own, in its
+  `.agents/workflows/`, win on the same name). `review-and-fix` is an example. Not versioned with the code.
 - `rules/` — your rules, imported by each profile's `CLAUDE.md`.
 - `icons/<size>/claude-desktop-<profile>.png` — the icon of a profile with its own Desktop.

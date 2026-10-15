@@ -20,7 +20,7 @@ import { loadPolicy } from "../../shared/mcp/lib/policy.ts";
 
 const USAGE =
   `agents routine add [--name n] (--cron "m h dom mon dow" | --at <2026-10-15T02:00|02:00|+90m> | --on run-done|run-failed [--plan name] | --on limit-reset [--account profile[/provider]])
-                   [--workflow <plan.json>] [--profile p [--provider codex]] [--folder dir] [--model m] [--grace minutes] [task…]
+                   [--workflow <plan.json|saved-name> [--var k=v]…] [--profile p [--provider codex]] [--folder dir] [--model m] [--grace minutes] [task…]
                                                without --profile the project's default account runs it (agents account default)
                                                schedules an unattended job in a worktree of the repository (docs/adr/0010)
 agents routine list [--project] [--all]        the routines of your project: trigger, next time, what it started
@@ -61,6 +61,11 @@ export async function routineCommand(args: string[]): Promise<number> {
         const workflow = opt("--workflow"), profile = opt("--profile"), model = opt("--model");
         const provider = opt("--provider"), account = opt("--account");
         const name = opt("--name"), folder = opt("--folder") ?? Deno.cwd(), grace = opt("--grace");
+        const vars: Record<string, string> = {};
+        for (let v = opt("--var"); v !== undefined; v = opt("--var")) {
+          const [k, ...val] = v.split("=");
+          vars[k] = val.join("=");
+        }
         const triggers = [cron, at, on].filter((x) => x !== undefined).length;
         if (triggers !== 1 || (provider !== undefined && provider !== "claude" && provider !== "codex")) break;
         const trigger: Trigger = cron !== undefined
@@ -77,13 +82,20 @@ export async function routineCommand(args: string[]): Promise<number> {
           trigger,
           folder,
           grace: grace === undefined ? undefined : Number(grace),
-          action: workflow ? { kind: "workflow", plan: workflow, task: task || undefined } : {
-            kind: "agent",
-            profile: profile ?? "",
-            ...(provider === "codex" ? { provider } : {}),
-            task,
-            model,
-          },
+          action: workflow
+            ? {
+              kind: "workflow",
+              plan: workflow,
+              task: task || undefined,
+              ...(Object.keys(vars).length ? { vars } : {}),
+            }
+            : {
+              kind: "agent",
+              profile: profile ?? "",
+              ...(provider === "codex" ? { provider } : {}),
+              task,
+              model,
+            },
           by: scope.me,
         });
         console.log(`${r.id}  ${describeTrigger(r.trigger)}  ${r.project}`);
