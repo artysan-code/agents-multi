@@ -5,6 +5,85 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.0] - 2026-10-15
+
+### Added
+
+- **node**: the server node's image, seccomp and AppArmor profiles, and compose (ADR 0012) (afc5ac6)
+- **nodes**: the doctor probes a headless node's sandbox; the site's page on nodes (EN, IT) (c3b36a0)
+- **nodes**: agents nodes — machines and jobs, accept signs here; the doctor's node checks (6ed5d47)
+- **node**: agentd takes the owner's jobs and follows its runs; agents node (ADR 0012) (c86fe4e)
+- **node**: the client of the service, a node's facts and its sandbox probe (ADR 0012) (fac63ee)
+- **node**: work that moves, a sandbox for headless children, the vault key in a file (ADR 0012) (38ca30f)
+- **brain**: the service keeps each account's nodes and jobs (ADR 0012) (0ad70df)
+- **ui**: Codex and stale readings on Accounts & limits; the chat list folds when narrow (4ccc169)
+- **ui**: the console cut to Chat, Runs and Accounts & limits; the rest behind More (d7a49e0)
+- **routines**: workflow steps of a routine get the reviewer's rules; reviewer.json example (1bc879c)
+- **site**: the docs in Italian too, with Starlight's locales (English at the root, Italian at /it/) (b11983c)
+- **routines**: the reviewer — rules and a judge answer what unattended runs ask for (ADR 0011) (d566b12)
+- **platform**: route process reads (parent, start, cmdline, age, running) through platform.ts (d8fb161)
+- **routines**: --workflow takes a saved workflow by name, with --var, checked at add time (67405ad)
+- **platform**: one module for the OS-bound operations (keyring, spawn, ps, notify, open) (8b3a87b)
+- **workflows**: saved workflows as skills — save, load by name with placeholders, example (1241e59)
+- **limits**: limits manager, account proposals and per-project default accounts (a5cd6cf)
+- **hub**: routines (cron, at, run events) and the unattended run policy (4473070)
+- **codex**: a Codex child gets the profile's MCP servers, allowed tools only (28ee180)
+- **providers**: one Provider interface, unified limits, agents limits and a limits tool (110cab4)
+- **doctor**: gateway checks; deny rules keep a session from calling the gateway by hand (29552bc)
+- **console**: the console supervises the MCP gateway; agents gateway and agents mcp warm (d836f95)
+- **mcp**: lazy gateway core, backend runner and the CLI side of its launch config (5cb92b4)
+- **agents**: isolate the hub by coordinator session, with orphan adoption (f31bdb0)
+- **agents**: Codex as a second provider: pinned CLI, per-profile account, hub child, limits (3428626)
+- **mcp**: keep the registry's servers in .claude.json for profiles with Desktop (200153c)
+- **mcp**: hand the CLI its servers at launch with --mcp-config, not a copy in .claude.json (ca626a8)
+
+### Fixed
+
+- **node**: the node image runs the official Node 24 LTS, pinned and checked, not Debian's Node 20 (faa2d4b)
+- **console**: only the machine's console runs the schedules and keeps the MCP gateway (f61c18f)
+- **vault**: vault run takes only the wrangler in the project's own node_modules (9ca7319)
+- **limits**: a reading older than half an hour blocks nobody; agents limits shows its age (f4e4d07)
+- **routines**: a finished child frees its slot; a proposal lapses when its routine starts (a308272)
+- **codex**: approve the allowed MCP tools; tasks reads are the Codex child's tools (615bef6)
+- **mcp**: doctor validated _npm servers after withNpm had set command (5f40ca8)
+- **gateway**: own fingerprints, server-side _deny, derived deny rules, file log (e6d491b)
+- **gateway**: shared start, cache, drain and orphans fixed in the server; integration test (8cf8222)
+- **ci**: statusline test finds jq where the runner installs it (8742192)
+- **agents**: make a Codex account's folder before codex runs (67ba797)
+- **agents**: a child or run without a project belongs to its folder's project (c35fecd)
+- **agents**: isolate the hub's children and runs by project (5388fd1)
+
+### Performance
+
+- **usage**: incremental ingest by byte offset, driven by the watcher; inotify narrowed (5c328ea)
+- **mcp**: the Code tab's .claude.json gets the gateway's http entries (28e11d0)
+- **agents**: a child's events are read from where the last look stopped (f31cbac)
+- **mcp**: third-party npm servers installed at their pin and started with node, not npx (a956d61)
+- **mcp**: launch.sh execs the server after the vault secret is resolved, no Deno wrapper left alive (cf4f119)
+- **ci**: jq and shellcheck as pinned, sha256-verified binaries fetched beside gitleaks, no apt-get (d6a96d0)
+- **cli**: run the doctor's groups and the status reads together (e4aaae1)
+- **ci**: release runs only the Rust half of the gate, without jq and shellcheck; caches corepack (5a0e767)
+- **ci**: check.sh runs its Deno, shell and Rust groups at once, with a --desktop mode (0de1446)
+
+### Changed
+
+- **cli**: usage.ts split into db, ingest, report and print; install's steps as a list (3a13884)
+
+### Documentation
+
+- nodes in the README; ADR 0012 with what F1 settled (dadfd70)
+- **adr**: 0012 — agentd, the service, and work that moves between machines (e76f4ee)
+- the console's three views and More in the README, AGENTS.md and the site (dd9a836)
+- **adr**: 0011 the reviewer — rules and a judge for unattended runs (08d5faf)
+- **providers**: ADR 0007 closes the MCP and limits issues, README on providers and limits (a1c710a)
+- **adr**: ADR 0009 Agents Multi 2, one agent you talk to (9b0bfc1)
+- **mcp**: ADR 0008 says what protects what; README on deny and warm --force (6f81b63)
+- **agents**: the gateway invariant (29b924a)
+- **mcp**: ADR 0008 and README for the lazy gateway (96b216d)
+- **adr**: Codex provider is ADR 0007 (0d03a0c)
+- **mcp**: ADR 0006, README, site and onboarding on MCP at launch (9a16ddb)
+- **agents**: group AGENTS.md rules by topic and tighten the wording (73553a9)
+
 ## [1.2.0-beta.6] - 2026-10-15
 
 ### Fixed
