@@ -127,14 +127,17 @@ export function taskSections(tasks: Task[], now: Date): TaskSections {
 
 // ---------------------------------------------------------------- routes
 
-export type View = "chat" | "tasks" | "brain" | "machines" | "settings";
+export type View = "chat" | "waiting" | "tasks" | "brain" | "more" | "machines";
 export interface Route {
   view: View;
   /** a chat's id (`new` for one not started), or a brain page's path */
   id?: string;
 }
 
-const VIEWS: View[] = ["chat", "tasks", "brain", "machines", "settings"];
+const VIEWS: View[] = ["chat", "waiting", "tasks", "brain", "more", "machines"];
+
+/** Pure: the tab a view belongs to (Machines is reached from More). */
+export const tabOf = (v: View): View => (v === "machines" ? "more" : v);
 
 /** Pure: the route a location hash names; the chat list when it names nothing known. */
 export function parseHash(hash: string): Route {
@@ -204,3 +207,112 @@ export function keyBytes(b64: string): Uint8Array<ArrayBuffer> {
   for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
   return out;
 }
+
+// ---------------------------------------------------------------- what waits (G5)
+
+/** A request or a question a child of a node waits on (PUT /api/node/requests, read back by GET /api/waiting). */
+export interface Waiting {
+  /** `<child>/<request>` */
+  id: string;
+  child: string;
+  request: string;
+  profile: string;
+  project: string;
+  kind: "request" | "question";
+  what: string;
+  questions?: Question[];
+  node: string;
+}
+
+/** One question of a child's AskUserQuestion. */
+export interface Question {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: { label: string; description?: string }[];
+}
+
+/** A job a node or the service proposed (shared/mcp/lib/nodes.ts's Job, the part the phone shows). */
+export interface ProposedJob {
+  id: string;
+  node: string;
+  kind: "routine" | "resume";
+  spec: { name: string; repo: string; path: string; action: { kind: string; [k: string]: unknown }; account?: string; id?: string; from?: string };
+  status: string;
+  reason?: string;
+  expires?: string;
+  created: string;
+  by: string;
+}
+
+export interface WaitingState {
+  requests: Waiting[];
+  jobs: ProposedJob[];
+}
+
+/** Pure: how many things wait for the person's yes: the requests, and the jobs still only proposed. */
+export const waitingCount = (w: WaitingState | null) =>
+  w ? w.requests.length + w.jobs.filter((j) => j.status === "proposed").length : 0;
+
+/** Pure: the passkeys as the phone uses them. A passkey with no endorsement is pending: it cannot say yes yet. */
+export interface Passkey {
+  id: string;
+  name: string;
+  publicKey: string;
+  endorsement: string | null;
+  created: string;
+}
+export const endorsed = (keys: Passkey[]) => keys.filter((k) => !!k.endorsement);
+export const pending = (keys: Passkey[]) => keys.filter((k) => !k.endorsement);
+
+/** Pure: the questions of a request with the answers chosen so far, as the `answers` map of the contract
+ *  (question text to the label chosen; several labels joined by a comma for a multi-select). */
+export function answersOf(questions: Question[], chosen: Record<string, string[]>): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const q of questions) {
+    const c = chosen[q.question] ?? [];
+    if (!c.length) return null;
+    out[q.question] = c.join(", ");
+  }
+  return out;
+}
+
+/** Pure: a chat's turn can be answered again from the same question when it failed. */
+export const retryable = (t: Pick<Turn, "state">) => t.state === "failed";
+
+/** Pure: a short human line for a change Claude made, from its tool name (`tasks_add`, `brain_edit`...). */
+export function actKind(n: string): "task" | "brain" | "calendar" | "mail" | "job" | "other" {
+  if (n.startsWith("tasks_")) return "task";
+  if (n.startsWith("brain_")) return "brain";
+  if (n.startsWith("calendar_")) return "calendar";
+  if (n.startsWith("gmail_")) return "mail";
+  if (/^(job|routine|agent|workflow)_/.test(n)) return "job";
+  return "other";
+}
+
+/** Pure: the theme choices, and the one stored when it is something else. */
+export type ThemePref = "system" | "light" | "dark";
+export const themeOf = (s: string | null): ThemePref => (s === "light" || s === "dark" ? s : "system");
+
+/** Pure: whether Enter sends. On a device with a fine pointer (a desktop) Enter sends and Shift+Enter breaks the
+ *  line; on a touch screen Enter is a new line and the button sends. Ctrl or Cmd+Enter sends everywhere. */
+export function sendsOnEnter(e: { key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; isComposing?: boolean }, finePointer: boolean): boolean {
+  if (e.key !== "Enter" || e.isComposing) return false;
+  if (e.ctrlKey || e.metaKey) return true;
+  return finePointer && !e.shiftKey;
+}
+
+// ---------------------------------------------------------------- pairing
+
+/** Pure: what the person typed as a pairing code, read as the service reads it: Crockford base32 (O is 0, I and L
+ *  are 1), upper case, no separators, at most eight characters. */
+export function normalizeCode(s: string): string {
+  return s.toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1").slice(0, 8);
+}
+
+/** Pure: a code as it is shown, `XXXX-XXXX`. */
+export const showCode = (c: string) => (c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c);
+
+/** Pure: how much of a node's memory is in use, 0 to 100 (0 when it did not say). */
+export const memUsed = (n: Pick<NodeInfo, "memTotal" | "memFree">) =>
+  n.memTotal > 0 ? Math.round(100 * (1 - Math.min(n.memFree, n.memTotal) / n.memTotal)) : 0;
