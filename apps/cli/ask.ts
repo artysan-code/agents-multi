@@ -88,7 +88,11 @@ async function setAskModel(model: AskModel) {
 }
 
 /** Pure: the arguments of `claude -p` for one request. */
-export function askArgs(text: string, now: string, opts: { session?: string | null; model?: AskModel } = {}) {
+export function askArgs(
+  text: string,
+  now: string,
+  opts: { session?: string | null; model?: AskModel; settings?: Record<string, unknown> } = {},
+) {
   const args = [
     "-p",
     asArg(text),
@@ -107,7 +111,27 @@ export function askArgs(text: string, now: string, opts: { session?: string | nu
   ];
   if (opts.session) args.push("--resume", opts.session);
   if (opts.model) args.push("--model", opts.model, "--effort", ASK_EFFORT[opts.model]);
+  if (opts.settings) args.push("--settings", JSON.stringify(opts.settings));
   return args;
+}
+
+/** What a chat turn remembers of the turns before it, for a machine that has no session of the chat. */
+export interface Earlier {
+  q: string;
+  a: string;
+}
+
+/** Pure: the request with the chat's earlier turns in front of it, compactly, when there is no session to
+ *  resume (the chat last ran on another machine). */
+export function withHistory(text: string, history: Earlier[] = []): string {
+  const cut = (s: string, n: number) => {
+    const t = s.trim();
+    return t.length > n ? `${t.slice(0, n)}…` : t;
+  };
+  const turns = history.filter((h) => h.q?.trim());
+  if (!turns.length) return text;
+  const lines = turns.slice(-10).map((h) => `Q: ${cut(h.q, 600)}\nA: ${cut(h.a ?? "", 1200)}`);
+  return `This conversation went on before; what was said so far:\n${lines.join("\n")}\n\nNow they write:\n${text}`;
 }
 
 /** What the page receives, one JSON object per line. */
@@ -234,15 +258,23 @@ async function defaultLauncher() {
   return ls.find((l) => l.command === "claude") ?? ls[0];
 }
 
-/** One request of a chat: the answer streams to the page and, once it ends, is kept as the chat's next
- *  turn (`saved` then tells the open pages). A request without `chat` starts a new one. */
-function ask(text: string, chat: string | null, saved: () => void) {
-  const enc = new TextEncoder();
-  // the page going away cancels the response's stream: that, and nothing else, stops claude -p
-  // (Deno.serve's request.signal also fires once a response has been delivered, and is changing)
-  const stop = new AbortController();
-  const signal = stop.signal;
-  const now = new Date().toLocaleString("en-GB", {
+/** What runTurn needs besides the text. */
+export interface TurnOpts {
+  /** the Claude Code session to resume, when the chat has one on this machine */
+  session?: string | null;
+  /** the chat's earlier turns, put in front of the request when there is no session */
+  history?: Earlier[];
+  /** default: the model chosen in the console */
+  model?: AskModel;
+  /** the page going away, the console stopping: kills `claude -p` */
+  signal?: AbortSignal;
+  /** settings and the whole environment of the child for the profile it runs as: a headless node's sandbox and
+   *  token (node/turns.ts); none on a desktop, whose child has its `/login` */
+  prepare?: (profile: string) => Promise<{ env?: Record<string, string>; settings?: Record<string, unknown> }>;
+}
+
+const nowText = () =>
+  new Date().toLocaleString("en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -250,6 +282,52 @@ function ask(text: string, chat: string | null, saved: () => void) {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+/** One answer from `claude -p` in the machine's default profile: what it says reaches `onEvent` as it comes
+ *  (session, text, tool) and the end is returned. Rejects when the run could not start (no profile, no
+ *  program). Shared by the console's /api/ask and the node answering a chat of the service (node/turns.ts). */
+export async function runTurn(
+  text: string,
+  opts: TurnOpts,
+  onEvent: (o: Out) => void,
+): Promise<Extract<Out, { t: "done" }>> {
+  const launcher = await defaultLauncher();
+  if (!launcher) throw new Error("no profile");
+  const model = opts.model ?? await askModel();
+  const extra = await opts.prepare?.(launcher.profile);
+  const prompt = opts.session ? text : withHistory(text, opts.history);
+  const child = new Deno.Command(`${BIN}/${launcher.command}`, {
+    args: askArgs(prompt, nowText(), { session: opts.session, model, settings: extra?.settings }),
+    cwd: HOME,
+    stdin: "null",
+    stdout: "piped",
+    stderr: "piped",
+    signal: opts.signal,
+    ...(extra?.env ? { env: extra.env, clearEnv: true } : {}),
+  }).spawn();
+  const stream = new AskStream();
+  const errText = new Response(child.stderr).text();
+  let rest = "";
+  for await (const chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
+    rest += chunk;
+    const lines = rest.split("\n");
+    rest = lines.pop() ?? "";
+    for (const l of lines) stream.line(l).forEach(onEvent);
+  }
+  if (rest) stream.line(rest).forEach(onEvent);
+  const { code } = await child.status;
+  const done = stream.end(code, await errText);
+  if (done.error || done.text) await recordLogin(launcher.profile, launcher.command, done.error ?? null);
+  return done;
+}
+
+/** One request of a chat: the answer streams to the page and, once it ends, is kept as the chat's next
+ *  turn (`saved` then tells the open pages). A request without `chat` starts a new one. */
+function ask(text: string, chat: string | null, saved: () => void) {
+  const enc = new TextEncoder();
+  // the page going away cancels the response's stream: that, and nothing else, stops claude -p
+  // (Deno.serve's request.signal also fires once a response has been delivered, and is changing)
+  const stop = new AbortController();
   return new ReadableStream<Uint8Array>({
     async start(ctl) {
       const send = (o: Out) => {
@@ -257,49 +335,26 @@ function ask(text: string, chat: string | null, saved: () => void) {
           ctl.enqueue(enc.encode(JSON.stringify(o) + "\n"));
         } catch { /* the page went away */ }
       };
-      const launcher = await defaultLauncher();
-      if (!launcher) {
-        send({ t: "done", text: "", code: null, error: "no profile" });
-        return ctl.close();
-      }
       const known = chat ? await readChat(chat) : null;
       const id = known?.id ?? crypto.randomUUID();
       send({ t: "chat", id });
       const model = await askModel();
-      let child: Deno.ChildProcess;
+      const acts: Act[] = [];
+      let session: string | null = null;
+      const pass = (o: Out) => {
+        if (o.t === "tool") acts.push(o.d ? { k: o.k, n: o.n, d: o.d } : { k: o.k, n: o.n });
+        if (o.t === "session") session = o.id;
+        send(o);
+      };
+      let done: Extract<Out, { t: "done" }>;
       try {
-        child = new Deno.Command(`${BIN}/${launcher.command}`, {
-          args: askArgs(text, now, { session: known?.session, model }),
-          cwd: HOME,
-          stdin: "null",
-          stdout: "piped",
-          stderr: "piped",
-          signal,
-        }).spawn();
+        done = await runTurn(text, { session: known?.session, model, signal: stop.signal }, pass);
       } catch (e) {
         send({ t: "done", text: "", code: null, error: (e as Error).message });
         return ctl.close();
       }
-      const stream = new AskStream();
-      const acts: Act[] = [];
-      const pass = (o: Out) => {
-        if (o.t === "tool") acts.push(o.d ? { k: o.k, n: o.n, d: o.d } : { k: o.k, n: o.n });
-        send(o);
-      };
-      const errText = new Response(child.stderr).text();
-      let rest = "";
-      for await (const chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
-        rest += chunk;
-        const lines = rest.split("\n");
-        rest = lines.pop() ?? "";
-        for (const l of lines) stream.line(l).forEach(pass);
-      }
-      if (rest) stream.line(rest).forEach(pass);
-      const { code } = await child.status;
-      const done = stream.end(code, await errText);
-      if (done.error || done.text) await recordLogin(launcher.profile, launcher.command, done.error ?? null);
       // kept even when the page went away mid-answer: the chat shows what was said, as far as it went
-      await saveTurn(id, stream.session ?? known?.session ?? null, {
+      await saveTurn(id, session ?? known?.session ?? null, {
         q: text,
         a: done.text,
         acts,

@@ -116,6 +116,8 @@ export interface Agentd {
   notify: (title: string, body: string) => void;
   /** starts the routines' tick; returns what stops it */
   startRoutines: () => () => void;
+  /** starts the loop that answers the service's chat turns (turns.ts); returns what stops it */
+  startTurns?: () => () => void;
 }
 
 /** One pass: announce, take what is accepted and verified, follow the runs. */
@@ -214,7 +216,16 @@ async function followRuns(svc: Service, st: NodeState, log: (s: string) => void)
 /** Starts agentd in the console's backend; returns what stops it. The routines start at once on a desktop, and
  *  on a headless node only while the sandbox probe passes. */
 export function startAgentd(o: Agentd): () => void {
-  let stopRoutines: (() => void) | null = o.headless ? null : o.startRoutines();
+  // what runs work here: the routines, and the chat turns of the service (ADR 0014); both wait for the sandbox
+  const startWork = () => {
+    const routines = o.startRoutines();
+    const turns = o.startTurns?.();
+    return () => {
+      routines();
+      turns?.();
+    };
+  };
+  let stopRoutines: (() => void) | null = o.headless ? null : startWork();
   let sandbox: boolean | null = null;
   let stopped = false, busy = false, said = "";
   const probe = async () => {
@@ -223,9 +234,9 @@ export function startAgentd(o: Agentd): () => void {
     sandbox = p.ok;
     if (p.ok && !stopRoutines) {
       o.log("node: the sandbox works and keeps the token from the children's commands: routines and jobs on");
-      stopRoutines = o.startRoutines();
+      stopRoutines = startWork();
     } else if (!p.ok) {
-      o.log(`node: no job and no routine here: ${p.reason}`);
+      o.log(`node: no job, routine or chat turn here: ${p.reason}`);
       stopRoutines?.();
       stopRoutines = null;
     }

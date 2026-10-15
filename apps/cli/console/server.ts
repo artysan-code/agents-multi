@@ -57,6 +57,7 @@ import { runsView } from "./runs.ts";
 import { memoryApi } from "../memory.ts";
 import { tasksView } from "./tasks-view.ts";
 import { startAgentd } from "../node/agentd.ts";
+import { startTurns } from "../node/turns.ts";
 import { loadNodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { desktopNotify } from "../notify.ts";
 
@@ -435,6 +436,7 @@ export async function serve(opts: { open?: boolean; headless?: boolean } = { ope
         log: console.log,
         notify: (title, body) => void desktopNotify(title, body).catch(() => {}),
         startRoutines: () => startRoutineSchedule(),
+        startTurns: () => startTurns(console.log),
       }),
     );
     // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
