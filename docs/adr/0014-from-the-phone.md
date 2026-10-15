@@ -1,6 +1,6 @@
 # 0014 — From the phone: the web app on the service, the orchestrator on a paired machine
 
-- Status: proposed
+- Status: accepted 2026-10-15; G1–G3 in progress
 - Date: 2026-10-15
 - Phase G of [ADR 0009](0009-agents-multi-2.md); changes its point 20
 
@@ -103,6 +103,38 @@ phone (web app, PWA) ──HTTPS──▶ the service ◀──HTTPS, outbound�
   of theirs), pairs it with a code, and talks from the phone. Their Claude is theirs to use as they choose.
 - **Self-hosting** is the repository's README and `apps/brain/compose.yaml`, unchanged: one compose file.
 
+## The API (G1–G3)
+
+Every route runs as the account its web session or token gives (tenants.ts): a person's chats are in their own
+database. `node` is the machine whose token it is (fleet.ts), null for a web session.
+
+- **Chats** (any caller of the account):
+  - `GET /api/chats` → `{chats: [{id, title, updated, node}]}`, newest first
+  - `GET /api/chats/<id>` → `{chat: {id, title, turns: [{id, q, a, acts, state, node, error, created, ended}]}}`
+  - `POST /api/chats` `{text, chat?}` → `{chat, turn}`: a new turn, in a new chat when `chat` is absent
+  - `DELETE /api/chats/<id>` → `{ok}`
+  - `GET /api/chats/<id>/events` → Server-Sent Events: `turn` `{turn, state, node, error?}` (waiting, running,
+    done, failed), `text` `{turn, d}` (a piece of the answer), `act` `{turn, k, n, d?}` (a change Claude made, as
+    chats.ts's `Act`), `done` `{turn, a, code?}`; a comment every 20 s keeps it open.
+- **The answering node** (its own token only):
+  - `GET /api/node/turns?wait=25` → `{turns: [{id, chat, text, session, history}]}`: the waiting turns this node
+    answers for the account, **claimed** by the call (state `running`); it waits up to `wait` seconds when there
+    are none. `session` is the Claude session to resume when the chat's last turn ran on this node, else null,
+    and `history` the chat's last turns (`[{q, a}]`, at most 10) for a node that has no session of it.
+  - `POST /api/turns/<id>/events` `{events: [{t: "text", d} | {t: "tool", k, n, d?} | {t: "session", id}]}` →
+    `{ok}`: what the answer has so far, relayed to the chat's event streams.
+  - `POST /api/turns/<id>/done` `{text, code?, error?}` → `{ok}`: the turn ends (`failed` with an error).
+  - A turn claimed by a node silent for 90 s goes back to `waiting`.
+- **Which node answers**: `GET /api/settings/orchestrator` → `{node, order}`, `PUT` with the same: `node` the
+  account's chosen one, `order` the fallbacks; with none set, the first online headless node, else the first
+  online one.
+- **Push** (G3): `GET /api/push/key` → `{key}` (the VAPID public key); `POST /api/push/subscriptions`
+  `{endpoint, keys: {p256dh, auth}, device}` → `{ok}`; `DELETE /api/push/subscriptions` `{endpoint}` → `{ok}`.
+  Sent on a turn done or failed (the chat's title and the answer's first line), as Web Push (RFC 8030, 8291,
+  8292).
+- **The web app**: `/app` and below, its built files; anything else under it is `index.html` (the app routes by
+  hash). Not signed in, it sends the person to the sign-in page with `next=/app`.
+
 ## What is paused
 
 F2 (the `node` token scope, the coordinator's MCP tools for nodes, presence) and Telegram wait until this path
@@ -112,14 +144,15 @@ works; each is taken up only if the path shows it is needed.
 
 | Slice | What                                                                                                   | Size   |
 | ----- | ------------------------------------------------------------------------------------------------------ | ------ |
-| G1    | Chat turns in the service (`chat_turns`, routes, SSE), the node's turn loop, ask.ts behind it; console | medium |
+| G1    | Chat turns in the service (routes, SSE), the node's turn loop over ask.ts's runner                     | medium |
 | G2    | The web app at `/app`: sign-in, Chat, Tasks, Brain, Machines; PWA shell                                | medium |
 | G3    | Web Push: VAPID keys, subscriptions, the three events                                                  | small  |
 | G4    | Pairing by code (`agents node pair`, the console's button, _Machines › Pair_)                          | small  |
 | G5    | What waits on the phone: jobs and requests, the passkey yes (WebAuthn, the nodes pin its key)          | medium |
 | G6    | Hosting for others: the sign-up and privacy text, onboarding in the docs (EN, IT), the hosted instance | small  |
 
-G1 → G2 → G3 make the path; G4 makes it simple; G5 makes it whole; G6 opens it.
+G1 → G2 → G3 make the path; G4 makes it simple; G5 makes it whole; G6 opens it. The console's own Chat page
+moves onto the service's chats right after G3, once the path is proven (until then it keeps its local chats).
 
 ## Consequences
 
