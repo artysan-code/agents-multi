@@ -14,6 +14,7 @@ import { gitIgnoreChecks } from "./checks/gitignore.ts";
 import { gatewayChecks } from "./checks/gateway.ts";
 import { loginChecks } from "./checks/logins.ts";
 import { mcpChecks } from "./checks/mcp.ts";
+import { nodeChecks } from "./checks/node.ts";
 import { profileChecks } from "./checks/profiles.ts";
 import { repoChecks } from "./checks/repo.ts";
 import { reviewerChecks } from "./checks/reviewer.ts";
@@ -53,6 +54,7 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
   agentsChecks,
   codexChecks,
   reviewerChecks,
+  nodeChecks,
 ];
 
 /**

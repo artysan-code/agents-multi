@@ -8,6 +8,7 @@ import { agentCommand } from "./agent.ts";
 import { runCommand } from "./run.ts";
 import { routineCommand } from "./routine.ts";
 import { reviewCommand } from "./review.ts";
+import { nodesCommand } from "./nodes.ts";
 import { accountCommand } from "./account.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
@@ -235,6 +236,9 @@ switch (cmd) {
   case "review":
     Deno.exit(await reviewCommand(rest));
     break;
+  case "nodes":
+    Deno.exit(await nodesCommand(rest));
+    break;
   case "account":
     Deno.exit(await accountCommand(rest));
     break;
@@ -306,6 +310,7 @@ switch (cmd) {
           team channel (agents run, alone, says how)
   routine add|list|rm|run   unattended jobs (cron, at, a run's end) on their own branch, under the repo's policy
   review  [rules [folder]]    what the reviewer allowed, refused or left to you in routines' runs; the rules they get
+  nodes   [accept|decline|propose]  the machines and jobs the service sees; accept signs a job here (ADR 0012)
   account status|default|proposals|propose|accept|decline|events   the limit rules per account, a project's default account, and the owner's yes to a switch
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
