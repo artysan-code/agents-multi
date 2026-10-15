@@ -4,14 +4,20 @@ import { signal } from "@preact/signals";
 import { hashOf, parseHash, type Route } from "./lib.ts";
 
 export const route = signal<Route>(parseHash(location.hash));
-addEventListener("hashchange", () => (route.value = parseHash(location.hash)));
+addEventListener("hashchange", () => {
+  // `go` has set the route already: the event only follows a hash someone else wrote (the back button, a link)
+  if (hashOf(route.value) !== location.hash) route.value = parseHash(location.hash);
+});
 
 /** Goes to a route; `replace` takes the place of the current history entry (a new chat becoming a chat). */
 export function go(r: Route, replace = false): void {
   if (replace) {
     history.replaceState(null, "", hashOf(r));
     route.value = r;
-  } else location.hash = hashOf(r);
+  } else {
+    location.hash = hashOf(r);
+    route.value = r;
+  }
 }
 
 /** The shell's tab bar and a notification click both ask for a hash: the service worker posts it here. */

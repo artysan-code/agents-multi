@@ -1,34 +1,49 @@
-// tasks.tsx — Tasks on the phone: today with its times, what is overdue, what was done today. «Done» is the
-// one change (the board's own route, where the repeat and the other rules run).
+// tasks.tsx — Tasks on the phone: today with its times, what is overdue, what was done today, in compact rows.
+// «Done» is the one change (the board's own route, where the repeat and the other rules run), by the circle or
+// by swiping the row to the right.
 
 import { useEffect, useState } from "preact/hooks";
 import { markDone, taskFiles } from "./api.ts";
 import { parseTasks, type Task, taskSections } from "./lib.ts";
 import { dateOf, t } from "./t.ts";
+import { Swipe } from "./swipe.tsx";
 import { Empty, Failure, Header, Icon, Skeleton, usePull } from "./ui.tsx";
 
+/** One task: a title at a readable size cut at two lines, and under it one small line (time, reference, project,
+ *  how late it is, what it waits on). Swiping it to the right marks it done; the circle does the same. */
 function Row({ task, late, onDone }: { task: Task; late?: boolean; onDone?: (t: Task) => void }) {
   const finished = task.status === "done";
-  const sub = [task.ref, task.project?.split("/").pop()].filter(Boolean).join(" · ");
+  const project = task.project?.split("/").pop();
+  const meta = [
+    task.time && <b class="time" key="t">{task.time}</b>,
+    task.ref && <span key="r">{task.ref}</span>,
+    project && <span key="p">{project}</span>,
+    late && task.due && <span class="since" key="s">{t("tasks.since", { d: dateOf(task.due, { day: "numeric", month: "short" }) })}</span>,
+    task.status === "waiting" && <span class="st warn" key="w">{t("tasks.waiting")}</span>,
+    task.status === "doing" && <span class="st" key="d">{t("tasks.doing")}</span>,
+  ].filter(Boolean);
   return (
     <li class={`task-r${late ? " late" : ""}${finished ? " fin" : ""}`}>
-      <button
-        type="button"
-        class="chk"
+      <Swipe
         disabled={finished || !onDone}
-        aria-label={finished ? t("tasks.isDone") : t("tasks.done", { t: task.title })}
-        onClick={() => onDone?.(task)}
+        right={{ label: t("tasks.doneShort"), tone: "ok", icon: "check", leave: true, run: () => onDone?.(task) }}
       >
-        {finished && <Icon name="check" size={14} />}
-      </button>
-      <span class="task-t">
-        {task.title}
-        {sub && <small>{sub}</small>}
-      </span>
-      {task.time && <span class="time">{task.time}</span>}
-      {late && task.due && <span class="tag crit">{t("tasks.since", { d: dateOf(task.due, { day: "numeric", month: "short" }) })}</span>}
-      {task.status === "waiting" && <span class="tag warn">{t("tasks.waiting")}</span>}
-      {task.status === "doing" && <span class="tag">{t("tasks.doing")}</span>}
+        <div class="task-in">
+          <button
+            type="button"
+            class="chk"
+            disabled={finished || !onDone}
+            aria-label={finished ? t("tasks.isDone") : t("tasks.done", { t: task.title })}
+            onClick={() => onDone?.(task)}
+          >
+            {finished && <Icon name="check" size={14} />}
+          </button>
+          <span class="task-t">
+            <span class="tt">{task.title}</span>
+            {meta.length > 0 && <small class="tm">{meta}</small>}
+          </span>
+        </div>
+      </Swipe>
     </li>
   );
 }

@@ -29,36 +29,46 @@ async function sha256(text: string): Promise<Uint8Array<ArrayBuffer>> {
 
 export type Verdict = "allow" | "session" | "deny";
 
-/** What the person says yes or no to: the fields the challenge covers. `answers` is left out when there are none. */
+/** What the person says yes or no to: the fields the challenge covers. `answers` is left out when there are none;
+ *  `what` is the request's hash (see `requestHash`). */
 export interface AnswerBody {
   id: string;
   node: string;
   verdict: Verdict;
   answers?: Record<string, string>;
   expires: string;
+  what: string;
 }
 
-/** Pure: the text a request's answer signs: `agents-multi answer v1\n` and the canonical JSON of the answer. */
+/** Pure: the text a request's answer signs, version 2: `agents-multi answer v2\n` and the canonical JSON of the
+ *  answer, which binds a hash of the words the person was shown (a service that showed other words gets a
+ *  signature the node refuses). */
 export const answerText = (a: AnswerBody) =>
-  `agents-multi answer v1\n${canonical({ id: a.id, node: a.node, verdict: a.verdict, answers: a.answers, expires: a.expires })}`;
+  `agents-multi answer v2\n${canonical({ id: a.id, node: a.node, verdict: a.verdict, answers: a.answers, expires: a.expires, what: a.what })}`;
 
 /** The challenge of an answer: SHA-256 of its text. */
 export const answerChallenge = (a: AnswerBody) => sha256(answerText(a));
+
+/** The base64url SHA-256 of the canonical JSON of `{what, questions}` as the node relayed them: the `what` of an
+ *  answer's challenge. `questions` is left out of the text when the request has none. */
+export async function requestHash(r: { what: string; questions?: unknown }): Promise<string> {
+  return b64u(await sha256(canonical({ what: r.what, questions: r.questions })));
+}
 
 /** The challenge of accepting a job: SHA-256 of the text the desktop signs for it (nodes.ts's signedText). */
 export const jobChallenge = (j: Pick<ProposedJob, "id" | "node" | "kind" | "spec">, expires: string) =>
   sha256(signedText({ id: j.id, node: j.node, kind: j.kind, spec: j.spec, expires } as Parameters<typeof signedText>[0]));
 
+/** Pure: the text declining a proposed job signs: `agents-multi job decline v1\n` and the job's canonical text. */
+export const declineText = (j: Pick<ProposedJob, "id" | "node" | "kind" | "spec">, expires: string) =>
+  `agents-multi job decline v1\n${canonical({ id: j.id, node: j.node, kind: j.kind, spec: j.spec, expires })}`;
+
+/** The challenge of declining a job. */
+export const declineChallenge = (j: Pick<ProposedJob, "id" | "node" | "kind" | "spec">, expires: string) =>
+  sha256(declineText(j, expires));
+
 /** Pure: when an answer stops counting: five minutes from `now` (the contract allows ten). */
 export const expiryFrom = (now: Date, minutes = 5) => new Date(now.getTime() + minutes * 60_000).toISOString();
-
-/** What the service gets with an answer. */
-export interface Assertion {
-  credential: string;
-  authenticatorData: string;
-  clientDataJSON: string;
-  signature: string;
-}
 
 /** What the service gets with an answer. */
 export interface Assertion {

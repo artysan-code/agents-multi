@@ -4,6 +4,7 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   claimPairing,
+  forgetNode,
   getOrchestrator,
   loadNodes,
   type Orchestrator,
@@ -13,7 +14,8 @@ import {
 } from "./api.ts";
 import { memUsed, moved, type NodeInfo, normalizeCode, online, orderOf, showCode } from "./lib.ts";
 import { dateOf, t } from "./t.ts";
-import { Empty, Failure, Header, Icon, Skeleton, usePull } from "./ui.tsx";
+import { pin, pinned } from "./state.ts";
+import { Empty, Failure, Header, Icon, Sheet, Skeleton, toast, usePull } from "./ui.tsx";
 
 function Pair({ onPaired }: { onPaired: () => void }) {
   const [code, setCode] = useState("");
@@ -93,7 +95,36 @@ function Pair({ onPaired }: { onPaired: () => void }) {
   );
 }
 
+/** Forgetting asks first: the machine stops answering, what waits on it goes, and its tokens are revoked. */
+function ForgetSheet({ name, onClose, onForgot }: { name: string; onClose: () => void; onForgot: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const go = async () => {
+    setBusy(true);
+    try {
+      await forgetNode(name);
+      if (pinned.value === name) pin(null);
+      toast(t("machines.forgot", { n: name }));
+      onForgot();
+    } catch (e) {
+      setErr((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet title={t("machines.forgetTitle", { n: name })} onClose={onClose}>
+      <p class="meta">{t("machines.forgetHelp")}</p>
+      {err && <p class="err" role="alert">{err}</p>}
+      <div class="sheet-actions">
+        <button type="button" class="btn danger" disabled={busy} aria-busy={busy} onClick={go}>{t("machines.forget")}</button>
+        <button type="button" class="btn" disabled={busy} onClick={onClose}>{t("cancel")}</button>
+      </div>
+    </Sheet>
+  );
+}
+
 export function Machines() {
+  const [forgetting, setForgetting] = useState<string | null>(null);
   const [nodes, setNodes] = useState<{ nodes: NodeInfo[]; now: string } | null>(null);
   const [orch, setOrch] = useState<Orchestrator>({ node: null, order: [] });
   const [err, setErr] = useState("");
@@ -148,7 +179,17 @@ export function Machines() {
                     {n.accounts.map((a) => <span key={a} class="tag plain">{a}</span>)}
                   </p>
                 )}
-                {!on && <p class="meta">{t("machines.seen", { t: dateOf(n.seen, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}</p>}
+                {!on && (
+                  <div class="gone">
+                    <p class="meta">{t("machines.seen", { t: dateOf(n.seen, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}</p>
+                    <button type="button" class="btn small danger-o" onClick={() => setForgetting(n.name)}>
+                      <Icon name="trash" size={16} />{t("machines.forget")}
+                    </button>
+                  </div>
+                )}
+                {on && (
+                  <button type="button" class="btn small ghost forget-quiet" onClick={() => setForgetting(n.name)}>{t("machines.forgetQuiet")}</button>
+                )}
               </li>
             );
           })}
@@ -186,6 +227,7 @@ export function Machines() {
         </section>
       )}
       <Pair onPaired={load} />
+      {forgetting && <ForgetSheet name={forgetting} onClose={() => setForgetting(null)} onForgot={() => (setForgetting(null), void load())} />}
     </>
   );
 }

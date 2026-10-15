@@ -5,15 +5,18 @@
 //   pnpm exec vite build --config vite.web.config.ts
 //   deno run --allow-net --allow-read apps/ui/scripts/web-fixture.ts [--port 8799]
 //
-// Send "fail" in a chat to see a failed turn, "hang" to see one nobody picks up. The state of the passkeys is
-// changed with /__set?passkeys=none|pending|ready (default ready); /__set?empty=1 empties every list.
+// Send "fail" in a chat to see a failed turn, "hang" to see one nobody picks up, "slow" to see one that runs long
+// enough to cancel. A voice note is "transcribed" after two seconds and then answered; /__set?voice=none makes no
+// machine able to transcribe, so the turn stays waiting. The passkeys: /__set?passkeys=none|pending|ready (default
+// ready); /__set?empty=1 empties every list; /__set?few=1 keeps three tasks and one chat (to see views that fit).
 
 import { toFile } from "../../../shared/mcp/lib/tasks/format.ts";
 import type { Task } from "../../../shared/mcp/lib/tasks/types.ts";
 
 const port = Number(Deno.args[Deno.args.indexOf("--port") + 1]) || 8799;
 const root = new URL("../dist-web/", import.meta.url);
-const mode = { passkeys: "ready", empty: false, slow: 0 };
+const mode = { passkeys: "ready", empty: false, slow: 0, voice: "yes", few: false };
+const forgotten = new Set<string>();
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 const day = (offset: number) => {
@@ -32,6 +35,7 @@ interface Turn {
   error: string | null;
   created: string;
   ended: string | null;
+  voice?: boolean;
 }
 const chats = new Map<string, { id: string; title: string; updated: string; node: string | null; turns: Turn[] }>();
 const seed = (id: string, title: string, min: number, node: string, q: string, a: string, acts: Turn["acts"] = []) =>
@@ -63,13 +67,18 @@ const streams = new Map<string, Set<(name: string, data: unknown) => void>>();
 const emit = (chat: string, name: string, data: unknown) => streams.get(chat)?.forEach((f) => f(name, data));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const cancelled = new Set<string>();
+
 async function answer(chatId: string, turn: Turn, text: string) {
   if (text.includes("hang")) return;
   await wait(900);
+  if (cancelled.has(turn.id)) return;
   turn.state = "running";
   turn.node = "studio";
   emit(chatId, "turn", { turn: turn.id, state: "running", node: "studio" });
   await wait(700);
+  if (text.includes("slow")) await wait(8000);
+  if (cancelled.has(turn.id)) return;
   if (text.includes("fail")) {
     turn.state = "failed";
     turn.error = "The machine lost its connection to Claude.";
@@ -78,6 +87,7 @@ async function answer(chatId: string, turn: Turn, text: string) {
   }
   for (const piece of ANSWER) {
     for (const part of piece.match(/.{1,6}/gs) ?? []) {
+      if (cancelled.has(turn.id)) return;
       turn.a += part;
       emit(chatId, "text", { turn: turn.id, d: part });
       await wait(35);
@@ -107,12 +117,12 @@ const tasks = (): string[] =>
   mode.empty ? [] : [
     task("t-1", { title: "Call the accountant", due: day(0), time: "10:30", project: "work/otacon" }),
     task("t-2", { title: "Review the G7 branch", due: day(0), time: "11:30", ref: "TASK-495", project: "personal/opensource/agents-multi", status: "doing" }),
-    task("t-3", { title: "Send the invoice for September", due: day(0), time: "15:00" }),
+    task("t-3", { title: "Send the invoice for September to the accountant and ask whether the VAT figures from the second quarter still need the corrected export before the filing deadline", due: day(0), time: "15:00", project: "work/otacon/smc/billing" }),
     task("t-4", { title: "Buy a new charger cable", due: day(0), status: "waiting" }),
     task("t-5", { title: "Renew the domain", due: day(-3), priority: 1 }),
     task("t-6", { title: "Reply to the lawyer", due: day(-1), time: "09:00" }),
     task("t-7", { title: "Backup the photos", due: day(0), status: "done", done: ago(90) }),
-  ].map(toFile);
+  ].slice(0, mode.few ? 3 : 99).map(toFile);
 
 const pages = [
   { path: "progetti/personal/opensource/agents-multi", title: "Agents Multi", area: "progetti", updated: ago(40) },
@@ -126,7 +136,8 @@ const nodes = () => mode.empty ? [] : [
   { name: "studio", platform: "linux", version: "1.2.1-rc.2", headless: false, load: 0.42, memTotal: 32e9, memFree: 19e9, cap: 4, running: 1, accounts: ["personal/claude", "work/claude"], present: true, sandbox: null, seen: ago(0.2) },
   { name: "hetzner", platform: "linux", version: "1.2.1-rc.2", headless: true, load: 0.08, memTotal: 8e9, memFree: 5.5e9, cap: 2, running: 0, accounts: ["personal/claude"], present: false, sandbox: true, seen: ago(0.4) },
   { name: "macbook", platform: "darwin", version: "1.2.0", headless: false, load: 1.9, memTotal: 16e9, memFree: 2e9, cap: 3, running: 0, accounts: ["personal/claude"], present: false, sandbox: null, seen: ago(60 * 26) },
-];
+  { name: "Portatile", platform: "linux", version: "1.1.0", headless: false, load: 0, memTotal: 8e9, memFree: 4e9, cap: 2, running: 0, accounts: [], present: false, sandbox: null, seen: ago(60 * 24 * 9) },
+].filter((n) => !forgotten.has(n.name));
 
 const keys = () =>
   mode.passkeys === "none" ? [] : [{ id: "AbCd1234", name: "iPhone", publicKey: "pk", endorsement: mode.passkeys === "ready" ? "sig" : null, created: ago(60 * 24 * 2) }];
@@ -163,6 +174,8 @@ async function handle(req: Request): Promise<Response> {
       if (k === "passkeys") mode.passkeys = v;
       if (k === "empty") mode.empty = v === "1";
       if (k === "slow") mode.slow = Number(v);
+      if (k === "voice") mode.voice = v;
+      if (k === "few") mode.few = v === "1";
     }
     return json(mode);
   }
@@ -172,7 +185,8 @@ async function handle(req: Request): Promise<Response> {
 
   // ---- chats
   if (p === "/api/chats" && req.method === "GET") {
-    const list = mode.empty ? [] : [...chats.values()].sort((a, b) => b.updated.localeCompare(a.updated));
+    const all = [...chats.values()].sort((a, b) => b.updated.localeCompare(a.updated));
+    const list = mode.empty ? [] : mode.few ? all.slice(0, 1) : all;
     return json({ chats: list.map(({ id, title, updated, node }) => ({ id, title, updated, node })) });
   }
   if (p === "/api/chats" && req.method === "POST") {
@@ -190,10 +204,58 @@ async function handle(req: Request): Promise<Response> {
     void answer(chat.id, turn, b.text);
     return json({ chat: { id: chat.id, title: chat.title, updated: chat.updated, node: chat.node }, turn });
   }
+  // a voice note: the audio is kept by the service; a machine that can transcribe sends the words, then answers
+  if (p === "/api/chats/voice" && req.method === "POST") {
+    const form = await req.formData();
+    const audio = form.get("audio");
+    if (!(audio instanceof File) || !audio.size) return json({ error: "no audio" }, 400);
+    const given = String(form.get("chat") ?? "");
+    let chat = given ? chats.get(given) : undefined;
+    if (!chat) {
+      const id = `c${chats.size + 1}`;
+      chat = { id, title: "Voice note", updated: new Date().toISOString(), node: null, turns: [] };
+      chats.set(id, chat);
+    }
+    const turn: Turn = { id: `${chat.id}-${chat.turns.length + 1}`, q: "", a: "", acts: [], state: "waiting", node: null, error: null, created: new Date().toISOString(), ended: null, voice: true };
+    chat.turns.push(turn);
+    chat.updated = turn.created;
+    emit(chat.id, "turn", { turn: turn.id, state: "waiting" });
+    if (mode.voice === "yes") {
+      void (async () => {
+        await wait(2000);
+        if (cancelled.has(turn.id)) return;
+        turn.q = "What is on my plate tomorrow, and can you move the call to the afternoon?";
+        chat!.title = "Tomorrow's plate";
+        emit(chat!.id, "transcript", { turn: turn.id, text: turn.q });
+        await answer(chat!.id, turn, turn.q);
+      })();
+    }
+    return json({ chat: { id: chat.id, title: chat.title, updated: chat.updated, node: chat.node }, turn });
+  }
+  const cancel = p.match(/^\/api\/turns\/([\w-]+)\/cancel$/);
+  if (cancel && req.method === "POST") {
+    const chat = [...chats.values()].find((c) => c.turns.some((x) => x.id === cancel[1]));
+    const turn = chat?.turns.find((x) => x.id === cancel[1]);
+    if (!chat || !turn) return json({ error: "no such turn" }, 404);
+    cancelled.add(turn.id);
+    // a waiting turn is cancelled at once; a running one when its machine next reports
+    setTimeout(() => {
+      turn.state = "cancelled";
+      turn.ended = new Date().toISOString();
+      emit(chat.id, "turn", { turn: turn.id, state: "cancelled" });
+    }, turn.state === "waiting" ? 0 : 1200);
+    return json({ ok: true });
+  }
   const one = p.match(/^\/api\/chats\/([\w-]+)$/);
   if (one && req.method === "GET") {
     const c = chats.get(one[1]);
     return c ? json({ chat: { id: c.id, title: c.title, turns: c.turns } }) : json({ error: "no such chat" }, 404);
+  }
+  if (one && req.method === "PATCH") {
+    const c = chats.get(one[1]);
+    if (!c) return json({ error: "no such chat" }, 404);
+    c.title = String((await req.json() as { title: string }).title).slice(0, 120);
+    return json({ ok: true });
   }
   if (one && req.method === "DELETE") return chats.delete(one[1]) ? json({ ok: true }) : json({ error: "no such chat" }, 404);
   const ev = p.match(/^\/api\/chats\/([\w-]+)\/events$/);
@@ -229,6 +291,11 @@ async function handle(req: Request): Promise<Response> {
       body: "# Agents Multi\n\nA multi-profile setup for Claude Code: several accounts on one machine, a console, and a desktop app.\n\n## Now\n\n- The phone has a web app ([[note/fatture]])\n- Passkeys say yes from the phone\n\n## Decisions\n\n> The service never runs agents. It relays.\n\nMore in `docs/adr/0014`.\n",
     });
   }
+  const forget = p.match(/^\/api\/nodes\/([^/]+)$/);
+  if (forget && req.method === "DELETE") {
+    forgotten.add(decodeURIComponent(forget[1]));
+    return json({ ok: true });
+  }
   if (p === "/api/nodes") return json({ nodes: nodes(), jobs: [], now: new Date().toISOString() });
   if (p === "/api/settings/orchestrator") return json({ node: "studio", order: ["studio", "hetzner"] });
 
@@ -240,7 +307,13 @@ async function handle(req: Request): Promise<Response> {
   if (p === "/api/waiting" && req.method === "GET") return json(waitingNow());
   if (p.startsWith("/api/waiting/") || p.startsWith("/api/jobs/")) return json({ ok: true });
   if (p === "/api/passkeys" && req.method === "GET") return json(keys());
-  if (p === "/api/passkeys/options") return json({ challenge: "AAAA", rp: { name: "Agents Multi" }, user: { id: "AAAA", name: "me" }, pubKeyCredParams: [{ type: "public-key", alg: -7 }] });
+  // as the service sends them: a discoverable credential (so a password manager can keep it) and five minutes
+  if (p === "/api/passkeys/options") {
+    return json({
+      challenge: "AAAA", rp: { name: "Agents Multi" }, user: { id: "AAAA", name: "me" }, pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+      timeout: 300000, attestation: "none", authenticatorSelection: { residentKey: "required", requireResidentKey: true, userVerification: "required" },
+    });
+  }
   if (p === "/api/passkeys" && req.method === "POST") {
     mode.passkeys = "pending";
     return json({ id: "AbCd1234", state: "pending" });

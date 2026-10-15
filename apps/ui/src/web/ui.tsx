@@ -2,6 +2,7 @@
 // skeletons, the offline banner, a bottom sheet, and pull to refresh.
 
 import type { ComponentChildren } from "preact";
+import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import mark from "../assets/mark.svg";
 import { t } from "./t.ts";
@@ -39,6 +40,11 @@ const ICONS = {
   bell: "M12 3a6 6 0 0 0-6 6c0 5-2 6-2 7h16c0-1-2-2-2-7a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0",
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   moon: "M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z",
+  mic: "M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM6 11a6 6 0 0 0 12 0M12 17v4",
+  wave: "M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2",
+  x: "M6 6l12 12M18 6L6 18",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13 7l4 4",
+  undo: "M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 8",
   phone: "M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2",
 } as const;
 export type IconName = keyof typeof ICONS;
@@ -139,12 +145,53 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   );
 }
 
-/** Pull to refresh for a view that scrolls with the page: at the top, a pull down past a threshold reads again.
- *  The refresh is also a button for those who do not pull. */
+/** What a toast offers: a line, and maybe one thing to do about it (Undo). */
+interface ToastItem {
+  id: number;
+  text: string;
+  action?: { label: string; run: () => void };
+}
+const toasts = signal<ToastItem[]>([]);
+let toastId = 0;
+
+/** Shows a line at the foot of the screen for a few seconds; `action` is a button on it (Undo). Returns a function
+ *  that takes it away at once. */
+export function toast(text: string, action?: ToastItem["action"], ms = 6000): () => void {
+  const id = ++toastId;
+  toasts.value = [...toasts.value.slice(-1), { id, text, action }];
+  const drop = () => (toasts.value = toasts.value.filter((x) => x.id !== id));
+  setTimeout(drop, ms);
+  return drop;
+}
+
+export function Toasts() {
+  if (!toasts.value.length) return null;
+  return (
+    <div class="toasts" role="status" aria-live="polite">
+      {toasts.value.map((x) => (
+        <div key={x.id} class="toast">
+          <span>{x.text}</span>
+          {x.action && (
+            <button
+              type="button"
+              class="toast-a"
+              onClick={() => (x.action!.run(), (toasts.value = toasts.value.filter((y) => y.id !== x.id)))}
+            >
+              {x.action.label}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Pull to refresh for a view that scrolls (`.scroller`): at its top, a pull down past a threshold reads again. A
+ *  pull that is more sideways than down is a swipe, not a pull. The refresh is also a button for those who do not pull. */
 export function usePull(refresh: () => Promise<unknown> | void) {
   const [pull, setPull] = useState(0);
   const [busy, setBusy] = useState(false);
-  const start = useRef<number | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
   const run = async () => {
     setBusy(true);
     try {
@@ -155,12 +202,13 @@ export function usePull(refresh: () => Promise<unknown> | void) {
   };
   useEffect(() => {
     const down = (e: TouchEvent) => {
-      start.current = scrollY <= 0 && !document.querySelector(".scrim") ? e.touches[0].clientY : null;
+      const at = (e.target as Element).closest?.(".scroller");
+      start.current = at && at.scrollTop <= 0 && !document.querySelector(".scrim") ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
     };
     const move = (e: TouchEvent) => {
-      if (start.current === null) return;
-      const dy = e.touches[0].clientY - start.current;
-      setPull(dy > 0 ? Math.min(dy * 0.5, 80) : 0);
+      if (!start.current) return;
+      const dy = e.touches[0].clientY - start.current.y, dx = e.touches[0].clientX - start.current.x;
+      setPull(dy > 0 && dy > Math.abs(dx) * 1.4 ? Math.min(dy * 0.5, 80) : 0);
     };
     const up = () => {
       if (start.current !== null && pull >= 56) void run();

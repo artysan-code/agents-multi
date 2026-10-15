@@ -5,24 +5,27 @@ description: Short answers to what people ask first.
 
 ## Is it official?
 
-No. Agents Multi is an independent, unofficial project, not affiliated with or endorsed by Anthropic.
-Claude, Claude Code and Claude Desktop are trademarks of Anthropic, PBC.
+No. Agents Multi is an independent, unofficial project, not affiliated with or
+endorsed by Anthropic. Claude, Claude Code and Claude Desktop are trademarks of
+Anthropic, PBC.
 
 ## Does it cost anything?
 
-Agents Multi is free to use. It does not bill you for anything, and the cost figures in `agents usage`
-and the console are an estimate at list prices of what the tokens would cost, not a charge. What you
-pay for Claude is between you and Anthropic.
+Agents Multi is free to use. It does not bill you for anything, and the cost
+figures in `agents usage` and the console are an estimate at list prices of what
+the tokens would cost, not a charge. What you pay for Claude is between you and
+Anthropic.
 
 ## Which systems does it run on?
 
-Linux x86_64 for now. macOS and Windows come with 1.x. See [Getting started](/docs/getting-started/).
+Linux x86_64 for now. macOS and Windows come with 1.x. See
+[Getting started](/docs/getting-started/).
 
 ## Do I need the brain?
 
-No. It is optional: memory and tasks on a server of yours, shared by every Claude. Profiles, the
-console, MCP and the vault work without it. See [The brain](/docs/brain/) and
-[Self-hosting the brain](/docs/self-hosting/).
+No. It is optional: memory and tasks on a server of yours, shared by every
+Claude. Profiles, the console, MCP and the vault work without it. See
+[The brain](/docs/brain/) and [Self-hosting the brain](/docs/self-hosting/).
 
 ## Does it send telemetry?
 
@@ -30,33 +33,36 @@ No.
 
 ## Where are my credentials?
 
-On your machine: each profile's login is in its own folder under `~/.agents-multi/`, and the secrets
-your tools use are in the encrypted vault, with the key in your keyring. They are never in your
-configuration folder or in the repository. See [Security](/docs/security/).
+On your machine: each profile's login is in its own folder under
+`~/.agents-multi/`, and the secrets your tools use are in the encrypted vault,
+with the key in your keyring. They are never in your configuration folder or in
+the repository. See [Security](/docs/security/).
 
 ## Can I use it with just one account?
 
-Yes. One profile is enough; you still get the console, the vault, the updates and the brain if you
-want it. Adding a second profile later is a new folder. See [Profiles](/docs/profiles/).
+Yes. One profile is enough; you still get the console, the vault, the updates
+and the brain if you want it. Adding a second profile later is a new folder. See
+[Profiles](/docs/profiles/).
 
 ## How do updates work?
 
-Claude Code, Claude Desktop and Agents Multi update themselves in the background, verified, and can
-be rolled back. See [Updates](/docs/updates/).
+Claude Code, Claude Desktop and Agents Multi update themselves in the
+background, verified, and can be rolled back. See [Updates](/docs/updates/).
 
 ## What is the licence?
 
-The GNU AGPL-3.0: open source. You may use it, study it, modify it and share it, also inside a
-company. Whoever distributes it, or offers a modified version to others over a network, gives them
-the source under the same licence and keeps the line «Based on Agents Multi by Samuel Tagliacozzo».
-The name and the logo are not part of the licence. See the
+The GNU AGPL-3.0: open source. You may use it, study it, modify it and share it,
+also inside a company. Whoever distributes it, or offers a modified version to
+others over a network, gives them the source under the same licence and keeps
+the line «Based on Agents Multi by Samuel Tagliacozzo». The name and the logo
+are not part of the licence. See the
 [LICENSE](https://github.com/artysan-code/agents-multi/blob/release/LICENSE) and
 [TRADEMARKS.md](https://github.com/artysan-code/agents-multi/blob/release/TRADEMARKS.md).
 
 ## Does it work with other AI providers?
 
-Not yet. Today it is built around Claude Code and Claude Desktop; other providers are something we
-want to support, but there is no date.
+Not yet. Today it is built around Claude Code and Claude Desktop; other
+providers are something we want to support, but there is no date.
 
 ## Something is wrong. Where do I start?
 

@@ -16,7 +16,8 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     ...init,
     credentials: "same-origin",
-    headers: { accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}) },
+    // a FormData body sets its own content type, with the boundary
+    headers: { accept: "application/json", ...(init.body && !(init.body instanceof FormData) ? { "content-type": "application/json" } : {}) },
   });
   if (res.status === 401) {
     location.assign(SIGN_IN);
@@ -34,18 +35,34 @@ const send = (method: string, path: string, body?: unknown) =>
 export const listChats = () => call<{ chats: ChatHead[] }>("/api/chats").then((r) => r.chats);
 export const getChat = (id: string) =>
   call<{ chat: { id: string; title: string; turns: Turn[] } }>(`/api/chats/${encodeURIComponent(id)}`).then((r) => r.chat);
-/** A turn written: the contract says `{chat, turn}`, both objects as `GET` gives them; the chat's id and the turn
- *  (null when the service sent only its id) are what is kept. */
-export async function sendTurn(text: string, chat?: string, node?: string): Promise<{ chat: string; turn: Turn | null }> {
-  const r = await send("POST", "/api/chats", { text, ...(chat ? { chat } : {}), ...(node ? { node } : {}) }) as {
-    chat: string | { id: string };
-    turn: Turn | string;
-  };
+type Sent = { chat: string | { id: string }; turn: Turn | string };
+
+/** The `{chat, turn}` a write answers: the contract says both are objects as `GET` gives them; the chat's id and
+ *  the turn (null when the service sent only its id) are what is kept. */
+function sentOf(r: Sent): { chat: string; turn: Turn | null } {
   const id = typeof r.chat === "string" ? r.chat : r.chat.id;
-  const turn = r.turn && typeof r.turn === "object" ? { ...r.turn, acts: r.turn.acts ?? [], a: r.turn.a ?? "" } : null;
+  const turn = r.turn && typeof r.turn === "object" ? { ...r.turn, acts: r.turn.acts ?? [], a: r.turn.a ?? "", q: r.turn.q ?? "" } : null;
   return { chat: id, turn };
 }
-export const deleteChat = (id: string) => send("DELETE", `/api/chats/${encodeURIComponent(id)}`);
+export async function sendTurn(text: string, chat?: string, node?: string): Promise<{ chat: string; turn: Turn | null }> {
+  return sentOf(await send("POST", "/api/chats", { text, ...(chat ? { chat } : {}), ...(node ? { node } : {}) }) as Sent);
+}
+/** A voice note: multipart with the audio, the chat and the machine to pin it to. The turn has `voice: true` and no
+ *  words until a machine that can transcribe has heard it. */
+export async function sendVoice(audio: Blob, ext: string, chat?: string, node?: string): Promise<{ chat: string; turn: Turn | null }> {
+  const form = new FormData();
+  form.append("audio", audio, `voice.${ext}`);
+  if (chat) form.append("chat", chat);
+  if (node) form.append("node", node);
+  const r = sentOf(await call<Sent>("/api/chats/voice", { method: "POST", body: form }));
+  return r.turn ? { ...r, turn: { ...r.turn, voice: true } } : r;
+}
+export const renameChat = (id: string, title: string) => send("PATCH", `/api/chats/${encodeURIComponent(id)}`, { title });
+/** Cancels a turn: a waiting one at once, a running one when its machine next reports. */
+export const cancelTurn = (id: string) => send("POST", `/api/turns/${encodeURIComponent(id)}/cancel`);
+/** `keepalive`: a delete that was waiting out its Undo still goes when the page is closing. */
+export const deleteChat = (id: string) =>
+  call<Record<string, unknown>>(`/api/chats/${encodeURIComponent(id)}`, { method: "DELETE", keepalive: true });
 export const eventsOf = (id: string) => new EventSource(`/api/chats/${encodeURIComponent(id)}/events`);
 
 // ---- tasks: the files the service keeps; «done» goes through the board's own route, where the rules run
@@ -81,6 +98,8 @@ export const readPage = (path: string) => call<Page>(`/api/brain/page?path=${enc
 
 // ---- machines
 export const loadNodes = () => call<{ nodes: import("./lib.ts").NodeInfo[]; now: string }>("/api/nodes");
+/** Forgets a machine: the node, what waits on it and its personal tokens go; it must be paired again to come back. */
+export const forgetNode = (name: string) => send("DELETE", `/api/nodes/${encodeURIComponent(name)}`);
 export interface Orchestrator {
   node: string | null;
   order: string[];
@@ -111,7 +130,9 @@ export const answerRequest = (id: string, body: { verdict: Verdict; answers?: Re
   send("POST", `/api/waiting/${encodeURIComponent(id)}`, body);
 export const acceptJob = (id: string, expires: string, assertion: Assertion) =>
   send("POST", `/api/jobs/${encodeURIComponent(id)}`, { op: "accept", expires, assertion });
-export const declineJob = (id: string) => send("POST", `/api/jobs/${encodeURIComponent(id)}`, { op: "decline" });
+/** Declining is signed as accepting is (ADR 0014, second round): nobody but the owner stops their agents either. */
+export const declineJob = (id: string, expires: string, assertion: Assertion) =>
+  send("POST", `/api/jobs/${encodeURIComponent(id)}`, { op: "decline", expires, assertion });
 
 // ---- passkeys (G5)
 export const listPasskeys = () => call<Passkey[] | { passkeys: Passkey[] }>("/api/passkeys").then((r) => (Array.isArray(r) ? r : r.passkeys));

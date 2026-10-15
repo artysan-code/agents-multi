@@ -5,8 +5,11 @@ import {
   actKind,
   answersOf,
   applyEvent,
+  cancellable,
   deviceName,
   endorsed,
+  explainError,
+  filterChats,
   groupByDay,
   hashOf,
   isIos,
@@ -36,10 +39,36 @@ import {
   answerText,
   b64u,
   creationOptions,
+  declineChallenge,
+  declineText,
   expiryFrom,
   jobChallenge,
+  requestHash,
   unb64u,
 } from "../../ui/src/web/webauthn-core.ts";
+import {
+  intentOf,
+  neighbour,
+  rowCommits,
+  rowFollow,
+  rubber,
+  settle,
+  springDone,
+  springStep,
+  velocityOf,
+} from "../../ui/src/web/gesture.ts";
+import {
+  clock,
+  extOf,
+  joinDictation,
+  levelOf,
+  MAX_BYTES,
+  MAX_SECONDS,
+  pickRecorderType,
+  pushLevel,
+  slidCancel,
+  speechLang,
+} from "../../ui/src/web/voice-core.ts";
 import { canonical, signedText } from "../../../shared/mcp/lib/nodes.ts";
 import { toFile } from "../../../shared/mcp/lib/tasks/format.ts";
 import type { Task } from "../../../shared/mcp/lib/tasks/types.ts";
@@ -269,6 +298,52 @@ Deno.test("web: a change is of the kind its tool says, and only a failed turn is
   assertEquals(actKind("Bash"), "other");
   assertEquals(retryable({ state: "failed" }), true);
   assertEquals(retryable({ state: "done" }), false);
+  assertEquals(retryable({ state: "cancelled" }), true);
+  assertEquals([
+    cancellable({ state: "waiting" }),
+    cancellable({ state: "running" }),
+    cancellable({ state: "cancelled" }),
+  ], [true, true, false]);
+});
+
+Deno.test("web: a voice note's words arrive as the question; a cancelled turn stays cancelled when its done comes", () => {
+  let turns = [turn("v1", { voice: true, q: "" })];
+  turns = applyEvent(turns, "transcript", { turn: "v1", text: "call the accountant" })!;
+  assertEquals([turns[0].q, turns[0].voice], ["call the accountant", true]);
+  turns = applyEvent(turns, "turn", { turn: "v1", state: "cancelled" })!;
+  turns = applyEvent(turns, "done", { turn: "v1", a: "" })!;
+  assertEquals(turns[0].state, "cancelled");
+  // a transcript with no words changes nothing
+  assertEquals(applyEvent(turns, "transcript", { turn: "v1" }), turns);
+});
+
+Deno.test("web: the chat list is searched by the words of the title, any order, any case", () => {
+  const chats = [{ title: "Plan for today" }, { title: "Release notes wording" }, { title: "" }];
+  assertEquals(filterChats(chats, "").length, 3);
+  assertEquals(filterChats(chats, "NOTES release"), [chats[1]]);
+  assertEquals(filterChats(chats, "zzz"), []);
+  assertEquals(filterChats(chats, "new", "New conversation"), [chats[2]]);
+});
+
+Deno.test("web: a passkey error shows the browser's name and message, with a hint for the names a person can act on", () => {
+  assertEquals(explainError({ name: "NotAllowedError", message: "timed out" }, true), {
+    name: "NotAllowedError",
+    message: "timed out",
+    hint: "NotAllowedError",
+  });
+  assertEquals(explainError({ name: "InvalidStateError", message: "x" }, true).hint, "InvalidStateError");
+  assertEquals(explainError({ name: "SecurityError", message: "x" }, true).hint, "SecurityError");
+  // an error of the service has no name to show and no hint
+  assertEquals(explainError({ name: "Error", message: "no such code" }, false), {
+    name: null,
+    message: "no such code",
+    hint: null,
+  });
+  assertEquals(explainError({ name: "WeirdError", message: "m" }, true), {
+    name: "WeirdError",
+    message: "m",
+    hint: null,
+  });
 });
 
 Deno.test("web: the theme is light, dark or the device's", () => {
@@ -317,28 +392,60 @@ Deno.test("web: base64url round-trips bytes, without padding", () => {
   assertEquals(b64u(new Uint8Array([]).buffer), "");
 });
 
-Deno.test("web: the challenge of an answer is SHA-256 of the contract's text, keys in order, no answers when there are none", async () => {
-  const body = { id: "ch-1/rq-1", node: "studio", verdict: "allow" as const, expires: "2026-10-15T10:05:00.000Z" };
+Deno.test("web: the challenge of an answer (v2) is SHA-256 of the contract's text, keys in order, no answers when there are none, the request's hash inside", async () => {
+  const body = {
+    id: "ch-1/rq-1",
+    node: "studio",
+    verdict: "allow" as const,
+    expires: "2026-10-15T10:05:00.000Z",
+    what: "HASH",
+  };
   assertEquals(
     answerText(body),
-    'agents-multi answer v1\n{"expires":"2026-10-15T10:05:00.000Z","id":"ch-1/rq-1","node":"studio","verdict":"allow"}',
+    'agents-multi answer v2\n{"expires":"2026-10-15T10:05:00.000Z","id":"ch-1/rq-1","node":"studio","verdict":"allow","what":"HASH"}',
   );
   assertEquals(await answerChallenge(body), await sha(answerText(body)));
   const withAnswers = { ...body, answers: { "Which?": "SQLite" } };
   assertEquals(
     answerText(withAnswers),
-    `agents-multi answer v1\n${
+    `agents-multi answer v2\n${
       canonical({
         answers: { "Which?": "SQLite" },
         expires: body.expires,
         id: body.id,
         node: body.node,
         verdict: "allow",
+        what: "HASH",
       })
     }`,
   );
   // another verdict, another challenge: a yes cannot be replayed as a no
   assert(b64u(await answerChallenge({ ...body, verdict: "deny" })) !== b64u(await answerChallenge(body)));
+  // other words, another challenge: the signature belongs to what the person saw
+  assert(b64u(await answerChallenge({ ...body, what: "OTHER" })) !== b64u(await answerChallenge(body)));
+});
+
+Deno.test("web: the request's hash is the base64url SHA-256 of the canonical {what, questions}, questions left out when absent", async () => {
+  const q = [{ question: "Which?", options: [{ label: "A" }] }];
+  assertEquals(await requestHash({ what: "git push" }), b64u(await sha('{"what":"git push"}')));
+  assertEquals(
+    await requestHash({ what: "w", questions: q }),
+    b64u(await sha(canonical({ what: "w", questions: q }))),
+  );
+  assert((await requestHash({ what: "a" })) !== (await requestHash({ what: "b" })));
+});
+
+Deno.test("web: declining a job signs its own text, which an accept cannot be replayed as", async () => {
+  const job = {
+    id: "j-1",
+    node: "hetzner",
+    kind: "routine" as const,
+    spec: { name: "Backup", repo: "git@x:me/b.git", path: "", action: { kind: "child" } },
+  };
+  const expires = "2026-10-16T10:05:00.000Z";
+  assert(declineText(job, expires).startsWith("agents-multi job decline v1\n{"));
+  assertEquals(await declineChallenge(job, expires), await sha(declineText(job, expires)));
+  assert(b64u(await declineChallenge(job, expires)) !== b64u(await jobChallenge(job, expires)));
 });
 
 Deno.test("web: the challenge of accepting a job is SHA-256 of the text the desktop signs", async () => {
@@ -372,4 +479,91 @@ Deno.test("web: the creation options of the service become the bytes WebAuthn ta
     assertEquals(o.excludeCredentials[0].id, Uint8Array.from([7]));
     assertEquals(o.rp, { name: "Agents Multi" });
   }
+});
+
+Deno.test("gesture: sideways wins only when it clearly does; a short move says nothing", () => {
+  assertEquals(intentOf(3, 2), null);
+  assertEquals(intentOf(30, 5), "h");
+  assertEquals(intentOf(-30, 5), "h");
+  assertEquals(intentOf(20, 20), "v");
+  assertEquals(intentOf(4, 40), "v");
+});
+
+Deno.test("gesture: a drag commits past a third of the width or with a flick; otherwise it comes back", () => {
+  assertEquals(settle(-150, 0, 390), "forward");
+  assertEquals(settle(150, 0, 390), "back");
+  assertEquals(settle(-60, 0, 390), "stay");
+  assertEquals(settle(-60, -0.8, 390), "forward");
+  // a flick against the drag does not count
+  assertEquals(settle(-60, 0.8, 390), "stay");
+});
+
+Deno.test("gesture: past the last tab the view resists, and a tab has a neighbour only where there is one", () => {
+  assert(Math.abs(rubber(-400, 80)) < 80);
+  assert(Math.abs(rubber(-100, 80)) < 100);
+  assertEquals(Math.sign(rubber(-50, 80)), -1);
+  const tabs = ["a", "b", "c"];
+  assertEquals(neighbour(tabs, "b", -10), "c");
+  assertEquals(neighbour(tabs, "b", 10), "a");
+  assertEquals(neighbour(tabs, "c", -10), null);
+  assertEquals(neighbour(tabs, "a", 10), null);
+  assertEquals(neighbour(tabs, "x", -10), null);
+});
+
+Deno.test("gesture: a row follows only toward an action and acts past its distance or on a flick", () => {
+  assertEquals(rowFollow(80, false, true, 390), 0);
+  assertEquals(rowFollow(-80, false, true, 390), -80);
+  assert(rowFollow(300, true, false, 390) < 300);
+  assert(rowFollow(300, true, false, 390) > 120);
+  assertEquals(rowCommits(100, 0, 390), true);
+  assertEquals(rowCommits(50, 0, 390), false);
+  assertEquals(rowCommits(50, 0.9, 390), true);
+  assertEquals(rowCommits(50, -0.9, 390), false);
+});
+
+Deno.test("gesture: speed is read from the last 100 ms of the drag, and the spring ends where it is sent", () => {
+  assertEquals(velocityOf([{ x: 0, t: 0 }]), 0);
+  assertEquals(velocityOf([{ x: 0, t: 0 }, { x: 100, t: 400 }, { x: 150, t: 450 }, { x: 200, t: 500 }]), 1);
+  let x = 120, v = 0;
+  for (let i = 0; i < 200 && !springDone(x, v, 0); i++) [x, v] = springStep(x, v, 0, 1 / 60);
+  assert(springDone(x, v, 0));
+  // it overshoots a little when it is thrown, and does not run away
+  let y = 0, w = -3000, low = 0;
+  for (let i = 0; i < 300; i++) {
+    [y, w] = springStep(y, w, 0, 1 / 60);
+    low = Math.min(low, y);
+  }
+  assert(low > -400 && Math.abs(y) < 1);
+});
+
+Deno.test("voice: Opus in WebM first, AAC in MP4 on iOS, nothing when the browser says none", () => {
+  assertEquals(pickRecorderType(() => true), { mime: "audio/webm;codecs=opus", ext: "webm" });
+  assertEquals(pickRecorderType((m) => m.startsWith("audio/mp4")), { mime: "audio/mp4;codecs=mp4a.40.2", ext: "m4a" });
+  assertEquals(pickRecorderType(() => false), null);
+  assertEquals([extOf("audio/mp4"), extOf("audio/webm;codecs=opus"), extOf("audio/ogg")], ["m4a", "webm", "ogg"]);
+  assertEquals([MAX_SECONDS, MAX_BYTES], [300, 10 * 1024 * 1024]);
+});
+
+Deno.test("voice: the clock, the meter and the slide to cancel", () => {
+  assertEquals([clock(0), clock(7.9), clock(65), clock(299)], ["0:00", "0:07", "1:05", "4:59"]);
+  assertEquals(levelOf(new Uint8Array([128, 128, 128])), 0);
+  assert(levelOf(new Uint8Array([0, 255, 0, 255])) > 0.9);
+  assertEquals(levelOf([]), 0);
+  assertEquals(pushLevel([1, 2, 3], 4, 3), [2, 3, 4]);
+  assertEquals([slidCancel(-100, 0), slidCancel(-20, 0), slidCancel(0, -150), slidCancel(0, -20)], [
+    true,
+    false,
+    true,
+    false,
+  ]);
+});
+
+Deno.test("voice: dictation listens in the app's language and joins the words after what was written", () => {
+  assertEquals(speechLang("it", "it-IT"), "it-IT");
+  assertEquals(speechLang("it", "en-GB"), "it-IT");
+  assertEquals(speechLang("en", "en_GB"), "en-GB");
+  assertEquals(speechLang("en", "it-IT"), "en-US");
+  assertEquals(joinDictation("", "hello there"), "hello there");
+  assertEquals(joinDictation("Remind me ", "to call"), "Remind me to call");
+  assertEquals(joinDictation("kept", "  "), "kept");
 });

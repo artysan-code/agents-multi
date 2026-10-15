@@ -3,10 +3,24 @@
 
 import { useEffect, useState } from "preact/hooks";
 import { addPasskey, listPasskeys, passkeyOptions, revokePasskey } from "./api.ts";
-import { deviceName, endorsed, type Passkey, pending } from "./lib.ts";
-import { dateOf, t } from "./t.ts";
+import { deviceName, endorsed, type Explained, explainError, type Passkey, pending } from "./lib.ts";
+import { dateOf, t, tk } from "./t.ts";
 import { createPasskey, passkeysSupported } from "./webauthn.ts";
 import { Failure, Icon, Skeleton } from "./ui.tsx";
+
+/** What a failed passkey call tells the person: the browser's own error name and message, as they are, and when the
+ *  name is one a person can act on, a line about what to do. */
+export const explain = (e: unknown): Explained => explainError(e as Error, typeof DOMException !== "undefined" && e instanceof DOMException);
+
+export function PkError({ e }: { e: Explained }) {
+  const hint = e.hint && tk(`pk.hint.${e.hint}`);
+  return (
+    <div class="pk-err" role="alert">
+      <p class="err">{e.name ? <b>{e.name}</b> : null}{e.name ? ": " : ""}{e.message}</p>
+      {hint && <p class="meta">{hint}</p>}
+    </div>
+  );
+}
 
 export function usePasskeys() {
   const [keys, setKeys] = useState<Passkey[] | null>(null);
@@ -23,7 +37,7 @@ export function usePasskeys() {
 export function PasskeyCard({ keys, onChange }: { keys: Passkey[]; onChange: () => void }) {
   const [name, setName] = useState(deviceName(navigator.userAgent, navigator.maxTouchPoints));
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState<Explained | null>(null);
   const wait = pending(keys);
   if (endorsed(keys).length) return null;
 
@@ -33,11 +47,10 @@ export function PasskeyCard({ keys, onChange }: { keys: Passkey[]; onChange: () 
       const options = await passkeyOptions();
       const credential = await createPasskey(options);
       await addPasskey(name.trim() || "Phone", credential);
-      setErr("");
+      setErr(null);
       onChange();
     } catch (e) {
-      const n = (e as Error).name;
-      setErr(n === "NotAllowedError" || n === "AbortError" ? t("pk.cancelled") : (e as Error).message);
+      setErr(explain(e));
     }
     setBusy(false);
   };
@@ -75,7 +88,7 @@ export function PasskeyCard({ keys, onChange }: { keys: Passkey[]; onChange: () 
             )}
           </>
         )}
-      {err && <p class="err" role="alert">{err}</p>}
+      {err && <PkError e={err} />}
     </section>
   );
 }
