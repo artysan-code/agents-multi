@@ -2,7 +2,7 @@
 // files it displays and the brain, and sends a topic when something it shows has changed.
 
 import { lstat } from "../lib/fs.ts";
-import { HOME, REPO, RUNTIME, STATE } from "../lib/paths.ts";
+import { HOME, NON_PROFILE_DIRS, REPO, RUNTIME, STATE } from "../lib/paths.ts";
 import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
 import { listTasks, tasksRoot } from "../../../shared/mcp/lib/tasks.ts";
 import { memoryVersion } from "../memory.ts";
@@ -14,6 +14,16 @@ export type Topic = typeof TOPICS[number];
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
 /** The open pages alone (clients also holds the server's own listeners): nobody looking, nothing to poll. */
 const pages = new Set<unknown>();
+
+/** The transcripts the watcher saw change since the usage ingest last asked; null when nothing watches
+ *  them (the watcher failed or has not started), which means every transcript must be looked at. */
+let changed: Set<string> | null = null;
+export function takeChangedTranscripts(): string[] | null {
+  if (!changed) return null;
+  const out = [...changed];
+  changed.clear();
+  return out;
+}
 
 /** Sends a topic to every open page. */
 export function broadcast(topic: Topic, sessions: string[] = []) {
@@ -84,6 +94,29 @@ export function topicOf(
   return { topic: "state" };
 }
 
+/** Pure: what to watch. The runtime is mostly Claude Code's own churn (plugin caches, file history,
+ *  shell snapshots: thousands of directories, each an inotify watch), and the console shows only
+ *  the configuration, each profile's settings and credentials (the files of its folder) and its
+ *  plugin list (the files of plugins/), and the transcripts under projects/. So: those deep, the
+ *  folders that hold the rest shallow. */
+export function watchPlan(runtime: string, profiles: string[]): { deep: string[]; flat: string[] } {
+  return {
+    deep: [`${runtime}/config`, ...profiles.map((p) => `${runtime}/${p}/projects`)],
+    flat: [runtime, ...profiles.flatMap((p) => [`${runtime}/${p}`, `${runtime}/${p}/plugins`])],
+  };
+}
+
+/** Profile folders under the runtime: every directory that is not one of the runtime's own. */
+async function profileDirs(): Promise<string[]> {
+  const out: string[] = [];
+  try {
+    for await (const e of Deno.readDir(RUNTIME)) {
+      if (e.isDirectory && !e.name.startsWith(".") && !NON_PROFILE_DIRS.has(e.name)) out.push(e.name);
+    }
+  } catch { /* no runtime yet */ }
+  return out.sort();
+}
+
 /**
  * Watch what the console displays and say which half moved (`app-update` is the app's own word,
  * relayed by app-update.ts).
@@ -96,22 +129,32 @@ export function topicOf(
  * second is plenty for a dashboard.
  */
 export async function watchTree(signal: AbortSignal) {
+  const plan = watchPlan(RUNTIME, await profileDirs());
   // The update check's cache, and the state directory where every update result is logged
   // (updates.jsonl): the Updates tab follows both. watchFs refuses a path that does not exist, so
-  // those two are watched only where they are.
-  const paths = [RUNTIME, `${REPO}/shared`];
+  // those are watched only where they are.
   // the vault too: Syncthing bringing a secret from another machine changes what Connections shows
-  for (const d of [`${HOME}/.cache/claude-update`, STATE, vaultDir(), tasksRoot()]) if (await lstat(d)) paths.push(d);
-  let watcher: Deno.FsWatcher;
+  const deep = [...plan.deep, `${REPO}/shared`, `${HOME}/.cache/claude-update`, STATE, vaultDir(), tasksRoot()];
+  const exists = async (paths: string[]) => {
+    const out: string[] = [];
+    for (const d of paths) if (await lstat(d)) out.push(d);
+    return out;
+  };
+  const watchers: Deno.FsWatcher[] = [];
   try {
-    watcher = Deno.watchFs(paths, { recursive: true });
+    const [d, f] = [await exists(deep), await exists(plan.flat)];
+    if (d.length) watchers.push(Deno.watchFs(d, { recursive: true }));
+    if (f.length) watchers.push(Deno.watchFs(f, { recursive: false }));
   } catch {
+    for (const w of watchers) w.close();
     return;
   }
   signal.addEventListener("abort", () => {
-    try {
-      watcher.close();
-    } catch { /* already closed */ }
+    for (const w of watchers) {
+      try {
+        w.close();
+      } catch { /* already closed */ }
+    }
   });
   const roots = { runtime: RUNTIME, state: STATE, tasks: tasksRoot() };
   const pending = new Set<Topic>();
@@ -124,18 +167,25 @@ export async function watchTree(signal: AbortSignal) {
     pending.clear();
     sessions.clear();
   };
-  try {
-    for await (const e of watcher) {
-      if (e.kind === "access") continue;
-      for (const p of e.paths) {
-        const t = topicOf(p, roots);
-        if (!t) continue;
-        pending.add(t.topic);
-        if (t.session) sessions.add(t.session);
+  // every profile's projects/ is under a recursive watch: from here on the changed transcripts are known
+  if (plan.deep.length > 1) changed = new Set();
+  const follow = async (watcher: Deno.FsWatcher) => {
+    try {
+      for await (const e of watcher) {
+        if (e.kind === "access") continue;
+        for (const p of e.paths) {
+          const t = topicOf(p, roots);
+          if (!t) continue;
+          if (t.topic === "usage" && p.endsWith(".jsonl")) changed?.add(p);
+          pending.add(t.topic);
+          if (t.session) sessions.add(t.session);
+        }
+        if (pending.size && timer == null) timer = setTimeout(flush, 1000);
       }
-      if (pending.size && timer == null) timer = setTimeout(flush, 1000);
-    }
-  } catch { /* closed on shutdown */ }
+    } catch { /* closed on shutdown */ }
+  };
+  await Promise.all(watchers.map(follow));
+  changed = null;
 }
 
 /** The SSE response for one page. `code` is the fingerprint of the code serving it: a page loaded

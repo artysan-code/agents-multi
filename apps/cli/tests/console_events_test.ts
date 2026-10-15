@@ -1,7 +1,7 @@
 // The console's live updates (console/events.ts) and its kept status report (console/status-cache.ts):
 // which file changes are news, and how often a burst of them recomputes the report.
 import { assertEquals } from "jsr:@std/assert@1";
-import { topicOf } from "../console/events.ts";
+import { topicOf, watchPlan } from "../console/events.ts";
 import { StatusCache } from "../console/status-cache.ts";
 
 const roots = { runtime: "/h/.agents-multi", state: "/h/.local/state/agents-multi", tasks: "/h/brains/tasks" };
@@ -52,4 +52,11 @@ Deno.test("StatusCache: a burst of changes is one computation per gap; fresh alw
   assertEquals((await cache.get(true)).report, { n: 3 });
   // the trailing computation scheduled in the burst runs on its own; let it finish
   await new Promise((r) => setTimeout(r, 5));
+});
+
+Deno.test("watchPlan: config and every profile's projects deep; the profile folders and their plugin lists shallow", () => {
+  assertEquals(watchPlan("/r", ["a", "b"]), {
+    deep: ["/r/config", "/r/a/projects", "/r/b/projects"],
+    flat: ["/r", "/r/a", "/r/a/plugins", "/r/b", "/r/b/plugins"],
+  });
 });

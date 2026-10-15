@@ -79,7 +79,8 @@ export function openDb(path: string = DB_PATH) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS files (
-      path TEXT PRIMARY KEY, profile TEXT, size INTEGER, mtime REAL, ingested_at TEXT
+      path TEXT PRIMARY KEY, profile TEXT, size INTEGER, mtime REAL, ingested_at TEXT,
+      read_to INTEGER, turn_id TEXT, turn_used INTEGER
     );
     CREATE TABLE IF NOT EXISTS messages (
       msg_id TEXT PRIMARY KEY, profile TEXT NOT NULL, project TEXT, session_id TEXT, file TEXT,
@@ -107,6 +108,12 @@ export function openDb(path: string = DB_PATH) {
   // migration: databases created before per-turn attribution lack the column
   const cols = (db.prepare("PRAGMA table_info(messages)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("turn_id")) db.exec("ALTER TABLE messages ADD COLUMN turn_id TEXT");
+  // …and those before incremental reading lack where each file was read to (NULL: read it whole again)
+  const fcols = (db.prepare("PRAGMA table_info(files)").all() as { name: string }[]).map((c) => c.name);
+  if (!fcols.includes("read_to")) {
+    db.exec("ALTER TABLE files ADD COLUMN read_to INTEGER; ALTER TABLE files ADD COLUMN turn_id TEXT;");
+    db.exec("ALTER TABLE files ADD COLUMN turn_used INTEGER");
+  }
   return db;
 }
 
@@ -163,14 +170,31 @@ export function projectLabel(slug: string | null, cwd?: string | null): string {
   return rest.replace(/^-+/, "") || slug;
 }
 
+/** Where a transcript was read to: the byte after its last complete line, and the turn open there. */
+export interface ReadState {
+  readTo: number;
+  turnId: string | null;
+  turnUsed: boolean;
+}
+
+/** The whole transcript, read again from its first byte. */
 export async function ingestFile(db: DatabaseSync, profile: string, path: string) {
-  const text = await Deno.readTextFile(path);
+  return (await ingestFrom(db, profile, path)).msgs;
+}
+
+/** Reads a transcript from `from.readTo` (the start when absent) to its last complete line, merging
+ *  with what an earlier read left: a response written in chunks across the boundary keeps the
+ *  per-field maximum, and the turn that was open goes on. A partial last line waits for the next read. */
+export async function ingestFrom(db: DatabaseSync, profile: string, path: string, from?: ReadState) {
+  const bytes = await readBytes(path, from?.readTo ?? 0);
+  const end = completeEnd(bytes);
+  const text = new TextDecoder().decode(bytes.subarray(0, end));
   const project = projectOf(path, profile);
   const inSub = path.includes("/subagents/");
   const msgs = new Map<string, Acc>();
   const spawns: { id: string; ts: string; type: string; desc: string; model: string; session: string | null }[] = [];
   // a turn runs from one human prompt to the next; it is what attributes cost to skills and commands
-  let turnId: string | null = null, turnUsed = false;
+  let turnId: string | null = from?.turnId ?? null, turnUsed = from?.turnUsed ?? false;
   const tools = new Map<string, { turn: string; kind: string; name: string; ts: string; session: string | null }>();
   const rememberTool = (kind: string, name: string, ts: string, session: string | null) => {
     if (!turnId || !name) return;
@@ -269,8 +293,25 @@ export async function ingestFile(db: DatabaseSync, profile: string, path: string
       if (blk.name === "Skill" && blk.input?.skill) rememberTool("skill", blk.input.skill, cur.ts, cur.sessionId);
     }
   }
-  db.prepare("DELETE FROM messages WHERE file = ?").run(path);
-  db.prepare("DELETE FROM turn_tools WHERE file = ?").run(path);
+  if (!from) {
+    db.prepare("DELETE FROM messages WHERE file = ?").run(path);
+    db.prepare("DELETE FROM turn_tools WHERE file = ?").run(path);
+  } else {
+    const before = db.prepare(
+      "SELECT input, output, cache_read, cache_5m, cache_1h FROM messages WHERE msg_id = ? AND file = ?",
+    );
+    for (const [id, a] of msgs) {
+      const o = before.get(id, path) as
+        | { input: number; output: number; cache_read: number; cache_5m: number; cache_1h: number }
+        | undefined;
+      if (!o) continue;
+      a.input = Math.max(a.input, o.input);
+      a.output = Math.max(a.output, o.output);
+      a.cacheRead = Math.max(a.cacheRead, o.cache_read);
+      a.cache5m = Math.max(a.cache5m, o.cache_5m);
+      a.cache1h = Math.max(a.cache1h, o.cache_1h);
+    }
+  }
   const ins = db.prepare(`INSERT OR REPLACE INTO messages
     (msg_id, profile, project, session_id, file, sidechain, agent_id, agent, model, ts, day, input, output, cache_read, cache_5m, cache_1h, cost_usd, cwd, entrypoint, version, turn_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
@@ -300,7 +341,7 @@ export async function ingestFile(db: DatabaseSync, profile: string, path: string
     );
   }
   const insT = db.prepare(
-    `INSERT OR REPLACE INTO turn_tools (turn_id, kind, name, profile, project, session_id, file, ts, day) VALUES (?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO turn_tools (turn_id, kind, name, profile, project, session_id, file, ts, day) VALUES (?,?,?,?,?,?,?,?,?)`,
   );
   for (const t of tools.values()) {
     insT.run(t.turn, t.kind, t.name, profile, project, t.session, path, t.ts, t.ts.slice(0, 10));
@@ -309,66 +350,143 @@ export async function ingestFile(db: DatabaseSync, profile: string, path: string
     `INSERT OR REPLACE INTO agent_spawns (tool_use_id, profile, project, session_id, ts, day, subagent_type, description, model) VALUES (?,?,?,?,?,?,?,?,?)`,
   );
   for (const s of spawns) insS.run(s.id, profile, project, s.session, s.ts, s.ts.slice(0, 10), s.type, s.desc, s.model);
-  return msgs.size;
+  const state: ReadState = { readTo: (from?.readTo ?? 0) + end, turnId, turnUsed };
+  return { msgs: msgs.size, bytes: end, state };
+}
+
+/** Pure: how many bytes of `bytes` are complete lines. A last line with no newline counts when it is
+ *  whole JSON (a writer that does not end its file with one); a half-written one waits. */
+export function completeEnd(bytes: Uint8Array): number {
+  const nl = bytes.lastIndexOf(10) + 1;
+  if (nl === bytes.length) return nl;
+  try {
+    JSON.parse(new TextDecoder().decode(bytes.subarray(nl)));
+    return bytes.length;
+  } catch {
+    return nl;
+  }
+}
+
+/** The file's bytes from `offset` on. */
+async function readBytes(path: string, offset: number): Promise<Uint8Array> {
+  if (!offset) return await Deno.readFile(path);
+  using f = await Deno.open(path);
+  await f.seek(offset, Deno.SeekMode.Start);
+  const size = (await f.stat()).size - offset;
+  const out = new Uint8Array(Math.max(size, 0));
+  let got = 0;
+  while (got < out.length) {
+    const n = await f.read(out.subarray(got));
+    if (n == null) break;
+    got += n;
+  }
+  return out.subarray(0, got);
 }
 
 /** Derived-schema version: when it rises, already-read files must be re-read (derived data changed). */
 const SCHEMA_VERSION = 2;
 
-export async function ingest(db: DatabaseSync, opts: { full?: boolean; quiet?: boolean } = {}) {
+/** What `ingest` did: files read, messages found, files left alone, bytes read. */
+export interface IngestResult {
+  files: number;
+  msgs: number;
+  skipped: number;
+  bytes: number;
+}
+
+/** Reads the transcripts into the database. Each file is read from where the last read stopped, so a
+ *  session that grew by a few lines costs a few lines. `only`: the paths known to have changed (the
+ *  console's watcher); the others are not even looked at. Without it every transcript is looked at. */
+export async function ingest(db: DatabaseSync, opts: { full?: boolean; quiet?: boolean; only?: string[] } = {}) {
   const ver = (db.prepare("PRAGMA user_version").get() as { user_version: number } | undefined)?.user_version ?? 0;
   const full = opts.full || ver < SCHEMA_VERSION;
   if (full && ver < SCHEMA_VERSION && !opts.quiet) {
     console.error(`schema usage ${ver} → ${SCHEMA_VERSION}: full re-read of the transcripts`);
   }
-  const known = new Map<string, { size: number; mtime: number }>();
-  if (!full) {
-    for (
-      const r of db.prepare("SELECT path, size, mtime FROM files").all() as {
-        path: string;
-        size: number;
-        mtime: number;
-      }[]
-    ) known.set(r.path, r);
-  }
-  let files = 0, msgs = 0, skipped = 0;
+  type Known = {
+    size: number;
+    mtime: number;
+    read_to: number | null;
+    turn_id: string | null;
+    turn_used: number | null;
+  };
+  const known = new Map<string, Known>();
+  for (
+    const r of db.prepare("SELECT path, size, mtime, read_to, turn_id, turn_used FROM files").all() as (Known & {
+      path: string;
+    })[]
+  ) known.set(r.path, r);
+  const res: IngestResult = { files: 0, msgs: 0, skipped: 0, bytes: 0 };
   const upFile = db.prepare(
-    "INSERT OR REPLACE INTO files (path, profile, size, mtime, ingested_at) VALUES (?,?,?,?,?)",
+    "INSERT OR REPLACE INTO files (path, profile, size, mtime, ingested_at, read_to, turn_id, turn_used) VALUES (?,?,?,?,?,?,?,?)",
   );
-  for (const profile of await ingestProfiles()) {
-    for await (const path of walk(`${RUNTIME}/${profile}/projects`)) {
-      const st = await Deno.stat(path);
-      const mtime = st.mtime?.getTime() ?? 0;
-      const k = known.get(path);
-      if (k && k.size === st.size && k.mtime === mtime) {
-        skipped++;
-        continue;
-      }
-      db.exec("BEGIN");
-      try {
-        msgs += await ingestFile(db, profile, path);
-        upFile.run(path, profile, st.size, mtime, new Date().toISOString());
-        db.exec("COMMIT");
-      } catch (e) {
-        db.exec("ROLLBACK");
-        if (!opts.quiet) console.error(`  ! ${path}: ${(e as Error).message}`);
-        continue;
-      }
-      files++;
-    }
-  }
-  // files that vanished (deleted sessions): drop their messages too
-  for (const p of known.keys()) {
+  const forget = (p: string) => {
+    db.prepare("DELETE FROM messages WHERE file = ?").run(p);
+    db.prepare("DELETE FROM turn_tools WHERE file = ?").run(p);
+    db.prepare("DELETE FROM files WHERE path = ?").run(p);
+  };
+  const one = async (profile: string, path: string) => {
+    let st: Deno.FileInfo;
     try {
-      await Deno.stat(p);
+      st = await Deno.stat(path);
     } catch {
-      db.prepare("DELETE FROM messages WHERE file = ?").run(p);
-      db.prepare("DELETE FROM turn_tools WHERE file = ?").run(p);
-      db.prepare("DELETE FROM files WHERE path = ?").run(p);
+      if (known.has(path)) forget(path); // a deleted session
+      return;
+    }
+    const mtime = st.mtime?.getTime() ?? 0;
+    const k = full ? undefined : known.get(path);
+    if (k && k.size === st.size && k.mtime === mtime) {
+      res.skipped++;
+      return;
+    }
+    // resume only a file that grew past where it was read to; a shorter one was rewritten
+    const from: ReadState | undefined = k && k.read_to != null && k.read_to > 0 && st.size >= k.read_to
+      ? { readTo: k.read_to, turnId: k.turn_id, turnUsed: !!k.turn_used }
+      : undefined;
+    db.exec("BEGIN");
+    try {
+      const r = await ingestFrom(db, profile, path, from);
+      upFile.run(
+        path,
+        profile,
+        st.size,
+        mtime,
+        new Date().toISOString(),
+        r.state.readTo,
+        r.state.turnId,
+        r.state.turnUsed ? 1 : 0,
+      );
+      db.exec("COMMIT");
+      res.msgs += r.msgs;
+      res.bytes += r.bytes;
+    } catch (e) {
+      db.exec("ROLLBACK");
+      if (!opts.quiet) console.error(`  ! ${path}: ${(e as Error).message}`);
+      return;
+    }
+    res.files++;
+  };
+  if (opts.only) {
+    const prefix = `${RUNTIME}/`;
+    for (const path of opts.only) {
+      const profile = path.startsWith(prefix) ? path.slice(prefix.length).split("/")[0] : "";
+      if (profile && path.endsWith(".jsonl") && path.includes("/projects/")) await one(profile, path);
+    }
+  } else {
+    for (const profile of await ingestProfiles()) {
+      for await (const path of walk(`${RUNTIME}/${profile}/projects`)) await one(profile, path);
+    }
+    // files that vanished (deleted sessions): drop their messages too
+    for (const p of known.keys()) {
+      try {
+        await Deno.stat(p);
+      } catch {
+        forget(p);
+      }
     }
   }
   if (ver < SCHEMA_VERSION) db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-  return { files, msgs, skipped };
+  return res;
 }
 
 // ---------------------------------------------------------------- report

@@ -1,6 +1,16 @@
 // Tests for usage.ts: rates, time windows, ingest with chunk dedupe, reports.
 import { assert, assertAlmostEquals, assertEquals } from "jsr:@std/assert@1";
-import { costUsd, ingestFile, openDb, projectLabel, report, sessions, sinceDate } from "../usage.ts";
+import {
+  completeEnd,
+  costUsd,
+  ingestFile,
+  ingestFrom,
+  openDb,
+  projectLabel,
+  report,
+  sessions,
+  sinceDate,
+} from "../usage.ts";
 
 Deno.test("sinceDate: 7d, all, an explicit date, and invalid input", () => {
   const d = sinceDate("7d")!;
@@ -236,4 +246,69 @@ Deno.test("projectLabel: cwd names the project, the slug is only a fallback", ()
   // no cwd: strip the slugified home and keep what is left, ambiguous as it is
   assertEquals(projectLabel("-home-a-dragons-lair", null).endsWith("dragons-lair"), true);
   assertEquals(projectLabel(null, null), "—");
+});
+
+Deno.test("ingestFrom: reading a transcript in pieces gives what reading it whole gives", async () => {
+  const dir = await Deno.makeTempDir();
+  const user = (id: string, text: string) =>
+    line({ type: "user", uuid: id, timestamp: "2026-09-04T10:00:00Z", message: { role: "user", content: text } });
+  const reply = (uuid: string, id: string, out: number, content: unknown[] = []) =>
+    line({
+      type: "assistant",
+      uuid,
+      timestamp: "2026-09-04T10:00:01Z",
+      sessionId: "s1",
+      message: { id, model: "claude-opus-5", usage: usage(10, out, 1000), content },
+    });
+  const skill = [{ type: "tool_use", name: "Skill", id: "t1", input: { skill: "review" } }];
+  const lines = [
+    user("u1", "<command-name>/deploy</command-name>"),
+    reply("a1", "msg_1", 50), // a response in chunks, split by the boundary below
+    reply("a2", "msg_1", 100, skill),
+    user("u2", "next"),
+    reply("a3", "msg_2", 7),
+  ].map((l) => l + "\n");
+  const dump = (db: ReturnType<typeof openDb>) => ({
+    m: db.prepare("SELECT msg_id, output, cost_usd, turn_id FROM messages ORDER BY msg_id").all(),
+    t: db.prepare("SELECT turn_id, kind, name, ts FROM turn_tools ORDER BY turn_id, kind, name").all(),
+  });
+
+  const whole = openDb(":memory:");
+  const wf = `${dir}/whole.jsonl`;
+  await Deno.writeTextFile(wf, lines.join(""));
+  await ingestFile(whole, "personal", wf);
+
+  const parts = openDb(":memory:");
+  const pf = `${dir}/parts.jsonl`;
+  // first read: up to the middle of the second chunk of msg_1 (a half-written line)
+  const cut = lines.slice(0, 2).join("").length + 20;
+  await Deno.writeTextFile(pf, lines.join("").slice(0, cut));
+  const r1 = await ingestFrom(parts, "personal", pf);
+  assertEquals(r1.state.readTo, lines[0].length + lines[1].length); // the half line waits
+  // second read: the rest of the file, from the offset only
+  await Deno.writeTextFile(pf, lines.join(""));
+  const r2 = await ingestFrom(parts, "personal", pf, r1.state);
+  assertEquals(r2.bytes, lines.join("").length - r1.state.readTo);
+  assertEquals(r2.state.readTo, lines.join("").length);
+  assertEquals(dump(parts), dump(whole));
+
+  // a read that begins after the chunk keeps the maximum already stored
+  const late = openDb(":memory:");
+  const lf = `${dir}/late.jsonl`;
+  await Deno.writeTextFile(lf, lines.slice(0, 3).join(""));
+  const l1 = await ingestFrom(late, "personal", lf);
+  await Deno.writeTextFile(lf, lines.slice(0, 3).join("") + reply("a9", "msg_1", 40) + "\n");
+  await ingestFrom(late, "personal", lf, l1.state);
+  assertEquals(
+    (late.prepare("SELECT output FROM messages WHERE msg_id = 'msg_1'").get() as { output: number }).output,
+    100,
+  );
+});
+
+Deno.test("completeEnd: whole lines count, a half-written one waits, a whole last line without newline counts", () => {
+  const b = (s: string) => new TextEncoder().encode(s);
+  assertEquals(completeEnd(b('{"a":1}\n{"b":2}\n')), 16);
+  assertEquals(completeEnd(b('{"a":1}\n{"b":')), 8);
+  assertEquals(completeEnd(b('{"a":1}\n{"b":2}')), 15);
+  assertEquals(completeEnd(b("")), 0);
 });
