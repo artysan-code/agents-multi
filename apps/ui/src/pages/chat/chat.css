@@ -1,0 +1,456 @@
+/* chat.css — the Chat page (pages/chat/*): the list of chats beside the thread, the thread in a reading
+   column, Claude's answers in the serif (its voice), the composer at the foot — or in the middle, under
+   the greeting, while the chat is empty. */
+
+.cht {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+}
+
+/* ---------------- the list ---------------- */
+.chl {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 10px 10px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+.chl-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font: 500 13px var(--sans);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.chl-new:hover {
+  background: var(--raised);
+}
+.chl-new svg,
+.chl-x svg,
+.msg-tb svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.chl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.chl-h {
+  margin: 12px 8px 4px;
+  font: 600 10.5px var(--sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.chl-none {
+  margin: 12px 8px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.chl-r {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+.chl-r:hover {
+  background: var(--hover);
+}
+.chl-r.on {
+  background: var(--raised);
+}
+.chl-t {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chl-r.on .chl-t {
+  color: var(--fg);
+  font-weight: 500;
+}
+.chl-x {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 3px;
+  border-radius: 6px;
+  color: var(--faint);
+  opacity: 0;
+}
+.chl-r:hover .chl-x,
+.chl-x:focus-visible {
+  opacity: 1;
+}
+.chl-x:hover {
+  color: var(--crit);
+  background: var(--crit-wash);
+}
+.chl-ask {
+  display: flex;
+  gap: 4px;
+  padding-right: 4px;
+}
+.bt.danger {
+  background: var(--crit);
+  color: var(--on-accent);
+}
+
+/* ---------------- the thread ---------------- */
+.cht-main {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cht-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.cht-h h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 500 14px var(--sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cht-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 24px 8px;
+}
+.cht-thread,
+.cht-foot {
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+.turn + .turn {
+  margin-top: 28px;
+}
+.msg-u {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+.msg-u .bub {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--raised);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.msg-a {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 12px;
+}
+.msg-a > .spark {
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+}
+.msg-a > .spark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.msg-b {
+  min-width: 0;
+}
+.msg-b .md {
+  padding: 0;
+  font: 400 15.5px/1.65 var(--serif);
+  overflow-wrap: anywhere;
+}
+.msg-b .md > :first-child {
+  margin-top: 0;
+}
+.msg-b .md pre {
+  font-size: 12.5px;
+  overflow: auto;
+}
+.msg-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.msg-read {
+  font-size: 12px;
+  color: var(--faint);
+}
+.msg-act {
+  display: inline-flex;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.msg-act b {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.msg-act span {
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msg-err {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--crit-wash);
+  color: var(--crit);
+  font-size: 13px;
+}
+.msg-doing {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--faint);
+}
+.msg-doing:empty {
+  display: none;
+}
+.msg-f {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-top: 6px;
+}
+.msg-tb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--faint);
+  opacity: 0;
+}
+.msg-a:hover .msg-tb,
+.msg-tb:focus-visible {
+  opacity: 1;
+}
+.msg-tb:hover {
+  background: var(--raised);
+  color: var(--fg);
+}
+.msg-m {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+  opacity: 0;
+}
+.msg-a:hover .msg-m {
+  opacity: 1;
+}
+
+/* ---------------- empty: the greeting, the composer under it ---------------- */
+.cht-main.empty {
+  justify-content: center;
+}
+.cht-main.empty .cht-scroll {
+  flex: none;
+  overflow: visible;
+  padding-bottom: 20px;
+}
+.cht-hi {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.cht-hi .spark {
+  width: 34px;
+  height: 34px;
+}
+.cht-hi .spark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.cht-hi h2 {
+  margin: 0;
+  font: 400 30px/1.2 var(--serif);
+  letter-spacing: -.01em;
+}
+.cht-sug {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ---------------- the composer ---------------- */
+.cht-foot {
+  padding: 8px 24px 18px;
+}
+.cht-main.empty .cht-foot {
+  max-width: 680px;
+}
+.cmp {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 8px 16px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow), 0 6px 24px rgba(20, 20, 18, .05);
+}
+.cmp:focus-within {
+  box-shadow: 0 0 0 1px var(--line), 0 6px 28px rgba(20, 20, 18, .09);
+}
+.cmp textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--fg);
+  font: 400 15px/1.5 var(--sans);
+  padding: 2px 0;
+}
+.cmp textarea::placeholder {
+  color: var(--faint);
+}
+.cmp-f {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cmp-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmp-go {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  flex: none;
+}
+.cmp-go:hover {
+  background: var(--accent-hi);
+}
+.cmp-go svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cmp-go.stop {
+  background: var(--fg);
+}
+.cmp-go.stop svg {
+  fill: var(--surface);
+  stroke: none;
+}
+
+/* the button that opens the list, and the veil under it: a narrow window only */
+.cht-tg,
+.cht-tg-bar,
+.cht-veil {
+  display: none;
+}
+
+/* a narrow window: the thread takes the width, the list folds into a button and opens over it */
+@media (max-width: 760px) {
+  .cht {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chl {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    width: min(280px, 85%);
+    box-shadow: var(--pop);
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition: transform .18s ease, visibility 0s linear .18s;
+  }
+  .cht.list-open .chl {
+    transform: none;
+    visibility: visible;
+    transition: transform .18s ease;
+  }
+  .cht-veil {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(20, 20, 18, .18);
+  }
+  .cht-tg {
+    display: grid;
+  }
+  .cht-tg-bar {
+    display: block;
+    position: absolute;
+    top: 10px;
+    left: 12px;
+  }
+  .cht-main.empty {
+    position: relative;
+  }
+  .cht-h {
+    padding: 8px 12px;
+  }
+  .cht-scroll,
+  .cht-foot {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

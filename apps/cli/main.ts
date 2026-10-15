@@ -195,9 +195,9 @@ switch (cmd) {
       const r = await ingest(db, { full: flag("--full") });
       if (rest[0] === "ingest" || r.files) {
         console.error(
-          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged (${
-            ((Date.now() - t0) / 1000).toFixed(1)
-          }s) → ${DB_PATH}`,
+          `ingest: ${r.files} files read, ${r.msgs} messages, ${r.skipped} unchanged, ${
+            (r.bytes / 1e6).toFixed(1)
+          } MB read (${((Date.now() - t0) / 1000).toFixed(1)}s) → ${DB_PATH}`,
         );
       }
       if (rest[0] === "ingest") break;
@@ -300,7 +300,7 @@ switch (cmd) {
   limits  [--json]            every account's usage windows (5h, 7d…): Claude's from the status line, Codex's from its logs
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  vault   [status|init|pair|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
+  vault   [status|init [--file]|pair [--file]|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
           in ~/vault/claude-multi (Syncthing), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind]   the task list (in the brain); remind is what claude-tasks.timer runs
@@ -315,7 +315,7 @@ switch (cmd) {
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)
-  serve   [--no-open|--headless]   local console on http://127.0.0.1:${PORT} (today, connections, profiles, plugins, updates, health);
+  serve   [--no-open|--headless]   local console on http://127.0.0.1:${PORT} (chat, runs, accounts & limits; the rest under More);
           --headless: a server's agentd (docs/adr/0012), no page, routines and jobs only inside the Bash sandbox
   node    [status|enable [--headless] [--max N]|disable|probe|key]   this machine as a node of the service: what it
           announces, turning it on or off, the sandbox probe, the owner's public approval key (for a node with no vault)

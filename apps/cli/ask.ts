@@ -1,29 +1,25 @@
-// ask.ts — the console talks to Claude: the one field at the bottom of the page, the morning debrief,
-// and the hand-over to a terminal (resume a session, continue a conversation, open Claude Code in a
-// project) and to a session's own window.
+// ask.ts — the console talks to Claude: the Chat page and the Hey window (one conversation each, kept
+// by chats.ts), and the hand-over to a terminal (resume a session, continue a conversation, open Claude
+// Code in a project) and to a session's own window.
 //
-// The answer comes from `claude -p` in the machine's default profile, as Hey's does, and streams
-// back to the page as NDJSON on the response of the POST that asked: one request, one answer, no
-// polling. The tools are a fixed list per kind of request and `--permission-mode dontAsk` refuses
-// everything else, whatever the profile's own mode: from here Claude reads and keeps the tasks, and
-// creates or moves calendar events (the server sends no invitation unless asked: the prompt forbids
-// asking without the owner's word); it never sends mail or deletes. A change asked from the Brain page gets the brain's tools and
-// nothing else: it writes only there.
+// The answer comes from `claude -p` in the machine's default profile and streams back to the page as
+// NDJSON on the response of the POST that asked: one request, one answer, no polling. The tools are a
+// fixed list and `--permission-mode dontAsk` refuses everything else, whatever the profile's own mode:
+// from here Claude reads and keeps the tasks and the brain, and creates or moves calendar events (the
+// server sends no invitation unless asked: the prompt forbids asking without the owner's word); it
+// never sends mail or deletes.
 
 import { readJson } from "./lib/fs.ts";
 import { BIN, expandHome, HOME, STATE } from "./lib/paths.ts";
 import { has } from "./lib/proc.ts";
 import { running } from "./lib/processes.ts";
 import { launchers } from "./lib/profiles.ts";
-import { dayOf } from "../../shared/mcp/lib/tasks.ts";
-import { BRAIN as WIKI } from "./brain.ts";
 import { owner } from "../../shared/mcp/lib/owner.ts";
 import { parentPid } from "../../shared/mcp/lib/platform.ts";
 import { recordLogin } from "./login.ts";
-import { choiceSignature, listCalendars, loadChoice } from "./calendars.ts";
+import { type Act, CHAT_ID, readChat, saveTurn } from "./chats.ts";
 
 type Json = (v: unknown, code?: number) => Response;
-export type AskKind = "ask" | "newtask" | "debrief" | "brain";
 
 // The owner's brain, read only: the claude.ai connector "Brain" of the personal profile, as the CLI names it
 const BRAIN_READ = [
@@ -31,21 +27,9 @@ const BRAIN_READ = [
   "mcp__claude_ai_Brain__brain_read",
   "mcp__claude_ai_Brain__brain_list",
 ];
-// what a change to the brain may use: its writing tools, never deletion (brain_delete stays out)
-const BRAIN_WRITE = [
-  "brain_write",
-  "brain_edit",
-  "brain_append",
-  "brain_move",
-  "brain_inbox_clear",
-  "brain_check",
-  "brain_history",
-  "brain_restore",
-]
-  .map((t) => `mcp__claude_ai_Brain__${t}`);
-// what the field may write in the brain on its own: a line in the diary, a page changed or added; never a move or a deletion
+// what a chat may write in the brain on its own: a line in the diary, a page changed or added; never a move or a deletion
 const BRAIN_KEEP = ["brain_append", "brain_edit", "brain_write"].map((t) => `mcp__claude_ai_Brain__${t}`);
-// Events created or moved from the field: never deleted, never with an invitation sent unless asked (the prompt)
+// Events created or moved from a chat: never deleted, never with an invitation sent unless asked (the prompt)
 const CALENDAR_WRITE = ["mcp__google__calendar_create", "mcp__google__calendar_update"];
 const READ = [
   "mcp__google__calendar_list",
@@ -56,71 +40,17 @@ const READ = [
   "mcp__google__drive_read",
   ...BRAIN_READ,
 ];
-export const TOOLS: Record<AskKind, string[]> = {
-  ask: ["mcp__tasks", ...READ, ...CALENDAR_WRITE, ...BRAIN_KEEP],
-  newtask: ["mcp__tasks", ...BRAIN_READ],
-  debrief: ["mcp__tasks__tasks_brief", "mcp__google__calendar_events", "mcp__google__calendar_list"],
-  // and the old wiki, read only, for what is brought over from the Archive
-  brain: [...BRAIN_READ, ...BRAIN_WRITE, `Read(/${WIKI}/**)`],
-};
-/** Claude Code's own tools a kind may use at all (the rules above narrow them): none, except reading the old wiki. */
-const BUILTIN: Record<AskKind, string> = { ask: "", newtask: "", debrief: "", brain: "Read" };
+/** What a chat may use: the tasks, the calendar, mail and Drive to read, the brain. Claude Code's own
+ *  tools (files, shell) are none of it: work in a project's files goes to a terminal. */
+export const TOOLS = ["mcp__tasks", ...READ, ...CALENDAR_WRITE, ...BRAIN_KEEP];
 
-const BASE = (now: string, o = owner()) =>
-  `You answer inside ${o.name}'s console (agents-multi), in a panel above the field they typed in. Answer in ${o.language} ` +
-  `unless they write in another language. No preamble, no closing question. Now: ${now}.`;
-
-/** Pure but for the owner (owner.ts, passed in tests): the instructions for a kind of request. */
-export function promptFor(
-  kind: AskKind,
-  now: string,
-  project?: string | null,
-  noProject = false,
-  o = owner(),
-  calendars = "",
-): string {
-  const base = BASE(now, o), who = o.name;
-  if (kind === "newtask") {
-    const where = project
-      ? `the project "${project}"`
-      : noProject
-      ? `no project (a simple thing to do)`
-      : `a project you work out from what they say`;
-    const set = project
-      ? `project "${project}"`
-      : noProject
-      ? "no project"
-      : `project: the folder under ~ it belongs to (work/acme/site, ` +
-        `personal/blog: look at the existing tasks' projects with tasks_list, or the brain), or none for a simple thing`;
-    return `${base}\n${who} is describing a new task for ${where}. Create it with tasks_add: a short, clear title in their ` +
-      `words, ${set}, the day (resolve "tomorrow", "Friday" from today) and a time: theirs when they gave one, else a ` +
-      `plausible slot that day that does not overlap their calendar (say which), and in notes what they explained, as a ` +
-      `short description. If it takes more than one action, add the steps ` +
-      `with tasks_steps. Then answer with one line: what you created, and when it is due if it is. If what they wrote is too ` +
-      `vague to be a task, ask one short question instead of creating it.`;
-  }
-  if (kind === "brain") {
-    const on = project
-      ? `They are looking at the page ${project}: "this page" means it; read it first (brain_read).`
-      : "They are looking at the brain as a whole.";
-    return `${base}\n${who} asks for a change to their brain, from its page in the console. ${on} Make the change with the ` +
-      `brain tools, by the brain's rules (they refuse what breaks them: fix and try again). You can only write in the brain, ` +
-      `nothing else. Prefer brain_edit to rewriting a page; read before changing; never invent facts they did not give or ` +
-      `that the brain does not already hold: if something is missing, ask one short question instead. The old wiki ` +
-      `(${WIKI}, an archive) can be read with Read, never written: to bring a subject over, rewrite what still holds ` +
-      `into the right page (search first: update rather than copy). Then answer ` +
-      `in one or two lines: what you changed, page by page.`;
-  }
-  if (kind === "debrief") {
-    return `${base}\nWrite ${who}'s debrief for today from tasks_brief and today's calendar events: at most three short ` +
-      `lines, plain sentences, no headings, no bullets. First what matters today, with times; then anything late; then ` +
-      `what they are waiting for from others, if anything. If the day is empty say so in one line.` +
-      (calendars
-        ? ` Calendar events: read only these calendars (calendar_events, one call each, with its account and ` +
-          `calendarId), and never mention any other: ${calendars}.`
-        : "");
-  }
-  return `${base}\nBe brief: one to four lines. You keep ${who}'s tasks and memory without being asked to: work out ` +
+/** Pure but for the owner (owner.ts, passed in tests): the instructions of a chat. */
+export function promptFor(now: string, o = owner()): string {
+  const who = o.name;
+  return `You answer in ${who}'s chat in their console (agents-multi). Answer in ${o.language} unless they write in ` +
+    `another language. No preamble, no closing question. Now: ${now}.\n` +
+    `Be brief unless they ask for more: a short answer, Markdown when it helps (lists, tables, code). You keep ${who}'s ` +
+    `tasks and memory without being asked to: work out ` +
     `from what they write what it is, and act. Something to do, even said in passing (no need for "add a task"): create ` +
     `it with tasks_add, with the project (the folder under ~, from tasks_list or the brain) when you can tell, the day, ` +
     `and a time whenever one fits: theirs if they gave it, else a plausible slot that day that does not overlap their ` +
@@ -140,16 +70,14 @@ export function promptFor(
 export const asArg = (s: string) => s.startsWith("-") ? ` ${s}` : s;
 
 /** The models a request can be asked of, by Claude Code's aliases; the first is the default: most of
- *  what is asked here (a summary, a question on the day, a task to add) is light work. The debrief is
- *  not among the choices: it always runs on the light model, at low effort. */
+ *  what is asked here (a summary, a question on the day, a task to add) is light work. */
 const ASK_MODELS = ["haiku", "sonnet", "opus"] as const;
 type AskModel = typeof ASK_MODELS[number];
 /** The effort each model is asked with: enough for the work it is chosen for, no more. */
 const ASK_EFFORT: Record<AskModel, "low" | "medium" | "high"> = { haiku: "low", sonnet: "medium", opus: "high" };
-const DEBRIEF_MODEL: AskModel = "haiku";
 const ASK_MODEL_FILE = `${STATE}/ask-model.json`;
 const isAskModel = (m: unknown): m is AskModel => ASK_MODELS.includes(m as AskModel);
-/** The model chosen last, in the console or in the Hey window: one choice for both. */
+/** The model chosen last, in the Chat page or in the Hey window: one choice for both. */
 async function askModel(): Promise<AskModel> {
   const m = (await readJson<{ model?: string }>(ASK_MODEL_FILE))?.model;
   return isAskModel(m) ? m : ASK_MODELS[0];
@@ -160,18 +88,7 @@ async function setAskModel(model: AskModel) {
 }
 
 /** Pure: the arguments of `claude -p` for one request. */
-export function askArgs(
-  kind: AskKind,
-  text: string,
-  now: string,
-  opts: {
-    session?: string | null;
-    project?: string | null;
-    noProject?: boolean;
-    model?: AskModel;
-    calendars?: string;
-  } = {},
-) {
+export function askArgs(text: string, now: string, opts: { session?: string | null; model?: AskModel } = {}) {
   const args = [
     "-p",
     asArg(text),
@@ -180,22 +97,22 @@ export function askArgs(
     "--verbose",
     "--include-partial-messages",
     "--tools",
-    BUILTIN[kind],
+    "",
     "--permission-mode",
     "dontAsk",
     "--allowedTools",
-    ...TOOLS[kind],
+    ...TOOLS,
     "--append-system-prompt",
-    promptFor(kind, now, opts.project, opts.noProject, undefined, opts.calendars),
+    promptFor(now),
   ];
   if (opts.session) args.push("--resume", opts.session);
-  const model = kind === "debrief" ? DEBRIEF_MODEL : opts.model;
-  if (model) args.push("--model", model, "--effort", ASK_EFFORT[model]);
+  if (opts.model) args.push("--model", opts.model, "--effort", ASK_EFFORT[opts.model]);
   return args;
 }
 
 /** What the page receives, one JSON object per line. */
 export type Out =
+  | { t: "chat"; id: string }
   | { t: "session"; id: string }
   | { t: "text"; d: string }
   | {
@@ -317,25 +234,9 @@ async function defaultLauncher() {
   return ls.find((l) => l.command === "claude") ?? ls[0];
 }
 
-const DEBRIEF = `${STATE}/debrief.json`;
-/** Today's debrief, if one was written under the calendars chosen now: another choice makes it out of date. */
-async function cachedDebrief(): Promise<{ day: string; text: string } | null> {
-  const d = await readJson<{ day: string; text: string; calendars?: string }>(DEBRIEF);
-  return d && d.day === dayOf(new Date()) && (d.calendars ?? "") === choiceSignature(await loadChoice()) ? d : null;
-}
-
-/** The calendars the debrief may read, for its prompt: the shown ones of each account. */
-async function shownCalendars(): Promise<string> {
-  return (await listCalendars()).filter((a) => a.state === "ok").map((a) =>
-    a.calendars.filter((c) => c.shown).map((c) => `account ${a.account}: "${c.name}" (calendarId ${c.id})`).join("; ")
-  ).filter(Boolean).join("; ");
-}
-
-function ask(
-  kind: AskKind,
-  text: string,
-  opts: { session?: string | null; project?: string | null; noProject?: boolean },
-) {
+/** One request of a chat: the answer streams to the page and, once it ends, is kept as the chat's next
+ *  turn (`saved` then tells the open pages). A request without `chat` starts a new one. */
+function ask(text: string, chat: string | null, saved: () => void) {
   const enc = new TextEncoder();
   // the page going away cancels the response's stream: that, and nothing else, stops claude -p
   // (Deno.serve's request.signal also fires once a response has been delivered, and is changing)
@@ -361,16 +262,15 @@ function ask(
         send({ t: "done", text: "", code: null, error: "no profile" });
         return ctl.close();
       }
-      // the debrief reads the calendars chosen now, and is kept under that choice
-      const calendars = kind === "debrief" ? await shownCalendars().catch(() => "") : "";
-      const choice = kind === "debrief" ? choiceSignature(await loadChoice()) : "";
+      const known = chat ? await readChat(chat) : null;
+      const id = known?.id ?? crypto.randomUUID();
+      send({ t: "chat", id });
+      const model = await askModel();
       let child: Deno.ChildProcess;
       try {
         child = new Deno.Command(`${BIN}/${launcher.command}`, {
-          // a change to the brain runs in the old wiki: Claude Code lets a session read its own folder
-          // whatever the rules, so that folder must be the only one it may read
-          args: askArgs(kind, text, now, { ...opts, model: await askModel(), calendars }),
-          cwd: kind === "brain" ? WIKI : HOME,
+          args: askArgs(text, now, { session: known?.session, model }),
+          cwd: HOME,
           stdin: "null",
           stdout: "piped",
           stderr: "piped",
@@ -381,25 +281,33 @@ function ask(
         return ctl.close();
       }
       const stream = new AskStream();
+      const acts: Act[] = [];
+      const pass = (o: Out) => {
+        if (o.t === "tool") acts.push(o.d ? { k: o.k, n: o.n, d: o.d } : { k: o.k, n: o.n });
+        send(o);
+      };
       const errText = new Response(child.stderr).text();
       let rest = "";
       for await (const chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
         rest += chunk;
         const lines = rest.split("\n");
         rest = lines.pop() ?? "";
-        for (const l of lines) stream.line(l).forEach(send);
+        for (const l of lines) stream.line(l).forEach(pass);
       }
-      if (rest) stream.line(rest).forEach(send);
+      if (rest) stream.line(rest).forEach(pass);
       const { code } = await child.status;
       const done = stream.end(code, await errText);
       if (done.error || done.text) await recordLogin(launcher.profile, launcher.command, done.error ?? null);
-      if (kind === "debrief" && done.text && !done.error) {
-        await Deno.mkdir(STATE, { recursive: true }).catch(() => {});
-        await Deno.writeTextFile(
-          DEBRIEF,
-          JSON.stringify({ day: dayOf(new Date()), text: done.text, calendars: choice }),
-        ).catch(() => {});
-      }
+      // kept even when the page went away mid-answer: the chat shows what was said, as far as it went
+      await saveTurn(id, stream.session ?? known?.session ?? null, {
+        q: text,
+        a: done.text,
+        acts,
+        ...(done.error ? { error: done.error } : {}),
+        ...(done.code ? { code: done.code } : {}),
+        model,
+        at: new Date().toISOString(),
+      }).then(saved, () => {});
       send(done);
       ctl.close();
     },
@@ -463,6 +371,9 @@ export async function openTerminal(workdir: string, argv: string[]): Promise<{ o
   return { ok: true };
 }
 
+/** The longest message a chat takes: a pasted page, not a book. */
+const MAX_TEXT = 16000;
+
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Pure: the process ids from pid up to init. */
@@ -503,12 +414,10 @@ for (const p of pids) { const w = ws.find((x) => x.pid === p && x.normalWindow);
   }
 }
 
-export async function askApi(req: Request, u: URL, json: Json): Promise<Response | null> {
+/** The console's routes for talking to Claude. `saved`: a chat changed (a turn kept), for the open pages. */
+export async function askApi(req: Request, u: URL, json: Json, saved: () => void = () => {}): Promise<Response | null> {
   const p = u.pathname;
-  if (!["/api/ask", "/api/ask/model", "/api/debrief", "/api/terminal", "/api/focus"].includes(p)) return null;
-  if (p === "/api/debrief" && req.method === "GET") {
-    return json({ today: dayOf(new Date()), debrief: await cachedDebrief() });
-  }
+  if (!["/api/ask", "/api/ask/model", "/api/terminal", "/api/focus"].includes(p)) return null;
   if (p === "/api/ask/model" && req.method === "GET") {
     return json({ model: await askModel(), models: ASK_MODELS, efforts: ASK_EFFORT, default: ASK_MODELS[0] });
   }
@@ -522,21 +431,11 @@ export async function askApi(req: Request, u: URL, json: Json): Promise<Response
     return json({ ok: true, model: b.model });
   }
 
-  if (p === "/api/ask" || p === "/api/debrief") {
-    const kind: AskKind = p === "/api/debrief"
-      ? "debrief"
-      : b.kind === "newtask"
-      ? "newtask"
-      : b.kind === "brain"
-      ? "brain"
-      : "ask";
-    const text = kind === "debrief" ? "debrief" : String(b.text ?? "").trim().slice(0, 4000);
+  if (p === "/api/ask") {
+    const text = String(b.text ?? "").trim().slice(0, MAX_TEXT);
     if (!text) return json({ error: "empty" }, 400);
-    const session = typeof b.session === "string" && SESSION_ID.test(b.session) ? b.session : null;
-    const project = typeof b.project === "string" && /^[\w./ -]{1,200}$/.test(b.project) && !b.project.includes("..")
-      ? b.project
-      : null;
-    return new Response(ask(kind, text, { session, project, noProject: b.noProject === true }), {
+    const chat = typeof b.chat === "string" && CHAT_ID.test(b.chat) ? b.chat : null;
+    return new Response(ask(text, chat, saved), {
       headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
     });
   }

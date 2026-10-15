@@ -1,5 +1,5 @@
-// index.tsx — «Which Claude?», the profile picker: one row per profile with its colour (the same as on
-// Today), its account, «default» for the machine's plain `claude`, and its state: sessions running,
+// index.tsx — «Which Claude?», the profile picker: one row per profile with its colour (the same as in
+// the console), its account, «default» for the machine's plain `claude`, and its state: sessions running,
 // Desktop open, sign-in expired, or closed. A line says what choosing it will do; at the foot, the
 // day's next appointment. The desktop app shows it at /#pick in a small window of its own, without the
 // console's frame; choosing a profile asks the console to run claude-launch, which starts that Desktop
@@ -14,9 +14,8 @@ import { t } from "../../i18n.ts";
 import { machineLang } from "../../state.ts";
 import { closeWindow as close } from "../../lib/window.ts";
 import { profileColor } from "../../lib/pcolor.ts";
-import type { DayItem } from "../today/api.ts";
-import { countdown, upNext } from "../today/model.ts";
-import { type Launcher, pickApi, type PickStatus } from "./api.ts";
+import { countdown, upNext } from "./model.ts";
+import { type DayItem, type Launcher, pickApi, type PickStatus } from "./api.ts";
 import "./pick.css";
 import { Mark } from "../../shell/mark.tsx";
 

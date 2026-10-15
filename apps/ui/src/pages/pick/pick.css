@@ -1,5 +1,5 @@
 /* pick.css — «Which Claude?» (/#pick): a card that fills its own small window, in the console's
-   tokens and the same language as Today (the clay mark, the serif title, the profile's colour). */
+   tokens and the same language as the console (the clay mark, the serif title, the profile's colour). */
 
 body:has(main.pick) {
   background: var(--surface);

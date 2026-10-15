@@ -3,7 +3,7 @@
 // so the token is the same one the MCP server uses and never sits in a file, an argument or a
 // login of the tool's own.
 //
-// Only the service's own tool runs, resolved from the project's node_modules/.bin (or PATH): a
+// Only the service's own tool runs, the one inside the project's own node_modules (never above its root, never PATH): a
 // session cannot hand the token to `env` or a script of its own. The tool's output goes through a
 // filter that hides the token if it ever shows up. What deletes or rewrites remote data asks for a
 // typed "yes" on a terminal, which a Claude session does not have: there, it is refused and the
@@ -104,18 +104,33 @@ export function parseRun(argv: string[]): RunPlan {
   return { service, ...(account ? { account } : {}), runner, args };
 }
 
-/** The tool's executable: the project's own (node_modules/.bin, from here up), else on PATH. */
-async function findTool(tool: string, from = Deno.cwd()): Promise<string | null> {
+/** The project's root: the nearest folder from `from` up that has a package.json, or null. */
+async function projectRoot(from: string): Promise<string | null> {
   for (let dir = from;; dir = dirname(dir)) {
-    const p = join(dir, "node_modules", ".bin", tool);
-    if (await Deno.stat(p).then((s) => s.isFile, () => false)) return p;
-    if (dirname(dir) === dir) break;
+    if (await Deno.stat(join(dir, "package.json")).then((s) => s.isFile, () => false)) return dir;
+    if (dirname(dir) === dir) return null;
   }
-  for (const dir of (Deno.env.get("PATH") ?? "").split(":").filter(Boolean)) {
-    const p = join(dir, tool);
-    if (await Deno.stat(p).then((s) => s.isFile, () => false)) return p;
+}
+
+/** The tool's executable: the one the project itself installed, `<root>/node_modules/<tool>` and its
+ *  declared bin, the root being the nearest folder with a package.json. Never a folder above it, never
+ *  PATH, and never a file whose real path leaves the project's node_modules — the token goes to code the
+ *  project chose, not to whatever a parent directory or the shell happens to hold. */
+export async function findTool(tool: string, from = Deno.cwd()): Promise<string | null> {
+  const root = await projectRoot(from);
+  if (!root) return null;
+  try {
+    const pkgDir = join(root, "node_modules", tool);
+    const bin = JSON.parse(await Deno.readTextFile(join(pkgDir, "package.json"))).bin;
+    const rel = typeof bin === "string" ? bin : bin?.[tool];
+    if (typeof rel !== "string") return null;
+    const exe = await Deno.realPath(join(pkgDir, rel));
+    const modules = await Deno.realPath(join(root, "node_modules"));
+    if (!exe.startsWith(modules + "/")) return null;
+    return (await Deno.stat(exe)).isFile ? exe : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 /** A stream with every occurrence of `secret` replaced, even when it is split across chunks. */
@@ -167,7 +182,7 @@ export async function runTool(plan: RunPlan, secret: string): Promise<number> {
   const exe = await findTool(runner.tool);
   if (!exe) {
     console.error(
-      `${runner.tool} is not installed: add it to the project (pnpm add -D ${runner.tool}), then run this again`,
+      `${runner.tool} is not in this project's node_modules: add it to the project (pnpm add -D ${runner.tool}), then run this again from inside it`,
     );
     return 127;
   }

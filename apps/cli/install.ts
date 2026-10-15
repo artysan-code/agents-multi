@@ -221,41 +221,13 @@ export function codeFor(inst: Installation, running: string, runningIsCheckout: 
   return inst.mode === "dev" && runningIsCheckout ? running : inst.code;
 }
 
-/**
- * Materialises the runtime. `as` names the installation to install; otherwise it is this machine's.
- */
-export async function install(
-  dry: boolean,
-  opts: { as?: Installation; diagnose?: boolean } = {},
-) {
-  DRY = dry;
-  actions.length = 0;
-  const m = await machine();
-  const inst = opts.as ?? await installation();
-  CODE = codeFor(inst, REPO, await isCheckout(REPO));
-  SRC = (await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO;
-  const dev = inst.mode === "dev";
-  console.log(
-    `${ANSI.b}agents install${ANSI.x} — ${dev ? "checkout" : "the app's code"} ${
-      shortHome(CODE)
-    } → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`,
-  );
-  if (!dev && !(await stat(`${SRC}/apps/cli/main.ts`))) {
-    console.log(`  ${ANSI.r}✗${ANSI.x} no copy of the app's code in ${shortHome(CODE)}: start the app, it installs it`);
-    return 1;
-  }
+interface Ctx {
+  m: Awaited<ReturnType<typeof machine>>;
+  dev: boolean;
+}
 
-  // 0. the person's configuration: without it there is no profile to install
-  if (!(await stat(`${CONFIG}/owner.json`))) {
-    console.log(
-      `  ${ANSI.r}✗${ANSI.x} no configuration at ${
-        shortHome(CONFIG)
-      }: make one with  agents init <folder>  (or link an existing one there)`,
-    );
-    return 1;
-  }
-
-  // 1. runtime + marketplaces outside shared (per-machine, re-clonable)
+/** Runtime + marketplaces outside shared (per-machine, re-clonable) */
+async function marketplaces(): Promise<void> {
   await ensureDir(RUNTIME);
   const sharedSt = await lstat(`${RUNTIME}/shared`);
   const oldMk = `${RUNTIME}/shared/plugins/marketplaces`;
@@ -264,8 +236,10 @@ export async function install(
     if (!DRY) await Deno.rename(oldMk, `${RUNTIME}/marketplaces`);
   }
   await ensureDir(`${RUNTIME}/marketplaces`);
+}
 
-  // 2. skills installed by external tools in ~/.agents/skills → absolute links in shared/skills
+/** Skills installed by external tools in ~/.agents/skills → absolute links in shared/skills */
+async function agentsSkills(): Promise<void> {
   await ensureDir(AGENTS_SKILLS);
   for (const s of await listDir(AGENTS_SKILLS)) {
     if (!(await lstat(`${AGENTS_SKILLS}/${s}/SKILL.md`))) continue;
@@ -285,11 +259,15 @@ export async function install(
       } else await removeLink(p, "broken link, skill no longer in ~/.agents");
     }
   }
+}
 
-  // 3. shared → the code: the copy's (relative, through app/current) or the checkout's
+/** Shared → the code: the copy's (relative, through app/current) or the checkout's */
+async function sharedLink({ dev }: Ctx): Promise<void> {
   await ensureSymlink(dev ? `${CODE}/shared` : COPY_SHARED, `${RUNTIME}/shared`, "~/.agents-multi/shared");
+}
 
-  // 4. profili
+/** Profili */
+async function profiles(): Promise<void> {
   for (const p of await profileNames()) {
     const dir = `${RUNTIME}/${p}`;
     await ensureDir(dir, 0o700);
@@ -322,8 +300,10 @@ export async function install(
       if (!DRY) await Deno.chmod(`${dir}/.credentials.json`, 0o600);
     }
   }
+}
 
-  // 5. ~/.local/bin e ~/.local/lib
+/** ~/.local/bin e ~/.local/lib */
+async function binLinks(): Promise<void> {
   await ensureDir(BIN);
   for (const b of await listDir(`${SRC}/bin`)) {
     if (b === "lib") continue;
@@ -348,19 +328,21 @@ export async function install(
     await removeLink(`${BIN}/claude-distiller`, "the memory is the brain now");
   }
   await ensureDir(LIB);
+}
 
-  // 5a. the npm packages of third-party MCP servers (_npm), at the version the registry pins: they are
-  // started with node, so a session carries no `npm exec` parent. Not a reason to stop the install.
-  {
-    const pkgs = npmPackages(await loadRegistry());
-    if (pkgs.length && !(await has("npm"))) {
-      say(`${ANSI.r}!${ANSI.x} npm not found: MCP servers ${pkgs.map((p) => p.package).join(", ")} stay uninstalled`);
-    } else if (pkgs.length || await lstat(MCP_TOOLS)) {
-      for (const l of await installNpm(pkgs, MCP_TOOLS, DRY)) say(`${ANSI.g}+${ANSI.x} ${l}`);
-    }
+/** The npm packages of third-party MCP servers (_npm), at the version the registry pins: they are
+ *  started with node, so a session carries no `npm exec` parent. Not a reason to stop the install. */
+async function mcpPackages(): Promise<void> {
+  const pkgs = npmPackages(await loadRegistry());
+  if (pkgs.length && !(await has("npm"))) {
+    say(`${ANSI.r}!${ANSI.x} npm not found: MCP servers ${pkgs.map((p) => p.package).join(", ")} stay uninstalled`);
+  } else if (pkgs.length || await lstat(MCP_TOOLS)) {
+    for (const l of await installNpm(pkgs, MCP_TOOLS, DRY)) say(`${ANSI.g}+${ANSI.x} ${l}`);
   }
+}
 
-  // 5b. the checkout's git hooks (pre-commit: secret guard + type check)
+/** The checkout's git hooks (pre-commit: secret guard + type check) */
+async function gitHooks({ dev }: Ctx): Promise<void> {
   if (dev && await isCheckout(CODE)) {
     const hooks = (await run("git", ["-C", CODE, "config", "--get", "core.hooksPath"])).out;
     if (hooks !== ".githooks") {
@@ -368,9 +350,11 @@ export async function install(
       if (!DRY) await run("git", ["-C", CODE, "config", "core.hooksPath", ".githooks"]);
     }
   }
+}
 
-  // 5c. stignore-gen's git template: a repository cloned inside a Syncthing folder gets its .stignore block
-  // from the post-checkout hook before Syncthing picks its files up (the timer of step 8 is the safety net).
+/** Stignore-gen's git template: a repository cloned inside a Syncthing folder gets its .stignore block
+ *  from the post-checkout hook before Syncthing picks its files up (the timer of systemdUnits is the safety net). */
+async function stignoreTemplate(): Promise<void> {
   if (await lstat(SYNCTHING_CONFIG)) {
     const tpl = (await run("git", ["config", "--global", "--get", "init.templateDir"])).out;
     const want = `${CODE}/${STIGNORE_GEN_TEMPLATE_IN_REPO}`;
@@ -379,22 +363,24 @@ export async function install(
       if (!DRY) await run("git", ["config", "--global", "init.templateDir", want]);
     }
   }
+}
 
-  // 5d. git's global ignore: what a project keeps for agents-multi stays out of every repository
-  {
-    const file = await gitGlobalIgnore();
-    const text = await readText(file) ?? "";
-    const add = missingIgnores(text, GIT_IGNORED);
-    if (add.length) {
-      say(`${ANSI.g}+${ANSI.x} ${shortHome(file)}: ${add.join(", ")}`);
-      if (!DRY) {
-        await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
-        await Deno.writeTextFile(file, `${text}${text && !text.endsWith("\n") ? "\n" : ""}${add.join("\n")}\n`);
-      }
+/** Git's global ignore: what a project keeps for agents-multi stays out of every repository */
+async function gitIgnore(): Promise<void> {
+  const file = await gitGlobalIgnore();
+  const text = await readText(file) ?? "";
+  const add = missingIgnores(text, GIT_IGNORED);
+  if (add.length) {
+    say(`${ANSI.g}+${ANSI.x} ${shortHome(file)}: ${add.join(", ")}`);
+    if (!DRY) {
+      await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+      await Deno.writeTextFile(file, `${text}${text && !text.endsWith("\n") ? "\n" : ""}${add.join("\n")}\n`);
     }
   }
+}
 
-  // 6. stub ~/.claude (mode 500: stat fails with ENOENT on the settings, so Claude Code shows no "Settings Error")
+/** Stub ~/.claude (mode 500: stat fails with ENOENT on the settings, so Claude Code shows no "Settings Error") */
+async function claudeStub(): Promise<void> {
   const stub = await lstat(`${HOME}/.claude`);
   if (!stub) {
     say(`${ANSI.g}+${ANSI.x} stub ~/.claude (500)`);
@@ -406,8 +392,10 @@ export async function install(
     say(`${ANSI.y}→${ANSI.x} chmod 500 ~/.claude`);
     if (!DRY) await Deno.chmod(`${HOME}/.claude`, 0o500);
   }
+}
 
-  // 7. ~/.zshrc
+/** ~/.zshrc */
+async function zshrc(): Promise<void> {
   const zp = `${HOME}/.zshrc`;
   const zsh = await readText(zp);
   if (zsh !== null) {
@@ -419,54 +407,56 @@ export async function install(
       if (!DRY) await Deno.writeTextFile(zp, next);
     }
   }
+}
 
-  // 8. systemd user units: dev mode only. In app mode the app's backend schedules their jobs while it
-  // runs (console/schedule.ts), so nothing depends on systemd.
-  {
-    const ud = `${HOME}/.config/systemd/user`;
-    const present = await Promise.all(
-      (await listDir(ud)).map(async (name) => ({ name, target: await readlink(`${ud}/${name}`) })),
-    );
-    if (dev && m.systemd) {
-      await ensureDir(ud);
-      for (const u of await listDir(`${SRC}/systemd/user`)) {
-        await ensureSymlink(`${CODE}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
-      }
-      // a unit removed from the code leaves its link behind: drop the ones pointing at nothing
-      for (const { name: u, target } of present) {
-        if (target?.endsWith(`/systemd/user/${u}`) && !(await lstat(target))) {
-          say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
-          if (!DRY) {
-            await run("systemctl", ["--user", "disable", "--now", u]); // a linked unit: disable removes the link itself
-            await Deno.remove(`${ud}/${u}`).catch(() => {});
-          }
+/** Systemd user units: dev mode only. In app mode the app's backend schedules their jobs while it
+ *  runs (console/schedule.ts), so nothing depends on systemd. */
+async function systemdUnits({ m, dev }: Ctx): Promise<void> {
+  const ud = `${HOME}/.config/systemd/user`;
+  const present = await Promise.all(
+    (await listDir(ud)).map(async (name) => ({ name, target: await readlink(`${ud}/${name}`) })),
+  );
+  if (dev && m.systemd) {
+    await ensureDir(ud);
+    for (const u of await listDir(`${SRC}/systemd/user`)) {
+      await ensureSymlink(`${CODE}/systemd/user/${u}`, `${ud}/${u}`, `systemd/user/${u}`);
+    }
+    // a unit removed from the code leaves its link behind: drop the ones pointing at nothing
+    for (const { name: u, target } of present) {
+      if (target?.endsWith(`/systemd/user/${u}`) && !(await lstat(target))) {
+        say(`${ANSI.y}-${ANSI.x} ${shortHome(`${ud}/${u}`)} (no longer in the repository)`);
+        if (!DRY) {
+          await run("systemctl", ["--user", "disable", "--now", u]); // a linked unit: disable removes the link itself
+          await Deno.remove(`${ud}/${u}`).catch(() => {});
         }
       }
-      if (!DRY) {
-        await run("systemctl", ["--user", "daemon-reload"]);
-        // The console is the desktop app's now (its backend), and the app starts at login from its
-        // autostart entry (step 10); a headless box runs `agents serve` by hand.
-        const wantEnabled: string[] = [];
-        // The update check raises desktop notifications, so it only makes sense with a session.
-        if (m.graphical) wantEnabled.push("claude-update-check.timer");
-        // task briefs and reminders are desktop notifications: only where there is a desktop
-        if (m.graphical) wantEnabled.push("claude-tasks.timer");
-        // a copy of the brain on every machine that is on, fetched only when it changed
-        if (brainAccount(undefined, loadAccounts())) wantEnabled.push("claude-brain-backup.timer");
-        // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
-        if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
-        for (const u of wantEnabled) {
-          const en = await run("systemctl", ["--user", "is-enabled", u]);
-          if (en.out !== "enabled") {
-            say(`${ANSI.g}+${ANSI.x} enable --now ${u}`);
-            await run("systemctl", ["--user", "enable", "--now", u]);
-          }
+    }
+    if (!DRY) {
+      await run("systemctl", ["--user", "daemon-reload"]);
+      // The console is the desktop app's now (its backend), and the app starts at login from its
+      // autostart entry (appAtLogin); a headless box runs `agents serve` by hand.
+      const wantEnabled: string[] = [];
+      // The update check raises desktop notifications, so it only makes sense with a session.
+      if (m.graphical) wantEnabled.push("claude-update-check.timer");
+      // task briefs and reminders are desktop notifications: only where there is a desktop
+      if (m.graphical) wantEnabled.push("claude-tasks.timer");
+      // a copy of the brain on every machine that is on, fetched only when it changed
+      if (brainAccount(undefined, loadAccounts())) wantEnabled.push("claude-brain-backup.timer");
+      // Keeps the git repositories inside Syncthing folders out of Syncthing: only where Syncthing runs.
+      if (await lstat(SYNCTHING_CONFIG)) wantEnabled.push("stignore-gen.timer");
+      for (const u of wantEnabled) {
+        const en = await run("systemctl", ["--user", "is-enabled", u]);
+        if (en.out !== "enabled") {
+          say(`${ANSI.g}+${ANSI.x} enable --now ${u}`);
+          await run("systemctl", ["--user", "enable", "--now", u]);
         }
       }
     }
   }
+}
 
-  // 9. Claude Desktop (only where it is installed)
+/** Claude Desktop (only where it is installed) */
+async function claudeDesktop({ m }: Ctx): Promise<void> {
   if (m.desktopVersion) {
     const apps = `${HOME}/.local/share/applications`;
     for (const d of await listDir(`${SRC}/desktop`)) {
@@ -502,8 +492,10 @@ export async function install(
   } else {
     console.log(`  ${ANSI.d}Claude Desktop is not installed: skipping desktop entries and icons${ANSI.x}`);
   }
+}
 
-  // 10. the desktop app at login, in the tray: wherever there is a session and the app is installed
+/** The desktop app at login, in the tray: wherever there is a session and the app is installed */
+async function appAtLogin({ m, dev }: Ctx): Promise<void> {
   if (m.graphical) {
     const entry = `${HOME}/.config/autostart/${AUTOSTART}`;
     const tpl = await readText(`${SRC}/desktop/autostart.desktop.in`);
@@ -539,16 +531,74 @@ export async function install(
       }
     }
   }
+}
 
-  // the console's new interface: built here in a checkout, not counted as install work, since
-  // self-update builds it on its own and an install waiting for Claude to close must not wait for it;
-  // the app's code carries its build
+/** The console's new interface: built here in a checkout, not counted as install work, since
+ *  self-update builds it on its own and an install waiting for Claude to close must not wait for it;
+ *  the app's code carries its build */
+async function consoleUi({ dev }: Ctx): Promise<void> {
   if (!DRY && dev && CODE === REPO && (await uiStatus()) !== "built") {
     const b = await uiBuild();
     console.log(
       b.ok ? `  ${ANSI.g}✓${ANSI.x} console interface built` : `  ${ANSI.y}!${ANSI.x} console interface: ${b.error}`,
     );
   }
+}
+
+/** What install does once its preconditions hold, in order. */
+const STEPS: ((c: Ctx) => Promise<void>)[] = [
+  marketplaces,
+  agentsSkills,
+  sharedLink,
+  profiles,
+  binLinks,
+  mcpPackages,
+  gitHooks,
+  stignoreTemplate,
+  gitIgnore,
+  claudeStub,
+  zshrc,
+  systemdUnits,
+  claudeDesktop,
+  appAtLogin,
+  consoleUi,
+];
+
+/**
+ * Materialises the runtime. `as` names the installation to install; otherwise it is this machine's.
+ */
+export async function install(
+  dry: boolean,
+  opts: { as?: Installation; diagnose?: boolean } = {},
+) {
+  DRY = dry;
+  actions.length = 0;
+  const m = await machine();
+  const inst = opts.as ?? await installation();
+  CODE = codeFor(inst, REPO, await isCheckout(REPO));
+  SRC = (await stat(`${CODE}/apps/cli/main.ts`)) ? CODE : REPO;
+  const dev = inst.mode === "dev";
+  console.log(
+    `${ANSI.b}agents install${ANSI.x} — ${dev ? "checkout" : "the app's code"} ${
+      shortHome(CODE)
+    } → runtime ${RUNTIME} (${m.hostname}${DRY ? ", dry-run" : ""})\n`,
+  );
+  if (!dev && !(await stat(`${SRC}/apps/cli/main.ts`))) {
+    console.log(`  ${ANSI.r}✗${ANSI.x} no copy of the app's code in ${shortHome(CODE)}: start the app, it installs it`);
+    return 1;
+  }
+
+  // 0. the person's configuration: without it there is no profile to install
+  if (!(await stat(`${CONFIG}/owner.json`))) {
+    console.log(
+      `  ${ANSI.r}✗${ANSI.x} no configuration at ${
+        shortHome(CONFIG)
+      }: make one with  agents init <folder>  (or link an existing one there)`,
+    );
+    return 1;
+  }
+
+  for (const step of STEPS) await step({ m, dev });
 
   if (!actions.length) console.log(`  ${ANSI.g}✓${ANSI.x} everything already materialised, nothing to do`);
   console.log();

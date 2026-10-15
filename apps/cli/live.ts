@@ -1,4 +1,4 @@
-// live.ts — Claude at work, as Today's «Claude now» shows it: each profile's usage limits (the five
+// live.ts — Claude at work, as the console's «Accounts & limits» shows it: each profile's usage limits (the five
 // hours and the week) and each session's context.
 //
 // The status line writes them (shared/statusline-command.sh): Claude Code hands it, at every turn, the

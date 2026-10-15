@@ -7,29 +7,38 @@
 import { signal } from "@preact/signals";
 import { machineLang } from "./state.ts";
 import * as shell from "./i18n/shell.ts";
-import * as today from "./i18n/today.ts";
-import * as tasks from "./i18n/tasks.ts";
-import * as brain from "./i18n/brain.ts";
+import * as chat from "./i18n/chat.ts";
+import * as runs from "./i18n/runs.ts";
+import * as limits from "./i18n/limits.ts";
 import * as connections from "./i18n/connections.ts";
 import * as system from "./i18n/system.ts";
-import * as plugins from "./i18n/plugins.ts";
 import * as updates from "./i18n/updates.ts";
 import * as pick from "./i18n/pick.ts";
 import * as hey from "./i18n/hey.ts";
 import * as setup from "./i18n/setup.ts";
 
-const en = { ...shell.en, ...today.en, ...tasks.en, ...brain.en, ...connections.en, ...system.en, ...plugins.en, ...updates.en, ...pick.en, ...hey.en, ...setup.en };
+const en = {
+  ...shell.en,
+  ...chat.en,
+  ...runs.en,
+  ...limits.en,
+  ...connections.en,
+  ...system.en,
+  ...updates.en,
+  ...pick.en,
+  ...hey.en,
+  ...setup.en,
+};
 
 export type Key = keyof typeof en;
 
 const it: Record<Key, string> = {
   ...shell.it,
-  ...today.it,
-  ...tasks.it,
-  ...brain.it,
+  ...chat.it,
+  ...runs.it,
+  ...limits.it,
   ...connections.it,
   ...system.it,
-  ...plugins.it,
   ...updates.it,
   ...pick.it,
   ...hey.it,
