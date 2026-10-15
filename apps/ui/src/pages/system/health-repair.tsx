@@ -9,8 +9,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type Blocker, type Check, post, type RepairStep } from "../../api.ts";
 import { loadStatus, status } from "../../state.ts";
 import { type Key, t } from "../../i18n.ts";
-import { go } from "../../router.ts";
-import { short } from "../../lib/format.ts";
+import { go, request } from "../../router.ts";
 import { FIX_ACTIONS, openDrawer, runAction, runJob, toast } from "../../lib/ui.tsx";
 import { closeStep } from "./api.ts";
 import { BlockerList, reopenProfile } from "./updates-close.tsx";
@@ -24,31 +23,64 @@ type StepState = "todo" | "running" | "waiting" | "done" | "failed";
 const PAGES: [RegExp, string, Key][] = [
   [/console (›|→) System › Permissions/, "system/permissions", "sys.permissions"],
   [/console (›|→) Connections/, "connections", "nav.connections"],
+  // the brain's sign-in is a button of Connections, which opens the system browser itself
+  [/^agents brain-login\b/, "connections", "nav.connections"],
 ];
 
-/** A fix line is a shell command. When it maps to an allowlisted action there is a button; when it
- *  names a page of the console, a button that goes there; otherwise it is text to copy, because running
- *  arbitrary strings from here would turn the console into a remote shell. */
+/** A fix line is a shell command. When it maps to an allowlisted action there is a button (the update
+ *  goes through its wizard); when it names a page of the console, a button that goes there; otherwise it
+ *  is text to read or copy (ManualFix), because running arbitrary strings from here would turn the
+ *  console into a remote shell. */
+const fixPage = (fix: string) => PAGES.find(([re]) => re.test(fix));
+export const isManualFix = (fix: string): boolean => !FIX_ACTIONS[fix.trim()] && !fixPage(fix);
+
+/** Looks like something typed in a terminal, rather than a sentence («restart Agents Multi»). */
+const isCommand = (fix: string) => /^(agents|git|rm|chmod|sudo|pnpm|claude|wrangler)\b/.test(fix.trim());
+
 export function ActionButton({ fix }: { fix: string }) {
   const act = FIX_ACTIONS[fix.trim()];
-  const page = PAGES.find(([re]) => re.test(fix));
+  const page = fixPage(fix);
   return act
-    ? <button type="button" class="fix" onClick={() => runAction(act)}>{fix}</button>
+    ? (
+      <button
+        type="button"
+        class="fix"
+        title={fix}
+        onClick={() => act === "update-now" ? request("update.wizard") : runAction(act)}
+      >
+        {act === "update-now" ? t("rep.updateWizard") : fix}
+      </button>
+    )
     : page
     ? (
       <button type="button" class="fix" title={fix} onClick={() => go(page[1])}>
         {t("rep.open", { p: t(page[2]) })}
       </button>
     )
-    : (
-      <code
+    : isCommand(fix)
+    ? (
+      <button
+        type="button"
         class="fix"
-        style={{ cursor: "text", background: "none", borderColor: "var(--line)", color: "var(--fg-faint)" }}
         title={fix}
+        onClick={() =>
+          void navigator.clipboard?.writeText(fix).then(() => toast(t("rep.copied", { c: fix })), () =>
+            toast(t("rep.copyFailed"), true))}
       >
-        {short(fix, 40)}
-      </code>
-    );
+        {t("rep.copy")}
+      </button>
+    )
+    : null;
+}
+
+/** What a check says to do when the console cannot do it: the whole line, never cut, and plainly that it
+ *  is done outside the console (in a terminal, or by hand). */
+export function ManualFix({ fix }: { fix: string }) {
+  return (
+    <div class="fixline">
+      <span class="sub">{t(isCommand(fix) ? "rep.inTerminal" : "rep.byHand")}</span> <code>{fix}</code>
+    </div>
+  );
 }
 
 /** What a check offers: its repair when it has steps, else the fix as before. */

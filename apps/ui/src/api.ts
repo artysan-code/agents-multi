@@ -5,6 +5,7 @@
 
 import type { Check, RepairStep, Status } from "../../cli/lib/output.ts";
 import { askToEnterAgain } from "./lib/window.ts";
+import { errorText } from "./lib/http-error.ts";
 
 export type { Check, RepairStep, Status };
 
@@ -116,7 +117,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await send(path, init);
-  if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`.trim());
+  if (!r.ok) throw new Error(errorText(r.status, await r.text().catch(() => "")));
   return r.json() as Promise<T>;
 }
 

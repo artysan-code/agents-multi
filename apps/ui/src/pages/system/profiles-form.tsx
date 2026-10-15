@@ -50,7 +50,7 @@ function ProfileForm({ name }: { name: string | null }) {
       const r = await saveProfile(body);
       closeDrawer();
       await loadStatus();
-      toast(r.message ?? t("profile.saved", { name: body.name }));
+      toast(r.message ?? t("profile.saved", { name: body.name }), !!r.failed);
       if (r.output) showOutput(body.name, r.output);
     } catch (err) {
       setBusy(false);

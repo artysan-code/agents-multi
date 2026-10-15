@@ -76,7 +76,9 @@ export async function writeProfile(b: ProfileBody): Promise<{ error?: string; na
  * `install` to materialise the runtime. Every write lands in the person's configuration —
  * nothing here touches ~/.agents-multi directly.
  */
-export async function saveProfile(b: ProfileBody): Promise<{ error?: string; message?: string; output?: string }> {
+export async function saveProfile(
+  b: ProfileBody,
+): Promise<{ error?: string; message?: string; output?: string; failed?: boolean }> {
   const { error, name, isNew } = await writeProfile(b);
   if (error) return { error };
 
@@ -88,6 +90,7 @@ export async function saveProfile(b: ProfileBody): Promise<{ error?: string; mes
   return {
     message: `${isNew ? "Created" : "Updated"} profile ${name}${r.code ? " — install reported problems" : ""}`,
     output: r.output,
+    ...(r.code ? { failed: true } : {}),
   };
 }
 

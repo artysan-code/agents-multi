@@ -35,6 +35,9 @@ export function spawnJob(
   const child = new Deno.Command(r.cmd, {
     args: r.args,
     cwd: REPO,
+    // no terminal behind it: a command that asks something fails at once, instead of waiting for a
+    // timeout (or reading the keys of the terminal `agents serve` runs in)
+    stdin: "null",
     stdout: "piped",
     stderr: "piped",
     env: { NO_COLOR: "1" },

@@ -268,7 +268,7 @@ export function Done(p: StepProps) {
           disabled={mcp === "running" || s.running}
           onClick={() =>
             void s.run(() => send("finish", {}), () => {
-              location.hash = "#today";
+              location.hash = "#chat";
               location.reload();
             })}
         >

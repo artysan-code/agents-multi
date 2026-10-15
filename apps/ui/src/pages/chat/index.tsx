@@ -13,7 +13,7 @@ import { t, tk } from "../../i18n.ts";
 import { Spark } from "../../lib/claude.tsx";
 import { renderMarkdown } from "../../lib/markdown.tsx";
 import { ModelPicker, useAskModel } from "../../lib/model-picker.tsx";
-import { toast } from "../../lib/ui.tsx";
+import { toast, toastErr } from "../../lib/ui.tsx";
 import { useIntent } from "../../router.ts";
 import { owner, useTopic } from "../../state.ts";
 import {
@@ -58,7 +58,7 @@ function ChatRow({ c, on }: { c: ChatHead; on: boolean }) {
   const [asking, setAsking] = useState(false);
   return (
     <div class={`chl-r${on ? " on" : ""}`}>
-      <button type="button" class="chl-t" title={c.title} onClick={() => void openChat(c.id).catch(() => {})}>
+      <button type="button" class="chl-t" title={c.title} onClick={() => void openChat(c.id).catch(toastErr)}>
         {c.title || t("chat.untitled")}
       </button>
       {asking

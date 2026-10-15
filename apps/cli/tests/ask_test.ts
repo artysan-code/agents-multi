@@ -1,6 +1,17 @@
 // Tests for apps/cli/ask.ts: what the console asks `claude -p`, and how its stream becomes the page's.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { ancestry, asArg, askArgs, AskStream, promptFor, sessionEnv, toolCall, toolKind, TOOLS } from "../ask.ts";
+import {
+  ancestry,
+  asArg,
+  askArgs,
+  AskStream,
+  byHand,
+  promptFor,
+  sessionEnv,
+  toolCall,
+  toolKind,
+  TOOLS,
+} from "../ask.ts";
 
 Deno.test("askArgs: the tools are a fixed list, and anything else is refused", () => {
   const a = askArgs("cosa ho domani?", "now");
@@ -143,4 +154,13 @@ Deno.test("toolCall: a change says what it was on, a read only which tool; the f
   const ask = TOOLS.join(" ");
   assert(ask.includes("brain_append") && ask.includes("brain_edit"));
   assert(!ask.includes("brain_delete") && !ask.includes("brain_move"));
+});
+
+Deno.test("byHand: the command a terminal that would not open stands for, quoted for a shell", () => {
+  const home = Deno.env.get("HOME")!;
+  assertEquals(
+    byHand(home, [`${home}/.local/bin/claude`, "--resume", "abc"]),
+    "cd ~ && ~/.local/bin/claude --resume abc",
+  );
+  assertEquals(byHand("/srv/a b", ["claude", "it's"]), "cd '/srv/a b' && claude 'it'\\''s'");
 });
