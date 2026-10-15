@@ -40,8 +40,14 @@ async function decide(hook: string, command: string, cwd: string, env?: Record<s
   })
     .spawn();
   const w = child.stdin.getWriter();
-  await w.write(new TextEncoder().encode(JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd })));
-  await w.close();
+  // a hook may exit before reading its input (commit-trailer-guard when the preference is off): under
+  // load the write then meets a closed pipe, which is the hook's answer, not a failure
+  try {
+    await w.write(new TextEncoder().encode(JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd })));
+    await w.close();
+  } catch (e) {
+    if (!(e instanceof Deno.errors.BrokenPipe)) throw e;
+  }
   const r = await child.output();
   if (r.code === 2) return "block"; // a hook that blocks with exit 2 (commit-trailer-guard)
   const out = new TextDecoder().decode(r.stdout).trim();
