@@ -26,4 +26,7 @@ regexes = [
   '''31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE''',
   # RFC 6238 test vector secret, apps/brain/tests/brain_test.ts
   '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
+  # RFC 8291 appendix A test vector keys, apps/brain/tests/push_test.ts
+  '''yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw''',
+  '''BTBZMqHH6r4Tts7J_aSIgg''',
 ]
