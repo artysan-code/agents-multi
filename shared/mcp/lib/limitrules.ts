@@ -151,7 +151,9 @@ export const emptyState = (): AccountState => ({ status: "ok", resets: {}, expir
 const minutes = (secs: number) => Math.max(1, Math.round(secs / 60));
 
 /** Pure: one account's state and the events a new reading raises. `windows` are the ones still running
- *  (the providers leave out a window whose reset has passed: unknown, never a guess). */
+ *  (the providers leave out a window whose reset has passed: unknown, never a guess). A window read more
+ *  than STALE_S ago neither blocks nor announces: Claude's endpoint reading is only as fresh as its last
+ *  refresh, and an old one is unknown too. Its reset is still remembered. */
 export function evaluate(
   account: string,
   prev: AccountState | undefined,
@@ -189,9 +191,9 @@ export function evaluate(
     }
   }
 
-  const worst = [...windows].sort((a, b) => b.usedPercent - a.usedPercent)[0];
-  const blocking =
-    windows.filter((w) => w.usedPercent >= rules.stopAt).sort((a, b) => b.usedPercent - a.usedPercent)[0];
+  const fresh = windows.filter((w) => w.at === null || now - w.at <= STALE_S);
+  const worst = [...fresh].sort((a, b) => b.usedPercent - a.usedPercent)[0];
+  const blocking = fresh.filter((w) => w.usedPercent >= rules.stopAt).sort((a, b) => b.usedPercent - a.usedPercent)[0];
   const state: AccountState = {
     status: blocking ? "blocked" : "ok",
     ...(blocking ? { by: { window: blocking.window, used: blocking.usedPercent, resetsAt: blocking.resetsAt } } : {}),
@@ -212,7 +214,7 @@ export function evaluate(
     );
   }
   // expiring with room left: only for an account still taking work
-  for (const w of windows) {
+  for (const w of fresh) {
     if (w.resetsAt === null) continue;
     const left = w.resetsAt - now;
     if (

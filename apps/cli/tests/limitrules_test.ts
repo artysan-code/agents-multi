@@ -255,3 +255,16 @@ Deno.test("apply: an accepted project proposal sets the default in the owner's c
     await Deno.remove(tmp, { recursive: true });
   }
 });
+
+Deno.test("evaluate: a reading older than STALE_S blocks nobody and announces nothing; its reset is kept", () => {
+  const old = (w: Window) => ({ ...w, at: NOW - STALE_S - 60 });
+  const stale = evaluate("p/claude", undefined, [old(win("7d", 98, 5000)), old(win("5h", 40, 30))], DEFAULT_RULES, NOW);
+  assertEquals([stale.state.status, stale.state.used, stale.events], ["ok", null, []]);
+  assertEquals(stale.state.resets["7d"], NOW + 5000 * 60);
+  // the same reading, fresh, blocks
+  assertEquals(evaluate("p/claude", undefined, [win("7d", 98, 5000)], DEFAULT_RULES, NOW).state.status, "blocked");
+  // a blocked account whose reading goes stale is no longer held back
+  const blocked = evaluate("p/claude", undefined, [win("7d", 98, 5000)], DEFAULT_RULES, NOW).state;
+  const later = NOW + STALE_S + 60;
+  assertEquals(evaluate("p/claude", blocked, [win("7d", 98, 5000)], DEFAULT_RULES, later).state.status, "ok");
+});

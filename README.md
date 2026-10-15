@@ -399,6 +399,8 @@ chat ("do this tonight at 2").
   routine whose account is blocked is held and a **proposal** appears; a project's default account is
   `config/projects.json` (`agents account default <profile>[/codex]`). Nothing switches an account without your yes:
   the coordinator proposes (`account_propose`), you accept, the console applies. `agents account status|events`.
+  A reading older than half an hour blocks nothing (Claude's endpoint reading is as fresh as its last refresh):
+  `agents limits` says how old each one is.
 - **Outward actions** (a permission the child's mode does not grant) wait; you get a desktop notification, and the
   request is answered from a coordinator of the project once it adopts the child.
 

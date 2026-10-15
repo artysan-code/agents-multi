@@ -14,7 +14,7 @@ import {
 } from "../../../shared/mcp/lib/providers.ts";
 import { codexHome } from "../../../shared/mcp/lib/codex.ts";
 import { tokenFileOf } from "../mcp/gateway-settings.ts";
-import { inHours, limitsTable } from "../limits.ts";
+import { inHours, limitsTable, readAgo } from "../limits.ts";
 
 const NOW = 1_800_000_000;
 
@@ -132,6 +132,17 @@ Deno.test("limits: every account's windows from a status line snapshot and a Cod
   } finally {
     await Deno.remove(root, { recursive: true });
   }
+});
+
+Deno.test("limits: a reading's age as a person reads it, stale past half an hour", () => {
+  assertEquals([null, NOW, NOW - 240, NOW - 1799, NOW - 3 * 3600, NOW - 2 * 86400].map((a) => readAgo(a, NOW)), [
+    "read —",
+    "read now",
+    "read 4m ago",
+    "read 29m ago",
+    "read 3h ago, stale",
+    "read 2d ago, stale",
+  ]);
 });
 
 Deno.test("limits: a reset as a person reads it", () => {

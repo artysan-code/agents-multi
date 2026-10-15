@@ -4,6 +4,7 @@
 
 import { type Account, allLimits } from "../../shared/mcp/lib/providers.ts";
 import type { Window } from "../../shared/mcp/lib/limits.ts";
+import { STALE_S } from "../../shared/mcp/lib/limitrules.ts";
 import { CONFIG, RUNTIME, STATE } from "./lib/paths.ts";
 
 export interface AccountView {
@@ -21,11 +22,21 @@ export function inHours(resetsAt: number | null, now: number): string {
   return m ? `in ${m}m` : "now";
 }
 
+/** Pure: how old a reading is, "read 4m ago" / "read 3h ago", marked stale past STALE_S: the limits manager
+ *  does not act on it (refresh: Today › Claude now). */
+export function readAgo(at: number | null, now: number): string {
+  if (at === null) return "read —";
+  const s = Math.max(0, now - at);
+  const d = Math.floor(s / 86400), h = Math.floor(s / 3600), m = Math.floor(s / 60);
+  const ago = d ? `${d}d` : h ? `${h}h` : m ? `${m}m` : "now";
+  return `read ${ago === "now" ? "now" : `${ago} ago`}${s > STALE_S ? ", stale" : ""}`;
+}
+
 /** Pure: the table a person reads, one line per window, and a line for an account with none. */
 export function limitsTable(all: AccountView[], now: number): string[] {
   const rows: string[][] = [];
   for (const { account, windows } of all) {
-    if (!windows.length) rows.push([account.id, "—", "no reading", "", ""]);
+    if (!windows.length) rows.push([account.id, "—", "no reading", "", "", ""]);
     for (const w of windows) {
       rows.push([
         account.id,
@@ -33,11 +44,12 @@ export function limitsTable(all: AccountView[], now: number): string[] {
         `${Math.round(w.usedPercent)}%`,
         `resets ${inHours(w.resetsAt, now)}`,
         w.source,
+        readAgo(w.at, now),
       ]);
     }
   }
-  const width = [0, 1, 2, 3].map((i) => Math.max(...rows.map((r) => r[i].length)));
-  return rows.map((r) => r.map((c, i) => (i < 4 ? c.padEnd(width[i]) : c)).join("  ").trimEnd());
+  const width = [0, 1, 2, 3, 4].map((i) => Math.max(...rows.map((r) => r[i].length)));
+  return rows.map((r) => r.map((c, i) => (i < 5 ? c.padEnd(width[i]) : c)).join("  ").trimEnd());
 }
 
 export async function limitsCommand(args: string[]): Promise<number> {
