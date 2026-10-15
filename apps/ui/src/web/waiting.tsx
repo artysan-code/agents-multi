@@ -4,26 +4,27 @@
 
 import { useState } from "preact/hooks";
 import { acceptJob, answerRequest, declineJob } from "./api.ts";
-import { answersOf, type Passkey, type ProposedJob, type Question, type Waiting as Req } from "./lib.ts";
-import { PasskeyCard, usePasskeys } from "./passkeys.tsx";
+import { answersOf, type Explained, type Passkey, type ProposedJob, type Question, type Waiting as Req } from "./lib.ts";
+import { explain, PasskeyCard, PkError, usePasskeys } from "./passkeys.tsx";
+import { Swipe } from "./swipe.tsx";
 import { pendingCount, refreshWaiting, waiting, waitingError } from "./state.ts";
 import { dateOf, t } from "./t.ts";
 import { Empty, Failure, Header, Icon, Skeleton, usePull } from "./ui.tsx";
-import { answerChallenge, assertWith, expiryFrom, jobChallenge, type Verdict } from "./webauthn.ts";
+import { answerChallenge, assertWith, declineChallenge, expiryFrom, jobChallenge, requestHash, type Verdict } from "./webauthn.ts";
 
 /** Runs one passkey-signed action: shows it is waiting for the device, and the reason when it fails. */
 function useSigned() {
   const [busy, setBusy] = useState<string>("");
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState<Explained | null>(null);
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setBusy(what);
     try {
       await fn();
-      setErr("");
+      setErr(null);
       await refreshWaiting();
     } catch (e) {
-      const n = (e as Error).name;
-      setErr(n === "NotAllowedError" || n === "AbortError" ? t("pk.cancelled") : (e as Error).message);
+      // the browser's own reason, with a hint for the names a person can act on
+      setErr(explain(e));
     }
     setBusy("");
   };
@@ -71,13 +72,22 @@ function Request({ r, usable }: { r: Req; usable: Passkey[] }) {
   const answer = (verdict: Verdict) =>
     run(verdict, async () => {
       const expires = expiryFrom(new Date());
-      const body = { id: r.id, node: r.node, verdict, answers: verdict === "deny" ? undefined : answers ?? undefined, expires };
+      // v2 binds a hash of the words shown here, so a service that showed other words gets a signature the node refuses
+      const body = { id: r.id, node: r.node, verdict, answers: verdict === "deny" ? undefined : answers ?? undefined, expires, what: await requestHash(r) };
       const assertion = await assertWith(await answerChallenge(body), usable.map((k) => k.id));
       await answerRequest(r.id, { verdict, ...(body.answers ? { answers: body.answers } : {}), expires, assertion });
     });
 
+  // the swipe is the verdict's shortcut: right says yes (once the questions are answered), left says no
+  const yes = !ask || !!answers;
   return (
-    <li class="card ask">
+    <li class="card ask flush">
+      <Swipe
+        class="sw-pad"
+        disabled={off}
+        right={yes ? { label: ask ? t("wait.send") : t("wait.yes"), tone: "ok", icon: "check", run: () => answer("allow") } : undefined}
+        left={{ label: t("wait.no"), tone: "crit", icon: "x", run: () => answer("deny") }}
+      >
       <div class="ask-h">
         <span class={`badge ${ask ? "info" : "warn"}`}><Icon name={ask ? "chat" : "shield"} size={16} /></span>
         <div>
@@ -109,7 +119,9 @@ function Request({ r, usable }: { r: Req; usable: Passkey[] }) {
         </button>
       </div>
       {usable.length === 0 && <p class="meta">{t("wait.needKey")}</p>}
-      {err && <p class="err" role="alert">{err}</p>}
+      {err && <PkError e={err} />}
+      <p class="meta swipe-hint">{t("wait.swipeHint")}</p>
+      </Swipe>
     </li>
   );
 }
@@ -123,9 +135,21 @@ function Job({ j, usable }: { j: ProposedJob; usable: Passkey[] }) {
       const assertion = await assertWith(await jobChallenge(j, expires), usable.map((k) => k.id));
       await acceptJob(j.id, expires, assertion);
     });
-  const decline = () => run("decline", () => declineJob(j.id));
+  // declining is signed as accepting is: nobody but the owner stops their agents either
+  const decline = () =>
+    run("decline", async () => {
+      const expires = expiryFrom(new Date());
+      const assertion = await assertWith(await declineChallenge(j, expires), usable.map((k) => k.id));
+      await declineJob(j.id, expires, assertion);
+    });
   return (
-    <li class="card ask">
+    <li class="card ask flush">
+      <Swipe
+        class="sw-pad"
+        disabled={off}
+        right={{ label: t("wait.accept"), tone: "ok", icon: "check", run: accept }}
+        left={{ label: t("wait.decline"), tone: "crit", icon: "x", run: decline }}
+      >
       <div class="ask-h">
         <span class="badge ok"><Icon name="job" size={16} /></span>
         <div>
@@ -139,10 +163,14 @@ function Job({ j, usable }: { j: ProposedJob; usable: Passkey[] }) {
         <button type="button" class="btn primary" disabled={off} aria-busy={busy === "accept"} onClick={() => void accept()}>
           {busy === "accept" ? t("wait.confirm") : t("wait.accept")}
         </button>
-        <button type="button" class="btn danger-o" disabled={!!busy} onClick={() => void decline()}>{t("wait.decline")}</button>
+        <button type="button" class="btn danger-o" disabled={off} aria-busy={busy === "decline"} onClick={() => void decline()}>
+          {busy === "decline" ? t("wait.confirm") : t("wait.decline")}
+        </button>
       </div>
       {usable.length === 0 && <p class="meta">{t("wait.needKey")}</p>}
-      {err && <p class="err" role="alert">{err}</p>}
+      {err && <PkError e={err} />}
+      <p class="meta swipe-hint">{t("wait.swipeHintJob")}</p>
+      </Swipe>
     </li>
   );
 }

@@ -17,7 +17,7 @@ export interface Act {
   d?: string;
 }
 
-export type TurnState = "waiting" | "running" | "done" | "failed";
+export type TurnState = "waiting" | "running" | "done" | "failed" | "cancelled";
 
 /** One request and its answer, as GET /api/chats/<id> gives it. */
 export interface Turn {
@@ -30,6 +30,8 @@ export interface Turn {
   error?: string | null;
   created: string;
   ended?: string | null;
+  /** a voice note: `q` is empty until the machine that transcribes it has sent the words */
+  voice?: boolean;
 }
 
 export interface ChatHead {
@@ -39,7 +41,7 @@ export interface ChatHead {
   node: string | null;
 }
 
-/** Pure: the turns after one Server-Sent Event of the chat (`turn`, `text`, `act`, `done`), or null when the
+/** Pure: the turns after one Server-Sent Event of the chat (`turn`, `text`, `act`, `done`, `transcript`), or null when the
  *  event is about a turn this page does not have yet (the caller reads the chat again). */
 export function applyEvent(turns: Turn[], name: string, data: Record<string, unknown>): Turn[] | null {
   const i = turns.findIndex((t) => t.id === data.turn);
@@ -62,8 +64,19 @@ export function applyEvent(turns: Turn[], name: string, data: Record<string, unk
       next = { ...t, acts: [...t.acts, { k: String(data.k), n: String(data.n), ...(data.d ? { d: String(data.d) } : {}) }] };
       break;
     case "done":
-      next = { ...t, a: typeof data.a === "string" ? data.a : t.a, state: t.state === "failed" ? "failed" : "done" };
+      next = {
+        ...t,
+        a: typeof data.a === "string" ? data.a : t.a,
+        state: t.state === "failed" || t.state === "cancelled" ? t.state : "done",
+      };
       break;
+    case "transcript": {
+      // a voice note's words, as the question; the event carries them as `text` (`q` and `d` are read too)
+      const words = [data.text, data.q, data.d].find((x) => typeof x === "string") as string | undefined;
+      if (words === undefined) return turns;
+      next = { ...t, q: words, voice: true };
+      break;
+    }
     default:
       return turns;
   }
@@ -277,8 +290,37 @@ export function answersOf(questions: Question[], chosen: Record<string, string[]
   return out;
 }
 
-/** Pure: a chat's turn can be answered again from the same question when it failed. */
-export const retryable = (t: Pick<Turn, "state">) => t.state === "failed";
+/** Pure: a chat's turn can be asked again from the same question when it failed or was cancelled. */
+export const retryable = (t: Pick<Turn, "state">) => t.state === "failed" || t.state === "cancelled";
+
+/** Pure: a turn the machine is still working on or has yet to take: it can be cancelled. */
+export const cancellable = (t: Pick<Turn, "state">) => t.state === "waiting" || t.state === "running";
+
+/** Pure: the chats whose title has every word the person typed (any case, any order); all of them for an empty search. */
+export function filterChats<T extends { title: string }>(chats: T[], query: string, untitled = ""): T[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return chats;
+  return chats.filter((c) => {
+    const title = (c.title || untitled).toLowerCase();
+    return words.every((w) => title.includes(w));
+  });
+}
+
+/** What a failed passkey call shows: the browser's error name and message as they are, and the key of the hint
+ *  for the names a person can do something about. A server's error (not a DOMException) has no name to show. */
+export interface Explained {
+  name: string | null;
+  message: string;
+  hint: "NotAllowedError" | "InvalidStateError" | "SecurityError" | "NotSupportedError" | "AbortError" | "ConstraintError" | null;
+}
+const HINTED = ["NotAllowedError", "InvalidStateError", "SecurityError", "NotSupportedError", "AbortError", "ConstraintError"] as const;
+
+/** Pure: the name, the message and the hint of an error from `navigator.credentials` (`dom`: it is a DOMException). */
+export function explainError(e: { name?: string; message?: string }, dom: boolean): Explained {
+  const name = dom && e.name ? e.name : null;
+  const hint = HINTED.find((h) => h === name) ?? null;
+  return { name, message: e.message || name || "error", hint };
+}
 
 /** Pure: a short human line for a change Claude made, from its tool name (`tasks_add`, `brain_edit`...). */
 export function actKind(n: string): "task" | "brain" | "calendar" | "mail" | "job" | "other" {

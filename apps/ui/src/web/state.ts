@@ -9,6 +9,11 @@ export const offline = signal(!navigator.onLine);
 addEventListener("online", () => (offline.value = false));
 addEventListener("offline", () => (offline.value = true));
 
+/** A wide screen: the rail and the list beside the conversation, no swiping between tabs. */
+const wideQuery = matchMedia("(min-width: 900px)");
+export const wide = signal(wideQuery.matches);
+wideQuery.addEventListener("change", () => (wide.value = wideQuery.matches));
+
 export const waiting = signal<WaitingState | null>(null);
 export const waitingError = signal("");
 export const pendingCount = computed(() => waitingCount(waiting.value));
