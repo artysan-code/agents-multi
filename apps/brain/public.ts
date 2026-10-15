@@ -23,7 +23,7 @@ export interface Site {
 }
 
 /** When the notice last changed: bump it with every change of substance. */
-export const PRIVACY_UPDATED = "8 ottobre 2026";
+export const PRIVACY_UPDATED = "15 ottobre 2026";
 
 const GOOGLE_SCOPES: [string, string][] = [
   [
@@ -72,6 +72,14 @@ export function privacyPage(s: Site) {
     <li><b>Quello che scrivi tu o i Claude che colleghi</b>: pagine di memoria, task, e la storia delle loro versioni, con chi le ha fatte e quando.</li>
     <li><b>Gli accessi</b>: i token dei tuoi computer e delle connessioni di Claude, salvati solo come hash, e la chiave delle tue copie (cifrata).</li>
     <li><b>Dati tecnici</b>: i log del server (indirizzo IP, richiesta, orario), per farlo funzionare e tenerlo sicuro.</li>
+  </ul>
+  <h2>Chat, macchine e telefono</h2>
+  <ul class="list">
+    <li><b>Le chat</b>: le domande che fai dal telefono o dalla console e le risposte, con le modifiche che Claude ha fatto e la macchina che ha risposto. Il servizio le tiene per mostrartele ovunque; le risposte le scrive Claude su una <b>tua</b> macchina, non su questo server.</li>
+    <li><b>Le tue macchine</b>: nome, sistema, carico, memoria e quali account Claude vi sono collegati (non le credenziali), e le richieste di permesso che i loro agenti ti fanno, con le tue risposte.</li>
+    <li><b>Le notifiche</b>: per ogni dispositivo su cui le attivi, l'indirizzo del servizio di notifiche del browser (Google, Mozilla, Apple, Microsoft) e le chiavi per cifrarle. Il testo di una notifica è cifrato per il tuo dispositivo; il servizio del browser vede solo che è arrivata.</li>
+    <li><b>Le passkey</b>: solo la parte pubblica della chiave, il nome che le dai e la firma con cui un tuo computer l'ha approvata. La parte segreta resta nel telefono.</li>
+    <li><b>I codici per collegare una macchina</b>: valgono dieci minuti e una volta sola, e sono salvati solo come hash.</li>
   </ul>
   <p>Un solo cookie, <code>brain_session</code>, tecnico: ti tiene dentro per un'ora dall'ultimo uso, dodici al massimo. Niente statistiche, pubblicità o tracciamento, né qui né da terze parti.</p>
 

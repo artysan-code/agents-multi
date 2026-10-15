@@ -521,6 +521,17 @@ The app runs nothing itself: a chat is answered by one of your paired machines. 
 `deno run --allow-net --allow-read apps/ui/scripts/web-fixture.ts` serves it with made-up data (a streaming answer
 included) on `http://127.0.0.1:8799/app/`.
 
+### On a service someone else hosts
+
+The service can be hosted by someone for other people ([ADR 0014](docs/adr/0014-from-the-phone.md)): an
+invitation from `brain-admin create`, an account each, a database each. The person installs Agents Multi on a
+machine of theirs, pairs it with `agents node pair` and the code typed in the web app (which shows the machine
+before it pairs it), and talks from the phone. The host keeps their memory, tasks and chats, and can read them as
+anyone who runs a server can; it never holds their Claude login, their vault or their code, runs nothing on their
+machines and cannot say yes for them (a yes is their passkey, endorsed by their own desktop and checked by their
+machines). The privacy notice at `/privacy` says what the service keeps. The site's guide: «Starting on a hosted
+service».
+
 ## Consumption
 
 `agents usage` reports tokens by profile, model, project, agent, day, skill or command, with

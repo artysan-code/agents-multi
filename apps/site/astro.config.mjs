@@ -21,7 +21,7 @@ export default defineConfig({
         it: { label: "Italiano", lang: "it" },
       },
       sidebar: [
-        { label: "Start here", translations: { it: "Per cominciare" }, items: ["docs", "docs/getting-started", "docs/setup-with-claude"] },
+        { label: "Start here", translations: { it: "Per cominciare" }, items: ["docs", "docs/getting-started", "docs/hosted", "docs/setup-with-claude"] },
         { label: "Concepts", translations: { it: "Concetti" }, items: ["docs/profiles", "docs/configuration", "docs/console", "docs/brain", "docs/self-hosting", "docs/nodes", "docs/from-the-phone", "docs/mcp-and-vault", "docs/updates", "docs/security"] },
         { label: "Reference", translations: { it: "Riferimento" }, items: ["docs/commands", "docs/troubleshooting", "docs/faq", "docs/changelog"] },
       ],
