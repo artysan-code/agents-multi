@@ -100,7 +100,8 @@ export function acceptSummary(j: Job, node: string, expires: string): string[] {
 const USAGE = `agents nodes                                   the machines (online, sessions, logins) and the jobs
 agents nodes accept <job> [--node N]             sign a proposal here and send it: that node may run it for 24 h
 agents nodes decline <job> [reason…]             no: the job is closed
-agents nodes propose <routine> [--node N]        run a routine of this machine on another node now (a proposal)`;
+agents nodes propose <routine> [--node N]        run a routine of this machine on another node now (a proposal)
+agents nodes forget <name>                       forget a machine: its row, what waits on it, its tokens (it must pair again)`;
 
 async function git(dir: string, ...args: string[]): Promise<string> {
   const r = await new Deno.Command("git", { args: ["-C", dir, ...args], stdout: "piped", stderr: "null" }).output();
@@ -123,7 +124,7 @@ async function connect(): Promise<Service | null> {
 
 export async function nodesCommand(args: string[]): Promise<number> {
   const [sub, ...rest] = args;
-  if (sub === "--help" || sub === "-h" || (sub && !["accept", "decline", "propose", "list"].includes(sub))) {
+  if (sub === "--help" || sub === "-h" || (sub && !["accept", "decline", "propose", "list", "forget"].includes(sub))) {
     console.log(USAGE);
     return sub === "--help" || sub === "-h" ? 0 : 2;
   }
@@ -143,6 +144,18 @@ export async function nodesCommand(args: string[]): Promise<number> {
     if (!id) {
       console.log(USAGE);
       return 2;
+    }
+    if (sub === "forget") {
+      const r = await s.call<{ node: boolean; turns: number; tokens: number }>(
+        "DELETE",
+        `/api/nodes/${encodeURIComponent(id)}`,
+      );
+      console.log(
+        `${id}: forgotten (${r.tokens} token${r.tokens === 1 ? "" : "s"} revoked, ${r.turns} turn${
+          r.turns === 1 ? "" : "s"
+        } released); it comes back only by pairing again`,
+      );
+      return 0;
     }
     if (sub === "decline") {
       const reason = rest.filter((a) => a !== id).join(" ") || undefined;

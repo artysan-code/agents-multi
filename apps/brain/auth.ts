@@ -21,6 +21,7 @@ import type { Users } from "./users.ts";
 import { Gate } from "./guard.ts";
 import { migrate, type Migration } from "./migrate.ts";
 import { randomToken, same, sha256 } from "./crypto.ts";
+import { nodeNameOf } from "../../shared/mcp/lib/nodes.ts";
 
 const SCHEMA = `
 create table if not exists users (
@@ -473,6 +474,20 @@ export class Auth {
   /** A personal token of this account revoked; another account's is out of reach. */
   revoke(user: string, hash: string) {
     this.db.prepare("update tokens set revoked = 1 where hash = ? and user = ?").run(hash, user);
+  }
+  /** The personal tokens of this account named after a node (the pairing and `agents node login` name a token
+   *  after its machine) revoked; how many. */
+  revokeNode(user: string, node: string): number {
+    const rows = this.db.prepare("select hash, name from tokens where user = ? and kind = 'personal' and revoked = 0")
+      .all(user) as { hash: string; name: string | null }[];
+    let n = 0;
+    for (const r of rows) {
+      if (r.name && nodeNameOf(r.name) === node) {
+        this.db.prepare("update tokens set revoked = 1 where hash = ?").run(r.hash);
+        n++;
+      }
+    }
+    return n;
   }
   revokeAllClaude(user: string) {
     this.db.prepare("update tokens set revoked = 1 where user = ? and kind in ('access', 'refresh')").run(user);

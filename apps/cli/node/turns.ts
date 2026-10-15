@@ -10,7 +10,8 @@ import { childEnv, childSettings, loadNodeConfig, type NodeConfig } from "../../
 import { configDir } from "../../../shared/mcp/lib/owner.ts";
 import { type Earlier, type Out, runTurn, type TurnOpts } from "../ask.ts";
 import { HOME, RUNTIME } from "../lib/paths.ts";
-import { type Service, service } from "./service.ts";
+import { isCancelled, type Service, service } from "./service.ts";
+import { realTranscriber } from "./voice.ts";
 
 /** A turn the service gave this node (the contract of ADR 0014). */
 export interface Claimed {
@@ -19,7 +20,12 @@ export interface Claimed {
   text: string;
   session: string | null;
   history: Earlier[];
+  /** a voice note: no text yet, the audio is at `GET /api/turns/<id>/audio` */
+  voice?: true;
 }
+
+/** Audio to text on this machine (voice.ts), or a stand-in in tests. */
+export type Transcribe = (audio: { type: string; data: Uint8Array }, signal?: AbortSignal) => Promise<string>;
 
 /** What goes back to the service while a turn runs. */
 export type Piece = Exclude<Out, { t: "chat" } | { t: "done" }>;
@@ -111,6 +117,8 @@ export interface LoopIO {
   /** the service as this node, or why not */
   service?: () => Promise<Service | string>;
   run?: Runner;
+  /** transcribes a voice turn's audio (default: whisper.cpp, voice.ts) */
+  transcribe?: Transcribe;
   /** waits ms, or less when the loop stops */
   sleep?: (ms: number) => Promise<void>;
   batchMs?: number;
@@ -128,8 +136,10 @@ const sleepFor = (signal: AbortSignal) => (ms: number) =>
  *  90 s back to `waiting` (ADR 0014), and a Claude step can be silent longer than that. */
 export const HEARTBEAT_MS = 30_000;
 
-/** Answers one turn: the pieces go to the service as they come, an empty batch every 30 s keeps it ours, then the
- *  end (`error` when it failed, with what had been said so far). */
+/** Answers one turn: a voice note is fetched and transcribed first (its text goes to the service as the turn's
+ *  first event), the pieces go to the service as they come, an empty batch every 30 s keeps it ours, then the end
+ *  (`error` when it failed, with what had been said so far). A 409 with `cancelled` on any post means the person
+ *  cancelled the turn: Claude is stopped and nothing more is reported. */
 export async function answerTurn(
   svc: Service,
   t: Claimed,
@@ -137,16 +147,37 @@ export async function answerTurn(
   signal: AbortSignal,
   batchMs = BATCH_MS,
   heartbeatMs = HEARTBEAT_MS,
-): Promise<{ error?: string }> {
-  const post = async (events: Piece[]) => {
-    await svc.call("POST", `/api/turns/${t.id}/events`, { events }, { signal });
+  transcribe?: Transcribe,
+): Promise<{ error?: string; cancelled?: boolean }> {
+  const stop = new AbortController();
+  const running = AbortSignal.any([signal, stop.signal]);
+  let cancelled = false;
+  const post = async (events: unknown[]) => {
+    try {
+      await svc.call("POST", `/api/turns/${t.id}/events`, { events }, { signal: running });
+    } catch (e) {
+      if (!isCancelled(e)) throw e;
+      cancelled = true;
+      stop.abort();
+    }
   };
   const out = batcher(post, batchMs);
   const beat = setInterval(() => post([]).catch(() => {}), heartbeatMs);
   let said = "";
   let done: Done;
   try {
-    done = await run(t.text, { session: t.session, history: t.history, signal }, (o) => {
+    let text = t.text;
+    if (t.voice) {
+      if (!svc.bytes) throw new Error("this service client cannot fetch audio");
+      if (!transcribe) throw new Error("this machine cannot transcribe voice notes");
+      const audio = await svc.bytes(`/api/turns/${t.id}/audio`, { signal: running });
+      const heard = await transcribe(audio, running);
+      if (!heard.trim()) throw new Error("no speech was heard in the voice note");
+      await post([{ t: "transcript", text: heard }]);
+      text = heard;
+    }
+    if (cancelled) throw new Error("cancelled");
+    done = await run(text, { session: t.session, history: t.history, signal: running }, (o) => {
       if (o.t === "text") said += o.d;
       if (o.t === "session" || o.t === "text" || o.t === "tool") out.push(o);
     });
@@ -156,6 +187,7 @@ export async function answerTurn(
     clearInterval(beat);
   }
   await out.close();
+  if (cancelled) return { cancelled: true };
   const body = {
     text: done.text,
     ...(done.code ? { code: done.code } : {}),
@@ -167,6 +199,7 @@ export async function answerTurn(
       await svc.call("POST", `/api/turns/${t.id}/done`, body, { signal });
       return done.error ? { error: done.error } : {};
     } catch (e) {
+      if (isCancelled(e)) return { cancelled: true };
       last = e as Error;
       await new Promise((r) => setTimeout(r, 500 * (i + 1)));
     }
@@ -180,6 +213,7 @@ export async function turnLoop(io: LoopIO): Promise<void> {
   const config = io.config ?? (() => loadNodeConfig());
   const getService = io.service ?? (() => service(fetch, { node: true }));
   const run = io.run ?? realRunner;
+  const transcribe = io.transcribe ?? realTranscriber(() => config());
   const sleep = io.sleep ?? sleepFor(signal);
   const idle = io.idleMs ?? 30_000;
   let wait = BACKOFF.min, said = "";
@@ -216,8 +250,9 @@ export async function turnLoop(io: LoopIO): Promise<void> {
       if (!turns?.length && Date.now() - began < 1000) await sleep(1000);
       for (const t of turns ?? []) {
         if (signal.aborted) break;
-        const r = await answerTurn(svc, t, run, signal, io.batchMs);
-        if (r.error) log(`node: chat turn ${t.id} failed: ${r.error}`);
+        const r = await answerTurn(svc, t, run, signal, io.batchMs, undefined, transcribe);
+        if (r.cancelled) log(`node: chat turn ${t.id} was cancelled`);
+        else if (r.error) log(`node: chat turn ${t.id} failed: ${r.error}`);
       }
     } catch (e) {
       if (signal.aborted) break;

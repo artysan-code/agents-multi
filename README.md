@@ -224,7 +224,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents vault status\|init\|pair\|set\|delete\|run`                           | the secret vault the MCP servers read their credentials from (below)                                                                                           |
 | `agents routine add\|list\|rm\|run`                                           | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
 | `agents review [rules [folder]]`                                              | what the reviewer allowed, refused or left to you in routines' runs; the rules a project's runs get (below)                                                    |
-| `agents nodes [accept\|decline\|propose]`                                     | the machines and jobs the service sees; `accept` signs a job here, with the vault's approval key (ADR 0012)                                                    |
+| `agents nodes [accept\|decline\|propose\|forget]`                             | the machines and jobs the service sees; `accept` signs a job here, with the vault's approval key (ADR 0012); `forget <name>` drops a machine and its tokens    |
 | `agents passkeys [endorse <id>]`                                              | the passkeys your phone registered, with their fingerprints; `endorse` signs one here so that it can say yes (ADR 0014)                                        |
 | `agents account status\|default\|proposals\|propose\|accept\|decline\|events` | the limit rules per account, a project's default account, and the owner's yes to a switch (below)                                                              |
 | `agents tasks brief\|add\|done\|remind`                                       | the task list from the terminal; `remind` is what the timer runs                                                                                               |
@@ -484,6 +484,19 @@ sees, and `agents nodes accept <job>` signs one.
   uses the same path when the machine is a node: its questions become turns pinned to this machine, its list
   shows the service's chats (so a conversation started on the phone is there), and without a brain account
   or when the service does not answer it keeps its local chats.
+- **It transcribes your voice notes** ([ADR 0014](docs/adr/0014-from-the-phone.md)). A node announces `voice` when it
+  has whisper.cpp (`whisper-cli` and a multilingual ggml model, kept as `voice` in this machine's `node.json`) and
+  ffmpeg. `agents node voice` finds them in the usual places (`PATH`, `~/.local/src/whisper.cpp/build*/bin`,
+  `~/.local/share/*/models/ggml-*.bin`) and saves them; `--bin <whisper-cli> --model <ggml-….bin>` sets them by
+  hand, `--off` turns it off. Only such a machine takes a voice turn: it fetches the audio the service keeps until
+  the turn ends, converts it to 16 kHz mono WAV in a temporary folder, transcribes it locally in the account's
+  language (`owner.json` `language`), posts the text as the question and answers it like any turn. Both programs
+  run with an empty environment (no secrets) and, on a server, without a network. The audio leaves your machines
+  only for the service's copy, deleted when the turn ends. The server image builds whisper.cpp (CPU only, a
+  pinned commit); `agents node setup` offers to download a model into the volume, checked against its SHA-256.
+- **Forgetting a machine.** `agents nodes forget <name>` (or _More › Machines_ in the web app) drops the node, what
+  waits on it and its pending answers, hands the turns it held back to the other machines and revokes the tokens
+  named after it: a forgotten machine cannot come back without pairing again.
 - **A server** runs `agents serve --headless`: no page, every child in Claude Code's Bash sandbox, failing closed
   (`agents node probe`); only the node pushes. It is given your configuration and the vault, read only, as
   Syncthing folders of their own (`agents config move` puts the configuration in `~/agents-multi-config`), and
@@ -501,6 +514,11 @@ the shell and push only: no data is kept offline). It is made for one hand: a ta
 **Waiting** with a badge, **Tasks**, **Brain**, **More**), a calm light and dark theme that follows the device (or
 the choice in More), and on a wide screen the chat list beside the conversation.
 
+- **Voice**: dictation in the composer where the browser has speech recognition (the words appear as you speak; the
+  browser's own service does the recognition, which the app says), and **voice notes** (up to five minutes and
+  10 MB, Opus or AAC): the recording goes to the service, a machine of yours with whisper.cpp transcribes it and
+  answers, and the audio is deleted when the turn ends. A chat can be renamed, searched by title and question, and
+  a turn **cancelled** at any moment (a waiting one ends at once, a running one is stopped on its machine).
 - **Chat**: the conversations by day with the machine that answered; your messages as compact bubbles, answers as
   full-width text (Markdown, code blocks with a copy button, lists, links), the changes Claude made as chips under
   the answer, a live cursor while it writes, _Stop waiting_ and _Try again_ when a machine does not answer, and a

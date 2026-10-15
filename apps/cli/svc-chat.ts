@@ -29,7 +29,7 @@ export interface SvcTurn {
   q: string;
   a: string;
   acts: Act[];
-  state: "waiting" | "running" | "done" | "failed";
+  state: "waiting" | "running" | "done" | "failed" | "cancelled";
   node: string | null;
   error: string | null;
   code?: string;
@@ -135,6 +135,9 @@ export function relay(e: Sse, turn: string): { out: Out[]; end: boolean } {
       if (d.state === "failed") {
         return { out: [{ t: "done", text: "", code: null, error: str(d.error) || "the turn failed" }], end: true };
       }
+      if (d.state === "cancelled") {
+        return { out: [{ t: "done", text: "", code: null, error: "the turn was cancelled" }], end: true };
+      }
       return { out: [], end: false };
   }
   return { out: [], end: false };
@@ -146,6 +149,7 @@ export function endedTurn(t: SvcTurn | undefined): Done | null {
   if (!t) return null;
   if (t.state === "done") return { t: "done", text: t.a, code: t.code ?? null };
   if (t.state === "failed") return { t: "done", text: "", code: null, error: t.error || "the turn failed" };
+  if (t.state === "cancelled") return { t: "done", text: "", code: null, error: "the turn was cancelled" };
   return null;
 }
 

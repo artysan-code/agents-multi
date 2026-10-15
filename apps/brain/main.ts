@@ -49,7 +49,7 @@ import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
 import { Fleet, fleetRoute } from "./fleet.ts";
 import { Waiting, waitingRoute } from "./waiting.ts";
 import { siteOf } from "../../shared/mcp/lib/webauthn.ts";
-import { ChatHub, chatRoute, Chats } from "./chat.ts";
+import { ChatHub, chatRoute, Chats, forgetRoute } from "./chat.ts";
 import { loadVapid, noticeOf, pushAll, pushRoute, Subscriptions } from "./push.ts";
 import { nodeNameOf } from "../../shared/mcp/lib/nodes.ts";
 
@@ -262,7 +262,7 @@ const otpauth = (id: string, secret: string) =>
 
 /** The API paths a web session may use (the rest of /api/ is for tokens). */
 const WEB_API =
-  /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$|pair\/claim$)/;
+  /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$|pair\/claim$|turns\/[\w-]{1,64}\/cancel$|nodes\/[^/]{1,64}$)/;
 
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
@@ -551,6 +551,12 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
       return json({ error: "the task changed meanwhile", task: toFile(e.current) }, 409);
     }
     return json({ written: one[1] });
+  }
+  // a machine forgotten: the node, what waits on it, its claimed turns and its tokens (chat.ts forgetRoute)
+  if (/^\/api\/nodes\/[^/]+$/.test(p) && req.method === "DELETE") {
+    const chats = new Chats(store.db, chatHub, { user: who.user });
+    const r = forgetRoute(req, u, new Fleet(store.db), chats, (n) => auth.revokeNode(who.user, n));
+    if (r) return r;
   }
   // the account's machines and the jobs placed on them (fleet.ts, ADR 0012): a machine acts as its token's name
   if (p === "/api/node" || p === "/api/nodes" || p.startsWith("/api/jobs")) {

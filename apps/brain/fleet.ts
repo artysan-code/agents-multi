@@ -47,6 +47,7 @@ export function cleanAnnounce(raw: unknown): Announce {
       : [],
     present: r.present === true,
     sandbox: typeof r.sandbox === "boolean" ? r.sandbox : null,
+    voice: r.voice === true,
   };
 }
 
@@ -122,6 +123,22 @@ export class Fleet {
       "select * from jobs where status not in ('proposed', 'accepted', 'running') and updated >= ? order by updated desc limit ?",
     ).all(since, ENDED_KEEP) as unknown as JobRow[];
     return [...open, ...ended].map(toJob);
+  }
+
+  /** A machine forgotten: its row, what waits on it and the phone's answers not yet taken. True when it was known.
+   *  Its jobs stay (history); the tokens and the turns are the caller's (chat.ts `forgetNode`). */
+  forget(name: string): boolean {
+    this.db.exec("begin immediate");
+    try {
+      const r = this.db.prepare("delete from nodes where name = ?").run(name);
+      this.db.prepare("delete from waiting where node = ?").run(name);
+      this.db.prepare("delete from waiting_answers where node = ? and state = 'pending'").run(name);
+      this.db.exec("commit");
+      return Number(r.changes) > 0;
+    } catch (e) {
+      this.db.exec("rollback");
+      throw e;
+    }
   }
 
   /** A node's announcement; the answer is what has been accepted for it. */

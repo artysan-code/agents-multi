@@ -1,6 +1,7 @@
 // facts.ts — what this machine is, as a node: its name, its owner's approval key, and what it announces (ADR
 // 0012). Reading a profile's login means only seeing that its file is there, never opening it.
 
+import { voiceReady } from "./voice.ts";
 import {
   type Announce,
   approvalKeys,
@@ -112,6 +113,7 @@ export async function nodeFacts(cfg: NodeConfig, sandbox: boolean | null): Promi
     accounts: await loggedIn(cfg.headless),
     present: cfg.headless ? false : await present(),
     sandbox,
+    voice: await voiceReady(cfg.voice),
   };
 }
 

@@ -3,7 +3,13 @@
 // approval key, which a node with no vault pins.
 
 import { approvalKeys } from "../../../shared/mcp/lib/nodes.ts";
-import { CLAUDE_TOKEN, loadNodeConfig, machineNodeFile } from "../../../shared/mcp/lib/headless.ts";
+import {
+  CLAUDE_TOKEN,
+  loadNodeConfig,
+  machineNodeFile,
+  type VoiceConfig,
+  voicePath,
+} from "../../../shared/mcp/lib/headless.ts";
 import { setSecret } from "../../../shared/mcp/lib/vault.ts";
 import { launchers } from "../lib/profiles.ts";
 import { readStdin } from "../vault.ts";
@@ -20,6 +26,7 @@ import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { readNodeState } from "./agentd.ts";
 import { bigCode, pairMachine, spinnerFrame } from "./pair.ts";
 import { platformOf } from "../../../shared/mcp/lib/platform.ts";
+import { expandVoicePath, findOnPath, findWhisperBin, findWhisperModel, realFindIO, voiceReady } from "./voice.ts";
 
 const GiB = 2 ** 30;
 
@@ -33,6 +40,14 @@ export function nodeConfigWith(raw: unknown, set: { enabled: boolean; headless?:
   if (set.headless !== undefined) out.headless = set.headless;
   if (set.maxSessions !== undefined) out.maxSessions = set.maxSessions;
   return out;
+}
+
+/** Pure: this machine's node.json with its voice setting set, or removed (`null`); its other keys kept. */
+export function voiceConfigWith(raw: unknown, voice: VoiceConfig | null): Record<string, unknown> {
+  const base = raw && typeof raw === "object" && !Array.isArray(raw) ? { ...raw as Record<string, unknown> } : {};
+  if (voice) base.voice = voice;
+  else delete base.voice;
+  return base;
 }
 
 /** Turns this machine's node on or off in its own node.json (the other keys kept). */
@@ -71,6 +86,15 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log(`  sessions    ${facts.running} of ${facts.cap}  (memory ${(facts.memTotal / GiB).toFixed(1)} GiB)`);
       console.log(`  accounts    ${facts.accounts.join(", ") || "none logged in"}`);
       console.log(`  owner here  ${facts.present ? "yes" : "no"}`);
+      console.log(
+        `  voice       ${
+          cfg.voice
+            ? facts.voice
+              ? `on (${cfg.voice.bin}, ${cfg.voice.model})`
+              : "set, but whisper, its model or ffmpeg is missing"
+            : "off: agents node voice"
+        }`,
+      );
       if (probe) console.log(`  sandbox     ${probe.ok ? "works" : `does not work: ${probe.reason}`}`);
       console.log(
         `  approval    ${key ? "the owner's key is known here" : "no key: no vault, and no approvalKey in node.json"}`,
@@ -163,6 +187,51 @@ export async function nodeCommand(args: string[]): Promise<number> {
       }
       return 0;
     }
+    case "voice": {
+      // voice notes (ADR 0014): find whisper.cpp and a ggml model here, or take the ones named, and keep them in
+      // this machine's node.json; the node then announces it takes voice notes
+      const raw = await Deno.readTextFile(file).then(JSON.parse).catch(() => ({}));
+      if (rest.includes("--off")) {
+        await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+        await writeAtomic(file, JSON.stringify(voiceConfigWith(raw, null), null, 2) + "\n");
+        console.log("voice notes off on this machine");
+        return 0;
+      }
+      const find = realFindIO();
+      const given = (n: string) => {
+        const v = opt(n);
+        if (v === undefined) return undefined;
+        return voicePath(v) ?? null;
+      };
+      const gb = given("--bin"), gm = given("--model");
+      if (gb === null || gm === null) {
+        console.error("--bin and --model are absolute paths (or start with ~/)");
+        return 2;
+      }
+      const bin = gb ?? await findWhisperBin(find), model = gm ?? await findWhisperModel(find);
+      const ffmpeg = await findOnPath(find, "ffmpeg");
+      const mark = (ok: boolean) => ok ? `${ANSI.g}found${ANSI.x}` : `${ANSI.y}missing${ANSI.x}`;
+      const exists = async (p: string | null | undefined) => !!p && await find.isFile(expandVoicePath(p));
+      console.log(`  whisper-cli  ${mark(await exists(bin))}  ${bin ?? "--bin <path to whisper-cli>"}`);
+      console.log(`  ggml model   ${mark(await exists(model))}  ${model ?? "--model <path to a ggml-*.bin>"}`);
+      console.log(`  ffmpeg       ${mark(!!ffmpeg)}  ${ffmpeg ?? "install ffmpeg"}`);
+      if (!bin || !model || !(await exists(bin)) || !(await exists(model))) {
+        console.log(
+          `\n${ANSI.d}whisper.cpp: build it (cmake -B build && cmake --build build -j --config Release) and fetch a multilingual model (models/download-ggml-model.sh base); the server node image has the program, \`agents node setup\` offers the model${ANSI.x}`,
+        );
+        return 1;
+      }
+      const voice = { bin, model };
+      await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+      await writeAtomic(file, JSON.stringify(voiceConfigWith(raw, voice), null, 2) + "\n");
+      const ready = await voiceReady(voice, find);
+      console.log(
+        ready
+          ? `\n${ANSI.g}+${ANSI.x} voice notes on: ${file}; the node announces it within 30 s`
+          : `\nsaved in ${file}, but ffmpeg is missing: the node takes no voice note until it is installed`,
+      );
+      return 0;
+    }
     case "setup":
       return await nodeSetup(nodeCommand);
     case "token": {
@@ -215,7 +284,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
     }
     default:
       console.error(
-        "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key]",
+        "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key|voice [--bin P] [--model P] [--off]]",
       );
       return 2;
   }
