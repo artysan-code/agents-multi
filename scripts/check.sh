@@ -6,6 +6,7 @@
 #
 #   scripts/check.sh            all three groups
 #   scripts/check.sh --desktop  the Rust group only (the release job: the rest passed on `dev` already)
+#   scripts/check.sh --fast     Deno and shell only: what a workstation runs before a commit (the Rust is CI's)
 # The shellcheck step is optional on a workstation (skipped with a warning) and required in CI (CI=true).
 # The Rust step runs where cargo and WebKitGTK are installed, CI included; elsewhere it is skipped.
 set -euo pipefail
@@ -23,8 +24,8 @@ optional() {
 }
 
 mode=${1:-all}
-[[ "$mode" == all || "$mode" == --desktop ]] || {
-  echo "usage: check.sh [--desktop]" >&2
+[[ "$mode" == all || "$mode" == --desktop || "$mode" == --fast ]] || {
+  echo "usage: check.sh [--desktop|--fast]" >&2
   exit 2
 }
 
@@ -67,6 +68,7 @@ logs=$(mktemp -d)
 trap 'rm -rf "$logs"' EXIT
 groups=(rust)
 [[ "$mode" == all ]] && groups=(deno shell rust)
+[[ "$mode" == --fast ]] && groups=(deno shell)
 pids=()
 for g in "${groups[@]}"; do
   "${g}_group" >"$logs/$g" 2>&1 &

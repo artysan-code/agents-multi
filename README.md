@@ -806,15 +806,18 @@ deno task check   # type-check the CLI and tests, bash -n every script, the app'
 deno task test    # usage (rates, dedupe, turns), notifications, guards, mcp, manifests, changelog,
                   # prelaunch against real git repositories; files in parallel (scripts/test.sh)
 deno task ci      # the whole gate (scripts/ci.sh): its steps at once, failures named at the end
+bash scripts/ci.sh --fast   # what a workstation runs: check (no Rust), commit subjects, tests
 ```
 
 - **Pre-commit** (`.githooks/pre-commit`, wired up by `install`): blocks staged state or credential
-  files and added lines that look like tokens, then runs `deno task check` and the tests together
-  when code changed. Deliberate bypass: `git commit --no-verify`.
-- **Pre-push** (`.githooks/pre-push`): the whole gate, the site build only when the pushed commits
-  touch the site or the brain.
-- **CI** (`.forgejo/workflows/ci.yml`): the same gate on every push to `dev`. Needs a runner with the
-  `docker` label.
+  files and added lines that look like tokens, then runs the Deno and shell check and the tests together,
+  at low priority, when code changed. Deliberate bypass: `git commit --no-verify`.
+- **Pre-push** (`.githooks/pre-push`): the commit subjects only. The gate is CI's.
+- **CI** (`.forgejo/workflows/ci.yml`): the whole gate on every push to `dev`, to an agent's branch
+  (`wf/*`, `agent/*`) and on pull requests, with its tools, Deno's cache and the pnpm stores kept between
+  runs; it leaves its verdict as a git note on the commit (`refs/notes/ci`), which `deno task ship` waits
+  for. Needs a runner with the `docker` label; the release's app build runs on `heavy`, the brain's image
+  beside it.
 - **Guards for Claude** (`shared/hooks/`): `branch-guard.sh` lets pushes to work branches through and
   asks before anything that reaches production — a protected branch, a stable version tag, a deleted or
   rewritten ref, `--no-verify`, `ship stable`; `destructive-blocker.sh` asks before broad deletions, lost

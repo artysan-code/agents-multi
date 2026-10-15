@@ -1,13 +1,15 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 /**
  * ship.ts — the one way a version leaves `dev` (docs/adr/0002): brings `dev` in step with what CI and
- * the other branches added, runs the gate, moves the branch by fast-forward, cuts the version with
- * release.ts, pushes the branch and its tag, and merges the result back down to `dev`.
+ * the other branches added, pushes it and waits for CI's verdict on that commit (the note the gate leaves in
+ * refs/notes/ci: the gate runs on the runner, not here), moves the branch by fast-forward, cuts the version
+ * with release.ts, pushes the branch and its tag, and merges the result back down to `dev`.
  *
  *   deno task ship beta [major|minor|patch]   the next beta, cut on `beta` from `dev`
  *   deno task ship rc                         the release candidate, cut on `beta` from `dev`
  *   deno task ship stable --yes               the stable version, cut on `release` from `beta`
  *   deno task ship <kind> --dry-run           print the steps, change nothing
+ *   deno task ship <kind> --local-gate        run the gate here instead of waiting for CI (CI is down)
  *
  * Betas and release candidates are shipped whenever they are needed; a stable version only with the
  * owner's go-ahead (AGENTS.md), which is why it needs `--yes`. Run it from `dev`, with a clean tree.
@@ -59,15 +61,54 @@ export function shipSteps(kind: Kind, aim?: string): Step[] {
   ];
 }
 
+/** Pure: CI's verdict from the note it left on a commit ("ci ok <run>", "ci failed <run>"), or null while
+ *  there is none yet. */
+export function ciVerdict(note: string | null): "ok" | "failed" | null {
+  const m = note?.trim().split("\n").pop()?.match(/^ci (ok|failed)\b/);
+  return m ? m[1] as "ok" | "failed" : null;
+}
+
+/** Waits for CI's verdict on `sha`: fetched from refs/notes/ci every ten seconds, for `minutes` at most. */
+async function waitForCi(sha: string, minutes = 20): Promise<"ok" | "failed"> {
+  const until = Date.now() + minutes * 60_000;
+  let said = 0;
+  while (Date.now() < until) {
+    await new Deno.Command("git", { args: ["fetch", "-q", "origin", "+refs/notes/ci:refs/notes/ci"], stderr: "null" })
+      .output();
+    const out = await new Deno.Command("git", {
+      args: ["notes", "--ref=ci", "show", sha],
+      stdout: "piped",
+      stderr: "null",
+    })
+      .output();
+    const v = ciVerdict(out.success ? new TextDecoder().decode(out.stdout) : null);
+    if (v) return v;
+    if (Date.now() - said > 30_000) {
+      console.log(`  waiting for CI on ${sha.slice(0, 7)}…`);
+      said = Date.now();
+    }
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+  throw new Error(`no verdict from CI on ${sha.slice(0, 7)} in ${minutes} minutes: nothing was shipped (--local-gate)`);
+}
+
 /** Pure: the arguments, or why they are wrong. */
-export function parseArgs(args: string[]): { kind: Kind; aim?: string; dry: boolean; yes: boolean } | string {
+export function parseArgs(
+  args: string[],
+): { kind: Kind; aim?: string; dry: boolean; yes: boolean; localGate: boolean } | string {
   const [kind, aim, ...rest] = args.filter((a) => !a.startsWith("--"));
   if (kind !== "beta" && kind !== "rc" && kind !== "stable") return "usage: deno task ship beta|rc|stable";
   if (rest.length) return `unexpected: ${rest.join(" ")}`;
   if (aim && (kind !== "beta" || !["major", "minor", "patch"].includes(aim))) {
     return `only a beta takes a target (beta major | minor | patch), not ${kind} ${aim}`;
   }
-  return { kind, aim, dry: args.includes("--dry-run"), yes: args.includes("--yes") };
+  return {
+    kind,
+    aim,
+    dry: args.includes("--dry-run"),
+    yes: args.includes("--yes"),
+    localGate: args.includes("--local-gate"),
+  };
 }
 
 /** Pure: the subjects (merges excluded) that `beta` would take from `dev` which are not update manifests. */
@@ -106,7 +147,7 @@ async function main(args: string[]) {
     console.log(
       `ship ${a.kind}${
         a.aim ? ` ${a.aim}` : ""
-      }: from dev, after merging origin/dev, origin/release and origin/beta into it and the gate\n`,
+      }: from dev, after merging origin/dev, origin/release and origin/beta into it, pushing it and CI's verdict\n`,
     );
     console.log(steps.map(show).join("\n"));
     return;
@@ -142,11 +183,19 @@ async function main(args: string[]) {
       );
     }
   }
-  // the gate once here; the pushes below skip it (same commits, or only the release commit on top)
-  const gate = await new Deno.Command("bash", { args: ["scripts/ci.sh"], stdout: "inherit", stderr: "inherit" })
-    .output();
-  if (!gate.success) throw new Error("scripts/ci.sh failed: nothing was shipped");
+  // the gate once, on this commit: CI's on the runner (or here with --local-gate); the pushes below skip the
+  // hook (same commits, or only the release commit on top)
+  if (a.localGate) {
+    const gate = await new Deno.Command("bash", { args: ["scripts/ci.sh"], stdout: "inherit", stderr: "inherit" })
+      .output();
+    if (!gate.success) throw new Error("scripts/ci.sh failed: nothing was shipped");
+  }
   await gitIn(".", "push", "-q", "--no-verify", "origin", "dev");
+  if (!a.localGate) {
+    const sha = await git("rev-parse", "HEAD");
+    if ((await waitForCi(sha)) !== "ok") throw new Error(`CI failed on ${sha.slice(0, 7)}: nothing was shipped`);
+    console.log(`  CI passed ${sha.slice(0, 7)}`);
+  }
 
   let tag = "";
   for (const s of steps) {

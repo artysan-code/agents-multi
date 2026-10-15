@@ -1,6 +1,6 @@
 // Tests for scripts/ship.ts: the arguments it takes and the steps a version goes out with.
 import { assertEquals } from "jsr:@std/assert@1";
-import { parseArgs, shipSteps, untried } from "../../../scripts/ship.ts";
+import { ciVerdict, parseArgs, shipSteps, untried } from "../../../scripts/ship.ts";
 
 Deno.test("ship: a beta or an rc is cut on beta from dev and comes back to dev by fast-forward", () => {
   const runs = shipSteps("beta", "minor").map((s) => s.run.join(" "));
@@ -34,9 +34,31 @@ Deno.test("ship: beta takes from dev for a stable only update manifests and merg
 });
 
 Deno.test("ship: only the kinds and targets release.ts knows", () => {
-  assertEquals(parseArgs(["beta", "major", "--dry-run"]), { kind: "beta", aim: "major", dry: true, yes: false });
-  assertEquals(parseArgs(["stable", "--yes"]), { kind: "stable", aim: undefined, dry: false, yes: true });
+  assertEquals(parseArgs(["beta", "major", "--dry-run"]), {
+    kind: "beta",
+    aim: "major",
+    dry: true,
+    yes: false,
+    localGate: false,
+  });
+  assertEquals(parseArgs(["stable", "--yes"]), {
+    kind: "stable",
+    aim: undefined,
+    dry: false,
+    yes: true,
+    localGate: false,
+  });
+  assertEquals((parseArgs(["rc", "--local-gate"]) as { localGate: boolean }).localGate, true);
   assertEquals(typeof parseArgs(["rc", "minor"]), "string");
   assertEquals(typeof parseArgs(["patch"]), "string");
   assertEquals(typeof parseArgs([]), "string");
+});
+
+Deno.test("ship: CI's verdict from the note on the commit", () => {
+  assertEquals(ciVerdict(null), null);
+  assertEquals(ciVerdict(""), null);
+  assertEquals(ciVerdict("ci ok 480\n"), "ok");
+  assertEquals(ciVerdict("ci failed 481"), "failed");
+  assertEquals(ciVerdict("ci failed 481\n\nci ok 482"), "ok"); // a later run, appended: the last one counts
+  assertEquals(ciVerdict("something else"), null);
 });

@@ -41,9 +41,11 @@ if git diff --cached --name-only | grep -qE '\.(ts|js|sh|py|json|md|css|html)$|^
   if command -v deno >/dev/null; then
     # at once: they share nothing, and the commit waits for the slower one only
     check_log=$(mktemp) test_log=$(mktemp)
-    bash scripts/check.sh >"$check_log" 2>&1 &
+    # Deno and shell only, at low priority (ionice is Linux's): the Rust, the builds and the rest of the gate are CI's
+    low() { if command -v ionice >/dev/null; then nice -n 10 ionice -c3 "$@"; else nice -n 10 "$@"; fi; }
+    low bash scripts/check.sh --fast >"$check_log" 2>&1 &
     check_pid=$!
-    deno task --quiet test >"$test_log" 2>&1 &
+    low deno task --quiet test >"$test_log" 2>&1 &
     test_pid=$!
     wait "$check_pid" || {
       red "scripts/check.sh failed:"

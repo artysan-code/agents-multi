@@ -101,19 +101,23 @@ a console, and a desktop app that carries it all. **This repository is the sourc
 
 ### Verify, branches, releases
 
-- **Verify before saying done**: `deno task ci` (or `check` and `test`), then `agents doctor`; for
-  `install`, `agents install --dry-run` first. A new pure function gets a test in `apps/cli/tests/`.
-  Read the gate's exit code, not its last line: a filter or `tail` hides a failure.
-- **The gate is `scripts/ci.sh`**, run by CI on `dev` and by the pre-push hook; a new check goes there,
-  never only in a workflow file.
+- **Verify before saying done**: on the machine, `scripts/ci.sh --fast` (check, commit subjects, tests, at
+  four test processes), then `agents doctor`; for `install`, `agents install --dry-run` first. The whole gate
+  is CI's: push the branch (`dev`, or an agent's `wf/*` / `agent/*`) and read its verdict (`git fetch origin
+  refs/notes/ci:refs/notes/ci && git notes --ref=ci show HEAD`), never the whole gate on the owner's machine
+  — it shares it. A new pure function gets a test in `apps/cli/tests/`. Read the gate's exit code, not its
+  last line: a filter or `tail` hides a failure.
+- **The gate is `scripts/ci.sh`**, run by CI on `dev`, on agents' branches and on pull requests, which
+  leaves its verdict as a note on the commit; a new check goes there, never only in a workflow file. The
+  hooks stay light: pre-commit runs the Deno and shell check and the tests at low priority, pre-push only the
+  commit subjects.
 - **Branches** ([ADR 0002](docs/adr/0002-versions-branches-releases.md)): work lands on `dev`; `beta`
   and `release` move only by fast-forward to commits the branch before already has.
-- **Commit and push on `dev` and `beta` without asking**, as soon as it helps: the pre-push gate is the
-  check. **Ask first only for a stable release** (anything that moves `release` or cuts a stable version).
+- **Commit and push on `dev` and `beta` without asking**, as soon as it helps: CI's gate is the check. **Ask first only for a stable release** (anything that moves `release` or cuts a stable version).
 - **Versions go out with `deno task ship`**, never by hand: `ship beta [major|minor|patch]` or `ship rc`
   from `dev` (cut on `beta`), `ship stable --yes` once the owner said so (cut on `release` from `beta`);
-  `--dry-run` shows the steps. It merges what CI committed on `release` into `dev`, runs the gate,
-  fast-forwards, cuts the version with `scripts/release.ts` (every manifest in `MANIFESTS`, the CHANGELOG
+  `--dry-run` shows the steps. It merges what CI committed on `release` into `dev`, pushes it and waits for
+  CI's verdict on that commit (`--local-gate` runs the gate here when CI is down), fast-forwards, cuts the version with `scripts/release.ts` (every manifest in `MANIFESTS`, the CHANGELOG
   section, the tag), pushes, and brings the release commit back to `dev`. The CHANGELOG is the only place
   release notes are written. Commit subjects are Conventional Commits (`TYPES`); the `commit-msg` hook
   and CI reject anything else. No attribution trailer (`commit-trailer-guard`).

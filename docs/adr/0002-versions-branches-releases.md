@@ -12,7 +12,8 @@
   before them. Betas (`X.Y.Z-beta.N`) and release candidates (`X.Y.Z-rc.N`, after the last beta) are cut on `beta`; stable versions are cut on `release`.
   Installations follow `release`.
 - **One command ships a version** (2026-10-12): `deno task ship beta|rc|stable` (`scripts/ship.ts`)
-  merges what CI committed on `release` into `dev`, runs the gate, fast-forwards the branch, cuts the
+  merges what CI committed on `release` into `dev`, pushes it and waits for CI's gate on that commit (since
+  2026-10-15: the gate runs on the runner, not on the owner's machine), fast-forwards the branch, cuts the
   version with `deno task release` and pushes it with its tag. Betas and release candidates ship
   whenever they are needed; a stable version only with the owner's go-ahead (`--yes`).
 - **Commit subjects are Conventional Commits**; the CHANGELOG section and the bump are generated

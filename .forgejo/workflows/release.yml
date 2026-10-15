@@ -45,11 +45,10 @@ jobs:
           FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: deno run --allow-read --allow-env --allow-net --allow-run=git scripts/publish-releases.ts
 
+  # the heavy lane (atlas-heavy): two at a time, never queued behind the light lane's jobs of every repository
   app:
-    runs-on: docker
-    timeout-minutes: 120
-    outputs:
-      site: ${{ steps.channels.outputs.sha }}
+    runs-on: heavy
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -84,14 +83,34 @@ jobs:
       # `tray-icon` feature in Cargo.toml without its target and refuses an AppImage when no
       # appindicator library is installed; zstd: actions/cache compresses with it when it is
       # there, and gzip took about 5 minutes over the 1.4 GB of Cargo's build at the end of every job
+      # apt's lists and packages and the Rust toolchain, kept between releases: apt and rustup took about a
+      # minute of each release, fetching the same things
+      - name: tools cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/apt-cache
+            ~/.rustup
+            ~/.cargo/bin
+          key: tools-${{ env.RUST_VERSION }}-${{ hashFiles('.forgejo/workflows/release.yml') }}
+          restore-keys: tools-${{ env.RUST_VERSION }}-
+
       - name: tools
         run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends file patchelf \
+          # the image deletes what apt downloads (docker-clean): kept in the cached folder instead
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          mkdir -p ~/apt-cache/archives/partial ~/apt-cache/lists/partial
+          apt="-o Dir::Cache::Archives=$HOME/apt-cache/archives -o Dir::State::Lists=$HOME/apt-cache/lists"
+          # shellcheck disable=SC2086
+          apt-get $apt update -qq
+          # shellcheck disable=SC2086
+          apt-get $apt install -y -qq --no-install-recommends file patchelf \
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev \
             libayatana-appindicator3-dev zstd >/dev/null
-          curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
-            --default-toolchain "$RUST_VERSION" --component rustfmt,clippy
+          if ! "$HOME/.cargo/bin/rustc" --version 2>/dev/null | grep -q " $RUST_VERSION "; then
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
+              --default-toolchain "$RUST_VERSION" --component rustfmt,clippy
+          fi
           echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
           corepack enable
 
@@ -136,7 +155,6 @@ jobs:
         run: deno run --allow-read --allow-env --allow-net=api.github.com,uploads.github.com scripts/app-release.ts publish dist-app
 
       - name: update channels
-        id: channels
         run: |
           git config user.name "Agents Multi release"
           git config user.email "release@agents-multi.invalid"
@@ -158,10 +176,9 @@ jobs:
             fi
             git add apps/site/public/updates
             if [[ -d pkg/agents-multi-bin ]]; then git add pkg/agents-multi-bin; fi
-            # the commit the brain's image is built from: the site with these manifests (brain-image)
-            if git diff --cached --quiet; then echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"; exit 0; fi
+            if git diff --cached --quiet; then exit 0; fi
             git commit --quiet -m "chore(updates): v$VERSION on its update channels"
-            git push --quiet origin release && { echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"; exit 0; }
+            git push --quiet origin release && exit 0
             git reset --quiet --hard origin/release # someone pushed meanwhile: again on top
           done
           exit 1
@@ -180,19 +197,18 @@ jobs:
             deno run --allow-read --allow-write --allow-run=git --allow-env scripts/aur.ts push pkg/agents-multi-bin
 
   # The brain's image on GHCR, built by kaniko: the runner gives jobs no Docker socket and no
-  # privileges, and kaniko needs neither. It builds from git (the job token reads the repository):
-  #   - from the commit with the new manifests on `release` → :latest, which the production brain
-  #     runs and whose site serves the update channels; for a stable version also :X.Y.Z and :X.Y;
-  #   - for a beta, from its tagged commit as well → :beta and :X.Y.Z-beta.N (the beta's code).
+  # privileges, and kaniko needs neither. It builds from git (the job token reads the repository), from the
+  # tagged commit, at the same time as the app (it needs nothing of it):
+  #   - a stable version → :latest, which the production brain runs, and :X.Y.Z and :X.Y;
+  #   - a beta or an rc → :beta and :X.Y.Z-beta.N (the beta's code); :latest is left alone.
   # Then brain-deploy has Coolify pull again the resources on the tag that moved: Coolify's deploy
   # endpoint (`/api/v1/deploy?uuid=<a>,<b>`, apps/brain/coolify/) in COOLIFY_DEPLOY_URL for those on
   # :latest (the brain), redeployed by a stable version, and in COOLIFY_DEPLOY_BETA_URL for those on
   # :beta (the site, until 1.0.0), by a beta. The site reads the update manifests from `release` on
   # its own (apps/brain/manifests.ts): no resource is redeployed for them.
   # Without GHCR_TOKEN (a GitHub token with write:packages on artysan-code) nothing is built; without
-  # the URL and COOLIFY_TOKEN nothing is redeployed.
+  # the URL and COOLIFY_TOKEN nothing is redeployed. Kaniko keeps its layers in :<image>-cache.
   brain-image:
-    needs: app
     runs-on: docker
     timeout-minutes: 40
     container:
@@ -209,7 +225,6 @@ jobs:
           GIT_USERNAME: oauth2
           GIT_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          SITE: ${{ needs.app.outputs.site }}
         run: |
           [ -n "$GHCR_TOKEN" ] || { echo "no GHCR_TOKEN: the brain's image is not built"; exit 0; }
           mkdir -p /kaniko/.docker
@@ -220,17 +235,18 @@ jobs:
           build() { # <ref> <commit> <tag>...
             ctx="$repo#$1#$2"; shift 2
             dest=""; for t in "$@"; do dest="$dest --destination $IMAGE:$t"; done
-            # --cleanup: kaniko builds in this container's own filesystem, and a beta builds twice
+            # --cache: the dependency layers come back from the registry when their inputs did not change
             /kaniko/executor --context "$ctx" --dockerfile apps/brain/Dockerfile $dest --cleanup \
+              --cache=true --cache-repo "$IMAGE-cache" --cache-ttl=336h \
               --label "org.opencontainers.image.source=$SOURCE" \
               --label "org.opencontainers.image.version=$version" --verbosity warn
           }
+          # from the tagged commit, on the branch that holds it (the tag is annotated, the commit is not);
+          # a beta or an rc no longer rebuilds :latest, the production brain: the manifests it would carry
+          # are read live from `release`
           case "$version" in
-            *-beta.*|*-rc.*)
-              build refs/heads/release "$SITE" latest
-              # from `beta`, which holds the tagged commit: the tag is annotated, the commit is not
-              build refs/heads/beta "$GITHUB_SHA" beta "$version" ;;
-            *) build refs/heads/release "$SITE" latest "$version" "${version%.*}" ;;
+            *-beta.*|*-rc.*) build refs/heads/beta "$GITHUB_SHA" beta "$version" ;;
+            *) build refs/heads/release "$GITHUB_SHA" latest "$version" "${version%.*}" ;;
           esac
           echo "built=true" >>"$GITHUB_OUTPUT"
 

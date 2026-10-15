@@ -5,13 +5,18 @@
 # Deno comes from setup-deno; the tools the gate requires in CI are pinned, sha256-checked
 # gitleaks, jq and shellcheck releases (no apt-get: its index fetch alone cost more than the tools).
 #
-# Only `dev` is gated here: `beta` and `release` move by fast-forward to commits `dev` already passed,
-# and what is committed on `release` itself (the version bump, the update manifests) is gated by the
-# release job of its tag. Gating the same commit on three branches tripled the runner's queue.
+# Gated here: `dev`, the agents' branches (wf/*, agent/*: an agent pushes its branch and reads the verdict
+# instead of running the whole gate on the owner's machine) and pull requests. `beta` and `release` move by
+# fast-forward to commits `dev` already passed, and what is committed on `release` itself (the version bump,
+# the update manifests) is gated by the release job of its tag. Gating the same commit on three branches
+# tripled the runner's queue.
+#
+# The verdict is left on the commit as a git note (refs/notes/ci: "ci ok <run>" or "ci failed <run>"): `deno
+# task ship` reads it with a plain fetch, no token, and ships only a commit CI passed.
 name: ci
 on:
   push:
-    branches: [dev]
+    branches: [dev, "wf/**", "agent/**"]
   pull_request:
 
 concurrency:
@@ -42,8 +47,21 @@ jobs:
         with:
           deno-version: ${{ env.DENO_VERSION }}
 
+      # the pinned tools, kept between runs: downloaded only when a version changes
+      - name: tools cache
+        id: tools
+        uses: actions/cache@v4
+        with:
+          path: ~/ci-tools
+          key: tools-${{ env.GITLEAKS_VERSION }}-${{ env.JQ_VERSION }}-${{ env.SHELLCHECK_VERSION }}
+
       - name: tools
         run: |
+          if [[ -x ~/ci-tools/gitleaks && -x ~/ci-tools/jq && -x ~/ci-tools/shellcheck ]]; then
+            install -m 755 ~/ci-tools/gitleaks ~/ci-tools/jq ~/ci-tools/shellcheck /usr/local/bin/
+            corepack enable
+            exit 0
+          fi
           fetch() { # <url> <sha256> <file>
             curl -fsSL -o "$3" "$1"
             echo "$2  $3" | sha256sum -c -
@@ -58,6 +76,7 @@ jobs:
           tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
           install -m 755 /tmp/jq /usr/local/bin/jq
           tar -xJf /tmp/shellcheck.txz -C /usr/local/bin --strip-components=1 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          mkdir -p ~/ci-tools && cp /usr/local/bin/gitleaks /usr/local/bin/jq /usr/local/bin/shellcheck ~/ci-tools/
           corepack enable
 
       - name: cache
@@ -67,8 +86,26 @@ jobs:
             ~/.cache/deno
             ~/.local/share/pnpm/store
             ~/.cache/node/corepack
+            apps/ui/node_modules
+            apps/site/node_modules
+            apps/site/.astro
           key: ci-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml') }}
           restore-keys: ci-
 
       - name: gate
         run: bash scripts/ci.sh
+
+      # the verdict on the commit, for `deno task ship` (a cancelled run leaves none)
+      - name: verdict
+        if: ${{ always() && github.event_name == 'push' && (job.status == 'success' || job.status == 'failure') }}
+        env:
+          VERDICT: ${{ job.status == 'success' && 'ok' || 'failed' }}
+        run: |
+          git config user.name "Agents Multi CI"
+          git config user.email "ci@agents-multi.invalid"
+          for _ in 1 2 3; do
+            git fetch -q origin "+refs/notes/ci:refs/notes/ci" 2>/dev/null || true
+            git notes --ref=ci add -f -m "ci $VERDICT $GITHUB_RUN_NUMBER" "$GITHUB_SHA"
+            git push -q origin refs/notes/ci && exit 0
+          done
+          echo "::warning::the verdict could not be written on the commit"
