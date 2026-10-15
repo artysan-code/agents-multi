@@ -5,6 +5,36 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.1-rc.2] - 2026-10-15
+
+### Added
+
+- **ui**: the web app, a second entry for the phone (chat, tasks, brain, machines, PWA) (28bd2ff)
+- **brain**: serve the web app under /app, with the sign-in redirect and the session for /api (190e4ba)
+- **brain**: chats, the node's turn routes and Web Push (ADR 0014 G1, G3) (02047c5)
+- **node**: answer the service's chat turns with the console's runner (2aa979e)
+- **ui**: minimal Tasks and Brain views behind More, with the brain's board link (3fef594)
+- **node**: a server set up by one command, Claude's tokens in the vault (ADR 0013) (91db8b4)
+
+### Fixed
+
+- **node**: one turn at a time, a heartbeat while answering, a failed answer keeps what it said (ce3efab)
+- **brain**: the web session reads only tasks, brain and nodes; chats and push are their own (3d974d6)
+- **console**: doctor fixes say how to run them, refusals read as messages, dead plugins API removed (bb0e029)
+- **node**: a container's node counts its own memory, init takes the brain, a server's doctor (382203c)
+- **node**: the vault reaches a node on Coolify, and the doctor says when it does not (33907a2)
+
+### Performance
+
+- **release**: the rpm is back, Tauri CLI 2.12.3 writes it in seconds (stable versions only) (cb722b5)
+
+### Documentation
+
+- from the phone, the web app at /app (README, site EN and IT) (03020c7)
+- **adr**: 0014 accepted, with the API of G1 to G3 (6eafc8c)
+- **adr**: 0014, from the phone: the web app on the service, the orchestrator on a paired machine (7ff287a)
+- **adr**: 0013, a server node without a terminal (proposed) (b4c8ff6)
+
 ## [1.2.1-rc.1] - 2026-10-15
 
 ### Fixed
