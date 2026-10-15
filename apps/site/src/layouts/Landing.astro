@@ -13,6 +13,7 @@ interface Props { lang: Lang }
 const { lang } = Astro.props;
 const t = dict[lang];
 const home = lang === "en" ? "/" : "/it/";
+const docs = lang === "en" ? "/docs/" : "/it/docs/";
 const origin = Astro.site!.origin;
 const url = origin + home;
 const ld = {
@@ -65,7 +66,7 @@ const ld = {
           <a href="#features">{t.nav.features}</a>
           <a href="#brain">{t.nav.brain}</a>
           <a href="#how">{t.nav.how}</a>
-          <a href="/docs/">{t.nav.docs}</a>
+          <a href={docs}>{t.nav.docs}</a>
         </nav>
         <div class="lang">
           <a href="/" hreflang="en" lang="en" aria-current={lang === "en" ? "page" : undefined}>EN</a>
@@ -81,7 +82,7 @@ const ld = {
           <h1 set:html={t.h1} />
           <p class="lead">{t.lead}</p>
           <div class="ctas">
-            <a class="btn" href="/docs/getting-started/#download">{t.ctaDownload}</a>
+            <a class="btn" href={docs + "getting-started/#download"}>{t.ctaDownload}</a>
             <a class="btn ghost" href="mailto:__CONTACT__">{t.ctaContact}</a>
             <a class="btn ghost" href="#how">{t.ctaHow} →</a>
           </div>
@@ -192,7 +193,7 @@ const ld = {
             <p>{t.callText}</p>
             <div class="ctas">
               <a class="btn" href="mailto:__CONTACT__">{t.callContact}</a>
-              <a class="btn ghost" href="/docs/">{t.callDocs} →</a>
+              <a class="btn ghost" href={docs}>{t.callDocs} →</a>
             </div>
           </div>
         </div>
@@ -204,7 +205,7 @@ const ld = {
         <a class="brand" href={home}><span class="mark" set:html={mark} />Agents Multi</a>
         <span>{t.footer.made} __OPERATOR__</span>
         <nav>
-          <a href="/docs/">{t.footer.docs}</a>
+          <a href={docs}>{t.footer.docs}</a>
           <a href="__APP__/privacy">{t.footer.privacy}</a>
           <a href="__APP__/tasks" rel="nofollow">{t.footer.signin}</a>
         </nav>
