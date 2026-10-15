@@ -105,3 +105,24 @@ export async function importGoogleClient(text: string): Promise<Result> {
     return failed(e as Error);
   }
 }
+
+export interface PasskeyRow {
+  id: string;
+  name: string;
+  fingerprint: string;
+  state: "pending" | "endorsed" | "not valid here" | "endorsed (unchecked)";
+  created: string;
+}
+
+export interface PasskeysView {
+  available: boolean;
+  message?: string;
+  canEndorse: boolean;
+  passkeys: PasskeyRow[];
+}
+
+/** The phone's passkeys as the service lists them, with where each stands as this machine sees it. */
+export const loadPasskeys = () => get<PasskeysView>("/api/passkeys");
+
+/** Endorses one: signed here with the approval key. The page has asked the owner first. */
+export const endorsePasskey = (id: string) => post("/api/passkeys", { id }).catch(failed);

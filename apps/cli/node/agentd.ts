@@ -19,12 +19,16 @@ import {
   saveRoutine,
 } from "../../../shared/mcp/lib/routines.ts";
 import { parseAccountId } from "../../../shared/mcp/lib/limitrules.ts";
+import { type Passkey, siteOf, verifyJobAssertion } from "../../../shared/mcp/lib/webauthn.ts";
 import { HOME } from "../lib/paths.ts";
 import { approvalKey, nodeFacts, nodeName } from "./facts.ts";
 import { headlessProbe } from "./probe.ts";
 import { actOn, announce, newJob, type Service, service } from "./service.ts";
+import { getAnswers, getPasskeys, handleAnswers, relayRequests } from "./waiting.ts";
 
 export const TICK_MS = 30_000;
+/** how often what waits on this machine is looked at between ticks (ADR 0014): a change is told at once */
+export const WAITING_MS = 10_000;
 const PROBE_MS = 3600_000;
 
 /** What agentd remembers between ticks, in `<runs>/node/state.json`: the jobs it took or refused (a job is
@@ -130,14 +134,29 @@ export async function nodeTick(
   const self = nodeName(cfg);
   const st = await readNodeState();
   const facts = await nodeFacts(cfg, sandbox);
-  const { jobs } = await announce(svc, facts);
+  const { jobs, answers } = await announce(svc, facts);
   const key = await approvalKey(cfg);
+  // what waits here goes to the phone, and what the phone answered is checked here (waiting.ts)
+  await handleAnswers(cfg, svc, answers ?? [], o).catch((e) => o.log(`node: answers: ${(e as Error).message}`));
+  await relayRequests(svc, true).catch((e) => o.log(`node: waiting: ${(e as Error).message}`));
+  // the account's passkeys, read once and only for a job the phone approved
+  let passkeys: Passkey[] | null = null, unreadable = false;
+  const viaPasskey = async (j: Job) => {
+    try {
+      passkeys ??= await getPasskeys(svc);
+    } catch {
+      unreadable = true; // ours to retry next tick, not a reason to refuse the job
+      return "the account's passkeys could not be read";
+    }
+    return await verifyJobAssertion(j, { site: siteOf(svc.url), passkeys, ownerKey: key, now: Date.now() });
+  };
   let running = facts.running;
   for (const j of jobs) {
     if (st.seen.includes(j.id)) continue;
     const why = key
-      ? await verifyJob(j, key, self, Date.now(), st.seen)
+      ? await verifyJob(j, key, self, Date.now(), st.seen, viaPasskey)
       : "this node has no approval key (no vault here: approvalKey in node.json)";
+    if (unreadable) continue;
     const d = decide(why, running < facts.cap, !cfg.headless || sandbox === true);
     if (d.act === "wait") continue;
     let refusal = d.act === "refuse" ? d.why : null;
@@ -263,13 +282,36 @@ export function startAgentd(o: Agentd): () => void {
       busy = false;
     }
   };
+  // what waits on the hub goes to the phone when it changes, and while something waits the phone's answers are
+  // fetched here, not only with the announce
+  let quickBusy = false, quickSaid = "";
+  const quick = async () => {
+    if (quickBusy || stopped || busy) return;
+    quickBusy = true;
+    try {
+      const cfg = await loadNodeConfig();
+      if (!cfg.enabled) return;
+      const svc = await service(fetch, { node: true });
+      if (typeof svc === "string") return;
+      if (await relayRequests(svc) > 0) await handleAnswers(cfg, svc, await getAnswers(svc), o);
+      quickSaid = "";
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (quickSaid !== msg) o.log(`node: waiting: ${msg}`);
+      quickSaid = msg;
+    } finally {
+      quickBusy = false;
+    }
+  };
   void probe().then(tick);
   const t = setInterval(tick, TICK_MS);
+  const q = setInterval(quick, WAITING_MS);
   const p = setInterval(() => void probe(), PROBE_MS);
   o.log(`schedule: node${o.headless ? " (headless)" : ""}`);
   return () => {
     stopped = true;
     clearInterval(t);
+    clearInterval(q);
     clearInterval(p);
     stopRoutines?.();
   };
