@@ -88,17 +88,22 @@ export interface Orchestrator {
 export const getOrchestrator = () => call<Orchestrator>("/api/settings/orchestrator");
 export const setOrchestrator = (o: Orchestrator) => send("PUT", "/api/settings/orchestrator", o);
 
-/** The code a machine shows (`agents node pair`), typed here: the machine becomes a node of this account. */
-export const claimPairing = (code: string) => send("POST", "/api/pair/claim", { code }) as Promise<{ node: string }>;
-
 // ---- push
 export const pushKey = () => call<{ key: string }>("/api/push/key").then((r) => r.key);
 export const subscribePush = (s: { endpoint: string; keys: { p256dh: string; auth: string }; device: string }) =>
   send("POST", "/api/push/subscriptions", s);
 export const unsubscribePush = (endpoint: string) => send("DELETE", "/api/push/subscriptions", { endpoint });
 
-// ---- pairing a machine (G4)
-export const claimPairing = (code: string) => send("POST", "/api/pair/claim", { code }) as Promise<{ node: string | { name: string } }>;
+// ---- pairing a machine (G4): the code first shows which machine asks; only a confirmed claim makes it a node
+export interface PairPreview {
+  node: string;
+  platform: string;
+  asked: string;
+}
+export const previewPairing = (code: string) =>
+  send("POST", "/api/pair/claim", { code }) as Promise<{ preview: PairPreview }>;
+export const claimPairing = (code: string) =>
+  send("POST", "/api/pair/claim", { code, confirm: true }) as Promise<{ node: string }>;
 
 // ---- what waits (G5)
 export const loadWaiting = () => call<WaitingState>("/api/waiting");

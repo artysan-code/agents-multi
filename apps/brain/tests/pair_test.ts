@@ -78,8 +78,13 @@ Deno.test("pair: the machine polls, the person claims, the token comes once and 
   // stored hashed: neither the code nor the secret is in the table
   const rows = JSON.stringify(db.prepare("select * from pairings").all());
   assert(!rows.includes(p.pairing) && !rows.includes(p.code.replace("-", "")));
+  // the code first shows which machine asks, and binds nothing
+  const seen = await pairings.claim("ann", p.code);
+  assert("preview" in seen);
+  assertEquals([seen.preview.node, seen.preview.platform], ["My-Laptop-old-", "linux"]);
+  assertEquals(await pairings.poll(p.pairing), { state: "waiting" });
   assertEquals(
-    await pairings.claim("ann", p.code.toLowerCase().replace("-", " ")),
+    await pairings.claim("ann", p.code.toLowerCase().replace("-", " "), true),
     { node: "My-Laptop-old-" },
   );
   const done = await pairings.poll(p.pairing);
@@ -104,7 +109,7 @@ Deno.test("pair: the machine polls, the person claims, the token comes once and 
 Deno.test("pair: one use, ten minutes", async () => {
   const { pairings, tick } = await setup();
   const a = await pairings.create("a", "linux");
-  await pairings.claim("ann", a.code);
+  await pairings.claim("ann", a.code, true);
   await assertRejects(
     () => pairings.claim("bob", a.code),
     PairError,
@@ -139,10 +144,10 @@ Deno.test("pair: five wrong codes in a row lock an account's claiming for fiftee
   );
   assertEquals((e as PairError).status, 429);
   // another account is not locked
-  assertEquals((await pairings.claim("bob", p.code)).node, "m");
+  assertEquals((await pairings.claim("bob", p.code, true) as { node: string }).node, "m");
   tick(LOCK_MS + 1);
   const q = await pairings.create("n", "linux");
-  assertEquals((await pairings.claim("ann", q.code)).node, "n");
+  assertEquals((await pairings.claim("ann", q.code, true) as { node: string }).node, "n");
 });
 
 Deno.test("pair: a right code in between resets the count; a malformed one counts as wrong", async () => {
@@ -150,7 +155,7 @@ Deno.test("pair: a right code in between resets the count; a malformed one count
   for (let i = 0; i < MAX_WRONG - 1; i++) {
     await assertRejects(() => pairings.claim("ann", "nonsense"), PairError);
   }
-  await pairings.claim("ann", (await pairings.create("m", "linux")).code);
+  await pairings.claim("ann", (await pairings.create("m", "linux")).code, true);
   for (let i = 0; i < MAX_WRONG - 1; i++) {
     await assertRejects(() => pairings.claim("ann", "ZZZZ-ZZZZ"), PairError);
   }
@@ -182,7 +187,7 @@ Deno.test("pair: a name is required and the table is bounded", async () => {
 Deno.test("pair: a disabled account gets no token, and purging forgets what expired", async () => {
   const { pairings, users, auth, tick, db } = await setup();
   const p = await pairings.create("m", "linux");
-  await pairings.claim("ann", p.code);
+  await pairings.claim("ann", p.code, true);
   users.setDisabled("ann", true);
   assertEquals(await pairings.poll(p.pairing), { state: "expired" });
   await pairings.create("old", "linux");

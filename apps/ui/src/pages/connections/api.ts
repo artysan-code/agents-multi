@@ -125,4 +125,6 @@ export interface PasskeysView {
 export const loadPasskeys = () => get<PasskeysView>("/api/passkeys");
 
 /** Endorses one: signed here with the approval key. The page has asked the owner first. */
-export const endorsePasskey = (id: string) => post("/api/passkeys", { id }).catch(failed);
+/** The fingerprint the owner said yes to goes with it: the backend signs only a key that still has it. */
+export const endorsePasskey = (id: string, fingerprint: string) =>
+  post("/api/passkeys", { id, fingerprint }).catch(failed);

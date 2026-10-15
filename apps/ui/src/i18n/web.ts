@@ -123,6 +123,9 @@ export const en = {
   "pair.pairing": "Pairing…",
   "pair.help": "A code works once. Five wrong codes in a row stop pairing for 15 minutes.",
   "pair.done": "{n} is paired. It starts answering in a few seconds.",
+  "pair.confirm": "Add «{n}» ({p}), which asked to pair at {w}, as one of your machines? Only say yes if it is yours: it will act for your account.",
+  "pair.yes": "Yes, it is mine",
+  "pair.no": "No",
 
   "wait.title": "Waiting",
   "wait.count": "{n} waiting for your answer",
@@ -305,6 +308,9 @@ export const it: Record<keyof typeof en, string> = {
   "pair.pairing": "Collego…",
   "pair.help": "Un codice vale una volta. Cinque codici sbagliati di fila bloccano il collegamento per 15 minuti.",
   "pair.done": "{n} è collegata. Comincia a rispondere tra qualche secondo.",
+  "pair.confirm": "Aggiungere «{n}» ({p}), che ha chiesto di collegarsi alle {w}, come tua macchina? Di' sì solo se è tua: agirà per il tuo account.",
+  "pair.yes": "Sì, è mia",
+  "pair.no": "No",
 
   "wait.title": "In attesa",
   "wait.count": "{n} aspettano la tua risposta",

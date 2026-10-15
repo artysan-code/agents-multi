@@ -48,3 +48,10 @@ Deno.test("log: a request's line has method, path, status, ms and id, and no sec
   });
   for (const s of ["SECRET", "INVITE", "token=", "Bearer"]) assert(!lines[0].includes(s), s);
 });
+
+Deno.test("log: a pairing's secret never reaches the log", async () => {
+  const { loggedPath } = await import("../log.ts");
+  assertEquals(loggedPath("/api/pair/" + "a".repeat(43)), "/api/pair/…");
+  assertEquals(loggedPath("/api/pair/claim"), "/api/pair/claim");
+  assertEquals(loggedPath("/api/chats/12"), "/api/chats/12");
+});

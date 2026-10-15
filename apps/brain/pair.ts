@@ -110,18 +110,28 @@ export class Pairings {
       MAX_WRONG;
   }
 
-  /** The signed-in account types the code: the machine is its own from now on; returns the node's name. */
-  async claim(user: string, typed: unknown): Promise<{ node: string }> {
+  /** The signed-in account types the code. Without `confirm` it only learns which machine asks (its name, platform
+   *  and when it asked), so that a code someone else handed over cannot make their machine the person's node
+   *  unseen; with `confirm` the machine is its own from now on. A wrong code counts either way. */
+  async claim(
+    user: string,
+    typed: unknown,
+    confirm = false,
+  ): Promise<{ node: string } | { preview: { node: string; platform: string; asked: string } }> {
     if (this.locked(user)) throw new PairError("too many wrong codes: try again in a quarter of an hour", 429);
     const code = normalCode(typed);
     const row = code
-      ? this.db.prepare("select name, expires, user from pairings where code = ?").get(await sha256(code)) as
-        | { name: string; expires: number; user: string | null }
+      ? this.db.prepare("select name, platform, expires, user from pairings where code = ?").get(await sha256(code)) as
+        | { name: string; platform: string; expires: number; user: string | null }
         | undefined
       : undefined;
     if (!code || !row || row.expires < this.now() || row.user) {
       this.db.prepare("insert into pair_failures (user, at) values (?, ?)").run(user, this.now());
       throw new PairError("unknown or expired code", 404);
+    }
+    if (!confirm) {
+      const asked = new Date(row.expires - PAIR_TTL_MS).toISOString();
+      return { preview: { node: nodeNameOf(row.name), platform: row.platform, asked } };
     }
     this.db.prepare("update pairings set user = ? where code = ?").run(user, await sha256(code));
     this.db.prepare("delete from pair_failures where user = ?").run(user);

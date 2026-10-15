@@ -2,7 +2,15 @@
 // and pairing a new one with the 8-character code (ADR 0014, G4).
 
 import { useEffect, useState } from "preact/hooks";
-import { claimPairing, getOrchestrator, loadNodes, type Orchestrator, setOrchestrator } from "./api.ts";
+import {
+  claimPairing,
+  getOrchestrator,
+  loadNodes,
+  type Orchestrator,
+  type PairPreview,
+  previewPairing,
+  setOrchestrator,
+} from "./api.ts";
 import { memUsed, moved, type NodeInfo, normalizeCode, online, orderOf, showCode } from "./lib.ts";
 import { dateOf, t } from "./t.ts";
 import { Empty, Failure, Header, Icon, Skeleton, usePull } from "./ui.tsx";
@@ -12,19 +20,32 @@ function Pair({ onPaired }: { onPaired: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState("");
+  const [preview, setPreview] = useState<PairPreview | null>(null);
+  // first which machine asks, then a yes: a code someone else handed over never pairs their machine unseen
   const submit = async (e: Event) => {
     e.preventDefault();
     if (code.length !== 8 || busy) return;
     setBusy(true);
     try {
-      const r = await claimPairing(code);
-      setDone(typeof r.node === "string" ? r.node : r.node?.name ?? "");
+      setPreview((await previewPairing(code)).preview);
+      setErr("");
+      setDone("");
+    } catch (x) {
+      setErr((x as Error).message);
+      setPreview(null);
+    }
+    setBusy(false);
+  };
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      setDone((await claimPairing(code)).node);
       setCode("");
+      setPreview(null);
       setErr("");
       onPaired();
     } catch (x) {
       setErr((x as Error).message);
-      setDone("");
     }
     setBusy(false);
   };
@@ -55,6 +76,17 @@ function Pair({ onPaired }: { onPaired: () => void }) {
         <button type="submit" class="btn primary" disabled={busy || code.length !== 8}>{busy ? t("pair.pairing") : t("pair.go")}</button>
       </form>
       <p id="pair-help" class="meta">{t("pair.help")}</p>
+      {preview && (
+        <div class="banner" role="alertdialog" aria-labelledby="pair-q">
+          <p id="pair-q">
+            {t("pair.confirm", { n: preview.node, p: preview.platform || "?", w: dateOf(preview.asked, { hour: "2-digit", minute: "2-digit" }) })}
+          </p>
+          <div class="row">
+            <button type="button" class="btn primary" disabled={busy} onClick={confirm}>{t("pair.yes")}</button>
+            <button type="button" class="btn" disabled={busy} onClick={() => setPreview(null)}>{t("pair.no")}</button>
+          </div>
+        </div>
+      )}
       {done && <p class="banner ok" role="status"><Icon name="check" size={18} />{t("pair.done", { n: done })}</p>}
       {err && <p class="banner crit" role="alert"><Icon name="alert" size={18} />{err}</p>}
     </section>

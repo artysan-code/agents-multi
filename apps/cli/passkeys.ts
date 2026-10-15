@@ -89,13 +89,19 @@ export async function passkeysView(): Promise<
   }
 }
 
-/** The console's endorsement: the page has shown the name and the fingerprint and asked for a confirmation. */
-export async function endorseOp(id: string): Promise<{ ok: boolean; message: string }> {
+/** The console's endorsement: the page has shown the name and the fingerprint and asked for a confirmation, and
+ *  sends back the fingerprint the owner said yes to. The passkey is read again from the service here, so it is
+ *  signed only if its key is still the one shown: a key swapped under the same id between the page and this
+ *  call (a stolen web session re-registering it) is refused, never signed. */
+export async function endorseOp(id: string, seen: string): Promise<{ ok: boolean; message: string }> {
   try {
     const s = await service();
     if (typeof s === "string") return { ok: false, message: s };
     const p = findPasskey(await getPasskeys(s), id);
     if (typeof p === "string") return { ok: false, message: p };
+    if (!seen || (await fingerprint(p.publicKey)) !== seen) {
+      return { ok: false, message: "this passkey changed since it was shown: nothing signed; look at it again" };
+    }
     await endorse(s, p, await ownerKeys());
     return { ok: true, message: p.name };
   } catch (e) {

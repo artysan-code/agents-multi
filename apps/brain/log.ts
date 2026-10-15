@@ -26,8 +26,18 @@ const level = (asked && asked in LEVELS ? asked : "info") as Level;
 
 export const log = makeLog(level, (line, l) => (LEVELS[l] >= LEVELS.warn ? console.error : console.log)(line));
 
-/** One line for a request that was answered: what was asked (the path, without its query string),
- *  what came back, how long it took, and the id that an error answer also carries. */
+/** Pure: a path as the log keeps it: a pairing's secret (`/api/pair/<secret>`, the credential a machine polls
+ *  with until it gets its token) is never written down. */
+export const loggedPath = (path: string): string => path.replace(/^\/api\/pair\/[\w-]{20,}$/, "/api/pair/…");
+
+/** One line for a request that was answered: what was asked (the path, without its query string and without a
+ *  secret it carries), what came back, how long it took, and the id that an error answer also carries. */
 export function logRequest(l: Log, req: Request, status: number, ms: number, id: string) {
-  l.info("request", { method: req.method, path: new URL(req.url).pathname, status, ms: Math.round(ms), id });
+  l.info("request", {
+    method: req.method,
+    path: loggedPath(new URL(req.url).pathname),
+    status,
+    ms: Math.round(ms),
+    id,
+  });
 }

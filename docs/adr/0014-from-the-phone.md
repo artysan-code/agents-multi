@@ -215,3 +215,31 @@ moves onto the service's chats right after G3, once the path is proven (until th
   `brain-admin delete` removes it with the rest.
 - The passkey becomes a second key that can say yes; the nodes pin both, and losing the phone means revoking
   its key on `/account`.
+
+## As built (G4, G5, G1b, G7; 2026-10-15)
+
+What the building changed in the contract, and what it left open.
+
+- **Pairing shows the machine before it pairs it.** `POST /api/pair/claim` `{code}` answers `{preview: {node,
+  platform, asked}}` and binds nothing; `{code, confirm: true}` pairs. Without the preview, a code someone else
+  handed over would have made their machine the person's node, with a token for the account, unseen. The token is
+  made at the poll that hands it over, so none sits in the database; the pairing's secret is kept out of the log.
+- **A passkey is endorsed as it was shown.** The console sends the fingerprint the owner confirmed, and the backend
+  signs only a key that still has it; `agents passkeys endorse` signs the very key it printed. The fingerprint is
+  the first 8 bytes of SHA-256 of the 65-byte P-256 point, shown `ab12-cd34-ef56-7890`, the same on the phone.
+- **Added routes and fields**: `POST /api/node/answers` `{results: [{id, ok, why?}]}` (the node reports every answer,
+  applied or refused, and why); `answers` in `GET /api/waiting` (the last hour, so the phone shows a refusal); a
+  passkey's `id` is the base64url credential id, and `assertion.credential` the same; `GET /api/chats` rows carry
+  `turns`; a turn carries `code` (the folder the answer named) and the `done` event carries it as a string; `POST
+  /api/chats` takes `node` to pin a turn to one machine.
+- **Exact encodings the challenge depends on**: `expires` is `Date.toISOString()` (milliseconds, `Z`); `answers` is
+  omitted when there are none (not `null`, not `{}`); a multi-select answer is the labels joined by `,`, as Claude
+  Code's own AskUserQuestion; `<child>/<request>` travels as one percent-encoded path segment.
+- **Open**:
+  - no cancel for a turn: «Stop waiting» on the phone stops watching, the turn stays queued; a turn pinned to an
+    offline machine waits for it;
+  - declining a proposed job from the phone is not signed (the contract signs a deny of a request, and is silent on
+    a job's decline): a stolen session can decline work, not start it;
+  - the answer's challenge binds the request's id, not its text: a hostile service could show the phone different
+    words for the same id; binding a hash of `what` is the next revision of the signed text;
+  - revoking a passkey is the service withholding it; the nodes keep no revocation list of their own.

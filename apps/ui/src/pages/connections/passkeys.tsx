@@ -16,7 +16,7 @@ export function Passkeys() {
 
   const endorse = async (p: PasskeyRow) => {
     if (!confirm(t("pk.confirm", { name: p.name, fp: p.fingerprint }))) return;
-    const r = await endorsePasskey(p.id);
+    const r = await endorsePasskey(p.id, p.fingerprint);
     toast(r.ok ? t("pk.done", { name: p.name }) : r.message ?? "", !r.ok);
     await load().catch(toastErr);
   };

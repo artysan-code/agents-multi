@@ -177,7 +177,8 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/passkeys": {
       get: async () => json(await passkeysView()),
       post: async ({ req }) => {
-        const r = await endorseOp(String((await body(req) as { id?: string }).id ?? ""));
+        const b = await body(req) as { id?: string; fingerprint?: string };
+        const r = await endorseOp(String(b.id ?? ""), String(b.fingerprint ?? ""));
         if (r.ok) broadcast("state");
         return json(r);
       },

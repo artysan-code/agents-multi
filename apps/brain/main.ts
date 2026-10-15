@@ -585,7 +585,7 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   if (p === "/api/pair/claim" && req.method === "POST") {
     const b = await req.json().catch(() => null) as Record<string, unknown> | null;
     try {
-      return json(await pairings.claim(who.user, b?.code));
+      return json(await pairings.claim(who.user, b?.code, b?.confirm === true));
     } catch (e) {
       if (e instanceof PairError) return json({ error: e.message }, e.status);
       throw e;
