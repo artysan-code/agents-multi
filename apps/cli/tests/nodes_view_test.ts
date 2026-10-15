@@ -114,7 +114,7 @@ Deno.test("doctor node: only loopback on our ports; the key file the user's alon
   ].join("\n");
   assertEquals(exposed(ss), ["0.0.0.0:7332"]);
   const off = cleanNodeConfig({});
-  const base = { cfg: off, keyMode: null, exposed: [], service: null, approval: false };
+  const base = { cfg: off, keyMode: null, exposed: [], service: null, approval: false, sandbox: null };
   const ids = (c: { id: string; status: string }[]) => c.map((x) => `${x.id}:${x.status}`);
   assertEquals(ids(nodeFindings(base)), ["node.bind:ok", "node.on:ok"]);
   assertEquals(ids(nodeFindings({ ...base, exposed: ["0.0.0.0:7332"], keyMode: 0o644 })), [
@@ -133,4 +133,11 @@ Deno.test("doctor node: only loopback on our ports; the key file the user's alon
     "node.bind:ok",
     "node.service:ok",
   ]);
+  const ready = { ...base, cfg: on, service: "https://brain.x", approval: true };
+  assertEquals(ids(nodeFindings({ ...ready, sandbox: { ok: false, reason: "no namespace" } })), [
+    "node.bind:ok",
+    "node.service:ok",
+    "node.sandbox:fail",
+  ]);
+  assertEquals(ids(nodeFindings({ ...ready, sandbox: { ok: true } })).at(-1), "node.sandbox:ok");
 });

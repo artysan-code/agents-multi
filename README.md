@@ -438,7 +438,8 @@ permission syntax:
 
 Every machine's console is a node of **the service** — the brain, which also keeps your machines and the jobs
 placed on them ([ADR 0012](docs/adr/0012-agentd-and-the-service.md)). `agents node enable` turns it on
-(`config/node.json`); `agents node` shows what it announces.
+(`config/node.json`); `agents node` shows what it announces, `agents nodes` every machine and job the service
+sees, and `agents nodes accept <job>` signs one.
 
 - **Outbound only.** Every 30 s the node tells the service its load, its session cap (from its memory, or
   `maxSessions`), the accounts logged in and whether you are at it, with its own machine token

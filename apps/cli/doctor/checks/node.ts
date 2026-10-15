@@ -6,27 +6,15 @@ import { loadNodeConfig, type NodeConfig } from "../../../../shared/mcp/lib/head
 import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
 import { loadKey, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
 import { type Check } from "../../lib/output.ts";
+import { exposedListeners, type Probe, sandboxProbe } from "../../node/probe.ts";
 import { DEFAULT_PORT } from "../../lib/paths.ts";
 import { checkList } from "../context.ts";
 
 /** The console's port and the MCP gateway's (ADR 0008). */
 export const OUR_PORTS = [DEFAULT_PORT, DEFAULT_PORT + 1];
 
-const LOOPBACK = /^(127\.\d+\.\d+\.\d+|\[::1\]|::1|localhost)$/;
-
 /** Pure: the listening addresses (`ss -ltnH` lines) on our ports that are not loopback. */
-export function exposed(ss: string, ports = OUR_PORTS): string[] {
-  const out: string[] = [];
-  for (const line of ss.split("\n")) {
-    const local = line.trim().split(/\s+/)[3];
-    if (!local) continue;
-    const m = local.match(/^(.*):(\d+)$/);
-    if (!m || !ports.includes(Number(m[2]))) continue;
-    const host = m[1].replace(/%.*$/, "");
-    if (!LOOPBACK.test(host)) out.push(local);
-  }
-  return out;
-}
+export const exposed = (ss: string, ports = OUR_PORTS): string[] => exposedListeners(ss, ports);
 
 export interface NodeFacts {
   cfg: NodeConfig;
@@ -38,6 +26,8 @@ export interface NodeFacts {
   service: string | null;
   /** an approval key to check jobs against: the vault's, or node.json's for a node with none */
   approval: boolean;
+  /** the Bash sandbox probe, on a headless node (null elsewhere: a desktop does not need it) */
+  sandbox: Probe | null;
 }
 
 /** Pure: what the doctor says of this machine as a node. */
@@ -74,6 +64,14 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "agents brain-login",
     );
   } else add("node.service", "ok", `node on, service ${f.service}${f.cfg.headless ? " · headless" : ""}`);
+  if (f.sandbox && !f.sandbox.ok) {
+    add(
+      "node.sandbox",
+      "fail",
+      `headless node, but the Bash sandbox cannot start: ${f.sandbox.reason}; it takes no job`,
+      "apps/node/README.md: the seccomp profile, systempaths=unconfined and, with AppArmor, its profile",
+    );
+  } else if (f.sandbox) add("node.sandbox", "ok", "headless node: the Bash sandbox starts");
   if (!f.approval) {
     add(
       "node.approval",
@@ -110,5 +108,6 @@ export async function nodeChecks(): Promise<Check[]> {
     exposed: ss === null ? null : exposed(ss),
     service: account?.url ?? null,
     approval,
+    sandbox: cfg.enabled && cfg.headless ? await sandboxProbe() : null,
   });
 }
