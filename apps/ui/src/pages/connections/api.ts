@@ -79,6 +79,8 @@ interface Login {
   ok: boolean;
   message?: string;
   url?: string;
+  /** the console opened it in the system browser; when not, the page shows the link */
+  opened?: boolean;
 }
 
 export const loadAccounts = () => get<AccountsView>("/api/accounts");

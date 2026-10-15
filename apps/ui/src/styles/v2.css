@@ -654,3 +654,11 @@ body {
   grid-column: 1 / -1;
   margin: 10px 0 0;
 }
+
+/* the consent link shown when the browser could not be opened from the console (#14) */
+.login-manual a {
+  overflow-wrap: anywhere;
+}
+.login-manual p {
+  margin: 0 0 10px;
+}

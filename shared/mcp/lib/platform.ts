@@ -399,3 +399,14 @@ export function openUrl(target: string): void {
   const o = openCmd(target);
   new Deno.Command(o.cmd, { args: o.args, stdin: "null", stdout: "null", stderr: "null" }).spawn().unref();
 }
+
+/** `openUrl`, saying whether the opener could start: false where there is none (no desktop, a server), so that
+ *  the page can show the link instead of claiming a tab opened. */
+export function tryOpenUrl(target: string): boolean {
+  try {
+    openUrl(target);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -7,7 +7,8 @@ import { startLogin } from "./api.ts";
 import { Logo, svcName } from "./logo.tsx";
 import { openAccountForm } from "./form.tsx";
 import { type Key, t, tk } from "../../i18n.ts";
-import { toast } from "../../lib/ui.tsx";
+import { openDrawer, toast } from "../../lib/ui.tsx";
+import { ManualLink } from "../../lib/login-link.tsx";
 import { useState } from "preact/hooks";
 import { post } from "../../api.ts";
 
@@ -42,12 +43,14 @@ function accState(a: Account): State {
   return { cls: "ok-t", text: t("conn.ready"), sub: desk };
 }
 
-/** Opens the consent page in a new tab; the result of the connection comes back as a toast. */
+/** The console opens the consent page in the system browser; when it could not (no opener, a server), the
+ *  link is shown to open or copy, never a message saying it opened (#14). The result comes back as a toast. */
 async function login(kind: "google" | "brain", account: string): Promise<void> {
   const r = await startLogin(kind, account);
   if (!r.ok || !r.url) return toast(r.message ?? "", true);
-  window.open(r.url, "_blank", "noopener");
-  toast(t(kind === "google" ? "google.finish" : "brain.finish"));
+  if (r.opened) return toast(t(kind === "google" ? "google.finish" : "brain.finish"));
+  const url = r.url;
+  openDrawer(t("login.manual.h"), () => <ManualLink url={url} />);
 }
 
 function AccRow({ a, view, reload }: { a: Account; view: AccountsView; reload: () => void }) {

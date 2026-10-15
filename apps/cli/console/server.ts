@@ -5,7 +5,7 @@
 // with the anti-CSRF header; a path with only a POST handler answers 405 to anything else. The
 // feature modules that own a group of paths (ask, Claude's assets) answer theirs before the static files.
 
-import { openUrl } from "../../../shared/mcp/lib/platform.ts";
+import { openUrl, tryOpenUrl } from "../../../shared/mcp/lib/platform.ts";
 import { ANSI } from "../lib/output.ts";
 import { DEFAULT_PORT, machineConsole, PORT, REPO, SYNCTHING_CONFIG } from "../lib/paths.ts";
 import { codeVersion } from "../codeversion.ts";
@@ -118,7 +118,8 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
             status.invalidate();
             broadcast("state");
           });
-          return json({ ok: true, url });
+          // opened here, in the system browser: the page shows the link only when this could not (#14)
+          return json({ ok: true, url, opened: tryOpenUrl(url) });
         } catch (e) {
           return json({ ok: false, message: (e as Error).message });
         }
@@ -143,7 +144,7 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
             recordConnect(account, r);
             broadcast("state");
           });
-          return json({ ok: true, url });
+          return json({ ok: true, url, opened: tryOpenUrl(url) });
         } catch (e) {
           return json({ ok: false, message: (e as Error).message });
         }

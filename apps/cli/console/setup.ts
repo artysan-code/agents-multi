@@ -25,6 +25,7 @@ import {
   watchFor,
 } from "../setup.ts";
 import { initVault, pairVault, VaultError } from "../../../shared/mcp/lib/vault.ts";
+import { tryOpenUrl } from "../../../shared/mcp/lib/platform.ts";
 import { connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { json } from "./http.ts";
 import { broadcast } from "./events.ts";
@@ -108,7 +109,7 @@ export function setupRoutes(status: Pick<StatusCache, "invalidate">): Record<str
         recordConnect("brain", r);
         changed();
       });
-      return { ok: true, url };
+      return { ok: true, url, opened: tryOpenUrl(url) };
     }),
     "/api/setup/finish": step(async () => {
       const step = nextStep(await setupFacts());

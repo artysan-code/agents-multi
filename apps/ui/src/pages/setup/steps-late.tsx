@@ -10,6 +10,7 @@ import { type StepRow, StepRows } from "../../lib/steps.tsx";
 import { send, type Step } from "./api.ts";
 import { Nav, type StepProps } from "./nav.tsx";
 import { JobStep, useSend } from "./steps.tsx";
+import { ManualLink } from "../../lib/login-link.tsx";
 
 /** «Later»: the step is recorded as put off, and the wizard moves on. */
 function Later({ p, step, label = "su.later" }: { p: StepProps; step: Step; label?: "su.later" | "su.skip" }) {
@@ -172,14 +173,15 @@ export function Brain(p: StepProps) {
   const f = p.v.facts;
   const [url, setUrl] = useState(f.brain.url ?? "");
   const [waiting, setWaiting] = useState(false);
+  const [link, setLink] = useState("");
   const vault = f.vault === "ok";
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        void s.run(() => send<{ ok: boolean; message?: string; url?: string }>("brain", { url }), (r) => {
-          // the brain's sign-in page: the app opens it in the system browser
-          if (r.url) window.open(r.url, "_blank", "noopener");
+        void s.run(() => send<{ ok: boolean; message?: string; url?: string; opened?: boolean }>("brain", { url }), (r) => {
+          // the brain's sign-in page: the console opens it in the system browser, else the link is shown (#14)
+          setLink(r.url && !r.opened ? r.url : "");
           setWaiting(true);
         });
       }}
@@ -199,6 +201,7 @@ export function Brain(p: StepProps) {
         )
         : <p class="su-note">{t("su.brain.noVault")}</p>}
       {waiting && !f.brain.connected && <p class="su-sub">{t("su.brain.wait")}</p>}
+      {link && !f.brain.connected && <ManualLink url={link} />}
       {s.cause && <p class="uw-cause">{s.cause}</p>}
       <Nav back={p.back}>
         {!f.brain.connected && <Later p={p} step="brain" label="su.skip" />}
