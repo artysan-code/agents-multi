@@ -134,7 +134,7 @@ Sizes only. The brain's tasks carry them (label `2.0`).
 | E     | UI cut to three views (Chat, Runs, Accounts & limits) and "More"                                                               | medium | —     |
 | F     | `agentd` headless on the server, node announcement and job placement, resume from branch                                       | large  | D, B  |
 | G     | Web app (PWA, push, brain login) and the Telegram adapter                                                                      | large  | F     |
-| H     | Reviewer agent (approve, block, ask)                                                                                           | medium | D     |
+| H     | Reviewer agent (approve, block, ask) ([ADR 0011](0011-reviewer.md))                                                            | medium | D     |
 
 E can start any time: it removes, it adds nothing the others need.
 
