@@ -8,6 +8,7 @@ import {
   type JobSpec,
   memoryLimit,
   type NodeInfo,
+  nodeNameOf,
   normalRemote,
   place,
   presentFrom,
@@ -72,6 +73,13 @@ Deno.test("nodes: the owner is present at an active graphical session that is no
   assert(!presentFrom([s("x11", "no", "no")]), "another seat's turn");
   assert(!presentFrom([s("tty", "yes", "no")]), "an ssh login is not the owner at the machine");
   assert(!presentFrom([]));
+});
+
+Deno.test("nodes: a node's name is its hostname, from the token or from the machine", () => {
+  assertEquals(nodeNameOf("agents-multi su ownyt"), "ownyt");
+  assertEquals(nodeNameOf("my laptop (old)"), "my-laptop-old-");
+  assertEquals(nodeNameOf("../x"), "x");
+  assertEquals(nodeNameOf("  "), "node");
 });
 
 Deno.test("nodes: remotes compare without credentials, scheme or .git", () => {

@@ -21,6 +21,7 @@ import {
   setSecret,
   vaultDir,
   VaultError,
+  vaultKeyFile,
 } from "../../shared/mcp/lib/vault.ts";
 import { amEnv } from "../../shared/mcp/lib/env.ts";
 
@@ -125,15 +126,22 @@ export async function vaultCommand(args: string[]): Promise<number> {
   try {
     switch (sub) {
       case "init": {
-        const code = await initVault();
-        console.log(`${ANSI.b}vault created${ANSI.x} in ${vaultDir()}, key in this machine's keyring.\n`);
+        const place = rest.includes("--file") ? "file" : "keyring";
+        const code = await initVault(place);
+        console.log(
+          `${ANSI.b}vault created${ANSI.x} in ${vaultDir()}, key in ${
+            place === "file" ? vaultKeyFile() : "this machine's keyring"
+          }.\n`,
+        );
         console.log(`Recovery code — keep it somewhere safe outside this machine (KeePassXC, paper):\n\n  ${code}\n`);
         console.log("Another machine joins with `agents vault pair` and this code.");
         return 0;
       }
       case "pair": {
-        await pairVault(await readStdin("recovery code: "));
-        console.log("paired: this machine opens the vault");
+        // --file: a machine with no keyring (a headless server, ADR 0012) keeps the key in a file only you read
+        const place = rest.includes("--file") ? "file" : "keyring";
+        await pairVault(await readStdin("recovery code: "), place);
+        console.log(`paired: this machine opens the vault${place === "file" ? ` (key in ${vaultKeyFile()})` : ""}`);
         return 0;
       }
       case "recovery-code": {
@@ -226,7 +234,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       }
       default:
         console.error(
-          "usage: agents vault [status|init|pair|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
+          "usage: agents vault [status|init [--file]|pair [--file]|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
         );
         return 2;
     }

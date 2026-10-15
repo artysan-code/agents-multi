@@ -39,6 +39,7 @@ import {
   setProjectAccount,
 } from "./limitrules.ts";
 import { DENY_TOOLS, isolate, loadPolicy, type Policy } from "./policy.ts";
+import { resumeNote, resumeWorktree } from "./moving.ts";
 import {
   forcedRules,
   type Item,
@@ -81,6 +82,10 @@ export interface Routine {
   created: string;
   /** the coordinator that scheduled it, as a note */
   by?: Coordinator;
+  /** a job the owner placed on this node through the service (ADR 0012): agentd writes it as a one-shot
+   *  routine, so it runs under the same policy, reviewer and timeout. `resume`: it carries on run `run`,
+   *  dropped by the machine `from`, as one child of `profile`. */
+  job?: { id: string; resume?: { run: string; from: string; profile: string; provider?: ProviderName } };
 }
 
 /** What a firing started. */
@@ -380,10 +385,12 @@ export async function routinePlan(
  *  the project's with no coordinator. Returns what it started. */
 export async function fire(r: Routine, p?: Policy): Promise<Fired> {
   const policy = p ?? await loadPolicy(r.project);
-  const id = `${slug(r.name) || "routine"}-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "")}-${
-    crypto.randomUUID().slice(0, 3)
-  }`;
-  const iso = await isolate(r.project, id, policy);
+  const resume = r.job?.resume;
+  const id = resume?.run ??
+    `${slug(r.name) || "routine"}-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "")}-${
+      crypto.randomUUID().slice(0, 3)
+    }`;
+  const iso = resume ? await resumeWorktree(r.project, id, policy) : await isolate(r.project, id, policy);
   const owner: Owner = { project: r.project };
   const where = iso.path + r.folder.slice(r.project.length);
   const out: Fired = { id, at: new Date().toISOString(), branch: iso.branch, worktree: iso.path, told: [] };
@@ -391,7 +398,27 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
   // child here, for a workflow's children through its runner (the run's guard)
   const forced = forcedRules(await loadReviewRules(r.project));
   const deny = [...DENY_TOOLS, ...forced.deny];
-  if (r.action.kind === "agent") {
+  if (resume) {
+    // a run another machine dropped: one child carries it on from its branch and HANDOFFs (ADR 0012)
+    const handoffs = "handoffs" in iso ? iso.handoffs as string[] : [];
+    const task = r.action.kind === "agent"
+      ? r.action.task
+      : `the workflow ${r.action.plan}${
+        r.action.task ? `, for: ${r.action.task}` : ""
+      } (its earlier steps' HANDOFFs say how far it got)`;
+    const m = await startChild({
+      profile: resume.profile,
+      provider: resume.provider,
+      dir: where,
+      task: `${preamble(r, id, iso.branch, policy, iso.path)}\n${
+        resumeNote(resume.from, iso.branch, policy.devBranch, handoffs)
+      }\n\n${task}`,
+      owner,
+      disallowedTools: deny,
+      askTools: forced.ask,
+    });
+    out.child = m.id;
+  } else if (r.action.kind === "agent") {
     const m = await startChild({
       profile: r.action.profile,
       provider: r.action.provider,

@@ -99,6 +99,14 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/;
 export const validNodeName = (s: unknown): s is string => typeof s === "string" && NAME.test(s);
 const RUN_ID = /^[a-z0-9][a-z0-9-]{0,80}$/;
 
+/** Pure: a node's name from its machine token's (`agents brain-login` names it `agents-multi su <hostname>`):
+ *  the hostname, with anything outside letters, digits, `.`, `_` and `-` made a `-`. The node computes the same
+ *  from its own hostname, so it never takes its name from the service. */
+export function nodeNameOf(tokenName: string): string {
+  const s = tokenName.trim().replace(/^agents-multi su /, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-._]+/, "");
+  return s.slice(0, 63) || "node";
+}
+
 // ---------------------------------------------------------------- what a node can take
 
 /** Pure: the memory a node counts with: the cgroup's limit (`memory.max`, "max" when none) when it is set

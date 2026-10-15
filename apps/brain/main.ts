@@ -45,6 +45,7 @@ import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/own
 import { masterKey, type User, Users } from "./users.ts";
 import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
 import { Fleet, fleetRoute } from "./fleet.ts";
+import { nodeNameOf } from "../../shared/mcp/lib/nodes.ts";
 
 if (Deno.args[0] === "totp") {
   const secret = base32Encode(crypto.getRandomValues(new Uint8Array(20)));
@@ -486,7 +487,7 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   }
   // the account's machines and the jobs placed on them (fleet.ts, ADR 0012): a machine acts as its token's name
   if (p === "/api/node" || p === "/api/nodes" || p.startsWith("/api/jobs")) {
-    const node = who.label.startsWith("token:") ? who.label.slice("token:".length) : null;
+    const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
     const r = await fleetRoute(req, u, node, new Fleet(store.db));
     if (r) return r;
   }
