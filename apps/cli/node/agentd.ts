@@ -236,7 +236,7 @@ export function startAgentd(o: Agentd): () => void {
     try {
       const cfg = await loadNodeConfig();
       if (!cfg.enabled) return;
-      const svc = await service();
+      const svc = await service(fetch, { node: true });
       if (typeof svc === "string") {
         if (said !== svc) o.log(`node: ${svc}`);
         said = svc;

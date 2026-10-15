@@ -7,7 +7,7 @@
 // personal token named after this machine and the account's backup key, which go straight into the
 // vault (brain/<account>, the token and its backup-key field) and from there to the other machines.
 
-import { openUrl } from "../../shared/mcp/lib/platform.ts";
+import { tryOpenUrl } from "../../shared/mcp/lib/platform.ts";
 import { ACCOUNTS } from "./mcp/registry.ts";
 import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
@@ -38,7 +38,12 @@ function brainAuthUrl(base: string, client: string, redirect: string, challenge:
 export async function startBrainLogin(
   account: string,
   onDone: Done,
-  { fetcher = fetch, store = setSecret }: { fetcher?: typeof fetch; store?: typeof setSecret } = {},
+  { fetcher = fetch, store = setSecret, where = "the vault" }: {
+    fetcher?: typeof fetch;
+    store?: (service: string, account: string, value: string, field?: string) => Promise<void>;
+    /** where the token goes, as the messages say it */
+    where?: string;
+  } = {},
 ): Promise<string> {
   const accounts = (await readJson<{ accounts: Account[] }>(ACCOUNTS))?.accounts ?? [];
   const a = accounts.find((x) => x.service === "brain" && x.name === account);
@@ -102,11 +107,9 @@ export async function startBrainLogin(
       await store("brain", account, d.access_token);
       if (d.backup_key) await store("brain", account, d.backup_key, "backup-key");
       const who = d.account ? ` as ${d.account}` : "";
-      finish({ ok: true, message: `brain/${account} signed in${who}: token and backup key in the vault` });
+      finish({ ok: true, message: `brain/${account} signed in${who}: the token is in ${where}` });
       return page(
-        `Signed in${
-          d.account ? ` as <b>${d.account}</b>` : ""
-        }: token and backup key are in the vault. You can close this tab.`,
+        `Signed in${d.account ? ` as <b>${d.account}</b>` : ""}: the token is in ${where}. You can close this tab.`,
       );
     } catch (e) {
       finish({ ok: false, message: (e as Error).message });
@@ -136,14 +139,63 @@ export async function startBrainLogin(
   return brainAuthUrl(base, client, redirect, challenge, state);
 }
 
-export async function brainLoginCommand(account = "brain"): Promise<number> {
-  const done = Promise.withResolvers<{ ok: boolean; message: string }>();
-  const url = await startBrainLogin(account, done.resolve);
-  console.log(`Opening the brain's sign-in page. If no browser opens, visit:\n\n  ${url}\n`);
-  try {
-    openUrl(url);
-  } catch { /* the link above */ }
-  const r = await done.promise;
+/** Pure: the address pasted back from the browser, when it is this sign-in's callback with its answer; else
+ *  null. On a machine with no browser (a server) the brain's redirect lands on a 127.0.0.1 page the person's
+ *  browser cannot reach: they copy that address here, and this machine calls its own listener with it. */
+export function pastedCallback(line: string, redirect: string): string | null {
+  const s = line.trim();
+  if (!redirect || !s.startsWith(`${redirect}?`)) return null;
+  const q = new URL(s).searchParams;
+  return q.get("state") && (q.get("code") || q.get("error")) ? s : null;
+}
+
+async function readLines(each: (line: string) => Promise<boolean>): Promise<void> {
+  const dec = new TextDecoder();
+  let buf = "";
+  for await (const chunk of Deno.stdin.readable) {
+    buf += dec.decode(chunk, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      if (await each(line)) return;
+    }
+  }
+}
+
+/** Follows a sign-in to its end: the system browser when there is one (and `noBrowser` is not asked), else the
+ *  link to open anywhere and the address to paste back. */
+export async function followLogin(
+  url: string,
+  done: Promise<{ ok: boolean; message: string }>,
+  noBrowser = false,
+): Promise<number> {
+  const redirect = new URL(url).searchParams.get("redirect_uri") ?? "";
+  if (!noBrowser && tryOpenUrl(url)) {
+    console.log(`Opening the brain's sign-in page. If no browser opens, visit:\n\n  ${url}\n`);
+  } else {
+    console.log(`Open this link in a browser, on any machine:\n\n  ${url}\n`);
+    console.log(
+      `After signing in, the browser lands on an address starting with\n  ${redirect}\n` +
+        `that does not load from there. Copy that whole address and paste it here:`,
+    );
+    void readLines(async (line) => {
+      const cb = pastedCallback(line, redirect);
+      if (!cb) {
+        if (line.trim()) console.log(`not the address of this sign-in (it starts with ${redirect}?): try again`);
+        return false;
+      }
+      await fetch(cb).then((r) => r.body?.cancel(), () => {});
+      return true;
+    }).catch(() => {});
+  }
+  const r = await done;
   console.log(r.message);
   return r.ok ? 0 : 1;
+}
+
+export async function brainLoginCommand(account = "brain", noBrowser = false): Promise<number> {
+  const done = Promise.withResolvers<{ ok: boolean; message: string }>();
+  const url = await startBrainLogin(account, done.resolve);
+  return await followLogin(url, done.promise, noBrowser);
 }

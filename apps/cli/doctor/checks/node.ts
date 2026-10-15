@@ -7,6 +7,7 @@ import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
 import { loadKey, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { exposedListeners, type Probe, sandboxProbe } from "../../node/probe.ts";
+import { nodeTokenFile } from "../../node/service.ts";
 import { DEFAULT_PORT } from "../../lib/paths.ts";
 import { checkList } from "../context.ts";
 
@@ -28,6 +29,8 @@ export interface NodeFacts {
   approval: boolean;
   /** the Bash sandbox probe, on a headless node (null elsewhere: a desktop does not need it) */
   sandbox: Probe | null;
+  /** this machine's own node token file: its mode (`& 0o777`), null when there is none */
+  tokenMode?: number | null;
 }
 
 /** Pure: what the doctor says of this machine as a node. */
@@ -64,6 +67,21 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "agents brain-login",
     );
   } else add("node.service", "ok", `node on, service ${f.service}${f.cfg.headless ? " · headless" : ""}`);
+  if (f.tokenMode == null) {
+    add(
+      "node.token",
+      "fail",
+      "node on, but no token of its own: it does not announce itself (the vault's token would make it every machine)",
+      "agents node login (--no-browser on a server)",
+    );
+  } else if (f.tokenMode & 0o077) {
+    add(
+      "node.token",
+      "fail",
+      `the node token file is readable by others (mode ${f.tokenMode.toString(8)})`,
+      `chmod 600 ${nodeTokenFile()}`,
+    );
+  } else add("node.token", "ok", "a node token of its own (0600)");
   if (f.sandbox && !f.sandbox.ok) {
     add(
       "node.sandbox",
@@ -109,5 +127,6 @@ export async function nodeChecks(): Promise<Check[]> {
     service: account?.url ?? null,
     approval,
     sandbox: cfg.enabled && cfg.headless ? await sandboxProbe() : null,
+    tokenMode: await Deno.stat(nodeTokenFile()).then((s) => s.mode != null ? s.mode & 0o777 : 0o600, () => null),
   });
 }

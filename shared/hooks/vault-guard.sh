@@ -5,7 +5,8 @@
 # execs the server). Claude Code runs both
 # on its own, outside the Bash tool; a session that ran them would get a vault secret into the
 # conversation. Reading or editing the files stays allowed: only running them is denied.
-# The deny rules on secret-tool, kwallet-query and ~/vault/claude-multi cover the other ways in
+# The deny rules on secret-tool, kwallet-query and the vault folder (~/agents-multi-vault, before 1.2.1
+# ~/vault/claude-multi) cover the other ways in
 # (apps/cli/doctor/checks/vault.ts checks this hook is registered, like it checks those rules).
 set -uo pipefail
 trap 'exit 0' EXIT

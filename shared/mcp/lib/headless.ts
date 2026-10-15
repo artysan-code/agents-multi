@@ -67,6 +67,7 @@ export async function loadNodeConfig(config = configDir()): Promise<NodeConfig> 
 export function secretPaths(home: string, runtime: string, profiles: string[]): string[] {
   return [
     `${home}/vault`,
+    `${home}/agents-multi-vault`,
     `${home}/.local/state/agents-multi`,
     `${home}/.ssh`,
     `${home}/.git-credentials`,

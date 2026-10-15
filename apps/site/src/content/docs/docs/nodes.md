@@ -10,6 +10,7 @@ off. Nothing moves without your yes.
 ## Turning a machine into a node
 
 ```bash
+agents node login
 agents node enable
 agents node
 agents nodes
@@ -20,7 +21,7 @@ shows every machine and job the service sees.
 
 - **Outbound only.** Every 30 seconds the node tells the service its load, how many sessions it may run (from
   its memory, or `maxSessions`), which accounts are logged in and whether you are at it. It uses its own machine
-  token (`agents brain-login`). Nothing listens beyond `127.0.0.1`.
+  token (`agents node login`, kept on that machine only). Nothing listens beyond `127.0.0.1`.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
   machines with a key derived from the vault, which the service never has: a stolen token or a broken service
   cannot start an agent.

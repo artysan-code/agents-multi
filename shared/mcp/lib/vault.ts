@@ -2,9 +2,10 @@
 // on every machine.
 //
 // Where things are:
-//   the entries   ~/vault/claude-multi/secrets/<id>.json (AGENTS_MULTI_VAULT overrides the directory).
-//                 ~/vault is a Syncthing folder: the entries travel between machines already
-//                 encrypted, and a relay device in between cannot read them.
+//   the entries   ~/agents-multi-vault/secrets/<id>.json (AGENTS_MULTI_VAULT overrides the directory), a
+//                 Syncthing folder of its own: the entries travel between machines already encrypted,
+//                 and it alone can be shared with a server node (ADR 0012) without the rest of ~/vault.
+//                 A machine that has not moved yet keeps ~/vault/claude-multi (`agents vault move`).
 //   the key       one per vault, 256 bits, in each machine's keyring through the Secret Service API
 //                 (KWallet / ksecretd here, unlocked at login): no password to type, and never on disk
 //                 next to the entries.
@@ -38,8 +39,47 @@ export const CHECK_TEXT = "claude-multi vault";
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
+/** The vault's folder: a Syncthing folder of its own. */
+export const VAULT_DIR = `${HOME}/agents-multi-vault`;
+/** Where it was until 1.2.1, inside ~/vault: still read where the move has not happened yet. */
+export const LEGACY_VAULT_DIR = `${HOME}/vault/claude-multi`;
+
+/** Pure: which folder holds the vault: the new one once it has one (or when neither has, for a new vault),
+ *  else the old one. */
+export const pickVaultDir = (hasNew: boolean, hasLegacy: boolean): string =>
+  hasNew || !hasLegacy ? VAULT_DIR : LEGACY_VAULT_DIR;
+
+const hasVault = (dir: string): boolean => {
+  try {
+    return Deno.statSync(`${dir}/key-check.json`).isFile;
+  } catch {
+    return false; // missing, or a process not allowed to read there
+  }
+};
+
 export function vaultDir(): string {
-  return amEnv("VAULT") ?? `${HOME}/vault/claude-multi`;
+  return amEnv("VAULT") ?? pickVaultDir(hasVault(VAULT_DIR), hasVault(LEGACY_VAULT_DIR));
+}
+
+/** Copies the old vault folder into the new one (`agents vault move`): the entries and the key check, never a
+ *  Syncthing conflict copy. The old folder stays until every machine reads the new one. Returns what it copied. */
+export async function moveVault(from = LEGACY_VAULT_DIR, to = VAULT_DIR): Promise<number> {
+  if (hasVault(to)) throw new VaultError(`${to} already holds a vault`);
+  if (!hasVault(from)) throw new VaultError(`no vault in ${from} to move`);
+  let n = 0;
+  const copy = async (src: string, dst: string) => {
+    await Deno.mkdir(dst, { recursive: true, mode: 0o700 });
+    for await (const e of Deno.readDir(src)) {
+      if (e.name.includes("sync-conflict") || e.name.startsWith(".stfolder")) continue;
+      if (e.isDirectory) await copy(`${src}/${e.name}`, `${dst}/${e.name}`);
+      else if (e.isFile) {
+        await Deno.copyFile(`${src}/${e.name}`, `${dst}/${e.name}`);
+        n++;
+      }
+    }
+  };
+  await copy(from, to);
+  return n;
 }
 
 export interface Entry {

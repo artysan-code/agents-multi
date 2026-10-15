@@ -196,3 +196,21 @@ Measured on 2026-10-15 (Docker 29.9, kernel 7.2, debian:trixie-slim, bubblewrap 
 - The relay of ADR 0005 (issue #11) is not built: a job moves as a branch, never as a live session.
 - Work that moves needs a remote both nodes can reach and a clone on each; the server's clones and credentials
   are the owner's to make, once.
+
+## Amendment (1.2.1, 2026-10-15)
+
+Configuring the first server showed three things the first slice had wrong.
+
+- **A node's token is its own file, not the vault's.** `agents brain-login` keeps the brain token in the vault,
+  which travels to every machine; the service names a node after its token, so every machine would have been the
+  same node, and a login on one would have changed the others'. `agents node login` makes a token for this
+  machine and keeps it in `<state>/node-token` (0600, never synced, denied to sessions like the vault key);
+  agentd announces only with it (`node.token` in the doctor). The owner's views (`agents nodes`) use it when there
+  is one, else the vault's.
+- **Signing in with no browser.** On a server the brain's redirect lands on a `127.0.0.1` page the owner's browser
+  cannot reach: `--no-browser` (or no opener) prints the link and takes the address pasted back.
+- **The vault is a Syncthing folder of its own**, `~/agents-multi-vault` (was `~/vault/claude-multi`, still read
+  until `agents vault move`), so that a server can be given that folder alone, as a trusted device, while the
+  owner's other folders stay encrypted there. The node mounts it read only (`NODE_VAULT_DIR`): its jobs' MCP
+  servers open their accounts, and whoever has the server has the vault — the price of MCP on a server, the same
+  as with the key file.

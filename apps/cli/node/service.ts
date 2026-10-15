@@ -1,7 +1,11 @@
-// service.ts — this machine talking to the service (ADR 0012): outbound HTTPS with its own machine token (the
-// one `agents brain-login` put in the vault), to the brain's address in accounts.json. Nothing here listens.
+// service.ts — this machine talking to the service (ADR 0012): outbound HTTPS to the brain's address in
+// accounts.json. A node announces and takes jobs with its own token (`agents node login`), kept in a file of
+// this machine only: the vault's brain token travels to every machine, and the service names a node after its
+// token, so with it every machine would be the same node. Nothing here listens.
 
 import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
+import { amEnv } from "../../../shared/mcp/lib/env.ts";
+import { STATE } from "../lib/paths.ts";
 import { getSecret } from "../../../shared/mcp/lib/vault.ts";
 import type { Announce, Job, NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 
@@ -10,11 +14,31 @@ export interface Service {
   call<T>(method: string, path: string, body?: unknown): Promise<T>;
 }
 
-/** The service as this machine reaches it, or why it cannot. */
-export async function service(fetcher: typeof fetch = fetch): Promise<Service | string> {
+/** Where this machine keeps its node token: a file only the user reads, never synced. */
+export const nodeTokenFile = (): string => amEnv("NODE_TOKEN_FILE") ?? `${STATE}/node-token`;
+
+export async function readNodeToken(): Promise<string | null> {
+  return (await Deno.readTextFile(nodeTokenFile()).catch(() => "")).trim() || null;
+}
+
+export async function writeNodeToken(token: string): Promise<void> {
+  const file = nodeTokenFile();
+  await Deno.mkdir(file.replace(/\/[^/]+$/, ""), { recursive: true, mode: 0o700 });
+  await Deno.writeTextFile(file, token + "\n", { mode: 0o600 });
+  await Deno.chmod(file, 0o600);
+}
+
+/** The service as this machine reaches it, or why it cannot. `node`: as this node, with its own token only
+ *  (agentd); otherwise its node token when it has one, else the vault's brain token (the owner's views). */
+export async function service(
+  fetcher: typeof fetch = fetch,
+  { node = false }: { node?: boolean } = {},
+): Promise<Service | string> {
   const account = brainAccount();
   if (!account?.url) return "no brain account with an address in accounts.json: the service is the brain";
-  const token = await getSecret("brain", account.name).catch((e) => {
+  const own = await readNodeToken();
+  if (node && !own) return "this machine has no node token of its own: agents node login";
+  const token = own ?? await getSecret("brain", account.name).catch((e) => {
     throw new Error(`the vault: ${(e as Error).message}`);
   });
   if (!token) return `this machine has no token for ${account.url}: agents brain-login`;

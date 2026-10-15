@@ -10,6 +10,7 @@ se una si spegne. Niente si sposta senza il tuo sì.
 ## Rendere una macchina un nodo
 
 ```bash
+agents node login
 agents node enable
 agents node
 agents nodes
@@ -20,7 +21,7 @@ mostra tutte le macchine e i job che il servizio vede.
 
 - **Solo in uscita.** Ogni 30 secondi il nodo dice al servizio il suo carico, quante sessioni può far girare
   (in base alla memoria, o a `maxSessions`), quali account hanno il login e se ci sei tu davanti. Usa il proprio
-  token di macchina (`agents brain-login`). Niente ascolta oltre `127.0.0.1`.
+  token di macchina (`agents node login`, che resta solo su quella macchina). Niente ascolta oltre `127.0.0.1`.
 - **Il tuo sì si verifica sul nodo.** Un job assegnato a un nodo parte solo con la tua firma, fatta su una tua
   macchina con una chiave derivata dal vault, che il servizio non ha mai: né un token rubato né un servizio
   compromesso possono avviare un agente.

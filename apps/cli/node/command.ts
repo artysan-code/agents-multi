@@ -10,7 +10,9 @@ import { CONFIG } from "../lib/paths.ts";
 import { writeAtomic } from "../lib/fs.ts";
 import { approvalKey, nodeFacts, nodeName } from "./facts.ts";
 import { sandboxProbe } from "./probe.ts";
-import { service } from "./service.ts";
+import { nodeTokenFile, readNodeToken, service, writeNodeToken } from "./service.ts";
+import { followLogin, startBrainLogin } from "../brain-login.ts";
+import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { readNodeState } from "./agentd.ts";
 
 const GiB = 2 ** 30;
@@ -56,8 +58,26 @@ export async function nodeCommand(args: string[]): Promise<number> {
         `  approval    ${key ? "the owner's key is known here" : "no key: no vault, and no approvalKey in node.json"}`,
       );
       console.log(`  runs        ${followed} followed`);
+      const token = await readNodeToken();
+      console.log(`  token       ${token ? "its own" : "none: agents node login"}`);
       if (!cfg.enabled) console.log(`\n${ANSI.d}agents node enable [--headless] turns it on (${file})${ANSI.x}`);
       return 0;
+    }
+    case "login": {
+      // this machine's own token: the service names the node after it (ADR 0012), so it is never the vault's
+      const account = rest.find((a) => !a.startsWith("--")) ?? brainAccount()?.name;
+      if (!account) {
+        console.error("no brain account in accounts.json: add one (service brain, with its address) first");
+        return 1;
+      }
+      const done = Promise.withResolvers<{ ok: boolean; message: string }>();
+      const url = await startBrainLogin(account, done.resolve, {
+        store: async (_service, _account, value, field = "token") => {
+          if (field === "token") await writeNodeToken(value);
+        },
+        where: `${nodeTokenFile()}, this machine only`,
+      });
+      return await followLogin(url, done.promise, rest.includes("--no-browser"));
     }
     case "enable":
     case "disable": {
@@ -74,6 +94,9 @@ export async function nodeCommand(args: string[]): Promise<number> {
       });
       await writeAtomic(file, JSON.stringify(next, null, 2) + "\n");
       console.log(`${sub === "enable" ? "on" : "off"}: ${file}; the console picks it up within 30 s`);
+      if (sub === "enable" && !(await readNodeToken())) {
+        console.log("it announces itself only with a token of its own: agents node login [--no-browser]");
+      }
       return 0;
     }
     case "probe": {
@@ -87,7 +110,9 @@ export async function nodeCommand(args: string[]): Promise<number> {
       return 0;
     }
     default:
-      console.error("usage: agents node [status [--json]|enable [--headless] [--max N]|disable|probe|key]");
+      console.error(
+        "usage: agents node [status [--json]|login [--no-browser]|enable [--headless] [--max N]|disable|probe|key]",
+      );
       return 2;
   }
 }

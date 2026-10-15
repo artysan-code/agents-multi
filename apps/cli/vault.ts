@@ -15,10 +15,13 @@ import {
   getSecret,
   initVault,
   keyMatches,
+  LEGACY_VAULT_DIR,
   listSecrets,
   loadKey,
+  moveVault,
   pairVault,
   setSecret,
+  VAULT_DIR,
   vaultDir,
   VaultError,
   vaultKeyFile,
@@ -144,6 +147,23 @@ export async function vaultCommand(args: string[]): Promise<number> {
         console.log(`paired: this machine opens the vault${place === "file" ? ` (key in ${vaultKeyFile()})` : ""}`);
         return 0;
       }
+      case "move": {
+        // ~/vault/claude-multi → ~/agents-multi-vault, a Syncthing folder of its own (1.2.1): copied, then checked
+        const n = await moveVault();
+        const key = await loadKey();
+        if (!(await keyMatches(key))) {
+          throw new VaultError(`the copy in ${VAULT_DIR} does not open with this machine's key`);
+        }
+        console.log(
+          `${ANSI.b}vault moved${ANSI.x}: ${n} files copied to ${VAULT_DIR}; this machine reads it from now.`,
+        );
+        console.log(
+          `Next: make ${VAULT_DIR} a Syncthing folder of its own, shared with your machines (and, trusted, with a\n` +
+            `server node); run \`agents vault move\` on each machine that still has ${LEGACY_VAULT_DIR}. Remove the\n` +
+            `old folder only when every machine reads the new one.`,
+        );
+        return 0;
+      }
       case "recovery-code": {
         console.log(await currentRecoveryCode());
         return 0;
@@ -234,7 +254,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       }
       default:
         console.error(
-          "usage: agents vault [status|init [--file]|pair [--file]|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
+          "usage: agents vault [status|init [--file]|pair [--file]|move|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
         );
         return 2;
     }

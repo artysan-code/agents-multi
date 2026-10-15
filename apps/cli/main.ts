@@ -268,12 +268,12 @@ switch (cmd) {
     break;
   }
   case "brain-login": {
-    const account = rest[0] ?? brainAccount()?.name;
+    const account = rest.find((a) => !a.startsWith("--")) ?? brainAccount()?.name;
     if (!account) {
       console.error("no brain account in accounts.json: add one (service brain, with its address) first");
       Deno.exit(1);
     }
-    Deno.exit(await brainLoginCommand(account));
+    Deno.exit(await brainLoginCommand(account, rest.includes("--no-browser")));
     break;
   }
   case "google":
@@ -304,8 +304,8 @@ switch (cmd) {
   limits  [--json]            every account's usage windows (5h, 7d…): Claude's from the status line, Codex's from its logs
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  vault   [status|init [--file]|pair [--file]|recovery-code|set|delete|run]   the MCP servers' secrets: encrypted,
-          in ~/vault/claude-multi (Syncthing), key in this machine's keyring
+  vault   [status|init [--file]|pair [--file]|move|recovery-code|set|delete|run]   the MCP servers' secrets:
+          encrypted, in ~/agents-multi-vault (a Syncthing folder of its own), key in this machine's keyring
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account
   tasks   [brief|add|done|remind]   the task list (in the brain); remind is what claude-tasks.timer runs
   agent   start|list|status|say|answer|stop|wait|events   Claude sessions of any profile at work in a project, every
@@ -316,7 +316,7 @@ switch (cmd) {
   review  [rules [folder]]    what the reviewer allowed, refused or left to you in routines' runs; the rules they get
   nodes   [accept|decline|propose]  the machines and jobs the service sees; accept signs a job here (ADR 0012)
   account status|default|proposals|propose|accept|decline|events   the limit rules per account, a project's default account, and the owner's yes to a switch
-  brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
+  brain-login [account] [--no-browser]  sign this machine in to the brain: token and backup key into the vault
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
   ui      build               build the console's interface (apps/ui, pnpm) that serve shows
   gateway [status|run]        the lazy MCP gateway (docs/adr/0008): status, or run it in the foreground (the console keeps it up)

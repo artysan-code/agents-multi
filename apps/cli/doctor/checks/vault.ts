@@ -137,11 +137,16 @@ export async function vaultChecks(): Promise<Check[]> {
       "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",
       "Read(~/vault/claude-multi/**)",
+      "Read(~/agents-multi-vault/**)",
       "Edit(~/vault/claude-multi/**)",
+      "Edit(~/agents-multi-vault/**)",
       // the key file of a machine with no keyring (agents vault pair --file, ADR 0012)
       "Read(~/.local/state/agents-multi/vault-key)",
       "Edit(~/.local/state/agents-multi/vault-key)",
       "Bash(*vault-key*)",
+      "Read(~/.local/state/agents-multi/node-token)",
+      "Edit(~/.local/state/agents-multi/node-token)",
+      "Bash(*node-token*)",
     ];
     const absent = needed.filter((r) => !deny.includes(r));
     if (absent.length) {

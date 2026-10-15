@@ -443,7 +443,8 @@ sees, and `agents nodes accept <job>` signs one.
 
 - **Outbound only.** Every 30 s the node tells the service its load, its session cap (from its memory, or
   `maxSessions`), the accounts logged in and whether you are at it, with its own machine token
-  (`agents brain-login`). Nothing listens beyond `127.0.0.1`.
+  (`agents node login`, kept in a file of this machine only: the vault's brain token travels to every machine,
+  and the service names a node after its token). Nothing listens beyond `127.0.0.1`.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
   machines with a key from the vault the service never has: a stolen token or a broken service cannot start an
   agent. A job taken is a one-shot routine, under the same policy, limits and reviewer.
@@ -678,8 +679,9 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   one of that service's accounts, with `AGENTS_MULTI_PROFILE` in its environment and `{hosts}` in
   its arguments replaced by those accounts' hosts (its `--allow-net`). A server that is not ours is
   one per account instead ([above](#servers-that-are-not-ours-one-per-account)).
-- **Secrets** are in the vault, `~/vault/claude-multi` (a Syncthing folder: they travel between
-  machines already encrypted, a relay machine carries them without reading them). One file per secret,
+- **Secrets** are in the vault, `~/agents-multi-vault` (a Syncthing folder of its own: they travel between
+  machines already encrypted, a relay machine carries them without reading them, and a server node can be
+  given this folder alone; before 1.2.1 it was `~/vault/claude-multi`, still read until `agents vault move`). One file per secret,
   AES-GCM with a fresh IV per write, named by an HMAC so the names say nothing. The key is in each
   machine's keyring (Secret Service: KWallet here), so nothing is typed at login.
 - **Deleting** a secret rewrites it as a tombstone instead of removing the file: through an encrypted

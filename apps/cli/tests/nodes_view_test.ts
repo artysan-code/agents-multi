@@ -127,16 +127,24 @@ Deno.test("doctor node: only loopback on our ports; the key file the user's alon
     "node.bind:ok",
     "node.keyfile:ok",
     "node.service:fail",
+    "node.token:fail",
     "node.approval:fail",
   ]);
-  assertEquals(ids(nodeFindings({ ...base, cfg: on, service: "https://brain.x", approval: true })), [
+  // its own token: there and the user's alone
+  const own = { ...base, cfg: on, service: "https://brain.x", approval: true };
+  assertEquals(ids(nodeFindings({ ...own, tokenMode: 0o644 })).filter((x) => x.startsWith("node.token")), [
+    "node.token:fail",
+  ]);
+  assertEquals(ids(nodeFindings({ ...base, cfg: on, service: "https://brain.x", approval: true, tokenMode: 0o600 })), [
     "node.bind:ok",
     "node.service:ok",
+    "node.token:ok",
   ]);
-  const ready = { ...base, cfg: on, service: "https://brain.x", approval: true };
+  const ready = { ...base, cfg: on, service: "https://brain.x", approval: true, tokenMode: 0o600 };
   assertEquals(ids(nodeFindings({ ...ready, sandbox: { ok: false, reason: "no namespace" } })), [
     "node.bind:ok",
     "node.service:ok",
+    "node.token:ok",
     "node.sandbox:fail",
   ]);
   assertEquals(ids(nodeFindings({ ...ready, sandbox: { ok: true } })).at(-1), "node.sandbox:ok");
