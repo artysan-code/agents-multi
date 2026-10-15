@@ -6,3 +6,4 @@ apps/site/.astro
 .git
 apps/desktop/src-tauri/target
 apps/ui/dist
+apps/ui/dist-web

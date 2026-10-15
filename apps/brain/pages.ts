@@ -125,6 +125,8 @@ export function signInPage(totp: boolean, error = "", next = "/account") {
   <p>${
       next.startsWith("/tasks")
         ? "Accedi per vedere e cambiare le tue task."
+        : next.startsWith("/app")
+        ? "Accedi per usare Agents Multi da qui."
         : "Accedi per gestire i token delle tue macchine e le connessioni di Claude."
     }</p>
   <form method="post" action="/account/login"><input type="hidden" name="next" value="${esc(next)}">${

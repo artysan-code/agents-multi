@@ -121,7 +121,8 @@ const SITE_CSP =
   "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 // the paths that are the brain's on any address: never looked up in the site
-const RESERVED = /^\/(mcp|api|backup|tasks|account|invite|authorize|token|register|health|privacy|\.well-known)(\/|$)/;
+const RESERVED =
+  /^\/(mcp|api|backup|tasks|app|account|invite|authorize|token|register|health|privacy|\.well-known)(\/|$)/;
 /** What the site was built with as its address (apps/site/astro.config.mjs): replaced by the real one when served. */
 export const SITE_PLACEHOLDER = "https://site.invalid";
 

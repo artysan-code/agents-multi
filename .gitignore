@@ -23,6 +23,7 @@ shared/skills/use-railway
 
 # The console's new interface: built by install and self-update (agents ui build)
 apps/ui/dist/
+apps/ui/dist-web/
 apps/ui/dist.next/
 apps/ui/dist.old/
 
