@@ -499,19 +499,30 @@ The service also serves a web app at `/app` ([ADR 0014](docs/adr/0014-from-the-p
 `https://<your service>/app` on the phone, sign in as on `/account`, and add it to the home screen (it is a PWA,
 the shell and push only: no data is kept offline). It is made for one hand: a tab bar under the thumb (**Chat**,
 **Waiting** with a badge, **Tasks**, **Brain**, **More**), a calm light and dark theme that follows the device (or
-the choice in More), and on a wide screen the chat list beside the conversation.
+the choice in More), and on a wide screen the chat list beside the conversation. The frame is one screen high and
+only its panes scroll, so a view whose content fits never moves (one place in the layout, `web.css`: no `100vh`, the
+safe areas added once). You move between the tabs by swiping, with a spring; on rows a swipe is a shortcut for a
+button that is always there (a task to the right is done, a chat to the left is deleted with an Undo, a request or a
+job to the right is yes, to the left no, still with the passkey).
 
 - **Chat**: the conversations by day with the machine that answered; your messages as compact bubbles, answers as
   full-width text (Markdown, code blocks with a copy button, lists, links), the changes Claude made as chips under
-  the answer, a live cursor while it writes, _Stop waiting_ and _Try again_ when a machine does not answer, and a
-  composer that stays over the keyboard (Enter sends on a desktop, a new line on a touch screen). The machine that
-  answers can be changed in place, for the next messages.
+  the answer, a live cursor while it writes, _Cancel_ for a waiting or running answer and _Try again_ for a failed or
+  cancelled one, rename, delete, a search of the list, and a composer that stays over the keyboard (Enter sends on a desktop, a new line on a touch screen). The machine that
+  answers can be changed in place, for the next messages. **Voice**: a microphone dictates into the box
+  (`webkitSpeechRecognition`, in the account's language; the phone's own service hears it, and the app says so), and a
+  voice note is recorded (`MediaRecorder`: Opus in WebM, AAC in MP4 on iOS; hold and release, slide away to cancel, or
+  tap for a recording that stays open; 5 minutes, 10 MB), sent to `POST /api/chats/voice` and shown as an audio bubble
+  until a machine with whisper.cpp (`agents node voice`) sends the words. With none online it says the note waits.
 - **Waiting**: what the agents on your machines ask (permissions and questions) and the jobs proposed to them, each
-  answered with **a passkey**: _Yes_, _Yes for the session_, _No_. The first run creates the passkey; it counts only
+  answered with **a passkey**: _Yes_, _Yes for the session_, _No_ (the challenge binds a hash of the request's words;
+  declining a job is signed too). The first run creates the passkey, as a discoverable credential so a password
+  manager can keep it, and shows the browser's own error with a hint when it fails; it counts only
   once a desktop with your vault has endorsed it (`agents passkeys`), and until then it is shown as pending.
-- **Tasks** (today with its times, overdue, done today) and **Brain** (search, recent pages, a page in the serif
+- **Tasks** (compact rows: today with its times, overdue, done today) and **Brain** (search, recent pages, a page in the serif
   face), with loading skeletons, error banners with a retry, an offline banner, and pull to refresh.
-- **More**: Machines (state, load and accounts of each node, which one answers, **pair a machine** with the code
+- **More**: Machines (state, load and accounts of each node, which one answers, **forget** one you no longer use,
+  **pair a machine** with the code
   `agents node pair` shows), notifications (Web Push; on iPhone and iPad once the app is on the home screen), the
   passkeys (list, revoke), theme, language, sign out.
 
