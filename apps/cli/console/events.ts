@@ -4,12 +4,16 @@
 import { lstat } from "../lib/fs.ts";
 import { HOME, NON_PROFILE_DIRS, REPO, RUNTIME, STATE } from "../lib/paths.ts";
 import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
+import { listTasks } from "../../../shared/mcp/lib/tasks.ts";
+import { memoryVersion } from "../memory.ts";
 
-export const TOPICS = ["usage", "state", "agents", "chats", "app-update"] as const;
+export const TOPICS = ["usage", "state", "agents", "chats", "brain", "app-update"] as const;
 export type Topic = typeof TOPICS[number];
 /** A usage event carries which sessions wrote, so the page can light up the one that is working
  *  rather than repainting every row as busy. */
 const clients = new Set<(topic: Topic, sessions?: string[]) => void>();
+/** The open pages alone (clients also holds the server's own listeners): nobody looking, nothing to ask the brain. */
+const pages = new Set<unknown>();
 
 /** The transcripts the watcher saw change since the usage ingest last asked; null when nothing watches
  *  them (the watcher failed or has not started), which means every transcript must be looked at. */
@@ -124,6 +128,7 @@ async function profileDirs(): Promise<string[]> {
  * `state`  runtime config, credentials, MCP registry — profiles, doctor, plan windows
  * `agents` the agents hub's children and runs — the Runs page
  * `chats`  a chat kept a turn, or was forgotten — the Chat page
+ * `brain`  a task or a page of the brain changed, anywhere (watchBrain asks it every half minute) — Tasks, Brain
  *
  * Events are coalesced: a busy session writes its transcript continuously, and one redraw per
  * second is plenty for a dashboard.
@@ -201,6 +206,7 @@ export function eventStream(code: string, only?: Topic[]): Response {
     }
     if (send) {
       clients.delete(send);
+      pages.delete(send);
       send = null;
     }
   };
@@ -223,6 +229,7 @@ export function eventStream(code: string, only?: Topic[]): Response {
         }
       };
       clients.add(send);
+      if (!only) pages.add(send);
       // A proxy or a sleeping laptop can drop a silent connection: a comment every 25s keeps it
       // alive and gives the page a heartbeat to time its "last update" indicator against.
       ping = setInterval(() => write(`: ping ${Date.now()}\n\n`), 25000);
@@ -232,4 +239,33 @@ export function eventStream(code: string, only?: Topic[]): Response {
   return new Response(body, {
     headers: { "content-type": "text/event-stream", "cache-control": "no-store", "connection": "keep-alive" },
   });
+}
+
+/** The brain changes elsewhere (the phone, a chat on another machine) and touches no file here: every
+ *  half minute, while a page is open, its tasks and its memory version are read, and a `brain` event goes
+ *  out when one differs. The console's own task write broadcasts at once. */
+export async function watchBrain(signal: AbortSignal, tasks: boolean) {
+  let lastTasks = "", lastMemory: string | null = null;
+  while (!signal.aborted) {
+    // with no page open there is nobody to tell: the next look after one opens sets the baseline again
+    if (!pages.size) {
+      lastTasks = "";
+      lastMemory = null;
+      await new Promise((r) => setTimeout(r, 5_000));
+      continue;
+    }
+    let moved = false;
+    if (tasks) {
+      try {
+        const now = JSON.stringify((await listTasks()).map((t) => [t.id, t.updated]).sort());
+        if (lastTasks && now !== lastTasks) moved = true;
+        lastTasks = now;
+      } catch { /* the brain is away: the views say so when they ask */ }
+    }
+    const memory = await memoryVersion().catch(() => null);
+    if (memory && lastMemory && memory !== lastMemory) moved = true;
+    if (memory) lastMemory = memory;
+    if (moved) broadcast("brain");
+    await new Promise((r) => setTimeout(r, 30_000));
+  }
 }

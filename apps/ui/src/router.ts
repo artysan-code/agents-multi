@@ -1,12 +1,12 @@
 // router.ts — where the console is: the three views, #chat · #runs · #limits, and behind «More»
-// #connections · #system/<tab>. The tray opens a view by setting the hash. And the intents: a request
+// #tasks · #brain · #connections · #system/<tab>. The tray opens a view by setting the hash. And the intents: a request
 // from one place (the palette, the rail) to another page to do something once it is on screen — "start
 // a new chat" — which that page takes with `useIntent`, so no page reaches into another's markup.
 
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 
-const VIEWS = ["chat", "runs", "limits", "connections", "system"] as const;
+const VIEWS = ["chat", "runs", "limits", "tasks", "brain", "connections", "system"] as const;
 export const TABS = ["profiles", "permissions", "updates", "health"] as const;
 export type View = typeof VIEWS[number];
 export type Tab = typeof TABS[number];

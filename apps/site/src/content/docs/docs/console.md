@@ -31,14 +31,16 @@ the update when one is waiting, the commands and the preferences.
   workflow runs the hub started; the last sessions per folder, each reopened with one click.
 - **Accounts & limits** — each profile's accounts, Claude and Codex, with their usage limits (the five
   hours and the week), how old each reading is — stale past half an hour — and today's tokens.
-- **More** — Connections (every MCP server, which profiles see it, the accounts and the vault), and
-  profiles, permissions, updates, and every doctor check with its fix.
+- **More** — Tasks (today with its times first, what is overdue marked, then the open tasks by project;
+  marking one done is the only change made there), Brain (search it and read a page, read only), each with
+  a link to the brain's own web board; Connections (every MCP server, which profiles see it, the accounts
+  and the vault), and profiles, permissions, updates, and every doctor check with its fix.
 
 `Ctrl-K` opens a command palette with every view and every action.
 
 The limits come from Claude Code's status line while a session works; «Ask for the limits now» asks
 Anthropic for them at once, with each profile's own login, which the console reads for that request
-only. The tasks and the brain have their own pages on the brain's site.
+only. Adding tasks and writing the brain are done in a chat or on the brain's board.
 
 ## The desktop app
 

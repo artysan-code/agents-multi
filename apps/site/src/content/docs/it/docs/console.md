@@ -34,14 +34,16 @@ Salute), l'aggiornamento quando ce n'è uno in attesa, i comandi e le preferenze
 - **Account e limiti** — gli account di ogni profilo, Claude e Codex, con i loro limiti d'uso (le
   cinque ore e la settimana), quanto è vecchia ogni lettura — scaduta oltre la mezz'ora — e i token di
   oggi.
-- **Altro** — Connessioni (ogni server MCP, quali profili lo vedono, gli account e il vault), e
+- **Altro** — Task (oggi con i suoi orari per primo, le scadute segnate, poi le task aperte per progetto;
+  segnarne una come fatta è l'unica modifica che si fa da lì), Brain (cercarci e leggere una pagina, solo
+  lettura), ognuna con un link alla bacheca web del brain; Connessioni (ogni server MCP, quali profili lo vedono, gli account e il vault), e
   profili, permessi, aggiornamenti, e ogni controllo del doctor con la sua correzione.
 
 `Ctrl-K` apre una tavolozza dei comandi con ogni vista e ogni azione.
 
 I limiti arrivano dalla riga di stato di Claude Code mentre una sessione lavora e dai log di Codex;
 «Chiedi i limiti adesso» li chiede subito ad Anthropic, con il login di ciascun profilo, che la console
-legge solo per quella richiesta. Le task e il brain hanno le loro pagine sul sito del brain.
+legge solo per quella richiesta. Aggiungere task e scrivere nel brain si fa in una chat o sulla bacheca del brain.
 
 ## L'app desktop
 

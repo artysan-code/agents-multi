@@ -8,7 +8,7 @@ import { useEffect } from "preact/hooks";
 import { api, openEvents, type Owner, type StatusView, type Summary } from "./api.ts";
 
 type Live = "live" | "busy" | "down";
-type Topic = "state" | "usage" | "agents" | "chats" | "app-update";
+type Topic = "state" | "usage" | "agents" | "chats" | "brain" | "app-update";
 
 export const status = signal<StatusView | null>(null);
 export const summary = signal<Summary | null>(null);
@@ -22,6 +22,7 @@ export const topics = {
   usage: signal(0),
   agents: signal(0),
   chats: signal(0),
+  brain: signal(0),
   "app-update": signal(0),
 } satisfies Record<Topic, unknown>;
 
@@ -130,8 +131,9 @@ export function connect(): void {
       last = Date.now();
       coalesce("state");
     });
-    // the agents hub (the Runs page) and the chats (the Chat page, from another window too)
-    for (const topic of ["agents", "chats"] as const) {
+    // the agents hub (the Runs page), the chats (the Chat page, from another window too) and the brain
+    // (Tasks and Brain: a task or a page changed on the phone, in a chat, on another machine)
+    for (const topic of ["agents", "chats", "brain"] as const) {
       es.addEventListener(topic, () => {
         last = Date.now();
         topics[topic].value++;
