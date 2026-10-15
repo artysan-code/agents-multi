@@ -2,24 +2,17 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { ancestry, asArg, askArgs, AskStream, promptFor, sessionEnv, toolCall, toolKind, TOOLS } from "../ask.ts";
 
-Deno.test("askArgs: the tools are a fixed list per kind, and anything else is refused", () => {
-  const a = askArgs("ask", "cosa ho domani?", "now");
+Deno.test("askArgs: the tools are a fixed list, and anything else is refused", () => {
+  const a = askArgs("cosa ho domani?", "now");
   assertEquals(a.slice(0, 2), ["-p", "cosa ho domani?"]);
   assertEquals(a[a.indexOf("--permission-mode") + 1], "dontAsk");
   assertEquals(a[a.indexOf("--tools") + 1], "");
-  assertEquals(a.slice(a.indexOf("--allowedTools") + 1, a.indexOf("--append-system-prompt")), TOOLS.ask);
-  assert(!askArgs("debrief", "debrief", "now").includes("mcp__google__gmail_search"));
-  // events are created and moved from the field, never deleted, and no mail goes out
-  assert(TOOLS.ask.includes("mcp__google__calendar_create") && TOOLS.ask.includes("mcp__google__calendar_update"));
-  assert(!TOOLS.ask.some((t) => /calendar_delete|gmail_send|gmail_draft|calendar_respond/.test(t)));
+  assertEquals(a.slice(a.indexOf("--allowedTools") + 1, a.indexOf("--append-system-prompt")), TOOLS);
+  // events are created and moved from a chat, never deleted, and no mail goes out
+  assert(TOOLS.includes("mcp__google__calendar_create") && TOOLS.includes("mcp__google__calendar_update"));
+  assert(!TOOLS.some((t) => /calendar_delete|gmail_send|gmail_draft|calendar_respond|brain_delete|brain_move/.test(t)));
   assert(!a.includes("--resume"));
-  // a change from the Brain page writes only in the brain, and never deletes
-  assert(TOOLS.brain.every((t) => t.startsWith("mcp__claude_ai_Brain__brain_") || /^Read\(\/\/.+\/\*\*\)$/.test(t)));
-  const c = askArgs("brain", "porta nel brain", "now");
-  assertEquals(c[c.indexOf("--tools") + 1], "Read");
-  assert(TOOLS.brain.includes("mcp__claude_ai_Brain__brain_edit"));
-  assert(!TOOLS.brain.includes("mcp__claude_ai_Brain__brain_delete"));
-  const b = askArgs("ask", "e dopo?", "now", { session: "s-1" });
+  const b = askArgs("e dopo?", "now", { session: "s-1" });
   assertEquals(b.slice(-2), ["--resume", "s-1"]);
 });
 
@@ -28,12 +21,8 @@ Deno.test("asArg: a leading dash is not read as an option", () => {
   assertEquals(asArg("ciao"), "ciao");
 });
 
-Deno.test("promptFor: a new task names its project, says there is none, or leaves it to Claude", () => {
-  assert(promptFor("newtask", "now", "work/acme/portal").includes('"work/acme/portal"'));
-  assert(promptFor("newtask", "now", null, true).includes("no project (a simple thing to do)"));
-  assert(promptFor("newtask", "now", null).includes("work out from what they say"));
-  assert(promptFor("ask", "now").includes("[[code:PATH]]"));
-  assert(promptFor("brain", "now", "progetti/claude-multi.md").includes("progetti/claude-multi.md"));
+Deno.test("promptFor: work in a project's files is handed over, not started", () => {
+  assert(promptFor("now").includes("[[code:PATH]]"));
 });
 
 Deno.test("AskStream: deltas when streamed, the message otherwise, the result as a last resort", () => {
@@ -131,17 +120,10 @@ Deno.test("sessionEnv: the graphical session's variables, unquoted; everything e
   assertEquals(sessionEnv(""), {});
 });
 
-Deno.test("askArgs: the chosen model goes with every request, with its effort; the debrief is light", () => {
-  const ask = askArgs("ask", "ciao", "now", { model: "opus" });
+Deno.test("askArgs: the chosen model goes with every request, with its effort", () => {
+  const ask = askArgs("ciao", "now", { model: "opus" });
   assertEquals(ask.slice(ask.indexOf("--model"), ask.indexOf("--model") + 4), ["--model", "opus", "--effort", "high"]);
-  const debrief = askArgs("debrief", "debrief", "now", { model: "opus" });
-  assertEquals(debrief.slice(debrief.indexOf("--model"), debrief.indexOf("--model") + 4), [
-    "--model",
-    "haiku",
-    "--effort",
-    "low",
-  ]);
-  assertEquals(askArgs("ask", "ciao", "now").includes("--model"), false);
+  assertEquals(askArgs("ciao", "now").includes("--model"), false);
 });
 
 Deno.test("toolCall: a change says what it was on, a read only which tool; the field keeps the brain but never deletes", () => {
@@ -158,7 +140,7 @@ Deno.test("toolCall: a change says what it was on, a read only which tool; the f
     n: "calendar_events",
   });
   assertEquals(toolCall("mcp__tasks__tasks_add"), { t: "tool", k: "tasks", n: "tasks_add" });
-  const ask = TOOLS.ask.join(" ");
+  const ask = TOOLS.join(" ");
   assert(ask.includes("brain_append") && ask.includes("brain_edit"));
   assert(!ask.includes("brain_delete") && !ask.includes("brain_move"));
 });

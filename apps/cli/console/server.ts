@@ -3,8 +3,7 @@
 //
 // Routes are a table: each path has a GET handler, a POST handler, or both. A POST handler runs only
 // with the anti-CSRF header; a path with only a POST handler answers 405 to anything else. The
-// feature modules that own a group of paths (ask, task board, memory, Claude's assets) answer
-// theirs before the static files.
+// feature modules that own a group of paths (ask, Claude's assets) answer theirs before the static files.
 
 import { ANSI } from "../lib/output.ts";
 import { PORT, REPO, SYNCTHING_CONFIG } from "../lib/paths.ts";
@@ -16,19 +15,15 @@ import { startConnect, storeClient } from "../google.ts";
 import { startBrainLogin } from "../brain-login.ts";
 import { calendarAsTasks, resetAgenda } from "../agenda.ts";
 import { listCalendars, setShown } from "../calendars.ts";
-import { taskApi } from "../taskboard.ts";
 import { askApi } from "../ask.ts";
 import { assetsApi, claudeAssets } from "../claude-assets.ts";
-import { brainGraph, brainPage } from "../brain.ts";
-import { memoryApi } from "../memory.ts";
 import { permissionsOp, permissionsView, type PermOp } from "../permissions.ts";
-import { catalog, catalogPage, details, inventory, type PluginOp, pluginOp } from "../plugins.ts";
 import { claudeSessionVars } from "../../../shared/mcp/lib/agents.ts";
 import { owner } from "../../../shared/mcp/lib/owner.ts";
-import { addTask, brief, listTasks, type TaskInput, updateTask } from "../../../shared/mcp/lib/tasks.ts";
-import { brainAccount, connectTasks } from "../../../shared/mcp/lib/brain-tasks.ts";
+import { brief, listTasks } from "../../../shared/mcp/lib/tasks.ts";
+import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { hasCsrfHeader, isLocalHost, json, jsonText, uiFile } from "./http.ts";
-import { broadcast, eventStream, onTopic, type Topic, TOPICS, watchBrain, watchTree } from "./events.ts";
+import { broadcast, eventStream, onTopic, type Topic, TOPICS, watchTree } from "./events.ts";
 import { StatusCache } from "./status-cache.ts";
 import { runAction } from "./actions.ts";
 import { cancelJob, jobStream, startJob } from "./jobs.ts";
@@ -46,6 +41,8 @@ import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
 import type { Route } from "./http.ts";
 import { live, refresh as refreshLimits } from "../live.ts";
+import { listChats, readChat, removeChat } from "../chats.ts";
+import { runsView } from "./runs.ts";
 
 /** The routes of the console, given the state they share. */
 /** The usage database, kept open, and the transcripts read into it at most every few seconds: an
@@ -68,7 +65,6 @@ const usage = (() => {
 })();
 
 export function routes(code: string, status: StatusCache, app?: AppLink): Record<string, Route> {
-  let plugins: { at: number; body: string } | null = null;
   const body = (req: Request) => req.json().catch(() => ({}));
 
   return {
@@ -168,36 +164,39 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
         if (!known || typeof b.shown !== "boolean") return json({ ok: false, message: "unknown calendar" });
         await setShown(String(b.account), String(b.id), b.shown);
         resetAgenda();
-        broadcast("tasks");
         return json({ ok: true });
       },
     },
+    // the day's tasks and events: «Which Claude?» shows the next appointment
     "/api/tasks": {
       get: async () => {
         const cal = await calendarAsTasks(), now = new Date();
         const b = brief([...await listTasks(), ...cal.tasks], now);
-        // today's appointments already past: the day on the page keeps them above the line for now
+        // today's appointments already past: kept above the line for now
         const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
         const earlier = cal.tasks.filter((t) => t.due === b.day && t.time && t.time < clock);
         return json({ ...b, earlier, calendarErrors: cal.errors });
       },
+    },
+    // whose console this is: the chat greets them
+    "/api/owner": { get: () => json(owner()) },
+    // the chats with Claude (chats.ts): the list, one in full, forgetting one; a turn is kept by /api/ask
+    "/api/chats": {
+      get: async () => json(await listChats()),
       post: async ({ req }) => {
-        const b = await body(req) as TaskInput & { op?: string; id?: string };
-        try {
-          const { op, id, ...input } = b;
-          const r = op === "add" ? { task: await addTask(input) } : await updateTask(String(id ?? ""), input);
-          broadcast("tasks");
-          return json({ ok: true, task: r.task });
-        } catch (e) {
-          return json({ ok: false, message: (e as Error).message });
-        }
+        const b = await body(req) as { op?: string; id?: string };
+        if (b.op !== "delete") return json({ ok: false, message: "unknown op" }, 400);
+        return json({ ok: await removeChat(String(b.id ?? "")) });
       },
     },
-    // whose console this is: the tasks page needs the id
-    "/api/owner": { get: () => json(owner()) },
-    // the old wiki, read-only: the Brain page's Archive
-    "/api/archive": { get: async () => json(await brainGraph()) },
-    "/api/archive/page": { get: async ({ url }) => json(await brainPage(url.searchParams.get("path") ?? "")) },
+    "/api/chat": {
+      get: async ({ url }) => {
+        const c = await readChat(url.searchParams.get("id") ?? "");
+        return c ? json(c) : json({ error: "no such chat" }, 404);
+      },
+    },
+    // the agents hub: the workflow runs and the agents started lately, read only (runs.ts)
+    "/api/runs": { get: async () => json(await runsView()) },
     "/api/profile": {
       post: async ({ req }) => {
         const r = await saveProfile(await body(req));
@@ -205,39 +204,6 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
         broadcast("state");
         return json(r, r.error ? 400 : 200);
       },
-    },
-    "/api/plugins": {
-      get: async ({ url }) => {
-        if (!plugins || url.searchParams.has("fresh") || Date.now() - plugins.at > 15000) {
-          plugins = { at: Date.now(), body: JSON.stringify(await inventory()) };
-        }
-        return jsonText(plugins.body);
-      },
-      post: async ({ req }) => {
-        const r = await pluginOp(await body(req) as PluginOp);
-        plugins = null;
-        status.invalidate();
-        broadcast("state");
-        return json(r); // a refused operation is a result (ok: false, message), not an HTTP error
-      },
-    },
-    "/api/plugins/catalog": {
-      // one page at a time, filtered here: the whole catalog is thousands of entries and never leaves the server
-      get: async ({ url }) => {
-        const all = await catalog(url.searchParams.has("fresh")), g = (k: string) => url.searchParams.get(k);
-        return json({
-          ...catalogPage(all, {
-            q: g("q") ?? "",
-            mk: g("mk") ?? "",
-            offset: Number(g("offset")),
-            limit: Number(g("limit")),
-          }),
-          marketplaces: [...new Set(all.map((c) => c.marketplace))].sort(),
-        });
-      },
-    },
-    "/api/plugins/details": {
-      get: async ({ url }) => json({ text: await details(url.searchParams.get("id") ?? "") }),
     },
     // «Close Claude and update»: who holds the waiting install (or a Desktop to replace), then
     // SIGTERM, SIGKILL, reopen. The PIDs are always the server's own; the page only names a step, what
@@ -325,10 +291,7 @@ export function createHandler(
         if (route.get) return await route.get({ req, url: u });
         return json({ error: "POST required" }, 405);
       }
-      const delegated = await assetsApi(u) ??
-        await askApi(req, u, json) ??
-        await taskApi(req, u, json, () => broadcast("tasks")) ??
-        (req.method === "GET" ? await memoryApi(u) : null);
+      const delegated = await assetsApi(u) ?? await askApi(req, u, json);
       if (delegated) return delegated;
       return await uiFile(uiDist, u.pathname);
     } catch (e) {
@@ -388,7 +351,6 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   console.log(`${ANSI.b}agents serve${ANSI.x} — ${entry}  ${ANSI.d}(Ctrl-C to stop; localhost only)${ANSI.x}`);
   if (entry === url) console.log(`${ANSI.d}access key: ${file}${ANSI.x}`);
   void watchTree(ac.signal);
-  void watchBrain(ac.signal, connectTasks() === "brain");
   void app.follow(ac.signal);
   const srv = Deno.serve({ hostname: "127.0.0.1", port: PORT, onListen: () => {}, signal: ac.signal }, handler);
   // app mode: the timers' jobs are the backend's (schedule.ts); dev mode keeps its systemd timers

@@ -3,7 +3,20 @@
 // runs and whose sign-in has expired, the day's next appointment (optional), and POST /api/launch.
 
 import { get, post, type Result } from "../../api.ts";
-import type { Day } from "../today/api.ts";
+
+/** One item of the day: a task or an event. */
+export interface DayItem {
+  title: string;
+  time?: string | null;
+  status?: string;
+  color?: string | null;
+}
+
+/** The part of /api/tasks the picker reads. */
+interface Day {
+  today: DayItem[];
+  earlier?: DayItem[];
+}
 
 export interface Launcher {
   profile: string;

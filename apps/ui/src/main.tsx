@@ -1,5 +1,5 @@
-// main.tsx — boots the new console: the shared style sheet of the current one, whose console this is
-// (before the tasks draw: it says which are "mine"), the report, the live connection, then the shell;
+// main.tsx — boots the console: the shared style sheet, whose console this is (the chat greets them),
+// the report, the live connection, then the shell;
 // or, at #pick, the profile picker alone, and at #hey «Hey Claude» alone; on a machine not set up yet,
 // the first-run wizard.
 

@@ -1,6 +1,6 @@
 // index.tsx — «Hey Claude», the quick entry (what apps/tray/hey.py did): one field. What is typed goes to
 // the console's /api/ask and streams back under the field; what is typed next continues the same
-// conversation. After an answer, "continue in the terminal" opens the conversation in Claude Code, and
+// conversation, which the console keeps as a chat (its Chat page shows it). After an answer, "continue in the terminal" opens the conversation in Claude Code, and
 // when Claude says the request is work inside a project's files ([[code:PATH]]), one button opens
 // Claude Code in that folder with the request. Esc closes, stopping a running answer.
 //
@@ -46,6 +46,7 @@ export function Hey() {
   const body = useRef<HTMLDivElement>(null);
   const busy = useRef<AbortController | null>(null);
   const session = useRef<string | null>(null);
+  const chat = useRef<string | null>(null);
   const shown = useRef(false);
   shown.current = answer !== null;
 
@@ -103,8 +104,9 @@ export function Hey() {
     };
     const ctl = busy.current = new AbortController();
     try {
-      await heyApi.ask(text, session.current, ctl.signal, (o) => {
-        if (o.t === "session") session.current = o.id;
+      await heyApi.ask(text, chat.current, ctl.signal, (o) => {
+        if (o.t === "chat") chat.current = o.id;
+        else if (o.t === "session") session.current = o.id;
         else if (o.t === "text") {
           acc += o.d;
           if (a.state !== "writing") setAnswer((a = { ...a, state: "writing" }));

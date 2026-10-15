@@ -8,7 +8,7 @@ import { useEffect } from "preact/hooks";
 import { api, openEvents, type Owner, type StatusView, type Summary } from "./api.ts";
 
 type Live = "live" | "busy" | "down";
-type Topic = "state" | "usage" | "tasks" | "brain" | "app-update";
+type Topic = "state" | "usage" | "agents" | "chats" | "app-update";
 
 export const status = signal<StatusView | null>(null);
 export const summary = signal<Summary | null>(null);
@@ -20,8 +20,8 @@ export const machineLang = signal<string>("");
 export const topics = {
   state: signal(0),
   usage: signal(0),
-  tasks: signal(0),
-  brain: signal(0),
+  agents: signal(0),
+  chats: signal(0),
   "app-update": signal(0),
 } satisfies Record<Topic, unknown>;
 
@@ -130,14 +130,13 @@ export function connect(): void {
       last = Date.now();
       coalesce("state");
     });
-    es.addEventListener("tasks", () => {
-      last = Date.now();
-      topics.tasks.value++;
-    });
-    es.addEventListener("brain", () => {
-      last = Date.now();
-      topics.brain.value++;
-    });
+    // the agents hub (the Runs page) and the chats (the Chat page, from another window too)
+    for (const topic of ["agents", "chats"] as const) {
+      es.addEventListener(topic, () => {
+        last = Date.now();
+        topics[topic].value++;
+      });
+    }
     // the desktop app's own update (shell/app-update.ts): its state moves while it downloads and installs
     es.addEventListener("app-update", () => {
       last = Date.now();

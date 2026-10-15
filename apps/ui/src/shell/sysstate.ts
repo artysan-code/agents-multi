@@ -1,4 +1,4 @@
-// sysstate.ts — the machine's state as the rail and Today tell it: the checks that need someone,
+// sysstate.ts — the machine's state as the rail tells it: the checks that need someone,
 // what an update would take now, and the word for the rail's update button. Read from the shared report;
 // nothing here asks the server.
 

@@ -1,5 +1,5 @@
 // index.tsx — the first-run wizard: on a machine with no configuration (or a setup started and not
-// finished) the console opens on this screen instead of Today (main.tsx). It takes a new person from
+// finished) the console opens on this screen instead of Chat (main.tsx). It takes a new person from
 // nothing to a working setup, a step at a time, in the update screen's language (lib/screen.css,
 // lib/steps.tsx): welcome, you, the configuration folder, the profiles, install, Claude Code, the vault, each
 // profile's sign-in, the brain, done.

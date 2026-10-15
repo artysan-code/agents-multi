@@ -88,7 +88,7 @@ export interface Summary {
   generatedAt: string;
 }
 
-/** /api/owner: whose console this is; their tasks are "mine". */
+/** /api/owner: whose console this is; the chat greets them. */
 export interface Owner {
   id: string;
   name: string;
@@ -183,10 +183,26 @@ export interface ActionResult {
 
 /** One line of what /api/ask streams (`Out` in apps/cli/ask.ts). */
 export type AskLine =
+  | { t: "chat"; id: string }
   | { t: "session"; id: string }
   | { t: "text"; d: string }
-  | { t: "tool"; k: string }
+  | { t: "tool"; k: string; n: string; d?: string }
   | { t: "done"; text: string; code: string | null; error?: string };
+
+/** Asks Claude in the chat `chat`, a new one when null (its id comes first, as a `chat` line); `on` gets
+ *  each line as it comes. Aborting `signal` stops claude -p on the server. */
+export async function askStream(
+  text: string,
+  chat: string | null,
+  signal: AbortSignal,
+  on: (l: AskLine) => void,
+): Promise<void> {
+  const res = await api.ask({ text, chat }, signal);
+  if (!res.ok || !res.body) {
+    throw new Error((await res.json().catch(() => ({})) as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+  await ndjson<AskLine>(res, on);
+}
 
 /** Who holds the install, as /api/close-claude lists them. */
 export interface Blocker {
@@ -233,7 +249,7 @@ export const api = {
   /** Asks Claude (NDJSON, `AskLine`s); aborting `signal` stops claude -p on the server. */
   ask: (body: Record<string, unknown>, signal: AbortSignal) => postRaw("/api/ask", body, signal),
   closePlan: (why: ClosePurpose = "install") => get<Plan>(`/api/close-claude?for=${encodeURIComponent(why)}`),
-  /** The model Claude answers with, shared by the ask bar and the Hey window. */
+  /** The model Claude answers with, shared by the Chat page and the Hey window. */
   askModel: () => get<ModelState>("/api/ask/model"),
   setAskModel: (model: string) => post("/api/ask/model", { model }),
 };

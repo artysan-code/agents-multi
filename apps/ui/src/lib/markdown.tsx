@@ -1,14 +1,11 @@
-// markdown.tsx — Markdown to elements for the readers (brain pages, task descriptions, Claude's
-// answers): the forms the wiki uses, enough to read a page well, not a renderer. Text stays text —
-// nothing is parsed as HTML. Wikilinks call `onPage`, by default reading the page in the brain; web
-// links open outside.
+// markdown.tsx — Markdown to elements for Claude's answers and the notes the console shows: the forms
+// the brain and Claude use, enough to read well, not a renderer. Text stays text — nothing is parsed as
+// HTML. Wikilinks call `onPage` when the reader has pages to open, else read as text; web links open
+// outside.
 
 import type { ComponentChildren, VNode } from "preact";
-import { request } from "../router.ts";
 
 type OnPage = (target: string) => void;
-
-const readInBrain: OnPage = (target) => request("brain.open", "brain", target);
 
 interface Rule {
   re: RegExp;
@@ -22,13 +19,14 @@ const TOKENS: Rule[] = [
     re: /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/,
     make: (m, onPage) => {
       const target = m[1].trim();
+      if (!onPage) return <span class="lnk" title={target}>{m[2] ?? target.split("/").pop()}</span>;
       return (
         <a
           data-page={target}
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            (onPage ?? readInBrain)(target);
+            onPage(target);
           }}
         >
           {m[2] ?? target.split("/").pop()}

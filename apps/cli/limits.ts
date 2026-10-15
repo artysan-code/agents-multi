@@ -1,6 +1,6 @@
 // limits.ts — `agents limits [--json]`: every account (a profile's Claude, its Codex where it has one) with
 // the usage windows still running, read the passive way (shared/mcp/lib/limits.ts): the status line's
-// snapshots and Codex's session logs. Nothing asks a vendor; to refresh Claude's, Today › Claude now.
+// snapshots and Codex's session logs. Nothing asks a vendor; to refresh Claude's, the console's Accounts & limits.
 
 import { type Account, allLimits } from "../../shared/mcp/lib/providers.ts";
 import type { Window } from "../../shared/mcp/lib/limits.ts";
@@ -23,7 +23,7 @@ export function inHours(resetsAt: number | null, now: number): string {
 }
 
 /** Pure: how old a reading is, "read 4m ago" / "read 3h ago", marked stale past STALE_S: the limits manager
- *  does not act on it (refresh: Today › Claude now). */
+ *  does not act on it (refresh: the console's Accounts & limits). */
 export function readAgo(at: number | null, now: number): string {
   if (at === null) return "read —";
   const s = Math.max(0, now - at);

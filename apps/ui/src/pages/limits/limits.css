@@ -1,0 +1,119 @@
+/* limits.css — Accounts & limits (pages/limits/*): a card per profile with its two windows as bars,
+   green, amber past half, red past 80 % (the bar itself, .lim-bar, is v2.css's). */
+
+.pg-hr {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.pg-hr .pg-h {
+  margin: 0;
+  flex: 1;
+}
+.lm-rf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lm-rf svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+}
+.lm-rf.on svg {
+  animation: rot2 .9s linear infinite;
+}
+.lm-sub {
+  margin: 0 0 18px;
+  max-width: 72ch;
+  color: var(--dim);
+}
+.lm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.lm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 12px;
+}
+.lm-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.lm-acc {
+  margin-top: -4px;
+  font-size: 12.5px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lm-dk {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--faint);
+}
+.lm-dk:hover {
+  background: var(--raised);
+  color: var(--fg);
+}
+.lm-dk.on {
+  color: var(--ok);
+}
+.lm-dk svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+}
+.lm-none {
+  font-size: 12px;
+  color: var(--faint);
+}
+.lm-f {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  font: 500 11px var(--mono);
+  color: var(--faint);
+}
+
+/* a usage window: its name, the bar, its share, when it starts again */
+.lim {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 38px auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--dim);
+  --lc: var(--ok);
+}
+.lim.warn {
+  --lc: var(--warn);
+}
+.lim.crit {
+  --lc: var(--crit);
+}
+.lim b {
+  font: 600 11.5px var(--mono);
+  color: var(--fg);
+  text-align: right;
+}
+.lim small {
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
