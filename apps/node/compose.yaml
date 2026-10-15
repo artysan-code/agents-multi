@@ -1,0 +1,50 @@
+# The server node on Coolify (ADR 0012): the image of this folder, with the settings that let Claude Code's
+# Bash sandbox work inside it and nothing more. Coolify reads this file from the repository (base directory
+# /apps/node, compose file /compose.yaml) and builds the image from the repository's root. Anywhere else,
+# `docker compose up -d --build` from this folder. README.md has the host's part (the AppArmor profile) and the
+# steps in the container's terminal. No secret is written here, or in an environment variable: the logins, the
+# git key and the vault key file are in the volume, made once from a terminal of the container.
+services:
+  node:
+    build:
+      context: ../..
+      dockerfile: apps/node/Dockerfile
+    image: ${NODE_IMAGE:-agents-multi-node:local}
+    # a container of its own: `docker compose exec node bash` is the terminal of the setup steps
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    hostname: ${NODE_NAME:-atlas-node}
+    user: "1000:1000"
+    # no capability at all: bubblewrap makes its namespaces as an unprivileged user (the seccomp profile allows
+    # the calls, and the kernel lets them act only inside a user namespace the caller made)
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      # Docker's default profile plus the one rule of ADR 0012 (seccomp.sh makes it)
+      - seccomp=./seccomp.json
+      # docker-default with mounts and pivot_root allowed: loaded on the host first (README.md, step 2); a
+      # host without AppArmor ignores it, a container that names a profile the host lacks does not start
+      - apparmor=agents-node
+      # Docker's overmounts on /proc would stop bubblewrap's own /proc; with none, the weaker nested mode is not
+      # needed (for the node's uid 1000 with no capability they are closed anyway)
+      - systempaths=unconfined
+    # the node's session cap comes from this: (memory − 2 GiB) / 1.5 GiB, so 8g is 4 sessions
+    mem_limit: ${NODE_MEMORY:-8g}
+    memswap_limit: ${NODE_MEMORY:-8g}
+    pids_limit: 4096
+    # the whole home: the runtime, the configuration, the Claude logins, the clones, the git key and the
+    # vault key file (~/.local/state/agents-multi/vault-key, 0600)
+    volumes:
+      - node-home:/home/agent
+    environment:
+      - TZ=${NODE_TIMEZONE:-Europe/Rome}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  node-home:
