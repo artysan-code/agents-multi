@@ -115,18 +115,27 @@ jobs:
           echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
           corepack enable
 
-      - name: cache
+      # two caches: the Rust build keyed on Cargo.lock alone (a JavaScript dependency changing must not throw away
+      # four minutes of compiling), the Deno and pnpm downloads on their lockfiles
+      - name: cache (Rust)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+            !apps/desktop/src-tauri/target/release/bundle
+          key: rust-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: rust-
+
+      - name: cache (Deno, pnpm)
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/deno
             ~/.local/share/pnpm/store
             ~/.cache/node/corepack
-            ~/.cargo/registry
-            apps/desktop/src-tauri/target
-            !apps/desktop/src-tauri/target/release/bundle
-          key: app-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock') }}
-          restore-keys: app-
+          key: js-${{ hashFiles('deno.lock', 'shared/mcp/*/deno.lock', 'apps/*/pnpm-lock.yaml') }}
+          restore-keys: js-
 
       # The Rust's fmt and clippy only: this job alone has WebKitGTK. Everything else in the gate (formatting,
       # lint, types, shellcheck, tests, the MCP probe, the secret scan, the UI and site builds) already passed
