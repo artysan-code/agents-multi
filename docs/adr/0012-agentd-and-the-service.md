@@ -72,6 +72,8 @@ The owner chose (2026-10-15), among the options weighed:
   from the vault key (HKDF, its own label); the service never has it.
 - **Accepting** happens on one of the owner's machines (`agents nodes accept`, or a coordinator's question):
   it reads the job back, shows it, signs it, and sends the signature. Accepted jobs expire after 24 hours.
+  The approval can also come from the phone, as an assertion of a passkey a desktop endorsed
+  ([ADR 0014](0014-from-the-phone.md)); the node checks it as it does the signature.
 - **The node verifies** before it starts anything: the signature against the public key (derived from its own
   vault, or `approvalKey` in `node.json` for a node that has no vault), that the job names this node, that it
   has not expired and that it has not run it before (`<runs>/node/seen.json`).

@@ -8,6 +8,7 @@ import { amEnv } from "../../../shared/mcp/lib/env.ts";
 import { STATE } from "../lib/paths.ts";
 import { getSecret } from "../../../shared/mcp/lib/vault.ts";
 import type { Announce, Job, NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
+import type { PhoneAnswer } from "../../../shared/mcp/lib/webauthn.ts";
 
 export interface Service {
   url: string;
@@ -67,7 +68,8 @@ export async function service(
   };
 }
 
-export const announce = (s: Service, a: Announce) => s.call<{ jobs: Job[] }>("PUT", "/api/node", a);
+export const announce = (s: Service, a: Announce) =>
+  s.call<{ jobs: Job[]; answers?: PhoneAnswer[] }>("PUT", "/api/node", a);
 export const fleet = (s: Service) => s.call<{ nodes: NodeInfo[]; jobs: Job[]; now: string }>("GET", "/api/nodes");
 export const getJob = async (s: Service, id: string) => (await s.call<{ job: Job }>("GET", `/api/jobs/${id}`)).job;
 export const newJob = async (s: Service, body: Record<string, unknown>) =>

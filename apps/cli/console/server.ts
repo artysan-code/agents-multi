@@ -41,6 +41,7 @@ import { closePlan, closeSessions, parsePurpose, reopen } from "./close-claude.t
 import { launchList, launchOne } from "./picker.ts";
 import { saveProfile } from "./profiles.ts";
 import { accountOp, accountsView, recordConnect } from "./accounts.ts";
+import { endorseOp, passkeysView } from "../passkeys.ts";
 import { UI_DIST } from "../ui.ts";
 import { AppLink, appSocket, appUpdateRoute, unixDial } from "./app-update.ts";
 import { answer, type Auth, gate, newToken, publishToken, Tickets, tokenPath } from "./token.ts";
@@ -168,6 +169,15 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
         const r = await accountOp(await body(req));
         status.invalidate();
         broadcast("state");
+        return json(r);
+      },
+    },
+    // the phone's passkeys, and the owner's endorsement of one (ADR 0014); the page confirms before it posts
+    "/api/passkeys": {
+      get: async () => json(await passkeysView()),
+      post: async ({ req }) => {
+        const r = await endorseOp(String((await body(req) as { id?: string }).id ?? ""));
+        if (r.ok) broadcast("state");
         return json(r);
       },
     },

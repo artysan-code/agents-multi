@@ -6,6 +6,7 @@ import { useState } from "preact/hooks";
 import { type AccountsView, importGoogleClient, loadAccounts } from "./api.ts";
 import { Ours, Services, VaultCard } from "./accounts.tsx";
 import { Calendars } from "./calendars.tsx";
+import { Passkeys } from "./passkeys.tsx";
 import { openAccountForm } from "./form.tsx";
 import { t } from "../../i18n.ts";
 import { runAction, toast, toastErr } from "../../lib/ui.tsx";
@@ -110,6 +111,7 @@ export function Connections() {
       </div>
       <Services view={view} accs={accs} servers={servers} reload={load} />
       <Calendars />
+      <Passkeys />
       <h3 class="conn-h">{t("conn.ours")}</h3>
       <Ours view={view} accs={accs} reload={load} />
     </div>

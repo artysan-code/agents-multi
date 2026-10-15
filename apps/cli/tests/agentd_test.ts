@@ -8,6 +8,9 @@ import { nodeConfigWith } from "../node/command.ts";
 import { exposedListeners, probeVerdict } from "../node/probe.ts";
 import type { Service } from "../node/service.ts";
 import { Fleet, fleetRoute } from "../../brain/fleet.ts";
+import { Waiting, waitingRoute } from "../../brain/waiting.ts";
+import { Authenticator, SITE } from "./fixtures/authenticator.ts";
+import { jobChallenge, signEndorsement } from "../../../shared/mcp/lib/webauthn.ts";
 import { Store } from "../../brain/store.ts";
 import { approvalKeys, type Job, type JobSpec, normalRemote, signJob } from "../../../shared/mcp/lib/nodes.ts";
 import { cleanNodeConfig } from "../../../shared/mcp/lib/headless.ts";
@@ -118,15 +121,18 @@ Deno.test("agentd: a tick takes the owner's job, refuses a forged one, and follo
     await git(clone, ["push", "--quiet", "origin", "dev"]);
 
     // the service, its own code on a database in memory, reached as the node "srv" would
-    const fleet = new Fleet(new Store(":memory:").db);
+    const db = new Store(":memory:").db;
+    const fleet = new Fleet(db), waiting = new Waiting(db, SITE);
     const as = (node: string): Service => ({
-      url: "https://service.test",
+      url: SITE.origin,
       async call<T>(method: string, path: string, body?: unknown): Promise<T> {
         const req = new Request(`https://service.test${path}`, {
           method,
           body: body ? JSON.stringify(body) : undefined,
         });
-        const r = (await fleetRoute(req, new URL(req.url), node, fleet))!;
+        const u = new URL(req.url);
+        const r = (await waitingRoute(req, u, node, waiting, () => [], "u1")) ??
+          (await fleetRoute(req, u, node, fleet, (me) => ({ answers: waiting.pending(me) })))!;
         const j = await r.json();
         if (!r.ok) throw new Error(j.error);
         return j as T;
@@ -194,6 +200,34 @@ Deno.test("agentd: a tick takes the owner's job, refuses a forged one, and follo
     const local = fleet.jobs().find((j) => j.local)!;
     assertEquals([local.node, local.status, local.spec.id, local.spec.repo], ["srv", "running", "own-2", spec.repo]);
     assertEquals(told.length, 1, "the owner was told of the refusal");
+
+    // approved from the phone: an endorsed passkey's assertion is taken as the owner's yes, an unendorsed one is not
+    const makePasskey = async (endorsed: boolean) => {
+      const ph = await Authenticator.make();
+      const chal = (await (await waitingRoute(
+        new Request("https://x.test/api/passkeys/options", { method: "POST" }),
+        new URL("https://x.test/api/passkeys/options"),
+        null,
+        waiting,
+        () => [],
+        "u1",
+      ))!.json()).challenge;
+      await waiting.register({ name: "Pixel", credential: await ph.register(chal) });
+      if (endorsed) waiting.endorse(ph.id, { signature: await signEndorsement(ph.id, ph.publicKey, owner.sign) });
+      return ph;
+    };
+    const byPhone = async (ph: Authenticator) => {
+      const p = fleet.create("desk", { kind: "routine", node: "srv", spec });
+      const expires = new Date(Date.now() + 3600_000).toISOString();
+      const assertion = await ph.assert(await jobChallenge({ id: p.id, node: "srv", kind: "routine", spec, expires }));
+      return fleet.act(p.id, "", { op: "accept", assertion, expires });
+    };
+    const viaGood = await byPhone(await makePasskey(true));
+    const viaBad = await byPhone(await makePasskey(false));
+    await nodeTick(cfg, as("srv"), null, o);
+    assertEquals(fleet.get(viaGood.id)!.status, "running", "the phone's yes, endorsed, starts the job");
+    assertEquals(fleet.get(viaBad.id)!.status, "declined", "an unendorsed passkey's does not");
+    assertStringIncludes(fleet.get(viaBad.id)!.reason!, "has not been endorsed");
   } finally {
     for (const [k, v] of Object.entries(saved)) v === undefined ? Deno.env.delete(k) : Deno.env.set(k, v);
     await Deno.remove(tmp, { recursive: true });

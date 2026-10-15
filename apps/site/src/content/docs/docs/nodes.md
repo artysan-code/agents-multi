@@ -25,6 +25,11 @@ shows every machine and job the service sees.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
   machines with a key derived from the vault, which the service never has: a stolen token or a broken service
   cannot start an agent.
+- **The phone's yes is a passkey you endorsed.** The web app shows what waits on your machines (permission
+  requests, questions, proposed jobs) and answers with a passkey registered on the service. A passkey counts
+  only after you endorse it on a desktop, `agents passkeys endorse <id>`, comparing its fingerprint with the
+  phone's; the node then checks the endorsement, the passkey's signature and its expiry before it answers
+  anything, so the service can carry the answer but never make one count.
 
 ## Accepting a job
 

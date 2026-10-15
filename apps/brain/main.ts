@@ -46,6 +46,8 @@ import { type Owner, owner, ownerFrom, useOwner } from "../../shared/mcp/lib/own
 import { masterKey, type User, Users } from "./users.ts";
 import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
 import { Fleet, fleetRoute } from "./fleet.ts";
+import { Waiting, waitingRoute } from "./waiting.ts";
+import { siteOf } from "../../shared/mcp/lib/webauthn.ts";
 import { ChatHub, chatRoute, Chats } from "./chat.ts";
 import { loadVapid, noticeOf, pushAll, pushRoute, Subscriptions } from "./push.ts";
 import { nodeNameOf } from "../../shared/mcp/lib/nodes.ts";
@@ -248,7 +250,7 @@ const otpauth = (id: string, secret: string) =>
   `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 /** The API paths a web session may use (the rest of /api/ is for tokens). */
-const WEB_API = /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$)/;
+const WEB_API = /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$)/;
 
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
@@ -484,6 +486,7 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   const { tenant } = here();
   const { store, index } = tenant;
   const toolCtx = { store, embed: embedCfg, by, changed: index.kick };
+  const waiting = () => new Waiting(store.db, siteOf(URL_));
 
   if (p === "/mcp") {
     // stateless: a server and a transport per request, nothing kept between them
@@ -526,7 +529,30 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   // the account's machines and the jobs placed on them (fleet.ts, ADR 0012): a machine acts as its token's name
   if (p === "/api/node" || p === "/api/nodes" || p.startsWith("/api/jobs")) {
     const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
-    const r = await fleetRoute(req, u, node, new Fleet(store.db));
+    const r = await fleetRoute(
+      req,
+      u,
+      node,
+      new Fleet(store.db),
+      (n) => ({ answers: waiting().pending(n) }),
+      who.label === "web",
+    );
+    if (r) return r;
+  }
+  // what waits on the machines and the phone's yes (waiting.ts, ADR 0014, G5): the node relays and fetches with
+  // its token; the phone, with its session, reads, registers a passkey and answers (the nodes check the answer)
+  if (/^\/api\/(node\/(requests|answers)$|waiting(\/|$)|passkeys(\/|$))/.test(p)) {
+    const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
+    const fleet = new Fleet(store.db);
+    fleet.sweep();
+    const r = await waitingRoute(
+      req,
+      u,
+      node,
+      waiting(),
+      () => fleet.jobs().filter((j) => j.status === "proposed"),
+      who.user,
+    );
     if (r) return r;
   }
   // the chats, the node's turn loop, the answering node's setting (chat.ts, ADR 0014) and Web Push (push.ts):

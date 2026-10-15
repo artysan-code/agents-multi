@@ -225,6 +225,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents routine add\|list\|rm\|run`                                           | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
 | `agents review [rules [folder]]`                                              | what the reviewer allowed, refused or left to you in routines' runs; the rules a project's runs get (below)                                                    |
 | `agents nodes [accept\|decline\|propose]`                                     | the machines and jobs the service sees; `accept` signs a job here, with the vault's approval key (ADR 0012)                                                    |
+| `agents passkeys [endorse <id>]`                                              | the passkeys your phone registered, with their fingerprints; `endorse` signs one here so that it can say yes (ADR 0014)                                        |
 | `agents account status\|default\|proposals\|propose\|accept\|decline\|events` | the limit rules per account, a project's default account, and the owner's yes to a switch (below)                                                              |
 | `agents tasks brief\|add\|done\|remind`                                       | the task list from the terminal; `remind` is what the timer runs                                                                                               |
 | `agents google client <file.json>\|connect <account>`                         | the Google OAuth client, and connecting an account                                                                                                             |
@@ -455,6 +456,18 @@ sees, and `agents nodes accept <job>` signs one.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your
   machines with a key from the vault the service never has: a stolen token or a broken service cannot start an
   agent. A job taken is a one-shot routine, under the same policy, limits and reviewer.
+- **The phone's yes is a passkey, and it counts only once a desktop endorsed it**
+  ([ADR 0014](docs/adr/0014-from-the-phone.md)). What waits on a machine (a child's permission request or
+  question) is relayed to the service, and the web app shows it with the proposed jobs. The phone says yes with a
+  passkey (WebAuthn, ES256, no attestation) it registered on the service; the service keeps its public key but a
+  passkey is _pending_ until `agents passkeys endorse <id>` (or the console's Connections page) shows its name and
+  fingerprint, asks for your yes and signs it with the vault's approval key. The service stores answers and
+  assertions and decides nothing: **the node checks everything** — the endorsement against your key, then the
+  assertion (challenge over the answer, origin, rpId, user presence and verification, signature), its expiry
+  (at most ten minutes) and that it was not used before — and only then answers the child; a refusal goes
+  back to the phone with the reason. A deny needs the same signature, and an accepted job may carry a passkey's
+  assertion instead of a desktop's signature. A stolen web session or a broken service can register a passkey, but
+  it stays pending: it has no endorsement. Losing the phone means revoking its passkey on `/account`.
 - **Resume from the branch.** While a run works, the node pushes its branch `agent/<id>` and its HANDOFFs
   (`refs/agents/<id>`); a node silent for ten minutes loses its running jobs, and a proposal to resume each on
   another node (a clone of the same remote under `repoRoots`) waits for your yes.

@@ -82,6 +82,23 @@ create index if not exists chat_turns_open on chat_turns(state) where state in (
 create table if not exists push_subs (
   endpoint text primary key, p256dh text not null, auth text not null, device text not null default '',
   created text not null);`),
+  // what waits on the machines, the phone's answers to it, and the passkeys that may say yes (waiting.ts, ADR 0014)
+  (db) => {
+    // a step must hold when run on a schema that already has it (a file stamped 0 by hand): the column only if missing
+    const cols = db.prepare("pragma table_info(jobs)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "assertion")) db.exec("alter table jobs add column assertion text");
+    db.exec(`
+create table if not exists waiting (
+  node text not null, id text not null, data text not null, updated text not null, primary key (node, id));
+create table if not exists waiting_answers (
+  seq integer primary key autoincrement, id text not null, node text not null, verdict text not null,
+  answers text, expires text not null, assertion text not null, created text not null,
+  state text not null default 'pending', why text);
+create index if not exists waiting_answers_open on waiting_answers(node) where state = 'pending';
+create table if not exists passkeys (
+  id text primary key, name text not null, public_key text not null, endorsement text, created text not null);
+create table if not exists passkey_challenges (challenge text primary key, expires integer not null);`);
+  },
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */

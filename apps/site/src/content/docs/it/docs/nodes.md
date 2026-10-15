@@ -25,6 +25,11 @@ mostra tutte le macchine e i job che il servizio vede.
 - **Il tuo sì si verifica sul nodo.** Un job assegnato a un nodo parte solo con la tua firma, fatta su una tua
   macchina con una chiave derivata dal vault, che il servizio non ha mai: né un token rubato né un servizio
   compromesso possono avviare un agente.
+- **Il sì del telefono è una passkey che hai avallato.** L'app web mostra cosa aspetta sulle tue macchine
+  (richieste di permesso, domande, job proposti) e risponde con una passkey registrata sul servizio. Una passkey
+  conta solo dopo che l'hai avallata su un desktop, `agents passkeys endorse <id>`, confrontando la sua impronta
+  con quella del telefono; il nodo controlla poi l'avallo, la firma della passkey e la scadenza prima di rispondere
+  a qualsiasi cosa, così il servizio può portare la risposta ma non farla mai valere.
 
 ## Accettare un job
 

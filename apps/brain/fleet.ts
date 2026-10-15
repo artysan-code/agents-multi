@@ -17,6 +17,7 @@ import {
   sweep,
   validNodeName,
 } from "../../shared/mcp/lib/nodes.ts";
+import { cleanAssertion } from "../../shared/mcp/lib/webauthn.ts";
 
 /** Ended jobs are listed for a week, at most this many. */
 const ENDED_KEEP = 30;
@@ -58,6 +59,7 @@ interface JobRow {
   reason: string | null;
   local: number;
   signature: string | null;
+  assertion: string | null;
   expires: string | null;
   created: string;
   updated: string;
@@ -75,6 +77,7 @@ const toJob = (r: JobRow): Job => ({
   ...(r.reason ? { reason: r.reason } : {}),
   ...(r.local ? { local: true } : {}),
   ...(r.signature ? { signature: r.signature } : {}),
+  ...(r.assertion ? { assertion: JSON.parse(r.assertion) } : {}),
   ...(r.expires ? { expires: r.expires } : {}),
   created: r.created,
   updated: r.updated,
@@ -159,7 +162,7 @@ export class Fleet {
 
   private insert(j: Job) {
     this.db.prepare(
-      "insert into jobs (id, node, kind, spec, status, reason, local, signature, expires, created, updated, by, head, parent) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "insert into jobs (id, node, kind, spec, status, reason, local, signature, assertion, expires, created, updated, by, head, parent) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).run(
       j.id,
       j.node,
@@ -169,6 +172,7 @@ export class Fleet {
       j.reason ?? null,
       j.local ? 1 : 0,
       j.signature ?? null,
+      j.assertion ? JSON.stringify(j.assertion) : null,
       j.expires ?? null,
       j.created,
       j.updated,
@@ -226,13 +230,23 @@ export class Fleet {
         if (j.status !== "proposed") throw new FleetError(`the job is ${j.status}`, 409);
         const node = typeof body.node === "string" && body.node ? body.node : j.node;
         if (!validNodeName(node)) throw new FleetError("accept names the node it runs on");
+        // the owner's yes: an Ed25519 signature from a desktop, or an endorsed passkey's assertion from the phone;
+        // either way the service only keeps it, the node checks it
         const sig = body.signature, expires = body.expires;
-        if (typeof sig !== "string" || !/^[\w-]{40,200}$/.test(sig)) throw new FleetError("no signature");
+        const asm = body.assertion === undefined ? null : cleanAssertion(body.assertion);
+        if (body.assertion !== undefined && !asm) throw new FleetError("the assertion lacks a part");
+        if (!asm && (typeof sig !== "string" || !/^[\w-]{40,200}$/.test(sig))) throw new FleetError("no signature");
         const until = typeof expires === "string" ? Date.parse(expires) : NaN;
         if (!(until > this.now() && until <= this.now() + JOB_TTL_MS + 60_000)) {
           throw new FleetError("expires is within a day");
         }
-        return set({ status: "accepted", node, signature: sig, expires: new Date(until).toISOString() });
+        return set({
+          status: "accepted",
+          node,
+          signature: asm ? null : sig as string,
+          assertion: asm ? JSON.stringify(asm) : null,
+          expires: new Date(until).toISOString(),
+        });
       }
       case "decline":
         if (j.status !== "proposed" && j.status !== "accepted") throw new FleetError(`the job is ${j.status}`, 409);
@@ -268,6 +282,10 @@ export async function fleetRoute(
   u: URL,
   node: string | null,
   fleet: Fleet,
+  /** more for the announce's reply, for the node that announced (the phone's answers waiting for it) */
+  alsoToNode: (node: string) => Record<string, unknown> = () => ({}),
+  /** the caller is the person's web session (the phone) */
+  phone = false,
 ): Promise<Response | null> {
   const p = u.pathname;
   const json = (v: unknown, status = 200) =>
@@ -286,7 +304,8 @@ export async function fleetRoute(
   };
   try {
     if (p === "/api/node" && req.method === "PUT") {
-      return json({ jobs: fleet.announce(write(), cleanAnnounce(await body())) });
+      const me = write();
+      return json({ jobs: fleet.announce(me, cleanAnnounce(await body())), ...alsoToNode(me) });
     }
     if (p === "/api/nodes" && req.method === "GET") {
       fleet.sweep();
@@ -298,7 +317,13 @@ export async function fleetRoute(
       const j = fleet.get(one[1]);
       return j ? json({ job: j }) : json({ error: "no such job" }, 404);
     }
-    if (one && req.method === "POST") return json({ job: fleet.act(one[1], write(), await body()) });
+    if (one && req.method === "POST") {
+      const b = await body();
+      // the phone has the account's web session, not a machine's token: it may accept a proposal with a
+      // passkey's assertion (which a node checks before it runs anything) or decline one, and nothing else
+      if (!node && !(phone && (b.op === "decline" || (b.op === "accept" && b.assertion !== undefined)))) write();
+      return json({ job: fleet.act(one[1], node ?? "", b) });
+    }
   } catch (e) {
     if (e instanceof FleetError) return json({ error: e.message }, e.status);
     throw e;
