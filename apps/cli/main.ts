@@ -290,7 +290,7 @@ switch (cmd) {
   default:
     console.log(`agents-multi ${manifest.version} — manage a multi-profile Claude setup (repository ${REPO})
 
-  init    <folder> [--name N] [--language L]   your configuration (profiles, accounts, rules, preferences), linked from ~/.agents-multi/config
+  init    <folder> [--name N] [--language L] [--brain URL]   your configuration (profiles, accounts, rules, preferences), linked from ~/.agents-multi/config
   install [--app] [--dry-run] materialise runtime, wrappers, units and desktop entries (idempotent);
           --app: from the desktop app's code, which becomes the runtime's copy (what the app runs)
   doctor  [--probe] [--json|--notify]   verify the setup's invariants, each with a suggested fix; --notify: desktop notification on new failures only;

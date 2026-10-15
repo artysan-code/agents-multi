@@ -67,7 +67,7 @@ service token and the vault key file are made once in the container's terminal a
    configuration, then restart the container so that the code is installed:
 
    ```sh
-   agents init ~/config --name <you>
+   agents init ~/config --name <you> --brain https://<your brain>   # the brain's address: node login needs it
    ```
 
    **Restart, then in the terminal again**, the node's own logins, one by one; each puts its secret in the

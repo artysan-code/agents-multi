@@ -67,7 +67,9 @@ export async function nodeCommand(args: string[]): Promise<number> {
       // this machine's own token: the service names the node after it (ADR 0012), so it is never the vault's
       const account = rest.find((a) => !a.startsWith("--")) ?? brainAccount()?.name;
       if (!account) {
-        console.error("no brain account in accounts.json: add one (service brain, with its address) first");
+        console.error(
+          "no brain account in accounts.json: add one (service brain, with its address), or `agents init <folder> --brain <address>` on a new node",
+        );
         return 1;
       }
       const done = Promise.withResolvers<{ ok: boolean; message: string }>();

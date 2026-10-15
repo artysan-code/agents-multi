@@ -4,6 +4,7 @@
 //
 //   agents init ~/personal/claude-multi-config --name Ann --language Italian [--id ann]
 //   agents init <existing folder>     only link it (a second machine)
+//   agents init ~/config --name Ann --brain https://brain.example   a server node: the brain's account comes too
 
 import { lstat, readlink } from "./lib/fs.ts";
 import { ANSI } from "./lib/output.ts";
@@ -12,6 +13,13 @@ import { CONFIG as CONFIG_DEFAULT, expandHome, REPO, shortHome } from "./lib/pat
 /** Pure: an owner id from a name — lower case, letters and digits only. */
 export function idFrom(name: string): string {
   return name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "") || "me";
+}
+
+/** Pure: accounts.json with the brain's account at this address: added when there is none, else unchanged. */
+export function withBrainAccount(raw: { accounts?: unknown[] } & Record<string, unknown>, url: string) {
+  const accounts = Array.isArray(raw.accounts) ? raw.accounts : [];
+  const has = accounts.some((a) => (a as { service?: string })?.service === "brain");
+  return has ? { ...raw, accounts } : { ...raw, accounts: [...accounts, { service: "brain", name: "brain", url }] };
 }
 
 async function copyTree(from: string, to: string) {
@@ -29,8 +37,19 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
   };
   const folder = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
   if (!folder) {
-    console.error("usage: agents init <folder> [--name N] [--language L] [--id I]");
+    console.error("usage: agents init <folder> [--name N] [--language L] [--id I] [--brain URL]");
     return 2;
+  }
+  // checked before anything is written; setup.ts imports this module, so it is loaded only when needed
+  let brain: string | undefined;
+  if (opt("--brain") !== undefined) {
+    const { checkBrainUrl } = await import("./setup.ts");
+    const u = checkBrainUrl(opt("--brain"));
+    if (!u.ok) {
+      console.error(`${ANSI.r}✗${ANSI.x} --brain: ${u.message}`);
+      return 2;
+    }
+    brain = u.url;
   }
   const dir = expandHome(folder).replace(/\/+$/, "");
   const abs = dir.startsWith("/") ? dir : `${Deno.cwd()}/${dir}`;
@@ -59,6 +78,16 @@ export async function init(args: string[], CONFIG = CONFIG_DEFAULT): Promise<num
       } (owner ${owner.id}): edit owner.json and profiles/ as you like`,
     );
   } else console.log(`${ANSI.d}${shortHome(abs)} already holds a configuration: only linking it${ANSI.x}`);
+  if (brain) {
+    // the brain's address, before any sign-in: bin/agents lets a process reach only the brains named here
+    const file = `${abs}/accounts.json`;
+    const raw = await Deno.readTextFile(file).then(JSON.parse).catch(() => ({ accounts: [] }));
+    const next = withBrainAccount(raw, brain);
+    if (next.accounts.length !== (raw.accounts?.length ?? 0)) {
+      await Deno.writeTextFile(file, JSON.stringify(next, null, 2) + "\n");
+      console.log(`${ANSI.g}+${ANSI.x} the brain's account: ${brain}`);
+    } else console.log(`${ANSI.d}accounts.json already has a brain account${ANSI.x}`);
+  }
 
   // ~/.agents-multi/config → the folder; never over something else
   if (linked) console.log(`${ANSI.d}${shortHome(CONFIG)} already links to it${ANSI.x}`);

@@ -15,6 +15,7 @@ import { gatewayChecks } from "./checks/gateway.ts";
 import { loginChecks } from "./checks/logins.ts";
 import { mcpChecks } from "./checks/mcp.ts";
 import { nodeChecks } from "./checks/node.ts";
+import { loadNodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { profileChecks } from "./checks/profiles.ts";
 import { repoChecks } from "./checks/repo.ts";
 import { reviewerChecks } from "./checks/reviewer.ts";
@@ -57,6 +58,14 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
   nodeChecks,
 ];
 
+/** What only a desktop needs: on a headless node (a server's container, ADR 0012) there is no app, no shell of
+ *  the owner's, no page served to anyone, and the code moves with the image, not with the update check. */
+export const DESKTOP_ONLY = new Set(["console.ui", "app.version", "app.autostart", "zshrc", "update.check"]);
+
+/** Pure: the findings that apply to this machine: on a headless node, the desktop's ones are left out. */
+export const forMachine = (checks: Check[], headless: boolean): Check[] =>
+  headless ? checks.filter((c) => !DESKTOP_ONLY.has(c.id)) : checks;
+
 /**
  * Runs every check group against this machine and returns the verdicts, in a stable order.
  *
@@ -69,5 +78,7 @@ export async function doctor(opts: { probe?: boolean } = {}): Promise<Check[]> {
   const ctx = await makeContext(opts);
   // the groups only read, so they run together (the network probes of the vault group no longer hold
   // up the rest); Promise.all keeps the report in the order of GROUPS
-  return (await Promise.all(GROUPS.map((group) => group(ctx)))).flat();
+  const checks = (await Promise.all(GROUPS.map((group) => group(ctx)))).flat();
+  const node = await loadNodeConfig();
+  return forMachine(checks, node.enabled && !!node.headless);
 }

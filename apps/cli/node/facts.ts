@@ -75,9 +75,13 @@ async function memory(): Promise<{ total: number; free: number }> {
       return { total: 0, available: 0 };
     }
   })();
-  const max = await Deno.readTextFile("/sys/fs/cgroup/memory.max").catch(() => null);
+  // through cat: Deno 2 reads nothing under /sys without --allow-all, and the host's memory would count instead
+  const max = await text("cat", ["/sys/fs/cgroup/memory.max"]);
   const total = memoryLimit(max, m.total);
-  return { total, free: Math.min(m.available, total) };
+  if (total === m.total) return { total, free: m.available };
+  // in a container, what is free is what its limit leaves, not the host's
+  const used = Number((await text("cat", ["/sys/fs/cgroup/memory.current"]))?.trim());
+  return { total, free: Math.min(m.available, Number.isFinite(used) ? Math.max(0, total - used) : total) };
 }
 
 /** The sessions alive on this machine: every child of the hub that has not ended. */

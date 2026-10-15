@@ -153,3 +153,14 @@ Deno.test("doctor node: only loopback on our ports; the key file the user's alon
   assertEquals(ids(nodeFindings({ ...ready, vault: true })).at(-1), "node.vault:ok");
   assertEquals(ids(nodeFindings({ ...ready, vault: null })).at(-1), "node.token:ok");
 });
+
+Deno.test("doctor on a headless node: the desktop's findings are left out", async () => {
+  const { forMachine } = await import("../doctor/index.ts");
+  const checks = ["console.ui", "zshrc", "node.sandbox", "app.version", "vault"].map((id) => ({
+    id,
+    status: "warn" as const,
+    msg: id,
+  }));
+  assertEquals(forMachine(checks, true).map((c) => c.id), ["node.sandbox", "vault"]);
+  assertEquals(forMachine(checks, false).length, 5);
+});
