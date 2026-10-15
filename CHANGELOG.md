@@ -5,6 +5,30 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.1-rc.3] - 2026-10-15
+
+### Added
+
+- **ui**: the web app redesigned: tab bar, rich chat, waiting with passkeys, pairing, themes (f68c7fe)
+- **cli**: agents passkeys and the console's Passkeys section (b1591a1)
+- **brain**: what waits, passkeys and the phone's answers, kept for the nodes to check (af831f1)
+- **webauthn**: the phone's passkey checks, endorsement and verifyJob via a passkey (c788efa)
+- **console**: the Chat on the service, turns pinned to this machine and relayed as NDJSON (4565509)
+- **node**: pair a machine with a code, service routes, agents node pair, console and web app (4b751e3)
+
+### Fixed
+
+- **site**: quote the hosted page's description, a colon broke its front matter (0eac6b5)
+- **node**: see the machine before pairing it, endorse only the passkey that was shown (dbba4ab)
+- **ui**: drop an attribute the Preact types do not know (40d0da5)
+
+### Documentation
+
+- starting on a hosted service, and the privacy notice for chats, machines, push and passkeys (565ecda)
+- from the phone, the redesigned web app (README, site EN and IT) (3637df7)
+- the phone's yes in the README, ADR 0012 and the site's nodes page (4cfcf72)
+- **adr**: 0014, the API of G4, G5 and G1b, and G7 (33849dc)
+
 ## [1.2.1-rc.2] - 2026-10-15
 
 ### Added
