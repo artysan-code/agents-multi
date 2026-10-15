@@ -206,3 +206,23 @@ coordinator tells the owner and adopts only when they want it carried on. Pure p
 in `shared/mcp/lib/proc.ts` alone, through `ps` (Deno lets only `--allow-all` read `/proc`, and the server
 has `ps`), so the platform layer ports one file. `ps` gives a start time to the second, derived from the boot
 time, so two starts within three seconds are the same process.
+
+## Amendment 2026-10-15 — saving, finding and starting a saved workflow
+
+The skill's body carries the plan as its first fenced `json` block, with `{{name}}` placeholders in any
+string (`{{folder}}` is the project's folder when one is asked about); the prose around it is for whoever
+fills it. Layout unchanged: the project's `.agents/workflows/<name>/SKILL.md` (`.agents/` added to the
+repository's exclude, as for HANDOFFs), the owner's `<config>/workflows/<name>/SKILL.md`. Names are lowercase
+letters, digits and `-`; the project's wins on a name.
+
+- `workflow_save` validates the plan (`planErrors`) and returns the SKILL.md's path and content; the coordinator
+  writes it with its own Write tool, because the hub's server may write only its state (`--allow-write`, which we
+  do not widen to the home folder). `agents run save` writes it itself and refuses to overwrite unless told.
+  Only when the owner asked for it.
+- `workflow_load` (`agents run saved` lists) finds one by name and fills the placeholders, naming any left
+  empty. It starts nothing: the owner approves the filled plan, then `workflow_start`. `agents run start
+  <name> --var k=v` is the owner's own act in a terminal and starts at once.
+- Example: `config.example/workflows/review-and-fix/`, copied by `agents init`.
+- Pure parts (`planOfSkill`, `placeholdersOf`, `fillPlan`, `skillText`) in `shared/mcp/lib/runs.ts`.
+- A routine's `--workflow` (and `routine_add`'s `workflow` + `vars`) takes a saved workflow by name as well as a
+  plan file; the placeholders (and `{{task}}`) are checked when the routine is added, not when it fires.

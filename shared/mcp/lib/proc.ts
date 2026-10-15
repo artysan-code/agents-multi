@@ -6,9 +6,11 @@
 // nearest one. Its pid plus its start time (a pid alone is reused) is the identity; it stays true for as
 // long as that process lives, and when it is gone whatever it owned is an orphan.
 //
-// Read with `ps`, not /proc: Deno lets only --allow-all read /proc, and the MCP server has `ps` only. One
-// `ps` lists every process, kept for a second: a look at a dozen children asks it once. This file is the
-// platform layer's to port: every other file asks through `ProcReader`.
+// Read from the platform layer's process list (`ps`, not /proc: Deno lets only --allow-all read /proc, and the MCP
+// server has `ps` only). One listing, kept for a second: a look at a dozen children asks it once. Every other
+// file asks through `ProcReader`.
+
+import { listProcesses, parsePs, type ProcInfo } from "./platform.ts";
 
 /** A process as the hub names a coordinator: pid and start time (seconds since the epoch, as a string). */
 export interface Proc {
@@ -16,12 +18,8 @@ export interface Proc {
   start: string;
 }
 
-/** What `ps` says of one process. */
-export interface ProcInfo {
-  ppid: number;
-  comm: string;
-  start: string;
-}
+/** What the platform layer says of one process. */
+export type { ProcInfo };
 
 /** Reads a process; null when it is not there (or is a zombie: gone for what it owned). */
 export type ProcReader = (pid: number) => ProcInfo | null;
@@ -30,19 +28,7 @@ export type ProcReader = (pid: number) => ProcInfo | null;
  *  second or two: two starts this close are the same process (a reused pid is minutes away at least). */
 const SAME_START_S = 3;
 
-/** Pure: `ps -A -o pid=,ppid=,stat=,lstart=,comm=` (LC_ALL=C) as a table. A line it cannot read, and a
- *  zombie, are left out. */
-export function parsePs(out: string): Map<number, ProcInfo> {
-  const table = new Map<number, ProcInfo>();
-  for (const line of out.split("\n")) {
-    const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d\d:\d\d:\d\d\s+\d{4})\s+(.+?)\s*$/.exec(line);
-    if (!m || m[3].startsWith("Z")) continue;
-    const at = Date.parse(m[4]);
-    if (!Number.isFinite(at)) continue;
-    table.set(Number(m[1]), { ppid: Number(m[2]), comm: m[5], start: String(Math.round(at / 1000)) });
-  }
-  return table;
-}
+export { parsePs };
 
 let cached: { at: number; table: Map<number, ProcInfo> } | undefined;
 
@@ -53,14 +39,7 @@ export const forgetProcs = () => {
 
 function table(): Map<number, ProcInfo> {
   if (cached && Date.now() - cached.at < 1000) return cached.table;
-  const r = new Deno.Command("ps", {
-    args: ["-A", "-o", "pid=,ppid=,stat=,lstart=,comm="],
-    env: { LC_ALL: "C" },
-    stdout: "piped",
-    stderr: "null",
-  }).outputSync();
-  if (!r.success) throw new Error("`ps` failed: the hub cannot tell which coordinators are alive");
-  cached = { at: Date.now(), table: parsePs(new TextDecoder().decode(r.stdout)) };
+  cached = { at: Date.now(), table: listProcesses() };
   return cached.table;
 }
 

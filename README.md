@@ -221,6 +221,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents ui build`                                                             | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                         |
 | `agents vault status\|init\|pair\|set\|delete\|run`                           | the secret vault the MCP servers read their credentials from (below)                                                                                           |
 | `agents routine add\|list\|rm\|run`                                           | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                           |
+| `agents review [rules [folder]]`                                              | what the reviewer allowed, refused or left to you in routines' runs; the rules a project's runs get (below)                                                    |
 | `agents account status\|default\|proposals\|propose\|accept\|decline\|events` | the limit rules per account, a project's default account, and the owner's yes to a switch (below)                                                              |
 | `agents tasks brief\|add\|done\|remind`                                       | the task list from the terminal; `remind` is what the timer runs                                                                                               |
 | `agents google client <file.json>\|connect <account>`                         | the Google OAuth client, and connecting an account                                                                                                             |
@@ -237,6 +238,16 @@ A **provider** is Claude Code or Codex (OpenAI), both behind one interface (`sha
 the passive way (the status line's snapshots, Codex's logs), and a window with no reading is unknown, not
 zero. A workflow step or `agent_start` takes `provider: "codex"`: the child gets the profile's MCP servers
 as the launch config names them, but only each server's `_allow` tools, since it never asks you.
+
+### Saved workflows
+
+A workflow the owner wants again is a **skill** ([ADR 0005](docs/adr/0005-agent-workflows.md)): a folder with a
+`SKILL.md`: a name, when to use it, the steps as prose and the plan as a `json` block with `{{placeholders}}`.
+The project's lives in `<project>/.agents/workflows/<name>/` (kept out of git like the HANDOFFs), the owner's for every
+project in `~/.agents-multi/config/workflows/<name>/` (an example comes with `agents init`); on a name in both, the
+project's wins. `workflow_save` prepares one (the coordinator writes the file: the hub's server writes only its own state), `workflow_list` lists them, `workflow_load` fills one by name for the
+owner to approve before `workflow_start`. From a terminal: `agents run save <plan.json> <name> "<when>" [--user]`,
+`agents run saved`, `agents run start <name> --var target="PR 4"`.
 
 `claude update` inside a wrapper is redirected to `agents update --cli`: the native updater
 would rewrite `~/.local/bin/claude` and leave `claude-bin` behind.
@@ -357,7 +368,7 @@ doctor says why.
 ### Routines and the run policy
 
 A **routine** is a job that runs when you are not there: a child (`--profile`, a task) or a saved plan
-(`--workflow plan.json`, with `{{task}}` in its prompts) in a git repository under home, started by a trigger:
+(`--workflow plan.json`, with `{{task}}` in its prompts, or the name of a saved workflow with `--var k=v` for its placeholders: a missing one is refused when you add it) in a git repository under home, started by a trigger:
 `--at 02:00` (the next 02:00; or `2026-10-15T02:00`, `+90m`), `--cron "0 9 * * 1-5"` (local time), or
 `--on run-done|run-failed [--plan name]` (a workflow run of the project ending). Each is a file in the hub's
 state; the console's backend ticks over them every 15 seconds, so they survive restarts. `agents routine
@@ -382,8 +393,42 @@ chat ("do this tonight at 2").
   the coordinator proposes (`account_propose`), you accept, the console applies. `agents account status|events`.
   A reading older than half an hour blocks nothing (Claude's endpoint reading is as fresh as its last refresh):
   `agents limits` says how old each one is.
-- **Outward actions** (a permission the child's mode does not grant) wait; you get a desktop notification, and the
-  request is answered from a coordinator of the project once it adopts the child.
+- **Outward actions** (a permission the child's mode does not grant) go to the **reviewer**, below.
+
+### The reviewer
+
+What a routine's child asks the hub for — send, publish, deploy, delete, spend, anything its mode does not grant —
+is decided by your rules in `config/reviewer.json` ([ADR 0011](docs/adr/0011-reviewer.md)), in Claude Code's
+permission syntax:
+
+```json
+{
+  "allow": ["Bash(wrangler deploy --env dev:*)"],
+  "ask": ["mcp__google__calendar_*"],
+  "deny": ["Bash(npm publish:*)"],
+  "review": [{ "match": "mcp__google__gmail_send", "criterion": "only replies to a thread already open" }],
+  "askMin": 30,
+  "judge": { "model": "haiku", "maxPerDay": 50 }
+}
+```
+
+- **The most restrictive rule wins**: deny, ask, review, allow; anything no rule names is an ask. A Bash command
+  with shell syntax (`;`, `&&`, `|`, `$(…)`, redirections) is never allowed by a rule. A repository's
+  `.agents/reviewer.json` can only add `deny` and `ask`.
+- **allow** answers the one call (never "for the session"), **deny** refuses it with the reason, **ask** sends you a
+  desktop notification: a coordinator of the project can adopt the child and answer; after `askMin` minutes
+  nobody answered, it is refused and the run goes on. A child's own question is never answered for you.
+- **review** hands the request to a **judge**: a Claude Code run with no tools, no MCP servers and no CLAUDE.md (about
+  1.2k tokens on Haiku), on `judge.profile` or the child's account, which reads your criterion and the request as
+  data — masked, cut at 4000 characters — and says allow, deny or ask. Anything else, a failure, an account at its
+  limit or the daily cap (`maxPerDay`, 0 turns it off) is an ask; the same request is judged once a day.
+- Every pattern named in the rules is given to a routine's child as an `ask` rule (a deny one as refused), so the
+  auto classifier cannot let it through unseen — a workflow routine's step children too, through its runner;
+  Codex never asks. A glob that covers `mcp__team__team_send` would stop a workflow's steps talking: the doctor
+  names it. `config.example/reviewer.json` is a conservative start (deletes and publishing denied, the rest asked).
+- `agents review` lists the decisions (`<state>/agents-multi/agents/reviewer/decisions.jsonl`: what, the rule, the
+  verdict, who decided and why); `agents review rules [folder]` shows what a project's runs get. The doctor
+  names ignored entries and an `allow` that lets a run do anything (`Bash`, `Bash(*)`, a shell or interpreter).
 
 ## Consumption
 

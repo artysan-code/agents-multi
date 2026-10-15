@@ -7,6 +7,7 @@
 // personal token named after this machine and the account's backup key, which go straight into the
 // vault (brain/<account>, the token and its backup-key field) and from there to the other machines.
 
+import { openUrl } from "../../shared/mcp/lib/platform.ts";
 import { ACCOUNTS } from "./mcp/registry.ts";
 import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
@@ -140,7 +141,7 @@ export async function brainLoginCommand(account = "brain"): Promise<number> {
   const url = await startBrainLogin(account, done.resolve);
   console.log(`Opening the brain's sign-in page. If no browser opens, visit:\n\n  ${url}\n`);
   try {
-    new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn();
+    openUrl(url);
   } catch { /* the link above */ }
   const r = await done.promise;
   console.log(r.message);

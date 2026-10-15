@@ -6,6 +6,7 @@
 //
 //   <runs>/runs/<id>/plan.json      the plan as approved, never changed
 //   <runs>/runs/<id>/owner.json     whose it is: the coordinator's project and session (agents.ts `Owner`)
+//   <runs>/runs/<id>/guard.json     a routine's run only: the rules its children must ask for or are refused
 //   <runs>/runs/<id>/state.json     the run's and each step's state (the runner's alone)
 //   <runs>/runs/<id>/events.jsonl   what happened, one line each
 //   <runs>/runs/<id>/control.jsonl  the owner's answers, read by the runner
@@ -43,7 +44,9 @@ import {
   stopChild,
   validId,
 } from "./agents.ts";
+import { spawnDetached } from "./platform.ts";
 import { PROVIDER_NAMES, type ProviderName, providers } from "./providers.ts";
+import { parseRule } from "./reviewer.ts";
 
 interface PlanStep {
   id: string;
@@ -66,6 +69,47 @@ export interface Plan {
   tasks?: string[];
   concurrency?: number;
   steps: PlanStep[];
+}
+
+/** What a run's children are held to beyond their profile's mode when a routine started it (ADR 0010, 0011):
+ *  rules they must ask the hub for (the reviewer's), and rules refused. A run started by hand has none. */
+export interface Guard {
+  ask: string[];
+  deny: string[];
+}
+
+/** Pure: a guard file's content, kept to rules (the rest dropped, never trusted). */
+export function cleanGuard(raw: unknown): Guard {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const rules = (v: unknown) => Array.isArray(v) ? [...new Set(v.flatMap((x) => parseRule(x)?.text ?? []))] : [];
+  return { ask: rules(r.ask), deny: rules(r.deny) };
+}
+
+/** Pure: a step's child as the runner starts it: the team channel, and the run's guard when it has one. */
+export function stepChild(
+  s: PlanStep,
+  x: {
+    folder: string;
+    task: string;
+    run: { id: string; step: string };
+    owner: Owner;
+    team: string;
+    guard: Guard | null;
+  },
+): Parameters<typeof startChild>[0] {
+  return {
+    profile: s.profile,
+    provider: s.provider,
+    dir: x.folder,
+    task: x.task,
+    model: s.model,
+    run: x.run,
+    owner: x.owner,
+    mcpConfig: x.team,
+    allowedTools: ["mcp__team__team_send"],
+    ...(x.guard?.deny.length ? { disallowedTools: x.guard.deny } : {}),
+    ...(x.guard?.ask.length ? { askTools: x.guard.ask } : {}),
+  };
 }
 
 type StepStatus = "waiting" | "confirm" | "running" | "done" | "failed" | "skipped" | "stopped";
@@ -334,13 +378,9 @@ async function runnerTail(dir: string): Promise<string> {
 /** Starts the runner of a run, detached from whoever asked. */
 async function spawnRunner(id: string, runs = runsDir()): Promise<void> {
   const dir = `${runsRoot(runs)}/${id}`;
-  await new Deno.Command("setsid", {
-    args: ["-f", "bash", "-c", 'exec "$A" run drive "$I" >> "$D/err.log" 2>&1'],
+  await spawnDetached("bash", ["-c", 'exec "$A" run drive "$I" >> "$D/err.log" 2>&1'], {
     env: { A: agentsBin(), I: id, D: dir },
-    stdin: "null",
-    stdout: "null",
-    stderr: "null",
-  }).output();
+  });
 }
 
 /** Starts a run's runner and waits until it is up: a runner that dies at its start throws, with what it
@@ -358,12 +398,13 @@ export async function ensureRunner(id: string, runs = runsDir(), waitMs = 5000):
 }
 
 /** Checks and writes a plan, then starts its runner. The profiles must exist and the folders be under
- *  the home folder. */
+ *  the home folder. A routine's run comes with a `guard` its children are started under. */
 export async function startRun(
   plan: Plan,
   runs = runsDir(),
   home = Deno.env.get("HOME") ?? "",
   owner?: Owner,
+  guard?: Guard,
 ): Promise<string> {
   const errs = planErrors(plan);
   for (const s of plan.steps ?? []) {
@@ -385,6 +426,7 @@ export async function startRun(
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify(plan, null, 2));
   if (owner) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owner, null, 2));
+  if (guard) await Deno.writeTextFile(`${dir}/guard.json`, JSON.stringify(cleanGuard(guard), null, 2));
   await writeState(dir, initialState(plan));
   await append(`${dir}/events.jsonl`, {
     at: new Date().toISOString(),
@@ -428,16 +470,16 @@ export async function teamSend(id: string, from: string, text: string, to?: stri
   await append(`${runsRoot(runs)}/${id}/channel.jsonl`, { at: new Date().toISOString(), from, to: to ?? null, text });
 }
 
-/** Where a step's HANDOFF goes: in its folder's repository, under .agents/ (kept out of git through the
- *  repository's own exclude file), else in the run's folder. */
-async function handoffDir(folder: string, run: string, runDir: string): Promise<string> {
+/** The top of the repository a folder is in, with `.agents/` added to its own exclude file (nothing
+ *  committed); "" when the folder is in no repository. */
+async function excludeAgents(folder: string): Promise<string> {
   const git = async (...args: string[]) => {
     const r = await new Deno.Command("git", { args: ["-C", folder, ...args], stdout: "piped", stderr: "null" })
       .output().catch(() => null);
     return r?.success ? new TextDecoder().decode(r.stdout).trim() : "";
   };
   const top = await git("rev-parse", "--show-toplevel");
-  if (!top) return `${runDir}/handoffs`;
+  if (!top) return "";
   const ex = await git("rev-parse", "--path-format=absolute", "--git-path", "info/exclude");
   if (ex) {
     const now = await Deno.readTextFile(ex).catch(() => "");
@@ -446,10 +488,21 @@ async function handoffDir(folder: string, run: string, runDir: string): Promise<
       await Deno.writeTextFile(ex, `${now && !now.endsWith("\n") ? "\n" : ""}.agents/\n`, { append: true });
     }
   }
-  return `${top}/.agents/runs/${run}`;
+  return top;
+}
+
+/** Where a step's HANDOFF goes: in its folder's repository, under .agents/ (kept out of git through the
+ *  repository's own exclude file), else in the run's folder. */
+async function handoffDir(folder: string, run: string, runDir: string): Promise<string> {
+  const top = await excludeAgents(folder);
+  return top ? `${top}/.agents/runs/${run}` : `${runDir}/handoffs`;
 }
 
 // ---------------------------------------------------------------- the runner
+
+/** A run's guard (`guard.json`), or null for a run started by hand. */
+export const readGuard = async (dir: string): Promise<Guard | null> =>
+  await Deno.readTextFile(`${dir}/guard.json`).then((t) => cleanGuard(JSON.parse(t))).catch(() => null);
 
 /** Runs a run until it is done or stopped: `agents run drive <id>`. Started again, it picks up from its
  *  state (a step running keeps its child). */
@@ -462,6 +515,7 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
   const { plan } = r;
   const st = r.state;
   const home = Deno.env.get("HOME") ?? "";
+  const guard = await readGuard(dir);
   const byId = new Map(plan.steps.map((s) => [s.id, s]));
   const folderOf = (s: PlanStep) => (s.folder ?? plan.folder ?? "").replace(/^~(?=\/|$)/, home);
   const handoffs = new Map<string, string>();
@@ -507,18 +561,15 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
       },
     });
     const m = await startChild(
-      {
-        profile: s.profile,
-        provider: s.provider,
-        dir: folderOf(s),
+      stepChild(s, {
+        folder: folderOf(s),
         task: stepPrompt(plan, s, id, handoffOf),
-        model: s.model,
         run: { id, step: sid },
         // read again: the run may have been adopted since the runner started
         owner: await readRun(id, runs).then((x) => ({ project: x?.project ?? r.project ?? "/", owner: x?.owner })),
-        mcpConfig: team,
-        allowedTools: ["mcp__team__team_send"],
-      },
+        team,
+        guard,
+      }),
       runs,
     );
     const was = st.steps[sid];
@@ -745,4 +796,120 @@ export async function savedWorkflows(folder?: string, config = configDir()): Pro
   if (folder) await scan(`${folder.replace(/^~(?=\/|$)/, home)}/.agents/workflows`, "project");
   await scan(`${config}/workflows`, "user");
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Pure: the plan a SKILL.md carries, in its first ```json block; null when there is none or it is not JSON. */
+export function planOfSkill(text: string): Plan | null {
+  const m = /```json[^\S\n]*\n([\s\S]*?)\n```/.exec(text);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]) as Plan;
+  } catch {
+    return null;
+  }
+}
+
+/** Pure: the `{{names}}` a plan leaves to fill, in order of appearance. */
+export function placeholdersOf(p: Plan): string[] {
+  return [...new Set([...JSON.stringify(p).matchAll(/\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/g)].map((m) => m[1]))];
+}
+
+/** Pure: the plan with each `{{name}}` replaced; throws naming those `vars` leaves unfilled. */
+export function fillPlan(p: Plan, vars: Record<string, string> = {}): Plan {
+  const missing = placeholdersOf(p).filter((k) => vars[k] === undefined);
+  if (missing.length) throw new Error(`to fill: ${missing.map((k) => `{{${k}}}`).join(", ")}`);
+  return JSON.parse(
+    JSON.stringify(p),
+    (_, v) => typeof v === "string" ? v.replace(/\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/g, (_m, k) => vars[k]) : v,
+  );
+}
+
+const WORKFLOW_NAME = /^[a-z0-9][a-z0-9-]*$/;
+
+/** Pure: whether a `--workflow` value names a saved workflow (else it is a plan file's path). */
+export const isWorkflowName = (s: string): boolean => WORKFLOW_NAME.test(s);
+
+/** Pure: a saved workflow's SKILL.md — the frontmatter Claude's skills have, the steps as prose, the plan. */
+export function skillText(name: string, description: string, p: Plan, notes = ""): string {
+  const steps = p.steps.map((s) =>
+    `- **${s.id}** (${s.profile}${s.after?.length ? `, after ${s.after.join(", ")}` : ""})`
+  );
+  return [
+    "---",
+    `name: ${name}`,
+    `description: ${description.replace(/\s+/g, " ").trim()}`,
+    "---",
+    "",
+    `# ${name}`,
+    "",
+    ...(notes.trim() ? [notes.trim(), ""] : []),
+    "Steps:",
+    "",
+    ...steps,
+    "",
+    "## Plan",
+    "",
+    "Fill the `{{placeholders}}` from the conversation, show the plan to the owner, start it only on their yes.",
+    "",
+    "```json",
+    JSON.stringify(p, null, 2),
+    "```",
+    "",
+  ].join("\n");
+}
+
+export interface SaveWorkflow {
+  name: string;
+  description: string;
+  plan: Plan;
+  /** "project" needs `folder`; "user" is for every project */
+  scope: SavedWorkflow["scope"];
+  folder?: string;
+  notes?: string;
+  overwrite?: boolean;
+}
+
+/** Checks a workflow to save and says where its SKILL.md goes and what is in it: `<folder>/.agents/workflows/<name>/`
+ *  or `<config>/workflows/<name>/`. Writes nothing. */
+export function skillToSave(w: SaveWorkflow, config = configDir()): { path: string; content: string } {
+  if (!WORKFLOW_NAME.test(w.name)) throw new Error(`workflow name "${w.name}": lowercase letters, digits, -`);
+  if (!w.description?.trim()) throw new Error("say when to use it: a workflow needs a description");
+  const errs = planErrors(w.plan);
+  if (errs.length) throw new Error(`the plan cannot run: ${errs.join("; ")}`);
+  if (w.scope === "project" && !w.folder) throw new Error("a project's workflow needs its folder");
+  const root = w.scope === "project"
+    ? `${w.folder!.replace(/^~(?=\/|$)/, Deno.env.get("HOME") ?? "")}/.agents/workflows`
+    : `${config}/workflows`;
+  return { path: `${root}/${w.name}/SKILL.md`, content: skillText(w.name, w.description, w.plan, w.notes) };
+}
+
+/** Saves a plan as a skill (see `skillToSave`); a project's has `.agents/` kept out of git. Returns the path.
+ *  Refuses to overwrite unless `overwrite`. For the CLI: the hub's server may not write there. */
+export async function saveWorkflow(w: SaveWorkflow, config = configDir()): Promise<string> {
+  const { path, content } = skillToSave(w, config);
+  if (!w.overwrite && await Deno.stat(path).then(() => true, () => false)) {
+    throw new Error(`${w.name} is saved already (${path}); overwrite it only if the owner says so`);
+  }
+  if (w.scope === "project") await excludeAgents(path.replace(/\/\.agents\/.*$/, ""));
+  await Deno.mkdir(path.replace(/\/[^/]+$/, ""), { recursive: true });
+  await writeAtomic(path, content);
+  return path;
+}
+
+/** The plan of a saved workflow, by name, for a folder (the project's wins), with its placeholders
+ *  filled from `vars`. Not started: the owner approves it first. */
+export async function loadWorkflow(
+  name: string,
+  folder?: string,
+  vars: Record<string, string> = {},
+  config = configDir(),
+): Promise<{ plan: Plan; path: string; scope: SavedWorkflow["scope"] }> {
+  const found = (await savedWorkflows(folder, config)).find((w) => w.name === name);
+  if (!found) throw new Error(`no saved workflow ${name} (workflow_list shows them)`);
+  const raw = planOfSkill(await Deno.readTextFile(found.path));
+  if (!raw) throw new Error(`${found.path} has no \`\`\`json plan`);
+  const plan = fillPlan(raw, { ...(folder ? { folder } : {}), ...vars });
+  const errs = planErrors(plan);
+  if (errs.length) throw new Error(`the plan of ${name} cannot run: ${errs.join("; ")}`);
+  return { plan, path: found.path, scope: found.scope };
 }

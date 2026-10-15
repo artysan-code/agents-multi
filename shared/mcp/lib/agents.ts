@@ -21,6 +21,7 @@
 
 import { configDir } from "./owner.ts";
 import { myCoordinator, type Proc, procAlive, type ProcReader, procReader, sameStart } from "./proc.ts";
+import { spawnDetached } from "./platform.ts";
 import { launcherOf, type ProviderName, providers } from "./providers.ts";
 
 export { launcherOf, type ProviderName };
@@ -696,6 +697,8 @@ interface StartInput {
   allowedTools?: string[];
   /** rules it is denied whatever its mode (`--disallowedTools`; Claude only) */
   disallowedTools?: string[];
+  /** rules it must ask the hub for whatever its mode (a session `ask` rule; Claude only) */
+  askTools?: string[];
 }
 
 /** The mode a profile's sessions start in: `defaultMode` in its built settings (`<runtime>/<profile>`,
@@ -767,6 +770,7 @@ export async function startChild(
     mcpConfig: i.mcpConfig,
     allowedTools: i.allowedTools,
     disallowedTools: i.disallowedTools,
+    askTools: i.askTools,
   });
   const script = [
     'for n in $(compgen -e); do [[ $n =~ $V ]] && unset "$n"; done',
@@ -776,13 +780,7 @@ export async function startChild(
     exec.line,
   ].join("\n");
   const env: Record<string, string> = { R: run, W: dir, V: CLAUDE_SESSION_VARS, ...exec.env };
-  await new Deno.Command("setsid", {
-    args: ["-f", "bash", "-c", script],
-    env,
-    stdin: "null",
-    stdout: "null",
-    stderr: "null",
-  }).output();
+  await spawnDetached("bash", ["-c", script], { env });
   for (let t = 0; t < 50 && !(await childAlive(run)); t++) await new Promise((r) => setTimeout(r, 100));
   await send(run, userLine(i.task));
   return meta;

@@ -5,6 +5,7 @@
 // the redirect address, PKCE ties the code to this run, `state` to this request. The refresh token
 // goes straight into the vault; the account's address is written next to its name in accounts.json.
 
+import { openUrl } from "../../shared/mcp/lib/platform.ts";
 import { ACCOUNTS } from "./mcp/registry.ts";
 import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
@@ -104,7 +105,7 @@ export async function googleCommand(args: string[]): Promise<number> {
     const url = await startConnect(arg, done.resolve);
     console.log(`Opening the consent page. If no browser opens, visit:\n\n  ${url}\n`);
     try {
-      new Deno.Command("xdg-open", { args: [url], stdout: "null", stderr: "null" }).spawn();
+      openUrl(url);
     } catch { /* the link above */ }
     const r = await done.promise;
     console.log(r.message);

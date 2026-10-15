@@ -5,6 +5,7 @@
 // with the anti-CSRF header; a path with only a POST handler answers 405 to anything else. The
 // feature modules that own a group of paths (ask, Claude's assets) answer theirs before the static files.
 
+import { openUrl } from "../../../shared/mcp/lib/platform.ts";
 import { ANSI } from "../lib/output.ts";
 import { PORT, REPO, SYNCTHING_CONFIG } from "../lib/paths.ts";
 import { codeVersion } from "../codeversion.ts";
@@ -369,10 +370,10 @@ export async function serve(opts: { open?: boolean } = { open: true }) {
   // the lazy MCP gateway (ADR 0008), when it is on: a process of its own that this one keeps up
   superviseGateway(ac.signal);
   if (opts.open) {
-    // a one-use ticket, not the token: the command line of xdg-open is readable by other users
+    // a one-use ticket, not the token: the command line of the opener is readable by other users
     const entryUrl = `${url}/?k=${auth.tickets.issue()}`;
     try {
-      new Deno.Command("xdg-open", { args: [entryUrl], stdout: "null", stderr: "null" }).spawn().unref();
+      openUrl(entryUrl);
     } catch { /* no browser */ }
   }
   try {

@@ -14,7 +14,8 @@ const fail = (e: unknown) => ({
 
 export function registerRoutineTools(server: McpServer) {
   server.registerTool("routine_add", {
-    description: "Schedule an unattended job: a child (`profile`, `task`) or a saved plan (`workflow`: a plan.json) " +
+    description:
+      "Schedule an unattended job: a child (`profile`, `task`) or a saved plan (`workflow`: a plan.json, or the name of a saved workflow with `vars` for its placeholders) " +
       "in `folder` (a git repository under home), at a time. Triggers: `at` (one-shot: `02:00` is the next 02:00, " +
       "`2026-10-15T02:00`, `+90m`), `cron` (five fields, local time), `on` (`run-done` / `run-failed`, a workflow run of the project ending; `limit-reset`, an account's window resetting). It runs in a worktree on its own branch under the repository's run policy: " +
       "commits yes; push only to that branch and the development branch, never main or release; outward actions " +
@@ -34,7 +35,12 @@ export function registerRoutineTools(server: McpServer) {
       ),
       provider: z.enum(["claude", "codex"]).optional(),
       model: z.string().optional(),
-      workflow: z.string().optional().describe("a plan.json (path, relative to the folder): {{task}} in its prompts"),
+      workflow: z.string().optional().describe(
+        "a plan.json (path, relative to the folder; {{task}} in its prompts) or a saved workflow's name",
+      ),
+      vars: z.record(z.string(), z.string()).optional().describe(
+        "with a saved workflow: the value of each {{placeholder}} (a missing one is refused now)",
+      ),
       task: z.string().optional().describe("what the child has to do, complete"),
       grace_minutes: z.number().optional().describe("how late it may start before it counts as missed"),
     },
@@ -50,6 +56,7 @@ export function registerRoutineTools(server: McpServer) {
     provider?: "claude" | "codex";
     model?: string;
     workflow?: string;
+    vars?: Record<string, string>;
     task?: string;
     grace_minutes?: number;
   }) => {
@@ -70,7 +77,7 @@ export function registerRoutineTools(server: McpServer) {
           ? { kind: "event", on: i.on, ...(i.account ? { account: i.account } : {}) }
           : { kind: "event", on: i.on!, ...(i.plan_name ? { plan: i.plan_name } : {}) },
         action: i.workflow
-          ? { kind: "workflow", plan: i.workflow, task: i.task }
+          ? { kind: "workflow", plan: i.workflow, task: i.task, ...(i.vars ? { vars: i.vars } : {}) }
           : { kind: "agent", profile: i.profile ?? "", provider: i.provider, task: i.task ?? "", model: i.model },
         by: scope.me,
       });

@@ -20,10 +20,12 @@ import {
   answerRun,
   type Choice,
   listRuns,
+  loadWorkflow,
   type Plan,
   runEvents,
   runIn,
   savedWorkflows,
+  skillToSave,
   startRun,
 } from "../lib/runs.ts";
 
@@ -240,8 +242,8 @@ export function registerAgentTools(server: McpServer) {
   });
 
   server.registerTool("workflow_list", {
-    description: "The saved workflows a folder can use (the project's, then the owner's: read the SKILL.md to " +
-      "fill a plan) and the runs this session started, with their steps' state, and the project's orphan runs " +
+    description: "The saved workflows a folder can use (the project's, then the owner's: workflow_load fills one by " +
+      "name) and the runs this session started, with their steps' state, and the project's orphan runs " +
       "(adopt one with workflow_adopt to act on it). `project`, `all`: other sessions' and projects', read-only.",
     inputSchema: { folder: z.string().optional(), ...scopeArgs },
   }, async ({ folder, ...scope }: { folder?: string; all?: boolean; project?: boolean }) =>
@@ -257,6 +259,51 @@ export function registerAgentTools(server: McpServer) {
         steps: Object.fromEntries(Object.entries(r.state.steps).map(([k, v]) => [k, v.status])),
       })),
     }));
+
+  server.registerTool("workflow_load", {
+    description: "A saved workflow's plan by name (the project's wins over the owner's), its `{{placeholders}}` " +
+      "filled from `vars` (`{{folder}}` is the folder given). It does not start anything: show the plan to the " +
+      "owner, then workflow_start with it.",
+    inputSchema: {
+      name: z.string(),
+      folder: z.string().optional().describe("the project's folder: its own workflows are looked up first"),
+      vars: z.record(z.string(), z.string()).optional().describe("value for each {{placeholder}}"),
+    },
+  }, async ({ name, folder, vars }: { name: string; folder?: string; vars?: Record<string, string> }) => {
+    try {
+      return text(await loadWorkflow(name, folder, vars));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  server.registerTool("workflow_save", {
+    description: "Prepare a plan the owner wants again as a saved workflow, a skill: checks the plan and returns " +
+      "the SKILL.md's `path` and `content` — write them with your own Write tool (this server writes nothing outside " +
+      "its state). The project's (`scope: project`, with its folder) or the owner's for every project (`scope: " +
+      "user`). Only when the owner asked for it; look at `path` first and never overwrite a workflow the owner did " +
+      "not say to replace. Leave `{{placeholders}}` in the prompts for what changes from one use to the next.",
+    inputSchema: {
+      name: z.string().describe("lowercase, e.g. review-and-fix"),
+      description: z.string().describe("when to use it, one or two sentences"),
+      scope: z.enum(["project", "user"]),
+      folder: z.string().optional().describe("the project's folder (scope project)"),
+      notes: z.string().optional().describe("a few lines of prose for whoever fills it"),
+      plan: z.object({
+        name: z.string(),
+        folder: z.string().optional(),
+        tasks: z.array(z.string()).optional(),
+        concurrency: z.number().int().min(1).max(8).optional(),
+        steps: z.array(step),
+      }),
+    },
+  }, (w: Parameters<typeof skillToSave>[0]) => {
+    try {
+      return text(skillToSave(w));
+    } catch (e) {
+      return fail(e);
+    }
+  });
 
   server.registerTool("workflow_status", {
     description: "One run in full: its plan, each step's state, child and HANDOFF, and what happened.",

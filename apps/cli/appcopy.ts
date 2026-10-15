@@ -16,6 +16,7 @@
 
 import { listDir, lstat, readJson, readlink, stat, swapLink } from "./lib/fs.ts";
 import { run } from "./lib/proc.ts";
+import { pidAlive } from "../../shared/mcp/lib/platform.ts";
 import { APP_DIR } from "./lib/mode.ts";
 
 /** The stamp scripts/bundle.sh writes at the root of the package's code. */
@@ -110,7 +111,7 @@ async function prune(app: string) {
     if (keep.has(n)) continue;
     // another install's copy in progress has its pid in the name; a dead one's is left over
     const pid = n.match(/\.tmp-(\d+)$/)?.[1];
-    if (pid && pid !== String(Deno.pid) && (await stat(`/proc/${pid}`))) continue;
+    if (pid && pid !== String(Deno.pid) && pidAlive(Number(pid))) continue;
     await Deno.remove(`${app}/${n}`, { recursive: true }).catch(() => {});
   }
 }

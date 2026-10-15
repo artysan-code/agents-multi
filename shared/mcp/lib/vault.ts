@@ -27,10 +27,11 @@
 
 import { amEnv } from "./env.ts";
 import { readJson, writeAtomic } from "./fs.ts";
+import { secretStore, Unsupported } from "./platform.ts";
 
 const HOME = Deno.env.get("HOME") ?? "";
-const SECRET_TOOL = "/usr/bin/secret-tool";
-const KEY_ATTRS = ["application", "claude-multi", "kind", "vault-key"];
+// the key in the OS keyring (platform.ts): on Linux the attributes application=claude-multi kind=vault-key
+const KEY = { service: "claude-multi", account: "vault-key" };
 // The plaintext sealed in every vault's key-check.json. It is data, not a name: it is the text a key must
 // open, so it keeps the project's name from before Agents Multi, as do the HKDF infos below. Never rename.
 export const CHECK_TEXT = "claude-multi vault";
@@ -147,43 +148,33 @@ export async function open(key: VaultKey, id: string, box: { iv: string; ct: str
 }
 
 // ---------------------------------------------------------------- the keyring
-async function secretTool(args: string[], stdin?: string): Promise<{ code: number; out: string }> {
-  const p = new Deno.Command(SECRET_TOOL, {
-    args,
-    stdin: stdin === undefined ? "null" : "piped",
-    stdout: "piped",
-    stderr: "null",
-  }).spawn();
-  if (stdin !== undefined) {
-    const w = p.stdin.getWriter();
-    await w.write(enc.encode(stdin));
-    await w.close();
-  }
-  const r = await p.output();
-  return { code: r.code, out: dec.decode(r.stdout).trim() };
-}
-
 export class VaultError extends Error {}
 
 /** This machine's vault key, from the keyring. */
 export async function loadKey(): Promise<VaultKey> {
-  let r: { code: number; out: string };
+  let key: string | null;
   try {
-    r = await secretTool(["lookup", ...KEY_ATTRS]);
-  } catch {
-    throw new VaultError("the keyring cannot be reached (secret-tool missing, or no desktop session)");
+    key = await secretStore.lookup(KEY);
+  } catch (e) {
+    if (e instanceof Unsupported) throw new VaultError(e.message);
+    throw new VaultError("the keyring cannot be reached (its program is missing, or there is no desktop session)");
   }
-  if (r.code !== 0 || !r.out) {
+  if (!key) {
     throw new VaultError(
       "this machine has no vault key: `agents vault pair` (or `vault init` on the first machine)",
     );
   }
-  return await importKey(unb64(r.out));
+  return await importKey(unb64(key));
 }
 
 async function storeKey(raw: Uint8Array) {
-  const r = await secretTool(["store", "--label=agents vault key", ...KEY_ATTRS], b64(raw));
-  if (r.code !== 0) throw new VaultError("the keyring refused the vault key");
+  let kept: boolean;
+  try {
+    kept = await secretStore.store(KEY, "agents vault key", b64(raw));
+  } catch (e) {
+    throw new VaultError(e instanceof Unsupported ? e.message : "the keyring cannot be reached");
+  }
+  if (!kept) throw new VaultError("the keyring refused the vault key");
 }
 
 // ---------------------------------------------------------------- the store

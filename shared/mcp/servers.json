@@ -182,6 +182,8 @@
         "agent_stop",
         "limits",
         "workflow_list",
+        "workflow_load",
+        "workflow_save",
         "workflow_start",
         "workflow_status"
       ],

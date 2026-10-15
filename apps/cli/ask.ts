@@ -15,6 +15,7 @@ import { has } from "./lib/proc.ts";
 import { running } from "./lib/processes.ts";
 import { launchers } from "./lib/profiles.ts";
 import { owner } from "../../shared/mcp/lib/owner.ts";
+import { parentPid } from "../../shared/mcp/lib/platform.ts";
 import { recordLogin } from "./login.ts";
 import { type Act, CHAT_ID, readChat, saveTurn } from "./chats.ts";
 
@@ -375,23 +376,14 @@ const MAX_TEXT = 16000;
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-/** Pure: the process ids from pid up to init, read from /proc stat lines. */
+/** Pure: the process ids from pid up to init. */
 export function ancestry(pid: number, parentOf: (pid: number) => number | null): number[] {
   const out: number[] = [];
   for (let p: number | null = pid; p && p > 1 && out.length < 64; p = parentOf(p)) out.push(p);
   return out;
 }
 
-const parentOf = (pid: number): number | null => {
-  try {
-    const stat = Deno.readTextFileSync(`/proc/${pid}/stat`);
-    // the command name is in parentheses and may contain spaces: the fields start after the last ")"
-    const ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
-    return Number.isFinite(ppid) ? ppid : null;
-  } catch {
-    return null;
-  }
-};
+const parentOf = parentPid;
 
 /** Bring forward the window that holds a process: on KWin, a one-shot script that activates the
  *  first window whose pid is the process or one of its ancestors (the terminal, Claude Desktop). */

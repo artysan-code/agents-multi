@@ -18,6 +18,7 @@ import {
   requestFire,
   type Routine,
   routineErrors,
+  routinePlan,
   tick,
   type Watch,
 } from "../../../shared/mcp/lib/routines.ts";
@@ -528,4 +529,54 @@ Deno.test("routines: an unattended child is done when gone or idle after a turn,
   assert(!childDone(st("idle", 0)));
   assert(!childDone(st("working", 3)));
   assert(!childDone(st("waiting", 1)));
+});
+
+Deno.test("routines: a saved workflow by name — placeholders and task filled, a missing one refused at add time", async () => {
+  const home = await Deno.makeTempDir();
+  const config = await Deno.makeTempDir();
+  const repo = `${home}/repo`;
+  await Deno.mkdir(`${repo}/.git`, { recursive: true });
+  const dir = await Deno.makeTempDir();
+  await Deno.mkdir(`${config}/workflows/nightly`, { recursive: true });
+  const plan = {
+    name: "nightly",
+    folder: "{{folder}}",
+    steps: [{ id: "a", profile: "personal", prompt: "Check {{target}}: {{task}}" }],
+  };
+  await Deno.writeTextFile(
+    `${config}/workflows/nightly/SKILL.md`,
+    `---\nname: nightly\ndescription: d\n---\n\`\`\`json\n${JSON.stringify(plan)}\n\`\`\`\n`,
+  );
+  const add = (o: Record<string, unknown>) =>
+    addRoutine(
+      {
+        trigger: { kind: "cron", expr: "0 2 * * *" },
+        folder: repo,
+        action: { kind: "workflow", plan: "nightly", ...o },
+      },
+      dir,
+      home,
+      config,
+    );
+  await assertRejects(() => add({ task: "t" }), Error, "{{target}}");
+  await assertRejects(() => add({ vars: { target: "x" } }), Error, "{{task}}");
+  await assertRejects(
+    () =>
+      addRoutine(
+        {
+          trigger: { kind: "cron", expr: "0 2 * * *" },
+          folder: repo,
+          action: { kind: "workflow", plan: "nope" },
+        },
+        dir,
+        home,
+        config,
+      ),
+    Error,
+    "no saved workflow nope",
+  );
+  const r = await add({ task: "go", vars: { target: "api" } });
+  const got = await routinePlan(r as never, config);
+  assertEquals(got.steps[0].prompt, "Check api: go");
+  assertEquals(got.folder, r.folder);
 });

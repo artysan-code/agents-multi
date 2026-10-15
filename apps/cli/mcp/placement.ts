@@ -1,6 +1,7 @@
 // placement.ts — pure: which servers each profile and surface gets from the registry, under what
 // name and config, and what the registry implies for permissions. No I/O.
 
+import { secretStoreBinary } from "../../../shared/mcp/lib/platform.ts";
 import { type Account, accountHosts, visibleAccounts } from "../../../shared/mcp/lib/accounts.ts";
 import { HOME } from "../lib/paths.ts";
 import { type Profile } from "../lib/profiles.ts";
@@ -45,7 +46,7 @@ function forAccount<T>(v: T, a: Account): T {
 /** Pure: one word for a POSIX shell. */
 export const shellQuote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
 
-/** Pure: the Deno command line of launch.ts, which may run the vault's `secret-tool` and nothing else. */
+/** Pure: the Deno command line of launch.ts, which may run the OS keyring's program (platform.ts) and nothing else. */
 export function launcher(paths: LaunchPaths, bind = false): string[] {
   return [
     paths.deno,
@@ -55,7 +56,7 @@ export function launcher(paths: LaunchPaths, bind = false): string[] {
     // a binding is looked for from the session's folder up to the home folder
     `--allow-read=${(bind ? [...paths.read, HOME] : paths.read).join(",")}`,
     "--allow-env=HOME,AGENTS_MULTI_PROFILE,AGENTS_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS",
-    "--allow-run=/usr/bin/secret-tool",
+    `--allow-run=${secretStoreBinary() ?? "/usr/bin/secret-tool"}`,
     paths.script,
   ];
 }
