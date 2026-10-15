@@ -21,9 +21,11 @@ that runs both, and installs everything else itself. Each version is on the proj
 and Windows come with 1.x):
 
 - **Debian, Ubuntu** — `sudo apt install ./agents-multi_<version>_amd64.deb`
+- **Fedora, openSUSE** — `sudo dnf install ./agents-multi-<version>-1.x86_64.rpm` (stable versions
+  only: a beta or an rc has no rpm, take the AppImage)
 - **Arch** — the AUR package `agents-multi-bin` (`paru -S agents-multi-bin`), not published yet: take
   the AppImage meanwhile. pacman will update it, so the app's own updater is off there
-- **Anywhere else** (Fedora and openSUSE too) — the AppImage: put it where it will stay (for example
+- **Anywhere else** — the AppImage: put it where it will stay (for example
   `~/Applications/`), `chmod +x` it and run it. Updates replace that file in place, and the first run
   writes its menu entry. It needs WebKitGTK on the system (`webkit2gtk-4.1`).
 
@@ -32,7 +34,7 @@ key), a system tray (GNOME: the AppIndicator extension) and `~/.local/bin` on th
 install puts the commands.
 
 The app updates itself from then on: it looks for a new version every day and downloads it in the
-background, and **System › Updates** in the console installs it and restarts the app; a deb asks for
+background, and **System › Updates** in the console installs it and restarts the app; a deb or an rpm asks for
 your password to install. Betas are a channel of their own (see
 [ADR 0004](docs/adr/0004-desktop-app-releases.md)).
 

@@ -44,9 +44,15 @@ export interface ReleaseConfig {
 }
 
 export type Kind = "deb" | "rpm" | "appimage";
-/** The kinds a release publishes: the rpm is left out until Tauri's rpm writer stops taking most of
- *  the release build (13 of 21 minutes on the runner); Fedora and openSUSE take the AppImage. */
-const PUBLISHED: Kind[] = ["deb", "appimage"];
+/** The kinds a stable release publishes. */
+export const PUBLISHED: Kind[] = ["deb", "rpm", "appimage"];
+
+/** Pure: the kinds a version publishes. A beta or an rc has no rpm: the rpm writer of the Tauri CLI
+ *  refuses a version with a hyphen (`1.2.1-rc.1`), and one rewritten for it would not match the version
+ *  the updater checks in the signature (ADR 0004). */
+export function kindsFor(version: string): Kind[] {
+  return isPre(parseVersion(version)) ? PUBLISHED.filter((k) => k !== "rpm") : PUBLISHED;
+}
 
 /** One platform of an update manifest (Tauri's static format). */
 interface Platform {
@@ -111,7 +117,7 @@ export function manifestFor(
   assets: Partial<Record<Kind, Platform>>,
 ): Manifest {
   const platforms: Record<string, Platform> = {};
-  for (const kind of ["deb", "rpm", "appimage"] as Kind[]) {
+  for (const kind of PUBLISHED) {
     const a = assets[kind];
     if (a) platforms[`linux-x86_64-${kind}`] = a;
   }
@@ -181,7 +187,7 @@ async function prepare(bundle: string, out: string) {
   }
   await Deno.mkdir(out, { recursive: true });
   const assets: Partial<Record<Kind, Platform>> = {};
-  for (const kind of PUBLISHED) {
+  for (const kind of kindsFor(version)) {
     const f = found[kind];
     if (!f?.file) throw new Error(`no ${kind} bundle in ${bundle}`);
     if (!f.sig) throw new Error(`the ${kind} bundle is not signed (TAURI_SIGNING_PRIVATE_KEY, createUpdaterArtifacts)`);
