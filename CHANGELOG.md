@@ -5,6 +5,49 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.0-beta.5] - 2026-10-15
+
+### Added
+
+- **node**: the server node's image, seccomp and AppArmor profiles, and compose (ADR 0012) (afc5ac6)
+- **nodes**: the doctor probes a headless node's sandbox; the site's page on nodes (EN, IT) (c3b36a0)
+- **nodes**: agents nodes — machines and jobs, accept signs here; the doctor's node checks (6ed5d47)
+- **node**: agentd takes the owner's jobs and follows its runs; agents node (ADR 0012) (c86fe4e)
+- **node**: the client of the service, a node's facts and its sandbox probe (ADR 0012) (fac63ee)
+- **node**: work that moves, a sandbox for headless children, the vault key in a file (ADR 0012) (38ca30f)
+- **brain**: the service keeps each account's nodes and jobs (ADR 0012) (0ad70df)
+- **ui**: Codex and stale readings on Accounts & limits; the chat list folds when narrow (4ccc169)
+- **ui**: the console cut to Chat, Runs and Accounts & limits; the rest behind More (d7a49e0)
+- **routines**: workflow steps of a routine get the reviewer's rules; reviewer.json example (1bc879c)
+- **site**: the docs in Italian too, with Starlight's locales (English at the root, Italian at /it/) (b11983c)
+- **routines**: the reviewer — rules and a judge answer what unattended runs ask for (ADR 0011) (d566b12)
+- **platform**: route process reads (parent, start, cmdline, age, running) through platform.ts (d8fb161)
+- **routines**: --workflow takes a saved workflow by name, with --var, checked at add time (67405ad)
+- **platform**: one module for the OS-bound operations (keyring, spawn, ps, notify, open) (8b3a87b)
+- **workflows**: saved workflows as skills — save, load by name with placeholders, example (1241e59)
+
+### Fixed
+
+- **console**: only the machine's console runs the schedules and keeps the MCP gateway (f61c18f)
+- **vault**: vault run takes only the wrangler in the project's own node_modules (9ca7319)
+- **limits**: a reading older than half an hour blocks nobody; agents limits shows its age (f4e4d07)
+- **routines**: a finished child frees its slot; a proposal lapses when its routine starts (a308272)
+
+### Performance
+
+- **usage**: incremental ingest by byte offset, driven by the watcher; inotify narrowed (5c328ea)
+
+### Changed
+
+- **cli**: usage.ts split into db, ingest, report and print; install's steps as a list (3a13884)
+
+### Documentation
+
+- nodes in the README; ADR 0012 with what F1 settled (dadfd70)
+- **adr**: 0012 — agentd, the service, and work that moves between machines (e76f4ee)
+- the console's three views and More in the README, AGENTS.md and the site (dd9a836)
+- **adr**: 0011 the reviewer — rules and a judge for unattended runs (08d5faf)
+
 ## [1.2.0-beta.4] - 2026-10-14
 
 ### Added
