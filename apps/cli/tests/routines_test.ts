@@ -2,8 +2,10 @@
 // is kept on disk across restarts, and the tick with its seams faked (no child, no git, no notification).
 import { assert, assertEquals, assertRejects, assertStringIncludes, assertThrows } from "jsr:@std/assert@1";
 import { DEFAULT_POLICY, type Policy } from "../../../shared/mcp/lib/policy.ts";
+import type { ChildState } from "../../../shared/mcp/lib/agents.ts";
 import {
   addRoutine,
+  childDone,
   type Deps,
   due,
   eventRuns,
@@ -204,6 +206,7 @@ function harness(over: Partial<Deps> = {}) {
     held: () => Promise.resolve([]),
     elsewhere: () => Promise.resolve([]),
     propose: () => Promise.resolve(),
+    lapse: () => Promise.resolve(),
     limitEvents: () => Promise.resolve([]),
     holdMaxMin: () => Promise.resolve(720),
     notify: (t, b) => (told.push(`${t} | ${b}`), undefined),
@@ -279,11 +282,12 @@ Deno.test("tick: a request of a running routine reaches the owner once; the end 
     h.at("2026-10-15T02:41:00Z");
     w = { requests: [], ended: false };
     await tick(dir, h.deps);
-    w = { requests: [], ended: true };
+    w = { requests: [], ended: true, lingering: true };
     h.at("2026-10-15T02:50:00Z");
     await tick(dir, h.deps);
     assert(h.told.some((t) => t.includes("finished")));
     assert((await readState(r2.id, dir)).runs[0].ended);
+    assertEquals(h.stopped, ["run-1", "run-2"], "a child idle after its turn is stopped, not left to time out");
   });
 });
 
@@ -408,11 +412,12 @@ Deno.test("tick: a routine whose account is at its limit is held, tells the owne
     const r = await addAt(home, dir, "2026-10-15T00:00:00.000Z");
     let blocked = true;
     const by = { window: "5h", used: 91, resetsAt: null };
-    const proposed: string[] = [];
+    const proposed: string[] = [], lapsed: string[] = [];
     const h = harness({
       held: () => Promise.resolve(blocked ? [{ account: "personal/claude", by }] : []),
       elsewhere: () => Promise.resolve(["otacon/claude"]),
       propose: (_r, from, to) => (proposed.push(`${from}>${to}`), Promise.resolve()),
+      lapse: (x) => (lapsed.push(x.id), Promise.resolve()),
     });
     await tick(dir, h.deps);
     await tick(dir, h.deps);
@@ -427,6 +432,7 @@ Deno.test("tick: a routine whose account is at its limit is held, tells the owne
     h.at("2026-10-15T01:00:00Z");
     await tick(dir, h.deps);
     assertEquals(h.fired.map((x) => x.id), [r.id]);
+    assertEquals(lapsed, [r.id], "the proposal it no longer needs is closed");
     const after = await readState(r.id, dir);
     assertEquals([after.held, after.queued], [undefined, undefined]);
   });
@@ -511,4 +517,15 @@ Deno.test("tick: a `limit-reset` routine ignores the past and fires when its acc
     await tick(dir, h.deps);
     assertEquals(h.fired.map((x) => x.id), [r.id]);
   });
+});
+
+Deno.test("routines: an unattended child is done when gone or idle after a turn, not before its first", () => {
+  const st = (phase: ChildState["phase"], turns: number) =>
+    ({ phase, turns, session: null, pending: [], said: [], lastResult: null, error: null, costUsd: 0 }) as ChildState;
+  assert(childDone(undefined));
+  assert(childDone(st("ended", 0)));
+  assert(childDone(st("idle", 1)));
+  assert(!childDone(st("idle", 0)));
+  assert(!childDone(st("working", 3)));
+  assert(!childDone(st("waiting", 1)));
 });

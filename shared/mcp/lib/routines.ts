@@ -8,6 +8,7 @@
 
 import { nextFire, parseCron } from "./cron.ts";
 import {
+  type ChildState,
   type Coordinator,
   listChildren,
   type Owner,
@@ -22,6 +23,7 @@ import {
   type AccountRef,
   alternatives,
   blockedAmong,
+  lapseProposals,
   type LimitEvent,
   limitsDir,
   listProposals,
@@ -373,12 +375,19 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
 
 // ---------------------------------------------------------------- the tick
 
-/** What a firing is waiting for from the owner, and whether it has ended. */
+/** What a firing is waiting for from the owner, and whether it has ended. `lingering`: it has, but a child
+ *  of it is still alive, idle after its turn, and is to be stopped. */
 export interface Watch {
   requests: { id: string; what: string }[];
   ended: boolean;
+  lingering?: boolean;
   error?: string;
 }
+
+/** Pure: whether an unattended child is through: gone, or idle after a turn — nobody will write to it, so
+ *  a child that waits for its next message has finished its work. */
+export const childDone = (s: ChildState | undefined): boolean =>
+  !s || s.phase === "ended" || (s.phase === "idle" && s.turns > 0);
 
 export async function watchFired(f: Fired): Promise<Watch> {
   const children = f.child
@@ -389,7 +398,8 @@ export async function watchFired(f: Fired): Promise<Watch> {
   const requests = children.flatMap((c) =>
     c?.state.pending.map((p) => ({ id: `${c.meta.id}:${p.request}`, what: p.what })) ?? []
   );
-  let ended = children.length > 0 && children.every((c) => !c || c.state.phase === "ended");
+  let ended = children.length > 0 && children.every((c) => childDone(c?.state));
+  const lingering = ended && children.some((c) => c && c.state.phase !== "ended");
   const error = children.map((c) => c?.state.error).find(Boolean) || undefined;
   if (f.run) {
     const run = await readRun(f.run);
@@ -402,7 +412,7 @@ export async function watchFired(f: Fired): Promise<Watch> {
       ended = run.state.status !== "running";
     }
   }
-  return { requests, ended, error };
+  return { requests, ended, lingering: ended && lingering, error };
 }
 
 /** Stops what a firing started: its children now, a run through its control file. */
@@ -433,6 +443,8 @@ export interface Deps {
   elsewhere: (blocked: string) => Promise<string[]>;
   /** raises the proposal "use `to` instead of `from`" for a routine; the owner decides */
   propose: (r: Routine, from: string, to: string, reason: string) => Promise<void>;
+  /** closes the routine's pending proposals once it started without them */
+  lapse: (r: Routine) => Promise<void>;
   /** the limits manager's events (resets wake `limit-reset` routines) */
   limitEvents: () => Promise<LimitEvent[]>;
   /** how long a firing held for a limit waits before it counts as missed */
@@ -476,6 +488,7 @@ export const realDeps = (notify: Deps["notify"], log: Deps["log"]): Deps => ({
       (await listAccounts()).map((a) => a.id),
     );
   },
+  lapse: async (r) => void await lapseProposals(r.id),
   limitEvents: () => readEvents(),
   holdMaxMin: async () => (await loadRules()).holdMaxMin,
   notify,
@@ -510,6 +523,7 @@ export async function tick(dir: string, deps: Deps): Promise<void> {
       }
       const p = await policyOf(r.project);
       if (w.ended) {
+        if (w.lingering) await deps.stop(f);
         f.ended = now.toISOString();
         await deps.notify(`Routine ${r.name} finished`, `Branch ${f.branch}${w.error ? `\n${w.error}` : ""}`);
       } else if (now.getTime() - Date.parse(f.at) > p.timeoutMin * 6e4) {
@@ -600,6 +614,7 @@ export async function tick(dir: string, deps: Deps): Promise<void> {
           const f = await deps.fire(r, p);
           st.runs = [...st.runs.slice(-19), f];
           st.lastFired = f.at;
+          if (st.held?.length) await deps.lapse(r);
           delete st.queued;
           delete st.held;
           delete st.lastError;

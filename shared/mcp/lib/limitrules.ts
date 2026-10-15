@@ -352,7 +352,8 @@ export interface Proposal {
   from: string;
   to: string;
   reason: string;
-  status: "pending" | "accepted" | "declined" | "applied";
+  /** lapsed: the routine started on its own before the owner answered (its account came back) */
+  status: "pending" | "accepted" | "declined" | "applied" | "lapsed";
   /** who raised it: the console, or a coordinator */
   by: "console" | "coordinator";
   decided?: string;
@@ -409,6 +410,16 @@ export async function decide(id: string, accept: boolean, dir = limitsDir()): Pr
   const next: Proposal = { ...p, status: accept ? "accepted" : "declined", decided: new Date().toISOString() };
   await writeProposal(next, dir);
   return next;
+}
+
+/** Closes a routine's pending proposals: it started without them, so a later yes would change nothing it
+ *  waits for. The ones it closed. */
+export async function lapseProposals(routine: string, dir = limitsDir()): Promise<Proposal[]> {
+  const open = (await listProposals(dir)).filter((p) =>
+    p.status === "pending" && p.scope === "routine" && p.routine === routine
+  );
+  for (const p of open) await writeProposal({ ...p, status: "lapsed", decided: new Date().toISOString() }, dir);
+  return open;
 }
 
 /** Marks an accepted proposal as applied. */

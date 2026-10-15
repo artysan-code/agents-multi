@@ -11,6 +11,7 @@ import {
   DEFAULT_RULES,
   defaultAccount,
   evaluate,
+  lapseProposals,
   listProposals,
   parseAccountId,
   projectAccount,
@@ -183,6 +184,13 @@ Deno.test("proposals: one pending per change; nothing is applied until accepted;
     assertEquals(accepted.status, "accepted");
     await assertRejects(() => decide(p.id, false, dir), Error, "already accepted");
     assertEquals((await listProposals(dir)).map((x) => x.status), ["accepted"]);
+    // a routine that started on its own: its pending proposal lapses, another routine's stays
+    const mine = await propose({ ...base, scope: "routine", routine: "night-1" }, accounts, dir);
+    const other = await propose({ ...base, scope: "routine", routine: "night-2" }, accounts, dir);
+    assertEquals((await lapseProposals("night-1", dir)).map((x) => x.id), [mine.id]);
+    const by = new Map((await listProposals(dir)).map((x) => [x.id, x.status]));
+    assertEquals([by.get(mine.id), by.get(other.id)], ["lapsed", "pending"]);
+    await assertRejects(() => decide(mine.id, true, dir), Error, "already lapsed");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
