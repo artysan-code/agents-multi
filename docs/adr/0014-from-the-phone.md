@@ -1,6 +1,6 @@
 # 0014 — From the phone: the web app on the service, the orchestrator on a paired machine
 
-- Status: accepted 2026-10-15; G1–G3 in progress
+- Status: accepted 2026-10-15; G1–G3 built (1.2.1-rc.2), G4–G7 in progress
 - Date: 2026-10-15
 - Phase G of [ADR 0009](0009-agents-multi-2.md); changes its point 20
 
@@ -63,7 +63,7 @@ phone (web app, PWA) ──HTTPS──▶ the service ◀──HTTPS, outbound�
   routines), and **every job, routine or outward action it proposes still needs the signed yes of ADR 0012** or
   the reviewer's rule of [ADR 0011](0011-reviewer.md). On a desktop that yes is the console's; on the phone it
   is a passkey (WebAuthn) of the account, registered on the phone, whose public key the nodes pin like the
-  owner's approval key. Until passkeys land, the phone shows what waits and the yes is given on a desktop.
+  owner's approval key. A passkey counts only once a desktop with the vault has endorsed it (G5, below).
 - The web session: the existing sign-in (passphrase and TOTP, `brain_session` cookie, `HttpOnly`, `Lax`),
   30 days on a device the owner marks as theirs, with the list of sessions on `/account` to revoke one.
 
@@ -138,6 +138,53 @@ database. `node` is the machine whose token it is (fleet.ts), null for a web ses
 - **The web app**: `/app` and below, its built files; anything else under it is `index.html` (the app routes by
   hash). Not signed in, it sends the person to the sign-in page with `next=/app`.
 
+## The API (G4, G5, G1b)
+
+### Pairing a machine (G4)
+
+- The machine, with no credential: `POST /api/pair` `{name, platform}` → `{code, pairing, expires}`. `code` is eight
+  characters (Crockford base32, shown `XXXX-XXXX`), one use, 10 minutes; `pairing` is a 32-byte secret only the
+  machine holds. It then polls `GET /api/pair/<pairing>` → `{state: "waiting"}` until `{state: "done", token,
+  url}`: the node's own token (the same kind `agents node login` makes, named after `name`), given once.
+- The person, signed in: `POST /api/pair/claim` `{code}` → `{node}`. Five wrong codes in a row lock claiming for
+  that account for 15 minutes; an unknown or expired code says so.
+- On the machine: `agents node pair` (and the console's _Nodes › Pair with a code_) shows the code, waits, keeps
+  the token where `agents node login` keeps it, and turns the node on. `agents node login` stays for scripts.
+
+### What waits, and the phone's yes (G5)
+
+- **The node relays what waits on it**: `PUT /api/node/requests` `{requests: [{id, child, request, profile,
+  project, kind: "request" | "question", what, questions?}]}` replaces that node's list (sent when it changes, and
+  with each announce); `id` is `<child>/<request>`.
+- **The phone reads it**: `GET /api/waiting` → `{requests: [{…, node}], jobs: [{…the proposed jobs of fleet.ts}]}`.
+- **A passkey says yes.** The phone registers one: `POST /api/passkeys/options` → WebAuthn creation options;
+  `POST /api/passkeys` `{name, credential}` (attestation `none`, ES256 only) → `{id, state: "pending"}`. A passkey
+  counts only once a machine with the vault **endorses** it: `agents passkeys` (and the console's _Connections ›
+  Passkeys_) lists the pending ones, shows name and fingerprint, and on the owner's yes signs `agents-multi passkey
+  v1\n<id>\n<public key>` with the approval key of ADR 0012 → `POST /api/passkeys/<id>/endorse` `{signature}`. `GET
+  /api/passkeys` → `[{id, name, publicKey, endorsement, created}]`; `DELETE /api/passkeys/<id>` revokes. So the
+  service can show a passkey but never make one count: the nodes check the endorsement with the owner's key.
+- **An answer from the phone**: `POST /api/waiting/<id>` `{verdict: "allow" | "session" | "deny", answers?,
+  expires, assertion: {credential, authenticatorData, clientDataJSON, signature}}`, where the WebAuthn challenge is
+  `SHA-256("agents-multi answer v1\n" + canonical JSON of {id, node, verdict, answers, expires})` and `expires` is
+  at most 10 minutes ahead. A job is accepted the same way (`POST /api/jobs/<id>` `{op: "accept", assertion,
+  expires}`, challenge over `agents-multi job v1` and the job's canonical text), beside the desktop's Ed25519
+  signature.
+- **The node checks it, not the service**: `GET /api/node/answers` → `{answers: [...]}` (also in the announce's
+  reply); for each, the node verifies the passkey's endorsement with the owner's approval key, then the assertion
+  (the challenge recomputed from the answer, `type` `webauthn.get`, the origin is the service's, `rpIdHash`, the
+  user-present and user-verified flags, ES256 over `authenticatorData || SHA-256(clientDataJSON)`), that it is not
+  expired and not used before; only then does it answer the hub (`answer()` of agents.ts). A refused answer is
+  reported back with why. A deny needs the same signature: nobody but the owner stops their agents either.
+
+### The console's chat on the service (G1b)
+
+- With a brain account, the console's Chat lists and opens the service's chats (`GET /api/chats`, its machine
+  token), and a question becomes a turn: `POST /api/chats` `{text, chat?, node}`, where `node` pins the turn to this
+  machine (any token of the account may pin; the phone may pin too). The console relays the chat's events to its
+  page as the NDJSON it streams today, so the page changes little; the conversation is the same on the phone.
+- Without a brain account, or when the service does not answer, the console keeps its local chats as today.
+
 ## What is paused
 
 F2 (the `node` token scope, the coordinator's MCP tools for nodes, presence) and Telegram wait until this path
@@ -145,16 +192,17 @@ works; each is taken up only if the path shows it is needed.
 
 ## Slices
 
-| Slice | What                                                                                                   | Size   |
-| ----- | ------------------------------------------------------------------------------------------------------ | ------ |
-| G1    | Chat turns in the service (routes, SSE), the node's turn loop over ask.ts's runner                     | medium |
-| G2    | The web app at `/app`: sign-in, Chat, Tasks, Brain, Machines; PWA shell                                | medium |
-| G3    | Web Push: VAPID keys, subscriptions, the three events                                                  | small  |
-| G4    | Pairing by code (`agents node pair`, the console's button, _Machines › Pair_)                          | small  |
-| G5    | What waits on the phone: jobs and requests, the passkey yes (WebAuthn, the nodes pin its key)          | medium |
-| G6    | Hosting for others: the sign-up and privacy text, onboarding in the docs (EN, IT), the hosted instance | small  |
+| Slice | What                                                                                                                                                 | Size   |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| G1    | Chat turns in the service (routes, SSE), the node's turn loop over ask.ts's runner                                                                   | medium |
+| G2    | The web app at `/app`: sign-in, Chat, Tasks, Brain, Machines; PWA shell                                                                              | medium |
+| G3    | Web Push: VAPID keys, subscriptions, the three events                                                                                                | small  |
+| G4    | Pairing by code (`agents node pair`, the console's button, _Machines › Pair_)                                                                        | small  |
+| G5    | What waits on the phone: jobs and requests, the passkey yes (WebAuthn, the nodes pin its key)                                                        | medium |
+| G6    | Hosting for others: the sign-up and privacy text, onboarding in the docs (EN, IT), the hosted instance                                               | small  |
+| G7    | The app done well: a real mobile design, the chat's Markdown, code and changes, loading and error states, Tasks and Brain, dark theme, accessibility | large  |
 
-G1 → G2 → G3 make the path; G4 makes it simple; G5 makes it whole; G6 opens it. The console's own Chat page
+G1 → G2 → G3 make the path; G4 makes it simple; G5 makes it whole; G6 opens it; G7 makes it good to use. The console's own Chat page
 moves onto the service's chats right after G3, once the path is proven (until then it keeps its local chats).
 
 ## Consequences
