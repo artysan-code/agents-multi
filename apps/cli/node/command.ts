@@ -18,6 +18,8 @@ import { nodeTokenFile, readNodeToken, service, writeNodeToken } from "./service
 import { followLogin, startBrainLogin } from "../brain-login.ts";
 import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
 import { readNodeState } from "./agentd.ts";
+import { bigCode, pairMachine, spinnerFrame } from "./pair.ts";
+import { platformOf } from "../../../shared/mcp/lib/platform.ts";
 
 const GiB = 2 ** 30;
 
@@ -31,6 +33,14 @@ export function nodeConfigWith(raw: unknown, set: { enabled: boolean; headless?:
   if (set.headless !== undefined) out.headless = set.headless;
   if (set.maxSessions !== undefined) out.maxSessions = set.maxSessions;
   return out;
+}
+
+/** Turns this machine's node on or off in its own node.json (the other keys kept). */
+async function writeEnabled(file: string, set: { enabled: boolean; headless?: boolean; maxSessions?: number }) {
+  await loadNodeConfig(CONFIG); // the old config/node.json is moved first, so that this does not undo it
+  await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+  const raw = await Deno.readTextFile(file).then(JSON.parse).catch(() => ({}));
+  await writeAtomic(file, JSON.stringify(nodeConfigWith(raw, set), null, 2) + "\n");
 }
 
 export async function nodeCommand(args: string[]): Promise<number> {
@@ -67,7 +77,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
       );
       console.log(`  runs        ${followed} followed`);
       const token = await readNodeToken();
-      console.log(`  token       ${token ? "its own" : "none: agents node login"}`);
+      console.log(`  token       ${token ? "its own" : "none: agents node pair"}`);
       if (!cfg.enabled) console.log(`\n${ANSI.d}agents node enable [--headless] turns it on (${file})${ANSI.x}`);
       return 0;
     }
@@ -89,25 +99,67 @@ export async function nodeCommand(args: string[]): Promise<number> {
       });
       return await followLogin(url, done.promise, rest.includes("--no-browser"));
     }
+    case "pair": {
+      // a code instead of a browser sign-in (ADR 0014): works on a server and for a phone-only owner
+      const account = brainAccount();
+      if (!account?.url) {
+        console.error(
+          "no brain account with an address in accounts.json: add one (service brain), or `agents init <folder> --brain <address>` on a new node",
+        );
+        return 1;
+      }
+      // --plain: lines a program reads (the console's job); otherwise the code is shown big, with a spinner
+      const plain = rest.includes("--plain");
+      const tty = !plain && Deno.stdout.isTerminal();
+      const stop = new AbortController();
+      Deno.addSignalListener("SIGINT", () => stop.abort());
+      const cfg = await loadNodeConfig(CONFIG);
+      const r = await pairMachine(account.url, nodeName(cfg), platformOf(), {
+        signal: stop.signal,
+        show: ({ code, url, expires }) => {
+          if (plain) {
+            console.log(`CODE ${code}\nOPEN ${url}\nEXPIRES ${expires}`);
+            return;
+          }
+          console.log(`\n  Open ${ANSI.c}${url}${ANSI.x}, sign in, and type this code:\n`);
+          console.log(`      ${bigCode(code)}\n`);
+          console.log(`  ${ANSI.d}good for 10 minutes; Ctrl-C to cancel${ANSI.x}\n`);
+        },
+        tick: tty
+          ? (ms) => Deno.stdout.writeSync(new TextEncoder().encode(`\r  ${spinnerFrame(ms)} waiting for the code…`))
+          : undefined,
+      });
+      if (tty) Deno.stdout.writeSync(new TextEncoder().encode("\r\x1b[K"));
+      if (!r.ok) {
+        console.error(r.message);
+        return 1;
+      }
+      await writeNodeToken(r.token);
+      await writeEnabled(file, { enabled: true });
+      console.log(
+        plain
+          ? `PAIRED ${nodeName(cfg)}`
+          : `${ANSI.g}+${ANSI.x} paired as ${
+            nodeName(cfg)
+          }: the token is in ${nodeTokenFile()}, this machine only; the node is on (the console picks it up within 30 s)`,
+      );
+      return 0;
+    }
     case "enable":
     case "disable": {
-      await loadNodeConfig(CONFIG); // the old config/node.json is moved first, so that this does not undo it
-      await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
-      const raw = await Deno.readTextFile(file).then(JSON.parse).catch(() => ({}));
       const max = opt("--max");
       if (max !== undefined && !/^\d+$/.test(max)) {
         console.error("--max is a number of sessions");
         return 2;
       }
-      const next = nodeConfigWith(raw, {
+      await writeEnabled(file, {
         enabled: sub === "enable",
         ...(rest.includes("--headless") ? { headless: true } : {}),
         ...(max !== undefined ? { maxSessions: Number(max) } : {}),
       });
-      await writeAtomic(file, JSON.stringify(next, null, 2) + "\n");
       console.log(`${sub === "enable" ? "on" : "off"}: ${file}; the console picks it up within 30 s`);
       if (sub === "enable" && !(await readNodeToken())) {
-        console.log("it announces itself only with a token of its own: agents node login [--no-browser]");
+        console.log("it announces itself only with a token of its own: agents node pair (or agents node login)");
       }
       return 0;
     }
@@ -163,7 +215,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
     }
     default:
       console.error(
-        "usage: agents node [status [--json]|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key]",
+        "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key]",
       );
       return 2;
   }

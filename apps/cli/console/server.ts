@@ -53,7 +53,8 @@ import { setupRoutes } from "./setup.ts";
 import type { Route } from "./http.ts";
 import { live, refresh as refreshLimits } from "../live.ts";
 import { limitsNow } from "../limits.ts";
-import { listChats, readChat, removeChat } from "../chats.ts";
+import { CHAT_ID, listChats, readChat, removeChat } from "../chats.ts";
+import { serviceChats } from "../svc-chat.ts";
 import { runsView } from "./runs.ts";
 import { memoryApi } from "../memory.ts";
 import { tasksView } from "./tasks-view.ts";
@@ -243,16 +244,22 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     "/api/owner": { get: () => json(owner()) },
     // the chats with Claude (chats.ts): the list, one in full, forgetting one; a turn is kept by /api/ask
     "/api/chats": {
-      get: async () => json(await listChats()),
+      // the local chats and, when this machine is a node of the service, its chats (svc-chat.ts)
+      get: async () => {
+        const [local, remote] = await Promise.all([listChats(), serviceChats.list()]);
+        return json([...local, ...remote ?? []].sort((a, b) => b.updated.localeCompare(a.updated)));
+      },
       post: async ({ req }) => {
         const b = await body(req) as { op?: string; id?: string };
         if (b.op !== "delete") return json({ ok: false, message: "unknown op" }, 400);
-        return json({ ok: await removeChat(String(b.id ?? "")) });
+        const id = String(b.id ?? "");
+        return json({ ok: CHAT_ID.test(id) ? await removeChat(id) : await serviceChats.remove(id) });
       },
     },
     "/api/chat": {
       get: async ({ url }) => {
-        const c = await readChat(url.searchParams.get("id") ?? "");
+        const id = url.searchParams.get("id") ?? "";
+        const c = CHAT_ID.test(id) ? await readChat(id) : /^[\w-]{1,64}$/.test(id) ? await serviceChats.get(id) : null;
         return c ? json(c) : json({ error: "no such chat" }, 404);
       },
     },
@@ -352,7 +359,7 @@ export function createHandler(
         if (route.get) return await route.get({ req, url: u });
         return json({ error: "POST required" }, 405);
       }
-      const delegated = await assetsApi(u) ?? await askApi(req, u, json) ??
+      const delegated = await assetsApi(u) ?? await askApi(req, u, json, () => broadcast("chats")) ??
         (req.method === "GET" ? await memoryApi(u) : null);
       if (delegated) return delegated;
       return await uiFile(uiDist, u.pathname);

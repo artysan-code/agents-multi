@@ -99,6 +99,14 @@ create table if not exists passkeys (
   id text primary key, name text not null, public_key text not null, endorsement text, created text not null);
 create table if not exists passkey_challenges (challenge text primary key, expires integer not null);`);
   },
+  // a turn may be pinned to one machine (the console's chat asks for its own, ADR 0014 G1b)
+  // and may carry the project folder its answer named (the console's chat opens a terminal there)
+  (db) => {
+    const cols = db.prepare("pragma table_info(chat_turns)").all() as { name: string }[];
+    for (const c of ["pin", "code"]) {
+      if (!cols.some((x) => x.name === c)) db.exec(`alter table chat_turns add column ${c} text`);
+    }
+  },
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */

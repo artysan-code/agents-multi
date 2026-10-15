@@ -11,6 +11,7 @@ import { openDrawer, toast } from "../../lib/ui.tsx";
 import { ManualLink } from "../../lib/login-link.tsx";
 import { useState } from "preact/hooks";
 import { post } from "../../api.ts";
+import { PairCard } from "./pair.tsx";
 
 const Chips = ({ ps }: { ps?: string[] }) =>
   ps ? <>{ps.map((p) => <span class="chip on" key={p}>{p}</span>)}</> : <span class="sub">{t("acc.allProfiles")}</span>;
@@ -145,9 +146,12 @@ export function Ours({ view, accs, reload }: { view: AccountsView; accs: Account
   const brain = accs.filter((a) => a.service === "brain");
   if (!brain.length) return <p class="sub">{t("conn.noBrain")}</p>;
   return (
-    <Svc service="brain" title={t("conn.brain")}>
-      {brain.map((a) => <AccRow key={a.name} a={a} view={view} reload={reload} />)}
-    </Svc>
+    <>
+      <Svc service="brain" title={t("conn.brain")}>
+        {brain.map((a) => <AccRow key={a.name} a={a} view={view} reload={reload} />)}
+      </Svc>
+      <PairCard reload={reload} />
+    </>
   );
 }
 

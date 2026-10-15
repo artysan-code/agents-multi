@@ -38,6 +38,7 @@ import { loadSite, privacyPage, type Site, siteAnswer, siteFile, siteMoved, site
 import { log, logRequest } from "./log.ts";
 import { brainServer } from "./tools.ts";
 import { brainApi } from "./api.ts";
+import { PairError, Pairings } from "./pair.ts";
 import { isWebPath, loadWebapp, webAnswer, webSize } from "./webapp.ts";
 import { bodyLimit, Buckets, capped, clientIp, fromOwnPages, hardened, isTooLarge } from "./guard.ts";
 import { snapshot } from "./backup.ts";
@@ -84,6 +85,7 @@ const accountsDb = new DatabaseSync(`${DATA}/accounts.db`);
 accountsDb.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 5000;");
 const users = new Users(accountsDb, await masterKey(env("BRAIN_MASTER_KEY")!), DEV);
 const auth = new Auth(accountsDb, users, { url: URL_ });
+const pairings = new Pairings(accountsDb, auth, users, URL_);
 const embedCfg = { url: env("BRAIN_EMBED_URL", "http://ollama:11434")!, model: env("BRAIN_EMBED_MODEL", "bge-m3")! };
 
 // whose request this is and how it came in: set per request, read by the stores, the task rules
@@ -207,7 +209,11 @@ const refused = (r: "wrong" | "locked" | "busy") => r === "locked" ? LOCKED : r 
 // per address: the forms a person signs in with (ten, then one every six seconds), the token
 // endpoint Claude's clients call (thirty, then one every two seconds), and registering a client
 // (ten, then one a minute). Claude's servers call from a few shared addresses: generous on purpose.
-const FORMS = new Buckets(10, 6_000), OAUTH = new Buckets(30, 2_000), REGISTER = new Buckets(10, 60_000);
+const FORMS = new Buckets(10, 6_000),
+  PAIR = new Buckets(10, 6_000),
+  PAIR_POLL = new Buckets(40, 1_000),
+  OAUTH = new Buckets(30, 2_000),
+  REGISTER = new Buckets(10, 60_000);
 // registration also has a limit for everyone together (thirty, then one every thirty seconds): the
 // address can be rotated, the table of clients cannot grow past what real connections need
 const REGISTER_ALL = new Buckets(30, 30_000);
@@ -217,12 +223,17 @@ if (URL_.startsWith("https:") && !IP_HEADER) {
     "BRAIN_CLIENT_IP_HEADER is not set: behind a proxy every client shares its address, and the sign-in limits lock everyone out together",
   );
 }
-/** Pure: which bucket a request draws from, if any. */
+/** Pure: which bucket a request draws from, if any. A machine asking for a pairing draws as a sign-in does (from
+ *  a bucket of its own); its poll, every couple of seconds for ten minutes, from a wider one. */
 const bucketOf = (method: string, p: string) =>
-  method !== "POST"
+  method === "GET"
+    ? /^\/api\/pair\/[\w-]{20,64}$/.test(p) ? PAIR_POLL : null
+    : method !== "POST"
     ? null
     : p === "/account/login" || p === "/authorize" || p === "/invite"
     ? FORMS
+    : p === "/api/pair"
+    ? PAIR
     : p === "/token"
     ? OAUTH
     : p === "/register"
@@ -250,7 +261,8 @@ const otpauth = (id: string, secret: string) =>
   `otpauth://totp/Brain:${encodeURIComponent(id)}?secret=${secret}&issuer=Brain&digits=6&period=30`;
 
 /** The API paths a web session may use (the rest of /api/ is for tokens). */
-const WEB_API = /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$)/;
+const WEB_API =
+  /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$|pair\/claim$)/;
 
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
@@ -446,6 +458,20 @@ async function handle(req: Request, ip: string): Promise<Response> {
     if (r) return r;
   }
 
+  // ---------------- pairing a machine with a code (pair.ts, ADR 0014): the machine has no credential yet; the
+  // person's claim is below, with the signed-in routes
+  if (p === "/api/pair" && req.method === "POST") {
+    const b = await req.json().catch(() => null) as Record<string, unknown> | null;
+    try {
+      return json(await pairings.create(b?.name, b?.platform));
+    } catch (e) {
+      if (e instanceof PairError) return json({ error: e.message }, e.status);
+      throw e;
+    }
+  }
+  const polled = p.match(/^\/api\/pair\/([\w-]{20,64})$/);
+  if (polled && req.method === "GET") return json(await pairings.poll(polled[1]));
+
   // ---------------- everything below needs a token, and runs as its account
   let who: Caller | null = await auth.caller(req);
   // the web app (apps/ui, at /app) has the person's session and no token: it reaches its chats, its push
@@ -554,6 +580,16 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
       who.user,
     );
     if (r) return r;
+  }
+  // the person types the code a machine shows: it becomes their node (pair.ts)
+  if (p === "/api/pair/claim" && req.method === "POST") {
+    const b = await req.json().catch(() => null) as Record<string, unknown> | null;
+    try {
+      return json(await pairings.claim(who.user, b?.code));
+    } catch (e) {
+      if (e instanceof PairError) return json({ error: e.message }, e.status);
+      throw e;
+    }
   }
   // the chats, the node's turn loop, the answering node's setting (chat.ts, ADR 0014) and Web Push (push.ts):
   // a machine acts as its token's name; the web session and any other token write turns and read them

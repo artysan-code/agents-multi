@@ -86,7 +86,7 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "node.token",
       "fail",
       "node on, but no token of its own: it does not announce itself (the vault's token would make it every machine)",
-      "agents node login (--no-browser on a server)",
+      "agents node pair (a code, works on a server), or agents node login --no-browser",
     );
   } else if (f.tokenMode & 0o077) {
     add(

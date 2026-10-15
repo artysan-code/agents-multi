@@ -10,18 +10,31 @@ se una si spegne. Niente si sposta senza il tuo sì.
 ## Rendere una macchina un nodo
 
 ```bash
-agents node login
-agents node enable
+agents node pair
 agents node
 agents nodes
 ```
 
-`agents node enable` accende solo questa macchina (un file suo, mai sincronizzato); `agents node` mostra cosa annuncia questa macchina; `agents nodes`
-mostra tutte le macchine e i job che il servizio vede.
+`agents node pair` collega questa macchina con un codice (qui sotto) e la accende; `agents node` mostra cosa
+annuncia questa macchina; `agents nodes` mostra tutte le macchine e i job che il servizio vede. (`agents node
+enable` accende solo questa macchina, un file suo, mai sincronizzato.)
+
+## Collegare con un codice
+
+Sulla macchina non serve un browser, quindi funziona su un server e dal telefono:
+
+1. Sulla macchina lancia `agents node pair`. Chiede un codice al servizio, lo mostra grande (`XXXX-XXXX`) e
+   aspetta. Il codice vale dieci minuti e un solo uso. Nella console è il bottone _Collega con un codice_ in
+   Connessioni.
+2. Nella web app apri _Macchine_ e scrivi il codice sotto _Collega una macchina_.
+3. La macchina riceve il suo token al prossimo controllo, lo tiene in un file solo suo e accende il nodo.
+
+Cinque codici sbagliati di fila bloccano il collegamento di quell'account per un quarto d'ora. `agents node
+login`, che fa l'accesso dal browser, resta per gli script.
 
 - **Solo in uscita.** Ogni 30 secondi il nodo dice al servizio il suo carico, quante sessioni può far girare
   (in base alla memoria, o a `maxSessions`), quali account hanno il login e se ci sei tu davanti. Usa il proprio
-  token di macchina (`agents node login`, che resta solo su quella macchina). Niente ascolta oltre `127.0.0.1`.
+  token di macchina (fatto con il collegamento, e resta solo su quella macchina). Niente ascolta oltre `127.0.0.1`.
 - **Il tuo sì si verifica sul nodo.** Un job assegnato a un nodo parte solo con la tua firma, fatta su una tua
   macchina con una chiave derivata dal vault, che il servizio non ha mai: né un token rubato né un servizio
   compromesso possono avviare un agente.
@@ -30,6 +43,13 @@ mostra tutte le macchine e i job che il servizio vede.
   conta solo dopo che l'hai avallata su un desktop, `agents passkeys endorse <id>`, confrontando la sua impronta
   con quella del telefono; il nodo controlla poi l'avallo, la firma della passkey e la scadenza prima di rispondere
   a qualsiasi cosa, così il servizio può portare la risposta ma non farla mai valere.
+
+## La chat della console
+
+Quando questa macchina è un nodo, anche la Chat della console passa dal servizio: una domanda diventa un turno
+assegnato a questa macchina, l'elenco mostra le tue chat del servizio (quindi una conversazione iniziata dal
+telefono è lì da continuare) e la risposta arriva in streaming come prima. Senza un account brain, o quando il
+servizio non risponde, le chat restano locali.
 
 ## Accettare un job
 

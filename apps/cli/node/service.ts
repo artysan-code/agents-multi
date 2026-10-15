@@ -14,6 +14,9 @@ export interface Service {
   url: string;
   /** `timeout` in ms (15 s by default; a long poll asks for more), `signal` to give up when this machine stops */
   call<T>(method: string, path: string, body?: unknown, o?: { timeout?: number; signal?: AbortSignal }): Promise<T>;
+  /** A GET whose body is read as it arrives (Server-Sent Events), with the same token; no overall timeout, `signal`
+   *  ends it. Absent on the stand-ins of tests that never stream. */
+  stream?(path: string, signal: AbortSignal): Promise<Response>;
 }
 
 /** Where this machine keeps its node token: a file only the user reads, never synced. */
@@ -39,7 +42,7 @@ export async function service(
   const account = brainAccount();
   if (!account?.url) return "no brain account with an address in accounts.json: the service is the brain";
   const own = await readNodeToken();
-  if (node && !own) return "this machine has no node token of its own: agents node login";
+  if (node && !own) return "this machine has no node token of its own: agents node pair";
   const token = own ?? await getSecret("brain", account.name).catch((e) => {
     throw new Error(`the vault: ${(e as Error).message}`);
   });
@@ -65,6 +68,8 @@ export async function service(
       if (!r.ok) throw new Error(`${method} ${path}: ${j.error ?? `HTTP ${r.status}`}`);
       return j as unknown as T;
     },
+    stream: (path: string, signal: AbortSignal) =>
+      fetcher(`${base}${path}`, { headers: { authorization: `Bearer ${token}`, accept: "text/event-stream" }, signal }),
   };
 }
 
