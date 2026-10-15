@@ -1,6 +1,6 @@
 ---
 title: Starting on a hosted service
-description: Someone runs the service for you: install Agents Multi on your machine, pair it with a code, talk from the phone.
+description: "Someone runs the service for you: install Agents Multi on your machine, pair it with a code, talk from the phone."
 ---
 
 When someone hosts the service for you (an invitation link, from whoever runs it), you need no server of your own.

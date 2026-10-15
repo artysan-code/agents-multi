@@ -1,6 +1,6 @@
 ---
 title: Partire da un servizio ospitato
-description: Qualcuno gestisce il servizio per te: installi Agents Multi sulla tua macchina, la colleghi con un codice, parli dal telefono.
+description: "Qualcuno gestisce il servizio per te: installi Agents Multi sulla tua macchina, la colleghi con un codice, parli dal telefono."
 ---
 
 Quando qualcuno ospita il servizio per te (un link d'invito, da chi lo gestisce), non ti serve un server tuo. Il
