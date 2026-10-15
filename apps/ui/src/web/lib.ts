@@ -204,3 +204,10 @@ export function keyBytes(b64: string): Uint8Array<ArrayBuffer> {
   for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
   return out;
 }
+
+/** Pure: a pairing code as it is typed: letters and digits only, capitals, a dash after the fourth (XXXX-XXXX), at most
+ *  eight. The service reads it tolerantly anyway; this is for the eye. */
+export function tidyCode(typed: string): string {
+  const s = typed.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 8);
+  return s.length > 4 ? `${s.slice(0, 4)}-${s.slice(4)}` : s;
+}

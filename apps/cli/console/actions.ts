@@ -30,6 +30,8 @@ export const ACTIONS: Record<string, ActionDef> = {
   "install-app": { args: ["install", "--app"], timeoutMs: 300000 },
   // Claude Code itself, Anthropic's installer on a new machine (bin/claude-update): the wizard's step
   "claude-code": { args: ["update", "--cli"], timeoutMs: 600000 },
+  // pairing this machine with a code (pair.ts): waits for the code to be typed, up to its ten minutes
+  "node-pair": { args: ["node", "pair", "--plain"], timeoutMs: 11 * 60_000 },
   "ui-build": { args: ["ui", "build"], timeoutMs: 300000 },
   "usage-ingest": { args: ["usage", "ingest", "--full"], timeoutMs: 120000 },
   // two downloads of 8 s each, a git fetch of 15 s and two Deno starts in the worst case

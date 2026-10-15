@@ -16,6 +16,7 @@ import {
   parseTasks,
   pushAdvice,
   taskSections,
+  tidyCode,
   type Turn,
 } from "../../ui/src/web/lib.ts";
 import { toFile } from "../../../shared/mcp/lib/tasks/format.ts";
@@ -191,4 +192,12 @@ Deno.test("web: the VAPID key is URL-safe base64 turned into bytes", () => {
   assertEquals([...keyBytes("AQID")], [1, 2, 3]);
   assertEquals([...keyBytes("-_8")], [251, 255]); // - and _ are + and /, the padding is added
   assertEquals(keyBytes("").length, 0);
+});
+
+Deno.test("web: a pairing code is tidied as it is typed", () => {
+  assertEquals(tidyCode("abcd"), "ABCD");
+  assertEquals(tidyCode("abcde"), "ABCD-E");
+  assertEquals(tidyCode("ab cd-23 45"), "ABCD-2345");
+  assertEquals(tidyCode("ABCD-2345-9999"), "ABCD-2345");
+  assertEquals(tidyCode("!?"), "");
 });

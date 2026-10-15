@@ -57,6 +57,11 @@ export const en = {
   "machines.answering": "Answering machine",
   "machines.auto": "Automatic (a server first)",
   "machines.fallback": "If it is offline",
+  "machines.pair": "Pair a machine",
+  "machines.pairHelp": "On the machine, run agents node pair (or press Pair with a code in its console): it shows a code. Type it here.",
+  "machines.code": "Code",
+  "machines.pairGo": "Pair",
+  "machines.paired": "Paired: {n} is now one of your machines. It appears in the list within a minute.",
   "machines.up": "Move {n} up",
   "machines.down": "Move {n} down",
 
@@ -133,6 +138,11 @@ export const it: Record<keyof typeof en, string> = {
   "machines.answering": "Macchina che risponde",
   "machines.auto": "Automatica (prima un server)",
   "machines.fallback": "Se è offline",
+  "machines.pair": "Collega una macchina",
+  "machines.pairHelp": "Sulla macchina lancia agents node pair (o premi Collega con un codice nella sua console): mostra un codice. Scrivilo qui.",
+  "machines.code": "Codice",
+  "machines.pairGo": "Collega",
+  "machines.paired": "Collegata: {n} ora è una delle tue macchine. Compare nell'elenco entro un minuto.",
   "machines.up": "Sposta {n} più su",
   "machines.down": "Sposta {n} più giù",
 

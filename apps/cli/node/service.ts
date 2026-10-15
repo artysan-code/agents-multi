@@ -38,7 +38,7 @@ export async function service(
   const account = brainAccount();
   if (!account?.url) return "no brain account with an address in accounts.json: the service is the brain";
   const own = await readNodeToken();
-  if (node && !own) return "this machine has no node token of its own: agents node login";
+  if (node && !own) return "this machine has no node token of its own: agents node pair";
   const token = own ?? await getSecret("brain", account.name).catch((e) => {
     throw new Error(`the vault: ${(e as Error).message}`);
   });

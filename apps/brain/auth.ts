@@ -39,21 +39,29 @@ create table if not exists login_failures (user text not null, ip text not null,
 /** accounts.db holds the people (users.ts) and their credentials (this file), so one list serves
  *  both: whichever opens the file first brings it up to date. Step 1 is the schema as it was before
  *  versions, and also adapts the older shapes a file may still have. */
-export const ACCOUNTS_MIGRATIONS: Migration[] = [(db) => {
-  const lacks = (t: string, c: string) => {
-    const cols = db.prepare(`pragma table_info(${t})`).all() as { name: string }[];
-    return cols.length > 0 && !cols.some((x) => x.name === c);
-  };
-  // accounts from before each had a zone: the service's own, until the person chooses
-  if (lacks("users", "timezone")) db.exec("alter table users add column timezone text");
-  // codes made before scope was kept: they last a minute, the column is simply added
-  if (lacks("oauth_codes", "scope")) db.exec("alter table oauth_codes add column scope text");
-  // sessions from before they had an end: signing in again is all it costs
-  if (lacks("sessions", "ends")) db.exec("drop table sessions");
-  // failures from before they were kept per address: they last fifteen minutes, so they simply go
-  if (lacks("login_failures", "ip")) db.exec("drop table login_failures");
-  db.exec(SCHEMA);
-}];
+export const ACCOUNTS_MIGRATIONS: Migration[] = [
+  (db) => {
+    const lacks = (t: string, c: string) => {
+      const cols = db.prepare(`pragma table_info(${t})`).all() as { name: string }[];
+      return cols.length > 0 && !cols.some((x) => x.name === c);
+    };
+    // accounts from before each had a zone: the service's own, until the person chooses
+    if (lacks("users", "timezone")) db.exec("alter table users add column timezone text");
+    // codes made before scope was kept: they last a minute, the column is simply added
+    if (lacks("oauth_codes", "scope")) db.exec("alter table oauth_codes add column scope text");
+    // sessions from before they had an end: signing in again is all it costs
+    if (lacks("sessions", "ends")) db.exec("drop table sessions");
+    // failures from before they were kept per address: they last fifteen minutes, so they simply go
+    if (lacks("login_failures", "ip")) db.exec("drop table login_failures");
+    db.exec(SCHEMA);
+  }, // pairing a machine with a code (pair.ts, ADR 0014): the codes waiting, and an account's wrong ones
+  (db) =>
+    db.exec(`
+create table if not exists pairings (
+  code text primary key, secret text not null unique, name text not null, platform text not null,
+  expires integer not null, user text);
+create table if not exists pair_failures (user text not null, at integer not null);`),
+];
 
 export interface AuthConfig {
   url: string;
@@ -240,6 +248,8 @@ export class Auth {
     gone += n(this.db.prepare("delete from tokens where expires < ?").run(now - 90 * 86_400_000));
     gone += n(this.db.prepare("delete from sessions where expires < ?").run(now));
     gone += n(this.db.prepare("delete from login_failures where at < ?").run(now - 15 * 60_000));
+    gone += n(this.db.prepare("delete from pairings where expires < ?").run(now));
+    gone += n(this.db.prepare("delete from pair_failures where at < ?").run(now - 15 * 60_000));
     return gone;
   }
 
@@ -476,10 +486,11 @@ export class Auth {
   /** An account's failed sign-ins forgotten, from every address: its lock lifted before the fifteen minutes. */
   unlock(user: string) {
     this.db.prepare("delete from login_failures where user = ?").run(user);
+    this.db.prepare("delete from pair_failures where user = ?").run(user);
   }
   /** Everything of a deleted account removed: tokens, codes, sessions, failed attempts. */
   forget(user: string) {
-    for (const t of ["tokens", "oauth_codes", "sessions", "login_failures"]) {
+    for (const t of ["tokens", "oauth_codes", "sessions", "login_failures", "pair_failures", "pairings"]) {
       this.db.prepare(`delete from ${t} where user = ?`).run(user);
     }
   }

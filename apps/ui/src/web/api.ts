@@ -82,6 +82,9 @@ export interface Orchestrator {
 export const getOrchestrator = () => call<Orchestrator>("/api/settings/orchestrator");
 export const setOrchestrator = (o: Orchestrator) => send("PUT", "/api/settings/orchestrator", o);
 
+/** The code a machine shows (`agents node pair`), typed here: the machine becomes a node of this account. */
+export const claimPairing = (code: string) => send("POST", "/api/pair/claim", { code }) as Promise<{ node: string }>;
+
 // ---- push
 export const pushKey = () => call<{ key: string }>("/api/push/key").then((r) => r.key);
 export const subscribePush = (s: { endpoint: string; keys: { p256dh: string; auth: string }; device: string }) =>
