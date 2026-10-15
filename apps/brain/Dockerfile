@@ -36,7 +36,7 @@ WORKDIR /app
 COPY deno.json deno.lock ./
 COPY apps/brain/ apps/brain/
 COPY shared/mcp/lib/tasks/ shared/mcp/lib/tasks/
-COPY shared/mcp/lib/tasks.ts shared/mcp/lib/mask.ts shared/mcp/lib/owner.ts shared/mcp/lib/env.ts shared/mcp/lib/fs.ts shared/mcp/lib/nodes.ts shared/mcp/lib/
+COPY shared/mcp/lib/tasks.ts shared/mcp/lib/mask.ts shared/mcp/lib/owner.ts shared/mcp/lib/env.ts shared/mcp/lib/fs.ts shared/mcp/lib/nodes.ts shared/mcp/lib/webauthn.ts shared/mcp/lib/
 COPY shared/mcp/tasks/tools.ts shared/mcp/tasks/tools.ts
 COPY --from=site /site/dist apps/site/dist
 COPY --from=webapp /repo/apps/ui/dist-web apps/ui/dist-web
