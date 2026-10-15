@@ -119,7 +119,7 @@ Deno.test("push: the VAPID header is an ES256 JWT for the push service's origin"
   );
 });
 
-const sub = (endpoint = "https://push.example.net/send/abc") => ({
+const sub = (endpoint = "https://fcm.googleapis.com/fcm/send/abc") => ({
   endpoint,
   keys: { p256dh: UA_PUBLIC, auth: AUTH },
   device: "phone",
@@ -127,6 +127,9 @@ const sub = (endpoint = "https://push.example.net/send/abc") => ({
 
 Deno.test("push: a subscription is checked", () => {
   assertEquals(typeof cleanSubscription(sub()), "object");
+  for (const ok of ["https://web.push.apple.com/Q", "https://wns2-db5p.notify.windows.com/w/?token=x"]) {
+    assertEquals(typeof cleanSubscription(sub(ok)), "object", ok);
+  }
   for (
     const e of [
       "http://push.example.net/x",
@@ -134,6 +137,9 @@ Deno.test("push: a subscription is checked", () => {
       "https://10.0.0.1/x",
       "nope",
       "https://u:p@a.example.net/",
+      "https://push.example.net/send/abc", // not a browser's push service
+      "https://notify.windows.com.evil.example/x",
+      "https://internal.corp/x",
     ]
   ) {
     assertEquals(typeof cleanSubscription(sub(e)), "string", e);
@@ -153,14 +159,17 @@ Deno.test("push: the routes keep and drop a device; a 404 or 410 from the push s
   };
   assertEquals((await call("GET", "/api/push/key")).body, { key: v.publicKey });
   assertEquals((await call("POST", "/api/push/subscriptions", sub())).body, { ok: true });
-  assertEquals((await call("POST", "/api/push/subscriptions", sub("https://old.example.net/g"))).body, { ok: true });
+  assertEquals(
+    (await call("POST", "/api/push/subscriptions", sub("https://updates.push.services.mozilla.com/wpush/v2/g"))).body,
+    { ok: true },
+  );
   assertEquals((await call("POST", "/api/push/subscriptions", { endpoint: "x" })).status, 400);
   assertEquals(subs.all().length, 2);
 
   const seen: { url: string; headers: Headers; len: number }[] = [];
   const fetcher = ((url: string, init: RequestInit) => {
     seen.push({ url, headers: new Headers(init.headers), len: (init.body as ArrayBuffer).byteLength });
-    return Promise.resolve(new Response(null, { status: url.includes("old.") ? 410 : 201 }));
+    return Promise.resolve(new Response(null, { status: url.includes("mozilla") ? 410 : 201 }));
   }) as unknown as typeof fetch;
   const r = await pushAll(
     v,
@@ -169,7 +178,7 @@ Deno.test("push: the routes keep and drop a device; a 404 or 410 from the push s
     fetcher,
   );
   assertEquals(r, { sent: 1, removed: 1 });
-  assertEquals(subs.all().map((s) => s.endpoint), ["https://push.example.net/send/abc"]);
+  assertEquals(subs.all().map((s) => s.endpoint), ["https://fcm.googleapis.com/fcm/send/abc"]);
   assert(seen[0].headers.get("authorization")!.startsWith("vapid t="));
   assertEquals([seen[0].headers.get("content-encoding"), seen[0].headers.get("ttl")], ["aes128gcm", "86400"]);
   assert(seen[0].len > 100);

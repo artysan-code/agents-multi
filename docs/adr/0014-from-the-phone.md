@@ -47,7 +47,7 @@ phone (web app, PWA) ──HTTPS──▶ the service ◀──HTTPS, outbound�
   (`chat_turns`: id, chat, text, state, node, created) and its state is `waiting`.
 - **Service → machine**: the answering node holds one long poll open to the service (`GET /api/node/turns`,
   its node token, outbound only as every node call): it gets the waiting turns of its account, claims one, runs
-  it, and posts the answer back in pieces (`POST /api/turns/<id>/chunks`) and at the end (`…/done`, with the acts
+  it, and posts the answer back in pieces (`POST /api/turns/<id>/events`) and at the end (`…/done`, with the acts
   of `chats.ts`). A node silent for 90 s loses its claimed turns back to `waiting`.
 - **Service → phone**: the web app follows its chat on Server-Sent Events (`GET /api/chats/<id>/events`), the
   same streaming the console's page has today; when the app is closed, a push says the answer is there.
@@ -111,20 +111,23 @@ database. `node` is the machine whose token it is (fleet.ts), null for a web ses
 - **Chats** (any caller of the account):
   - `GET /api/chats` → `{chats: [{id, title, updated, node}]}`, newest first
   - `GET /api/chats/<id>` → `{chat: {id, title, turns: [{id, q, a, acts, state, node, error, created, ended}]}}`
-  - `POST /api/chats` `{text, chat?}` → `{chat, turn}`: a new turn, in a new chat when `chat` is absent
+  - `POST /api/chats` `{text, chat?}` → `{chat, turn}` (both objects, as `GET` gives them): a new turn, in a new
+    chat when `chat` is absent; a chat's turns run one at a time
   - `DELETE /api/chats/<id>` → `{ok}`
   - `GET /api/chats/<id>/events` → Server-Sent Events: `turn` `{turn, state, node, error?}` (waiting, running,
     done, failed), `text` `{turn, d}` (a piece of the answer), `act` `{turn, k, n, d?}` (a change Claude made, as
-    chats.ts's `Act`), `done` `{turn, a, code?}`; a comment every 20 s keeps it open.
+    chats.ts's `Act`), `done` `{turn, a, code?}`; a failed turn ends with `turn` (state `failed`, its error) and
+    no `done`; a comment every 20 s keeps it open.
 - **The answering node** (its own token only):
-  - `GET /api/node/turns?wait=25` → `{turns: [{id, chat, text, session, history}]}`: the waiting turns this node
-    answers for the account, **claimed** by the call (state `running`); it waits up to `wait` seconds when there
-    are none. `session` is the Claude session to resume when the chat's last turn ran on this node, else null,
+  - `GET /api/node/turns?wait=25&max=1` → `{turns: [{id, chat, text, session, history}]}`: at most `max` (1 by
+    default) waiting turns this node answers for the account, **claimed** by the call (state `running`); it waits
+    up to `wait` seconds when there are none. A node asks for as many as it starts at once. `session` is the Claude session to resume when the chat's last turn ran on this node, else null,
     and `history` the chat's last turns (`[{q, a}]`, at most 10) for a node that has no session of it.
   - `POST /api/turns/<id>/events` `{events: [{t: "text", d} | {t: "tool", k, n, d?} | {t: "session", id}]}` →
     `{ok}`: what the answer has so far, relayed to the chat's event streams.
   - `POST /api/turns/<id>/done` `{text, code?, error?}` → `{ok}`: the turn ends (`failed` with an error).
-  - A turn claimed by a node silent for 90 s goes back to `waiting`.
+  - A turn claimed by a node silent for 90 s goes back to `waiting` and restarts from the top: a running node
+    posts `{events: []}` every 30 s when it has nothing else to say.
 - **Which node answers**: `GET /api/settings/orchestrator` → `{node, order}`, `PUT` with the same: `node` the
   account's chosen one, `order` the fallbacks; with none set, the first online headless node, else the first
   online one.

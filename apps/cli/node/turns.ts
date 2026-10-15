@@ -124,22 +124,36 @@ const sleepFor = (signal: AbortSignal) => (ms: number) =>
     signal.addEventListener("abort", () => (clearTimeout(t), done()), { once: true });
   });
 
-/** Answers one turn: the pieces go to the service as they come, then the end (`error` when it failed). */
+/** How often a running turn says it is alive when it has nothing to send: the service hands a turn silent for
+ *  90 s back to `waiting` (ADR 0014), and a Claude step can be silent longer than that. */
+export const HEARTBEAT_MS = 30_000;
+
+/** Answers one turn: the pieces go to the service as they come, an empty batch every 30 s keeps it ours, then the
+ *  end (`error` when it failed, with what had been said so far). */
 export async function answerTurn(
   svc: Service,
   t: Claimed,
   run: Runner,
   signal: AbortSignal,
   batchMs = BATCH_MS,
+  heartbeatMs = HEARTBEAT_MS,
 ): Promise<{ error?: string }> {
-  const out = batcher((events) => svc.call("POST", `/api/turns/${t.id}/events`, { events }, { signal }), batchMs);
+  const post = async (events: Piece[]) => {
+    await svc.call("POST", `/api/turns/${t.id}/events`, { events }, { signal });
+  };
+  const out = batcher(post, batchMs);
+  const beat = setInterval(() => post([]).catch(() => {}), heartbeatMs);
+  let said = "";
   let done: Done;
   try {
     done = await run(t.text, { session: t.session, history: t.history, signal }, (o) => {
+      if (o.t === "text") said += o.d;
       if (o.t === "session" || o.t === "text" || o.t === "tool") out.push(o);
     });
   } catch (e) {
-    done = { t: "done", text: "", code: null, error: (e as Error).message };
+    done = { t: "done", text: said, code: null, error: (e as Error).message };
+  } finally {
+    clearInterval(beat);
   }
   await out.close();
   const body = {
@@ -186,10 +200,16 @@ export async function turnLoop(io: LoopIO): Promise<void> {
         continue;
       }
       const began = Date.now();
-      const { turns } = await svc.call<{ turns?: Claimed[] }>("GET", `/api/node/turns?wait=${WAIT_S}`, undefined, {
-        timeout: (WAIT_S + 15) * 1000,
-        signal,
-      });
+      // one turn at a time: a turn claimed and left waiting here would look silent and be handed to another node
+      const { turns } = await svc.call<{ turns?: Claimed[] }>(
+        "GET",
+        `/api/node/turns?wait=${WAIT_S}&max=1`,
+        undefined,
+        {
+          timeout: (WAIT_S + 15) * 1000,
+          signal,
+        },
+      );
       said = "";
       wait = BACKOFF.min;
       // a service that answers at once with nothing is not a long poll: never a busy loop

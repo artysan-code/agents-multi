@@ -153,7 +153,7 @@ Deno.test("turnLoop: claimed turns are answered one at a time, pieces batched, t
   assertEquals(seen.map((s) => [s.text, s.session]), [["q-t1", "s0"], ["q-t2", null]]);
   assertEquals(seen[1].history, [{ q: "a", a: "b" }]);
   const paths = f.calls.map((c) => `${c.method} ${c.path}`);
-  assertEquals(paths[0], "GET /api/node/turns?wait=25");
+  assertEquals(paths[0], "GET /api/node/turns?wait=25&max=1");
   assertEquals(paths.filter((p) => p === "POST /api/turns/t1/done").length, 1);
   // t1 is entirely reported before t2 starts
   assert(paths.indexOf("POST /api/turns/t1/done") < paths.indexOf("POST /api/turns/t2/events"));
@@ -236,4 +236,27 @@ Deno.test("answerTurn: stopping the node does not report a turn it cannot finish
     .catch((e) => e as Error);
   assert(r instanceof Error);
   assert(!f.calls.some((c) => c.path.endsWith("/done")));
+});
+
+Deno.test("answerTurn: a silent run keeps its turn with empty batches, and a failure keeps what was said", async () => {
+  const f = fake([]);
+  const r = await answerTurn(
+    f.svc,
+    turn("t7"),
+    (_t, _o, onEvent) => {
+      onEvent({ t: "text", d: "half an answer" });
+      // silent for longer than three heartbeats, then it breaks
+      return new Promise((_, no) => setTimeout(() => no(new Error("claude exited")), 70));
+    },
+    new AbortController().signal,
+    5,
+    20,
+  );
+  assertEquals(r.error, "claude exited");
+  const beats = f.calls.filter((c) =>
+    c.path === "/api/turns/t7/events" && (c.body as { events: unknown[] }).events.length === 0
+  );
+  assert(beats.length >= 2, `heartbeats: ${beats.length}`);
+  const done = f.calls.find((c) => c.path === "/api/turns/t7/done")!.body as { text: string; error: string };
+  assertEquals(done, { text: "half an answer", error: "claude exited" });
 });

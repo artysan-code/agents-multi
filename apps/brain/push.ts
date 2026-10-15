@@ -142,6 +142,17 @@ export interface Subscription {
 
 /** Pure: a subscription as the service accepts it, or why not: an https endpoint on a public name, and the two
  *  keys of the right size. */
+/** The browsers' push services: a subscription's endpoint is on one of them, never anywhere else (on a service
+ *  hosted for others, an endpoint of the person's choosing would make the service post to any address). */
+export const PUSH_HOSTS = [
+  "fcm.googleapis.com", // Chrome, Edge on Android, Brave, Opera
+  "updates.push.services.mozilla.com", // Firefox
+  "web.push.apple.com", // Safari, iOS home-screen apps
+  ".notify.windows.com", // Edge on Windows
+];
+const pushHost = (host: string) =>
+  PUSH_HOSTS.some((h) => h.startsWith(".") ? host.endsWith(h) && host.length > h.length : host === h);
+
 export function cleanSubscription(raw: unknown): Subscription | string {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const keys = (r.keys && typeof r.keys === "object" ? r.keys : {}) as Record<string, unknown>;
@@ -155,8 +166,8 @@ export function cleanSubscription(raw: unknown): Subscription | string {
   if (
     url.protocol !== "https:" || String(r.endpoint).length > 700 || url.username || url.password ||
     host === "localhost" || host.endsWith(".localhost") || !host.includes(".") || /^[\d.]+$/.test(host) ||
-    host.startsWith("[")
-  ) return "endpoint is the https address of a push service";
+    host.startsWith("[") || !pushHost(host)
+  ) return "endpoint is the https address of a browser's push service";
   try {
     if (unb64u(String(keys.p256dh)).length !== 65 || unb64u(String(keys.auth)).length !== 16) throw 0;
   } catch {
