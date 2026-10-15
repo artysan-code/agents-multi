@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   attentionOfEvent,
+  cleanGuard,
   fillPlan,
   finished,
   follow,
@@ -12,11 +13,13 @@ import {
   type Plan,
   planErrors,
   planOfSkill,
+  readGuard,
   readySteps,
   runId,
   savedWorkflows,
   saveWorkflow,
   skillText,
+  stepChild,
   stepPrompt,
   teamLine,
 } from "../../../shared/mcp/lib/runs.ts";
@@ -276,5 +279,41 @@ Deno.test("runs: save a workflow as a skill, find it by name, the project's wins
     let failed = false;
     await bad().catch(() => failed = true);
     assert(failed);
+  }
+});
+
+Deno.test("runs: a routine's run holds its children to its guard — ask rules and refused ones — a run by hand to none", async () => {
+  const s = plan().steps[0];
+  const x = {
+    folder: "/w/site",
+    task: "Review the PR",
+    run: { id: "r1", step: "review" },
+    owner: { project: "/w/site" },
+    team: "{}",
+  };
+  const byHand = stepChild(s, { ...x, guard: null });
+  assertEquals([byHand.askTools, byHand.disallowedTools, byHand.allowedTools], [
+    undefined,
+    undefined,
+    ["mcp__team__team_send"],
+  ]);
+  const guard = cleanGuard({
+    ask: ["mcp__*__*delete*", "mcp__*__*delete*", "rm -rf /", 3],
+    deny: ["Bash(npm publish:*)", "Bash(git push --force:*)"],
+    other: true,
+  });
+  assertEquals(guard, { ask: ["mcp__*__*delete*"], deny: ["Bash(npm publish:*)", "Bash(git push --force:*)"] });
+  const routine = stepChild(s, { ...x, guard });
+  assertEquals(routine.askTools, ["mcp__*__*delete*"]);
+  assertEquals(routine.disallowedTools, ["Bash(npm publish:*)", "Bash(git push --force:*)"]);
+  assertEquals(routine.allowedTools, ["mcp__team__team_send"], "the team channel stays");
+  // on disk: what startRun writes, the runner reads back cleaned; no file, no guard
+  const dir = await Deno.makeTempDir();
+  try {
+    assertEquals(await readGuard(dir), null);
+    await Deno.writeTextFile(`${dir}/guard.json`, JSON.stringify({ ask: ["mcp__x__y"], deny: "junk" }));
+    assertEquals(await readGuard(dir), { ask: ["mcp__x__y"], deny: [] });
+  } finally {
+    await Deno.remove(dir, { recursive: true });
   }
 });

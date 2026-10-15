@@ -6,6 +6,7 @@
 //
 //   <runs>/runs/<id>/plan.json      the plan as approved, never changed
 //   <runs>/runs/<id>/owner.json     whose it is: the coordinator's project and session (agents.ts `Owner`)
+//   <runs>/runs/<id>/guard.json     a routine's run only: the rules its children must ask for or are refused
 //   <runs>/runs/<id>/state.json     the run's and each step's state (the runner's alone)
 //   <runs>/runs/<id>/events.jsonl   what happened, one line each
 //   <runs>/runs/<id>/control.jsonl  the owner's answers, read by the runner
@@ -45,6 +46,7 @@ import {
 } from "./agents.ts";
 import { spawnDetached } from "./platform.ts";
 import { PROVIDER_NAMES, type ProviderName, providers } from "./providers.ts";
+import { parseRule } from "./reviewer.ts";
 
 interface PlanStep {
   id: string;
@@ -67,6 +69,47 @@ export interface Plan {
   tasks?: string[];
   concurrency?: number;
   steps: PlanStep[];
+}
+
+/** What a run's children are held to beyond their profile's mode when a routine started it (ADR 0010, 0011):
+ *  rules they must ask the hub for (the reviewer's), and rules refused. A run started by hand has none. */
+export interface Guard {
+  ask: string[];
+  deny: string[];
+}
+
+/** Pure: a guard file's content, kept to rules (the rest dropped, never trusted). */
+export function cleanGuard(raw: unknown): Guard {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const rules = (v: unknown) => Array.isArray(v) ? [...new Set(v.flatMap((x) => parseRule(x)?.text ?? []))] : [];
+  return { ask: rules(r.ask), deny: rules(r.deny) };
+}
+
+/** Pure: a step's child as the runner starts it: the team channel, and the run's guard when it has one. */
+export function stepChild(
+  s: PlanStep,
+  x: {
+    folder: string;
+    task: string;
+    run: { id: string; step: string };
+    owner: Owner;
+    team: string;
+    guard: Guard | null;
+  },
+): Parameters<typeof startChild>[0] {
+  return {
+    profile: s.profile,
+    provider: s.provider,
+    dir: x.folder,
+    task: x.task,
+    model: s.model,
+    run: x.run,
+    owner: x.owner,
+    mcpConfig: x.team,
+    allowedTools: ["mcp__team__team_send"],
+    ...(x.guard?.deny.length ? { disallowedTools: x.guard.deny } : {}),
+    ...(x.guard?.ask.length ? { askTools: x.guard.ask } : {}),
+  };
 }
 
 type StepStatus = "waiting" | "confirm" | "running" | "done" | "failed" | "skipped" | "stopped";
@@ -355,12 +398,13 @@ export async function ensureRunner(id: string, runs = runsDir(), waitMs = 5000):
 }
 
 /** Checks and writes a plan, then starts its runner. The profiles must exist and the folders be under
- *  the home folder. */
+ *  the home folder. A routine's run comes with a `guard` its children are started under. */
 export async function startRun(
   plan: Plan,
   runs = runsDir(),
   home = Deno.env.get("HOME") ?? "",
   owner?: Owner,
+  guard?: Guard,
 ): Promise<string> {
   const errs = planErrors(plan);
   for (const s of plan.steps ?? []) {
@@ -382,6 +426,7 @@ export async function startRun(
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify(plan, null, 2));
   if (owner) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owner, null, 2));
+  if (guard) await Deno.writeTextFile(`${dir}/guard.json`, JSON.stringify(cleanGuard(guard), null, 2));
   await writeState(dir, initialState(plan));
   await append(`${dir}/events.jsonl`, {
     at: new Date().toISOString(),
@@ -455,6 +500,10 @@ async function handoffDir(folder: string, run: string, runDir: string): Promise<
 
 // ---------------------------------------------------------------- the runner
 
+/** A run's guard (`guard.json`), or null for a run started by hand. */
+export const readGuard = async (dir: string): Promise<Guard | null> =>
+  await Deno.readTextFile(`${dir}/guard.json`).then((t) => cleanGuard(JSON.parse(t))).catch(() => null);
+
 /** Runs a run until it is done or stopped: `agents run drive <id>`. Started again, it picks up from its
  *  state (a step running keeps its child). */
 export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promise<RunStatus> {
@@ -466,6 +515,7 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
   const { plan } = r;
   const st = r.state;
   const home = Deno.env.get("HOME") ?? "";
+  const guard = await readGuard(dir);
   const byId = new Map(plan.steps.map((s) => [s.id, s]));
   const folderOf = (s: PlanStep) => (s.folder ?? plan.folder ?? "").replace(/^~(?=\/|$)/, home);
   const handoffs = new Map<string, string>();
@@ -511,18 +561,15 @@ export async function drive(id: string, runs = runsDir(), everyMs = 1000): Promi
       },
     });
     const m = await startChild(
-      {
-        profile: s.profile,
-        provider: s.provider,
-        dir: folderOf(s),
+      stepChild(s, {
+        folder: folderOf(s),
         task: stepPrompt(plan, s, id, handoffOf),
-        model: s.model,
         run: { id, step: sid },
         // read again: the run may have been adopted since the runner started
         owner: await readRun(id, runs).then((x) => ({ project: x?.project ?? r.project ?? "/", owner: x?.owner })),
-        mcpConfig: team,
-        allowedTools: ["mcp__team__team_send"],
-      },
+        team,
+        guard,
+      }),
       runs,
     );
     const was = st.steps[sid];

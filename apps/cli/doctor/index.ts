@@ -16,6 +16,7 @@ import { loginChecks } from "./checks/logins.ts";
 import { mcpChecks } from "./checks/mcp.ts";
 import { profileChecks } from "./checks/profiles.ts";
 import { repoChecks } from "./checks/repo.ts";
+import { reviewerChecks } from "./checks/reviewer.ts";
 import { runtimeChecks } from "./checks/runtime.ts";
 import { sharedChecks } from "./checks/shared.ts";
 import { stubChecks } from "./checks/stub.ts";
@@ -51,6 +52,7 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
   loginChecks,
   agentsChecks,
   codexChecks,
+  reviewerChecks,
 ];
 
 /**
