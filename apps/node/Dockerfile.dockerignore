@@ -1,0 +1,17 @@
+# The node image's context (apps/node/Dockerfile): only what it copies.
+*
+!deno.json
+!deno.lock
+!CHANGELOG.md
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!apps/cli
+!apps/brain
+!apps/node/entrypoint.sh
+!apps/node/probe.sh
+!shared
+!bin
+!desktop
+!config.example
+!pkg
+**/node_modules

@@ -1,0 +1,54 @@
+# AppArmor profile of the Agents Multi node container (ADR 0012): Docker's `docker-default` (moby/profiles,
+# apparmor/v0.2.3, the template Docker fills in at run time) with two changes, so that bubblewrap can make
+# Claude Code's sandbox: `deny mount` becomes `mount` and `pivot_root` is allowed. Nothing else is loosened.
+# Load it on the host (README.md, step 2): sudo apparmor_parser -r -W agents-node
+abi <abi/3.0>,
+
+#include <tunables/global>
+
+profile agents-node flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  # Disallow AF_ALG (Linux kernel crypto API); see https://copy.fail/
+  deny network alg,
+  # Disallow AF_VSOCK to prevent host/guest communication.
+  deny network vsock,
+  capability,
+  file,
+  umount,
+  # Host (privileged) processes may send signals to container processes.
+  signal (receive) peer=unconfined,
+  # runc and crun may send signals to container processes (for "docker stop").
+  signal (receive) peer=runc,
+  signal (receive) peer=crun,
+  # dockerd, when it runs under the docker-default profile, may send signals (for "docker kill").
+  signal (receive) peer=docker-default,
+  # Container processes may send signals amongst themselves.
+  signal (send,receive) peer=agents-node,
+
+  deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
+  # deny write to files not in /proc/<number>/** or /proc/sys/**
+  deny @{PROC}/{[^1-9/],[^1-9/][^0-9/],[^1-9s/][^0-9y/][^0-9s/],[^1-9/][^0-9/][^0-9/][^0-9/]*}/** w,
+  deny @{PROC}/sys/[^k]** w,  # deny /proc/sys except /proc/sys/k* (effectively /proc/sys/kernel)
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,  # deny everything except shm* in /proc/sys/kernel/
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+
+  # the change: bubblewrap mounts its sandbox's filesystems and switches root into them
+  mount,
+  pivot_root,
+
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/devices/virtual/powercap/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  # allow processes within the container to trace each other,
+  # provided all other LSM and yama setting allow it.
+  ptrace (trace,tracedby,read,readby) peer=agents-node,
+}
