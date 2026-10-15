@@ -2,7 +2,7 @@
 # ci.sh — the whole gate, run by CI on every push of dev, of an agent's branch (wf/*, agent/*) and of a pull
 # request; `deno task ship` waits for its verdict (the note CI leaves on the commit) instead of running it.
 #
-#   scripts/ci.sh             check, commit subjects, tests, MCP server probe, secret scan, console UI build, site build
+#   scripts/ci.sh             check, commit subjects, tests, MCP server probe, secret scan, console UI and web app builds, site build
 #   scripts/ci.sh --no-site   the same without the site build
 #   scripts/ci.sh --fast      check (Deno and shell), commit subjects and tests: what a workstation runs, at low
 #                             priority, before saying done; the builds, the probe, the scan and the Rust are CI's
@@ -24,7 +24,8 @@ ui() {
   local out rc=0
   out=$(mktemp -d)
   (cd apps/ui && pnpm install --frozen-lockfile --silent && pnpm exec tsc --noEmit &&
-    pnpm exec vite build --logLevel warn --outDir "$out" --emptyOutDir) || rc=$?
+    pnpm exec vite build --logLevel warn --outDir "$out" --emptyOutDir &&
+    pnpm exec vite build --config vite.web.config.ts --logLevel warn --outDir "$out" --emptyOutDir) || rc=$?
   rm -rf "$out"
   return "$rc"
 }
