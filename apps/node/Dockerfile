@@ -35,16 +35,35 @@ FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d
 
 # bubblewrap and socat: Claude Code's Bash sandbox (the filesystem and the network); git and ssh: the clones and
 # the branches agentd pushes; iproute2: the node checks with `ss` that nothing of ours listens beyond loopback;
-# jq and python3: the launchers and bin/agents read the brain's host from accounts.json; nodejs and npm: Claude Code and the
-# third-party MCP servers that `agents install` pulls in.
+# jq and python3: the launchers and bin/agents read the brain's host from accounts.json.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bubblewrap socat git openssh-client ca-certificates curl \
-    iproute2 procps jq python3-minimal nodejs npm \
+    iproute2 procps jq python3-minimal \
   && rm -rf /var/lib/apt/lists/*
+
+# Node, for Claude Code (>= 22) and the third-party MCP servers `agents install` pulls in: the official build of
+# the active LTS, pinned and checked, not Debian's (Node 20, past its end of life, and npm with a pile of node-*
+# packages). Moving it: the version and both checksums from https://nodejs.org/dist/v<version>/SHASUMS256.txt.
+ARG NODE_VERSION=24.22.0
+ARG NODE_SHA256_X64=28ea0a438de9a13bd7891fd758eee6c7819ee8af5442dfd8d45bd65e56d4228c
+ARG NODE_SHA256_ARM64=b7e7991d5407815adfa74a2a9cd4db683552c8ce32ff4a295c22e972849c3f5d
+ARG TARGETARCH
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) arch=x64; sum="$NODE_SHA256_X64" ;; \
+      arm64) arch=arm64; sum="$NODE_SHA256_ARM64" ;; \
+      *) echo "no Node build for $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+  && file="node-v${NODE_VERSION}-linux-${arch}.tar.gz" \
+  && curl -fsSLo "/tmp/$file" "https://nodejs.org/dist/v${NODE_VERSION}/$file" \
+  && echo "$sum  /tmp/$file" | sha256sum -c - \
+  && tar -xzf "/tmp/$file" -C /usr/local --strip-components=1 --no-same-owner \
+    --exclude='*/CHANGELOG.md' --exclude='*/README.md' --exclude='*/LICENSE' --exclude='*/include' --exclude='*/share' \
+  && rm "/tmp/$file" \
+  && node --version && npm --version
 
 COPY --from=denoland/deno:bin-2.9.7@sha256:bc5aa4466e21b6d3021226a85ba2e1911f7c386254d97b9d797903ab74edace2 /deno /usr/local/bin/deno
 
-# Claude Code at the version the setup was measured with; its native binary needs no Node at run time.
+# Claude Code at the version the setup was measured with.
 ARG CLAUDE_CODE_VERSION=2.1.300
 RUN npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
   && claude --version
