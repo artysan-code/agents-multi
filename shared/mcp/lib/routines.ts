@@ -4,10 +4,12 @@
 // (apps/cli/console/routines.ts); the CLI and the MCP tools only write and read the files, so the tools'
 // narrow permissions are enough. A fired routine works in its own worktree under the repository's run
 // policy (policy.ts) and belongs to its project, with no coordinator: any coordinator of the project
-// sees it as an orphan and may adopt it (ADR 0005).
+// sees it as an orphan and may adopt it (ADR 0005). What its children ask the hub for is the reviewer's
+// (reviewer.ts, ADR 0011): the owner's rules, a judge where a rule wants one, the owner past that.
 
 import { nextFire, parseCron } from "./cron.ts";
 import {
+  answer,
   type ChildState,
   type Coordinator,
   listChildren,
@@ -37,6 +39,18 @@ import {
   setProjectAccount,
 } from "./limitrules.ts";
 import { DENY_TOOLS, isolate, loadPolicy, type Policy } from "./policy.ts";
+import {
+  forcedRules,
+  type Item,
+  loadReviewRules,
+  readDecisions,
+  readReviewState,
+  recordDecision,
+  type ReviewDeps,
+  reviewPass,
+  runJudge,
+  writeReviewState,
+} from "./reviewer.ts";
 import { listAccounts, type ProviderName } from "./providers.ts";
 import { listRuns, type Plan, readRun, startRun } from "./runs.ts";
 
@@ -310,7 +324,7 @@ export function preamble(r: Routine, id: string, branch: string, p: Policy, work
   return [
     `[routine ${r.name} · run ${id}] You work unattended, in ${worktree}, on the branch ${branch}, a worktree of its own.`,
     `You ${p.commit ? "may commit" : "may not commit"} and ${push}. Anything outward (deploy, send, delete, spend) ` +
-    "waits for the owner: ask for it and wait, do not look for a way round.",
+    "is decided by the owner's reviewer: ask for it and wait; a refusal is final, do not look for a way round.",
     "Say in your last message what you did and what is left.",
   ].join("\n");
 }
@@ -354,6 +368,8 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
   const where = iso.path + r.folder.slice(r.project.length);
   const out: Fired = { id, at: new Date().toISOString(), branch: iso.branch, worktree: iso.path, told: [] };
   if (r.action.kind === "agent") {
+    // what a reviewer rule names always comes to the hub, and what it denies never runs (ADR 0011)
+    const forced = forcedRules(await loadReviewRules(r.project));
     const m = await startChild({
       profile: r.action.profile,
       provider: r.action.provider,
@@ -361,7 +377,8 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
       task: `${preamble(r, id, iso.branch, policy, iso.path)}\n\n${r.action.task}`,
       model: r.action.model,
       owner,
-      disallowedTools: DENY_TOOLS,
+      disallowedTools: [...DENY_TOOLS, ...forced.deny],
+      askTools: forced.ask,
     });
     out.child = m.id;
   } else {
@@ -375,8 +392,9 @@ export async function fire(r: Routine, p?: Policy): Promise<Fired> {
 
 // ---------------------------------------------------------------- the tick
 
-/** What a firing is waiting for from the owner, and whether it has ended. `lingering`: it has, but a child
- *  of it is still alive, idle after its turn, and is to be stopped. */
+/** What a firing's workflow is waiting for from the owner (a step to confirm, one failed), and whether it has
+ *  ended. Its children's requests are the reviewer's, not here. `lingering`: it has ended, but a child of it is
+ *  still alive, idle after its turn, and is to be stopped. */
 export interface Watch {
   requests: { id: string; what: string }[];
   ended: boolean;
@@ -395,9 +413,7 @@ export async function watchFired(f: Fired): Promise<Watch> {
     : f.run
     ? (await listChildren()).filter((c) => c.meta.run?.id === f.run)
     : [];
-  const requests = children.flatMap((c) =>
-    c?.state.pending.map((p) => ({ id: `${c.meta.id}:${p.request}`, what: p.what })) ?? []
-  );
+  const requests: Watch["requests"] = [];
   let ended = children.length > 0 && children.every((c) => childDone(c?.state));
   const lingering = ended && children.some((c) => c && c.state.phase !== "ended");
   const error = children.map((c) => c?.state.error).find(Boolean) || undefined;
@@ -672,8 +688,73 @@ export async function applyProposals(
   return n;
 }
 
-/** Starts the backend's routine loop; the returned function stops it. */
-export function startRoutines(notify: Deps["notify"], log: Deps["log"] = console.log, everyMs = 15_000): () => void {
+// ---------------------------------------------------------------- the reviewer's view of the routines
+
+/** What the children of the routines' firings still running wait for in the hub (the reviewer's items). */
+export async function unattended(dir = routinesDir()): Promise<Item[]> {
+  const out: Item[] = [];
+  let all: Awaited<ReturnType<typeof listChildren>> | undefined;
+  for (const r of await listRoutines(dir)) {
+    const st = await readState(r.id, dir);
+    for (const f of st.runs.filter((f) => !f.ended)) {
+      const children = f.child
+        ? [await readChild(f.child)]
+        : f.run
+        ? (all ??= await listChildren()).filter((c) => c.meta.run?.id === f.run)
+        : [];
+      for (const c of children) {
+        for (const p of c?.state.pending ?? []) {
+          out.push({
+            child: c!.meta.id,
+            profile: c!.meta.profile,
+            provider: c!.meta.provider,
+            routine: { id: r.id, name: r.name, project: r.project, task: r.action.task },
+            run: f.id,
+            pending: p,
+          });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+export const realReviewDeps = (notify: Deps["notify"], log: Deps["log"], dir = routinesDir()): ReviewDeps => ({
+  now: () => new Date(),
+  items: () => unattended(dir),
+  rules: (project) => loadReviewRules(project),
+  answer: (child, request, verdict, message) => answer(child, request, verdict, message),
+  judge: (profile, model, prompt) => runJudge(profile, model, prompt),
+  blocked: async (account) => blockedAmong(await readSnapshot(), [account], Date.now() / 1000).length > 0,
+  recent: () => readDecisions(),
+  record: (d) => recordDecision(d),
+  readState: () => readReviewState(),
+  writeState: (s) => writeReviewState(s),
+  notify,
+  log,
+  home: Deno.env.get("HOME") ?? "",
+});
+
+/** Starts the backend's routine loop, and beside it the reviewer's (its own, so that a slow judge never
+ *  delays a firing); the returned function stops both. */
+export function startRoutines(
+  notify: Deps["notify"],
+  log: Deps["log"] = console.log,
+  everyMs = 15_000,
+  reviewEveryMs = 5_000,
+): () => void {
+  let reviewing = false;
+  const review = setInterval(async () => {
+    if (reviewing) return;
+    reviewing = true;
+    try {
+      await reviewPass(realReviewDeps(notify, log));
+    } catch (e) {
+      log(`reviewer: ${(e as Error).message}`);
+    } finally {
+      reviewing = false;
+    }
+  }, reviewEveryMs);
   let busy = false;
   const t = setInterval(async () => {
     if (busy) return;
@@ -687,5 +768,8 @@ export function startRoutines(notify: Deps["notify"], log: Deps["log"] = console
       busy = false;
     }
   }, everyMs);
-  return () => clearInterval(t);
+  return () => {
+    clearInterval(t);
+    clearInterval(review);
+  };
 }

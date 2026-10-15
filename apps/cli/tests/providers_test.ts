@@ -170,3 +170,19 @@ Deno.test("agents: a child's process is child.pid, or claude.pid in a child olde
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("providers: a Claude child's ask rules go in a --settings of its own, its deny rules beside them", async () => {
+  const base = { command: "claude-x", mode: "auto" as const, profile: "x", runtime: "/r" };
+  const plain = await providers.claude.exec(base);
+  assert(!("S" in plain.env));
+  const forced = await providers.claude.exec({
+    ...base,
+    askTools: ["mcp__google__gmail_send", "Bash(wrangler deploy:*)"],
+    disallowedTools: ["Bash(npm publish:*)"],
+  });
+  assertEquals(JSON.parse(forced.env.S), {
+    permissions: { ask: ["mcp__google__gmail_send", "Bash(wrangler deploy:*)"] },
+  });
+  assertEquals(forced.env.X, "Bash(npm publish:*)");
+  assert(forced.line.includes('${S:+--settings "$S"}'), "the value reaches the line as a variable, never as text");
+});

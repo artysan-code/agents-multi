@@ -58,6 +58,8 @@ export interface ExecInput {
   allowedTools?: string[];
   /** rules it is denied whatever its mode (Claude only) */
   disallowedTools?: string[];
+  /** rules it must ask for whatever its mode, so that the auto classifier cannot pass them (Claude only) */
+  askTools?: string[];
 }
 
 export interface Provider {
@@ -104,9 +106,10 @@ const claudeProvider: Provider = {
     if (i.mcpConfig) env.C = i.mcpConfig;
     if (i.allowedTools?.length) env.T = i.allowedTools.join(",");
     if (i.disallowedTools?.length) env.X = i.disallowedTools.join(",");
+    if (i.askTools?.length) env.S = JSON.stringify({ permissions: { ask: i.askTools } });
     return {
       line: 'exec "$L" -p ${M:+--model "$M"} ${C:+--mcp-config "$C"} ${T:+--allowedTools "$T"} ' +
-        '${X:+--disallowedTools "$X"} ' +
+        '${X:+--disallowedTools "$X"} ${S:+--settings "$S"} ' +
         "--input-format stream-json --output-format stream-json --verbose " +
         '--permission-mode "$P" --permission-prompt-tool stdio < "$R/in" > "$R/out.jsonl" 2> "$R/err.log"',
       env,

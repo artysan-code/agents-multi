@@ -7,6 +7,7 @@ import { tasksCommand } from "./tasks.ts";
 import { agentCommand } from "./agent.ts";
 import { runCommand } from "./run.ts";
 import { routineCommand } from "./routine.ts";
+import { reviewCommand } from "./review.ts";
 import { accountCommand } from "./account.ts";
 import { googleCommand } from "./google.ts";
 import { readJson } from "./lib/fs.ts";
@@ -231,6 +232,9 @@ switch (cmd) {
   case "routine":
     Deno.exit(await routineCommand(rest));
     break;
+  case "review":
+    Deno.exit(await reviewCommand(rest));
+    break;
   case "account":
     Deno.exit(await accountCommand(rest));
     break;
@@ -301,6 +305,7 @@ switch (cmd) {
   run     start|list|status|answer|resume   workflow runs: a plan of steps, each a child, with HANDOFFs and a
           team channel (agents run, alone, says how)
   routine add|list|rm|run   unattended jobs (cron, at, a run's end) on their own branch, under the repo's policy
+  review  [rules [folder]]    what the reviewer allowed, refused or left to you in routines' runs; the rules they get
   account status|default|proposals|propose|accept|decline|events   the limit rules per account, a project's default account, and the owner's yes to a switch
   brain-login [account]       sign this machine in to the brain: token and backup key into the vault, nothing to copy
   brain-backup [--force]      a sealed copy of the brain here, only when it changed (claude-brain-backup.timer)
