@@ -71,7 +71,7 @@ shell's.
     `PATH`, `bin/agents`' permissions); the package's copy runs on the package's Deno. Without either,
     nothing is started and the log says why.
   - **Permissions**: `bin/agents`' set (`--allow-read --allow-write --allow-run --allow-env
-    --allow-sys=hostname`) with the network open (`--allow-net`), not `-A`: `bin/agents` lists the
+    --allow-sys=hostname,loadavg,systemMemoryInfo`) with the network open (`--allow-net`), not `-A`: `bin/agents` lists the
     brain's host, which comes from the person's `accounts.json`, read by Python in that script.
     Opening the network adds no reach the process lacks, since `--allow-run` already lets it start
     any program. A test in `backend.rs` keeps the list equal to `bin/agents`' but for the network.

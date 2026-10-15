@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 export AGENTS_MULTI_CONFIG=apps/cli/tests/fixtures/config
 # loopback only: the tests talk to servers of their own on ports the system picks
 net=127.0.0.1
-perms=(--allow-read --allow-write --allow-run --allow-env --allow-sys=hostname "--allow-net=$net")
+perms=(--allow-read --allow-write --allow-run --allow-env "--allow-sys=hostname,loadavg,systemMemoryInfo" "--allow-net=$net")
 
 serial=() pool=()
 for f in apps/cli/tests/*_test.ts apps/brain/tests/*_test.ts; do

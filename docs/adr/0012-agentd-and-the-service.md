@@ -53,7 +53,9 @@ The owner chose (2026-10-15), among the options weighed:
 - **Its credential is its own**: the personal token `agents brain-login` already makes per machine
   (`token:<machine>`, listed and revoked one by one on `/account`). The service takes the node's name from the
   token, never from the body: a token can announce only its own node and claim or report only the jobs
-  placed on it.
+  placed on it. The name is the machine's hostname (`agents-multi su <hostname>` is how the token is named;
+  `nodeNameOf`), which the node computes itself and never takes from the service; `name` in `node.json` when
+  the token was named otherwise, and a container sets its hostname.
 - **Announcing** (`PUT /api/node`, every 30 s): platform, version, load and memory, its **session cap** and the
   sessions running, the accounts it can run (each profile with a Claude login, without reading it), whether
   the owner is at it (a graphical session not locked; a server never is), whether the sandbox works there,
@@ -78,6 +80,9 @@ The owner chose (2026-10-15), among the options weighed:
   agent anywhere. What a token still reads is the brain itself: a narrower `node` scope is F2.
 - A node's **own routines** run there without a signature, as today: they are files on that machine. agentd
   records each firing as a job of its own (`local`), so that it is seen and can be resumed.
+- **A job taken is a one-shot routine** (`job-<id>`, `at` now, the job's id in it): the routines' tick fires
+  it, so the run policy, the limits, the reviewer and the timeout are the same as for any routine. A job that
+  fails the check is declined with the reason, and the owner is told.
 
 ### Placement
 
@@ -98,6 +103,10 @@ The owner chose (2026-10-15), among the options weighed:
   HANDOFFs come back into its `.agents/runs/`, and the child is told it continues work a machine dropped: the
   task, where it was, what the commits and HANDOFFs say.
 - A job in a folder with no remote, or a repository the node has no clone of, cannot move: the proposal says so.
+  Nor can the runs of a repository whose policy forbids pushing (`push: false`): its hook refuses the
+  checkpoint too.
+- F1 resumes a run as **one child** of the job's account: a workflow's later steps are not restarted one by
+  one, the child reads their HANDOFFs and carries on; resuming step by step is F2.
 
 ### The server node
 
@@ -110,6 +119,9 @@ The owner chose (2026-10-15), among the options weighed:
   our vault key does. Where there is no keyring, `agents vault pair --file` keeps it in a file only the user
   reads (`<state>/vault-key`, 0600); the doctor checks its mode. Whoever has the disk or root has every secret of
   the vault: the price the owner accepted.
+- **`agents serve --headless`** refuses to start unless `node.json` says `headless` (`agents node enable
+  --headless`): the children's sandbox comes from that file, so a headless backend without it would run them
+  unsandboxed.
 - **Bash sandbox on, failing closed**: every child on a headless node gets `--settings` with
   `sandbox.enabled`, `failIfUnavailable` and `allowUnsandboxedCommands: false` (which also stops a repository's
   settings from loosening it), reads denied on the vault key, the gateway tokens, the Claude logins and the git
@@ -145,6 +157,10 @@ Measured on 2026-10-15 (Docker 29.9, kernel 7.2, debian:trixie-slim, bubblewrap 
 - **A sandboxed command may make a user namespace of its own** with srt 0.0.79 (its seccomp layer blocks only
   Unix sockets); later srt releases refuse it. It is the same on a desktop host, and the mounts it inherits stay
   locked; it is noted, not solved here.
+- **agentd's own probe** (`apps/cli/node/probe.ts`, `agents node probe`), run in the same container: with
+  Docker's defaults it fails ("No permissions to create a new namespace"), with the seccomp profile alone it
+  fails ("Can't mount proc"), with the profile and `systempaths=unconfined` it passes; each failure names
+  what is missing.
 - **AppArmor**: Docker's `docker-default` profile has `deny mount`, which would stop bwrap again on a host with
   AppArmor (Debian has it; this workstation does not, so it was not measured). The node ships its own profile
   (`apps/node/apparmor/agents-node`: `docker-default` with mounts and `pivot_root` allowed), loaded once on the
@@ -163,10 +179,11 @@ Measured on 2026-10-15 (Docker 29.9, kernel 7.2, debian:trixie-slim, bubblewrap 
 
 ## Slices
 
-- **F1 (this)**: the service's nodes and jobs (`apps/brain/fleet.ts`), the signature (`shared/mcp/lib/nodes.ts`),
-  agentd's loop (announce, verify, claim, run, checkpoint, report), resume from branch, `agents nodes` and
-  `agents node`, the vault key file, the sandbox for headless children and its probe, the node image's files,
-  the doctor's `node.*` checks.
+- **F1**: the service's nodes and jobs (`apps/brain/fleet.ts`), the signature (`shared/mcp/lib/nodes.ts`),
+  agentd's loop (announce, verify, claim, run, checkpoint, report: `apps/cli/node/`), resume from branch
+  (`shared/mcp/lib/moving.ts`), `agents node`, the vault key file, the sandbox for headless children
+  (`shared/mcp/lib/headless.ts`) and its probe; built on branches of their own: the node image (`apps/node/`),
+  `agents nodes` (the view, propose, accept) and the doctor's `node.*` checks.
 - **F2**: a `node` token scope; MCP tools for a coordinator (list nodes, propose); the console's view (with
   phase E); presence beyond "a session not locked".
 
@@ -175,6 +192,7 @@ Measured on 2026-10-15 (Docker 29.9, kernel 7.2, debian:trixie-slim, bubblewrap 
 - The service becomes the one place the machines meet; when it is down, nodes keep running their own routines
   and their running jobs, and catch up when it is back.
 - A second process class runs on a server, as a container; app mode still needs neither systemd nor git.
+- The CLI and the app's backend may read the load and the memory (`--allow-sys=hostname,loadavg,systemMemoryInfo`).
 - The relay of ADR 0005 (issue #11) is not built: a job moves as a branch, never as a live session.
 - Work that moves needs a remote both nodes can reach and a clone on each; the server's clones and credentials
   are the owner's to make, once.

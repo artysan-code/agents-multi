@@ -310,6 +310,15 @@ export async function addRoutine(
   return r;
 }
 
+/** Stores a routine made elsewhere than `addRoutine` (agentd's one-shot routine for a job placed on this
+ *  node, ADR 0012), checked the same way. */
+export async function saveRoutine(r: Routine, dir = routinesDir()): Promise<void> {
+  const errs = validRoutineId(r.id) ? routineErrors(r) : ["not a routine id"];
+  if (errs.length) throw new Error(errs.join("; "));
+  await writeJson(`${dir}/${r.id}.json`, r);
+  await writeState(r.id, { runs: [], ...(r.trigger.kind === "at" ? { next: r.trigger.at } : {}) }, dir);
+}
+
 /** Removes a routine and its state. What it started stays (worktrees, branches, children). */
 export async function removeRoutine(id: string, dir = routinesDir()): Promise<void> {
   if (!(await readRoutine(id, dir))) throw new Error(`no routine ${id}`);

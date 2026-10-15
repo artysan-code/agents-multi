@@ -11,7 +11,7 @@
     "check": "bash scripts/check.sh",
     "test": "bash scripts/test.sh",
     "ci": "bash scripts/ci.sh",
-    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname --allow-net=127.0.0.1:8384,127.0.0.1:7331,127.0.0.1:8789 apps/cli/main.ts doctor",
+    "doctor": "deno run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname,loadavg,systemMemoryInfo --allow-net=127.0.0.1:8384,127.0.0.1:7331,127.0.0.1:8789 apps/cli/main.ts doctor",
     "release": "deno run --allow-read --allow-write --allow-run=git scripts/release.ts",
     "ship": "deno run --allow-read --allow-write --allow-run scripts/ship.ts"
   },
