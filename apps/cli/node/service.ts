@@ -9,6 +9,7 @@ import { STATE } from "../lib/paths.ts";
 import { getSecret } from "../../../shared/mcp/lib/vault.ts";
 import type { Announce, Job, NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 import type { PhoneAnswer } from "../../../shared/mcp/lib/webauthn.ts";
+import type { Stop } from "./runs.ts";
 
 /** A call the service refused: its HTTP status and the JSON it answered (`cancelled: true` on a turn stopped). */
 export class ServiceError extends Error {
@@ -100,7 +101,7 @@ export async function service(
 }
 
 export const announce = (s: Service, a: Announce) =>
-  s.call<{ jobs: Job[]; answers?: PhoneAnswer[]; declined?: Job[] }>("PUT", "/api/node", a);
+  s.call<{ jobs: Job[]; answers?: PhoneAnswer[]; declined?: Job[]; stops?: Stop[] }>("PUT", "/api/node", a);
 export const fleet = (s: Service) => s.call<{ nodes: NodeInfo[]; jobs: Job[]; now: string }>("GET", "/api/nodes");
 export const getJob = async (s: Service, id: string) => (await s.call<{ job: Job }>("GET", `/api/jobs/${id}`)).job;
 export const newJob = async (s: Service, body: Record<string, unknown>) =>

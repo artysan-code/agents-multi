@@ -140,14 +140,14 @@ export function taskSections(tasks: Task[], now: Date): TaskSections {
 
 // ---------------------------------------------------------------- routes
 
-export type View = "chat" | "waiting" | "tasks" | "brain" | "more" | "machines";
+export type View = "chat" | "waiting" | "tasks" | "brain" | "more" | "machines" | "agents";
 export interface Route {
   view: View;
   /** a chat's id (`new` for one not started), or a brain page's path */
   id?: string;
 }
 
-const VIEWS: View[] = ["chat", "waiting", "tasks", "brain", "more", "machines"];
+const VIEWS: View[] = ["chat", "waiting", "tasks", "brain", "more", "machines", "agents"];
 
 /** Pure: the tab a view belongs to (Machines is reached from More). */
 export const tabOf = (v: View): View => (v === "machines" ? "more" : v);

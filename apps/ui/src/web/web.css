@@ -1983,3 +1983,99 @@ li > .cmd, .steps .cmd {
   .cursor, .rec-dot, .vb-bars i, .tool.on { animation: none; }
   .pane.enter, .thread article.enter, .rows > li.enter, .answer.streaming .md > *, .convo, .toast { animation: none !important; }
 }
+
+/* ---- agents (ADR 0014, third round): every machine's runs, their last lines, the routines and what ended */
+.tag.info { background: var(--info-wash); color: var(--info); }
+.run-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.run-t {
+  flex: 1;
+  min-width: 0;
+}
+.run-t h3 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dot.working {
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-wash);
+  animation: run-pulse 1.6s ease-in-out infinite;
+}
+.dot.waiting {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-wash);
+}
+.dot.failed {
+  background: var(--crit);
+}
+.dot.ended {
+  background: var(--ok);
+}
+@keyframes run-pulse {
+  50% { opacity: .45; }
+}
+.run-k {
+  margin-top: 6px;
+}
+.run-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.run-steps li {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--fg-faint);
+  font: 11.5px var(--mono);
+}
+.run-steps li.running { background: var(--info-wash); color: var(--info); }
+.run-steps li.confirm, .run-steps li.failed { background: var(--warn-wash); color: var(--warn); }
+.run-steps li.done { background: var(--ok-wash); color: var(--ok); }
+.run-tail {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--fg-dim);
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 9.5em;
+  overflow: hidden;
+}
+.card.run.stale .run-tail, .card.run.stale .run-t {
+  opacity: .6;
+}
+.plain-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.run-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.run-row:first-child {
+  border-top: 0;
+}
+.run-row .tag {
+  margin-right: 4px;
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot.working { animation: none; }
+}

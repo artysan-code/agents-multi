@@ -1,7 +1,11 @@
 // t.ts — the web app's strings (../i18n/web.ts): the language of the browser, or the one the console's
 // language picker saved (the same localStorage key), English otherwise.
 
-import * as web from "../i18n/web.ts";
+import * as base from "../i18n/web.ts";
+import * as agents from "../i18n/web-agents.ts";
+
+// the Agents view's strings live in their own file (ADR 0014, third round)
+const web = { en: { ...base.en, ...agents.en }, it: { ...base.it, ...agents.it } };
 
 export type Key = keyof typeof web.en;
 

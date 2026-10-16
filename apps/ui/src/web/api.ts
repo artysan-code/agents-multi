@@ -149,3 +149,14 @@ export interface PageHead {
 }
 /** The most recently changed pages, newest first (the service lists them all; the phone shows the first few). */
 export const loadPages = () => call<{ pages: PageHead[] }>("/api/brain/pages").then((r) => r.pages.slice(0, 12));
+
+// ---- the agents of every machine (ADR 0014, third round): the list, its stream, a signed stop, a resume proposal
+export const loadRuns = () => call<import("./agents-core.ts").RunsState>("/api/runs");
+export const runsEvents = () => new EventSource("/api/runs/events");
+const runPath = (node: string, id: string) => `/api/runs/${encodeURIComponent(node)}/${encodeURIComponent(id)}`;
+/** A stop is signed with the passkey: the machine checks it before it stops anything. */
+export const stopRun = (node: string, id: string, expires: string, assertion: Assertion) =>
+  send("POST", `${runPath(node, id)}/stop`, { expires, assertion });
+/** Proposes carrying a run on elsewhere (`node`, or the best one free): accepted in Waiting like any job. */
+export const resumeRun = (node: string, id: string, to?: string) =>
+  send("POST", `${runPath(node, id)}/resume`, to ? { node: to } : {});

@@ -32,6 +32,7 @@ import { actOn, announce, newJob, type Service, service } from "./service.ts";
 import { getAnswers, getPasskeys, handleAnswers, relayRequests } from "./waiting.ts";
 import { revokedIds } from "./revocations.ts";
 import { ensureClone } from "./clone.ts";
+import { handleStops, publishRuns } from "./runs.ts";
 
 export const TICK_MS = 30_000;
 /** how often what waits on this machine is looked at between ticks (ADR 0014): a change is told at once */
@@ -149,7 +150,7 @@ export async function nodeTick(
   const self = nodeName(cfg);
   const st = await readNodeState();
   const facts = await nodeFacts(cfg, sandbox);
-  const { jobs, answers, declined } = await announce(svc, facts);
+  const { jobs, answers, declined, stops } = await announce(svc, facts);
   const key = await approvalKey(cfg);
   // what waits here goes to the phone, and what the phone answered is checked here (waiting.ts)
   await handleAnswers(cfg, svc, answers ?? [], o).catch((e) => o.log(`node: answers: ${(e as Error).message}`));
@@ -170,6 +171,14 @@ export async function nodeTick(
     }
   };
   await checkDeclines(svc, self, declined ?? [], st, passkeyCtx, o);
+  // the phone's stops, checked here as a decline is; then this machine's runs to the phone's Agents view (runs.ts)
+  await handleStops(cfg, svc, stops ?? [], self, passkeyCtx, o).catch((e) =>
+    o.log(`node: stops: ${(e as Error).message}`)
+  );
+  await publishRuns(cfg, svc, {
+    force: true,
+    jobs: Object.fromEntries(Object.entries(st.runs).filter(([, r]) => r.job).map(([id, r]) => [id, r.job])),
+  }).catch((e) => o.log(`node: runs: ${(e as Error).message}`));
   let running = facts.running;
   for (const j of jobs) {
     if (st.seen.includes(j.id)) continue;
@@ -352,6 +361,7 @@ export function startAgentd(o: Agentd): () => void {
       const svc = await service(fetch, { node: true });
       if (typeof svc === "string") return;
       if (await relayRequests(svc) > 0) await handleAnswers(cfg, svc, await getAnswers(svc), o);
+      await publishRuns(cfg, svc);
       quickSaid = "";
     } catch (e) {
       const msg = (e as Error).message;

@@ -18,6 +18,7 @@ import {
   validNodeName,
 } from "../../shared/mcp/lib/nodes.ts";
 import { cleanAssertion } from "../../shared/mcp/lib/webauthn.ts";
+import { pendingStops } from "./runs.ts";
 
 /** Ended jobs are listed for a week, at most this many. */
 const ENDED_KEEP = 30;
@@ -148,6 +149,11 @@ export class Fleet {
       this.db.exec("rollback");
       throw e;
     }
+  }
+
+  /** The phone's stops of this node's runs, for it to check (runs.ts). */
+  stops(name: string): ReturnType<typeof pendingStops> {
+    return pendingStops(this.db, name, this.now);
   }
 
   /** A node's announcement; the answer is what has been accepted for it. */
@@ -351,7 +357,7 @@ export async function fleetRoute(
     if (p === "/api/node" && req.method === "PUT") {
       const me = write();
       const jobs = fleet.announce(me, cleanAnnounce(await body()));
-      return json({ jobs, declined: fleet.declined(me), ...alsoToNode(me) });
+      return json({ jobs, declined: fleet.declined(me), stops: fleet.stops(me), ...alsoToNode(me) });
     }
     if (p === "/api/nodes" && req.method === "GET") {
       fleet.sweep();
