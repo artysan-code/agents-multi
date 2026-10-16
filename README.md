@@ -483,6 +483,17 @@ sees, and `agents nodes accept <job>` signs one.
 - **Resume from the branch.** While a run works, the node pushes its branch `agent/<id>` and its HANDOFFs
   (`refs/agents/<id>`); a node silent for ten minutes loses its running jobs, and a proposal to resume each on
   another node (a clone of the same remote under `repoRoots`) waits for your yes.
+- **A clone on first need, and its env files** ([ADR 0014](docs/adr/0014-from-the-phone.md), slice A). A node
+  with no clone of a job's repository clones it under the first of `repoRoots`, with its own git key and nothing
+  else (no SSH agent, no token), but only when you allowed the remote: one of `repos` in `config/nodes.json`, or
+  one under a host or `host/owner` of `gitHosts` there (`["git.example.me", "github.com/you"]`; empty, nothing is
+  cloned on need). Any other remote is refused with the reason. What the clone lacks because git ignores it —
+  `.env`, `.env.*`, `.dev.vars`, `.dev.vars.*`, at most three folders down — goes through the vault:
+  `agents node seed <machine>` on a machine with the vault seals those of your repositories under `repoRoots` for
+  that machine (`--dry-run` lists the paths, never the values; a client's repository only with `--repo <path>`
+  and your yes; `--forget <repo>` drops it). Never keys, symlinks, binary files or a file holding a Claude key;
+  64 KiB a file, 20 files and 256 KiB a repository. The node writes them 0600 when it clones or uses that clone,
+  only where git ignores them there and never over a file that differs.
 - **It answers your chat from the phone** ([ADR 0014](docs/adr/0014-from-the-phone.md)). A node that is on holds a
   long poll open to the service (outbound, its own token), runs each chat turn written there with the console's
   own Claude (`claude -p`, resumed per chat, the same fixed tools) and sends the answer back as it comes. On a

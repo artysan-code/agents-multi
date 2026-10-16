@@ -29,6 +29,9 @@ export interface NodeConfig {
   approvalKey?: string;
   /** the repositories a server clones when it is set up (`agents node setup`): their remotes */
   repos: string[];
+  /** hosts (`git.example.me`) or `host/owner` prefixes whose repositories a node clones the first time a job needs
+   *  one (ADR 0014, slice A); absent is none: nothing is cloned on need until the owner lists a host */
+  gitHosts?: string[];
   /** this machine transcribes voice notes: whisper.cpp's `whisper-cli` and a ggml model (`agents node voice`) */
   voice?: VoiceConfig;
 }
@@ -64,6 +67,8 @@ export const DEFAULT_DOMAINS = [
 ];
 
 const HOST = /^(\*\.)?[a-z0-9.-]+(:\d+)?$/i;
+/** A `gitHosts` entry: a host, with its port if any, and at most an owner after it; never a scheme or a wildcard. */
+const GIT_HOST = /^[a-z0-9][a-z0-9.-]*(:\d+)?(\/[\w.-]+)?$/;
 
 /** Pure: node.json's content, kept to what is valid (the rest is ignored, never trusted). */
 export function cleanNodeConfig(raw: unknown): NodeConfig {
@@ -76,6 +81,8 @@ export function cleanNodeConfig(raw: unknown): NodeConfig {
     allowedDomains: strings(r.allowedDomains)?.filter((h) => HOST.test(h)) ?? [...DEFAULT_DOMAINS],
     repos: strings(r.repos)?.filter((u) => /^(ssh:\/\/|https:\/\/|[\w.-]+@[\w.-]+:)/.test(u)) ?? [],
   };
+  const gitHosts = strings(r.gitHosts)?.map((h) => h.toLowerCase()).filter((h) => GIT_HOST.test(h)) ?? [];
+  if (gitHosts.length) out.gitHosts = gitHosts;
   if (typeof r.name === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/.test(r.name)) out.name = r.name;
   if (typeof r.maxSessions === "number" && Number.isInteger(r.maxSessions) && r.maxSessions >= 0) {
     out.maxSessions = Math.min(r.maxSessions, 64);

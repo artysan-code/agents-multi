@@ -15,6 +15,7 @@ import { gatewayChecks } from "./checks/gateway.ts";
 import { loginChecks } from "./checks/logins.ts";
 import { mcpChecks } from "./checks/mcp.ts";
 import { nodeChecks } from "./checks/node.ts";
+import { seedChecks } from "./checks/seed.ts";
 import { loadNodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { profileChecks } from "./checks/profiles.ts";
 import { repoChecks } from "./checks/repo.ts";
@@ -56,6 +57,7 @@ const GROUPS: ((ctx: DoctorCtx) => Promise<Check[]>)[] = [
   codexChecks,
   reviewerChecks,
   nodeChecks,
+  seedChecks,
 ];
 
 /** What only a desktop needs: on a headless node (a server's container, ADR 0012) there is no app, no shell of
