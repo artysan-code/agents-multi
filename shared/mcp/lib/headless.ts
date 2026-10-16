@@ -31,6 +31,9 @@ export interface NodeConfig {
   repos: string[];
   /** this machine transcribes voice notes: whisper.cpp's `whisper-cli` and a ggml model (`agents node voice`) */
   voice?: VoiceConfig;
+  /** what this machine publishes of its runs to the service (ADR 0014, third round): `full` (default), `state` (no
+   *  output, no branch) or `off` */
+  runs?: "full" | "state" | "off";
 }
 
 export interface VoiceConfig {
@@ -48,7 +51,7 @@ export function voicePath(v: unknown): string | null {
 }
 
 /** What is this machine's alone: the rest of a node's settings is the owner's. */
-export const MACHINE_FIELDS = ["enabled", "headless", "name", "maxSessions", "voice"] as const;
+export const MACHINE_FIELDS = ["enabled", "headless", "name", "maxSessions", "voice", "runs"] as const;
 
 /** What a headless child's commands may reach by default: the code hosts and package registries a build needs. */
 export const DEFAULT_DOMAINS = [
@@ -83,6 +86,7 @@ export function cleanNodeConfig(raw: unknown): NodeConfig {
   const v = (r.voice && typeof r.voice === "object" ? r.voice : {}) as Record<string, unknown>;
   const bin = voicePath(v.bin), model = voicePath(v.model);
   if (bin && model) out.voice = { bin, model };
+  if (r.runs === "full" || r.runs === "state" || r.runs === "off") out.runs = r.runs;
   if (typeof r.approvalKey === "string" && /^[\w-]{43}$/.test(r.approvalKey)) out.approvalKey = r.approvalKey;
   return out;
 }
