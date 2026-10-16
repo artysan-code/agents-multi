@@ -9,7 +9,7 @@
 import { type Job, type JobSpec, verifyJob } from "../../../shared/mcp/lib/nodes.ts";
 import { loadNodeConfig, type NodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { runsDir } from "../../../shared/mcp/lib/agents.ts";
-import { checkpoint, findClone, type Mark, remoteOf } from "../../../shared/mcp/lib/moving.ts";
+import { checkpoint, type Mark, remoteOf } from "../../../shared/mcp/lib/moving.ts";
 import {
   type Fired,
   listRoutines,
@@ -26,12 +26,12 @@ import {
   verifyJobAssertion,
   verifyJobDecline,
 } from "../../../shared/mcp/lib/webauthn.ts";
-import { HOME } from "../lib/paths.ts";
 import { approvalKey, nodeFacts, nodeName } from "./facts.ts";
 import { headlessProbe } from "./probe.ts";
 import { actOn, announce, newJob, type Service, service } from "./service.ts";
 import { getAnswers, getPasskeys, handleAnswers, relayRequests } from "./waiting.ts";
 import { revokedIds } from "./revocations.ts";
+import { ensureClone } from "./clone.ts";
 
 export const TICK_MS = 30_000;
 /** how often what waits on this machine is looked at between ticks (ADR 0014): a change is told at once */
@@ -180,8 +180,10 @@ export async function nodeTick(
     const d = decide(why, running < facts.cap, !cfg.headless || sandbox === true);
     if (d.act === "wait") continue;
     let refusal = d.act === "refuse" ? d.why : null;
-    const clone = refusal ? null : await findClone(j.spec.repo, cfg.repoRoots, HOME);
-    if (!refusal && !clone) refusal = `no clone of ${j.spec.repo} under ${cfg.repoRoots.join(", ")}`;
+    // the clone it has, else one it makes when the owner allowed the remote (clone.ts), else why not
+    const found = refusal ? null : await ensureClone(cfg, j.spec.repo, o);
+    const clone = found && "dir" in found ? found.dir : null;
+    if (!refusal && !clone) refusal = found && "why" in found ? found.why : `no clone of ${j.spec.repo}`;
     st.seen.push(j.id);
     if (refusal) {
       o.log(`node: job ${j.id} refused: ${refusal}`);

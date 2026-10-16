@@ -13,6 +13,8 @@ import { CONFIG, HOME, RUNTIME, shortHome } from "../lib/paths.ts";
 import { CONFIG_HOME } from "../init.ts";
 import { readStdin } from "../vault.ts";
 import { readNodeToken } from "./service.ts";
+import { cloneName } from "./clone.ts";
+export { cloneName };
 import {
   downloadModel,
   findOnPath,
@@ -30,11 +32,6 @@ const stop = (m: string) => {
   console.error(`${ANSI.r}✗${ANSI.x} ${m}`);
   return 1;
 };
-
-/** Pure: a clone's folder name from its remote (`git@host:me/repo.git` → `repo`). */
-export function cloneName(remote: string): string {
-  return remote.replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop() || "repo";
-}
 
 /** A line from the terminal, shown as it is typed. */
 async function ask(prompt: string): Promise<string> {
