@@ -43,6 +43,7 @@
 
 import { type Account, loadAccounts } from "../../../shared/mcp/lib/accounts.ts";
 import { vaultDir } from "../../../shared/mcp/lib/vault.ts";
+import { machineHeadless, machineNodeFile, nodeTokenFile } from "../../../shared/mcp/lib/headless.ts";
 import { readJson } from "../lib/fs.ts";
 import { CONFIG, HOME, MCP_TOOLS, REPO, RUNTIME } from "../lib/paths.ts";
 import { installation, type Mode } from "../lib/mode.ts";
@@ -104,6 +105,9 @@ export interface Registry {
   launch?: LaunchPaths;
   /** the lazy gateway (ADR 0008): when enabled, the servers that can go through it do */
   gateway?: GatewaySettings;
+  /** on a headless node (ADR 0013, F2): the files the brain server's headers helper reads to sign in with the node's
+   *  own token — this machine's node.json and the token. Absent on a desktop, which signs in with /mcp. */
+  node?: { files: string[] };
 }
 /** servers.json as written on disk: `profiles` may be absent (= every declared profile). */
 export interface RawRegistry {
@@ -190,6 +194,7 @@ export async function loadRegistry(): Promise<Registry> {
     brainScopes,
     launch: launchPaths(deno),
     gateway: await loadGatewaySettings(mode),
+    ...(await machineHeadless() ? { node: { files: [machineNodeFile(), nodeTokenFile()] } } : {}),
   };
 }
 

@@ -92,7 +92,9 @@ service token and the vault key file are made once in the container's terminal a
 
    A headless node talks to the brain with that token only: never the vault's brain token (a machine's, the whole
    brain), and `agents brain-login`, `agents node login` and a desktop's `agents node pair` refuse to run there.
-   The doctor's `node.scope` fails on a server whose token reaches more than a node's.
+   The doctor's `node.scope` fails on a server whose token reaches more than a node's. The children's `brain`
+   MCP server signs in with the same token (a headers helper, no `/mcp` login): they search, list and read
+   projects and notes, add the diary line and use the tasks; `node.brain` checks it answers with that view.
 
 6. **Check the sandbox**, from the host:
 

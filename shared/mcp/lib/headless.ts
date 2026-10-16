@@ -164,6 +164,29 @@ export function brainTokenSource(headless: boolean, preferOwn: boolean, hasOwn: 
   return preferOwn && hasOwn ? "node" : "vault";
 }
 
+/** Pure: which view of the brain a token got, from the tools its MCP endpoint lists (apps/brain/tools.ts): a node's
+ *  narrow one (reads, no page written), the whole one (a wider token), or none of the brain's tools at all. */
+export function brainView(tools: string[]): "node" | "whole" | "none" {
+  if (tools.includes("brain_write")) return "whole";
+  return tools.includes("brain_read") ? "node" : "none";
+}
+
+/** The JSON-RPC call the doctor makes to the brain's /mcp (`agents doctor`'s node.brain): the tools it lists say which view the token got. */
+export const TOOLS_LIST = { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} };
+/** What a Streamable HTTP MCP endpoint wants of a request's headers. */
+export const MCP_HEADERS = { "content-type": "application/json", accept: "application/json, text/event-stream" };
+
+/** Pure: the tool names in a tools/list answer, sent as JSON or as one SSE event. */
+export function listedTools(body: string): string[] {
+  const json = body.trimStart().startsWith("{") ? body : body.split("\n").find((l) => l.startsWith("data:"))?.slice(5);
+  try {
+    const r = JSON.parse(json ?? "") as { result?: { tools?: { name?: unknown }[] } };
+    return (r.result?.tools ?? []).map((t) => String(t.name));
+  } catch {
+    return [];
+  }
+}
+
 /** A headless node's answer to anything that would sign it in with a `machine` token or read the vault's. */
 export const NODE_ONLY =
   "a headless node talks to the brain with its own node token only: agents node pair --server (the console takes the code)";
@@ -262,7 +285,11 @@ export async function childSettings(
   try {
     for await (const e of Deno.readDir(`${config}/profiles`)) if (e.isDirectory) profiles.push(e.name);
   } catch { /* no profiles: the shared secrets are still covered */ }
-  return sandboxSettings(secretPaths(home, runtime, profiles.sort()), node.allowedDomains);
+  // this machine's state and its node token wherever they are (XDG_STATE_HOME, AGENTS_MULTI_NODE_TOKEN_FILE): the
+  // brain server's helper reads the token there, and a child's commands must not
+  const own = [machineFile.slice(0, machineFile.lastIndexOf("/")), nodeTokenFile()];
+  const secrets = [...new Set([...secretPaths(home, runtime, profiles.sort()), ...own])];
+  return sandboxSettings(secrets, node.allowedDomains);
 }
 
 /** Where an account's long-lived token is kept (ADR 0013): `claude setup-token`, made on the owner's desktop

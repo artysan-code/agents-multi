@@ -2,7 +2,14 @@
 // user's alone, and a node that is on can reach the service and check the owner's signature.
 
 import { brainAccount } from "../../../../shared/mcp/lib/brain-tasks.ts";
-import { loadNodeConfig, type NodeConfig } from "../../../../shared/mcp/lib/headless.ts";
+import {
+  brainView,
+  listedTools,
+  loadNodeConfig,
+  MCP_HEADERS,
+  type NodeConfig,
+  TOOLS_LIST,
+} from "../../../../shared/mcp/lib/headless.ts";
 import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
 import { hasVault, loadKey, vaultDir, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
 import { type Check } from "../../lib/output.ts";
@@ -10,6 +17,8 @@ import { exposedListeners, headlessProbe, type Probe } from "../../node/probe.ts
 import { nodeTokenFile, readNodeToken } from "../../node/service.ts";
 import { DEFAULT_PORT } from "../../lib/paths.ts";
 import { checkList } from "../context.ts";
+import { servers } from "../../mcp/placement.ts";
+import { isHttp, loadRegistry } from "../../mcp/registry.ts";
 
 /** The console's port and the MCP gateway's (ADR 0008). */
 export const OUR_PORTS = [DEFAULT_PORT, DEFAULT_PORT + 1];
@@ -37,7 +46,16 @@ export interface NodeFacts {
   outranking?: string[];
   /** on a headless node with a token, what the service lets it reach (`tokenScope`); null elsewhere */
   scope?: TokenScope | null;
+  /** on a headless node with a token, what its children's brain MCP server answers (`brainMcp`); null elsewhere */
+  brain?: BrainMcp | null;
 }
+
+/** What the brain MCP server of a headless node's children answers, asked as they ask it (its headers helper):
+ *  the node's narrow view, the whole brain (a wider token), a failure (`error`), or no brain server placed. */
+export type BrainMcp =
+  | { view: "node" | "whole" | "none"; profile: string }
+  | { view: "error"; profile: string; error: string }
+  | { view: "absent" };
 
 /** What a node token reaches: a node's routes only, more (a machine's scope: the whole brain), or not known. */
 export type TokenScope = "node" | "wider" | "unknown";
@@ -93,6 +111,33 @@ export function nodeFindings(f: NodeFacts): Check[] {
     add("node.scope", "ok", "headless node: its token is a node's (projects, notes, tasks)");
   } else if (f.scope === "unknown") {
     add("node.scope", "warn", "headless node: the service did not say what its token reaches", "agents doctor, later");
+  }
+  if (f.brain?.view === "node") {
+    add(
+      "node.brain",
+      "ok",
+      `headless node: the brain MCP server answers ${f.brain.profile}'s children with the node scope`,
+    );
+  } else if (f.brain?.view === "whole") {
+    add(
+      "node.brain",
+      "fail",
+      `headless node, but the brain MCP server shows ${f.brain.profile}'s children the whole brain`,
+      `revoke the token on ${
+        f.service ?? "the brain"
+      }/account, then rm ${nodeTokenFile()} && agents node pair --server`,
+    );
+  } else if (f.brain?.view === "none") {
+    add("node.brain", "warn", `headless node: the brain MCP server answers ${f.brain.profile} with none of its tools`);
+  } else if (f.brain?.view === "error") {
+    add(
+      "node.brain",
+      "warn",
+      `headless node: the brain MCP server does not answer ${f.brain.profile}'s children (${f.brain.error})`,
+      "agents mcp sync, then agents doctor; the token: agents node pair --server",
+    );
+  } else if (f.brain?.view === "absent") {
+    add("node.brain", "ok", "headless node: no profile has the brain MCP server (the tasks server still works)");
   }
   if (!f.cfg.enabled) {
     add("node.on", "ok", "not a node: it takes no job from the service (agents node enable)");
@@ -182,6 +227,41 @@ async function probeScope(url: string, token: string): Promise<TokenScope> {
   }
 }
 
+/** The brain MCP server as a headless node's children get it: the first profile whose launch config places it,
+ *  its headers helper run as Claude Code runs it (through a shell), then tools/list with those headers. The headers
+ *  stay in this process: nothing of them is printed. */
+async function probeBrainMcp(): Promise<BrainMcp> {
+  const reg = await loadRegistry();
+  for (const profile of reg.profiles) {
+    const p = servers(reg, { profile, surface: "cli" }).find((x) =>
+      reg.servers[x.entry]._service === "brain" && isHttp(x.cfg)
+    );
+    if (!p) continue;
+    const helper = p.cfg.headersHelper;
+    if (typeof helper !== "string") return { view: "error", profile, error: "no headers helper: agents mcp sync" };
+    try {
+      const out = await new Deno.Command("sh", { args: ["-c", helper], stdout: "piped", stderr: "piped" }).output();
+      if (!out.success) {
+        const err = new TextDecoder().decode(out.stderr).trim().split("\n").pop() ?? "";
+        return { view: "error", profile, error: `the headers helper failed: ${err.slice(0, 200)}` };
+      }
+      const headers = JSON.parse(new TextDecoder().decode(out.stdout)) as Record<string, string>;
+      const r = await fetch(String(p.cfg.url), {
+        method: "POST",
+        headers: { ...MCP_HEADERS, ...headers },
+        body: JSON.stringify(TOOLS_LIST),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = await r.text();
+      if (!r.ok) return { view: "error", profile, error: `the brain answered ${r.status}` };
+      return { view: brainView(listedTools(body)), profile };
+    } catch (e) {
+      return { view: "error", profile, error: (e as Error).message.slice(0, 200) };
+    }
+  }
+  return { view: "absent" };
+}
+
 /** This machine as a node. */
 export async function nodeChecks(): Promise<Check[]> {
   const cfg = await loadNodeConfig();
@@ -195,6 +275,7 @@ export async function nodeChecks(): Promise<Check[]> {
   return nodeFindings({
     cfg,
     scope: token && account?.url ? await probeScope(account.url, token) : null,
+    brain: token && account?.url ? await probeBrainMcp() : null,
     keyMode: st?.mode != null ? st.mode & 0o777 : null,
     exposed: ss === null ? null : exposed(ss),
     service: account?.url ?? null,

@@ -19,14 +19,15 @@
 //       as it always has.
 //   launch.ts headers <service> <account> [NAME=template]…
 //       an http server's `headersHelper`: prints the headers as one JSON object, which Claude Code
-//       reads on every connection. The output is the secret: it goes to Claude Code, nowhere else.
+//       reads on every connection. The output is the secret: it goes to Claude Code, nowhere else. On a
+//       headless node the brain's secret is the node's own token (ADR 0013, F2), never the vault's.
 //
 // The account must be one the profile sees (AGENTS_MULTI_PROFILE, accounts.json): a configuration
 // edited by hand cannot reach an account the registry keeps from that profile.
 
 import { loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
-import { machineHeadless, NODE_ONLY } from "./headless.ts";
+import { machineHeadless, NODE_ONLY, readNodeToken } from "./headless.ts";
 import { amEnv } from "./env.ts";
 
 interface LaunchArgs {
@@ -146,12 +147,14 @@ async function main() {
   const account = resolveAccount(visible, a.account, a.service);
   let vars = a.vars;
   if (needsSecret(vars)) {
-    // the vault's brain token is a machine's: never on a server (ADR 0013, F2)
-    if (a.service === "brain" && await machineHeadless()) throw new Error(NODE_ONLY);
-    const secret = await getSecret(a.service, account.name);
+    // the vault's brain token is a machine's: never on a server, whose brain secret is its node token (ADR 0013, F2)
+    const node = a.service === "brain" && await machineHeadless();
+    const secret = node ? await readNodeToken() : await getSecret(a.service, account.name);
     if (!secret) {
       throw new Error(
-        `no secret for ${a.service}/${account.name} on this machine: console › Connections, or agents vault set ${a.service} ${account.name}`,
+        node
+          ? NODE_ONLY
+          : `no secret for ${a.service}/${account.name} on this machine: console › Connections, or agents vault set ${a.service} ${account.name}`,
       );
     }
     vars = fill(vars, secret);

@@ -230,3 +230,15 @@ _Legal and compliance_):
   the doctor's `node.scope` asks `GET /api/nodes` with the node's token (a `node` scope is refused it) and fails
   when it is answered. Desktops are unchanged. What stays: whoever has the server has the vault and its key, so
   the owner's brain token is one read away — the trust stated in «Consequences».
+- **The brain's tools for a headless node's children** (2026-10-16): the `brain` http server gets a
+  `headersHelper` (`nodeHeadersHelper` in `apps/cli/mcp/placement.ts`, when the registry sees this machine
+  headless) that runs `launch.ts` in its `headers` mode, which there prints the node token's `Authorization`, never
+  the vault's (no node token: it refuses with `NODE_ONLY`). The token is in no configuration, environment or tool
+  result; the helper is Claude Code's, and a child's commands cannot run it to read the token: `childSettings`
+  denies the state folder and the token file wherever `XDG_STATE_HOME` or `AGENTS_MULTI_NODE_TOKEN_FILE` put them.
+  The scrub probe is unchanged: nothing new reaches an environment. The `tasks` server already used the node
+  token; a refusal now says whose (`refusal()` in `brain-tasks.ts`: 401 the token, 403 the node scope). On the
+  service, a node calling a tool its view leaves out (`NODE_REFUSED`) is told why instead of «Tool not found», and
+  a path in an area out of reach is refused before it is looked up. The doctor's `node.brain` runs the helper as
+  Claude Code does and asks `tools/list`: the narrow view passes, the whole brain fails. Desktops keep their
+  `/mcp` sign-in.
