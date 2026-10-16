@@ -56,4 +56,8 @@ fi
 # If prelaunch could not build it (no Deno), Claude starts without the registry's servers.
 MCP=()
 [[ -f "$CONFIG_DIR/mcp.json" ]] && MCP=(--mcp-config "$CONFIG_DIR/mcp.json")
+# --mcp-config takes several files: before a subcommand it would swallow its name (`setup-token` read as a file).
+case "${1:-}" in
+  agents|attach|auth|auto-mode|doctor|gateway|import|install|logs|mcp|plugin|plugins|purge|respawn|rm|setup-token|stop|kill|ultrareview) MCP=() ;;
+esac
 exec env CLAUDE_CONFIG_DIR="$CONFIG_DIR" DISABLE_AUTOUPDATER=1 "$CLAUDE_BIN" "${OVERLAY[@]}" "${MCP[@]}" "$@"
