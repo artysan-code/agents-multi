@@ -166,10 +166,11 @@
       ],
       "_profiles": [],
       "_surfaces": [
-        "cli"
+        "cli",
+        "desktop"
       ],
       "_gateway": false,
-      "_note": "The hub's children for a coordinator (shared/mcp/lib/agents.ts): sessions of any profile at work in a project, every permission they need answered by the owner. No profile by default: a person's servers.json names the coordinator's (_profiles). Starting a child of another profile uses that profile's account. agent_answer and workflow_answer are in no list on purpose: they answer a child's permission request, which the owner decides first (AskUserQuestion); the permission mode judges the call, and the same for agent_adopt and workflow_adopt (taking an orphan: only when the owner wants it carried on). routine_add, routine_rm and routine_run schedule unattended work: also left to the permission mode.",
+      "_note": "The hub's children for a coordinator (shared/mcp/lib/agents.ts): sessions of any profile at work in a project, every permission they need answered by the owner. In Claude Desktop the coordinator is the app's own process, with no folder: it owns what it started in any project (ADR 0005, amendment 2026-10-16), and its agents_panel is an MCP App there too. No profile by default: a person's servers.json names the coordinator's (_profiles). Starting a child of another profile uses that profile's account. agent_answer and workflow_answer are in no list on purpose: they answer a child's permission request, which the owner decides first (AskUserQuestion); the permission mode judges the call, and the same for agent_adopt and workflow_adopt (taking an orphan: only when the owner wants it carried on). routine_add, routine_rm and routine_run schedule unattended work: also left to the permission mode.",
       "_allow": [
         "account_proposals",
         "account_propose",

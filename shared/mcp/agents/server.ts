@@ -22,6 +22,11 @@ const instructions =
   "orphan (`orphan: true`; its events carry `orphan`): you see the orphans of your project, and when the owner " +
   "wants one carried on, agent_adopt / workflow_adopt makes it yours (never across projects); until then do not " +
   "answer for it.\n" +
+  "In Claude Desktop there is no folder and no shell: the coordinator is the app itself, shared by all its " +
+  "conversations, and it owns the children and runs it started in any project (each child's folder says which). " +
+  "Its lists show only those; `project: true` or `all: true` shows everyone's, read-only, the orphans of every " +
+  "project among them (adoptable). With no Monitor, follow them with agents_panel, or agent_list and agent_status " +
+  "when the owner asks.\n" +
   "Follow them as it happens: while children are at work keep a Monitor on `agents agent events --follow` " +
   "(timeout at the maximum, armed again when it expires); each line is one JSON event: `request`, `question`, " +
   "`done` (a turn ended: `detail` is its result) or `ended`. The owner answers with the question tool, never in " +

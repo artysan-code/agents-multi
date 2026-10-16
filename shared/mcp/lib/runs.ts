@@ -425,7 +425,12 @@ export async function startRun(
   const dir = `${runsRoot(runs)}/${id}`;
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(`${dir}/plan.json`, JSON.stringify(plan, null, 2));
-  if (owner) await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify(owner, null, 2));
+  if (owner) {
+    // a coordinator with no folder (Desktop): the run is the project's of its folder, as readRun has it
+    const folder = plan.folder ?? plan.steps?.find((s) => s.folder)?.folder;
+    const project = owner.project || (folder ? await projectOf(folder.replace(/^~(?=\/|$)/, home)) : "");
+    await Deno.writeTextFile(`${dir}/owner.json`, JSON.stringify({ ...owner, project }, null, 2));
+  }
   if (guard) await Deno.writeTextFile(`${dir}/guard.json`, JSON.stringify(cleanGuard(guard), null, 2));
   await writeState(dir, initialState(plan));
   await append(`${dir}/events.jsonl`, {

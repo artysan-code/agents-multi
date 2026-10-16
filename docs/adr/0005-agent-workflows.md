@@ -207,6 +207,35 @@ in `shared/mcp/lib/proc.ts` alone, through `ps` (Deno lets only `--allow-all` re
 has `ps`), so the platform layer ports one file. `ps` gives a start time to the second, derived from the boot
 time, so two starts within three seconds are the same process.
 
+## Amendment 2026-10-16 — a coordinator in Claude Desktop
+
+The `agents` server is offered to Claude Desktop too (`_surfaces: ["cli", "desktop"]`). Desktop has no Claude
+Code session and no folder: it starts each stdio server once, as a child of its main process (through its
+`disclaimer` wrapper), in the home folder, for **all** its conversations, and gives it no conversation id —
+the MCP connection is the app's, not a chat's. So the rule above holds with the app as the coordinator:
+
+- **The coordinator is the app's main process** (`claude-desktop`, `claude-desktop-<profile>`): the same walk
+  up to the nearest `claude*`, pid plus start time, marked `desktop` (`isDesktopApp`, `proc.ts`). Every
+  conversation of that app shares its children; a restart of the app makes them orphans, like a closed CLI
+  session. Per-conversation isolation is not possible without an id Desktop does not give. The Code tab's
+  Claude Code is a `claude` process of its own: a CLI coordinator, with its folder.
+- **It has no project** (`Scope.project` is `""`, `folderless`). What it starts takes the project of its own
+  folder (a child's; a run's plan folder or first step folder), so a CLI session in that project sees it as a
+  peer's, read-only, and adopts it once the app is gone.
+- **Its own in any project, the rest read-only.** It acts only on what it started (`own`, wherever); a live
+  CLI session's things are `peer`; there is no `other`. By default it lists only its own — every project's
+  orphans would bury them (children are never pruned) — and `project: true` or `all: true` lists everything.
+  It adopts an orphan of **any** project: "never across projects" keeps a session inside its project, and
+  Desktop is in none. Adoption stays outside the auto-allowed tools, so the owner says yes each time.
+- **Records no coordinator owns** (routines, account proposals): a session reaches its project's, the app every
+  project's, as the console does (`reaches`). It may schedule a routine in any folder; it does not propose a
+  project's default account (no project to name).
+- **No Monitor in Desktop**: it follows its children with the panel (`agents_panel`, an MCP App Desktop shows),
+  or `agent_list` / `agent_status`. The panel is the same resource with the same scope.
+
+Pure parts: `isDesktopApp`, `coordinatorFrom` (`proc.ts`); `folderless`, `reaches`, `accessOf`, `inScope`,
+`mayAdopt` (`agents.ts`). The macOS app (`Claude`) is not recognised: only the Linux builds are published.
+
 ## Amendment 2026-10-15 — saving, finding and starting a saved workflow
 
 The skill's body carries the plan as its first fenced `json` block, with `{{name}}` placeholders in any

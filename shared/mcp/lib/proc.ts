@@ -16,6 +16,8 @@ import { listProcesses, parsePs, type ProcInfo } from "./platform.ts";
 export interface Proc {
   pid: number;
   start: string;
+  /** a Claude Desktop app, not a CLI: a coordinator with no folder (ADR 0005, amendment 2026-10-16) */
+  desktop?: true;
 }
 
 /** What the platform layer says of one process. */
@@ -48,15 +50,23 @@ export const procReader: ProcReader = (pid) => table().get(pid) ?? null;
 /** Pure: whether a process name is a Claude's (`claude`, `claude-bin`, the Desktop's `claude-desktop-…`). */
 export const isClaude = (comm: string): boolean => /^claude/i.test(comm);
 
-/** The coordinator `from` runs under: the nearest `claude` process among its ancestors (itself first).
- *  null when none is: a plain terminal, where the person is the coordinator. */
+/** Pure: whether a Claude process is the Desktop app (`claude-desktop`, `claude-desktop-<profile>`, cut to 15
+ *  characters by the kernel), whose MCP servers run with no project folder; the Claude Code its Code tab
+ *  embeds is a `claude` of its own. */
+export const isDesktopApp = (comm: string): boolean => /^claude-desktop/i.test(comm);
+
+/** The coordinator `from` runs under: the nearest `claude` process among its ancestors (itself first), marked
+ *  `desktop` when it is the Desktop app. null when none is: a plain terminal, where the person is the
+ *  coordinator. */
 export function coordinatorFrom(from: number, read: ProcReader = procReader): Proc | null {
   const seen = new Set<number>();
   for (let pid = from; pid > 1 && !seen.has(pid);) {
     seen.add(pid);
     const p = read(pid);
     if (!p) return null;
-    if (isClaude(p.comm)) return { pid, start: p.start };
+    if (isClaude(p.comm)) {
+      return isDesktopApp(p.comm) ? { pid, start: p.start, desktop: true } : { pid, start: p.start };
+    }
     pid = p.ppid;
   }
   return null;
