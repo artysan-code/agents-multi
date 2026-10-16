@@ -453,6 +453,17 @@ is doing now.
   strings in the new `apps/ui/src/i18n/web-agents.ts` (merged into the app's dictionary by one line in
   `web/t.ts`), tests in `apps/cli/tests/` and `apps/brain/tests/`.
 
+**As built (fourth round, 2026-10-16).** A client's run goes with an **opaque id**: `x-` and 32 hex digits of an
+HMAC-SHA256 of the real id, with a key the node makes once (`<runs>/node/runs-key`, 0600) and never sends; its
+`waiting` ids are opaque the same way and its workflow's steps are numbered, not named. A Stop names the opaque id
+and the node finds its run by recomputing it over its own runs; a resume moves the run's job, which the service
+already knows. Who owns a repository is one function, `ownedRemote` in `clone.ts`, for a clone on need and for the
+runs alike; `agents node hosts add <host>` puts the owner's forge in `nodes.json` `gitHosts` (proposed by `agents
+node enable` and the doctor's `node.runs` when neither list is set). The tables are a step of the brain's
+migrations; the stops waiting for a node are `stops.ts`, so `fleet.ts` and `runs.ts` no longer import each other. A
+resume is a proposal whose parent is the run's job (`Fleet.proposeResume`): one open per job, whether the phone or
+the sweep raises it.
+
 ### C. The panel: orchestrating from Claude Desktop
 
 Claude Desktop shows an **MCP App** (the MCP Apps extension:

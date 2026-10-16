@@ -2,14 +2,16 @@
 // B): the hub's children, the routines' firings and the workflow runs, each with its state and the last lines it
 // said (masked, bounded), the whole list replacing the last. What goes out is this machine's choice (`runs` in
 // its node.json) and never a client's: a repository that is not the owner's (not in `repos` nor `gitHosts`) goes
-// as its state only, its names replaced. A Stop from the phone is believed only after this node checked the
+// as its state only, its names replaced and its ids opaque (an HMAC with a key that never leaves this machine), so
+// that neither a folder's name nor a child's id reaches the service; a Stop from the phone is believed only after this node checked the
 // passkey (its endorsement, the revocations, the assertion, a replay record), as a decline is.
 
+import { createHmac } from "node:crypto";
 import { type Child, listChildren, runsDir, stopChild } from "../../../shared/mcp/lib/agents.ts";
 import type { NodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { maskValues } from "../../../shared/mcp/lib/mask.ts";
 import { remoteOf } from "../../../shared/mcp/lib/moving.ts";
-import { canonical, normalRemote, type PasskeyAssertion } from "../../../shared/mcp/lib/nodes.ts";
+import { canonical, type PasskeyAssertion } from "../../../shared/mcp/lib/nodes.ts";
 import { listRoutines, readState, type Routine, type RoutineState } from "../../../shared/mcp/lib/routines.ts";
 import { answerRun, listRuns, type Run as WorkflowRun } from "../../../shared/mcp/lib/runs.ts";
 import {
@@ -20,6 +22,7 @@ import {
   verifyPasskey,
 } from "../../../shared/mcp/lib/webauthn.ts";
 import { HOME } from "../lib/paths.ts";
+import { ownedRemote } from "./clone.ts";
 import type { Service } from "./service.ts";
 
 export type RunsMode = "full" | "state" | "off";
@@ -86,32 +89,46 @@ export function projectName(dir: string | undefined, home: string): string {
   return h && dir.startsWith(`${h}/`) ? dir.slice(h.length + 1) : dir.split("/").filter(Boolean).pop() ?? "";
 }
 
-/** Pure: whether a repository (a normalised remote, `host/path`) is the owner's: in `repos`, or under one of the
- *  `gitHosts` prefixes (`host` or `host/owner`), matched on whole segments, never as a substring. No remote is
- *  nobody's that this rule can tell: not the owner's. */
-export function ownRepo(repo: string | null | undefined, repos: string[], gitHosts: string[]): boolean {
-  if (!repo) return false;
-  if (repos.some((r) => normalRemote(r) === repo)) return true;
-  return gitHosts.some((h) => {
-    const p = h.trim().toLowerCase().replace(/^[a-z+]+:\/\//, "").replace(/\/+$/, "");
-    return !!p && (repo === p || repo.startsWith(`${p}/`));
-  });
-}
+/** An id as the service sees it for a client's run: the real one (`<profile>-<folder>-<stamp>-<rand>`) would name
+ *  the folder. */
+export type Opaque = (id: string) => string;
+
+/** Pure: an opaque id: an HMAC of the real one with this node's key, the same each time, so that a Stop coming back
+ *  finds its run (`resolveRun`); `x-` and 32 hex digits, nothing of the id in it. */
+export const opaqueId = (key: Uint8Array): Opaque => (id) =>
+  `x-${createHmac("sha256", key).update(id).digest("hex").slice(0, 32)}`;
 
 /** Pure: what a run becomes for this machine's choice and the repository's owner: `state` drops the output and the
- *  branch; a client's repository goes as `state` whatever the machine says, its project and remote named `(client)`. */
-export function redact(r: PublishedRun, mode: RunsMode, own: boolean): PublishedRun {
+ *  branch; a client's repository goes as `state` whatever the machine says, its project and remote named `(client)`,
+ *  its id and the requests it waits on opaque, its workflow's steps by number only. */
+export function redact(r: PublishedRun, mode: RunsMode, own: boolean, opaque: Opaque): PublishedRun {
   if (mode === "full" && own) return r;
   const { tail: _t, branch: _b, title: _x, ...rest } = r;
   const out: PublishedRun = { ...rest, tail: [] };
   if (!own) {
+    out.id = opaque(r.id);
     out.project = CLIENT;
     if (out.repo) out.repo = CLIENT;
     if (out.routine) out.routine = CLIENT;
-    if (out.workflow) out.workflow = { ...out.workflow, name: CLIENT };
+    if (out.waiting) out.waiting = out.waiting.map((w) => `${opaque(w.slice(0, w.indexOf("/")))}/${opaque(w)}`);
+    if (out.workflow) {
+      const steps = out.workflow.steps;
+      const at = steps.findIndex((s) => s.id === out.workflow!.step);
+      out.workflow = {
+        name: CLIENT,
+        step: at >= 0 ? String(at + 1) : "",
+        steps: steps.map((s, i) => ({ id: String(i + 1), state: s.state })),
+      };
+    }
     out.noMove ??= "a client's repository";
   }
   return out;
+}
+
+/** Pure: the run a Stop names: one of this machine's ids as it is, or the one whose opaque id it is; null when none. */
+export function resolveRun(run: string, ids: string[], opaque: Opaque): string | null {
+  if (ids.includes(run)) return run;
+  return ids.find((id) => opaque(id) === run) ?? null;
 }
 
 /** Pure: a child's phase as a run's state; a child that ended with an error failed. */
@@ -278,17 +295,18 @@ export function collect(
   };
 }
 
-/** Pure: what goes out for this machine's setting: each run redacted by its repository's owner; nothing for `off`. */
+/** Pure: what goes out for this machine's setting: each run redacted by its repository's owner (the rule a clone on
+ *  need follows, clone.ts); nothing for `off`. */
 export function publishable(
   c: ReturnType<typeof collect>,
   mode: RunsMode,
-  repos: string[],
-  gitHosts: string[],
+  cfg: Pick<NodeConfig, "repos" | "gitHosts">,
+  opaque: Opaque,
 ): { runs: PublishedRun[]; routines: PublishedRoutine[] } {
   if (mode === "off") return { runs: [], routines: [] };
   return {
-    runs: c.runs.map((x) => redact(x.run, mode, ownRepo(x.run.repo, repos, gitHosts))),
-    routines: c.routines.map((x) => ownRepo(x.repo, repos, gitHosts) ? x.routine : { ...x.routine, name: CLIENT }),
+    runs: c.runs.map((x) => redact(x.run, mode, ownedRemote(cfg, x.run.repo), opaque)),
+    routines: c.routines.map((x) => ownedRemote(cfg, x.repo) ? x.routine : { ...x.routine, name: CLIENT }),
   };
 }
 
@@ -403,6 +421,25 @@ async function cached(key: string, ms: number, get: () => Promise<string | null>
   return v;
 }
 
+/** The key of this node's opaque ids: made once, kept beside its stops, never sent anywhere. */
+export const runsKeyFile = (runs = runsDir()) => `${runs}/node/runs-key`;
+
+const keys = new Map<string, Uint8Array>();
+export async function runsKey(file = runsKeyFile()): Promise<Uint8Array> {
+  const known = keys.get(file);
+  if (known) return known;
+  let key = await Deno.readFile(file).catch(() => null);
+  if (!key || key.length !== 32) {
+    key = crypto.getRandomValues(new Uint8Array(32));
+    await Deno.mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+    const tmp = `${file}.tmp`;
+    await Deno.writeFile(tmp, key, { mode: 0o600 });
+    await Deno.rename(tmp, file);
+  }
+  keys.set(file, key);
+  return key;
+}
+
 const mtime = async (path: string) => (await Deno.stat(path).catch(() => null))?.mtime?.toISOString();
 
 /** Reads this machine's runs and routines as the service is told, for its setting. */
@@ -444,8 +481,7 @@ export async function readRuns(
     branchOf: (d) => branch.get(d) || undefined,
     jobOf: (id) => jobs[id] || undefined,
   });
-  const gitHosts = (cfg as NodeConfig & { gitHosts?: string[] }).gitHosts ?? [];
-  return publishable(c, mode, cfg.repos, gitHosts);
+  return publishable(c, mode, cfg, opaqueId(await runsKey(runsKeyFile(runs))));
 }
 
 export const putRuns = (s: Service, body: Record<string, unknown>) =>
@@ -508,10 +544,16 @@ export async function handleStops(
   if (!stops.length) return;
   const st = await readStopState();
   const workflows = new Set((await listRuns()).map((w) => w.id));
+  const ids = [...workflows, ...(await listChildren()).map((c) => c.meta.id)];
+  const opaque = opaqueId(await runsKey());
   const results = await applyStops(stops, self, st.done, {
     ctx,
-    // at once, as the person pressed it: not after the turn the child is in
-    stop: (run) => workflows.has(run) ? answerRun(run, "stop") : stopChild(run, true),
+    // at once, as the person pressed it: not after the turn the child is in; a client's run by its opaque id
+    stop: (run) => {
+      const id = resolveRun(run, ids, opaque);
+      if (!id) throw new Error("no such run on this machine");
+      return workflows.has(id) ? answerRun(id, "stop") : stopChild(id, true);
+    },
   });
   await writeStopState(st);
   for (const r of results) {

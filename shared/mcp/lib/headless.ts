@@ -72,6 +72,8 @@ export const DEFAULT_DOMAINS = [
 const HOST = /^(\*\.)?[a-z0-9.-]+(:\d+)?$/i;
 /** A `gitHosts` entry: a host, with its port if any, and at most an owner after it; never a scheme or a wildcard. */
 const GIT_HOST = /^[a-z0-9][a-z0-9.-]*(:\d+)?(\/[\w.-]+)?$/;
+/** Pure: whether a text is a valid `gitHosts` entry (lowercase). */
+export const validGitHost = (h: string) => GIT_HOST.test(h);
 
 /** Pure: node.json's content, kept to what is valid (the rest is ignored, never trusted). */
 export function cleanNodeConfig(raw: unknown): NodeConfig {

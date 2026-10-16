@@ -487,7 +487,9 @@ sees, and `agents nodes accept <job>` signs one.
   with no clone of a job's repository clones it under the first of `repoRoots`, with its own git key and nothing
   else (no SSH agent, no token), but only when you allowed the remote: one of `repos` in `config/nodes.json`, or
   one under a host or `host/owner` of `gitHosts` there (`["git.example.me", "github.com/you"]`; empty, nothing is
-  cloned on need). Any other remote is refused with the reason. What the clone lacks because git ignores it —
+  cloned on need): `agents node hosts add <host>` adds one, `hosts remove` drops one, `hosts` lists them. The same
+  lists tell the phone's Agents view your repositories from a client's: a run of any other remote goes as its state
+  only, its names and ids hidden. Any other remote is refused with the reason. What the clone lacks because git ignores it —
   `.env`, `.env.*`, `.dev.vars`, `.dev.vars.*`, at most three folders down — goes through the vault:
   `agents node seed <machine>` on a machine with the vault seals those of your repositories under `repoRoots` for
   that machine (`--dry-run` lists the paths, never the values; a client's repository only with `--repo <path>`
