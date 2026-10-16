@@ -42,6 +42,8 @@ const ICONS = {
   moon: "M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z",
   mic: "M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM6 11a6 6 0 0 0 12 0M12 17v4",
   wave: "M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2",
+  // dictation: lines of text beside a small mic, so it is not taken for the voice note's mic
+  dictate: "M3 7h8M3 12h6M3 17h4M17 13a2 2 0 0 0 2-2V7a2 2 0 0 0-4 0v4a2 2 0 0 0 2 2zM14 11a3 3 0 0 0 6 0M17 14v3",
   x: "M6 6l12 12M18 6L6 18",
   edit: "M4 20h4L19 9l-4-4L4 16zM13 7l4 4",
   undo: "M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 8",

@@ -241,7 +241,7 @@ export function Composer({ text, setText, field, busy, where, onMachine, onSend,
               aria-label={listening ? t("voice.dictStop") : t("voice.dict")}
               onClick={dictate}
             >
-              <Icon name="mic" size={20} />
+              <Icon name="dictate" size={20} />
             </button>
           )}
           {rec?.mode === "locked" && (
@@ -255,17 +255,18 @@ export function Composer({ text, setText, field, busy, where, onMachine, onSend,
                 <Icon name="send" size={20} />
               </button>
             )
-            : typed && !recording
-            ? (
-              <button key="send" type="submit" class="send" disabled={busy} aria-label={t("chat.send")}>
-                <Icon name="send" size={20} />
-              </button>
-            )
             : (
-              <button
-                key="voice"
-                type="button"
-                class={`send voice${rec ? " hold" : ""}${rec?.cancelling ? " cancelling" : ""}`}
+              <>
+                {
+                  /* the voice note is always offered: beside Send when the box has words, as the round button
+                  when it is empty (the owner's choice, 2026-10-16) */
+                }
+                <button
+                  key="voice"
+                  type="button"
+                  class={typed && !recording
+                    ? "tool"
+                    : `send voice${rec ? " hold" : ""}${rec?.cancelling ? " cancelling" : ""}`}
                 aria-label={t("voice.note")}
                 disabled={busy && !recording}
                 onPointerDown={down}
@@ -275,8 +276,14 @@ export function Composer({ text, setText, field, busy, where, onMachine, onSend,
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={click}
               >
-                <Icon name={recording ? "mic" : "wave"} size={20} />
-              </button>
+                  <Icon name="mic" size={20} />
+                </button>
+                {typed && !recording && (
+                  <button key="send" type="submit" class="send" disabled={busy} aria-label={t("chat.send")}>
+                    <Icon name="send" size={20} />
+                  </button>
+                )}
+              </>
             )}
         </div>
       </div>
