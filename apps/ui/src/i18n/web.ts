@@ -158,6 +158,7 @@ export const en = {
   "pair.help": "A code works once. Five wrong codes in a row stop pairing for 15 minutes.",
   "pair.done": "{n} is paired. It starts answering in a few seconds.",
   "pair.confirm": "Add «{n}» ({p}), which asked to pair at {w}, as one of your machines? Only say yes if it is yours: it will act for your account.",
+  "pair.server": "This code is a server's: add it from the console on your computer (Connections › Add a server), where its key's fingerprint is compared.",
   "pair.yes": "Yes, it is mine",
   "pair.no": "No",
 
@@ -384,6 +385,7 @@ export const it: Record<keyof typeof en, string> = {
   "pair.help": "Un codice vale una volta. Cinque codici sbagliati di fila bloccano il collegamento per 15 minuti.",
   "pair.done": "{n} è collegata. Comincia a rispondere tra qualche secondo.",
   "pair.confirm": "Aggiungere «{n}» ({p}), che ha chiesto di collegarsi alle {w}, come tua macchina? Di' sì solo se è tua: agirà per il tuo account.",
+  "pair.server": "Questo codice è di un server: aggiungilo dalla console sul tuo computer (Connessioni › Aggiungi un server), dove si confronta l'impronta della sua chiave.",
   "pair.yes": "Sì, è mia",
   "pair.no": "No",
 

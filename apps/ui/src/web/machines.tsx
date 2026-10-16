@@ -29,7 +29,9 @@ function Pair({ onPaired }: { onPaired: () => void }) {
     if (code.length !== 8 || busy) return;
     setBusy(true);
     try {
-      setPreview((await previewPairing(code)).preview);
+      const p = (await previewPairing(code)).preview;
+      if (p.kind === "server") throw new Error(t("pair.server"));
+      setPreview(p);
       setErr("");
       setDone("");
     } catch (x) {

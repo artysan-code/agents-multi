@@ -118,6 +118,8 @@ export interface PairPreview {
   node: string;
   platform: string;
   asked: string;
+  /** a server's pairing: it is the console's, where the key's fingerprint is compared (ADR 0013, F2) */
+  kind?: "server";
 }
 export const previewPairing = (code: string) =>
   send("POST", "/api/pair/claim", { code }) as Promise<{ preview: PairPreview }>;
