@@ -12,6 +12,7 @@ import { Brain } from "./brain.tsx";
 import { Machines } from "./machines.tsx";
 import { More } from "./more.tsx";
 import { WaitingView } from "./waiting.tsx";
+import { AgentsView } from "./agents.tsx";
 import { offline, pendingCount, wide } from "./state.ts";
 import { Pager, type Entry } from "./pager.tsx";
 import { Icon, type IconName, Mark, OfflineBanner, Toasts } from "./ui.tsx";
@@ -19,6 +20,7 @@ import { Icon, type IconName, Mark, OfflineBanner, Toasts } from "./ui.tsx";
 const TABS: { view: View; label: () => string; icon: IconName }[] = [
   { view: "chat", label: () => t("tab.chat"), icon: "chat" },
   { view: "waiting", label: () => t("tab.waiting"), icon: "waiting" },
+  { view: "agents", label: () => t("tab.agents"), icon: "job" },
   { view: "tasks", label: () => t("tab.tasks"), icon: "tasks" },
   { view: "brain", label: () => t("tab.brain"), icon: "brain" },
   { view: "more", label: () => t("tab.more"), icon: "more" },
@@ -50,6 +52,8 @@ function Screen({ e }: { e: Entry }) {
       return <div class="col"><ChatList /></div>;
     case "waiting":
       return <div class="col"><WaitingView /></div>;
+    case "agents":
+      return <div class="col"><AgentsView /></div>;
     case "tasks":
       return <div class="col"><Tasks /></div>;
     case "brain":
