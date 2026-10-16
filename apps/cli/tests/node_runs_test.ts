@@ -6,10 +6,12 @@ import {
   applyStops,
   collect,
   type Facts,
-  ownRepo,
+  opaqueId,
   projectName,
   publishable,
   redact,
+  resolveRun,
+  runsKey,
   scheduleOf,
   stopKey,
   stopText,
@@ -25,7 +27,10 @@ import { approvalKeys } from "../../../shared/mcp/lib/nodes.ts";
 import { type Passkey, type PasskeyCtx, signEndorsement } from "../../../shared/mcp/lib/webauthn.ts";
 import { HIDDEN } from "../../../shared/mcp/lib/mask.ts";
 import { Authenticator, SITE } from "./fixtures/authenticator.ts";
+import { ownedRemote } from "../node/clone.ts";
 
+const KEY = new Uint8Array(32).fill(7);
+const OPAQUE = opaqueId(KEY);
 const NOW = Date.parse("2026-10-16T12:00:00Z");
 const HOME = "/home/u";
 
@@ -97,23 +102,25 @@ Deno.test("runs: the tail is the last five lines said, masked and bounded", () =
 Deno.test("runs: a project is named by its path under home; a repository is the owner's by repos or gitHosts", () => {
   assertEquals(projectName(`${HOME}/personal/dnd/dragons-lair`, HOME), "personal/dnd/dragons-lair");
   assertEquals(projectName("/srv/x/app", HOME), "app");
-  assert(ownRepo("github.com/me/a", ["git@github.com:me/a.git"], []));
-  assert(ownRepo("git.example.me/owner/app", [], ["git.example.me"]));
-  assert(ownRepo("github.com/me/a", [], ["github.com/me"]));
+  // the rule of a clone on need (clone.ts), the same function: the two lists cannot drift
+  const own = (repo: string | null, repos: string[], gitHosts: string[]) => ownedRemote({ repos, gitHosts }, repo);
+  assert(own("github.com/me/a", ["git@github.com:me/a.git"], []));
+  assert(own("git.example.me/owner/app", [], ["git.example.me"]));
+  assert(own("github.com/me/a", [], ["github.com/me"]));
   // whole segments, never a substring
-  assert(!ownRepo("github.com/meander/a", [], ["github.com/me"]));
-  assert(!ownRepo("evilgit.example.me/x", [], ["git.example.me"]));
-  assert(!ownRepo("gitlab.client.it/c/app", [], ["github.com/me"]));
-  assert(!ownRepo(null, [], ["github.com"]));
+  assert(!own("github.com/meander/a", [], ["github.com/me"]));
+  assert(!own("evilgit.example.me/x", [], ["git.example.me"]));
+  assert(!own("gitlab.client.it/c/app", [], ["github.com/me"]));
+  assert(!own(null, [], ["github.com"]));
 });
 
 Deno.test("runs: state mode drops the output and the branch; a client's repository is named (client) whatever", () => {
   const { runs } = collect([child("work-a", { said: ["hello"] })], [], [], facts());
   const r = runs[0].run;
   assertEquals([r.tail, r.branch, r.title], [["hello"], "main", "Fix the login"]);
-  const s = redact(r, "state", true);
+  const s = redact(r, "state", true, OPAQUE);
   assertEquals([s.tail, s.branch, s.title, s.project], [[], undefined, undefined, "personal/app"]);
-  const c = redact(r, "full", false);
+  const c = redact(r, "full", false, OPAQUE);
   assertEquals([c.tail, c.branch, c.project, c.repo, c.noMove], [
     [],
     undefined,
@@ -121,9 +128,63 @@ Deno.test("runs: state mode drops the output and the branch; a client's reposito
     "(client)",
     "a client's repository",
   ]);
-  assertEquals(publishable({ runs, routines: [] }, "off", [], []).runs, []);
-  assertEquals(publishable({ runs, routines: [] }, "full", [], ["git.example.me"]).runs[0].tail, ["hello"]);
-  assertEquals(publishable({ runs, routines: [] }, "full", [], []).runs[0].project, "(client)");
+  assertEquals(publishable({ runs, routines: [] }, "off", { repos: [] }, OPAQUE).runs, []);
+  const mine = publishable({ runs, routines: [] }, "full", { repos: [], gitHosts: ["git.example.me"] }, OPAQUE);
+  assertEquals([mine.runs[0].tail, mine.runs[0].id], [["hello"], "work-a"]);
+  assertEquals(publishable({ runs, routines: [] }, "full", { repos: [] }, OPAQUE).runs[0].project, "(client)");
+});
+
+Deno.test("runs: nothing of a client's run's id, folder or steps reaches the service; a stop still finds it", () => {
+  const dir = `${HOME}/work/acme/acme-portal`;
+  const id = "work-acme-portal-20261016T1100-k3x9";
+  const kid = child(id, { dir, pending: ["req-acme-1"], phase: "waiting", said: ["acme secrets"] });
+  const step = child("work-acme-portal-20261016T1105-q7w2", { dir, run: true, said: ["acme build"] });
+  const wf = {
+    id: "wf-acme-portal-20261016",
+    plan: { name: "acme-deploy", steps: [{ id: "acme-build", profile: "work", prompt: "" }] },
+    state: {
+      status: "running",
+      steps: { "acme-build": { status: "running", attempt: 1, child: step.meta.id, started: "2026-10-16T11:05:00Z" } },
+      control: 0,
+      heard: {},
+    },
+    alive: true,
+    project: dir,
+  } as unknown as WorkflowRun;
+  const c = collect([kid, step], [wf], [], facts({ repoOf: () => "gitlab.acme.it/acme/portal" }));
+  const out = publishable(c, "full", { repos: [], gitHosts: ["git.example.me"] }, OPAQUE);
+  const json = JSON.stringify(out);
+  for (const part of ["acme", "portal", "20261016", "k3x9", "q7w2", "req-", "wf-"]) {
+    assert(!json.includes(part), `${part} reached the service: ${json}`);
+  }
+  const k = out.runs.find((r) => r.kind === "child")!, w = out.runs.find((r) => r.kind === "workflow")!;
+  assertMatch(k.id, /^x-[0-9a-f]{32}$/);
+  assertEquals(k.id, OPAQUE(id)); // the same each time: the service's row stays one row
+  assertEquals(k.waiting!.length, 1);
+  assertMatch(k.waiting![0], /^x-[0-9a-f]{32}\/x-[0-9a-f]{32}$/);
+  assertEquals(w.workflow, { name: "(client)", step: "1", steps: [{ id: "1", state: "running" }] });
+  // the phone's stop names the opaque id: the node finds the real one, and nothing else
+  const ids = [wf.id, id, step.meta.id];
+  assertEquals(resolveRun(k.id, ids, OPAQUE), id);
+  assertEquals(resolveRun(w.id, ids, OPAQUE), wf.id);
+  assertEquals(resolveRun(id, ids, OPAQUE), id);
+  assertEquals(resolveRun("x-0000", ids, OPAQUE), null);
+  // another node's key makes other ids
+  assert(opaqueId(new Uint8Array(32).fill(8))(id) !== k.id);
+});
+
+Deno.test("runs: the node's key is made once, private, and read back the same", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const file = `${dir}/node/runs-key`;
+    const a = await runsKey(file);
+    assertEquals(a.length, 32);
+    assertEquals((await Deno.stat(file)).mode! & 0o777, 0o600);
+    assertEquals(await Deno.readFile(file), a);
+    assertEquals(await runsKey(file), a);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });
 
 Deno.test("runs: children, routine firings and workflow runs are collected; a step's child is inside its run", () => {
@@ -292,4 +353,28 @@ Deno.test("doctor: node.runs says what is published, and warns when nothing tell
   assertMatch(runsFindings(cleanNodeConfig({ enabled: true, runs: "off" }))[0].msg, /not published/);
   assertEquals(cleanNodeConfig({ runs: "loud" }).runs, undefined);
   assertEquals(cleanNodeConfig({ runs: "state" }).runs, "state");
+});
+
+Deno.test("hosts: agents node hosts adds and removes the owner's forge in nodes.json, the doctor proposes it", async () => {
+  const { gitHostsWith, HOSTS_HINT } = await import("../node/command.ts");
+  const { runsFindings } = await import("../doctor/checks/runs.ts");
+  const { cleanNodeConfig } = await import("../../../shared/mcp/lib/headless.ts");
+  const raw = { repos: ["git@github.com:me/a.git"], repoRoots: ["~/src"] };
+  const added = gitHostsWith(raw, "add", "Git.Example.ME");
+  assert(added.ok);
+  assertEquals(added.config, { ...raw, gitHosts: ["git.example.me"] });
+  // a scheme or a user is dropped; adding twice keeps one; the result is a valid config
+  const again = gitHostsWith(added.config, "add", "ssh://git@git.example.me/");
+  assert(again.ok);
+  assertEquals(again.config.gitHosts, ["git.example.me"]);
+  const two = gitHostsWith(again.config, "add", "github.com/me");
+  assert(two.ok);
+  assertEquals(cleanNodeConfig(two.config).gitHosts, ["git.example.me", "github.com/me"]);
+  const less = gitHostsWith(two.config, "remove", "git.example.me");
+  assert(less.ok);
+  assertEquals(less.config.gitHosts, ["github.com/me"]);
+  for (const bad of ["*.example.me", "github.com/me/repo", "", "a b"]) assert(!gitHostsWith(raw, "add", bad).ok, bad);
+  // the doctor and `enable` name the command
+  assertMatch(runsFindings(cleanNodeConfig({ enabled: true }))[0].fix ?? "", /agents node hosts add/);
+  assertMatch(HOSTS_HINT, /agents node hosts add/);
 });

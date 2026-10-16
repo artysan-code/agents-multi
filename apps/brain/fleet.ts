@@ -18,7 +18,7 @@ import {
   validNodeName,
 } from "../../shared/mcp/lib/nodes.ts";
 import { cleanAssertion } from "../../shared/mcp/lib/webauthn.ts";
-import { pendingStops } from "./runs.ts";
+import { pendingStops } from "./stops.ts";
 
 /** Ended jobs are listed for a week, at most this many. */
 const ENDED_KEEP = 30;
@@ -247,6 +247,21 @@ export class Fleet {
       by,
       ...(typeof body.head === "string" ? { head: body.head.slice(0, 64) } : {}),
     };
+    this.insert(j);
+    return j;
+  }
+
+  /** A proposal to carry an interrupted or stopped job on elsewhere, as the sweep raises one (`resumeOf`): one open
+   *  at a time per job, whoever asks (the sweep, the phone's Agents view), so the owner never gets two yeses to give
+   *  for the same run. Refused while one is proposed, accepted or running. */
+  proposeResume(parentId: string, node: string, by: string, reason: string): Job {
+    const parent = this.get(parentId);
+    if (!parent) throw new FleetError("no such job", 404);
+    const open = this.db.prepare(
+      "select id from jobs where parent = ? and status in ('proposed', 'accepted', 'running') limit 1",
+    ).get(parentId) as { id: string } | undefined;
+    if (open) throw new FleetError(`a resume of it is already proposed (${open.id}): answer it in What waits`, 409);
+    const j = { ...resumeOf(parent, node, this.newId(), new Date(this.now())), by, reason: reason.slice(0, 300) };
     this.insert(j);
     return j;
   }

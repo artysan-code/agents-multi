@@ -43,6 +43,14 @@ export function hostCovers(entry: string, remote: string): boolean {
   return e.path.every((seg, i) => r.path[i] === seg);
 }
 
+/** Pure: whether a remote is the owner's: one of `repos`, or under one of `gitHosts`. The one rule a clone on need
+ *  and the runs the node publishes (runs.ts) both follow; no remote is nobody's this rule can tell. */
+export function ownedRemote(cfg: Pick<NodeConfig, "repos" | "gitHosts">, remote: string | null | undefined): boolean {
+  if (!remote) return false;
+  const n = normalRemote(remote);
+  return cfg.repos.some((u) => normalRemote(u) === n) || (cfg.gitHosts ?? []).some((h) => hostCovers(h, n));
+}
+
 export type Allowed = { ok: true; via: "repos" | "gitHosts"; url: string } | { ok: false; why: string };
 
 /** Pure: whether the owner allowed this remote to be cloned on need, and the address to clone it from. `remote` is a
@@ -56,7 +64,7 @@ export function remoteAllowed(cfg: Pick<NodeConfig, "repos" | "gitHosts">, remot
     const bad = badUrl(listed);
     return bad ? { ok: false, why: `${listed} in repos: ${bad}` } : { ok: true, via: "repos", url: listed };
   }
-  if (!(cfg.gitHosts ?? []).some((h) => hostCovers(h, n))) return { ok: false, why: "not in repos or gitHosts" };
+  if (!ownedRemote(cfg, n)) return { ok: false, why: "not in repos or gitHosts" };
   if (URL_FORM.test(remote) || remote.includes("://")) {
     const bad = badUrl(remote);
     return bad ? { ok: false, why: bad } : { ok: true, via: "gitHosts", url: remote };

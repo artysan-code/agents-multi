@@ -119,6 +119,17 @@ create table if not exists turn_audio (
   turn text primary key references chat_turns(id) on delete cascade, type text not null, data blob not null,
   created text not null);`);
   },
+  // the agents of every machine: their runs, their routines, the phone's stops (runs.ts, ADR 0014 third round)
+  (db) =>
+    db.exec(`
+create table if not exists runs (
+  node text not null, id text not null, data text not null, state text not null, updated text not null,
+  primary key (node, id));
+create index if not exists runs_ended on runs(updated) where state in ('ended', 'failed');
+create table if not exists run_routines (node text primary key, data text not null, updated text not null);
+create table if not exists run_stops (
+  seq integer primary key autoincrement, node text not null, run text not null, expires text not null,
+  assertion text not null, created text not null, state text not null default 'pending', why text);`),
 ];
 
 /** Resolves a [[target]] to a document path (see Store.resolver). */

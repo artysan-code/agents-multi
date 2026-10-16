@@ -7,6 +7,8 @@ import {
   CLAUDE_TOKEN,
   loadNodeConfig,
   machineNodeFile,
+  nodesFile,
+  validGitHost,
   type VoiceConfig,
   voicePath,
 } from "../../../shared/mcp/lib/headless.ts";
@@ -50,6 +52,27 @@ export function voiceConfigWith(raw: unknown, voice: VoiceConfig | null): Record
   else delete base.voice;
   return base;
 }
+
+/** Pure: the owner's nodes.json with a host added to or removed from `gitHosts` (the hosts whose repositories are
+ *  the owner's: cloned on need, their runs published by name); its other keys kept; why not, for a host that
+ *  is not `host`, `host:port` or `host/owner`. */
+export function gitHostsWith(
+  raw: unknown,
+  op: "add" | "remove",
+  host: string,
+): { ok: true; config: Record<string, unknown> } | { ok: false; why: string } {
+  const h = host.trim().toLowerCase().replace(/^[a-z+]+:\/\//, "").replace(/^[^@/]*@/, "").replace(/\/+$/, "");
+  if (!validGitHost(h)) return { ok: false, why: `${host}: not a host, host:port or host/owner` };
+  const base = raw && typeof raw === "object" && !Array.isArray(raw) ? { ...raw as Record<string, unknown> } : {};
+  const list = Array.isArray(base.gitHosts) ? base.gitHosts.filter((x): x is string => typeof x === "string") : [];
+  base.gitHosts = op === "add" ? (list.includes(h) ? list : [...list, h]) : list.filter((x) => x !== h);
+  return { ok: true, config: base };
+}
+
+/** The line that tells the owner how to say which repositories are theirs, when nothing does yet. */
+export const HOSTS_HINT =
+  "no repos nor gitHosts say which repositories are yours: their runs go to the phone as a client's (state only, " +
+  "names hidden) and none is cloned on need. Add your forge: agents node hosts add git.example.me (or github.com/you)";
 
 /** Turns this machine's node on or off in its own node.json (the other keys kept). */
 async function writeEnabled(file: string, set: { enabled: boolean; headless?: boolean; maxSessions?: number }) {
@@ -229,6 +252,10 @@ export async function nodeCommand(args: string[]): Promise<number> {
         ...(max !== undefined ? { maxSessions: Number(max) } : {}),
       });
       console.log(`${sub === "enable" ? "on" : "off"}: ${file}; the console picks it up within 30 s`);
+      if (sub === "enable") {
+        const cfg = await loadNodeConfig(CONFIG);
+        if (!cfg.repos.length && !cfg.gitHosts?.length) console.log(HOSTS_HINT);
+      }
       if (sub === "enable" && !(await readNodeToken())) {
         console.log("it announces itself only with a token of its own: agents node pair (or agents node login)");
       }
@@ -329,12 +356,37 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log((await approvalKeys((await loadKey()).raw)).public);
       return 0;
     }
+    case "hosts": {
+      // the owner's forges (config/nodes.json gitHosts, the same on every machine): what is theirs, cloned on need
+      // and published by name to the phone; anything else is a client's
+      const [op, host] = rest;
+      const shared = nodesFile(CONFIG);
+      await loadNodeConfig(CONFIG); // the old config/node.json is moved first
+      const raw = await Deno.readTextFile(shared).then(JSON.parse).catch(() => ({}));
+      if (!op || op === "list") {
+        const list = (await loadNodeConfig(CONFIG)).gitHosts ?? [];
+        console.log(list.length ? list.join("\n") : "none: agents node hosts add <host>");
+        return 0;
+      }
+      if ((op !== "add" && op !== "remove") || !host) {
+        console.error("usage: agents node hosts [list | add <host> | remove <host>]");
+        return 2;
+      }
+      const r = gitHostsWith(raw, op, host);
+      if (!r.ok) {
+        console.error(r.why);
+        return 2;
+      }
+      await writeAtomic(shared, JSON.stringify(r.config, null, 2) + "\n");
+      console.log(`gitHosts: ${(r.config.gitHosts as string[]).join(", ") || "none"} (${shared})`);
+      return 0;
+    }
     case "seed":
       // the env files git ignores, sealed in the vault for a machine that clones the repository (seed.ts)
       return await seedCommand(rest);
     default:
       console.error(
-        "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key|voice [--bin P] [--model P] [--off]]",
+        "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key|voice [--bin P] [--model P] [--off]|hosts [add|remove <host>]]",
       );
       return 2;
   }

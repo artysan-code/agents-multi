@@ -6,7 +6,7 @@ import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 
 /** Pure: what the doctor says of the runs this node publishes. */
-export function runsFindings(cfg: NodeConfig & { gitHosts?: string[] }): Check[] {
+export function runsFindings(cfg: NodeConfig): Check[] {
   const [c, add] = checkList();
   if (!cfg.enabled) return c;
   const mode = cfg.runs ?? "full";
@@ -18,7 +18,7 @@ export function runsFindings(cfg: NodeConfig & { gitHosts?: string[] }): Check[]
       "node.runs",
       "warn",
       "every run is published as a client's (state only, names hidden): no repos and no gitHosts say what is yours",
-      'list your forge in gitHosts of config/nodes.json ("git.example.me" or "github.com/you")',
+      "agents node hosts add git.example.me (your forge; or github.com/you)",
     );
   } else {
     add(
