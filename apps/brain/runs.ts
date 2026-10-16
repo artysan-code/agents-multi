@@ -5,9 +5,10 @@
 // elsewhere is a proposal raised for the run's job, accepted on the phone as any job is.
 
 import type { DatabaseSync } from "node:sqlite";
-import { isOnline, type JobSpec, type NodeInfo, place, validNodeName } from "../../shared/mcp/lib/nodes.ts";
+import { isOnline, type NodeInfo, place, validNodeName } from "../../shared/mcp/lib/nodes.ts";
 import { cleanAssertion, MAX_AHEAD_MS } from "../../shared/mcp/lib/webauthn.ts";
 import { Fleet, FleetError } from "./fleet.ts";
+import { pendingStops } from "./stops.ts";
 
 export class RunsError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -165,28 +166,13 @@ export class RunsHub {
 
 export const runsHub = new RunsHub();
 
-/** The tables, made here and not in store.ts: this slice's own. */
-function ensureTables(db: DatabaseSync) {
-  db.exec(`
-create table if not exists runs (
-  node text not null, id text not null, data text not null, state text not null, updated text not null,
-  primary key (node, id));
-create index if not exists runs_ended on runs(updated) where state in ('ended', 'failed');
-create table if not exists run_routines (node text primary key, data text not null, updated text not null);
-create table if not exists run_stops (
-  seq integer primary key autoincrement, node text not null, run text not null, expires text not null,
-  assertion text not null, created text not null, state text not null default 'pending', why text);`);
-}
-
 export class Runs {
   constructor(
     private db: DatabaseSync,
     private user: string,
     private hub: RunsHub = runsHub,
     private now = () => Date.now(),
-  ) {
-    ensureTables(db);
-  }
+  ) {}
 
   private at = () => new Date(this.now()).toISOString();
 
@@ -342,17 +328,7 @@ export class Runs {
 
   /** The stops waiting for a node, as the announce's reply carries them. */
   stops(node: string): { run: string; expires: string; assertion: unknown }[] {
-    const at = this.at();
-    this.db.prepare(
-      "update run_stops set state = 'refused', why = 'it expired before the machine picked it up' where state = 'pending' and expires < ?",
-    ).run(at);
-    return (this.db.prepare(
-      "select run, expires, assertion from run_stops where node = ? and state = 'pending' order by seq",
-    ).all(node) as { run: string; expires: string; assertion: string }[]).map((r) => ({
-      run: r.run,
-      expires: r.expires,
-      assertion: JSON.parse(r.assertion),
-    }));
+    return pendingStops(this.db, node, this.now);
   }
 
   /** What a node did with the stops it was given: `{id: "stop:<run>", ok, why?}` each. */
@@ -417,14 +393,14 @@ export class Runs {
     const wanted = typeof raw.node === "string" && raw.node ? raw.node : null;
     if (wanted && (!validNodeName(wanted) || wanted === node)) throw new RunsError("not another machine of yours");
     const target = wanted ?? place(parent.spec, nodes, now, node) ?? "";
-    const spec: JobSpec = { ...parent.spec, from: node };
     try {
-      const job = fleet.create("phone", {
-        kind: "resume",
-        node: target,
-        spec,
-        reason: `resume ${parent.spec.name} from ${node}, asked from the phone`,
-      });
+      // the run's job is the proposal's parent: the sweep, finding it, raises no second one, nor this one twice
+      const job = fleet.proposeResume(
+        r.job!,
+        target,
+        "phone",
+        `resume ${parent.spec.name} from ${node}, asked from the phone`,
+      );
       return { job };
     } catch (e) {
       if (e instanceof FleetError) throw new RunsError(e.message, e.status);
@@ -536,7 +512,3 @@ export async function runsRoute(
   }
   return null;
 }
-
-/** The stops waiting for a node: the announce's reply carries them (fleet.ts). */
-export const pendingStops = (db: DatabaseSync, node: string, now: () => number = () => Date.now()) =>
-  new Runs(db, "", runsHub, now).stops(node);

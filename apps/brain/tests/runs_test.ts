@@ -243,6 +243,42 @@ Deno.test("runs: resume elsewhere is a proposal for the run's job, refused while
     "nightly-1",
     "desk",
   ]);
+  // one open proposal per run: the phone asking again, or the sweep finding the machine gone, raises no second
+  assertEquals((await s.call(null, "POST", "/api/runs/desk/work-a/resume", {})).status, 409);
+  s.tick(60 * 60_000);
+  await s.announce("srv");
+  s.fleet.sweep();
+  assertEquals((s.db.prepare("select count(*) as n from jobs where kind = 'resume'").get() as { n: number }).n, 1);
+});
+
+Deno.test("runs: a resume the sweep proposed is not proposed again from the phone", async () => {
+  const s = setup();
+  await s.announce("desk");
+  await s.announce("srv");
+  const job = (await s.call("desk", "POST", "/api/jobs", {
+    kind: "routine",
+    local: true,
+    spec: { name: "Nightly", repo: "git.example.me/o/app", path: "", action: { kind: "agent" }, id: "nightly-1" },
+  })).body.job;
+  await s.call("desk", "PUT", "/api/node/runs", { runs: [run("work-a", { kind: "routine", job: job.id })] });
+  s.tick(60 * 60_000);
+  await s.announce("srv");
+  s.fleet.sweep();
+  const r = await s.call(null, "POST", "/api/runs/desk/work-a/resume", {});
+  assertEquals(r.status, 409);
+  assert(/already proposed/.test(r.body.error));
+  assertEquals((s.db.prepare("select count(*) as n from jobs where kind = 'resume'").get() as { n: number }).n, 1);
+});
+
+Deno.test("runs: its tables are the database's, made once at start; runs.ts and fleet.ts do not import each other", async () => {
+  const src = (f: string) => Deno.readTextFile(new URL(`../${f}`, import.meta.url));
+  const runs = await src("runs.ts"), fleet = await src("fleet.ts");
+  assert(!/create table/i.test(runs), "runs.ts makes no table: store.ts's migrations do");
+  assert(!/from "\.\/runs\.ts"/.test(fleet), "fleet.ts imports runs.ts");
+  const db = new Store(":memory:").db;
+  for (const t of ["runs", "run_routines", "run_stops"]) {
+    assert(db.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t), t);
+  }
 });
 
 Deno.test("web: the stream's events applied to the view, and what a row offers", () => {
