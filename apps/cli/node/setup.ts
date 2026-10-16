@@ -125,12 +125,16 @@ export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>
 
   // 2. the vault: its entries arrive by Syncthing, its key once, from the recovery code
   if (!hasVault(vaultDir())) {
-    return stop(`no vault in ${shortHome(vaultDir())}: mount the owner's (NODE_VAULT_DIR) and wait for Syncthing`);
+    return stop(
+      `no vault in ${shortHome(vaultDir())}: mount the server vault (NODE_VAULT_DIR, ADR 0015) and wait for Syncthing`,
+    );
   }
   const opens = await loadKey().then(keyMatches, () => false);
   if (opens) ok("the vault opens here");
   else {
-    console.log(`\nThe vault's recovery code (on your machine: ${ANSI.b}agents vault recovery-code${ANSI.x}).`);
+    console.log(
+      `\nThe server vault's recovery code (on your machine: ${ANSI.b}agents vault server recovery-code${ANSI.x}).`,
+    );
     try {
       await pairVault(await readStdin("recovery code (not shown): "), "file");
     } catch (e) {

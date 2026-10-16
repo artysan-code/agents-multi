@@ -6,7 +6,7 @@
 # takes it as its own. Once per volume and server; a deploy keeps it.
 #
 #   sudo apps/node/bind-volume.sh <volume> <folder>
-#   sudo apps/node/bind-volume.sh ctspzl…_node-vault  /var/lib/docker/volumes/<syncthing>_data1/_data/agents-multi-vault
+#   sudo apps/node/bind-volume.sh ctspzl…_node-vault  /var/lib/docker/volumes/<syncthing>_data1/_data/agents-multi-vault-server
 #   sudo apps/node/bind-volume.sh ctspzl…_node-config /var/lib/docker/volumes/<syncthing>_data1/_data/agents-multi-config
 #
 # It refuses a volume that holds files (it only replaces the empty one a deploy made) and a node that is running.

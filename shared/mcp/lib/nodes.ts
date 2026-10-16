@@ -274,6 +274,10 @@ export interface ApprovalKeys {
   public: string;
 }
 
+/** Where a server's vault holds the owner's public approval key (ADR 0015): the key is derived from the owner's vault
+ *  key, which a server does not have, so the owner's machine puts the public half there. */
+export const APPROVAL_ENTRY = { service: "approval", account: "owner", field: "public" } as const;
+
 /** The owner's approval keys, derived from the vault key (HKDF-SHA256 with a label of their own): any machine
  *  with the vault signs, the service never can. */
 export async function approvalKeys(vaultRaw: Uint8Array): Promise<ApprovalKeys> {

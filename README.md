@@ -221,7 +221,7 @@ closed, then run `agents install` and `agents doctor`.
 | `agents usage [--by …] [--since …]`                                           | tokens and list-price estimate by profile, model, project, agent, day, **skill**, **command** (SQLite)                                                                 |
 | `agents serve [--no-open]`                                                    | the console on `http://127.0.0.1:7331` (normally the app's backend already serves it)                                                                                  |
 | `agents ui build`                                                             | build the console's interface (`apps/ui`, pnpm); install and self-update run it when `apps/ui` changed                                                                 |
-| `agents vault status\|init\|pair\|set\|delete\|run`                           | the secret vault the MCP servers read their credentials from (below)                                                                                                   |
+| `agents vault status\|init\|pair\|set\|delete\|run\|server`                   | the secret vault the MCP servers read their credentials from (below); `server` keeps the separate vault a server node gets                                             |
 | `agents routine add\|list\|rm\|run`                                           | unattended jobs on a schedule (cron, a one-shot `at`, a run's end), each on its own branch under the repository's run policy (below)                                   |
 | `agents review [rules [folder]]`                                              | what the reviewer allowed, refused or left to you in routines' runs; the rules a project's runs get (below)                                                            |
 | `agents nodes [accept\|decline\|propose\|forget]`                             | the machines and jobs the service sees; `accept` signs a job here, with the vault's approval key (ADR 0012); `forget <name>` drops a machine and its tokens            |
@@ -518,11 +518,11 @@ sees, and `agents nodes accept <job>` signs one.
   waits on it and its pending answers, hands the turns it held back to the other machines and revokes the tokens
   named after it: a forgotten machine cannot come back without pairing again.
 - **A server** runs `agents serve --headless`: no page, every child in Claude Code's Bash sandbox, failing closed
-  (`agents node probe`); only the node pushes. It is given your configuration and the vault, read only, as
+  (`agents node probe`); only the node pushes. It is given your configuration and a vault of its own (not yours, ADR 0015), read only, as
   Syncthing folders of their own (`agents config move` puts the configuration in `~/agents-multi-config`), and
   set up by one command in its terminal, `agents node setup` ([ADR 0013](docs/adr/0013-a-server-node-without-a-terminal.md)).
   Nobody signs in to Claude there: `agents node token <profile>`, on your desktop, puts a one-year token of that
-  account (`claude setup-token`) in the vault, and the node gives it to that account's children only, with Claude
+  account (`claude setup-token`) in the vault (and in the server's), and the node gives it to that account's children only, with Claude
   Code's subprocess scrub keeping it from what they run (checked before the node takes work). Such a token makes
   model requests only: no claude.ai connectors on a server.
 
@@ -806,10 +806,17 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   its arguments replaced by those accounts' hosts (its `--allow-net`). A server that is not ours is
   one per account instead ([above](#servers-that-are-not-ours-one-per-account)).
 - **Secrets** are in the vault, `~/agents-multi-vault` (a Syncthing folder of its own: they travel between
-  machines already encrypted, a relay machine carries them without reading them, and a server node can be
-  given this folder alone; before 1.2.1 it was `~/vault/claude-multi`, still read until `agents vault move`). One file per secret,
+  machines already encrypted, a relay machine carries them without reading them; a server node is **not** given
+  this folder but a vault of its own, below; before 1.2.1 it was `~/vault/claude-multi`, still read until `agents vault move`). One file per secret,
   AES-GCM with a fresh IV per write, named by an HMAC so the names say nothing. The key is in each
   machine's keyring (Secret Service: KWallet here), so nothing is typed at login.
+- **A server's vault** ([ADR 0015](docs/adr/0015-a-vault-for-the-server.md)): a server node must not hold all your
+  secrets, and Syncthing cannot leave files out for one device, so it gets a second vault, `~/agents-multi-vault-server`
+  (`AGENTS_MULTI_SERVER_VAULT`), sealed with its own key, and a Syncthing folder of its own. `agents vault server sync`
+  copies into it, re-sealed, Claude's tokens, what a node reads by design (passkey revocations, the clones' env files,
+  your public approval key) and the `<service>/<account>` pairs of `serverServices` in `nodes.json` (default none);
+  never the brain's. `agents node token`, a revocation and `agents node seed` run it by themselves; the doctor warns
+  when it is behind, and fails on a server whose vault is your own or holds a brain entry.
 - **Deleting** a secret rewrites it as a tombstone instead of removing the file: through an encrypted
   relay a removal can lose against a concurrent modification and come back, a write cannot.
 - **Machines**: `agents vault init` on the first one prints a recovery code — keep it outside the

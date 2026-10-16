@@ -31,6 +31,7 @@ import { bigCode, pairMachine, spinnerFrame } from "./pair.ts";
 import { platformOf } from "../../../shared/mcp/lib/platform.ts";
 import { expandVoicePath, findOnPath, findWhisperBin, findWhisperModel, realFindIO, voiceReady } from "./voice.ts";
 import { seedCommand } from "./seed.ts";
+import { syncIfPresent } from "./server-vault.ts";
 
 const GiB = 2 ** 30;
 
@@ -352,8 +353,10 @@ export async function nodeCommand(args: string[]): Promise<number> {
       }
       await setSecret(CLAUDE_TOKEN.service, profile, token.trim(), CLAUDE_TOKEN.field);
       console.log(
-        `${ANSI.g}+${ANSI.x} ${profile}: the token is in the vault; every server node with the vault runs this account`,
+        `${ANSI.g}+${ANSI.x} ${profile}: the token is in the vault; a server node runs this account once its vault has it`,
       );
+      // a server has a vault of its own (ADR 0015): the token reaches it there
+      console.log((await syncIfPresent()) ?? "no server vault yet: agents vault server sync makes it");
       return 0;
     }
     case "probe": {
@@ -391,9 +394,15 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log(`gitHosts: ${(r.config.gitHosts as string[]).join(", ") || "none"} (${shared})`);
       return 0;
     }
-    case "seed":
-      // the env files git ignores, sealed in the vault for a machine that clones the repository (seed.ts)
-      return await seedCommand(rest);
+    case "seed": // the env files git ignores, sealed in the vault for a machine that clones the repository (seed.ts)
+    {
+      const code = await seedCommand(rest);
+      if (code === 0 && !rest.includes("--dry-run")) {
+        const line = await syncIfPresent();
+        if (line) console.log(line);
+      }
+      return code;
+    }
     default:
       console.error(
         "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key|voice [--bin P] [--model P] [--off]|hosts [add|remove <host>]]",

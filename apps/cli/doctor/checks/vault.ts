@@ -6,6 +6,7 @@ import { lstat, readJson, readText } from "../../lib/fs.ts";
 import { HOME, REPO, shortHome } from "../../lib/paths.ts";
 import { ACCOUNTS } from "../../mcp/registry.ts";
 import { probeKept } from "../../vault.ts";
+import { serverVaultStale } from "../../node/server-vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { checkList } from "../context.ts";
 import { verifyStep } from "../repair.ts";
@@ -17,6 +18,20 @@ import { verifyStep } from "../repair.ts";
  * @param detail the `detail` of a `probeAccount` result
  */
 export const keyRefused = (detail: string): boolean => /HTTP 40[13]/.test(detail);
+
+/** Pure: what the doctor says of the server vault, given what it is behind by. */
+export function serverVaultFinding(
+  stale: { write: { service: string; account: string }[]; remove: { service: string; account: string }[] },
+): [string, "ok" | "warn", string, string?] {
+  const n = stale.write.length + stale.remove.length;
+  if (!n) return ["vault.server", "ok", "server vault: up to date with the selection"];
+  return [
+    "vault.server",
+    "warn",
+    `the server vault is behind the selection: ${stale.write.length} to write, ${stale.remove.length} to remove`,
+    "agents vault server sync",
+  ];
+}
 
 /** The secret vault, the accounts that need it, and the deny rules and hooks that protect its key. */
 export async function vaultChecks(): Promise<Check[]> {
@@ -77,6 +92,16 @@ export async function vaultChecks(): Promise<Check[]> {
       if (!missing.length && !l.conflicts && !l.unreadable) {
         add("vault", "ok", `secret vault: ${accounts.length} accounts, every secret here`);
       }
+      // the server's vault (ADR 0015) is a copy of a selection: it goes stale when a selected secret changes
+      const stale = await serverVaultStale().catch((e) => e as Error);
+      if (stale instanceof Error) {
+        add(
+          "vault.server",
+          "warn",
+          `the server vault could not be compared: ${stale.message}`,
+          "agents vault server status",
+        );
+      } else if (stale) add(...serverVaultFinding(stale));
       // a secret can be here and dead (expired, revoked): one request each says whether the service
       // still takes it. The brain has its own check below; a service with no probe is not counted.
       const held = accounts.filter((a) =>
@@ -136,10 +161,16 @@ export async function vaultChecks(): Promise<Check[]> {
       "Bash(agents vault recovery-code:*)",
       "Bash(agents-multi vault recovery-code:*)",
       "Bash(claude-multi vault recovery-code:*)",
+      // the server vault's key too (agents vault server recovery-code, ADR 0015)
+      "Bash(agents vault server recovery-code:*)",
+      "Bash(agents-multi vault server recovery-code:*)",
+      "Bash(claude-multi vault server recovery-code:*)",
       "Read(~/vault/claude-multi/**)",
       "Read(~/agents-multi-vault/**)",
       "Edit(~/vault/claude-multi/**)",
       "Edit(~/agents-multi-vault/**)",
+      "Read(~/agents-multi-vault-server/**)",
+      "Edit(~/agents-multi-vault-server/**)",
       // the key file of a machine with no keyring (agents vault pair --file, ADR 0012)
       "Read(~/.local/state/agents-multi/vault-key)",
       "Edit(~/.local/state/agents-multi/vault-key)",
