@@ -27,6 +27,7 @@ import { readNodeState } from "./agentd.ts";
 import { bigCode, pairMachine, spinnerFrame } from "./pair.ts";
 import { platformOf } from "../../../shared/mcp/lib/platform.ts";
 import { expandVoicePath, findOnPath, findWhisperBin, findWhisperModel, realFindIO, voiceReady } from "./voice.ts";
+import { seedCommand } from "./seed.ts";
 
 const GiB = 2 ** 30;
 
@@ -282,6 +283,9 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log((await approvalKeys((await loadKey()).raw)).public);
       return 0;
     }
+    case "seed":
+      // the env files git ignores, sealed in the vault for a machine that clones the repository (seed.ts)
+      return await seedCommand(rest);
     default:
       console.error(
         "usage: agents node [status [--json]|pair|login [--no-browser]|enable [--headless] [--max N]|disable|token <profile>|setup|probe|key|voice [--bin P] [--model P] [--off]]",
