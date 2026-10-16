@@ -17,6 +17,7 @@ const SOURCES: Record<string, string[]> = {
     "shared/mcp/agents/routine-tools.ts",
     "shared/mcp/agents/account-tools.ts",
     "shared/mcp/agents/panel-tools.ts",
+    "shared/mcp/agents/node-tools.ts",
   ],
   "syncthing-status": ["shared/mcp/syncthing-status"],
   tasks: ["shared/mcp/tasks"],

@@ -9,12 +9,13 @@ import { listAccounts } from "../../../shared/mcp/lib/providers.ts";
 import { hasVault, keyMatches, loadKey, pairVault, vaultDir } from "../../../shared/mcp/lib/vault.ts";
 import { lstat, readlink } from "../lib/fs.ts";
 import { ANSI } from "../lib/output.ts";
-import { CONFIG, HOME, RUNTIME, shortHome } from "../lib/paths.ts";
+import { CONFIG, HOME, RUNTIME, shortHome, STATE } from "../lib/paths.ts";
 import { CONFIG_HOME } from "../init.ts";
 import { readStdin } from "../vault.ts";
 import { readNodeToken } from "./service.ts";
 import { cloneName } from "./clone.ts";
 export { cloneName };
+import { setupFile } from "./facts.ts";
 import {
   downloadModel,
   findOnPath,
@@ -86,6 +87,11 @@ async function voiceStep(current: Parameters<typeof voiceReady>[0], nodeCommand:
     ok(`${pick.file}: downloaded, checksum verified`);
   }
   if ((await nodeCommand(["voice", "--bin", bin, "--model", model])) === 0) ok("voice notes are on");
+}
+
+async function publishSetup(v: { gitKey: string; waits: string[] }) {
+  await Deno.mkdir(STATE, { recursive: true });
+  await Deno.writeTextFile(setupFile(), JSON.stringify(v, null, 2) + "\n");
 }
 
 export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>): Promise<number> {
@@ -163,9 +169,17 @@ export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>
     }
   }
   const pub = (await Deno.readTextFile(`${key}.pub`)).trim();
+  // what the node announces (ADR 0013, F2): the key's public half for the console's page, and what still waits
+  const waits = missing.map((p) => `Claude, ${p}: no token in the vault (agents node token ${p} on your desktop)`);
   if (cfg.repos.length) {
     const first = cfg.repos[0];
     while (!(await run("git", ["ls-remote", "--heads", first], GIT_ENV, true))) {
+      // with no terminal (a server paired from the console), it does not wait: the page shows the key to add
+      if (!Deno.stdin.isTerminal()) {
+        waits.push(`the forge does not take this node's git key yet (${first})`);
+        todo("the forge does not take this node's key yet: add it from the console's page, then setup runs again");
+        break;
+      }
       console.log(
         `\nThe forge does not take this node's key yet. Add it (a deploy key, or your user's):\n\n  ${pub}\n`,
       );
@@ -175,6 +189,7 @@ export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>
   } else {
     ok(`the git key (no repositories in nodes.json \`repos\`): ${pub}`);
   }
+  await publishSetup({ gitKey: pub, waits });
 
   // 6. the clones the owner lists, under the first of repoRoots
   const root = (cfg.repoRoots[0] ?? "~").replace(/^~(?=\/|$)/, HOME);

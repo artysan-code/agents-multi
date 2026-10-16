@@ -62,6 +62,16 @@ create table if not exists pairings (
   code text primary key, secret text not null unique, name text not null, platform text not null,
   expires integer not null, user text);
 create table if not exists pair_failures (user text not null, at integer not null);`),
+  // a token's scope (ADR 0013, F2): the personal tokens made before it are a machine's, as are G4's desktop
+  // pairings; a server pairing makes a `node` token. A pairing that carries the node's public key is a server's,
+  // and keeps the vault key sealed to it until the poll that hands the token over.
+  (db) => {
+    const cols = (t: string) => (db.prepare(`pragma table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
+    if (!cols("tokens").includes("scope")) db.exec("alter table tokens add column scope text");
+    for (const c of ["key", "sealed", "scope"]) {
+      if (!cols("pairings").includes(c)) db.exec(`alter table pairings add column ${c} text`);
+    }
+  },
 ];
 
 export interface AuthConfig {
@@ -72,10 +82,70 @@ export const MAX_CLIENTS = 1000;
 const SESSION_IDLE = 3600_000, SESSION_MAX = 12 * 3600_000;
 /** How long the browser keeps the session cookie: the server ends it sooner when it is not used. */
 export const SESSION_SECONDS = SESSION_MAX / 1000;
-/** Who is behind a request: the account, and how it came in ("claude:<client>" or "token:<name>"). */
+/** What a way in may reach: `brain` a Claude connection (OAuth), `machine` a personal token of the owner's machines
+ *  (every one made before F2), `node` a server node's token (ADR 0013), `web` the web app's session. */
+export type Scope = "brain" | "machine" | "node" | "web";
+/** Who is behind a request: the account, how it came in ("claude:<client>" or "token:<name>"), and its scope. */
 export interface Caller {
   user: string;
   label: string;
+  scope: Scope;
+}
+
+// ---------------------------------------------------------------- what a scope may reach
+/** The routes a `node` token may use (ADR 0013, F2): its own turn loop, announce, relays and runs, the jobs (claimed
+ *  and reported only when they are its own: the second check is main.ts's, which sees the job), proposing one, the
+ *  account's tasks, the MCP endpoint (whose tools tools.ts narrows), the passkeys' public halves (a node checks the
+ *  phone's yes against them) and forgetting itself. Anything else is refused. */
+export const NODE_ROUTES: [string, RegExp][] = [
+  ["PUT", /^\/api\/node$/],
+  ["GET", /^\/api\/node\/turns$/],
+  ["POST", /^\/api\/turns\/[\w-]{1,64}\/(events|done)$/],
+  ["GET", /^\/api\/turns\/[\w-]{1,64}\/audio$/],
+  ["GET", /^\/api\/node\/answers$/],
+  ["POST", /^\/api\/node\/answers$/],
+  ["PUT", /^\/api\/node\/requests$/],
+  ["PUT", /^\/api\/node\/runs$/],
+  ["POST", /^\/api\/jobs$/],
+  ["GET", /^\/api\/jobs\/[\w-]{1,64}$/],
+  ["POST", /^\/api\/jobs\/[\w-]{1,64}$/],
+  ["GET", /^\/api\/tasks$/],
+  ["GET", /^\/api\/tasks\/t-[\w-]+$/],
+  ["PUT", /^\/api\/tasks\/t-[\w-]+$/],
+  ["GET", /^\/api\/passkeys$/],
+  ["DELETE", /^\/api\/nodes\/[^/]{1,64}$/],
+  ["*", /^\/mcp$/],
+];
+
+/** Pure: whether a scope may use a route at all. Fail-closed: a scope this does not know reaches nothing. The
+ *  scopes from before F2 keep what they had; each route still checks the rest (a web session only its WEB_API). */
+export function scopeAllows(scope: unknown, method: string, path: string): boolean {
+  if (scope === "brain" || scope === "machine" || scope === "web") return true;
+  if (scope !== "node") return false;
+  return NODE_ROUTES.some(([m, re]) => (m === "*" || m === method) && re.test(path));
+}
+
+/** Pure: for a node token past the gate, why a route is still refused, or null: the jobs it reads or acts on are its
+ *  own (`jobNode`: the node of the job the path names, null when there is no such job) and it only claims or reports
+ *  them (`op`: the body's), and the machine it forgets is itself (`me`: its token's node name). */
+export function nodeOwnRefusal(
+  r: { method: string; path: string; me: string; op?: unknown; jobNode?: (id: string) => string | null },
+): string | null {
+  const gone = r.path.match(/^\/api\/nodes\/([^/]+)$/);
+  if (gone) {
+    let name = "";
+    try {
+      name = decodeURIComponent(gone[1]);
+    } catch { /* not a name */ }
+    return name === r.me ? null : "a node forgets only itself";
+  }
+  const one = r.path.match(/^\/api\/jobs\/([\w-]{1,64})$/);
+  if (!one) return null;
+  if (r.method === "POST" && r.op !== "claim" && r.op !== "report") {
+    return "a node only claims and reports its own jobs";
+  }
+  const node = r.jobNode?.(one[1]) ?? null;
+  return node === null || node === r.me ? null : "not this node's job";
 }
 
 // ---------------------------------------------------------------- redirects
@@ -161,16 +231,16 @@ export class Auth {
     const m = req.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i);
     if (!m) return null;
     const h = await sha256(m[1]);
-    const row = this.db.prepare("select user, kind, client, name, expires, revoked from tokens where hash = ?").get(
-      h,
-    ) as {
-      user: string;
-      kind: string;
-      client: string | null;
-      name: string | null;
-      expires: number | null;
-      revoked: number;
-    } | undefined;
+    const row = this.db.prepare("select user, kind, client, name, expires, revoked, scope from tokens where hash = ?")
+      .get(h) as {
+        user: string;
+        kind: string;
+        client: string | null;
+        name: string | null;
+        expires: number | null;
+        revoked: number;
+        scope: string | null;
+      } | undefined;
     if (!row || row.revoked || row.kind === "refresh" || (row.expires && row.expires < Date.now())) return null;
     const u = this.users.get(row.user);
     if (!u || u.disabled) return null;
@@ -181,11 +251,14 @@ export class Auth {
       h,
       new Date(now - 5 * 60_000).toISOString(),
     );
-    if (row.kind === "personal") return { user: row.user, label: `token:${row.name}` };
+    if (row.kind === "personal") {
+      // a scope this version does not know is kept as it is, and the gate refuses it everything
+      return { user: row.user, label: `token:${row.name}`, scope: (row.scope ?? "machine") as Scope };
+    }
     const c = this.db.prepare("select name from oauth_clients where id = ?").get(row.client) as
       | { name: string }
       | undefined;
-    return { user: row.user, label: `claude:${c?.name ?? "client"}` };
+    return { user: row.user, label: `claude:${c?.name ?? "client"}`, scope: "brain" };
   }
 
   // ------------------------------------------------------------ the door
@@ -450,14 +523,10 @@ export class Auth {
     const s = req.headers.get("cookie")?.match(/(?:^|;\s*)brain_session=([\w-]+)/)?.[1];
     if (s) this.db.prepare("delete from sessions where hash = ?").run(await sha256(s));
   }
-  async createPersonal(user: string, name: string): Promise<string> {
+  async createPersonal(user: string, name: string, scope: "machine" | "node" = "machine"): Promise<string> {
     const t = `brain_${randomToken()}`;
-    this.db.prepare("insert into tokens (hash, user, kind, name, created) values (?, ?, 'personal', ?, ?)").run(
-      await sha256(t),
-      user,
-      name.slice(0, 60),
-      new Date().toISOString(),
-    );
+    this.db.prepare("insert into tokens (hash, user, kind, name, created, scope) values (?, ?, 'personal', ?, ?, ?)")
+      .run(await sha256(t), user, name.slice(0, 60), new Date().toISOString(), scope);
     return t;
   }
   personalTokens(user: string): { name: string; created: string; used: string | null; hash: string }[] {

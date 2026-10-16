@@ -48,6 +48,8 @@ services:
       - ${NODE_CONFIG_DIR:-node-config}:/home/agent/agents-multi-config:ro
     environment:
       - TZ=${NODE_TIMEZONE:-Europe/Rome}
+      # the service's address, for a server paired from the console with a code in this log (ADR 0013, F2)
+      - AGENTS_MULTI_SERVICE_URL=${NODE_SERVICE_URL:-}
     logging:
       driver: json-file
       options:

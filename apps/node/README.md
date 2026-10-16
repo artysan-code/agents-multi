@@ -82,6 +82,14 @@ service token and the vault key file are made once in the container's terminal a
    turns the node on, headless. The container sees it and starts serving: no restart. The key and the logins live
    in its volume; whoever has the volume has them («The vault key without a keyring»).
 
+   **Or, with no terminal** (ADR 0013, F2): set `NODE_SERVICE_URL` (the brain's address) in the compose
+   environment before the first start. The unconfigured container then prints a pairing code and its key's
+   fingerprint in its log, a new code every ten minutes. On your machine, the console's _Connections › Add a
+   server_ takes the code and shows the fingerprint: say yes only if it is the one in the log. The node gets a
+   token of its own (scope `node`: it reads projects and notes, the tasks and its own jobs, nothing else of the
+   brain) and the vault key sealed to its key; once the configuration arrives by Syncthing it runs setup's steps
+   by itself, and the page shows its git key to add to the forge and what still waits.
+
 6. **Check the sandbox**, from the host:
 
    ```sh

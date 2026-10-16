@@ -21,7 +21,7 @@ import {
   useZone,
   validZone,
 } from "../../shared/mcp/lib/tasks.ts";
-import { Auth, type Caller, SESSION_SECONDS } from "./auth.ts";
+import { Auth, type Caller, nodeOwnRefusal, scopeAllows, SESSION_SECONDS } from "./auth.ts";
 import { base32Encode } from "./crypto.ts";
 import { boardRoute } from "./board.ts";
 import {
@@ -464,7 +464,8 @@ async function handle(req: Request, ip: string): Promise<Response> {
   if (p === "/api/pair" && req.method === "POST") {
     const b = await req.json().catch(() => null) as Record<string, unknown> | null;
     try {
-      return json(await pairings.create(b?.name, b?.platform));
+      // with `key`, a server's pairing (ADR 0013, F2): its token will be a node's
+      return json(await pairings.create(b?.name, b?.platform, b?.key));
     } catch (e) {
       if (e instanceof PairError) return json({ error: e.message }, e.status);
       throw e;
@@ -483,7 +484,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
       if (req.method !== "GET" && req.method !== "HEAD" && !fromOwnPages(req.headers, URL_)) {
         return json({ error: "cross-origin request refused" }, 403);
       }
-      who = { user: id, label: "web" };
+      who = { user: id, label: "web", scope: "web" };
     }
   }
   // and, read only, its tasks, brain and machines
@@ -494,8 +495,30 @@ async function handle(req: Request, ip: string): Promise<Response> {
       ? new Response("not found", { status: 404 })
       : siteFile(SITE_FILES, "/404.html", req.headers, 404) ?? new Response("not found", { status: 404 });
   }
+  // what the token's scope may reach (auth.ts, ADR 0013 F2): one gate, fail-closed; a node token then only its own
+  if (!scopeAllows(who.scope, req.method, p)) return json({ error: "this token's scope does not reach it" }, 403);
+  if (who.scope === "node") {
+    const refused = await nodeOwnOnly(req, p, who);
+    if (refused) return json({ error: refused }, 403);
+  }
   const user = users.get(who.user)!;
   return await as(user, who.label, () => served(req, u, who));
+}
+
+/** For a node token, past the gate: its own jobs only, only claimed and reported, and only itself forgotten
+ *  (auth.ts `nodeOwnRefusal`). The reason it is refused, or null. */
+async function nodeOwnOnly(req: Request, p: string, who: Caller): Promise<string | null> {
+  const jobs = /^\/api\/jobs\/[\w-]{1,64}$/.test(p);
+  const op = jobs && req.method === "POST"
+    ? (await req.clone().json().catch(() => null) as Record<string, unknown> | null)?.op
+    : undefined;
+  return nodeOwnRefusal({
+    method: req.method,
+    path: p,
+    me: nodeNameOf(who.label.replace(/^token:/, "")),
+    op,
+    jobNode: (id) => new Fleet(tenants.open(who.user).store.db).get(id)?.node ?? null,
+  });
 }
 
 /** The account signed in on the web app, for its reads of the tasks, the brain and the machines (the chats, push
@@ -504,7 +527,7 @@ async function handle(req: Request, ip: string): Promise<Response> {
 async function webCaller(req: Request, u: URL): Promise<Caller | null> {
   if (req.method !== "GET" || !/^\/api\/(tasks(\/|$)|brain\/|nodes$)/.test(u.pathname)) return null;
   const id = await auth.session(req);
-  return id ? { user: id, label: "web" } : null;
+  return id ? { user: id, label: "web", scope: "web" } : null;
 }
 
 /** What a request with a valid token gets, already running as its account. */
@@ -517,7 +540,8 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
 
   if (p === "/mcp") {
     // stateless: a server and a transport per request, nothing kept between them
-    const server = brainServer(toolCtx);
+    // a node token sees the narrow view (tools.ts, ADR 0013 F2)
+    const server = brainServer(toolCtx, who.scope);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -566,7 +590,8 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
       req,
       u,
       node,
-      new Fleet(store.db),
+      // a node token's node is a server (ADR 0013, F2): its row says so
+      new Fleet(store.db, undefined, undefined, who.scope === "node" ? "server" : undefined),
       (n) => ({ answers: waiting().pending(n) }),
       who.label === "web",
     );
@@ -599,7 +624,8 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   if (p === "/api/pair/claim" && req.method === "POST") {
     const b = await req.json().catch(() => null) as Record<string, unknown> | null;
     try {
-      return json(await pairings.claim(who.user, b?.code, b?.confirm === true));
+      // a server's pairing: the scope asked for and the vault key sealed to the node by the owner's console
+      return json(await pairings.claim(who.user, b?.code, b?.confirm === true, { scope: b?.scope, sealed: b?.sealed }));
     } catch (e) {
       if (e instanceof PairError) return json({ error: e.message }, e.status);
       throw e;

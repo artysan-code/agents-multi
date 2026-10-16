@@ -27,6 +27,12 @@ export interface Announce {
   sandbox: boolean | null;
   /** it can transcribe a voice note (whisper.cpp and ffmpeg here): the only kind of node that takes a voice turn */
   voice?: boolean;
+  /** a server's git key, public half (ADR 0013, F2): the owner adds it to the forge from the console's page */
+  gitKey?: string;
+  /** what a server's setup still waits for (a Claude token missing, the forge refusing its key), one line each */
+  waits?: string[];
+  /** set by the service, never announced: `server` for a node paired as one (its token's scope is `node`) */
+  kind?: "server";
 }
 
 export interface NodeInfo extends Announce {

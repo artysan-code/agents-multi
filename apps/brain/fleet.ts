@@ -49,8 +49,15 @@ export function cleanAnnounce(raw: unknown): Announce {
     present: r.present === true,
     sandbox: typeof r.sandbox === "boolean" ? r.sandbox : null,
     voice: r.voice === true,
+    ...(typeof r.gitKey === "string" && GIT_KEY.test(r.gitKey) ? { gitKey: r.gitKey } : {}),
+    ...(Array.isArray(r.waits)
+      ? { waits: r.waits.filter((w): w is string => typeof w === "string").slice(0, 10).map((w) => str(w, 200)) }
+      : {}),
   };
 }
+
+/** A git key's public half as a server announces it: an OpenSSH ed25519 key, with its comment. */
+const GIT_KEY = /^ssh-ed25519 [A-Za-z0-9+/]{68}={0,2}( [\x20-\x7e]{1,100})?$/;
 
 interface JobRow {
   id: string;
@@ -99,6 +106,8 @@ export class Fleet {
     private db: DatabaseSync,
     private now = () => Date.now(),
     private newId: () => string = () => crypto.randomUUID(),
+    /** what the announcing token says the node is: `server` for a node token (ADR 0013, F2), kept on its row */
+    private kind?: "server",
   ) {}
 
   nodes(): NodeInfo[] {
@@ -162,7 +171,7 @@ export class Fleet {
     const seen = new Date(this.now()).toISOString();
     this.db.prepare(
       "insert into nodes (name, info, seen) values (?, ?, ?) on conflict(name) do update set info = excluded.info, seen = excluded.seen",
-    ).run(name, JSON.stringify(a), seen);
+    ).run(name, JSON.stringify({ ...a, ...(this.kind ? { kind: this.kind } : {}) }), seen);
     this.sweep();
     return (this.db.prepare("select * from jobs where node = ? and status = 'accepted' order by created").all(
       name,

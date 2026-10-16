@@ -125,6 +125,52 @@ export async function nodeCommand(args: string[]): Promise<number> {
       return await followLogin(url, done.promise, rest.includes("--no-browser"));
     }
     case "pair": {
+      if (rest.includes("--server")) {
+        // a server with no configuration yet (ADR 0013, F2): the code and the key's fingerprint in its log, the
+        // owner pairs it from their console, the vault key arrives sealed to this server's key
+        const { adoptVaultKey, loadPairKey, pairKeyFile, pairServer, serverPairLines } = await import("./pair.ts");
+        const { amEnv } = await import("../../../shared/mcp/lib/env.ts");
+        const url = opt("--url") ?? amEnv("SERVICE_URL") ?? brainAccount()?.url;
+        if (!url || !/^https?:\/\//.test(url)) {
+          console.error("no service address: --url https://<your brain>, or AGENTS_MULTI_SERVICE_URL in the container");
+          return 1;
+        }
+        if (await readNodeToken()) {
+          console.log(`already paired: the node token is in ${nodeTokenFile()}`);
+          return 0;
+        }
+        const stop = new AbortController();
+        Deno.addSignalListener("SIGINT", () => stop.abort());
+        Deno.addSignalListener("SIGTERM", () => stop.abort());
+        const key = await loadPairKey();
+        const name = nodeName(await loadNodeConfig(CONFIG));
+        const r = await pairServer(url, name, platformOf(), key, {
+          signal: stop.signal,
+          show: ({ code, expires, fingerprint }) =>
+            console.log(
+              serverPairLines({ code, fingerprint: fingerprint ?? "", service: url, expires }).join("\n"),
+            ),
+        });
+        if (!r.ok) {
+          console.error(r.message);
+          return 1;
+        }
+        await writeNodeToken(r.token);
+        let vault = "no vault key came with it: `agents node setup` asks for the recovery code";
+        if (r.sealed && r.id) {
+          try {
+            vault = (await adoptVaultKey(r.sealed, key, r.id)) === "checked"
+              ? "the vault key arrived, sealed to this server, and opens the vault"
+              : "the vault key arrived, sealed to this server; the vault is still on its way (Syncthing)";
+          } catch (e) {
+            vault = `the vault key did not open: ${(e as Error).message}`;
+          }
+        }
+        // the key pair has served: a new pairing makes a new one
+        await Deno.remove(pairKeyFile()).catch(() => {});
+        console.log(`PAIRED ${name}\n  the node token is in ${nodeTokenFile()}, this machine only\n  ${vault}`);
+        return 0;
+      }
       // a code instead of a browser sign-in (ADR 0014): works on a server and for a phone-only owner
       const account = brainAccount();
       if (!account?.url) {
