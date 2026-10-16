@@ -548,8 +548,9 @@ Shared files by name:
   `PUT /api/node/runs`, not in `POST /api/node/answers`.
 - **Resume elsewhere** is `POST /api/runs/<node>/<id>/resume`: the service raises the `resume` job for the run, which
   the phone accepts with the passkey as any job.
-- **The panel exists only where the `agents` MCP server is**: `_surfaces: ["cli"]`, so Claude Desktop's chat does not
-  get it yet; whether to add `desktop` is open.
+- **The panel exists only where the `agents` MCP server is**: `_surfaces: ["cli"]` at first; since 2026-10-16
+  `["cli", "desktop"]`, with the Desktop app as a coordinator with no folder ([ADR 0005](0005-agent-workflows.md),
+  amendment 2026-10-16), so Desktop's chat opens the same panel.
 - **Client runs carry an opaque id** in what the node publishes.
 - **`gitHosts`** stays empty by default; `agents node hosts add <host>` fills it (fourth round, above).
 - F2's deviations are in [ADR 0013](0013-a-server-node-without-a-terminal.md), «As built (F2)».

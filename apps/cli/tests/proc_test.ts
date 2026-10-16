@@ -5,6 +5,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   coordinatorFrom,
   isClaude,
+  isDesktopApp,
   myCoordinator,
   parsePs,
   procAlive,
@@ -61,6 +62,21 @@ Deno.test("proc: coordinatorFrom — the nearest claude above, itself first; non
   assertEquals(coordinatorFrom(1, read), null);
   // a loop in the table (cannot happen, must not hang)
   assertEquals(coordinatorFrom(10, table({ 10: [11, "a", "1"], 11: [10, "b", "1"] })), null);
+});
+
+Deno.test("proc: under Claude Desktop the coordinator is the app's main process, marked desktop", () => {
+  for (const c of ["claude-desktop", "claude-desktop-", "Claude-Desktop"]) assert(isDesktopApp(c), c);
+  for (const c of ["claude", "claude-bin", "disclaimer", "deno"]) assert(!isDesktopApp(c), c);
+  const read = table({
+    100: [1, "systemd", "1"],
+    200: [100, "claude-desktop-", "2000"], // the app (comm cut to 15 characters)
+    300: [200, "disclaimer", "3000"], // Desktop's wrapper of an MCP server
+    400: [300, "deno", "4000"], // the agents server
+    500: [200, "claude", "5000"], // the Code tab's Claude Code
+    600: [500, "deno", "6000"], // its agents server
+  });
+  assertEquals(coordinatorFrom(400, read), { pid: 200, start: "2000", desktop: true });
+  assertEquals(coordinatorFrom(600, read), { pid: 500, start: "5000" }, "the Code tab is a CLI, with its folder");
 });
 
 Deno.test("proc: procAlive — same start is the same process, another start is a reused pid", () => {

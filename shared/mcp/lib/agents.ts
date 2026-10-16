@@ -61,7 +61,8 @@ export interface Owned {
   owner?: Coordinator;
 }
 
-/** Who starts a child or a run: a project always, a coordinator when there is one. */
+/** Who starts a child or a run: a project always, a coordinator when there is one. A coordinator with no
+ *  folder (Desktop) gives "": the project is then that of the child's or the run's folder. */
 export interface Owner {
   project: string;
   owner?: Coordinator;
@@ -70,7 +71,8 @@ export interface Owner {
 /** What a caller may see and touch. By default its own session's children (and the orphans of its project,
  *  which it can adopt); `project` also shows the project's other live coordinators' (read-only); `all` every
  *  project's (read-only). `me` is the caller's coordinator; without one (a plain terminal) the person is
- *  the coordinator of every child of the project. */
+ *  the coordinator of every child of the project. A Claude Desktop app has no folder: its `project` is ""
+ *  (`folderless`) and it owns what it started in any project. */
 export interface Scope {
   project: string;
   me?: Coordinator;
@@ -113,14 +115,15 @@ export async function projectOf(folder: string): Promise<string> {
   }
 }
 
-/** A caller's scope: its folder's project, the coordinator it runs under, and what it asks to see. */
+/** A caller's scope: its folder's project, the coordinator it runs under, and what it asks to see. Under the
+ *  Desktop app the folder means nothing (its MCP servers run in the home folder): no project. */
 export async function scopeOf(
   opts: { all?: boolean; project?: boolean; cwd?: string; me?: Coordinator | null; session?: string } = {},
 ): Promise<Scope> {
   const found = opts.me === undefined ? myCoordinator() : opts.me;
   const session = opts.session ?? (Deno.env.get("CLAUDE_CODE_SESSION_ID") || undefined);
   return {
-    project: await projectOf(opts.cwd ?? Deno.cwd()),
+    project: found?.desktop ? "" : await projectOf(opts.cwd ?? Deno.cwd()),
     me: found ? { ...found, ...(session ? { session } : {}) } : undefined,
     view: opts.all ? "all" : opts.project ? "project" : "mine",
   };
@@ -129,20 +132,32 @@ export async function scopeOf(
 /** The owner a caller's children and runs get. */
 export const ownerOf = (s: Scope): Owner => s.me ? { project: s.project, owner: s.me } : { project: s.project };
 
+/** Pure: whether the caller has no project folder (Claude Desktop): one app for all its conversations, and
+ *  the coordinator of what it started in any project. */
+export const folderless = (scope: Scope): boolean => !scope.project;
+
+/** Pure: whether a project's records that no coordinator owns (routines, account proposals) are within the
+ *  caller's reach: its own project's; every project's for a caller with no folder, as for the console. */
+export const reaches = (project: string | undefined, scope: Scope): boolean =>
+  folderless(scope) || project === scope.project;
+
 /** Pure: how something owned by `o` relates to the caller. A thing with no live owner process (none
- *  recorded, pid gone, or the pid reused: another start time) is an orphan. */
+ *  recorded, pid gone, or the pid reused: another start time) is an orphan. For a caller with no folder
+ *  every project is its own: what it started is `own` wherever, the rest `peer` or `orphan`. */
 export function accessOf(o: Owned | undefined, scope: Scope, read: ProcReader = procReader): Access {
-  if (!o?.project || o.project !== scope.project) return "other";
+  if (!o?.project || (o.project !== scope.project && !folderless(scope))) return "other";
   if (!procAlive(o.owner, read)) return "orphan";
   if (!scope.me) return "own";
   return o.owner!.pid === scope.me.pid && sameStart(o.owner!.start, scope.me.start) ? "own" : "peer";
 }
 
 /** Pure: whether the caller may see it: its own and its project's orphans by default, with `project` the
- *  other coordinators' of the project too, with `all` everything. */
+ *  other coordinators' of the project too, with `all` everything. A caller with no folder sees its own by
+ *  default (every project's orphans would bury them) and, with `project` or `all`, everything. */
 export function inScope(o: Owned | undefined, scope: Scope, read: ProcReader = procReader): boolean {
   if (scope.view === "all") return true;
   const a = accessOf(o, scope, read);
+  if (folderless(scope)) return a === "own" || (a !== "other" && scope.view === "project");
   return a === "own" || a === "orphan" || (a === "peer" && scope.view === "project");
 }
 
@@ -160,7 +175,8 @@ export function refusal(what: string, o: Owned | undefined, scope: Scope, read: 
       return `${what} belongs to another project (${o?.project ?? "unknown"}), this session is in ${scope.project}: ` +
         "only the coordinator of its project may act on it";
     case "peer":
-      return `${what} belongs to another live session of this project (pid ${o?.owner?.pid}): only that session ` +
+      return `${what} belongs to another live session${folderless(scope) ? "" : " of this project"} ` +
+        `(pid ${o?.owner?.pid}): only that session ` +
         "may act on it";
     default:
       return `${what} is an orphan (its coordinator is gone): adopt it first (\`agents agent adopt\`, or the ` +
@@ -169,7 +185,7 @@ export function refusal(what: string, o: Owned | undefined, scope: Scope, read: 
 }
 
 /** Pure: an orphan of the caller's own project is adoptable by a caller that has a coordinator. Adoption
- *  never crosses projects. */
+ *  never crosses projects; a caller with no folder (Desktop) is in none, so it adopts any project's orphan. */
 export const mayAdopt = (o: Owned | undefined, scope: Scope, read: ProcReader = procReader): boolean =>
   !!scope.me && accessOf(o, scope, read) === "orphan";
 
@@ -754,8 +770,9 @@ export async function startChild(
   if (name !== "claude") meta.provider = name;
   if (i.model) meta.model = i.model;
   if (i.run) meta.run = i.run;
-  const owner = i.owner ?? { project: await projectOf(dir) };
-  meta.project = owner.project;
+  const owner = i.owner ?? { project: "" };
+  // a coordinator with no folder (Desktop) gives its child the project of the child's own folder
+  meta.project = owner.project || await projectOf(dir);
   if (owner.owner) meta.owner = owner.owner;
   await Deno.writeTextFile(`${run}/meta.json`, JSON.stringify(meta, null, 2));
   const fifo = await new Deno.Command("mkfifo", { args: [`${run}/in`] }).output();

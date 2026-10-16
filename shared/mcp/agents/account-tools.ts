@@ -3,7 +3,7 @@
 // another one. A coordinator PROPOSES; the owner accepts; the console applies. Nothing here changes an account.
 import type { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { z } from "npm:zod@4.6.5";
-import { scopeOf } from "../lib/agents.ts";
+import { folderless, reaches, scopeOf } from "../lib/agents.ts";
 import {
   accountId,
   decide,
@@ -47,8 +47,8 @@ export function registerAccountTools(server: McpServer) {
         })),
         rules: await loadRules(),
         project: scope.project,
-        project_default: await projectAccount(scope.project),
-        proposals: (await listProposals()).filter((p) => p.project === scope.project && p.status === "pending"),
+        project_default: folderless(scope) ? null : await projectAccount(scope.project),
+        proposals: (await listProposals()).filter((p) => reaches(p.project, scope) && p.status === "pending"),
         events: await readEvents(undefined, 10),
       });
     } catch (e) {
@@ -71,19 +71,22 @@ export function registerAccountTools(server: McpServer) {
     try {
       const me = await scopeOf();
       let from = "none";
+      let project = me.project;
       if (i.scope === "routine") {
         const r = i.routine ? await readRoutine(i.routine) : null;
-        if (!r || r.project !== me.project) throw new Error(`no routine ${i.routine} in this project`);
+        if (!r || !reaches(r.project, me)) throw new Error(`no routine ${i.routine} in this project`);
         if (r.action.kind !== "agent") throw new Error("a plan's accounts are its steps': change the plan");
         from = accountId({ profile: r.action.profile, provider: r.action.provider ?? "claude" });
+        project = r.project;
       } else {
+        if (folderless(me)) throw new Error("a project's default is proposed from a session in that project");
         const d = await projectAccount(me.project);
         if (d) from = accountId(d);
       }
       const p = await propose(
         {
           scope: i.scope,
-          project: me.project,
+          project,
           routine: i.routine,
           from,
           to: i.to,
@@ -103,15 +106,15 @@ export function registerAccountTools(server: McpServer) {
       "coordinator); accepted ones are applied by the console within a minute.",
     inputSchema: {},
   }, async () => {
-    const project = (await scopeOf()).project;
-    return text((await listProposals()).filter((p) => p.project === project));
+    const scope = await scopeOf();
+    return text((await listProposals()).filter((p) => reaches(p.project, scope)));
   });
 
   const answer = async (id: string, accept: boolean) => {
     try {
       const me = await scopeOf();
       const p = (await listProposals()).find((x) => x.id === id);
-      if (!p || p.project !== me.project) throw new Error(`no proposal ${id} in this project`);
+      if (!p || !reaches(p.project, me)) throw new Error(`no proposal ${id} in this project`);
       return text(await decide(id, accept));
     } catch (e) {
       return fail(e);

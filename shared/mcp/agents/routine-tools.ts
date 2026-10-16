@@ -2,7 +2,7 @@
 // an unattended job from chat. They write and read the routines' files; the console fires them.
 import type { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { z } from "npm:zod@4.6.5";
-import { scopeOf } from "../lib/agents.ts";
+import { folderless, reaches, scopeOf } from "../lib/agents.ts";
 import { parseAt } from "../lib/cron.ts";
 import { addRoutine, listRoutines, readRoutine, readState, removeRoutine, requestFire } from "../lib/routines.ts";
 
@@ -81,7 +81,7 @@ export function registerRoutineTools(server: McpServer) {
           : { kind: "agent", profile: i.profile ?? "", provider: i.provider, task: i.task ?? "", model: i.model },
         by: scope.me,
       });
-      if (r.project !== scope.project && scope.me) {
+      if (r.project !== scope.project && scope.me && !folderless(scope)) {
         await removeRoutine(r.id);
         throw new Error("a session schedules only in its own project");
       }
@@ -99,7 +99,7 @@ export function registerRoutineTools(server: McpServer) {
     const scope = await scopeOf({ all });
     const out = [];
     for (const r of await listRoutines()) {
-      if (scope.view !== "all" && r.project !== scope.project) continue;
+      if (scope.view !== "all" && !reaches(r.project, scope)) continue;
       const st = await readState(r.id);
       out.push({ ...r, state: { ...st, seen: undefined } });
     }
@@ -112,7 +112,7 @@ export function registerRoutineTools(server: McpServer) {
   }, async ({ id }: { id: string }) => {
     try {
       const r = await readRoutine(id);
-      if (!r || r.project !== (await scopeOf()).project) throw new Error(`no routine ${id} in this project`);
+      if (!r || !reaches(r.project, await scopeOf())) throw new Error(`no routine ${id} in this project`);
       await removeRoutine(id);
       return text({ removed: id });
     } catch (e) {
@@ -126,7 +126,7 @@ export function registerRoutineTools(server: McpServer) {
   }, async ({ id }: { id: string }) => {
     try {
       const r = await readRoutine(id);
-      if (!r || r.project !== (await scopeOf()).project) throw new Error(`no routine ${id} in this project`);
+      if (!r || !reaches(r.project, await scopeOf())) throw new Error(`no routine ${id} in this project`);
       await requestFire(id);
       return text({ requested: id });
     } catch (e) {

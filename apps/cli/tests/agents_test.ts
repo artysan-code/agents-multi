@@ -16,6 +16,7 @@ import {
   childMode,
   type ChildState,
   type Coordinator,
+  folderless,
   inScope,
   isUnder,
   listChildren,
@@ -24,6 +25,7 @@ import {
   type Owned,
   projectOf,
   questionsOf,
+  reaches,
   readChild,
   refusal,
   rootFromGitFile,
@@ -527,6 +529,49 @@ Deno.test("agents: a fake process table — accessOf needs no real process", () 
   assertEquals(accessOf({ project: "/p", owner: me }, scope, read), "orphan", "same pid, new process");
   table.delete(10);
   assertEquals(accessOf({ project: "/p", owner: me }, scope, read), "orphan", "gone");
+});
+
+Deno.test("agents: a Desktop app with no folder — its own in any project, the rest read-only, orphans adoptable", () => {
+  const table = new Map([
+    [10, { ppid: 1, comm: "claude-desktop-", start: "500" }],
+    [20, { ppid: 1, comm: "claude-bin", start: "600" }],
+  ]);
+  const read: ProcReader = (pid) => table.get(pid) ?? null;
+  const desk: Coordinator = { pid: 10, start: "500", desktop: true };
+  const cli: Coordinator = { pid: 20, start: "600" };
+  const gone: Coordinator = { pid: 30, start: "700" };
+  const me: Scope = { project: "", me: desk };
+  const at = (project: string | undefined, owner?: Coordinator): Owned => ({ project, owner });
+  assert(folderless(me) && !folderless({ project: "/p/a", me: cli }));
+  assertEquals(accessOf(at("/p/a", desk), me, read), "own");
+  assertEquals(accessOf(at("/p/b", desk), me, read), "own", "every project: the child's folder said which");
+  assertEquals(accessOf(at("/p/a", cli), me, read), "peer");
+  assertEquals(accessOf(at("/p/b", gone), me, read), "orphan");
+  assertEquals(accessOf(at("/p/b"), me, read), "orphan", "a routine's child: no coordinator");
+  assertEquals(accessOf(at(undefined, desk), me, read), "other", "no project recorded at all");
+  // seen: its own by default; with project or all, everyone's
+  const all = [at("/p/a", desk), at("/p/b", desk), at("/p/a", cli), at("/p/b", gone), at(undefined, cli)];
+  const seen = (v: Scope["view"]) => all.map((o) => inScope(o, { ...me, view: v }, read));
+  assertEquals(seen("mine"), [true, true, false, false, false]);
+  assertEquals(seen("project"), [true, true, true, true, false]);
+  assertEquals(seen("all"), [true, true, true, true, true]);
+  // acts only on its own; adopts an orphan of any project, never a live session's
+  assertEquals(all.map((o) => mayAct(o, me, read)), [true, true, false, false, false]);
+  assertEquals(all.map((o) => mayAdopt(o, me, read)), [false, false, false, true, false]);
+  assertEquals(adoptable("x", at("/p/b", gone), me, read), desk);
+  assertThrows(() => adoptable("x", at("/p/a", cli), me, read), Error, "live coordinator");
+  assert(!refusal("x", at("/p/a", cli), me, read).includes("this project"));
+  // a CLI session of /p/a sees the Desktop's child there as a peer's, and its orphan once the app is gone
+  const there: Scope = { project: "/p/a", me: cli, view: "project" };
+  assertEquals(accessOf(at("/p/a", desk), there, read), "peer");
+  assertEquals(accessOf(at("/p/b", desk), there, read), "other");
+  assert(!mayAct(at("/p/a", desk), there, read));
+  table.delete(10);
+  assertEquals(accessOf(at("/p/a", desk), there, read), "orphan");
+  assert(mayAdopt(at("/p/a", desk), there, read));
+  // routines and proposals: its project's for a session, every project's for the app
+  assert(reaches("/p/a", there) && !reaches("/p/b", there));
+  assert(reaches("/p/a", me) && reaches("/p/b", me));
 });
 
 Deno.test("agents: children of two sessions in one project — each sees its own, orphans adoptable, never across projects", async () => {
