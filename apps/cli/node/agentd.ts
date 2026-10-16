@@ -154,7 +154,7 @@ export async function nodeTick(
   const key = await approvalKey(cfg);
   // what waits here goes to the phone, and what the phone answered is checked here (waiting.ts)
   await handleAnswers(cfg, svc, answers ?? [], o).catch((e) => o.log(`node: answers: ${(e as Error).message}`));
-  await relayRequests(svc, true).catch((e) => o.log(`node: waiting: ${(e as Error).message}`));
+  await relayRequests(cfg, svc, true).catch((e) => o.log(`node: waiting: ${(e as Error).message}`));
   // the account's passkeys, read once and only for a job the phone approved
   let passkeys: Passkey[] | null = null, unreadable = false, revoked: ReadonlySet<string> | null = null;
   const passkeyCtx = async (): Promise<PasskeyCtx> => {
@@ -360,7 +360,7 @@ export function startAgentd(o: Agentd): () => void {
       if (!cfg.enabled) return;
       const svc = await service(fetch, { node: true });
       if (typeof svc === "string") return;
-      if (await relayRequests(svc) > 0) await handleAnswers(cfg, svc, await getAnswers(svc), o);
+      if (await relayRequests(cfg, svc) > 0) await handleAnswers(cfg, svc, await getAnswers(svc), o);
       await publishRuns(cfg, svc);
       quickSaid = "";
     } catch (e) {

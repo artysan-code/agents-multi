@@ -462,7 +462,9 @@ runs alike; `agents node hosts add <host>` puts the owner's forge in `nodes.json
 node enable` and the doctor's `node.runs` when neither list is set). The tables are a step of the brain's
 migrations; the stops waiting for a node are `stops.ts`, so `fleet.ts` and `runs.ts` no longer import each other. A
 resume is a proposal whose parent is the run's job (`Fleet.proposeResume`): one open per job, whether the phone or
-the sweep raises it.
+the sweep raises it. **What a client's child waits on is not relayed** (`requestsOf`, `waiting.ts`): its words name
+the client, and a yes to a placeholder would be a yes unseen. It is answered on the machine; the Agents view shows
+that the run waits, and an answer naming such a request finds nothing to answer.
 
 ### C. The panel: orchestrating from Claude Desktop
 
@@ -549,5 +551,5 @@ Shared files by name:
 - **The panel exists only where the `agents` MCP server is**: `_surfaces: ["cli"]`, so Claude Desktop's chat does not
   get it yet; whether to add `desktop` is open.
 - **Client runs carry an opaque id** in what the node publishes.
-- **`gitHosts`** gets its default in this round (`cleanNodeConfig`, `shared/mcp/lib/headless.ts`).
+- **`gitHosts`** stays empty by default; `agents node hosts add <host>` fills it (fourth round, above).
 - F2's deviations are in [ADR 0013](0013-a-server-node-without-a-terminal.md), «As built (F2)».

@@ -51,6 +51,20 @@ Deno.test("node waiting: the pending requests of live children, as the service i
   assertEquals(out[2].project, "/home/a/proj/sub", "a child with no project says its folder");
 });
 
+Deno.test("node waiting: a client's child is not relayed, nothing of it reaches the service", () => {
+  const out = requestsOf(
+    [
+      child("c-own", "waiting", [{ request: "r1", kind: "request", what: "Bash: git push", at: 1 }]),
+      child("work-acme-site-1016", "waiting", [{ request: "r2", kind: "request", what: "Bash: deploy acme", at: 2 }], {
+        project: "/home/a/work/acme/site",
+      }),
+    ],
+    (c) => !c.meta.id.includes("acme"),
+  );
+  assertEquals(out.map((r) => r.id), ["c-own/r1"]);
+  assert(!JSON.stringify(out).includes("acme"));
+});
+
 Deno.test("node waiting: an id is its child and its request", () => {
   assertEquals(splitId("c-aaa/r1"), { child: "c-aaa", request: "r1" });
   assertEquals(splitId("c-aaa/a/b"), { child: "c-aaa", request: "a/b" });

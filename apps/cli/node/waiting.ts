@@ -7,6 +7,7 @@
 
 import { answer as hubAnswer, type Child, listChildren, runsDir } from "../../../shared/mcp/lib/agents.ts";
 import type { NodeConfig } from "../../../shared/mcp/lib/headless.ts";
+import { remoteOf } from "../../../shared/mcp/lib/moving.ts";
 import {
   answerKey,
   boundWords,
@@ -18,6 +19,7 @@ import {
   verifyAnswer,
   wordsHash,
 } from "../../../shared/mcp/lib/webauthn.ts";
+import { ownedRemote } from "./clone.ts";
 import { approvalKey, nodeName } from "./facts.ts";
 import { revokedIds } from "./revocations.ts";
 import type { Service } from "./service.ts";
@@ -34,9 +36,12 @@ export interface Relayed {
   questions?: unknown[];
 }
 
-/** Pure: the requests and questions the children of this machine wait on, as the service is told. */
-export function requestsOf(children: Child[]): Relayed[] {
-  return children.filter((c) => c.state.phase !== "ended").flatMap((c) =>
+/** Pure: the requests and questions the children of this machine wait on, as the service is told. A child whose
+ *  repository is not the owner's (`owned`, the rule clone.ts and runs.ts follow) is left out: its words would name
+ *  the client, and a yes to words replaced by a placeholder would be a yes unseen. It is answered on the machine;
+ *  the Agents view still shows that its run waits, by an opaque id (runs.ts). */
+export function requestsOf(children: Child[], owned: (c: Child) => boolean = () => true): Relayed[] {
+  return children.filter((c) => c.state.phase !== "ended" && owned(c)).flatMap((c) =>
     c.state.pending.map((p): Relayed => {
       // the words go out bounded (boundWords), the form the phone hashes and this node hashes again to check a yes
       const w = boundWords(p.what, p.questions);
@@ -85,12 +90,23 @@ export const getPasskeys = async (s: Service): Promise<Passkey[]> => {
 
 // ---------------------------------------------------------------- relaying what waits
 
+/** Whether a child works in one of the owner's repositories: its folder's `origin` against `repos` and `gitHosts`. */
+async function ownedChildren(cfg: NodeConfig, children: Child[]): Promise<(c: Child) => boolean> {
+  const remotes = new Map<string, string | null>();
+  for (const c of children) {
+    const d = c.meta.project ?? c.meta.dir;
+    if (d && !remotes.has(d)) remotes.set(d, await remoteOf(d).catch(() => null));
+  }
+  return (c) => ownedRemote(cfg, remotes.get(c.meta.project ?? c.meta.dir) ?? null);
+}
+
 let lastSent = "";
 
 /** Tells the service what waits on this machine: when it changed since the last time, or `force`d (each announce
  *  does, so a service that lost it learns it again). Returns how many wait. */
-export async function relayRequests(svc: Service, force = false): Promise<number> {
-  const reqs = requestsOf(await listChildren());
+export async function relayRequests(cfg: NodeConfig, svc: Service, force = false): Promise<number> {
+  const children = await listChildren();
+  const reqs = requestsOf(children, await ownedChildren(cfg, children));
   const json = JSON.stringify(reqs);
   if (force || json !== lastSent) {
     await putRequests(svc, reqs);
@@ -220,7 +236,12 @@ export function handleAnswers(
       now: Date.now,
       passkeys: () => getPasskeys(svc),
       revoked: revokedIds,
-      words: async (child, request) => await wordsOf(await listChildren(), child, request),
+      // a client's request was never relayed: an answer naming one finds nothing to answer
+      words: async (child, request) => {
+        const children = await listChildren();
+        const owned = await ownedChildren(cfg, children);
+        return await wordsOf(children.filter(owned), child, request);
+      },
       answer: (child, request, verdict, answers) => hubAnswer(child, request, verdict, undefined, runsDir(), answers),
     });
     await writeAnswerState(st);
