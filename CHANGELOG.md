@@ -5,6 +5,41 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.1-rc.5] - 2026-10-16
+
+### Added
+
+- **vault**: a vault of its own for server nodes, with its own key and a selection of secrets (55d16f6)
+- **node**: a headless node's children reach the brain MCP server with the node token (480c7fa)
+- **agents**: offer the agents server and its panel in Claude Desktop (4e52140)
+- **agents**: node_list and node_propose for a coordinator (4cfc543)
+- **node**: pair a server from the console's Add a server (4f7d6de)
+- **brain**: a node token scope, and pairing a server with its key (946214c)
+- **web**: the Agents view, live from the service's stream (3c6c246)
+- **node**: publish this machine's runs and check the phone's stop (f507252)
+- **brain**: the agents of every machine, their stream, a signed stop and a resume proposal (1eddc82)
+- **doctor**: node.seed, unknown machines and old client seeds (a6a6cdc)
+- **node**: agents node seed, the ignored env files through the vault (8ce7fcb)
+- **node**: clone a job's repository on first need, only from repos or gitHosts (04e771c)
+- **agents**: an MCP App panel of the session's children, runs, requests and limits (d379675)
+
+### Fixed
+
+- **node**: what a client's child waits on is not relayed to the phone (29e56af)
+- **node**: a headless node talks to the brain with its node token only, never the vault's (0a064c1)
+- **node**: a client's run goes with opaque ids; one ownership rule; agents node hosts (7855fba)
+- **brain**: runs tables in the migrations, stops in their own module, one open resume per run (1da26a6)
+- **web**: a server's pairing code is refused on Machines, it belongs to the console (ffea7c0)
+- **pair**: the console takes the fingerprint from the key it seals to, not the service's (bb70f3b)
+- **launcher**: no --mcp-config before a subcommand, or it swallows its name (a763f0a)
+
+### Documentation
+
+- **adr**: Telegram dropped, the web app is the phone's channel (aba9d65)
+- **adr**: F2 and the third round as built (8c32bf5)
+- **readme**: clone on first need and agents node seed (6b574c7)
+- **adr**: the third round's contract and F2's shape (4ea6ad3)
+
 ## [1.2.1-rc.4] - 2026-10-15
 
 ### Added
