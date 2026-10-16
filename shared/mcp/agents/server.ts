@@ -5,6 +5,7 @@
 // the owner's configuration names, never by default (servers.json, `_profiles`).
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/stdio.js";
+import { registerPanel } from "./panel-tools.ts";
 import { registerAgentTools } from "./tools.ts";
 import { registerAccountTools } from "./account-tools.ts";
 import { registerRoutineTools } from "./routine-tools.ts";
@@ -56,9 +57,15 @@ const instructions =
   "it; a routine whose account is blocked is held and a proposal appears. You PROPOSE another account " +
   "(account_propose) and never apply one: put each proposal to the owner with AskUserQuestion, then carry " +
   "their answer with account_accept / account_decline — the console applies an accepted one. A project's " +
-  "default account is the owner's; an organisation's account is never swapped for another without that yes.";
+  "default account is the owner's; an organisation's account is never swapped for another without that yes.\n" +
+  "Panel: when the owner asks to see or manage the agents, agents_panel opens a live panel of this session's " +
+  "children and runs (where the host shows it; otherwise its text is a summary); its Yes / No buttons are the " +
+  "owner's own answers, through agent_answer, agent_stop and workflow_answer, so do not ask again what it answered.\n" +
+  "Nodes: node_list shows the owner's machines (online, sessions, accounts); node_propose asks a node to run a " +
+  "routine or resume a run, and the owner's yes decides.";
 
 const server = new McpServer({ name: "agents", version: "0.1.0" }, { instructions });
+registerPanel(server);
 registerAgentTools(server);
 registerRoutineTools(server);
 registerAccountTools(server);

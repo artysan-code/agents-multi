@@ -175,6 +175,8 @@
         "account_propose",
         "account_status",
         "agent_list",
+        "agents_panel",
+        "agents_panel_state",
         "routine_list",
         "agent_say",
         "agent_start",

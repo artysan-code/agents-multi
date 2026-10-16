@@ -1,0 +1,685 @@
+<!doctype html>
+<!--
+  The agents panel (ADR 0014, C): an MCP App the host shows in a sandboxed frame. One file, no CDN, no
+  framework, no build. It talks to the host by JSON-RPC over postMessage (MCP Apps, 2026-01-26): ui/initialize,
+  then tools/call for agents_panel_state (the data) and for the tools the model has (agent_answer,
+  agent_stop, workflow_answer, workflow_status). What a child says or asks is put on the page as text,
+  never as HTML.
+-->
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Agents</title>
+    <style>
+    :root {
+      color-scheme: light dark;
+      --bg: var(--color-background-primary, light-dark(#fbfaf8, #1d1c1a));
+      --bg2: var(--color-background-secondary, light-dark(#f1efea, #282624));
+      --fg: var(--color-text-primary, light-dark(#24221f, #ecebe8));
+      --muted: var(--color-text-secondary, light-dark(#6b6862, #a9a69f));
+      --line: var(--color-border-primary, light-dark(#dedbd3, #3a3835));
+      --accent: light-dark(#b4532a, #e08a5c);
+      --ok: light-dark(#2e7d4f, #6cc28f);
+      --bad: light-dark(#b3261e, #f08b84);
+      --font: var(--font-sans, system-ui, sans-serif);
+      --mono: var(--font-mono, ui-monospace, monospace);
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 12px;
+      font: 13px/1.45 var(--font);
+      background: var(--bg);
+      color: var(--fg);
+    }
+    h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+    }
+    h2:first-child {
+      margin-top: 0;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 0 0 8px;
+      background: var(--bg);
+    }
+    .card.ask {
+      border-color: var(--accent);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+    .grow {
+      flex: 1;
+      min-width: 0;
+    }
+    .id {
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .what {
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: var(--bg2);
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin: 6px 0;
+      max-height: 12em;
+      overflow: auto;
+    }
+    .tail {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      margin: 4px 0 0;
+      max-height: 6em;
+      overflow: auto;
+    }
+    .tag {
+      font-size: 11px;
+      border-radius: 999px;
+      padding: 0 7px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .tag.working,
+    .tag.running {
+      color: var(--ok);
+      border-color: var(--ok);
+    }
+    .tag.waiting,
+    .tag.confirm {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .tag.failed,
+    .tag.stopped {
+      color: var(--bad);
+      border-color: var(--bad);
+    }
+    .steps {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    button {
+      font: inherit;
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--bg2);
+      color: var(--fg);
+      cursor: pointer;
+    }
+    button.yes {
+      border-color: var(--ok);
+    }
+    button.no {
+      border-color: var(--bad);
+    }
+    button:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+    fieldset {
+      border: 0;
+      padding: 0;
+      margin: 6px 0;
+    }
+    legend {
+      font-weight: 600;
+      padding: 0;
+    }
+    label {
+      display: block;
+    }
+    input[type=text] {
+      font: inherit;
+      width: 100%;
+      padding: 3px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    .bar {
+      height: 5px;
+      background: var(--bg2);
+      border-radius: 3px;
+      overflow: hidden;
+      width: 90px;
+      display: inline-block;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      background: var(--ok);
+    }
+    .bar.high > i {
+      background: var(--accent);
+    }
+    .bar.full > i {
+      background: var(--bad);
+    }
+    .status {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .error {
+      color: var(--bad);
+    }
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+    </style>
+  </head>
+  <body>
+    <div class="status" id="status"></div>
+    <div id="root"></div>
+    <script>
+    "use strict";
+    (() => {
+      // ---------------------------------------------------------------- words (English, Italian by locale)
+      const WORDS = {
+        en: {
+          requests: "Waiting for you",
+          children: "Children",
+          runs: "Runs",
+          limits: "Accounts",
+          none: "Nothing here.",
+          yes: "Yes",
+          yesSession: "Yes for the session",
+          no: "No",
+          send: "Send",
+          skipQ: "Don't answer",
+          own: "Your own answer",
+          stop: "Stop",
+          sure: "Sure?",
+          go: "Go",
+          skip: "Skip",
+          retry: "Retry",
+          stopRun: "Stop the run",
+          details: "Steps",
+          hide: "Hide",
+          refresh: "Refresh",
+          updated: "Updated",
+          orphan: "orphan: ask Claude to adopt it first",
+          stalled: "its runner is gone",
+          stale: "not read",
+          wants: "wants",
+          asks: "asks",
+          session: "for the session it would allow",
+          resets: "resets",
+          noWindows: "no reading lately",
+          failedCall: "Failed",
+          paused: "Paused while hidden",
+          connecting: "Connecting…",
+          noHost: "No host answered: this page works inside a host that shows MCP Apps.",
+        },
+        it: {
+          requests: "Aspettano te",
+          children: "Figli",
+          runs: "Run",
+          limits: "Account",
+          none: "Niente qui.",
+          yes: "Sì",
+          yesSession: "Sì per la sessione",
+          no: "No",
+          send: "Invia",
+          skipQ: "Non rispondere",
+          own: "Risposta tua",
+          stop: "Ferma",
+          sure: "Sicuro?",
+          go: "Via",
+          skip: "Salta",
+          retry: "Riprova",
+          stopRun: "Ferma il run",
+          details: "Passi",
+          hide: "Chiudi",
+          refresh: "Aggiorna",
+          updated: "Aggiornato",
+          orphan: "orfano: chiedi a Claude di adottarlo prima",
+          stalled: "il suo runner non c'è più",
+          stale: "non letto",
+          wants: "vuole",
+          asks: "chiede",
+          session: "per la sessione consentirebbe",
+          resets: "si azzera",
+          noWindows: "nessuna lettura di recente",
+          failedCall: "Non riuscito",
+          paused: "In pausa mentre è nascosto",
+          connecting: "Connessione…",
+          noHost: "Nessun host ha risposto: questa pagina funziona dentro un host che mostra le MCP App.",
+        },
+      };
+      let W = WORDS.en;
+
+      // ---------------------------------------------------------------- the bridge to the host (JSON-RPC over postMessage)
+      let nextId = 1;
+      const waiting = new Map();
+      const send = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
+      const notify = (method, params = {}) => send({ method, params });
+      function request(method, params = {}, timeoutMs = 30000) {
+        const id = nextId++;
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            waiting.delete(id);
+            reject(new Error(`${method}: no answer`));
+          }, timeoutMs);
+          waiting.set(id, { resolve, reject, timer });
+          send({ id, method, params });
+        });
+      }
+      window.addEventListener("message", (e) => {
+        if (e.source !== window.parent) return;
+        const m = e.data;
+        if (!m || m.jsonrpc !== "2.0") return;
+        if (m.id !== undefined && !m.method) {
+          const w = waiting.get(m.id);
+          if (!w) return;
+          waiting.delete(m.id);
+          clearTimeout(w.timer);
+          if (m.error) w.reject(new Error(m.error.message || "error"));
+          else w.resolve(m.result);
+          return;
+        }
+        if (m.method === "ui/notifications/tool-result") {
+          const s = m.params && m.params.structuredContent;
+          if (s && Array.isArray(s.children)) show(s);
+        } else if (m.method === "ui/notifications/host-context-changed") {
+          applyContext(m.params || {});
+        } else if (m.method === "ui/resource-teardown") {
+          stopPolling();
+          send({ id: m.id, result: {} });
+        } else if (m.id !== undefined) {
+          send({ id: m.id, error: { code: -32601, message: `unknown method ${m.method}` } });
+        }
+      });
+
+      function applyContext(ctx) {
+        if (ctx.theme === "light" || ctx.theme === "dark") document.documentElement.dataset.theme = ctx.theme;
+        const vars = ctx.styles && ctx.styles.variables;
+        if (vars && typeof vars === "object") {
+          for (const [k, v] of Object.entries(vars)) {
+            if (k.startsWith("--") && typeof v === "string") document.documentElement.style.setProperty(k, v);
+          }
+        }
+        if (typeof ctx.locale === "string") W = ctx.locale.toLowerCase().startsWith("it") ? WORDS.it : WORDS.en;
+      }
+
+      /** A tool through the host; an error result becomes a thrown error with its text. */
+      async function call(name, args = {}) {
+        const r = await request("tools/call", { name, arguments: args });
+        const text = (r && r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+        if (r && r.isError) throw new Error(text || "error");
+        return { result: r, text };
+      }
+
+      // ---------------------------------------------------------------- polling: 2 s busy, 15 s idle, never hidden
+      let timer = null;
+      let last = null;
+      let failed = null;
+      let inFlight = false;
+      /** what the last button's call answered when it failed, until the next button */
+      let notice = null;
+      const stopPolling = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+      };
+      function schedule(ms) {
+        stopPolling();
+        if (failed || document.hidden) return;
+        timer = setTimeout(poll, ms);
+      }
+      async function poll() {
+        if (inFlight) return;
+        inFlight = true;
+        try {
+          const { result } = await call("agents_panel_state");
+          failed = null;
+          if (result && result.structuredContent) show(result.structuredContent);
+          else schedule(15000);
+        } catch (e) {
+          failed = e.message;
+          stopPolling();
+          status();
+        } finally {
+          inFlight = false;
+        }
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) stopPolling();
+        else if (!failed) poll();
+        status();
+      });
+
+      // ---------------------------------------------------------------- building the page (text only, never HTML)
+      function el(tag, attrs = {}, ...kids) {
+        const n = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (v === undefined || v === null || v === false) continue;
+          if (k === "class") n.className = v;
+          else if (k === "onclick") n.addEventListener("click", v);
+          else if (k === "text") n.textContent = v;
+          else if (k === "width") n.style.width = v;
+          else n.setAttribute(k, v === true ? "" : String(v));
+        }
+        for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) n.append(c);
+        return n;
+      }
+      const tag = (state) => el("span", { class: `tag ${state}`, text: state });
+
+      /** A button that calls a tool, then asks for the state again. `confirm` wants a second click. */
+      function action(label, cls, run, confirm = false) {
+        const b = el("button", { class: cls, text: label });
+        let armed = false;
+        b.addEventListener("click", async () => {
+          if (confirm && !armed) {
+            armed = true;
+            b.textContent = W.sure;
+            setTimeout(() => {
+              armed = false;
+              b.textContent = label;
+            }, 3000);
+            return;
+          }
+          for (const x of b.parentElement ? b.parentElement.querySelectorAll("button") : [b]) x.disabled = true;
+          notice = null;
+          try {
+            await run();
+          } catch (e) {
+            notice = `${W.failedCall}: ${e.message}`;
+          }
+          failed = null;
+          poll();
+        });
+        return b;
+      }
+
+      function requestCard(r) {
+        const card = el(
+          "div",
+          { class: "card ask" },
+          el(
+            "div",
+            { class: "row" },
+            el("span", { class: "id", text: r.child }),
+            el("span", { class: "muted", text: `${r.profile} · ${r.kind === "question" ? W.asks : W.wants}` }),
+          ),
+          el("div", { class: "what", text: r.what }),
+          r.description ? el("div", { class: "muted", text: r.description }) : null,
+        );
+        if (r.orphan) {
+          card.append(el("div", { class: "muted", text: W.orphan }));
+          return card;
+        }
+        const answer = (verdict, extra = {}) => () =>
+          call("agent_answer", { id: r.child, request: r.id, answer: verdict, ...extra });
+        if (r.kind === "question" && Array.isArray(r.questions)) {
+          const pick = [];
+          r.questions.forEach((q, i) => {
+            const name = `q-${r.id}-${i}`;
+            const own = el("input", { type: "text", placeholder: W.own });
+            const boxes = (q.options || []).map((o) =>
+              el(
+                "label",
+                {},
+                el("input", { type: q.multiSelect ? "checkbox" : "radio", name, value: o.label }),
+                ` ${o.label}`,
+                o.description ? el("span", { class: "muted", text: ` — ${o.description}` }) : null,
+              )
+            );
+            card.append(
+              el("fieldset", {}, el("legend", { text: q.header ? `${q.header}: ${q.question}` : q.question }), boxes, own),
+            );
+            pick.push(() => {
+              const typed = own.value.trim();
+              if (typed) return [q.question, typed];
+              const chosen = [...card.querySelectorAll(`input[name="${CSS.escape(name)}"]:checked`)].map((x) => x.value);
+              return chosen.length ? [q.question, chosen.join(", ")] : null;
+            });
+          });
+          card.append(el(
+            "div",
+            { class: "actions" },
+            action(W.send, "yes", () => {
+              const answers = Object.fromEntries(pick.map((p) => p()).filter(Boolean));
+              return answer("allow", { answers })();
+            }),
+            action(W.skipQ, "no", answer("deny")),
+          ));
+        } else {
+          card.append(
+            el(
+              "div",
+              { class: "actions" },
+              action(W.yes, "yes", answer("allow")),
+              r.session ? action(W.yesSession, "", answer("session")) : null,
+              action(W.no, "no", answer("deny")),
+            ),
+          );
+          if (r.session) card.append(el("div", { class: "muted", text: `${W.session}: ${r.session}` }));
+        }
+        return card;
+      }
+
+      function childCard(c) {
+        return el(
+          "div",
+          { class: "card" },
+          el("div", { class: "row" }, el("span", { class: "id grow", text: c.id }), tag(c.phase)),
+          el("div", {
+            class: "muted",
+            text: [c.profile, c.provider !== "claude" ? c.provider : null, c.run ? `${c.run.id} / ${c.run.step}` : null]
+              .filter(Boolean).join(" · "),
+          }),
+          c.tail && c.tail.length ? el("div", { class: "tail", text: c.tail[c.tail.length - 1] }) : null,
+          c.orphan ? el("div", { class: "muted", text: W.orphan }) : null,
+          !c.orphan && c.phase !== "ended"
+            ? el("div", { class: "actions" }, action(W.stop, "no", () => call("agent_stop", { id: c.id }), true))
+            : null,
+        );
+      }
+
+      const opened = new Set();
+      function runCard(r) {
+        const body = el("div", {});
+        const card = el(
+          "div",
+          { class: r.confirm || r.failed ? "card ask" : "card" },
+          el("div", { class: "row" }, el("span", { class: "id grow", text: `${r.name} · ${r.id}` }), tag(r.state)),
+          el(
+            "div",
+            { class: "steps" },
+            r.steps.map((s) => el("span", { class: `tag ${s.state}`, text: `${s.id}: ${s.state}` })),
+          ),
+          r.stalled ? el("div", { class: "muted", text: W.stalled }) : null,
+          r.orphan ? el("div", { class: "muted", text: W.orphan }) : null,
+        );
+        const answer = (choice, step) => () => call("workflow_answer", { id: r.id, choice, ...(step ? { step } : {}) });
+        const acts = el("div", { class: "actions" });
+        if (!r.orphan) {
+          if (r.confirm) {
+            acts.append(
+              action(`${W.go}: ${r.confirm}`, "yes", answer("go", r.confirm)),
+              action(W.skip, "", answer("skip", r.confirm)),
+            );
+          }
+          if (r.failed) {
+            acts.append(
+              action(`${W.retry}: ${r.failed}`, "yes", answer("retry", r.failed)),
+              action(W.skip, "", answer("skip", r.failed)),
+            );
+          }
+          if (r.stalled) acts.append(action(W.retry, "yes", answer("retry")));
+          if (r.state === "running") acts.append(action(W.stopRun, "no", answer("stop"), true));
+        }
+        const toggle = el("button", { text: opened.has(r.id) ? W.hide : W.details });
+        toggle.addEventListener("click", () => {
+          if (opened.has(r.id)) opened.delete(r.id);
+          else opened.add(r.id);
+          render();
+        });
+        acts.append(toggle);
+        card.append(acts, body);
+        if (opened.has(r.id)) details(r.id, body);
+        return card;
+      }
+
+      /** A run's steps in full, through workflow_status: each step's state, child, HANDOFF and error. */
+      async function details(id, into) {
+        try {
+          const { text } = await call("workflow_status", { id });
+          const run = JSON.parse(text);
+          const steps = (run.state && run.state.steps) || {};
+          into.replaceChildren(
+            ...Object.entries(steps).map(([k, s]) =>
+              el("div", {
+                class: "what",
+                text: [
+                  `${k}: ${s.status}${s.attempt > 1 ? ` (#${s.attempt})` : ""}`,
+                  s.child ? `child ${s.child}` : null,
+                  s.handoff ? `HANDOFF ${s.handoff}` : null,
+                  s.error ? `error: ${s.error}` : null,
+                ].filter(Boolean).join("\n"),
+              })
+            ),
+          );
+        } catch (e) {
+          into.replaceChildren(el("div", { class: "error", text: e.message }));
+        }
+      }
+
+      function limitRow(a) {
+        return el(
+          "div",
+          { class: "row" },
+          el("span", { class: "grow", text: `${a.profile} · ${a.provider}` }),
+          a.windows.length
+            ? a.windows.map((w) =>
+              el(
+                "span",
+                { class: "row", title: w.resets ? `${W.resets} ${new Date(w.resets * 1000).toLocaleString()}` : null },
+                el("span", { class: "muted", text: w.name }),
+                el(
+                  "span",
+                  { class: `bar${w.used >= 100 ? " full" : w.used >= 80 ? " high" : ""}` },
+                  el("i", { width: `${Math.max(0, Math.min(100, w.used))}%` }),
+                ),
+                el("span", { text: `${w.used}%` }),
+              )
+            )
+            : el("span", { class: "muted", text: W.noWindows }),
+        );
+      }
+
+      const section = (
+        title,
+        items,
+      ) => [el("h2", { text: title }), ...(items.length ? items : [el("div", { class: "empty", text: W.none })])];
+
+      function status() {
+        const s = document.getElementById("status");
+        const parts = [];
+        if (failed) {
+          parts.push(el("span", { class: "error", text: `${W.failedCall}: ${failed}` }));
+          parts.push(action(W.refresh, "", async () => {}));
+        } else if (!last) parts.push(el("span", { text: W.connecting }));
+        else {
+          parts.push(el("span", { text: `${W.updated} ${new Date(last.at).toLocaleTimeString()}` }));
+          if (document.hidden) parts.push(el("span", { text: W.paused }));
+          if (notice) parts.push(el("span", { class: "error", text: notice }));
+          if (last.stale) parts.push(el("span", { class: "error", text: `${W.stale}: ${last.stale.join(", ")}` }));
+        }
+        s.replaceChildren(...parts);
+      }
+
+      function render() {
+        if (!last) return status();
+        const s = last;
+        document.getElementById("root").replaceChildren(
+          ...(s.requests.length ? section(W.requests, s.requests.map(requestCard)) : []),
+          ...section(W.children, s.children.slice().reverse().map(childCard)),
+          ...section(W.runs, s.runs.slice().reverse().map(runCard)),
+          ...section(W.limits, s.limits.map(limitRow)),
+        );
+        status();
+      }
+
+      /** A new snapshot: drawn unless the owner is typing an answer, which a redraw would lose. */
+      function show(s) {
+        const before = last;
+        last = s;
+        const typing = document.activeElement && document.activeElement.matches("input");
+        const same = before && JSON.stringify(before.requests) === JSON.stringify(s.requests);
+        if (!typing || !same) render();
+        else status();
+        schedule(s.poll || 15000);
+      }
+
+      // ---------------------------------------------------------------- size, then the handshake
+      new ResizeObserver(() => {
+        notify("ui/notifications/size-changed", {
+          width: document.documentElement.scrollWidth,
+          height: document.documentElement.scrollHeight,
+        });
+      }).observe(document.body);
+
+      status();
+      request("ui/initialize", {
+        protocolVersion: "2026-01-26",
+        appInfo: { name: "agents-panel", version: "1.0.0" },
+        appCapabilities: {},
+      }, 10000).then((r) => {
+        applyContext((r && r.hostContext) || {});
+        notify("ui/notifications/initialized", {});
+        status();
+        // the tool's own result paints first; if it has not come by now, ask
+        setTimeout(() => {
+          if (!last) poll();
+        }, 1500);
+      }).catch(() => {
+        failed = W.noHost;
+        status();
+      });
+    })();
+    </script>
+  </body>
+</html>
