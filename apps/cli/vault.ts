@@ -18,14 +18,19 @@ import {
   LEGACY_VAULT_DIR,
   listSecrets,
   loadKey,
+  type MergeAction,
   moveVault,
   pairVault,
+  planMerge,
+  putEntry,
+  readEntries,
   serverVaultDir,
   setSecret,
   VAULT_DIR,
   vaultDir,
   VaultError,
   vaultKeyFile,
+  vaultKind,
 } from "../../shared/mcp/lib/vault.ts";
 import { amEnv } from "../../shared/mcp/lib/env.ts";
 
@@ -208,6 +213,55 @@ export async function vaultCommand(args: string[]): Promise<number> {
         );
         return 0;
       }
+      case "merge": {
+        // another folder of this vault that went its own way (a machine that moved while the other did not): its
+        // entries join this machine's vault, newer write wins, --take service/account always takes that folder's
+        const dir = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--take");
+        if (!dir) {
+          console.error("usage: agents vault merge <folder> [--take <service>/<account>]… [--dry-run]");
+          return 2;
+        }
+        const take = rest.flatMap((a, i) => a === "--take" && rest[i + 1] ? [rest[i + 1]] : []);
+        const dry = rest.includes("--dry-run");
+        const from = dir.replace(/\/+$/, "");
+        if (from === vaultDir()) throw new VaultError(`${from} is this machine's vault already`);
+        const key = await loadKey();
+        const kind = await vaultKind(key, from);
+        if (kind !== "owner") {
+          throw new VaultError(
+            kind === "none" ? `no vault in ${from}` : `${from} is not this vault (${kind}): not merged`,
+          );
+        }
+        if (!(await keyMatches(key))) throw new VaultError("this machine's key does not open its own vault");
+        const there = await readEntries(key, from);
+        const steps = planMerge((await readEntries(key)).entries, there.entries, take);
+        const say: Record<MergeAction, string> = {
+          add: `${ANSI.g}+${ANSI.x} only in ${from}: added`,
+          newer: `${ANSI.g}~${ANSI.x} newer in ${from}: taken`,
+          take: `${ANSI.y}~${ANSI.x} taken from ${from} (--take)`,
+          kept: `${ANSI.d}=${ANSI.x} newer here: kept`,
+          same: `${ANSI.d}= same${ANSI.x}`,
+          here: `${ANSI.d}· only here${ANSI.x}`,
+        };
+        console.log(`${ANSI.b}agents vault merge${ANSI.x} ${from} → ${vaultDir()}${dry ? "  (dry run)" : ""}`);
+        for (const s of steps) console.log(`  ${s.name.padEnd(32)} ${say[s.action]}`);
+        if (there.unreadable) {
+          console.log(`  ${ANSI.r}✗${ANSI.x} ${there.unreadable} entries in ${from} this key cannot open`);
+        }
+        if (there.conflicts) {
+          console.log(`  ${ANSI.y}!${ANSI.x} ${there.conflicts} conflict copies in ${from}, left out`);
+        }
+        const writes = steps.filter((s) => s.entry);
+        if (!dry) {
+          const at = new Date().toISOString();
+          // a taken entry is written as new, so the next merge or sync does not take it back
+          for (const s of writes) {
+            await putEntry(vaultDir(), key, s.action === "take" ? { ...s.entry!, updatedAt: at } : s.entry!);
+          }
+        }
+        console.log(`${writes.length} ${dry ? "to write" : "written"}; nothing in ${from} is changed.`);
+        return 0;
+      }
       case "recovery-code": {
         console.log(await currentRecoveryCode());
         return 0;
@@ -300,7 +354,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       }
       default:
         console.error(
-          "usage: agents vault [status|init [--file]|pair [--file]|move|recovery-code|server [status|sync|recovery-code]|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
+          "usage: agents vault [status|init [--file]|pair [--file]|move|merge <folder> [--take <service>/<account>] [--dry-run]|recovery-code|server [status|sync|recovery-code]|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
         );
         return 2;
     }

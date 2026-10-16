@@ -316,7 +316,7 @@ switch (cmd) {
   limits  [--json]            every account's usage windows (5h, 7d…): Claude's from the status line, Codex's from its logs
   usage   [ingest [--full]] [--by profile|model|project|agent|day|session|entrypoint|skill|command]
           [--since 30d|7d|all|YYYY-MM-DD] [--profile p] [--limit n] [--no-ingest] [--json]
-  vault   [status|init [--file]|pair [--file]|move|recovery-code|server|set|delete|run]   the MCP servers' secrets:
+  vault   [status|init [--file]|pair [--file]|move|merge|recovery-code|server|set|delete|run]   the MCP servers' secrets:
           encrypted, in ~/agents-multi-vault (a Syncthing folder of its own), key in this machine's keyring;
           vault server [status|sync|recovery-code] is the separate vault a server node gets (ADR 0015)
   google  client <file.json> | connect <account>   the Google OAuth client, and connecting an account

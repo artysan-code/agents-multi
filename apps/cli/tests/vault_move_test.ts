@@ -41,3 +41,43 @@ Deno.test("sign-in with no browser: only this sign-in's callback with its answer
   assertEquals(pastedCallback("https://evil.example/callback?code=a&state=b", r), null);
   assertEquals(pastedCallback("", r), null);
 });
+
+Deno.test("vault merge: only there is added, the newer write wins, --take takes theirs, tombstones count", async () => {
+  const { planMerge } = await import("../../../shared/mcp/lib/vault.ts");
+  const e = (account: string, value: string, updatedAt: string, deleted = false) => ({
+    service: "s",
+    account,
+    field: "token",
+    value,
+    updatedAt,
+    ...(deleted ? { deleted } : {}),
+  });
+  const here = [
+    e("same", "v", "2026-10-01"),
+    e("mine-newer", "a", "2026-10-16"),
+    e("theirs-newer", "a", "2026-10-01"),
+    e("taken", "a", "2026-10-01"),
+    e("only-here", "a", "2026-10-01"),
+    e("gone-here", "", "2026-10-01", true),
+  ];
+  const there = [
+    e("same", "v", "2026-10-15"),
+    e("mine-newer", "b", "2026-10-15"),
+    e("theirs-newer", "b", "2026-10-15", true),
+    e("taken", "b", "2025-01-01"),
+    e("only-there", "b", "2026-10-15"),
+    e("dead-there", "", "2026-10-15", true),
+  ];
+  const steps = planMerge(here, there, ["s/taken"]);
+  const by = Object.fromEntries(steps.map((s) => [s.name.slice(2), s.action]));
+  assertEquals(by, {
+    "same": "same",
+    "mine-newer": "kept",
+    "theirs-newer": "newer",
+    "taken": "take",
+    "only-there": "add",
+    "only-here": "here",
+  });
+  assertEquals(steps.filter((s) => s.entry).map((s) => s.name).sort(), ["s/only-there", "s/taken", "s/theirs-newer"]);
+  assert(steps.find((s) => s.action === "newer")!.entry!.deleted, "a newer tombstone deletes");
+});

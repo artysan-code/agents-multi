@@ -807,7 +807,8 @@ and then it is waiting on them. Nothing is deleted: a task that no longer matter
   one per account instead ([above](#servers-that-are-not-ours-one-per-account)).
 - **Secrets** are in the vault, `~/agents-multi-vault` (a Syncthing folder of its own: they travel between
   machines already encrypted, a relay machine carries them without reading them; a server node is **not** given
-  this folder but a vault of its own, below; before 1.2.1 it was `~/vault/claude-multi`, still read until `agents vault move`). One file per secret,
+  this folder but a vault of its own, below; before 1.2.1 it was `~/vault/claude-multi`, still read until `agents vault move`; a machine whose old folder went its own way joins its entries with
+  `agents vault merge <folder> [--take <service>/<account>] [--dry-run]`, the newer write winning). One file per secret,
   AES-GCM with a fresh IV per write, named by an HMAC so the names say nothing. The key is in each
   machine's keyring (Secret Service: KWallet here), so nothing is typed at login.
 - **A server's vault** ([ADR 0015](docs/adr/0015-a-vault-for-the-server.md)): a server node must not hold all your

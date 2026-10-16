@@ -397,6 +397,37 @@ export async function putEntry(dir: string, key: VaultKey, entry: Entry) {
   await writeEntry(`${dir}/secrets/${id}.json`, JSON.stringify(await seal(key, id, JSON.stringify(entry))) + "\n");
 }
 
+/** What merging another folder of the same vault into this one does to one entry (`agents vault merge`). */
+export type MergeAction = "add" | "newer" | "take" | "kept" | "same" | "here";
+export interface MergeStep {
+  name: string;
+  action: MergeAction;
+  entry?: Entry;
+}
+
+const fullName = (e: Pick<Entry, "service" | "account" | "field">) =>
+  `${e.service}/${e.account}${e.field === "token" ? "" : ` (${e.field})`}`;
+
+/** Pure: how another copy of this vault (its folder diverged from this one, same key) joins it. An entry only there is
+ *  added; one on both sides keeps the newer write, tombstones included, unless its `service/account` is in `take`,
+ *  which always takes the other side's. `entry` is what to write, absent when nothing is written. */
+export function planMerge(here: Entry[], there: Entry[], take: readonly string[] = []): MergeStep[] {
+  const key = (e: Entry) => `${e.service}\n${e.account}\n${e.field}`;
+  const mine = new Map(here.map((e) => [key(e), e]));
+  const steps: MergeStep[] = there.map((t): MergeStep => {
+    const h = mine.get(key(t));
+    mine.delete(key(t));
+    const name = fullName(t);
+    if (!h) return { name, action: "add", entry: t };
+    if (h.value === t.value && !!h.deleted === !!t.deleted) return { name, action: "same" };
+    if (take.includes(`${t.service}/${t.account}`)) return { name, action: "take", entry: t };
+    return t.updatedAt > h.updatedAt ? { name, action: "newer", entry: t } : { name, action: "kept" };
+  });
+  for (const h of mine.values()) if (!h.deleted) steps.push({ name: fullName(h), action: "here" });
+  return steps.filter((s) => !(s.action === "add" && s.entry?.deleted)) // a tombstone of nothing is nothing
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** A new vault folder under `key` with the check text of its kind; no key is kept anywhere (ADR 0015). */
 export async function initVaultAt(dir: string, key: VaultKey, text = SERVER_CHECK_TEXT) {
   if (await readJson(`${dir}/key-check.json`)) throw new VaultError(`a vault already exists in ${dir}`);
