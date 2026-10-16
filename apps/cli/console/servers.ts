@@ -6,7 +6,7 @@
 // public half to add to the forge, and what its setup still waits for.
 
 import { loadKey } from "../../../shared/mcp/lib/vault.ts";
-import { sealTo } from "../../../shared/mcp/lib/seal.ts";
+import { keyFingerprint, sealTo } from "../../../shared/mcp/lib/seal.ts";
 import type { NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 import { type Service, service } from "../node/service.ts";
 import { json, type Route } from "./http.ts";
@@ -52,10 +52,17 @@ export async function claimServer(
   if (typeof s === "string") return { ok: false, message: s };
   try {
     const p = await previewOf(s, code);
-    if (p.kind !== "server" || !p.key) {
+    if (p.kind !== "server" || !p.publicKey) {
       return { ok: false, message: "this code is a desktop's: pair it from the web app's Machines page" };
     }
-    return { ok: true, node: p.node, platform: p.platform, asked: p.asked, fingerprint: p.key };
+    // the fingerprint of the key the vault would be sealed to, computed here: the service's `key` is not trusted
+    return {
+      ok: true,
+      node: p.node,
+      platform: p.platform,
+      asked: p.asked,
+      fingerprint: await keyFingerprint(p.publicKey),
+    };
   } catch (e) {
     return failed(e);
   }
@@ -75,7 +82,7 @@ export async function confirmServer(
   try {
     const p = await previewOf(s, code);
     if (p.kind !== "server" || !p.publicKey || !p.id) return { ok: false, message: "this code is not a server's" };
-    if (!fingerprint || p.key !== fingerprint) {
+    if (!fingerprint || await keyFingerprint(p.publicKey) !== fingerprint) {
       return { ok: false, message: "the server's key is not the one you compared: nothing was sent" };
     }
     const sealed = vault ? await sealTo(await deps.vaultKey(), p.publicKey, p.id) : undefined;

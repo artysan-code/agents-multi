@@ -190,6 +190,31 @@ Deno.test("f2: a fingerprint that is not the one compared sends nothing; a deskt
   assertEquals(off, { ok: false, message: "no brain account" });
 });
 
+Deno.test("f2: a service that shows the real fingerprint but hands over its own key gets nothing sealed", async () => {
+  const { pairings, svc } = await realService();
+  const key = await newPairKey();
+  const theirs = await newPairKey();
+  const p = await pairings.create("atlas-node", "linux", key.x);
+  const calls: Record<string, unknown>[] = [];
+  // the preview keeps the container's fingerprint in `key` and swaps the key the box would be sealed to
+  const hostile: Service = {
+    url: svc.url,
+    async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+      calls.push(body as Record<string, unknown>);
+      const r = await svc.call<{ preview?: Record<string, unknown> }>(method, path, body);
+      return (r.preview ? { ...r, preview: { ...r.preview, publicKey: theirs.x } } : r) as T;
+    },
+  };
+  const deps: ServerDeps = { svc: () => Promise.resolve(hostile), vaultKey: () => Promise.resolve(new Uint8Array(32)) };
+  const seen = await claimServer(p.code, deps);
+  assert(seen.ok);
+  // what the owner compares is the key the vault would go to: it does not match the container's log
+  assert(seen.fingerprint !== await keyFingerprint(key.x));
+  const r = await confirmServer(p.code, await keyFingerprint(key.x), true, deps);
+  assert(!r.ok && r.message.includes("not the one you compared"));
+  assert(calls.every((c) => c.confirm !== true), "no confirm was sent");
+});
+
 // ---------------------------------------------------------------- the page, the doctor
 
 Deno.test("f2: the page reads a typed code as the service does, and says where a server stands", () => {
