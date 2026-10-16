@@ -223,6 +223,8 @@ export function brainServer(ctx: ToolContext, scope?: string): McpServer {
     inputSchema: { path: z.string(), rev: z.number().int().min(1).optional() },
     annotations: READ,
   }, ({ path, rev }: { path: string; rev?: number }) => {
+    // a path in an area out of reach is refused before it is looked up: whether the page exists is not said either
+    if (path.includes("/") && !readable(path.replace(/^\/+/, "").toLowerCase())) throw outOfReach(path);
     if (rev) {
       if (!readable(path)) throw outOfReach(path);
       const r = store.revision(path, rev);
@@ -459,5 +461,42 @@ export function brainServer(ctx: ToolContext, scope?: string): McpServer {
   }
 
   registerTaskTools(server);
+  if (narrow) refuseOutOfView(server, a);
   return server;
+}
+
+/** The brain's tools a server node's view leaves out (ADR 0013, F2): they change a page, or look at its history or
+ *  at the whole brain. */
+export const NODE_REFUSED = [
+  "brain_write",
+  "brain_edit",
+  "brain_delete",
+  "brain_move",
+  "brain_restore",
+  "brain_history",
+  "brain_inbox_clear",
+  "brain_check",
+];
+
+/** Pure: what a server node is told when it calls a tool its view leaves out. */
+export const refusedForNode = (tool: string, a: ReturnType<typeof areasOf>) =>
+  `${tool} is not available to a server node: its token reads ${a.projects}/ and ${a.notes}/, adds the diary line ` +
+  "(brain_append) and uses the tasks; pages are changed from the owner's own machines.";
+
+type CallHandler = (req: { params: { name: string } }, extra: unknown) => Promise<unknown>;
+
+/** In the narrow view, a call to a tool it leaves out is answered with why (`refusedForNode`), as a tool error the
+ *  model reads, rather than the SDK's bare «Tool not found». The SDK keeps the call handler in a map it does not
+ *  expose: without it (another SDK) the bare answer stays, still a refusal. */
+function refuseOutOfView(server: McpServer, a: ReturnType<typeof areasOf>) {
+  const handlers = (server.server as unknown as { _requestHandlers?: Map<string, CallHandler> })._requestHandlers;
+  const inner = handlers?.get("tools/call");
+  if (!handlers || !inner) return;
+  handlers.set(
+    "tools/call",
+    (req, extra) =>
+      NODE_REFUSED.includes(req.params?.name)
+        ? Promise.resolve({ isError: true, content: [{ type: "text", text: refusedForNode(req.params.name, a) }] })
+        : inner(req, extra),
+  );
 }

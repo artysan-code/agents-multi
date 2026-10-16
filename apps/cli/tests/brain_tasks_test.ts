@@ -25,7 +25,7 @@ Deno.test("brainAccount: the brain account a profile sees, none without one", ()
 
 Deno.test("brainStore: a refused token and an absent brain say so, a missing task is null", async () => {
   const answer = (status: number, body = "{}") => () => Promise.resolve(new Response(body, { status }));
-  await assertRejects(() => brainStore("https://b", "t", answer(401)).list(), Error, "refused the token");
+  await assertRejects(() => brainStore("https://b", "t", answer(401)).list(), Error, "refused this machine's token");
   await assertRejects(
     () => brainStore("https://b", "t", () => Promise.reject(new TypeError("dns"))).list(),
     Error,

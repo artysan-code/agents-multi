@@ -12,7 +12,9 @@ import { masterKey, Users } from "../users.ts";
 import { PairError, Pairings } from "../pair.ts";
 import { sha256, totp } from "../crypto.ts";
 import { Store } from "../store.ts";
-import { brainServer, narrowScope } from "../tools.ts";
+import { brainServer, narrowScope, NODE_REFUSED } from "../tools.ts";
+import { brainView, listedTools, MCP_HEADERS, TOOLS_LIST } from "../../../shared/mcp/lib/headless.ts";
+import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/webStandardStreamableHttp.js";
 import { cleanAnnounce, Fleet } from "../fleet.ts";
 import { keyFingerprint, newPairKey, openSealed, sealTo } from "../../../shared/mcp/lib/seal.ts";
 
@@ -352,4 +354,41 @@ Deno.test("scope: a node token's announce makes its row a server's, with its git
   assertEquals(rows.find((n) => n.name === "atlas")?.kind, "server");
   assertEquals(rows.find((n) => n.name === "atlas")?.gitKey, pub);
   assertEquals(rows.find((n) => n.name === "desk")?.kind, undefined);
+});
+
+Deno.test("scope: a node calling a tool its view leaves out is told why, not «not found»", async () => {
+  const { call } = await tools("node");
+  for (const n of NODE_REFUSED) {
+    const r = await call(n, { path: "progetti/app.md", body: "x", find: "a", replace: "b", from: "a", to: "b" });
+    assert(r.error, n);
+    assert(r.text.includes(`${n} is not available to a server node`) && r.text.includes("progetti/"), r.text);
+  }
+  // a tool nobody has is still the SDK's answer; a page out of reach is refused before it is looked up
+  assert((await call("brain_nothing", {})).text.includes("not found"));
+  const missing = await call("brain_read", { path: "io/does-not-exist" });
+  assert(missing.error && missing.text.includes("out of reach"), missing.text);
+  assert((await call("brain_read", { path: "IO/chi-sono" })).text.includes("out of reach"));
+  // the owner's tokens keep the whole view, and its tools answer
+  const owner = await tools("machine");
+  assert(!(await owner.call("brain_history", { path: "progetti/app.md" })).error);
+});
+
+Deno.test("scope: the doctor's tools/list over HTTP tells a node's view from the owner's", async () => {
+  const store = new Store(":memory:");
+  const ctx = { store, embed: { url: "http://127.0.0.1:9", model: "x" }, by: () => "t", changed: () => {} };
+  const ask = async (scope: string) => {
+    const server = brainServer(ctx, scope);
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
+    await server.connect(transport);
+    const r = await transport.handleRequest(
+      new Request("http://b.test/mcp", { method: "POST", headers: MCP_HEADERS, body: JSON.stringify(TOOLS_LIST) }),
+    );
+    assertEquals(r.status, 200);
+    return brainView(listedTools(await r.text()));
+  };
+  assertEquals(await ask("node"), "node");
+  assertEquals(await ask("machine"), "whole");
 });

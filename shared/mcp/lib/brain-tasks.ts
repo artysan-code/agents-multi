@@ -22,6 +22,19 @@ export const retriable = (r: Response | null) => r?.status === 502 || r?.status 
 
 const ETAG = "\0etag";
 
+/** Pure: what a refused call says, by who refused it. A 401 is the token itself (a desktop's from the vault, a
+ *  server's its node token); a 403 for its scope is a server node's token asking beyond what it reaches. */
+export function refusal(status: number, path: string, error = ""): string {
+  if (status === 401) {
+    return "the brain refused this machine's token: on a desktop sign it in again (console › Connections › Sign in, " +
+      "or agents brain-login); on a server node pair it again (agents node pair --server)";
+  }
+  if (status === 403 && /scope/.test(error)) {
+    return `the brain refused ${path} to a server node's token: it reaches the tasks, the projects and the notes only`;
+  }
+  return `the brain answered ${status} on ${path}${error ? `: ${error}` : ""}`;
+}
+
 /** The TaskStore on a brain at `url`, signed in with a personal token. */
 export function brainStore(
   url: string,
@@ -68,12 +81,10 @@ export function brainStore(
       throw new Error(`the brain answered 409 on ${path}`);
     }
     if (!r.ok) {
-      await r.body?.cancel();
-      throw new Error(
-        r.status === 401
-          ? "the brain refused the token in the vault: sign this machine in again (console › Connections › Sign in, or agents brain-login)"
-          : `the brain answered ${r.status} on ${path}`,
-      );
+      const error = r.status === 403
+        ? String(((await r.json().catch(() => ({}))) as { error?: unknown }).error ?? "")
+        : (await r.body?.cancel(), "");
+      throw new Error(refusal(r.status, path, error));
     }
     const etag = r.headers.get("etag");
     return { ...(await r.json()), ...(etag ? { [ETAG]: etag } : {}) };

@@ -46,19 +46,37 @@ function forAccount<T>(v: T, a: Account): T {
 /** Pure: one word for a POSIX shell. */
 export const shellQuote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
 
-/** Pure: the Deno command line of launch.ts, which may run the OS keyring's program (platform.ts) and nothing else. */
-export function launcher(paths: LaunchPaths, bind = false): string[] {
+/** Pure: the Deno command line of launch.ts, which may run the OS keyring's program (platform.ts) and nothing else.
+ *  `node`: a headless node's files (Registry.node), read in place of the vault's brain token. */
+export function launcher(paths: LaunchPaths, bind = false, node: string[] = []): string[] {
+  const read = [...paths.read, ...node, ...(bind ? [HOME] : [])];
+  const env = ["HOME", "AGENTS_MULTI_PROFILE", "AGENTS_MULTI_VAULT", "AGENTS_MULTI_ACCOUNTS"];
   return [
     paths.deno,
     "run",
     "--quiet",
     "--no-lock",
     // a binding is looked for from the session's folder up to the home folder
-    `--allow-read=${(bind ? [...paths.read, HOME] : paths.read).join(",")}`,
-    "--allow-env=HOME,AGENTS_MULTI_PROFILE,AGENTS_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS",
+    `--allow-read=${read.join(",")}`,
+    `--allow-env=${(node.length ? [...env, "XDG_STATE_HOME", "AGENTS_MULTI_NODE_TOKEN_FILE"] : env).join(",")}`,
     `--allow-run=${secretStoreBinary() ?? "/usr/bin/secret-tool"}`,
     paths.script,
   ];
+}
+
+/** Pure: the `headersHelper` of the brain's http server on a headless node (ADR 0013, F2): launch.ts prints the
+ *  Authorization header with the node's own token, read from its file; Claude Code sends it on every request. The
+ *  token is in no configuration, no environment and no tool result, and a child's commands cannot run this helper
+ *  to read it: the sandbox denies them the token's file (headless.ts `childSettings`). */
+export function nodeHeadersHelper(paths: LaunchPaths, files: string[], profile: string, account: string): string {
+  return [
+    `AGENTS_MULTI_PROFILE=${shellQuote(profile)}`,
+    ...launcher(paths, false, files),
+    "headers",
+    "brain",
+    account,
+    "Authorization=Bearer {secret}",
+  ].map((w, i) => i ? shellQuote(w) : w).join(" ");
 }
 
 /** Pure: a `_perAccount` entry made into one server for one account (name and config). */
@@ -151,7 +169,17 @@ export function servers(reg: Registry, t: Pick<Target, "profile" | "surface">): 
       if (isHttp(clean)) {
         // a remote server at the account's address ({url}): the person's own brain, not anyone's written in
         if (visible.length !== 1) continue; // which one would it be? accounts.json must say, with profiles
-        out.push({ entry: name, name, cfg: forAccount(clean, visible[0]), accounts: [visible[0].name] });
+        const placed = forAccount(clean, visible[0]);
+        // a headless node has no /mcp sign-in: the brain sees it with the node's token, and its narrow view
+        if (cfg._service === "brain" && reg.node && t.surface === "cli") {
+          placed.headersHelper = nodeHeadersHelper(
+            reg.launch ?? launchPaths(),
+            reg.node.files,
+            t.profile,
+            visible[0].name,
+          );
+        }
+        out.push({ entry: name, name, cfg: placed, accounts: [visible[0].name] });
         continue;
       }
       clean.env = { ...(clean.env as Record<string, string> ?? {}), AGENTS_MULTI_PROFILE: t.profile };

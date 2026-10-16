@@ -247,7 +247,7 @@
       "_service": "brain",
       "type": "http",
       "url": "{url}/mcp",
-      "_note": "The person's brain (apps/brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. CLI only (http). Everything runs unasked but deleting a page and clearing the inbox: every change is in the page's history (brain_restore).",
+      "_note": "The person's brain (apps/brain/), at the address of their brain account in accounts.json. For the profiles that do not have it as the claude.ai connector \"Brain\" (their servers.json chooses which, with _profiles): sign in once per profile with /mcp (passphrase + TOTP), the token stays on that machine. On a headless node there is no /mcp sign-in: a headersHelper (placement.ts nodeHeadersHelper) signs it in with the node's own token, whose view is projects, notes, the diary line and the tasks (ADR 0013, F2). CLI only (http). Everything runs unasked but deleting a page and clearing the inbox: every change is in the page's history (brain_restore).",
       "_allow": [
         "brain_append",
         "brain_check",
