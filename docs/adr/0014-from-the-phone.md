@@ -187,7 +187,7 @@ database. `node` is the machine whose token it is (fleet.ts), null for a web ses
 
 ## What is paused
 
-Telegram waits until this path works; it is taken up only if the path shows it is needed. F2 (the `node` token
+Telegram is dropped (2026-10-16, [ADR 0009](0009-agents-multi-2.md) point 5): the web app is the phone's channel. F2 (the `node` token
 scope, the coordinator's MCP tools for nodes, pairing a server from the console) was taken up in the third round
 (below, and [ADR 0013](0013-a-server-node-without-a-terminal.md)); what of it stays paused is presence beyond «a
 session not locked».

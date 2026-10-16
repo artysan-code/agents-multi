@@ -45,7 +45,8 @@ Already done, and the ground this stands on:
 
 4. **The console app** (Tauri, ADR 0003) and a **web app (PWA)** on the Agents Multi site, with **push
    notifications**, signed in with the **brain account** (one identity, no second login).
-5. **Telegram** is a secondary adapter over the same chat API, not a second product.
+5. ~~**Telegram** is a secondary adapter over the same chat API, not a second product.~~ Dropped (2026-10-16): the
+   web app with push covers the phone; no second chat channel is built.
 6. Every channel talks to the same orchestrator through the same API; a channel holds no logic of its own
    (the rule of ADR 0003: the view shows, the backend decides).
 
@@ -133,7 +134,7 @@ Sizes only. The brain's tasks carry them (label `2.0`).
 | D     | Scheduler, run policy and limits manager (routines, night policy, rules of 16–19)                                              | large  | C     |
 | E     | UI cut to three views (Chat, Runs, Accounts & limits) and "More" (done)                                                        | medium | —     |
 | F     | `agentd` headless on the server, node announcement and job placement, resume from branch                                       | large  | D, B  |
-| G     | Web app (PWA, push, brain login) and the Telegram adapter                                                                      | large  | F     |
+| G     | Web app (PWA, push, brain login); the Telegram adapter dropped (point 5)                                                       | large  | F     |
 | H     | Reviewer agent (approve, block, ask) ([ADR 0011](0011-reviewer.md))                                                            | medium | D     |
 
 E can start any time: it removes, it adds nothing the others need.
