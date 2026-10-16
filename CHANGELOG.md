@@ -5,6 +5,13 @@ raised component resets the ones to its right (0.1.24 → 0.2.0 → 1.0.0). Sect
 `deno task release` from the [Conventional Commits](https://www.conventionalcommits.org) since the
 previous version; stable versions are cut on `release`, betas (`X.Y.Z-beta.N`) on `beta`.
 
+## [1.2.1-rc.6] - 2026-10-16
+
+### Fixed
+
+- **node**: the image carries railway, gitea-mcp and Railway's skill, pinned and checked (c59c1f2)
+- **web**: the voice note is always offered, with the mic icon; dictation gets its own (298e6be)
+
 ## [1.2.1-rc.5] - 2026-10-16
 
 ### Added
