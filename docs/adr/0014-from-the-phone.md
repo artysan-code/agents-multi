@@ -1,6 +1,6 @@
 # 0014 — From the phone: the web app on the service, the orchestrator on a paired machine
 
-- Status: accepted 2026-10-15; G1–G3 built (1.2.1-rc.2), G4–G7 in progress
+- Status: accepted 2026-10-15; G1–G7 built (1.2.1-rc.x), second round built, third round (2026-10-16) in progress
 - Date: 2026-10-15
 - Phase G of [ADR 0009](0009-agents-multi-2.md); changes its point 20
 
@@ -187,8 +187,10 @@ database. `node` is the machine whose token it is (fleet.ts), null for a web ses
 
 ## What is paused
 
-F2 (the `node` token scope, the coordinator's MCP tools for nodes, presence) and Telegram wait until this path
-works; each is taken up only if the path shows it is needed.
+Telegram waits until this path works; it is taken up only if the path shows it is needed. F2 (the `node` token
+scope, the coordinator's MCP tools for nodes, pairing a server from the console) was taken up in the third round
+(below, and [ADR 0013](0013-a-server-node-without-a-terminal.md)); what of it stays paused is presence beyond «a
+session not locked».
 
 ## Slices
 
@@ -337,3 +339,192 @@ The owner's first use from the phone, and the points left open above.
   followed; on a headless node with bubblewrap both run with the network and the processes unshared, the filesystem
   read only but for their temporary folder, and die with the node's process; half an hour is the most a note may take. Transcription is silent for the service, so the heartbeat keeps the turn ours meanwhile.
 - **Not here.** Speech recognition in the browser and the recorder are the web app's.
+
+## The API, third round (2026-10-16)
+
+The owner at the phone wants three things the path lacks: a server that **has the repositories** its jobs need
+without a hand-made clone, **the agents of every machine in one view**, and the same view **in Claude Desktop**
+to orchestrate from. F2 ([ADR 0013](0013-a-server-node-without-a-terminal.md)) rides with them. Four slices
+(`clone`, `runs`, `panel`, `f2`) built in parallel; «Who touches what», at the end, keeps them apart.
+
+### A. Clone on first need, and the env files a repository's checkout lacks
+
+**Clone on first need.** Where a job or a resume (ADR 0012, «Moving and resuming») names a repository the node
+has no clone of, the node used to say «cannot move». It now clones, **only if the remote is allowed**:
+
+- the remote is in `config/nodes.json` `repos` (the list `agents node setup` already clones), **or**
+- its host is in the new `config/nodes.json` `gitHosts`: an array of `host` or `host/owner` prefixes (the owner's
+  forge, `git.example.me`; their account on a public one, `github.com/owner`), matched on the parsed remote, never
+  by substring. `gitHosts` is the owner's configuration, the same on every machine; empty by default (nothing is
+  cloned on need until the owner lists a host).
+- Any other remote — a client's, a stranger's — is **refused with its reason** in the job («not in repos or
+  gitHosts»), and goes on only through an explicit `--repo` of `agents node seed` (below).
+- The clone is made **by the node, with its own git key** (`<state>/git/`, the one `agents node setup` makes; the
+  same `GIT_ENV`, no agent, no credentials from the environment), under the first `repoRoots`, by
+  `git clone --quiet` into `<root>/<cloneName>` (`cloneName` of setup.ts moves to a shared module). Never with a
+  token in the URL, never over a remote that is not `ssh://`, `https://` or `user@host:`. A clone that fails
+  (the forge refuses the key) leaves nothing half made and tells the owner once per remote per hour.
+- The function is `ensureClone(cfg, remote)` in `apps/cli/node/clone.ts` (pure parts: `remoteAllowed`,
+  `cloneTarget`); agentd's resume path and the job's check call it before they declare a repository missing.
+
+**`agents node seed <machine>`** (run on a machine with the vault, normally the owner's PC): the files a clone
+lacks because git ignores them go through the vault, sealed, to a machine that will have the repository.
+
+- **What**: in each repository chosen, the files `git ls-files --others --ignored --exclude-standard` lists that
+  are named `.env`, `.env.*` or `.dev.vars`, `.dev.vars.*`, at the root or at most three folders down, never under
+  `node_modules/`, `.git/`, `vendor/` or `dist/`. Which repositories: the owner's — those under this machine's
+  `repoRoots` whose `origin` is in `repos` or `gitHosts` — with `--dry-run` listing paths (never values). **A
+  client's repository only with an explicit `--repo <path>`**, one per flag, and the command says it is a client's
+  case, asks for a yes, and writes `client: true` in the entry.
+- **Where**: the vault (`shared/mcp/lib/vault.ts`), service `seed`, account `<host>/<path of the remote>` without
+  `.git` (`git.example.me/owner/repo`), one entry per repository, value JSON `{v: 1, at, from, nodes: [names],
+  client?: true, files: [{path, mode, b64}]}`. Sealed because the vault is: encrypted at rest, in the Syncthing
+  folder the owner's machines and servers already share; no new store, nothing in the service, nothing in the
+  repository, nothing in `nodes.json`. Re-seeding replaces the entry. `agents node seed --forget <repo>` deletes it.
+- **Cap**: 64 KiB a file, 20 files and 256 KiB a repository, 200 entries a vault; one over is skipped with its
+  name, never truncated.
+- **Never seeded**, whatever its name: a symlink, a file outside the repository or not ignored by git (tracked
+  `.env.example` is in the clone already), a file that is not UTF-8 text, any `*.pem`, `*.key`, `id_*`, `.npmrc`,
+  `.netrc`, `credentials*`, `*.p12`, `*.kdbx`; anything in `.claude/`, `.agents/`, the vault, the state folder;
+  and the values of the Claude or Anthropic credentials (`sk-ant-…`: a file with one is skipped and said). The
+  node's deny rules on its own secrets (ADR 0012) are untouched.
+- **The node writes them** at clone and again at each update of that clone (a resume or job start that fetches),
+  and only when the entry lists its name: mode 0600, atomically, **never over a file that exists and differs**
+  (kept, the difference reported once in the job's log), and only after `git check-ignore -q <path>` says git
+  ignores it in that clone: a repository that stopped ignoring it never gets it written. Values are never logged.
+- **Where the code is**: `apps/cli/node/seed.ts` (collect, cap, seal, apply: pure functions tested in
+  `apps/cli/tests/`), the `seed` subcommand in `command.ts` (one case; see the table), the doctor check
+  `node.seed` (an entry naming a machine the service does not know, or a client entry older than 90 days).
+
+### B. The Agents view
+
+The web app gets a section, **Agents**, between Waiting and Tasks: what is running, on which machine, and what it
+is doing now.
+
+- **A run** is a hub child, a routine's firing or a workflow's run, as the node's hub knows them. The node
+  publishes **its own runs** as it publishes requests (ADR 0014, G5): the whole list replaces its previous one.
+  ```
+  PUT /api/node/runs {runs: [Run], routines?: [Routine]}  →  {ok}
+  Run = {id, kind: "child" | "routine" | "workflow", profile, provider?, project, repo?, branch?, started,
+         updated, state: "working" | "waiting" | "idle" | "ended" | "failed", ended?, tail: [string],
+         waiting?: [<child>/<request>], routine?, workflow?: {name, step, steps: [{id, state}]}}
+  Routine = {name, schedule, next?, last?, enabled}
+  ```
+  `id` is the child's id (`<profile>-…`, ADR 0005), `project` the folder under `~` (`personal/dnd/dragons-lair`),
+  `repo` the remote's `host/path`, `tail` the last 5 lines of the child's output, each at most 400 characters,
+  **masked** (`shared/mcp/lib/mask.ts`) and bounded by the node before it sends. `waiting` lists the ids that are
+  also in `PUT /api/node/requests` (the Yes/No stays where it is: `POST /api/waiting/<id>`, passkey and all).
+  The node sends when a run's state or tail changes, **at most once every 2 s**, and with each announce, as the
+  requests are; at most 100 runs and 20 routines.
+- **What a machine publishes** is its own choice: `runs` in this machine's `node.json` is `"full"` (default),
+  `"state"` (no `tail`, no `branch`) or `"off"`. A run of a repository that is not the owner's (the rule of
+  slice A: not in `repos` or `gitHosts`) is published as `"state"` whatever the machine says, with `project`
+  and `repo` replaced by `(client)`: the client's names and output are not stored by a host. The console's
+  Nodes page shows the setting.
+- **The view reads**: `GET /api/runs` → `{runs: [Run & {node, online}], routines: [Routine & {node}], recent:
+  [Run & {node}]}`, `runs` the live ones (state not ended) of nodes seen in the last 10 minutes, `recent` the
+  last 50 ended in the last 7 days; sorted waiting first, then working, then newest. Any session or token of the
+  account **except a `node` token** (ADR 0013, F2) may read.
+- **Live**: `GET /api/runs/events` (Server-Sent Events, a comment every 20 s): `run` `{run}` (upsert, with `node`
+  and `online`), `gone` `{id, node}` (a run dropped from its node's list without ending, or a forgotten
+  machine), `node` `{node, online}` (a machine went offline: its runs are shown stale, not removed). The page
+  loads `GET /api/runs` and then follows the stream, as the chat does.
+- **Actions** (the person's, from the web session, each as the existing signed paths allow):
+  - **Answer**: the same row as What waits: `POST /api/waiting/<id>` with the passkey (G5). Nothing new.
+  - **Stop**: `POST /api/runs/<node>/<id>/stop` `{expires, assertion}`, the assertion of a passkey over
+    `agents-multi stop v1\n` + canonical JSON of `{node, run, expires}`, `expires` at most 10 minutes ahead. The
+    service stores it; the announce's reply carries `stops: [{run, expires, assertion}]` for that node, which
+    verifies it exactly as it verifies a decline (the endorsement, the revocations, the replay record) and then
+    stops the child (`stopChild`); the outcome comes back in `POST /api/node/answers` as `{id: "stop:<run>", ok,
+    why?}`. A stop is signed because nobody but the owner stops their agents (ADR 0014, «the node checks it»).
+  - **Resume elsewhere**: `POST /api/jobs` `{kind: "resume", run, from: <node>, node?}` proposes the move as ADR
+    0012 «Placement» does (`place`), and the proposal is accepted on the phone with the passkey as any job: the
+    new route is only a proposal raised for a run's id, not a new kind of authority. The row says why it cannot
+    (no remote, `push: false`, a client's repository).
+  - **Routines and workflows** are shown with their next firing and step; no action beyond the above in this round.
+- **What the service stores, and for how long**: table `runs` (`node`, `id`, `data` JSON, `updated`) in the
+  account's database, replaced per node by each `PUT`; a run no longer in the node's list is deleted unless its
+  last state was `ended` or `failed`, which stay as `recent` for 7 days (purged hourly, with the account's
+  other housekeeping), the tail included — so the host holds a few lines of what a child said for a week; the
+  sign-up text (G6) says it, and `brain-admin delete` removes it with the rest. Forgetting a machine deletes
+  its runs. The service never stores a stop's assertion beyond its `expires` plus an hour.
+- **Where the code is**: `apps/brain/runs.ts` (table, `runsRoute`, SSE hub), `apps/cli/node/runs.ts` (collect
+  from the hub, mask, bound, publish, apply stops), `apps/ui/src/web/agents.tsx` (the section, one tab entry),
+  strings in the new `apps/ui/src/i18n/web-agents.ts` (merged into the app's dictionary by one line in
+  `web/t.ts`), tests in `apps/cli/tests/` and `apps/brain/tests/`.
+
+### C. The panel: orchestrating from Claude Desktop
+
+Claude Desktop shows an **MCP App** (the MCP Apps extension:
+a tool declares `_meta.ui.resourceUri`, and the host renders that `ui://` resource, an HTML page, in a sandboxed
+frame beside the conversation). The `agents` MCP server (`shared/mcp/agents/`) gains one.
+
+- **Resource**: `ui://agents/panel`, MIME type `text/html;profile=mcp-app`, **one self-contained HTML file**
+  (inline CSS and JS, no CDN, no framework, no build step: `shared/mcp/agents/panel/panel.html`, read when the
+  server starts), served through `resources/read`. It declares no external origins in its `_meta.ui.csp`: it
+  needs none, since all data comes through the host.
+- **Tools**:
+  - `agents_panel` (model-visible): «Open the panel of this session's children and runs.» Its result's text is a
+    short summary (counts, what waits) and its `structuredContent` is the first snapshot; its `_meta.ui` names
+    the resource. The model calls it when the owner asks to see or manage the agents.
+  - `agents_panel_state` (visible only to the app: `_meta.ui.visibility: ["app"]`, **to confirm against Claude
+    Desktop's build** — if the host ignores it the tool is merely also listed, harmless) → the snapshot:
+    `{at, children: [{id, profile, provider, project, phase, orphan?, started, last, tail}], runs: [{id, name,
+    state, step, steps: [{id, state}], confirm?}], requests: [{id, child, kind, what, questions?, session}],
+    limits: [{profile, provider, windows: [{name, used, resets}]}], stale?}`, with the same scope as the other tools: the
+    session's own children and runs, never another's (`project`/`all` are not offered).
+  - The buttons call tools that already exist, through the host: **`agent_answer`** (Yes → `allow`, Yes for the
+    session → `session`, No → `deny`; a `question` shows its options and the owner's own text, `answers`),
+    **`agent_stop`**, **`workflow_answer`** (go / skip / retry / stop), and for steps `workflow_status`. No new
+    permission and no new authority: a click is the owner's own act, rendered from the same `Pending` the model
+    would have asked about, and the panel shows the request's exact `what`, never a paraphrase, as text (never
+    HTML).
+- **Where the data comes from**: `shared/mcp/lib/panel.ts` (new, pure and tested) assembles the snapshot from
+  the functions `agents.ts` already exports (`listChildren`, `look`/`attentionBetween`, the workflow runs
+  reader, the limits reader of `limits`); `shared/mcp/lib/agents.ts` itself is **not changed** by this round,
+  except an additive export if the panel needs one it lacks (the panel's owner only).
+- **Live without a loop of its own**: a stdio MCP server cannot push into the frame, and `resources/updated`
+  reaches the host, not the app. So the app **asks through the host** with `agents_panel_state`: every 2 s while
+  something is working or waiting, every 15 s when all is idle, **not at all while the frame is hidden**
+  (`visibilitychange`), and once straight after any button; it stops on the first error and offers «Refresh». Each
+  call is a read of the runs folder (the same read `agent_list` does). Chosen over holding a long call open
+  (`agent_wait`-style) because hosts time long tool calls out and one stuck call blocks the buttons, and over no
+  refresh because a request that waits unseen is the whole point. The host's `ui/notifications/tool-result` for
+  `agents_panel` is the first paint, so nothing is blank while the first poll is on its way.
+- **Fallback**: a host without the extension ignores `_meta.ui` and the model gets the text summary: the tools
+  work as today. The instructions of the server gain one sentence about the panel (and one about
+  `node_list`/`node_propose`, slice F2).
+- **Not in this round**: remote machines' runs (they are the web app's, slice B), editing a plan inside the
+  panel, a panel in the console (it has its own pages).
+
+### F2 in this round
+
+F2's shape (pairing a server from the console, the `node` token scope, the coordinator's MCP tools) is in
+[ADR 0013](0013-a-server-node-without-a-terminal.md), «F2: pairing from the console». Slice `f2` builds it.
+
+### Who touches what
+
+Four agents build in parallel, each on its own branch. A slice **owns** the paths in its row; it touches a
+**shared** file only as the third column says, by adding lines and never rewording or moving what is there.
+Anything else it needs from another's path goes by `team_send`, not by an edit. The reviewer merges the four.
+
+| Slice   | Owns (create, change freely)                                                                                                                                                                                                                                        | Shared files: additive only, and where                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clone` | `apps/cli/node/clone.ts`, `apps/cli/node/seed.ts`, `apps/cli/tests/node_clone_test.ts`, `apps/cli/tests/node_seed_test.ts`, the `node.seed` check in `apps/cli/doctor/`                                                                                             | `apps/cli/node/command.ts`: one `case "seed":` block **right after `case "key":`** (the last case) and one import line **at the end** of the imports. `apps/cli/node/setup.ts`: its `cloneName` import from `clone.ts` (one line; the rest untouched). `apps/cli/node/agentd.ts`: only the `ensureClone` call where a resume finds no clone. `shared/mcp/lib/headless.ts`: only the config's new `gitHosts` field (type, default `[]`, parser line). `shared/mcp/lib/moving.ts`: only the «no clone» refusal, to call `ensureClone`. README: one paragraph in the node section.                                                                                                                                                                                                                                                                                 |
+| `runs`  | `apps/brain/runs.ts`, `apps/brain/tests/runs_test.ts`, `apps/cli/node/runs.ts`, `apps/cli/tests/node_runs_test.ts`, `apps/ui/src/web/agents.tsx`, `apps/ui/src/i18n/web-agents.ts`, the console's Nodes setting for `runs` in a new file under `apps/ui/src/pages/` | `apps/brain/main.ts`: one import line **right after the `./waiting.ts` import** and one route block **right after the waiting block** (before «the person types the code a machine shows»); the table is created by `runs.ts`, no edit of `store.ts`. `apps/cli/node/agentd.ts`: one publish call in `tick()`/`quick()` and the `stops` handling next to `declined`. `apps/cli/node/service.ts`: the `PUT /api/node/runs` helper and `stops` in the announce reply type. `apps/brain/fleet.ts`: only the announce reply's `stops` field. `apps/ui/src/web/app.tsx`, `route.ts`: the section's route and tab. `apps/ui/src/web/t.ts`: one line merging `web-agents.ts`. `apps/ui/src/web/web.css`: rules **appended at the end**. `shared/mcp/lib/headless.ts`: only the machine's `runs` field of `node.json`. **Not** `apps/ui/src/i18n/web.ts`.               |
+| `panel` | `shared/mcp/agents/panel/`, `shared/mcp/agents/panel-tools.ts`, `shared/mcp/lib/panel.ts`, its tests beside the other MCP tests                                                                                                                                     | `shared/mcp/agents/server.ts`: the `instructions` text (**the panel's owner is its only editor**: one sentence about the panel and this one about nodes, «Nodes: node_list shows the owner's machines (online, sessions, accounts); node_propose asks a node to run a routine or resume a run, and the owner's yes decides.»), one import line **before the `registerAgentTools` import** and one `registerPanel(server)` call **before `registerAgentTools(server)`**. `shared/mcp/lib/agents.ts`: **nobody edits it**; the panel's owner alone may add an export. `scripts/ci.sh`: the MCP probe's expected tool list, if it has one.                                                                                                                                                                                                                         |
+| `f2`    | `apps/cli/node/pair.ts`, `apps/brain/pair.ts`, `shared/mcp/lib/seal.ts`, `shared/mcp/agents/node-tools.ts`, `apps/ui/src/i18n/servers.ts`, the console's «Add a server» page under `apps/ui/src/pages/`, tests for each                                             | `apps/brain/auth.ts`: `Caller.scope`, the `tokens.scope` column (in-place migration, as `oauth_codes.scope` was), the scope check: f2's file. `apps/brain/main.ts`: the gate right after `who` is computed, the pair routes (edited in place) and `GET /api/nodes` fields; **not** the waiting block or what follows it. `apps/brain/tools.ts`: the area filter of a `node` caller. `apps/brain/fleet.ts`: `kind: "server"` and the git key on the node row. `apps/cli/node/command.ts`: **only inside `case "pair":`**. `apps/cli/node/setup.ts`: only the step that publishes the git key. `shared/mcp/agents/server.ts`: one import line **after the `registerRoutineTools` import** and one `registerNodeTools(server)` call **after `registerAccountTools(server)`**, nothing else. `apps/ui/src/i18n.ts`: one import line and one entry for `servers.ts`. |
+
+Shared files by name:
+
+- **`apps/cli/node/command.ts`**: `clone` adds `case "seed"` after `case "key"`; `f2` edits only inside `case "pair"`;
+  `runs` does not touch it (its setting is one optional field of `node.json`, in `headless.ts`).
+- **`apps/brain` routing (`main.ts`)**: `f2` the gate after `who` and the pair routes; `runs` one import and one block
+  after the waiting block; `clone` and `panel` nothing. Each route function lives in its slice's own file.
+- **`apps/ui` i18n**: `i18n/web.ts` is edited by **nobody** this round; `runs` adds `web-agents.ts` (merged in
+  `web/t.ts`); `f2` adds `servers.ts` (registered in the console's `i18n.ts`); Italian carries every English key.
+- **`shared/mcp/lib/agents.ts`**: nobody (the panel's owner may add an export). **`shared/mcp/agents/server.ts`**: the
+  panel's owner edits the instructions and its own lines; `f2` adds its two lines at the places named.
+- **`shared/mcp/lib/headless.ts`**: `clone` adds `gitHosts` to the config's type, `runs` adds the machine's `runs`: two
+  fields in two places.
+- Every slice adds its invariants to `apps/cli/doctor/`, not to the README, and its tests beside the code.

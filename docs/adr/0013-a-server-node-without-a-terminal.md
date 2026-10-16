@@ -1,6 +1,6 @@
 # 0013 — A server node without a terminal: shared configuration, Claude's tokens in the vault, pairing
 
-- Status: accepted 2026-10-15; part B built (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
+- Status: accepted 2026-10-15; part B built, F2 specified 2026-10-16 (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
 - Date: 2026-10-15
 
 ## Context
@@ -100,7 +100,59 @@ The same steps with no terminal, so that a new server is one code typed in a pag
 - the configuration and the vault arrive by Syncthing as above; Claude's tokens are already in the vault; the
   git key's public half comes back to the page, to add to the forge.
 
-Its shape (the pairing request, its expiry, what the service may see) is written when F2 starts.
+**The shape** (built in the third round, [ADR 0014](0014-from-the-phone.md)):
+
+- **The pairing request.** The unconfigured container (no config, no vault, no token) makes an X25519 key pair
+  kept in `<state>/pair-key` (0600) and asks `POST /api/pair` `{name, platform, key}`, where `key` is the public half
+  (base64url) and `name` the host name; the answer is G4's `{code, pairing, expires}`. It prints the code, **the
+  key's fingerprint** (first 8 bytes of SHA-256 of the 32-byte key, `ab12-cd34-ef56-7890` as the passkeys') and the
+  service's address, in its log. It keeps polling `GET /api/pair/<pairing>`; at expiry it asks for a new code and
+  the old one dies.
+- **Expiry and use.** 10 minutes, one use, five wrong codes lock claiming for 15 minutes: G4's rules, unchanged. A
+  request that carries `key` is a **server** pairing (`kind: "server"` on the node row); one without is G4's, for a
+  desktop, and mints a `machine` token as today.
+- **The claim.** In the console, _Nodes › Add a server_ takes the code: `POST /api/pair/claim` `{code}` answers the
+  preview `{preview: {node, platform, asked, key: <fingerprint>}}`, and the page shows the fingerprint **to be
+  compared with the one in the container's log**: otherwise the service could swap the node's key for its own and
+  receive the vault key. On the owner's confirm: `{code, confirm: true, scope: "node", sealed?}`, where `sealed` is
+  the vault key sealed to the node's public key by the console's backend (`shared/mcp/lib/seal.ts`: ephemeral X25519,
+  HKDF-SHA-256 with its own label, AES-256-GCM, the node's public key and the pairing id as associated data). The
+  vault key is read from the keyring on the owner's machine and sealed there; the browser never has it, the
+  service never has it open. `sealed` is optional: a server that already has the vault key file is paired without it.
+- **What the service may see**: the code, the node's name and platform, its public key, the sealed blob (opaque),
+  the token it mints, later the git key's public half. **It may not** see the vault key, a Claude token or the
+  node's private key. The sealed blob is kept with the pairing, handed over once at the poll that delivers the
+  token (`{state: "done", token, url, sealed?}`), and deleted then or at expiry. A service that withheld or replaced
+  it could only make the server fail to open its vault, never read it. The server writes the key to
+  `<state>/vault-key` (0600), links the mounted configuration and goes on with `agents node setup`'s steps with no
+  terminal; what still waits (a Claude token missing, the forge refusing the git key) is a field of its announce,
+  shown on the console's page.
+- **The git key** comes back as `gitKey` (public half) in the node's announce facts; `GET /api/nodes` returns it
+  and the page shows it with a copy button, to add to the forge; setup's `git ls-remote` probe follows.
+- **The `node` token scope.** The token of a server pairing is a **personal token of scope `node`** (a `scope`
+  column on `tokens`; existing tokens and G4's desktop pairings are `machine`, the web session `web`; `Caller`
+  carries it). A `node` token **may**:
+  - the node's own routes: `PUT /api/node`, `GET /api/node/turns`, `POST /api/turns/<id>/events|done`, `GET
+    /api/turns/<id>/audio`, `GET|POST /api/node/answers`, `PUT /api/node/requests`, `PUT /api/node/runs`, the jobs
+    addressed to it (claim, report);
+  - `tasks_*` of the account (the orchestrator's turns use them) and `brain_search`, `brain_list`, `brain_read`
+    **only in `progetti/` and `note/`**, and `brain_append` to `diario/`;
+  - propose a job (`POST /api/jobs`; the owner's yes still decides), and forget **only itself**.
+
+  It **may not**: read or write `io/`, `clienti/`, `persone/`, `inbox/`; write, move or delete a page; read the
+  chats it is not answering; read other nodes' runs, requests, jobs or answers; list tokens, sessions, passkeys or
+  settings; pair or claim; forget another machine; change the orchestrator setting. The check is one gate in
+  `apps/brain/main.ts` (a path allowlist by scope) and an area filter in `tools.ts`, both fail-closed: a scope the
+  gate does not know is refused. A leaked server token reads a project's pages and tasks, not the owner.
+- **The coordinator's MCP tools** (the `agents` MCP server, `shared/mcp/agents/node-tools.ts`, over the machine's
+  token):
+  - `node_list` → `[{name, online, headless, seen, sessions: {running, cap}, accounts, sandbox, repos}]`;
+  - `node_propose` `{routine?, run?, node?, why}` → `{job}`: the proposal `agents nodes propose` makes (a routine to
+    run elsewhere now, or a run to resume), `place` choosing when `node` is absent. It says the job **waits for the
+    owner's yes** (desktop signature or phone passkey): the tool never starts anything.
+
+  Read and propose only: no accept, no stop; the coordinator never says the yes.
+- **Not in F2**: presence beyond «a graphical session not locked».
 
 ### The token inside a child
 
