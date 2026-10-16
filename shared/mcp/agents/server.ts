@@ -8,6 +8,7 @@ import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/serve
 import { registerAgentTools } from "./tools.ts";
 import { registerAccountTools } from "./account-tools.ts";
 import { registerRoutineTools } from "./routine-tools.ts";
+import { registerNodeTools } from "./node-tools.ts";
 
 const instructions =
   "You coordinate the owner's agents: Claude Code sessions (children) of any profile, at work in a project's folder " +
@@ -62,4 +63,5 @@ const server = new McpServer({ name: "agents", version: "0.1.0" }, { instruction
 registerAgentTools(server);
 registerRoutineTools(server);
 registerAccountTools(server);
+registerNodeTools(server);
 await server.connect(new StdioServerTransport());
