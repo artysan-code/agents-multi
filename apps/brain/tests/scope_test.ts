@@ -6,7 +6,7 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { DatabaseSync } from "node:sqlite";
 import { Client } from "npm:@modelcontextprotocol/sdk@1.32.1/client/index.js";
 import { InMemoryTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/inMemory.js";
-import { ACCOUNTS_MIGRATIONS, Auth, NODE_ROUTES, nodeOwnRefusal, scopeAllows } from "../auth.ts";
+import { ACCOUNTS_MIGRATIONS, Auth, NODE_ROUTES, nodeOwnRefusal, scopeAllows, serverAnnounceRefusal } from "../auth.ts";
 import { migrate } from "../migrate.ts";
 import { masterKey, Users } from "../users.ts";
 import { PairError, Pairings } from "../pair.ts";
@@ -95,6 +95,21 @@ Deno.test("scope: the scopes from before F2 keep what they had; one the gate doe
   }
   // the allowlist is anchored: a longer path does not slip through
   for (const [, re] of NODE_ROUTES) assert(re.source.startsWith("^") && re.source.endsWith("$"), re.source);
+});
+
+Deno.test("scope: a server announces with a node token only; a desktop keeps its machine token", () => {
+  // what a leaked server credential reads must be a node's (#6): a headless announce with a wider token is refused
+  for (const scope of ["machine", "brain", "web", undefined]) {
+    assert(serverAnnounceRefusal(scope, { headless: true, platform: "linux" }), String(scope));
+  }
+  assertEquals(serverAnnounceRefusal("node", { headless: true }), null);
+  assertEquals(serverAnnounceRefusal("machine", { headless: false }), null);
+  assertEquals(serverAnnounceRefusal("machine", {}), null);
+  assertEquals(serverAnnounceRefusal("machine", null), null);
+  assertEquals(serverAnnounceRefusal("machine", { headless: "yes" }), null);
+  // the doctor's node.scope asks GET /api/nodes with the server's token: a node's is refused, a machine's is not
+  assert(!scopeAllows("node", "GET", "/api/nodes"));
+  assert(scopeAllows("machine", "GET", "/api/nodes"));
 });
 
 Deno.test("scope: past the gate, a node acts only on its own jobs, only claims and reports, forgets only itself", () => {

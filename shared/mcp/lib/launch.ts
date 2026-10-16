@@ -26,6 +26,7 @@
 
 import { loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
+import { machineHeadless, NODE_ONLY } from "./headless.ts";
 import { amEnv } from "./env.ts";
 
 interface LaunchArgs {
@@ -145,6 +146,8 @@ async function main() {
   const account = resolveAccount(visible, a.account, a.service);
   let vars = a.vars;
   if (needsSecret(vars)) {
+    // the vault's brain token is a machine's: never on a server (ADR 0013, F2)
+    if (a.service === "brain" && await machineHeadless()) throw new Error(NODE_ONLY);
     const secret = await getSecret(a.service, account.name);
     if (!secret) {
       throw new Error(

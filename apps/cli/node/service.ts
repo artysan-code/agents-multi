@@ -3,10 +3,8 @@
 // this machine only: the vault's brain token travels to every machine, and the service names a node after its
 // token, so with it every machine would be the same node. Nothing here listens.
 
-import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
-import { amEnv } from "../../../shared/mcp/lib/env.ts";
-import { STATE } from "../lib/paths.ts";
-import { getSecret } from "../../../shared/mcp/lib/vault.ts";
+import { brainAccount, brainToken } from "../../../shared/mcp/lib/brain-tasks.ts";
+import { machineHeadless, NODE_ONLY, nodeTokenFile, readNodeToken } from "../../../shared/mcp/lib/headless.ts";
 import type { Announce, Job, NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 import type { PhoneAnswer } from "../../../shared/mcp/lib/webauthn.ts";
 import type { Stop } from "./runs.ts";
@@ -33,12 +31,7 @@ export interface Service {
   bytes?(path: string, o?: { timeout?: number; signal?: AbortSignal }): Promise<{ type: string; data: Uint8Array }>;
 }
 
-/** Where this machine keeps its node token: a file only the user reads, never synced. */
-export const nodeTokenFile = (): string => amEnv("NODE_TOKEN_FILE") ?? `${STATE}/node-token`;
-
-export async function readNodeToken(): Promise<string | null> {
-  return (await Deno.readTextFile(nodeTokenFile()).catch(() => "")).trim() || null;
-}
+export { nodeTokenFile, readNodeToken };
 
 export async function writeNodeToken(token: string): Promise<void> {
   const file = nodeTokenFile();
@@ -48,16 +41,17 @@ export async function writeNodeToken(token: string): Promise<void> {
 }
 
 /** The service as this machine reaches it, or why it cannot. `node`: as this node, with its own token only
- *  (agentd); otherwise its node token when it has one, else the vault's brain token (the owner's views). */
+ *  (agentd); otherwise its node token when it has one, else the vault's brain token (the owner's views). A headless
+ *  node never takes the vault's (`brainTokenSource`, ADR 0013 F2). */
 export async function service(
   fetcher: typeof fetch = fetch,
   { node = false }: { node?: boolean } = {},
 ): Promise<Service | string> {
   const account = brainAccount();
   if (!account?.url) return "no brain account with an address in accounts.json: the service is the brain";
-  const own = await readNodeToken();
-  if (node && !own) return "this machine has no node token of its own: agents node pair";
-  const token = own ?? await getSecret("brain", account.name).catch((e) => {
+  if (await machineHeadless() && !(await readNodeToken())) return `this machine has no node token: ${NODE_ONLY}`;
+  if (node && !(await readNodeToken())) return "this machine has no node token of its own: agents node pair";
+  const token = await brainToken(account, { preferOwn: true }).catch((e) => {
     throw new Error(`the vault: ${(e as Error).message}`);
   });
   if (!token) return `this machine has no token for ${account.url}: agents brain-login`;

@@ -9,7 +9,7 @@
 
 import { readJson, writeAtomic } from "./lib/fs.ts";
 import { DATA, STATE } from "./lib/paths.ts";
-import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
+import { brainAccount, brainToken } from "../../shared/mcp/lib/brain-tasks.ts";
 import { getSecret } from "../../shared/mcp/lib/vault.ts";
 import { open } from "../brain/backup.ts";
 import { dayOf, hhmm } from "../../shared/mcp/lib/tasks.ts";
@@ -38,7 +38,7 @@ export function toPrune(names: string[], keep = KEEP): string[] {
 
 export async function brainBackup(force = false): Promise<number> {
   const account = brainAccount();
-  const token = account && await getSecret("brain", account.name).catch(() => null);
+  const token = account && await brainToken(account).catch(() => null);
   if (!account?.url || !token) {
     console.error(
       account

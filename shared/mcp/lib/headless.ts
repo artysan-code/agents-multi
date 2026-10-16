@@ -11,6 +11,7 @@
 
 import { configDir } from "./owner.ts";
 import { getSecret } from "./vault.ts";
+import { amEnv } from "./env.ts";
 
 export interface NodeConfig {
   /** announce to the service and take the jobs placed here */
@@ -135,6 +136,37 @@ export function machineNodeFile(): string {
   };
   return `${env("XDG_STATE_HOME") || `${env("HOME") ?? ""}/.local/state`}/agents-multi/node.json`;
 }
+
+/** Where this machine keeps its node token (ADR 0012): a file only the user reads, never synced. */
+export const nodeTokenFile = (): string =>
+  amEnv("NODE_TOKEN_FILE") ?? machineNodeFile().replace(/node\.json$/, "node-token");
+
+export async function readNodeToken(): Promise<string | null> {
+  return (await Deno.readTextFile(nodeTokenFile()).catch(() => "")).trim() || null;
+}
+
+/** Whether this machine's own file says headless. A file this process may not read is an error, never a desktop:
+ *  on a server that would hand it the vault's brain token (`brainTokenSource`). */
+export async function machineHeadless(file = machineNodeFile()): Promise<boolean> {
+  try {
+    return (JSON.parse(await Deno.readTextFile(file)) as Record<string, unknown>)?.headless === true;
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound || e instanceof SyntaxError) return false;
+    throw new Error(`${file} cannot be read here (${(e as Error).message}): agents install`);
+  }
+}
+
+/** Pure: where a machine's brain token comes from (ADR 0013, F2). A headless node uses its node token only: the
+ *  vault's is the owner's, of scope `machine`, and on a server one leak of it would read the whole brain. Elsewhere
+ *  the vault's, or the node token first where the caller asks (`agents node`'s service). */
+export function brainTokenSource(headless: boolean, preferOwn: boolean, hasOwn: boolean): "node" | "vault" | null {
+  if (headless) return hasOwn ? "node" : null;
+  return preferOwn && hasOwn ? "node" : "vault";
+}
+
+/** A headless node's answer to anything that would sign it in with a `machine` token or read the vault's. */
+export const NODE_ONLY =
+  "a headless node talks to the brain with its own node token only: agents node pair --server (the console takes the code)";
 
 /** Whether a folder is inside a Syncthing folder (its root holds `.stfolder`). */
 export function inSyncthing(dir: string): boolean {

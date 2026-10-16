@@ -139,11 +139,12 @@ export async function nodeSetup(nodeCommand: (args: string[]) => Promise<number>
     ok("the vault opens here (its key in a file only this user reads)");
   }
 
-  // 3. this node's own token at the service
+  // 3. this node's own token at the service: a server's pairing, scope `node` (ADR 0013, F2), never a sign-in, whose
+  // token is a machine's and reads the whole brain
   if (await readNodeToken()) ok("a node token of its own");
   else {
-    console.log();
-    if ((await nodeCommand(["login", "--no-browser"])) !== 0) return stop("the node did not sign in: run setup again");
+    console.log("\nPair this server: type the code below in your console (Connections › Add a server).");
+    if ((await nodeCommand(["pair", "--server"])) !== 0) return stop("the node is not paired: run setup again");
   }
 
   // 4. Claude's accounts: a long-lived token each, made on the owner's desktop

@@ -7,7 +7,7 @@ import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
 import { hasVault, loadKey, vaultDir, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
 import { type Check } from "../../lib/output.ts";
 import { exposedListeners, headlessProbe, type Probe } from "../../node/probe.ts";
-import { nodeTokenFile } from "../../node/service.ts";
+import { nodeTokenFile, readNodeToken } from "../../node/service.ts";
 import { DEFAULT_PORT } from "../../lib/paths.ts";
 import { checkList } from "../context.ts";
 
@@ -35,6 +35,19 @@ export interface NodeFacts {
   vault?: boolean | null;
   /** on a headless node, the variables set here that outrank an account's token (ADR 0013) */
   outranking?: string[];
+  /** on a headless node with a token, what the service lets it reach (`tokenScope`); null elsewhere */
+  scope?: TokenScope | null;
+}
+
+/** What a node token reaches: a node's routes only, more (a machine's scope: the whole brain), or not known. */
+export type TokenScope = "node" | "wider" | "unknown";
+
+/** Pure: the scope from the service's answer to `GET /api/nodes` with the token, a route a `node` scope never
+ *  reaches (apps/brain/auth.ts `NODE_ROUTES`): refused is a node's, answered is wider, anything else unknown. */
+export function tokenScope(status: number | null, error?: string): TokenScope {
+  if (status === 403 && /scope/.test(error ?? "")) return "node";
+  if (status === 200) return "wider";
+  return "unknown";
 }
 
 /** What Claude Code reads before a long-lived token (its *Authentication precedence*): set where agentd runs, it
@@ -69,6 +82,18 @@ export function nodeFindings(f: NodeFacts): Check[] {
       );
     } else add("node.keyfile", "ok", "the vault key file is the user's alone (0600)");
   }
+  if (f.scope === "wider") {
+    add(
+      "node.scope",
+      "fail",
+      "headless node, but its token is a machine's: one leak of it reads the whole brain",
+      `revoke it on ${f.service ?? "the brain"}/account, then rm ${nodeTokenFile()} && agents node pair --server`,
+    );
+  } else if (f.scope === "node") {
+    add("node.scope", "ok", "headless node: its token is a node's (projects, notes, tasks)");
+  } else if (f.scope === "unknown") {
+    add("node.scope", "warn", "headless node: the service did not say what its token reaches", "agents doctor, later");
+  }
   if (!f.cfg.enabled) {
     add("node.on", "ok", "not a node: it takes no job from the service (agents node enable)");
     return c;
@@ -86,7 +111,9 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "node.token",
       "fail",
       "node on, but no token of its own: it does not announce itself (the vault's token would make it every machine)",
-      "agents node pair (a code, works on a server), or agents node login --no-browser",
+      f.cfg.headless
+        ? "agents node pair --server (the console takes the code)"
+        : "agents node pair (a code), or agents node login --no-browser",
     );
   } else if (f.tokenMode & 0o077) {
     add(
@@ -141,6 +168,20 @@ async function ssListening(): Promise<string | null> {
   }
 }
 
+/** What this headless node's token reaches, asked of the service (`tokenScope`). */
+async function probeScope(url: string, token: string): Promise<TokenScope> {
+  try {
+    const r = await fetch(`${url.replace(/\/+$/, "")}/api/nodes`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const j = await r.json().catch(() => ({})) as { error?: string };
+    return tokenScope(r.status, j.error);
+  } catch {
+    return tokenScope(null);
+  }
+}
+
 /** This machine as a node. */
 export async function nodeChecks(): Promise<Check[]> {
   const cfg = await loadNodeConfig();
@@ -150,8 +191,10 @@ export async function nodeChecks(): Promise<Check[]> {
   // the vault's approval key needs its key; asking the keyring only when the node is on
   let approval = !!cfg.approvalKey;
   if (cfg.enabled && !approval) approval = await loadKey().then(() => true, () => false);
+  const token = cfg.headless ? await readNodeToken() : null;
   return nodeFindings({
     cfg,
+    scope: token && account?.url ? await probeScope(account.url, token) : null,
     keyMode: st?.mode != null ? st.mode & 0o777 : null,
     exposed: ss === null ? null : exposed(ss),
     service: account?.url ?? null,

@@ -9,6 +9,7 @@
 import { type Account, loadAccounts, visibleAccounts } from "./accounts.ts";
 import { fromFile, StaleError, type Task, type TaskStore, toFile, useTaskStore } from "./tasks.ts";
 import { getSecret } from "./vault.ts";
+import { brainTokenSource, machineHeadless, readNodeToken } from "./headless.ts";
 import { amEnv } from "./env.ts";
 
 /** How long to wait before each new try while the brain restarts (a deploy takes it away for seconds). */
@@ -158,11 +159,20 @@ export function brainAccount(
   return visibleAccounts(all, "brain", profile).find((a) => !!a.url) ?? null;
 }
 
+/** The token this machine talks to the brain with (`brainTokenSource`): on a headless node its node token, never
+ *  the vault's. `preferOwn`: the node token first where there is one (`agents node`'s service). */
+export async function brainToken(account: Account, { preferOwn = false } = {}): Promise<string | null> {
+  const headless = await machineHeadless();
+  const own = headless || preferOwn ? await readNodeToken() : null;
+  const from = brainTokenSource(headless, preferOwn, !!own);
+  return from === "node" ? own : from === "vault" ? await getSecret("brain", account.name) : null;
+}
+
 /** Point this process's tasks at the brain when there is a brain account; say where they are. */
 export function connectTasks(): "brain" | "files" {
   const account = brainAccount();
   if (!account) return "files";
-  const store = lazyStore(account, () => getSecret("brain", account.name));
+  const store = lazyStore(account, () => brainToken(account));
   const scope = (amEnv("BRAIN_SCOPE") ?? "").split(",").map((s) => s.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean);
   useTaskStore(scope.length ? scoped(store, scope) : store);
   return "brain";

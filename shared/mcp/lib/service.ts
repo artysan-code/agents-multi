@@ -5,6 +5,7 @@
 import { z } from "npm:zod@4.6.5";
 import { type Account, loadAccounts, resolveAccount, visibleAccounts } from "./accounts.ts";
 import { getSecret } from "./vault.ts";
+import { machineHeadless, NODE_ONLY } from "./headless.ts";
 import { amEnv } from "./env.ts";
 
 export function service(name: string) {
@@ -27,6 +28,8 @@ export function service(name: string) {
     const account = resolveAccount(visible, requested, name);
     let secret = secrets.get(account.name);
     if (!secret) {
+      // the vault's brain token is a machine's: never on a server (ADR 0013, F2)
+      if (name === "brain" && await machineHeadless()) throw new Error(NODE_ONLY);
       const s = await getSecret(name, account.name);
       if (!s) {
         throw new Error(`no secret for ${name}/${account.name} on this machine: add it in the console, Connections`);

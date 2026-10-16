@@ -2,9 +2,8 @@
 
 import { keyRefused } from "./vault.ts";
 import { loadAccounts } from "../../../../shared/mcp/lib/accounts.ts";
-import { brainAccount } from "../../../../shared/mcp/lib/brain-tasks.ts";
+import { brainAccount, brainToken } from "../../../../shared/mcp/lib/brain-tasks.ts";
 import { dayOf, hhmm } from "../../../../shared/mcp/lib/tasks.ts";
-import { getSecret } from "../../../../shared/mcp/lib/vault.ts";
 import { lastBackup } from "../../brain-backup.ts";
 import { run } from "../../lib/proc.ts";
 import { probeKept } from "../../vault.ts";
@@ -20,7 +19,7 @@ export async function brainChecks(ctx: DoctorCtx): Promise<Check[]> {
     const ba = brainAccount(undefined, loadAccounts());
     if (ba) {
       // the token this machine's tasks, console and copies use: one request says whether the brain still takes it
-      const token = await getSecret("brain", ba.name).catch(() => null);
+      const token = await brainToken(ba).catch(() => null);
       const login = "agents brain-login (or console › Connections › Sign in)";
       if (!token) {
         add(

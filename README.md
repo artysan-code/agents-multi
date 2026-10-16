@@ -456,7 +456,8 @@ sees, and `agents nodes accept <job>` signs one.
 - **Pairing with a code.** `agents node pair` asks the service for a code (eight characters, `XXXX-XXXX`, good
   for ten minutes, one use), shows it big and waits. In the web app, _Machines › Pair_, you type it; the
   service makes this machine's own token for your account and hands it over on the next poll, and the node is
-  turned on. No browser on the machine, no address to paste: it works on a server and from the phone. The
+  turned on. No browser on the machine, no address to paste: it works from the phone. A server pairs with
+  `agents node pair --server` instead (its token is a node's, never a machine's: [apps/node](apps/node/README.md)). The
   console has the same as _Connections › Pair with a code_. Five wrong codes lock pairing for fifteen
   minutes. `agents node login` stays for scripts.
 - **Your yes is checked on the node.** A job placed on a node runs only with your signature, made on one of your

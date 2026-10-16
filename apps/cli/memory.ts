@@ -3,8 +3,7 @@
 // the console asks the brain: the token never reaches the page. Only reads; changes go through Claude,
 // where the rules answer.
 
-import { brainAccount } from "../../shared/mcp/lib/brain-tasks.ts";
-import { getSecret } from "../../shared/mcp/lib/vault.ts";
+import { brainAccount, brainToken } from "../../shared/mcp/lib/brain-tasks.ts";
 
 /** The console's paths and the brain's: nothing else passes, and only these query parameters. */
 const ROUTES: Record<string, string> = {
@@ -32,7 +31,7 @@ export const boardUrl = (base: string) => `${base.replace(/\/+$/, "")}/board`;
 async function target(): Promise<{ url: string; token: string } | { error: string }> {
   const account = brainAccount(undefined);
   if (!account?.url) return { error: "no brain account in accounts.json" };
-  const token = await getSecret("brain", account.name).catch(() => null);
+  const token = await brainToken(account).catch(() => null);
   if (!token) {
     return {
       error: `no token for the brain on this machine: make one on ${account.url}/account and put it in Connections`,

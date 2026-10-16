@@ -1,6 +1,6 @@
 # 0012 — agentd, the service, and work that moves between machines
 
-- Status: accepted (phase F of [ADR 0009](0009-agents-multi-2.md); slice F1 built, F2 listed below)
+- Status: accepted (phase F of [ADR 0009](0009-agents-multi-2.md); slices F1 and F2 built)
 - Date: 2026-10-15
 
 ## Context
@@ -186,7 +186,7 @@ Measured on 2026-10-15 (Docker 29.9, kernel 7.2, debian:trixie-slim, bubblewrap 
   (`shared/mcp/lib/moving.ts`), `agents node`, the vault key file, the sandbox for headless children
   (`shared/mcp/lib/headless.ts`) and its probe; built on branches of their own: the node image (`apps/node/`),
   `agents nodes` (the view, propose, accept) and the doctor's `node.*` checks.
-- **F2**: a `node` token scope; MCP tools for a coordinator (list nodes, propose); pairing a server from the
+- **F2** (built 2026-10-16, [ADR 0013](0013-a-server-node-without-a-terminal.md) «As built (F2)»): a `node` token scope; MCP tools for a coordinator (list nodes, propose); pairing a server from the
   console. Taken up 2026-10-16: its shape is in [ADR 0013](0013-a-server-node-without-a-terminal.md) («F2: pairing
   from the console»), built with the third round of [ADR 0014](0014-from-the-phone.md). Presence beyond "a session
   not locked" stays paused.
