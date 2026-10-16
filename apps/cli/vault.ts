@@ -20,6 +20,7 @@ import {
   loadKey,
   moveVault,
   pairVault,
+  serverVaultDir,
   setSecret,
   VAULT_DIR,
   vaultDir,
@@ -125,6 +126,48 @@ export async function probeKept(a: Account, secret: string, now = Date.now()): P
   return r;
 }
 
+/** `agents vault server …` (ADR 0015): the vault a server node gets instead of this one. */
+async function serverVaultCommand(args: string[]): Promise<number> {
+  const [sub = "status", ...rest] = args;
+  const { serverRecoveryCode, serverVaultStale, summary, syncServerVault } = await import("./node/server-vault.ts");
+  switch (sub) {
+    case "sync": {
+      const dry = rest.includes("--dry-run");
+      const r = await syncServerVault(dry);
+      if (r.created) console.log(`${ANSI.b}server vault created${ANSI.x} in ${serverVaultDir()}`);
+      console.log(dry ? summary(r).replace("server vault:", "server vault would be:") : summary(r));
+      if (r.created) {
+        console.log(
+          `Next: make ${serverVaultDir()} a Syncthing folder shared with the server alone (trusted, receive only), then pair\n` +
+            `the server from the console (Connections › Add a server). apps/node/README.md has the steps.`,
+        );
+      }
+      return 0;
+    }
+    case "status": {
+      console.log(`${ANSI.b}agents vault server${ANSI.x} — ${serverVaultDir()}`);
+      const stale = await serverVaultStale();
+      if (!stale) {
+        console.log(`  ${ANSI.d}no server vault yet: agents vault server sync${ANSI.x}`);
+        return 0;
+      }
+      const behind = stale.write.length + stale.remove.length;
+      console.log(
+        behind
+          ? `  ${ANSI.y}!${ANSI.x} ${summary(stale)}  (agents vault server sync)`
+          : `  ${ANSI.g}✓${ANSI.x} up to date with the selection`,
+      );
+      return 0;
+    }
+    case "recovery-code":
+      console.log(await serverRecoveryCode());
+      return 0;
+    default:
+      console.error("usage: agents vault server [status|sync [--dry-run]|recovery-code]");
+      return 2;
+  }
+}
+
 export async function vaultCommand(args: string[]): Promise<number> {
   const [sub = "status", ...rest] = args;
   try {
@@ -169,6 +212,8 @@ export async function vaultCommand(args: string[]): Promise<number> {
         console.log(await currentRecoveryCode());
         return 0;
       }
+      case "server":
+        return await serverVaultCommand(rest);
       case "status": {
         const key = await loadKey().catch((e) => e as Error);
         console.log(`${ANSI.b}agents vault${ANSI.x} — ${vaultDir()}`);
@@ -255,7 +300,7 @@ export async function vaultCommand(args: string[]): Promise<number> {
       }
       default:
         console.error(
-          "usage: agents vault [status|init [--file]|pair [--file]|move|recovery-code|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
+          "usage: agents vault [status|init [--file]|pair [--file]|move|recovery-code|server [status|sync|recovery-code]|set <service> <account>|delete <service> <account>|run <service> [account] -- <tool> …]",
         );
         return 2;
     }

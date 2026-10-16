@@ -6,6 +6,8 @@
 //                 Syncthing folder of its own: the entries travel between machines already encrypted,
 //                 and it alone can be shared with a server node (ADR 0012) without the rest of ~/vault.
 //                 A machine that has not moved yet keeps ~/vault/claude-multi (`agents vault move`).
+//                 A server node does not get this folder but a vault of its own, in the same format under another
+//                 key (`~/agents-multi-vault-server`, ADR 0015): it mounts it where this one would be.
 //   the key       one per vault, 256 bits, in each machine's keyring through the Secret Service API
 //                 (KWallet / ksecretd here, unlocked at login): no password to type, and never on disk
 //                 next to the entries.
@@ -36,6 +38,8 @@ const KEY = { service: "claude-multi", account: "vault-key" };
 // The plaintext sealed in every vault's key-check.json. It is data, not a name: it is the text a key must
 // open, so it keeps the project's name from before Agents Multi, as do the HKDF infos below. Never rename.
 export const CHECK_TEXT = "claude-multi vault";
+/** The same for a server's vault (ADR 0015): another text, so a vault can be told from the owner's. */
+export const SERVER_CHECK_TEXT = "agents-multi server vault";
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -43,6 +47,10 @@ const dec = new TextDecoder();
 export const VAULT_DIR = `${HOME}/agents-multi-vault`;
 /** Where it was until 1.2.1, inside ~/vault: still read where the move has not happened yet. */
 export const LEGACY_VAULT_DIR = `${HOME}/vault/claude-multi`;
+
+/** The server's vault on the owner's machine (ADR 0015): a Syncthing folder of its own, the only one a server receives. */
+export const SERVER_VAULT_DIR = `${HOME}/agents-multi-vault-server`;
+export const serverVaultDir = (): string => amEnv("SERVER_VAULT") ?? SERVER_VAULT_DIR;
 
 /** Pure: which folder holds the vault: the new one once it has one (or when neither has, for a new vault),
  *  else the old one. */
@@ -94,7 +102,7 @@ export interface Entry {
 type EntryMeta = Omit<Entry, "value" | "deleted">;
 
 // ---------------------------------------------------------------- key material
-interface VaultKey {
+export interface VaultKey {
   aes: CryptoKey;
   hmac: CryptoKey;
   raw: Uint8Array;
@@ -164,7 +172,7 @@ export function parseRecoveryCode(code: string): Uint8Array {
 }
 
 // ---------------------------------------------------------------- entries (pure given a key)
-async function entryId(key: VaultKey, service: string, account: string, field: string): Promise<string> {
+export async function entryId(key: VaultKey, service: string, account: string, field: string): Promise<string> {
   const mac = new Uint8Array(
     await crypto.subtle.sign("HMAC", key.hmac, enc.encode(`${service}\n${account}\n${field}`)),
   );
@@ -247,19 +255,29 @@ async function storeKey(raw: Uint8Array, place: KeyPlace = "keyring") {
 // ---------------------------------------------------------------- the store
 const entriesDir = () => `${vaultDir()}/secrets`;
 const checkFile = () => `${vaultDir()}/key-check.json`;
+const EntryFile = /^[0-9a-f]{32}\.json$/;
 
 /** Written via a temporary file and a rename (Syncthing never ships half an entry), readable by the owner only. */
 const writeEntry = (p: string, text: string) => writeAtomic(p, text, { mode: 0o600 });
 
-/** Does this key open this vault? True for a vault that has no check yet (a new one). */
-export async function keyMatches(key: VaultKey): Promise<boolean> {
-  const box = await readJson<{ iv: string; ct: string }>(checkFile());
-  if (!box) return true;
+/** Which vault a key opens in a folder: the owner's, a server's (ADR 0015), none yet, or neither (another key). */
+export type VaultKind = "owner" | "server" | "none" | "foreign";
+
+export async function vaultKind(key: VaultKey, dir = vaultDir()): Promise<VaultKind> {
+  const box = await readJson<{ iv: string; ct: string }>(`${dir}/key-check.json`);
+  if (!box) return "none";
   try {
-    return (await open(key, "key-check", box)) === CHECK_TEXT;
+    const text = await open(key, "key-check", box);
+    return text === CHECK_TEXT ? "owner" : text === SERVER_CHECK_TEXT ? "server" : "foreign";
   } catch {
-    return false;
+    return "foreign";
   }
+}
+
+/** Does this key open this vault (the owner's or a server's)? True for a vault that has no check yet (a new one). */
+export async function keyMatches(key: VaultKey, dir = vaultDir()): Promise<boolean> {
+  const kind = await vaultKind(key, dir);
+  return kind === "owner" || kind === "server" || kind === "none";
 }
 
 /** First machine: a new key, in the keyring, and the check next to the entries. */
@@ -327,38 +345,63 @@ export async function deleteSecret(
   return true;
 }
 
-/** What the vault holds, without the values. Entries this key cannot open are counted, not hidden;
- *  Syncthing conflict copies are counted too, for the doctor to raise. */
-export async function listSecrets(
-  key?: VaultKey,
-): Promise<{ entries: EntryMeta[]; unreadable: number; conflicts: number }> {
-  const k = key ?? await loadKey();
-  const entries: EntryMeta[] = [];
+/** Every entry of a vault folder, values and tombstones included, and what could not be read: for the code that
+ *  copies one vault into another (ADR 0015). Never printed. */
+export async function readEntries(
+  key: VaultKey,
+  dir = vaultDir(),
+): Promise<{ entries: Entry[]; unreadable: number; conflicts: number }> {
+  const entries: Entry[] = [];
   let unreadable = 0, conflicts = 0;
   let files: Deno.DirEntry[] = [];
   try {
-    files = [...Deno.readDirSync(entriesDir())];
+    files = [...Deno.readDirSync(`${dir}/secrets`)];
   } catch { /* empty vault */ }
   for (const f of files) {
     if (f.name.includes(".sync-conflict-")) {
       conflicts++;
       continue;
     }
-    if (!/^[0-9a-f]{32}\.json$/.test(f.name)) continue; // temporaries
+    if (!EntryFile.test(f.name)) continue; // temporaries
     const id = f.name.slice(0, -5);
     try {
-      const box = await readJson<{ iv: string; ct: string }>(`${entriesDir()}/${f.name}`);
-      const { value: _v, deleted, ...meta } = JSON.parse(await open(k, id, box!)) as Entry;
-      if (!deleted) entries.push(meta);
+      const box = await readJson<{ iv: string; ct: string }>(`${dir}/secrets/${f.name}`);
+      entries.push(JSON.parse(await open(key, id, box!)) as Entry);
     } catch {
       unreadable++;
     }
   }
+  return { entries, unreadable, conflicts };
+}
+
+/** What the vault holds, without the values. Entries this key cannot open are counted, not hidden;
+ *  Syncthing conflict copies are counted too, for the doctor to raise. */
+export async function listSecrets(
+  key?: VaultKey,
+  dir = vaultDir(),
+): Promise<{ entries: EntryMeta[]; unreadable: number; conflicts: number }> {
+  const all = await readEntries(key ?? await loadKey(), dir);
+  const entries = all.entries.filter((e) => !e.deleted).map(({ value: _v, deleted: _d, ...meta }) => meta);
   return {
     entries: entries.sort((a, b) => `${a.service}/${a.account}`.localeCompare(`${b.service}/${b.account}`)),
-    unreadable,
-    conflicts,
+    unreadable: all.unreadable,
+    conflicts: all.conflicts,
   };
+}
+
+/** Writes one entry (or its tombstone) into a vault folder that is not necessarily this machine's (a server's, ADR
+ *  0015): sealed with `key`, the file named by the id this key gives it. */
+export async function putEntry(dir: string, key: VaultKey, entry: Entry) {
+  const id = await entryId(key, entry.service, entry.account, entry.field);
+  await Deno.mkdir(`${dir}/secrets`, { recursive: true, mode: 0o700 });
+  await writeEntry(`${dir}/secrets/${id}.json`, JSON.stringify(await seal(key, id, JSON.stringify(entry))) + "\n");
+}
+
+/** A new vault folder under `key` with the check text of its kind; no key is kept anywhere (ADR 0015). */
+export async function initVaultAt(dir: string, key: VaultKey, text = SERVER_CHECK_TEXT) {
+  if (await readJson(`${dir}/key-check.json`)) throw new VaultError(`a vault already exists in ${dir}`);
+  await Deno.mkdir(`${dir}/secrets`, { recursive: true, mode: 0o700 });
+  await writeEntry(`${dir}/key-check.json`, JSON.stringify(await seal(key, "key-check", text)) + "\n");
 }
 
 /** For `vault recovery-code`: this machine's key, as the code another machine pairs with. */

@@ -4,7 +4,16 @@
 import { brainAccount } from "../../../../shared/mcp/lib/brain-tasks.ts";
 import { loadNodeConfig, type NodeConfig } from "../../../../shared/mcp/lib/headless.ts";
 import { platformOf } from "../../../../shared/mcp/lib/platform.ts";
-import { hasVault, loadKey, vaultDir, vaultKeyFile } from "../../../../shared/mcp/lib/vault.ts";
+import {
+  hasVault,
+  listSecrets,
+  loadKey,
+  vaultDir,
+  vaultKeyFile,
+  type VaultKind,
+  vaultKind,
+} from "../../../../shared/mcp/lib/vault.ts";
+import { approvalKey } from "../../node/facts.ts";
 import { type Check } from "../../lib/output.ts";
 import { exposedListeners, headlessProbe, type Probe } from "../../node/probe.ts";
 import { nodeTokenFile, readNodeToken } from "../../node/service.ts";
@@ -33,6 +42,9 @@ export interface NodeFacts {
   tokenMode?: number | null;
   /** a vault in sight, on a headless node (null elsewhere: a desktop's vault has its own checks) */
   vault?: boolean | null;
+  /** on a headless node whose vault this process opens: which vault it is and whether it holds a brain entry (ADR
+   *  0015); absent when it cannot be told (no vault, no key) */
+  vaultScope?: { kind: VaultKind; brain: boolean } | null;
   /** on a headless node, the variables set here that outrank an account's token (ADR 0013) */
   outranking?: string[];
   /** on a headless node with a token, what the service lets it reach (`tokenScope`); null elsewhere */
@@ -136,9 +148,26 @@ export function nodeFindings(f: NodeFacts): Check[] {
       "node.vault",
       "warn",
       `headless node, but no vault in ${vaultDir()}: its jobs open no service's account`,
-      "apps/node/README.md, «The vault»: the Syncthing folder mounted at ~/agents-multi-vault",
+      "apps/node/README.md, «The vault»: the server vault (agents-multi-vault-server) mounted at ~/agents-multi-vault",
     );
   } else if (f.vault) add("node.vault", "ok", "headless node: the vault is in sight (read only)");
+  if (f.vaultScope) {
+    if (f.vaultScope.kind === "owner") {
+      add(
+        "node.vault.scope",
+        "fail",
+        "headless node, but the vault it holds is the owner's: every secret of the owner is here",
+        "ADR 0015: unshare agents-multi-vault from this server, share agents-multi-vault-server, pair again (apps/node/README.md)",
+      );
+    } else if (f.vaultScope.brain) {
+      add(
+        "node.vault.scope",
+        "fail",
+        "headless node: its vault holds a brain entry (the token of a machine, the whole brain)",
+        "agents vault server sync on the owner's machine takes it out; the node uses its node token",
+      );
+    } else if (f.vaultScope.kind === "server") add("node.vault.scope", "ok", "headless node: its vault is a server's");
+  }
   if (f.outranking?.length) {
     add(
       "node.claude",
@@ -182,6 +211,17 @@ async function probeScope(url: string, token: string): Promise<TokenScope> {
   }
 }
 
+/** Which vault a headless node holds, and whether a brain entry is in it; null when it cannot be told. */
+async function vaultScope(): Promise<NodeFacts["vaultScope"]> {
+  if (!hasVault(vaultDir())) return null;
+  const key = await loadKey().catch(() => null);
+  if (!key) return null;
+  const kind = await vaultKind(key);
+  if (kind !== "owner" && kind !== "server") return null;
+  const brain = (await listSecrets(key).catch(() => ({ entries: [] }))).entries.some((e) => e.service === "brain");
+  return { kind, brain };
+}
+
 /** This machine as a node. */
 export async function nodeChecks(): Promise<Check[]> {
   const cfg = await loadNodeConfig();
@@ -190,7 +230,7 @@ export async function nodeChecks(): Promise<Check[]> {
   const account = brainAccount();
   // the vault's approval key needs its key; asking the keyring only when the node is on
   let approval = !!cfg.approvalKey;
-  if (cfg.enabled && !approval) approval = await loadKey().then(() => true, () => false);
+  if (cfg.enabled && !approval) approval = !!(await approvalKey(cfg));
   const token = cfg.headless ? await readNodeToken() : null;
   return nodeFindings({
     cfg,
@@ -201,6 +241,7 @@ export async function nodeChecks(): Promise<Check[]> {
     approval,
     sandbox: cfg.enabled && cfg.headless ? await headlessProbe() : null,
     vault: cfg.enabled && cfg.headless ? hasVault(vaultDir()) : null,
+    vaultScope: cfg.headless ? await vaultScope() : null,
     outranking: cfg.enabled && cfg.headless ? OUTRANKING.filter((n) => !!Deno.env.get(n)) : [],
     tokenMode: await Deno.stat(nodeTokenFile()).then((s) => s.mode != null ? s.mode & 0o777 : 0o600, () => null),
   });

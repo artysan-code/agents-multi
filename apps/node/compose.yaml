@@ -38,8 +38,9 @@ services:
     # vault key file (~/.local/state/agents-multi/vault-key, 0600)
     volumes:
       - node-home:/home/agent
-      # the vault's entries (already sealed with the vault key), read only: the host folder a Syncthing of this
-      # server keeps as a trusted device for ~/agents-multi-vault alone (README.md, «The vault»); unset, an empty
+      # the SERVER vault (ADR 0015: a vault of its own, sealed with its own key, holding only what a server needs,
+      # never the owner's), read only: the host folder a Syncthing of this server keeps for the owner's
+      # ~/agents-multi-vault-server alone (README.md, «The vault»), mounted where a vault is looked for; unset, an empty
       # volume, and the node runs no job that needs a service's secret. Coolify resolves this to the named volume
       # whatever the variable says: there bind-volume.sh makes that volume a bind of the folder
       - ${NODE_VAULT_DIR:-node-vault}:/home/agent/agents-multi-vault:ro

@@ -38,11 +38,16 @@ service token and the vault key file are made once in the container's terminal a
    names a profile the host does not have does not start: load it first. Docker's own `docker-default` would
    keep the sandbox from starting (`deny mount`): that is why this one exists.
 
-3. **The vault and the configuration, on this server.** Both are Syncthing folders of their own on your machines:
-   `~/agents-multi-vault` and `~/agents-multi-config` (`agents config move` puts the configuration there, ADR 0013).
-   Share **those two alone** with this server's Syncthing as a **trusted** device (no encryption password),
-   receive only: the node runs your profiles, accounts and MCP servers, and its jobs open their accounts. The rest
-   of your Syncthing folders stay encrypted there. Note each folder's path **on the host** (with Syncthing in
+3. **The server vault and the configuration, on this server.** Both are Syncthing folders of their own on your
+   machines: `~/agents-multi-vault-server` and `~/agents-multi-config` (`agents config move` puts the configuration
+   there, ADR 0013). The server vault is **not your vault** ([ADR 0015](../../docs/adr/0015-a-vault-for-the-server.md)):
+   a vault of its own, sealed with its own key, holding Claude's tokens, what a node reads by design (passkey
+   revocations, the clones' env files, your public approval key) and the services you list in `nodes.json`
+   `serverServices` (`["cloudflare/main"]`; default none). Never the brain's token, never your vault's key.
+   `agents vault server sync` on your machine makes and updates it (names only are printed); `agents node token`
+   runs it by itself. Share **those two folders alone** with this server's Syncthing as a **trusted** device (no
+   encryption password), receive only: **never `agents-multi-vault`**. The rest of your Syncthing folders stay
+   encrypted there. Note each folder's path **on the host** (with Syncthing in
    Docker, inside its data volume: `docker volume inspect -f '{{.Mountpoint}}' <its data volume>`), and make each
    the node's user's before anything mounts it, or Docker makes it root's and Syncthing can no longer write there:
    `install -d -o 1000 -g 1000 -m 700 <folder>`.
@@ -64,7 +69,8 @@ service token and the vault key file are made once in the container's terminal a
    sudo apps/node/bind-volume.sh <uuid>_node-config <configuration folder>
    ```
 
-   Without Coolify, `NODE_VAULT_DIR=<folder> NODE_CONFIG_DIR=<folder> docker compose up -d --build` in this
+   `NODE_VAULT_DIR` is the server vault's folder (inside the container it is still mounted at `~/agents-multi-vault`,
+   where the node looks for its vault). Without Coolify, `NODE_VAULT_DIR=<folder> NODE_CONFIG_DIR=<folder> docker compose up -d --build` in this
    folder mounts them directly. Without the vault the node runs no job that needs a service's secret (the doctor's
    `node.vault` says so); without the configuration it needs one of its own (`agents init ~/config --brain <url>`).
 
@@ -76,7 +82,7 @@ service token and the vault key file are made once in the container's terminal a
    ```
 
    It does in order what is missing, and runs again to finish what waited: links the configuration; pairs the
-   vault (it asks for the recovery code: `agents vault recovery-code` on your machine); pairs the node (a code to
+   vault (it asks for the **server** vault's recovery code: `agents vault server recovery-code` on your machine); pairs the node (a code to
    type in your console's _Connections › Add a server_: the token is a node's, never a machine's); checks each Claude account's token and names the missing ones;
    makes the git key and waits until the forge takes it; clones the repositories `nodes.json` lists (`repos`);
    turns the node on, headless. The container sees it and starts serving: no restart. The key and the logins live
@@ -110,6 +116,28 @@ service token and the vault key file are made once in the container's terminal a
 
 7. **Updating** is a new image: redeploy; the entrypoint puts the new code in the volume as the app copy. Claude
    Code moves with `CLAUDE_CODE_VERSION` in the Dockerfile, never by itself.
+
+## Moving a server from your vault to its own (ADR 0015)
+
+A server paired before this change holds your whole vault and its key. Per server, once, in this order:
+
+1. On your machine, **`agents vault server sync`**: it makes `~/agents-multi-vault-server` with its own key and
+   puts the selection in it. Check `agents vault server status` and, if a job needs a service's secret, list
+   `<service>/<account>` in `nodes.json` `serverServices`, then sync again.
+2. In your Syncthing, make `~/agents-multi-vault-server` a folder shared with this server (trusted, receive
+   only, as in step 3), and **stop sharing `agents-multi-vault` with it**. On the server's Syncthing, remove
+   that folder and delete its files.
+3. On the host: point the container's vault at the new folder. With Coolify the volume `<uuid>_node-vault` is a
+   bind of the old folder: stop the service, `docker volume rm <uuid>_node-vault`, let a deploy make it empty
+   again, `sudo apps/node/bind-volume.sh <uuid>_node-vault <the new folder>`, deploy.
+4. In the container (`docker exec -it <container> bash`): `rm -f ~/.local/state/agents-multi/vault-key` — the old
+   key file is your vault's key.
+5. **Pair again**: in your console's _Connections › Add a server_ with the code the container prints (the key it
+   seals is now the server vault's), or in the container's terminal `agents node setup` with
+   `agents vault server recovery-code`. The node keeps its token.
+6. `agents doctor` on the server: `node.vault.scope` must be ok; on your machine `vault.server` must be ok.
+
+From then on the server vault is behind your vault until the next `agents vault server sync`; the doctor says when.
 
 ## Moving to a newer Docker
 

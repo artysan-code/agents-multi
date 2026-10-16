@@ -28,6 +28,9 @@ export interface NodeConfig {
   allowedDomains: string[];
   /** the owner's public approval key, for a node with no vault (`agents node key` on one that has it) */
   approvalKey?: string;
+  /** the services (`<service>/<account>`) the owner's machine copies into a server's vault, besides what a node
+   *  always reads (ADR 0015); never the brain's. Absent is none. */
+  serverServices?: string[];
   /** the repositories a server clones when it is set up (`agents node setup`): their remotes */
   repos: string[];
   /** hosts (`git.example.me`) or `host/owner` prefixes whose repositories a node clones the first time a job needs
@@ -76,6 +79,9 @@ const GIT_HOST = /^[a-z0-9][a-z0-9.-]*(:\d+)?(\/[\w.-]+)?$/;
 /** Pure: whether a text is a valid `gitHosts` entry (lowercase). */
 export const validGitHost = (h: string) => GIT_HOST.test(h);
 
+/** Pure: whether a text is a valid `serverServices` entry: `<service>/<account>`, and never the brain's. */
+export const validServerService = (s: string) => /^[\w.-]+\/[^\s/]+$/.test(s) && !/^brain\//i.test(s);
+
 /** Pure: node.json's content, kept to what is valid (the rest is ignored, never trusted). */
 export function cleanNodeConfig(raw: unknown): NodeConfig {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -89,6 +95,8 @@ export function cleanNodeConfig(raw: unknown): NodeConfig {
   };
   const gitHosts = strings(r.gitHosts)?.map((h) => h.toLowerCase()).filter((h) => GIT_HOST.test(h)) ?? [];
   if (gitHosts.length) out.gitHosts = gitHosts;
+  const serverServices = strings(r.serverServices)?.filter(validServerService) ?? [];
+  if (serverServices.length) out.serverServices = [...new Set(serverServices)];
   if (typeof r.name === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/.test(r.name)) out.name = r.name;
   if (typeof r.maxSessions === "number" && Number.isInteger(r.maxSessions) && r.maxSessions >= 0) {
     out.maxSessions = Math.min(r.maxSessions, 64);
@@ -217,6 +225,7 @@ export function secretPaths(home: string, runtime: string, profiles: string[]): 
   return [
     `${home}/vault`,
     `${home}/agents-multi-vault`,
+    `${home}/agents-multi-vault-server`,
     `${home}/.local/state/agents-multi`,
     `${home}/.ssh`,
     `${home}/.git-credentials`,

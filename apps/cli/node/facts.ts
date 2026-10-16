@@ -4,6 +4,7 @@
 import { voiceReady } from "./voice.ts";
 import {
   type Announce,
+  APPROVAL_ENTRY,
   approvalKeys,
   memoryLimit,
   nodeNameOf,
@@ -13,7 +14,7 @@ import {
 import { claudeToken, loadNodeConfig, type NodeConfig } from "../../../shared/mcp/lib/headless.ts";
 import { listChildren } from "../../../shared/mcp/lib/agents.ts";
 import { listAccounts } from "../../../shared/mcp/lib/providers.ts";
-import { loadKey } from "../../../shared/mcp/lib/vault.ts";
+import { getSecret, loadKey, vaultKind } from "../../../shared/mcp/lib/vault.ts";
 import { platformOf } from "../../../shared/mcp/lib/platform.ts";
 import { CONFIG, RUNTIME, STATE } from "../lib/paths.ts";
 import { lstat, readJson } from "../lib/fs.ts";
@@ -22,12 +23,18 @@ import manifest from "../../../deno.json" with { type: "json" };
 /** This node's name: node.json's, else the one its machine token carries (`agents-multi su <hostname>`). */
 export const nodeName = (cfg: NodeConfig) => cfg.name ?? nodeNameOf(Deno.hostname());
 
-/** The owner's public approval key this node checks jobs against: node.json's for a node with no vault, else
- *  the one its vault derives. Null when it has neither. */
+/** The owner's public approval key this node checks jobs against: nodes.json's for a node with no vault, else the
+ *  one in its vault (a server's: the owner's machine put it there, ADR 0015), else the one the owner's vault key
+ *  derives. A server vault without it yet gives none: its own key would derive a key nobody signs with. */
 export async function approvalKey(cfg: NodeConfig): Promise<string | null> {
   if (cfg.approvalKey) return cfg.approvalKey;
   try {
-    return (await approvalKeys((await loadKey()).raw)).public;
+    const key = await loadKey();
+    const a = APPROVAL_ENTRY;
+    const pinned = await getSecret(a.service, a.account, a.field, key);
+    if (pinned) return pinned;
+    if ((await vaultKind(key)) === "server") return null;
+    return (await approvalKeys(key.raw)).public;
   } catch {
     return null;
   }

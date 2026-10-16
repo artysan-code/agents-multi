@@ -1,11 +1,11 @@
 // servers.ts — Connections › Add a server (ADR 0013, F2): the console's side of pairing a server node from its code.
 // The page sends the code; the service answers which server asks and its key's fingerprint, which the owner
 // compares with the one in the container's log. On their yes the console asks again, checks the key is still the
-// one they compared, seals the vault key to it here (seal.ts: the browser never has the key, the service never
+// one they compared, seals the server vault's key to it here (seal.ts: the browser never has the key, the service never
 // has it open) and confirms with the box. Afterwards the page follows the server's row: online, its git key's
 // public half to add to the forge, and what its setup still waits for.
 
-import { loadKey } from "../../../shared/mcp/lib/vault.ts";
+import { serverKeyForPairing } from "../node/server-vault.ts";
 import { keyFingerprint, sealTo } from "../../../shared/mcp/lib/seal.ts";
 import type { NodeInfo } from "../../../shared/mcp/lib/nodes.ts";
 import { type Service, service } from "../node/service.ts";
@@ -26,13 +26,13 @@ export type ServerOp<T> = ({ ok: true } & T) | { ok: false; message: string };
 
 export interface ServerDeps {
   svc: () => Promise<Service | string>;
-  /** the vault key's 32 bytes, from this machine's keyring (or key file) */
+  /** the key a server's pairing seals: its own vault's, not the owner's (ADR 0015) — 32 bytes */
   vaultKey: () => Promise<Uint8Array>;
 }
 
 const realDeps: ServerDeps = {
   svc: () => service().catch((e: Error) => e.message),
-  vaultKey: async () => (await loadKey()).raw,
+  vaultKey: serverKeyForPairing,
 };
 
 const failed = (e: unknown) => ({ ok: false as const, message: (e as Error).message.replace(/^POST \S+: /, "") });
@@ -68,7 +68,7 @@ export async function claimServer(
   }
 }
 
-/** The owner's yes, for the fingerprint they compared: the vault key sealed to that key and the pairing confirmed.
+/** The owner's yes, for the fingerprint they compared: the server vault's key (ADR 0015) sealed to that key and the pairing confirmed.
  *  A key that changed since (another fingerprint) is refused and nothing is sealed. `vault: false` pairs it without
  *  the vault key (a server that has it already). */
 export async function confirmServer(

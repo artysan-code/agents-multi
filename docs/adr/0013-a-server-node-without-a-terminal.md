@@ -1,6 +1,6 @@
 # 0013 — A server node without a terminal: shared configuration, Claude's tokens in the vault, pairing
 
-- Status: accepted 2026-10-15; part B built, F2 built 2026-10-16 («As built (F2)») (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
+- Status: accepted 2026-10-15; the server's vault is [ADR 0015](0015-a-vault-for-the-server.md); part B built, F2 built 2026-10-16 («As built (F2)») (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
 - Date: 2026-10-15
 
 ## Context

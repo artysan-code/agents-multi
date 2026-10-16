@@ -9,6 +9,7 @@ import { loadKey } from "../../shared/mcp/lib/vault.ts";
 import { type Service, service } from "./node/service.ts";
 import { getPasskeys } from "./node/waiting.ts";
 import { revokedIds, revokeInVault } from "./node/revocations.ts";
+import { syncIfPresent } from "./node/server-vault.ts";
 import { ago } from "./nodes.ts";
 
 export type PasskeyState = "pending" | "endorsed" | "not valid here" | "endorsed (unchecked)" | "revoked";
@@ -138,6 +139,9 @@ export function revokeTarget(list: Passkey[], ref: string): { id: string; name: 
  *  had the owner's yes. */
 export async function revoke(s: Service, t: { id: string; listed: boolean }): Promise<void> {
   await revokeInVault(t.id);
+  // a node reads its revocations from a vault of its own (ADR 0015): this one must reach it too
+  const line = await syncIfPresent();
+  if (line) console.log(line);
   if (t.listed) await s.call("DELETE", `/api/passkeys/${encodeURIComponent(t.id)}`);
 }
 
