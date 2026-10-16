@@ -1,6 +1,6 @@
 # 0013 — A server node without a terminal: shared configuration, Claude's tokens in the vault, pairing
 
-- Status: accepted 2026-10-15; part B built, F2 specified 2026-10-16 (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
+- Status: accepted 2026-10-15; part B built, F2 built 2026-10-16 («As built (F2)») (amends [ADR 0012](0012-agentd-and-the-service.md), «The server node»)
 - Date: 2026-10-15
 
 ## Context
@@ -140,8 +140,8 @@ The same steps with no terminal, so that a new server is one code typed in a pag
   - propose a job (`POST /api/jobs`; the owner's yes still decides), and forget **only itself**.
 
   It **may not**: read or write `io/`, `clienti/`, `persone/`, `inbox/`; write, move or delete a page; read the
-  chats it is not answering; read other nodes' runs, requests, jobs or answers; list tokens, sessions, passkeys or
-  settings; pair or claim; forget another machine; change the orchestrator setting. The check is one gate in
+  chats it is not answering; read other nodes' runs, requests, jobs or answers; list tokens, sessions or settings;
+  register, endorse or revoke a passkey (it reads their public halves: «As built (F2)»); pair or claim; forget another machine; change the orchestrator setting. The check is one gate in
   `apps/brain/main.ts` (a path allowlist by scope) and an area filter in `tools.ts`, both fail-closed: a scope the
   gate does not know is refused. A leaked server token reads a project's pages and tasks, not the owner.
 - **The coordinator's MCP tools** (the `agents` MCP server, `shared/mcp/agents/node-tools.ts`, over the machine's
@@ -205,3 +205,28 @@ _Legal and compliance_):
 - The owner's configuration moves once more (`agents config move`), as the vault did.
 - Whoever has a server has the owner's configuration, the vault and a year's token of each account: the same
   trust the vault already asked for, now stated for Claude's accounts too.
+
+## As built (F2; 2026-10-16)
+
+- **Built as specified**: the server's pairing (`<state>/pair-key`, the code and fingerprint in its log, a new code at
+  expiry), the claim with the fingerprint to compare, the vault key sealed by the console (`shared/mcp/lib/seal.ts`),
+  the `node` scope (one gate in `apps/brain/main.ts`, `NODE_ROUTES` in `auth.ts`, the area filter in `tools.ts`),
+  `gitKey` and `waits` in the announce, `node_list` and `node_propose`.
+- **`GET /api/passkeys` is readable by a node token**: public keys and endorsements only, which the node needs to
+  check a phone's yes. Registering, endorsing and revoking stay refused; the scope list above is corrected.
+- **The git key is `~/.ssh/id_ed25519`**, not `<state>/git/`: setup and the clone on first need share it.
+  `StrictHostKeyChecking=accept-new`: the forge's host key is trusted on first use.
+- **The pairing card lives in Connections › Add a server**: no separate Nodes view.
+- **The console computes the fingerprint from the key it seals to**, never takes the service's word for it
+  (commit bb70f3b); **the web app refuses a server's code** (ffea7c0): it belongs to the console, which seals.
+- **`accounts.db` schema 3** (the `scope` columns, the pairing's key and sealed blob) is refused by an older image:
+  take the brain's backup before deploying it.
+- **A headless node uses its node token only** (review #6). The vault the server receives still holds the owner's
+  brain token (`brain/<account>`, a `machine` scope): nothing on a headless machine reads it. `brainToken()`
+  (`shared/mcp/lib/brain-tasks.ts`) gives the node token there, or nothing; the tasks server, the CLI's
+  `service()`, the doctor, the copies and the launch of a `brain` secret go through it or refuse. `agents
+  brain-login`, `agents node login` and a desktop's `agents node pair` refuse on a headless machine, and `agents
+  node setup` pairs with `--server`. The service refuses a `headless` announce from any token but a `node` one;
+  the doctor's `node.scope` asks `GET /api/nodes` with the node's token (a `node` scope is refused it) and fails
+  when it is answered. Desktops are unchanged. What stays: whoever has the server has the vault and its key, so
+  the owner's brain token is one read away — the trust stated in «Consequences».

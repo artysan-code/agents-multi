@@ -1,6 +1,6 @@
 # 0014 — From the phone: the web app on the service, the orchestrator on a paired machine
 
-- Status: accepted 2026-10-15; G1–G7 built (1.2.1-rc.x), second round built, third round (2026-10-16) in progress
+- Status: accepted 2026-10-15; G1–G7 built (1.2.1-rc.x), second and third rounds built (2026-10-16)
 - Date: 2026-10-15
 - Phase G of [ADR 0009](0009-agents-multi-2.md); changes its point 20
 
@@ -528,3 +528,15 @@ Shared files by name:
 - **`shared/mcp/lib/headless.ts`**: `clone` adds `gitHosts` to the config's type, `runs` adds the machine's `runs`: two
   fields in two places.
 - Every slice adds its invariants to `apps/cli/doctor/`, not to the README, and its tests beside the code.
+
+## As built (third round; 2026-10-16)
+
+- **Stop results ride the runs' publish**: the node sends `{id: "stop:<run>", ok, why?}` as `results` in its next
+  `PUT /api/node/runs`, not in `POST /api/node/answers`.
+- **Resume elsewhere** is `POST /api/runs/<node>/<id>/resume`: the service raises the `resume` job for the run, which
+  the phone accepts with the passkey as any job.
+- **The panel exists only where the `agents` MCP server is**: `_surfaces: ["cli"]`, so Claude Desktop's chat does not
+  get it yet; whether to add `desktop` is open.
+- **Client runs carry an opaque id** in what the node publishes.
+- **`gitHosts`** gets its default in this round (`cleanNodeConfig`, `shared/mcp/lib/headless.ts`).
+- F2's deviations are in [ADR 0013](0013-a-server-node-without-a-terminal.md), «As built (F2)».
