@@ -100,7 +100,7 @@ Deno.test("pair: the machine polls, the person claims, the token comes once and 
       headers: { authorization: `Bearer ${done.token}` },
     }),
   );
-  assertEquals(who, { user: "ann", label: "token:My-Laptop-old-" });
+  assertEquals(who, { user: "ann", label: "token:My-Laptop-old-", scope: "machine" });
   // once only
   assertEquals(await pairings.poll(p.pairing), { state: "expired" });
   assertEquals(auth.personalTokens("bob"), []);

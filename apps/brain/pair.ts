@@ -4,12 +4,18 @@
 // ten minutes, one use); the machine's secret is 32 random bytes only it holds. Both are stored as their SHA-256.
 // The token is made at the poll that hands it over, not at the claim, so it never sits in the database: only the
 // account that claimed is kept until then. Five wrong codes in a row lock an account's claiming for fifteen minutes.
+//
+// A server pairs the same way (ADR 0013, F2), with its X25519 public key in the request: the preview shows the key's
+// fingerprint (the owner compares it with the one in the container's log), the claim may carry the vault key sealed
+// to that key by the owner's console (seal.ts: the service keeps it, opaque, and cannot open it), and the poll hands
+// over a `node` token with the box, once. The box goes with the row: at that poll, or at expiry.
 
 import type { DatabaseSync } from "node:sqlite";
 import type { Auth } from "./auth.ts";
 import type { Users } from "./users.ts";
 import { randomToken, sha256 } from "./crypto.ts";
 import { nodeNameOf } from "../../shared/mcp/lib/nodes.ts";
+import { cleanPublicKey, cleanSealed, keyFingerprint, type Sealed } from "../../shared/mcp/lib/seal.ts";
 
 export const PAIR_TTL_MS = 10 * 60_000;
 export const LOCK_MS = 15 * 60_000;
@@ -45,7 +51,25 @@ export class PairError extends Error {
 export type Polled =
   | { state: "waiting" }
   | { state: "expired" }
-  | { state: "done"; token: string; url: string };
+  | { state: "done"; token: string; url: string; sealed?: Sealed };
+
+/** What the person sees before saying yes: which machine asks, and, for a server, its key's fingerprint, its public
+ *  key and the pairing's id (what the console seals the vault key to; the id is the poll secret's hash, not it). */
+export interface Preview {
+  node: string;
+  platform: string;
+  asked: string;
+  kind?: "server";
+  key?: string;
+  publicKey?: string;
+  id?: string;
+}
+
+/** What the confirming claim may carry: the scope asked for, and the sealed vault key. */
+export interface ClaimOptions {
+  scope?: unknown;
+  sealed?: unknown;
+}
 
 export class Pairings {
   constructor(
@@ -57,11 +81,19 @@ export class Pairings {
   ) {}
 
   /** A pairing for a machine: its code (to show) and its secret (to poll with). */
-  async create(name: unknown, platform: unknown): Promise<{ code: string; pairing: string; expires: string }> {
+  async create(
+    name: unknown,
+    platform: unknown,
+    key?: unknown,
+  ): Promise<{ code: string; pairing: string; expires: string }> {
     const clean = (v: unknown, n: number) =>
       typeof v === "string" ? v.replace(/[^\x20-\x7e]/g, "").trim().slice(0, n) : "";
     const label = clean(name, 60);
     if (!label) throw new PairError("name is the machine's name");
+    const pub = key === undefined || key === null ? null : cleanPublicKey(key);
+    if (key !== undefined && key !== null && !pub) {
+      throw new PairError("key is a server's X25519 public key, base64url");
+    }
     const now = this.now();
     this.db.prepare("delete from pairings where expires < ?").run(now);
     if ((this.db.prepare("select count(*) n from pairings").get() as { n: number }).n >= MAX_OPEN) {
@@ -73,13 +105,8 @@ export class Pairings {
       const hash = await sha256(code);
       if (this.db.prepare("select 1 from pairings where code = ?").get(hash)) continue;
       const expires = now + PAIR_TTL_MS;
-      this.db.prepare("insert into pairings (code, secret, name, platform, expires) values (?, ?, ?, ?, ?)").run(
-        hash,
-        await sha256(pairing),
-        label,
-        clean(platform, 20),
-        expires,
-      );
+      this.db.prepare("insert into pairings (code, secret, name, platform, expires, key) values (?, ?, ?, ?, ?, ?)")
+        .run(hash, await sha256(pairing), label, clean(platform, 20), expires, pub);
       return { code: showCode(code), pairing, expires: new Date(expires).toISOString() };
     }
     throw new PairError("no free code: try again", 503);
@@ -88,8 +115,17 @@ export class Pairings {
   /** What the machine learns by polling: waiting, or (once) its token. */
   async poll(pairing: string): Promise<Polled> {
     const hash = await sha256(pairing);
-    const row = this.db.prepare("select name, expires, user from pairings where secret = ?").get(hash) as
-      | { name: string; expires: number; user: string | null }
+    const row = this.db.prepare("select name, expires, user, key, sealed, scope from pairings where secret = ?").get(
+      hash,
+    ) as
+      | {
+        name: string;
+        expires: number;
+        user: string | null;
+        key: string | null;
+        sealed: string | null;
+        scope: string | null;
+      }
       | undefined;
     if (!row || row.expires < this.now()) return { state: "expired" };
     if (!row.user) return { state: "waiting" };
@@ -99,7 +135,11 @@ export class Pairings {
     }
     const u = this.users.get(row.user);
     if (!u || u.disabled) return { state: "expired" };
-    return { state: "done", token: await this.auth.createPersonal(row.user, nodeNameOf(row.name)), url: this.url };
+    // a server's pairing makes a node token, whatever the claim said; a desktop's a machine token, as before F2
+    const scope = row.key ? "node" : "machine";
+    const token = await this.auth.createPersonal(row.user, nodeNameOf(row.name), scope);
+    const sealed = row.sealed ? cleanSealed(JSON.parse(row.sealed)) : null;
+    return { state: "done", token, url: this.url, ...(sealed ? { sealed } : {}) };
   }
 
   /** Whether an account's claiming is locked: five wrong codes in the last fifteen minutes. */
@@ -117,12 +157,15 @@ export class Pairings {
     user: string,
     typed: unknown,
     confirm = false,
-  ): Promise<{ node: string } | { preview: { node: string; platform: string; asked: string } }> {
+    opts: ClaimOptions = {},
+  ): Promise<{ node: string; kind?: "server" } | { preview: Preview }> {
     if (this.locked(user)) throw new PairError("too many wrong codes: try again in a quarter of an hour", 429);
     const code = normalCode(typed);
     const row = code
-      ? this.db.prepare("select name, platform, expires, user from pairings where code = ?").get(await sha256(code)) as
-        | { name: string; platform: string; expires: number; user: string | null }
+      ? this.db.prepare("select name, platform, expires, user, key, secret from pairings where code = ?").get(
+        await sha256(code),
+      ) as
+        | { name: string; platform: string; expires: number; user: string | null; key: string | null; secret: string }
         | undefined
       : undefined;
     if (!code || !row || row.expires < this.now() || row.user) {
@@ -131,10 +174,30 @@ export class Pairings {
     }
     if (!confirm) {
       const asked = new Date(row.expires - PAIR_TTL_MS).toISOString();
-      return { preview: { node: nodeNameOf(row.name), platform: row.platform, asked } };
+      const server = row.key
+        ? { kind: "server" as const, key: await keyFingerprint(row.key), publicKey: row.key, id: row.secret }
+        : {};
+      return { preview: { node: nodeNameOf(row.name), platform: row.platform, asked, ...server } };
     }
-    this.db.prepare("update pairings set user = ? where code = ?").run(user, await sha256(code));
+    // a server's pairing is a node's, never more; a desktop's carries no sealed key and asks for no other scope
+    const scope = opts.scope ?? (row.key ? "node" : "machine");
+    if (scope !== (row.key ? "node" : "machine")) {
+      throw new PairError(row.key ? "a server pairs with scope node" : "a desktop pairs with scope machine");
+    }
+    let sealed: string | null = null;
+    if (opts.sealed !== undefined && opts.sealed !== null) {
+      if (!row.key) throw new PairError("only a server's pairing carries a sealed vault key");
+      const box = cleanSealed(opts.sealed);
+      if (!box) throw new PairError("sealed is not a sealed vault key");
+      sealed = JSON.stringify(box);
+    }
+    this.db.prepare("update pairings set user = ?, sealed = ?, scope = ? where code = ?").run(
+      user,
+      sealed,
+      scope as string,
+      await sha256(code),
+    );
     this.db.prepare("delete from pair_failures where user = ?").run(user);
-    return { node: nodeNameOf(row.name) };
+    return { node: nodeNameOf(row.name), ...(row.key ? { kind: "server" as const } : {}) };
   }
 }

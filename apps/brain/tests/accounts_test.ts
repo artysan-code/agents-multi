@@ -117,8 +117,8 @@ Deno.test("tokens: each belongs to its account; one account cannot revoke anothe
   await ready(users, "ann");
   await ready(users, "bob");
   const ta = await auth.createPersonal("ann", "fisso"), tb = await auth.createPersonal("bob", "portatile");
-  assertEquals(await auth.caller(bearer(ta)), { user: "ann", label: "token:fisso" });
-  assertEquals(await auth.caller(bearer(tb)), { user: "bob", label: "token:portatile" });
+  assertEquals(await auth.caller(bearer(ta)), { user: "ann", label: "token:fisso", scope: "machine" });
+  assertEquals(await auth.caller(bearer(tb)), { user: "bob", label: "token:portatile", scope: "machine" });
   assertEquals(auth.personalTokens("ann").map((t) => t.name), ["fisso"]);
   auth.revoke("bob", await sha256(ta)); // bob names ann's token: nothing happens
   assertEquals((await auth.caller(bearer(ta)))?.user, "ann");
@@ -159,7 +159,11 @@ Deno.test("OAuth: the code carries the account that signed in to the tokens", as
     }),
   );
   const tok = r.json as { access_token: string; refresh_token: string };
-  assertEquals(await auth.caller(bearer(tok.access_token)), { user: "ann", label: "claude:Claude Code" });
+  assertEquals(await auth.caller(bearer(tok.access_token)), {
+    user: "ann",
+    label: "claude:Claude Code",
+    scope: "brain",
+  });
   assertEquals(auth.connections("ann").length, 1);
   assertEquals(auth.connections("bob").length, 0);
   users.setDisabled("ann", true);
@@ -210,7 +214,7 @@ Deno.test("adopt: the live tokens of a one-person brain become the first account
     await sha256(gone),
   );
   assertEquals(auth.adopt(old, "alice"), 1);
-  assertEquals(await auth.caller(bearer(live)), { user: "alice", label: "token:fisso" });
+  assertEquals(await auth.caller(bearer(live)), { user: "alice", label: "token:fisso", scope: "machine" });
   assertEquals(await auth.caller(bearer(gone)), null);
   assertEquals(auth.client("c1")?.name, "Claude");
 });
@@ -279,7 +283,11 @@ Deno.test("OAuth scope machine: a personal token named after the client and the 
   const tok = r.json as { access_token: string; refresh_token?: string; backup_key: string; account: string };
   assertEquals([r.status, tok.account, tok.refresh_token], [200, "ann", undefined]);
   assertEquals(tok.backup_key, await users.backupKey("ann"));
-  assertEquals(await auth.caller(bearer(tok.access_token)), { user: "ann", label: "token:claude-multi su fisso" });
+  assertEquals(await auth.caller(bearer(tok.access_token)), {
+    user: "ann",
+    label: "token:claude-multi su fisso",
+    scope: "machine",
+  });
   assertEquals(auth.personalTokens("ann").map((t) => t.name), ["claude-multi su fisso"]);
   // Claude's own callback never gets a token that does not expire
   const claude = auth.register({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }).json as {

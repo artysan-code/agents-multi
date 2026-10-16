@@ -60,6 +60,22 @@ export function instructions(store: Store, o: Owner = owner()): string {
   return `${rules}\n\nWho ${who} is (from ${a.self}/, read the pages for more):\n${portrait}`;
 }
 
+/** The scopes that see the whole brain (auth.ts `Scope`); any other — a server node's, or one this version does not
+ *  know — gets the narrow view below. */
+const WHOLE = ["brain", "machine", "web"];
+/** Pure: whether a caller of this scope gets the narrow view: a `node` token (ADR 0013, F2), fail-closed. */
+export const narrowScope = (scope: string | undefined): boolean => scope !== undefined && !WHOLE.includes(scope);
+/** Pure: the areas a server node may read: the projects and the notes, never who the owner is or whom they know. */
+export const nodeAreas = (a: ReturnType<typeof areasOf>): string[] => [a.projects, a.notes];
+
+/** What a server node's Claude is told: what it may reach, nothing of io/. */
+export function nodeInstructions(store: Store): string {
+  const a = areasOf(store);
+  return `A server node's view of the owner's brain: search, list and read the pages in ${a.projects}/ and ${a.notes}/, ` +
+    `add one line to today's diary (brain_append, linking the project), and use the tasks. The rest of the brain is not ` +
+    "reachable from here, and pages are changed from the owner's own machines.";
+}
+
 const text = (o: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(o, null, 2) }] });
 const READ = { readOnlyHint: true, openWorldHint: false };
 const CHANGE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
@@ -163,10 +179,20 @@ export async function search(ctx: ToolContext, query: string, limit = 10, tasks 
   return { results, ...(note ? { note } : {}) };
 }
 
-export function brainServer(ctx: ToolContext): McpServer {
-  const server = new McpServer({ name: "brain", version: "0.2.0" }, { instructions: instructions(ctx.store) });
+/** The brain's tools for a caller of `scope` (auth.ts). A server node's token gets search, list and read in the
+ *  projects and the notes, the diary line and the tasks; nothing that writes a page, moves or deletes one, or reads
+ *  io/, clients, people or the inbox (ADR 0013, F2). */
+export function brainServer(ctx: ToolContext, scope?: string): McpServer {
+  const narrow = narrowScope(scope);
+  const server = new McpServer({ name: "brain", version: "0.2.0" }, {
+    instructions: narrow ? nodeInstructions(ctx.store) : instructions(ctx.store),
+  });
   const { store } = ctx;
   const a = areasOf(store);
+  /** For the narrow view: a page it may read (its area is a project's or a note's). */
+  const readable = (path: string) => !narrow || nodeAreas(a).includes(areaOf(path));
+  const outOfReach = (path: string) =>
+    new Error(`${path} is out of reach from a server node: only ${nodeAreas(a).join("/ and ")}/`);
   /** A write the rules refuse comes back as the reasons, for the writer to fix. */
   const refuse = (errors: string[], extra: Record<string, unknown> = {}) => text({ refused: true, errors, ...extra });
 
@@ -182,8 +208,13 @@ export function brainServer(ctx: ToolContext): McpServer {
       },
       annotations: READ,
     },
-    async ({ query, limit, include_tasks }: { query: string; limit?: number; include_tasks?: boolean }) =>
-      text(await search(ctx, query, limit, include_tasks)),
+    async ({ query, limit, include_tasks }: { query: string; limit?: number; include_tasks?: boolean }) => {
+      const r = await search(ctx, query, narrow ? 50 : limit, include_tasks);
+      if (!narrow) return text(r);
+      // the narrow view: only what it may read, and the tasks it may use anyway
+      const results = r.results.filter((x) => readable(x.path) || x.path.startsWith("tasks/")).slice(0, limit ?? 10);
+      return text({ ...r, results });
+    },
   );
 
   server.registerTool("brain_read", {
@@ -193,13 +224,18 @@ export function brainServer(ctx: ToolContext): McpServer {
     annotations: READ,
   }, ({ path, rev }: { path: string; rev?: number }) => {
     if (rev) {
+      if (!readable(path)) throw outOfReach(path);
       const r = store.revision(path, rev);
       if (!r) throw new Error(`no version ${rev} of ${path}`);
       return text(r);
     }
     const d = store.get(path) ?? (store.resolve(path) ? store.get(store.resolve(path)!) : null);
+    // what it would read, not what it asked for: a short name resolves to a page anywhere
+    if (d && !readable(d.path)) throw outOfReach(d.path);
     if (!d) throw new Error(`no document ${path}: search for it with brain_search, or list a folder with brain_list`);
-    return text({ ...d, links: store.links(d.path) });
+    const links = store.links(d.path);
+    // the pages that link here, only those it may read (the links out are in the body already)
+    return text({ ...d, links: narrow ? { ...links, back: links.back.filter(readable) } : links });
   });
 
   server.registerTool("brain_list", {
@@ -209,96 +245,117 @@ export function brainServer(ctx: ToolContext): McpServer {
     annotations: READ,
   }, ({ folder, limit }: { folder?: string; limit?: number }) => {
     const prefix = folder ? folder.replace(/^\/+|\/+$/g, "") + "/" : "";
+    if (narrow && !prefix) {
+      // everything it may read: the projects and the notes, newest first
+      const documents = nodeAreas(a).flatMap((x) => store.list(`${x}/`, { limit: limit ?? 200 }))
+        .sort((x, y) => String(y.updated).localeCompare(String(x.updated))).slice(0, limit ?? 200);
+      return text({ folder: "/", documents });
+    }
+    if (!readable(`${prefix}x.md`)) throw outOfReach(prefix);
     return text({ folder: prefix || "/", documents: store.list(prefix, { limit: limit ?? 200 }) });
   });
 
-  server.registerTool("brain_write", {
-    description:
-      "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the seven areas. " +
-      "To replace, read it first and pass its rev as base_rev. The rules are checked: a refusal lists what to fix. The previous version is kept (brain_history). " +
-      "Diary and inbox are added to with brain_append. A diary page may be replaced only to tidy it: every timed line kept, at its time and in its order.",
-    inputSchema: {
-      path: z.string().describe(
-        `${a.all.join("|")}/name.md (${a.projects}/ follows the folder: ${a.projects}/work/acme/site.md)`,
-      ),
-      body: z.string().describe(
-        "the whole Markdown: '# Title', one sentence saying what it is, then the content with [[links]]",
-      ),
-      base_rev: z.number().int().min(0).optional().describe("the rev you read; 0 to create only if it does not exist"),
-      distinct: z.boolean().optional().describe(
-        "true when a page with a similar title exists and this really is another subject",
-      ),
-    },
-    annotations: CHANGE,
-  }, ({ path, body, base_rev, distinct }: { path: string; body: string; base_rev?: number; distinct?: boolean }) => {
-    const p = slugPath(path);
-    const cur = store.get(p);
-    if (cur && areaOf(p) === a.inbox) return refuse([`${p} is only added to: use brain_append`]);
-    if (cur && areaOf(p) === a.diary) {
-      const e = diaryRewriteErrors(cur.body, body);
-      if (e.length) return refuse(e);
-    }
-    const v = check(store, p, body, { creating: !cur, distinct });
-    if (!v.ok) return refuse(v.errors, v.similar ? { similar: v.similar } : {});
-    const d = store.write(p, body, ctx.by(), base_rev);
-    ctx.changed();
-    return text({ written: d.path, rev: d.rev, title: d.title });
-  });
+  if (!narrow) {
+    server.registerTool("brain_write", {
+      description:
+        "Create a page, or replace one whole. The path is normalised (lower case, no accents) and must be in one of the seven areas. " +
+        "To replace, read it first and pass its rev as base_rev. The rules are checked: a refusal lists what to fix. The previous version is kept (brain_history). " +
+        "Diary and inbox are added to with brain_append. A diary page may be replaced only to tidy it: every timed line kept, at its time and in its order.",
+      inputSchema: {
+        path: z.string().describe(
+          `${a.all.join("|")}/name.md (${a.projects}/ follows the folder: ${a.projects}/work/acme/site.md)`,
+        ),
+        body: z.string().describe(
+          "the whole Markdown: '# Title', one sentence saying what it is, then the content with [[links]]",
+        ),
+        base_rev: z.number().int().min(0).optional().describe(
+          "the rev you read; 0 to create only if it does not exist",
+        ),
+        distinct: z.boolean().optional().describe(
+          "true when a page with a similar title exists and this really is another subject",
+        ),
+      },
+      annotations: CHANGE,
+    }, ({ path, body, base_rev, distinct }: { path: string; body: string; base_rev?: number; distinct?: boolean }) => {
+      const p = slugPath(path);
+      const cur = store.get(p);
+      if (cur && areaOf(p) === a.inbox) return refuse([`${p} is only added to: use brain_append`]);
+      if (cur && areaOf(p) === a.diary) {
+        const e = diaryRewriteErrors(cur.body, body);
+        if (e.length) return refuse(e);
+      }
+      const v = check(store, p, body, { creating: !cur, distinct });
+      if (!v.ok) return refuse(v.errors, v.similar ? { similar: v.similar } : {});
+      const d = store.write(p, body, ctx.by(), base_rev);
+      ctx.changed();
+      return text({ written: d.path, rev: d.rev, title: d.title });
+    });
+  }
 
-  server.registerTool("brain_edit", {
-    description:
-      "Change part of a document: replace one exact passage with another (it must occur exactly once). Cheaper and safer than rewriting the whole document.",
-    inputSchema: {
-      path: z.string(),
-      find: z.string().min(1),
-      replace: z.string(),
-      base_rev: z.number().int().min(1).optional(),
-    },
-    annotations: CHANGE,
-  }, ({ path, find, replace, base_rev }: { path: string; find: string; replace: string; base_rev?: number }) => {
-    const d = store.get(path) ?? store.get(slugPath(path));
-    if (!d) throw new Error(`no document ${path}`);
-    if (logs(a).includes(areaOf(d.path))) return refuse([`${d.path} is only added to: use brain_append`]);
-    const n = d.body.split(find).length - 1;
-    if (n !== 1) {
-      throw new Error(
-        n ? `the passage occurs ${n} times: include more context` : "the passage is not in the document: read it again",
-      );
-    }
-    const next = d.body.replace(find, () => replace);
-    const v = check(store, d.path, next, { creating: false });
-    if (!v.ok) return refuse(v.errors);
-    const w = store.write(d.path, next, ctx.by(), base_rev ?? d.rev);
-    ctx.changed();
-    return text({ edited: w.path, rev: w.rev });
-  });
+  if (!narrow) {
+    server.registerTool("brain_edit", {
+      description:
+        "Change part of a document: replace one exact passage with another (it must occur exactly once). Cheaper and safer than rewriting the whole document.",
+      inputSchema: {
+        path: z.string(),
+        find: z.string().min(1),
+        replace: z.string(),
+        base_rev: z.number().int().min(1).optional(),
+      },
+      annotations: CHANGE,
+    }, ({ path, find, replace, base_rev }: { path: string; find: string; replace: string; base_rev?: number }) => {
+      const d = store.get(path) ?? store.get(slugPath(path));
+      if (!d) throw new Error(`no document ${path}`);
+      if (logs(a).includes(areaOf(d.path))) return refuse([`${d.path} is only added to: use brain_append`]);
+      const n = d.body.split(find).length - 1;
+      if (n !== 1) {
+        throw new Error(
+          n
+            ? `the passage occurs ${n} times: include more context`
+            : "the passage is not in the document: read it again",
+        );
+      }
+      const next = d.body.replace(find, () => replace);
+      const v = check(store, d.path, next, { creating: false });
+      if (!v.ok) return refuse(v.errors);
+      const w = store.write(d.path, next, ctx.by(), base_rev ?? d.rev);
+      ctx.changed();
+      return text({ edited: w.path, rev: w.rev });
+    });
+  }
 
-  server.registerTool("brain_delete", {
-    description: "Remove a document from the brain. Its history stays, and brain_restore brings it back.",
-    inputSchema: { path: z.string() },
-    annotations: { ...CHANGE, destructiveHint: true },
-  }, ({ path }: { path: string }) => {
-    store.remove(path, ctx.by());
-    ctx.changed();
-    return text({ removed: path });
-  });
+  if (!narrow) {
+    server.registerTool("brain_delete", {
+      description: "Remove a document from the brain. Its history stays, and brain_restore brings it back.",
+      inputSchema: { path: z.string() },
+      annotations: { ...CHANGE, destructiveHint: true },
+    }, ({ path }: { path: string }) => {
+      store.remove(path, ctx.by());
+      ctx.changed();
+      return text({ removed: path });
+    });
+  }
 
-  server.registerTool("brain_history", {
-    description:
-      "The versions of a document: revision, when, by whom (the owner, or Claude from which client), and what happened.",
-    inputSchema: { path: z.string() },
-    annotations: READ,
-  }, ({ path }: { path: string }) => text({ path, versions: store.history(path) }));
+  if (!narrow) {
+    server.registerTool("brain_history", {
+      description:
+        "The versions of a document: revision, when, by whom (the owner, or Claude from which client), and what happened.",
+      inputSchema: { path: z.string() },
+      annotations: READ,
+    }, ({ path }: { path: string }) => text({ path, versions: store.history(path) }));
+  }
 
-  server.registerTool("brain_restore", {
-    description: "Put an earlier version of a document back (as a new version on top: nothing is lost).",
-    inputSchema: { path: z.string(), rev: z.number().int().min(1) },
-    annotations: CHANGE,
-  }, ({ path, rev }: { path: string; rev: number }) => {
-    const d = store.restore(path, rev, ctx.by());
-    ctx.changed();
-    return text({ restored: d.path, from: rev, rev: d.rev });
-  });
+  if (!narrow) {
+    server.registerTool("brain_restore", {
+      description: "Put an earlier version of a document back (as a new version on top: nothing is lost).",
+      inputSchema: { path: z.string(), rev: z.number().int().min(1) },
+      annotations: CHANGE,
+    }, ({ path, rev }: { path: string; rev: number }) => {
+      const d = store.restore(path, rev, ctx.by());
+      ctx.changed();
+      return text({ restored: d.path, from: rev, rev: d.rev });
+    });
+  }
 
   server.registerTool("brain_append", {
     description:
@@ -311,6 +368,7 @@ export function brainServer(ctx: ToolContext): McpServer {
     },
     annotations: CHANGE,
   }, ({ where, text: line }: { where?: "diary" | "diario" | "inbox"; text: string }) => {
+    if (narrow && where === "inbox") throw outOfReach(`${a.inbox}/`);
     const now = new Date(), day = dayOf(now);
     if (where !== "inbox") {
       const e = entryErrors(line);
@@ -344,55 +402,61 @@ export function brainServer(ctx: ToolContext): McpServer {
     return text({ added: d.path, rev: d.rev, ...(where === "inbox" ? {} : staleProjects(store, body, line, now)) });
   });
 
-  server.registerTool("brain_inbox_clear", {
-    description:
-      "Take lines out of the inbox once they have found their place in a page (give the exact lines, or a part that identifies each).",
-    inputSchema: { lines: z.array(z.string().min(3)).min(1) },
-    annotations: CHANGE,
-  }, ({ lines }: { lines: string[] }) => {
-    const cur = store.get(`${a.inbox}/inbox.md`);
-    if (!cur) throw new Error("the inbox is empty");
-    const kept = cur.body.split("\n").filter((l) => !(l.startsWith("- ") && lines.some((x) => l.includes(x.trim()))));
-    const removed = cur.body.split("\n").length - kept.length;
-    if (!removed) throw new Error("none of those lines is in the inbox: read it again");
-    const d = store.write(cur.path, kept.join("\n"), ctx.by(), cur.rev);
-    ctx.changed();
-    return text({ removed, rev: d.rev });
-  });
+  if (!narrow) {
+    server.registerTool("brain_inbox_clear", {
+      description:
+        "Take lines out of the inbox once they have found their place in a page (give the exact lines, or a part that identifies each).",
+      inputSchema: { lines: z.array(z.string().min(3)).min(1) },
+      annotations: CHANGE,
+    }, ({ lines }: { lines: string[] }) => {
+      const cur = store.get(`${a.inbox}/inbox.md`);
+      if (!cur) throw new Error("the inbox is empty");
+      const kept = cur.body.split("\n").filter((l) => !(l.startsWith("- ") && lines.some((x) => l.includes(x.trim()))));
+      const removed = cur.body.split("\n").length - kept.length;
+      if (!removed) throw new Error("none of those lines is in the inbox: read it again");
+      const d = store.write(cur.path, kept.join("\n"), ctx.by(), cur.rev);
+      ctx.changed();
+      return text({ removed, rev: d.rev });
+    });
+  }
 
-  server.registerTool("brain_move", {
-    description:
-      "Move or rename a page; every link that pointed at it is updated to the new path (each changed page gets a new version).",
-    inputSchema: { from: z.string(), to: z.string() },
-    annotations: CHANGE,
-  }, ({ from, to }: { from: string; to: string }) => {
-    const d = store.get(from) ?? store.get(slugPath(from));
-    if (!d) throw new Error(`no document ${from}`);
-    const dest = slugPath(to);
-    if (store.get(dest)) throw new Error(`${dest} exists already`);
-    const v = check(store, dest, d.body, { creating: false });
-    if (!v.ok) return refuse(v.errors);
-    // the pages that link here, found before the move while their links still resolve to the old path
-    const back = store.links(d.path).back;
-    const resolveOld = store.resolver();
-    const rewritten = back.map((src) => ({ src, body: relink(store.get(src)!.body, d.path, dest, resolveOld) }));
-    store.write(dest, d.body, ctx.by());
-    store.remove(d.path, ctx.by());
-    for (const r of rewritten) {
-      const cur = store.get(r.src === d.path ? dest : r.src);
-      if (cur && cur.body !== r.body) store.write(cur.path, r.body, ctx.by(), cur.rev);
-    }
-    ctx.changed();
-    return text({ moved: d.path, to: dest, links_updated: rewritten.map((r) => r.src) });
-  });
+  if (!narrow) {
+    server.registerTool("brain_move", {
+      description:
+        "Move or rename a page; every link that pointed at it is updated to the new path (each changed page gets a new version).",
+      inputSchema: { from: z.string(), to: z.string() },
+      annotations: CHANGE,
+    }, ({ from, to }: { from: string; to: string }) => {
+      const d = store.get(from) ?? store.get(slugPath(from));
+      if (!d) throw new Error(`no document ${from}`);
+      const dest = slugPath(to);
+      if (store.get(dest)) throw new Error(`${dest} exists already`);
+      const v = check(store, dest, d.body, { creating: false });
+      if (!v.ok) return refuse(v.errors);
+      // the pages that link here, found before the move while their links still resolve to the old path
+      const back = store.links(d.path).back;
+      const resolveOld = store.resolver();
+      const rewritten = back.map((src) => ({ src, body: relink(store.get(src)!.body, d.path, dest, resolveOld) }));
+      store.write(dest, d.body, ctx.by());
+      store.remove(d.path, ctx.by());
+      for (const r of rewritten) {
+        const cur = store.get(r.src === d.path ? dest : r.src);
+        if (cur && cur.body !== r.body) store.write(cur.path, r.body, ctx.by(), cur.rev);
+      }
+      ctx.changed();
+      return text({ moved: d.path, to: dest, links_updated: rewritten.map((r) => r.src) });
+    });
+  }
 
-  server.registerTool("brain_check", {
-    description:
-      "The brain's health against its rules: pages nothing links to, links to pages that do not exist, pages over the length limit, " +
-      "inbox lines older than a week. Run it now and then and fix what it finds.",
-    inputSchema: {},
-    annotations: READ,
-  }, () => text(health(store)));
+  if (!narrow) {
+    server.registerTool("brain_check", {
+      description:
+        "The brain's health against its rules: pages nothing links to, links to pages that do not exist, pages over the length limit, " +
+        "inbox lines older than a week. Run it now and then and fix what it finds.",
+      inputSchema: {},
+      annotations: READ,
+    }, () => text(health(store)));
+  }
 
   registerTaskTools(server);
   return server;
