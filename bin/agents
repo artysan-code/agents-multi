@@ -27,5 +27,11 @@ except (OSError, ValueError):
 print(",".join(sorted({urllib.parse.urlparse(a["url"]).netloc for a in accounts if a.get("service") == "brain" and a.get("url")})))
 PY
 )
+# A server not yet configured pairs with the service named in its environment (ADR 0013, F2): its host too.
+SERVICE_HOST="${AGENTS_MULTI_SERVICE_URL:-}"
+SERVICE_HOST="${SERVICE_HOST#*://}"
+SERVICE_HOST="${SERVICE_HOST%%/*}"
+[[ "$SERVICE_HOST" =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || SERVICE_HOST=""
+BRAIN_HOSTS="${BRAIN_HOSTS}${SERVICE_HOST:+${BRAIN_HOSTS:+,}$SERVICE_HOST}"
 exec "$DENO" run --quiet --allow-read --allow-write --allow-run --allow-env --allow-sys=hostname,loadavg,systemMemoryInfo --allow-net=127.0.0.1,oauth2.googleapis.com,www.googleapis.com,api.anthropic.com${BRAIN_HOSTS:+,$BRAIN_HOSTS},"unix:${AGENTS_MULTI_APP_SOCKET:-${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agents-multi}/agents-multi-app.sock}" \
   "$REPO/apps/cli/main.ts" "$@"

@@ -1,0 +1,56 @@
+// servers.ts — Connections › Add a server (ADR 0013, F2): a server node paired from the code in its log.
+
+export const en = {
+  "srv.title": "Add a server",
+  "srv.how":
+    "A server node with no configuration shows a code and a fingerprint in its log. Type the code here: the vault key goes to it sealed, so that only that server opens it.",
+  "srv.code": "The code in the server's log",
+  "srv.check": "Check the code",
+  "srv.badcode": "A code is eight letters and digits, like ABCD-2345.",
+  "srv.asks": "{node} ({platform}) asks to pair, at {asked}.",
+  "srv.compare": "Compare this fingerprint with the one in the server's log:",
+  "srv.match": "They match: pair it",
+  "srv.nomatch": "They differ: stop",
+  "srv.stopped": "Nothing was sent. A fingerprint that differs means someone else's key: do not pair.",
+  "srv.paired": "{node} is paired as a server node.",
+  "srv.paired.vault": "The vault key went to it sealed.",
+  "srv.paired.novault": "No vault key was sent: it asks for the recovery code.",
+  "srv.state.unseen": "Not seen yet: it announces itself once the configuration reaches it by Syncthing and its setup runs.",
+  "srv.state.offline": "Offline: last seen {seen}.",
+  "srv.state.waiting": "Online, still waiting for:",
+  "srv.state.ready": "Online and ready for work.",
+  "srv.state.sandbox": "its sandbox does not work yet",
+  "srv.gitkey": "Its git key: add it to the forge (a deploy key, or your user's).",
+  "srv.copy": "Copy",
+  "srv.copied": "Copied",
+  "srv.recheck": "Check again",
+  "srv.another": "Add another",
+};
+
+export const it: Record<keyof typeof en, string> = {
+  "srv.title": "Aggiungi un server",
+  "srv.how":
+    "Un nodo server senza configurazione mostra un codice e un'impronta nel suo log. Scrivi qui il codice: la chiave del vault gli arriva sigillata, così la apre solo quel server.",
+  "srv.code": "Il codice nel log del server",
+  "srv.check": "Controlla il codice",
+  "srv.badcode": "Un codice è di otto lettere e cifre, come ABCD-2345.",
+  "srv.asks": "{node} ({platform}) chiede di collegarsi, alle {asked}.",
+  "srv.compare": "Confronta questa impronta con quella nel log del server:",
+  "srv.match": "Coincidono: collegalo",
+  "srv.nomatch": "Sono diverse: fermati",
+  "srv.stopped": "Non è stato inviato nulla. Un'impronta diversa è la chiave di qualcun altro: non collegarlo.",
+  "srv.paired": "{node} è collegato come nodo server.",
+  "srv.paired.vault": "La chiave del vault gli è arrivata sigillata.",
+  "srv.paired.novault": "Nessuna chiave del vault inviata: chiede il codice di recupero.",
+  "srv.state.unseen":
+    "Non ancora visto: si annuncia quando la configurazione gli arriva da Syncthing e il suo setup va avanti.",
+  "srv.state.offline": "Offline: visto l'ultima volta {seen}.",
+  "srv.state.waiting": "Online, aspetta ancora:",
+  "srv.state.ready": "Online e pronto a lavorare.",
+  "srv.state.sandbox": "la sua sandbox non funziona ancora",
+  "srv.gitkey": "La sua chiave git: aggiungila alla forge (deploy key, o quella del tuo utente).",
+  "srv.copy": "Copia",
+  "srv.copied": "Copiata",
+  "srv.recheck": "Controlla di nuovo",
+  "srv.another": "Aggiungine un altro",
+};

@@ -50,6 +50,7 @@ import { superviseGateway } from "./gateway.ts";
 import { installation } from "../lib/mode.ts";
 import { lstat } from "../lib/fs.ts";
 import { setupRoutes } from "./setup.ts";
+import { serverRoutes } from "./servers.ts";
 import type { Route } from "./http.ts";
 import { live, refresh as refreshLimits } from "../live.ts";
 import { limitsNow } from "../limits.ts";
@@ -338,6 +339,8 @@ export function routes(code: string, status: StatusCache, app?: AppLink): Record
     },
     // the first-run wizard: where a new person's setup is, and its steps (setup.ts)
     ...setupRoutes(status),
+    // Connections › Add a server: a server node paired from its code (servers.ts, ADR 0013 F2)
+    ...serverRoutes(),
     // the desktop app's own updates, relayed to and from the app (app-update.ts)
     ...(app ? { "/api/app/update": appUpdateRoute(app) } : {}),
   };

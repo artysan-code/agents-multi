@@ -101,6 +101,8 @@ const USAGE = `agents nodes                                   the machines (onli
 agents nodes accept <job> [--node N]             sign a proposal here and send it: that node may run it for 24 h
 agents nodes decline <job> [reason…]             no: the job is closed
 agents nodes propose <routine> [--node N]        run a routine of this machine on another node now (a proposal)
+agents nodes propose --run <id> [--node N]       resume a run a node dropped, from its last checkpoint (a proposal)
+  --json on list and propose: the answer as JSON (the coordinator's node tools read it); --why <text> says why
 agents nodes forget <name>                       forget a machine: its row, what waits on it, its tokens (it must pair again)`;
 
 async function git(dir: string, ...args: string[]): Promise<string> {
@@ -134,13 +136,37 @@ export async function nodesCommand(args: string[]): Promise<number> {
   try {
     if (!sub || sub === "list") {
       const f = await fleet(s);
+      if (rest.includes("--json")) {
+        console.log(JSON.stringify(f));
+        return 0;
+      }
       const at = Date.parse(f.now) || now;
       console.log(nodeLines(f.nodes, at).join("\n"));
       const jobs = jobsToShow(f.jobs);
       if (jobs.length) console.log(`\njobs\n${jobs.map((j) => jobLine(j, at)).join("\n")}`);
       return 0;
     }
-    const id = rest.find((a) => !a.startsWith("--") && a !== flag(rest, "--node"));
+    const asJson = rest.includes("--json");
+    if (sub === "propose" && flag(rest, "--run")) {
+      // resume a run (ADR 0013, F2): the last job that ran it gives the spec; the owner's yes still decides
+      const run = flag(rest, "--run")!;
+      const f = await fleet(s);
+      const last = f.jobs.filter((j) => j.spec.id === run).sort((a, b) => b.updated.localeCompare(a.updated))[0];
+      if (!last) {
+        console.error(`agents nodes: no job ran ${run} (agents nodes shows the jobs)`);
+        return 1;
+      }
+      const node = flag(rest, "--node");
+      const j = await newJob(s, {
+        kind: "resume",
+        spec: { ...last.spec, from: last.node },
+        ...(node ? { node } : {}),
+        reason: flag(rest, "--why") ?? `resume ${run}, proposed from this machine`,
+      });
+      console.log(asJson ? JSON.stringify({ job: j }) : `${j.id}: proposed${j.node ? ` for ${j.node}` : ""}`);
+      return 0;
+    }
+    const id = rest.find((a) => !a.startsWith("--") && a !== flag(rest, "--node") && a !== flag(rest, "--why"));
     if (!id) {
       console.log(USAGE);
       return 2;
@@ -203,9 +229,10 @@ export async function nodesCommand(args: string[]): Promise<number> {
       kind: "routine",
       spec: routineSpec(r, top, remote),
       ...(node ? { node } : {}),
-      reason: "proposed from this machine (agents nodes propose)",
+      reason: flag(rest, "--why") ?? "proposed from this machine (agents nodes propose)",
     });
-    console.log(`${j.id}: proposed${j.node ? ` for ${j.node}` : ""}; agents nodes accept ${j.id} signs it`);
+    if (asJson) console.log(JSON.stringify({ job: j }));
+    else console.log(`${j.id}: proposed${j.node ? ` for ${j.node}` : ""}; agents nodes accept ${j.id} signs it`);
     return 0;
   } catch (e) {
     const m = (e as Error).message;

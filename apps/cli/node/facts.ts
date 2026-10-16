@@ -15,8 +15,8 @@ import { listChildren } from "../../../shared/mcp/lib/agents.ts";
 import { listAccounts } from "../../../shared/mcp/lib/providers.ts";
 import { loadKey } from "../../../shared/mcp/lib/vault.ts";
 import { platformOf } from "../../../shared/mcp/lib/platform.ts";
-import { CONFIG, RUNTIME } from "../lib/paths.ts";
-import { lstat } from "../lib/fs.ts";
+import { CONFIG, RUNTIME, STATE } from "../lib/paths.ts";
+import { lstat, readJson } from "../lib/fs.ts";
 import manifest from "../../../deno.json" with { type: "json" };
 
 /** This node's name: node.json's, else the one its machine token carries (`agents-multi su <hostname>`). */
@@ -92,6 +92,20 @@ export async function running(): Promise<number> {
   return (await listChildren()).filter((c) => c.state.phase !== "ended").length;
 }
 
+/** Where `agents node setup` leaves what a server announces about it (ADR 0013, F2): its git key's public half,
+ *  for the console's page, and what still waits. This machine only; nothing in it is secret. */
+export const setupFile = (): string => `${STATE}/node-setup.json`;
+
+/** What setup left for a headless node to announce, known fields only. */
+async function setupFacts(headless: boolean): Promise<{ gitKey?: string; waits?: string[] }> {
+  if (!headless) return {};
+  const s = await readJson<{ gitKey?: unknown; waits?: unknown }>(setupFile());
+  return {
+    ...(typeof s?.gitKey === "string" ? { gitKey: s.gitKey } : {}),
+    ...(Array.isArray(s?.waits) ? { waits: s.waits.filter((w): w is string => typeof w === "string") } : {}),
+  };
+}
+
 /** What this node announces. */
 export async function nodeFacts(cfg: NodeConfig, sandbox: boolean | null): Promise<Announce> {
   const mem = await memory();
@@ -114,6 +128,7 @@ export async function nodeFacts(cfg: NodeConfig, sandbox: boolean | null): Promi
     present: cfg.headless ? false : await present(),
     sandbox,
     voice: await voiceReady(cfg.voice),
+    ...(await setupFacts(cfg.headless)),
   };
 }
 

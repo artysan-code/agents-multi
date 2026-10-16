@@ -12,6 +12,7 @@ import { ManualLink } from "../../lib/login-link.tsx";
 import { useState } from "preact/hooks";
 import { post } from "../../api.ts";
 import { PairCard } from "./pair.tsx";
+import { AddServerCard } from "../servers/add.tsx";
 
 const Chips = ({ ps }: { ps?: string[] }) =>
   ps ? <>{ps.map((p) => <span class="chip on" key={p}>{p}</span>)}</> : <span class="sub">{t("acc.allProfiles")}</span>;
@@ -151,6 +152,7 @@ export function Ours({ view, accs, reload }: { view: AccountsView; accs: Account
         {brain.map((a) => <AccRow key={a.name} a={a} view={view} reload={reload} />)}
       </Svc>
       <PairCard reload={reload} />
+      <AddServerCard />
     </>
   );
 }
