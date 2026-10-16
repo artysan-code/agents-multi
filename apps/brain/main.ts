@@ -48,6 +48,7 @@ import { masterKey, type User, Users } from "./users.ts";
 import { type Tenant, tenantFile, Tenants } from "./tenants.ts";
 import { Fleet, fleetRoute } from "./fleet.ts";
 import { Waiting, waitingRoute } from "./waiting.ts";
+import { Runs, runsRoute } from "./runs.ts";
 import { siteOf } from "../../shared/mcp/lib/webauthn.ts";
 import { ChatHub, chatRoute, Chats, forgetRoute } from "./chat.ts";
 import { loadVapid, noticeOf, pushAll, pushRoute, Subscriptions } from "./push.ts";
@@ -262,7 +263,7 @@ const otpauth = (id: string, secret: string) =>
 
 /** The API paths a web session may use (the rest of /api/ is for tokens). */
 const WEB_API =
-  /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$|pair\/claim$|turns\/[\w-]{1,64}\/cancel$|nodes\/[^/]{1,64}$)/;
+  /^\/api\/(chats(\/|$)|push\/|settings\/orchestrator$|waiting(\/|$)|passkeys(\/|$)|jobs\/[\w-]{1,64}$|pair\/claim$|turns\/[\w-]{1,64}\/cancel$|nodes\/[^/]{1,64}$|runs(\/|$))/;
 
 async function handle(req: Request, ip: string): Promise<Response> {
   const u = new URL(req.url);
@@ -585,6 +586,13 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
       () => fleet.jobs().filter((j) => j.status === "proposed"),
       who.user,
     );
+    if (r) return r;
+  }
+  // the agents of every machine (runs.ts, ADR 0014 third round): a node publishes its own runs with its token; the
+  // phone reads them, follows their stream, and asks for a passkey-signed stop or a resume elsewhere
+  if (/^\/api\/(node\/runs$|runs(\/|$))/.test(p)) {
+    const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
+    const r = await runsRoute(req, u, node, new Runs(store.db, who.user), who.user);
     if (r) return r;
   }
   // the person types the code a machine shows: it becomes their node (pair.ts)
