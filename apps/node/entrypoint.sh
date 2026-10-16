@@ -15,6 +15,19 @@ MACHINE="$STATE/node.json"
 mkdir -p "$HOME/.local/bin" "$HOME/.agents-multi"
 ln -sfn "$(readlink -f /usr/local/bin/claude)" "$HOME/.local/bin/claude-bin"
 
+# the MCP servers' binaries and the external skills of the image (Dockerfile, stage tools), where the owner's
+# servers.json and a desktop's ~/.agents/skills put them; something of the user's own there is left alone
+mkdir -p "$HOME/.railway/bin" "$HOME/.local/lib/gitea-mcp" "$HOME/.agents/skills"
+for pair in /opt/tools/railway/railway:"$HOME/.railway/bin/railway" \
+  /opt/tools/gitea-mcp/gitea-mcp:"$HOME/.local/lib/gitea-mcp/gitea-mcp"; do
+  src="${pair%%:*}" dst="${pair#*:}"
+  [[ -e "$dst" && ! -L "$dst" ]] || ln -sfn "$src" "$dst"
+done
+for skill in /opt/tools/skills/*/; do
+  dst="$HOME/.agents/skills/$(basename "$skill")"
+  [[ -e "$dst" && ! -L "$dst" ]] || ln -sfn "${skill%/}" "$dst"
+done
+
 # the owner's configuration, mounted read only from its Syncthing folder: the node's own, over one `agents init`
 # made before it was mounted (that folder is left where it is)
 link_shared() {

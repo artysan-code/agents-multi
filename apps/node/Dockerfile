@@ -49,6 +49,41 @@ RUN git init /src && cd /src \
   && strip build/bin/whisper-cli \
   && test -x build/bin/whisper-cli
 
+# The MCP servers' own binaries the owner's servers.json names under the home (railway, gitea): pinned and checked
+# here, kept in /opt (root's: the CLI cannot update itself), linked into the home by entrypoint.sh. Railway's skill
+# (`use-railway`) is installed by its CLI into an .agents/skills of the image, which `agents install` mounts like a
+# desktop's ~/.agents/skills. Moving one: the version and its SHA-256 (Railway: the GitHub release's asset digest;
+# gitea-mcp: the release's checksums file).
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS tools
+ARG RAILWAY_VERSION=5.62.1
+ARG RAILWAY_SHA256_X64=2d04f08360b4c55f52b9e458e04987ec988261f16d2fb4fc4e7b2d43ad4a6cb2
+ARG RAILWAY_SHA256_ARM64=37f38f11fc1e4d78adbc45858123b39c8b637fa44b96c3f6d0e6bfb1a4510efd
+ARG GITEA_MCP_VERSION=1.8.0
+ARG GITEA_MCP_SHA256_X64=0a3aec987216b3299693ecf988f0b80686af6053d093d44148d26502e139f80c
+ARG GITEA_MCP_SHA256_ARM64=0714a101ab2163126580078ea1fc2291df306bfbd74e3af1b0f7a09c3f210ebb
+ARG TARGETARCH
+ENV RAILWAY_NO_AUTO_UPDATE=1 RAILWAY_NO_TELEMETRY=1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) r=x86_64; rsum="$RAILWAY_SHA256_X64"; g=x86_64; gsum="$GITEA_MCP_SHA256_X64" ;; \
+      arm64) r=aarch64; rsum="$RAILWAY_SHA256_ARM64"; g=arm64; gsum="$GITEA_MCP_SHA256_ARM64" ;; \
+      *) echo "no tools build for $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+  && rf="railway-v${RAILWAY_VERSION}-${r}-unknown-linux-musl.tar.gz" \
+  && curl -fsSLo "/tmp/$rf" "https://github.com/railwayapp/cli/releases/download/v${RAILWAY_VERSION}/$rf" \
+  && echo "$rsum  /tmp/$rf" | sha256sum -c - \
+  && mkdir -p /out/railway /out/gitea-mcp && tar -xzf "/tmp/$rf" -C /out/railway railway \
+  && gf="gitea-mcp_Linux_${g}.tar.gz" \
+  && curl -fsSLo "/tmp/$gf" "https://gitea.com/gitea/gitea-mcp/releases/download/v${GITEA_MCP_VERSION}/$gf" \
+  && echo "$gsum  /tmp/$gf" | sha256sum -c - \
+  && tar -xzf "/tmp/$gf" -C /out/gitea-mcp gitea-mcp \
+  && chmod 0755 /out/railway/railway /out/gitea-mcp/gitea-mcp \
+  && HOME=/out/home /out/railway/railway skills install \
+  && test -f /out/home/.agents/skills/use-railway/SKILL.md \
+  && mkdir -p /out/skills && cp -a /out/home/.agents/skills/. /out/skills/ && rm -rf /out/home /tmp/*.tar.gz
+
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 
 # bubblewrap and socat: Claude Code's Bash sandbox (the filesystem and the network); git and ssh: the clones and
@@ -88,6 +123,9 @@ RUN npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE
   && claude --version
 
 COPY --from=whisper /src/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=tools /out/railway /opt/tools/railway
+COPY --from=tools /out/gitea-mcp /opt/tools/gitea-mcp
+COPY --from=tools /out/skills /opt/tools/skills
 COPY --from=code /out /opt/agents-multi
 COPY apps/node/entrypoint.sh /opt/agents-multi/entrypoint.sh
 COPY apps/node/probe.sh /usr/local/bin/node-probe
@@ -101,6 +139,8 @@ WORKDIR /home/agent
 # file all live under the home: one volume
 ENV HOME=/home/agent \
   AGENTS_MULTI_DENO=/usr/local/bin/deno \
+  RAILWAY_NO_AUTO_UPDATE=1 \
+  RAILWAY_NO_TELEMETRY=1 \
   PATH=/home/agent/.local/bin:/usr/local/bin:/usr/bin:/bin
 VOLUME /home/agent
 # the console listens on loopback only (7331): the probe is a connection to it, over bash's /dev/tcp
