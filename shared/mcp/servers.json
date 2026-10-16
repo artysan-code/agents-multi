@@ -130,7 +130,7 @@
         "run",
         "--quiet",
         "--allow-net={hosts}",
-        "--allow-read=${HOME}/brains/tasks,${HOME}/agents-multi-vault,${HOME}/vault/claude-multi,${HOME}/.local/state/agents-multi/vault-key,${HOME}/.agents-multi/config,${HOME}/.cache/deno",
+        "--allow-read=${HOME}/brains/tasks,${HOME}/agents-multi-vault,${HOME}/vault/claude-multi,${HOME}/.local/state/agents-multi/vault-key,${HOME}/.local/state/agents-multi/node.json,${HOME}/.local/state/agents-multi/node-token,${HOME}/.agents-multi/config,${HOME}/.cache/deno",
         "--allow-write=${HOME}/brains/tasks",
         "--allow-env=HOME,AGENTS_MULTI_TASKS,AGENTS_MULTI_PROFILE,AGENTS_MULTI_BRAIN_SCOPE,AGENTS_MULTI_VAULT,AGENTS_MULTI_ACCOUNTS,AGENTS_MULTI_CONFIG,AGENTS_MULTI_OWNER_ID,AGENTS_MULTI_OWNER_NAME,AGENTS_MULTI_LANGUAGE",
         "--allow-run=/usr/bin/secret-tool",
@@ -148,7 +148,7 @@
         "tasks_get",
         "tasks_list"
       ],
-      "_note": "Le task stanno nel brain (shared/mcp/lib/brain-tasks.ts): _service brain dà l'host e il profilo, il token personale sta nel vault (brain/brain). ~/brains/tasks resta per settings.json e i file allegati dalla console. Un profilo di lavoro (brainScope nel manifest) riceve AGENTS_MULTI_BRAIN_SCOPE e vede solo le task di quei progetti."
+      "_note": "Le task stanno nel brain (shared/mcp/lib/brain-tasks.ts): _service brain dà l'host e il profilo, il token personale sta nel vault (brain/brain). Su un nodo headless usa il token del nodo, mai quello del vault (ADR 0013, F2): legge per questo node.json e il token del nodo nello stato. ~/brains/tasks resta per settings.json e i file allegati dalla console. Un profilo di lavoro (brainScope nel manifest) riceve AGENTS_MULTI_BRAIN_SCOPE e vede solo le task di quei progetti."
     },
     "agents": {
       "type": "stdio",

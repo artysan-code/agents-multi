@@ -148,6 +148,16 @@ export function nodeOwnRefusal(
   return node === null || node === r.me ? null : "not this node's job";
 }
 
+/** Pure: why an announce is refused for its token's scope, or null. A server (`headless`) announces with a `node`
+ *  token only: a machine's reaches the whole brain, and on a server one leak of it would read it all (ADR 0013,
+ *  F2). A desktop keeps its `machine` token. */
+export function serverAnnounceRefusal(scope: unknown, body: unknown): string | null {
+  const headless = !!body && typeof body === "object" && (body as Record<string, unknown>).headless === true;
+  return headless && scope !== "node"
+    ? "a server announces with a node token only: agents node pair --server, and revoke this one on /account"
+    : null;
+}
+
 // ---------------------------------------------------------------- redirects
 /** Pure: an http address on this machine, the only kind of redirect allowed besides Claude's. */
 function isLoopback(uri: string): boolean {

@@ -76,8 +76,8 @@ service token and the vault key file are made once in the container's terminal a
    ```
 
    It does in order what is missing, and runs again to finish what waited: links the configuration; pairs the
-   vault (it asks for the recovery code: `agents vault recovery-code` on your machine); signs the node in (a link
-   to open anywhere, the address to paste back); checks each Claude account's token and names the missing ones;
+   vault (it asks for the recovery code: `agents vault recovery-code` on your machine); pairs the node (a code to
+   type in your console's _Connections › Add a server_: the token is a node's, never a machine's); checks each Claude account's token and names the missing ones;
    makes the git key and waits until the forge takes it; clones the repositories `nodes.json` lists (`repos`);
    turns the node on, headless. The container sees it and starts serving: no restart. The key and the logins live
    in its volume; whoever has the volume has them («The vault key without a keyring»).
@@ -89,6 +89,10 @@ service token and the vault key file are made once in the container's terminal a
    token of its own (scope `node`: it reads projects and notes, the tasks and its own jobs, nothing else of the
    brain) and the vault key sealed to its key; once the configuration arrives by Syncthing it runs setup's steps
    by itself, and the page shows its git key to add to the forge and what still waits.
+
+   A headless node talks to the brain with that token only: never the vault's brain token (a machine's, the whole
+   brain), and `agents brain-login`, `agents node login` and a desktop's `agents node pair` refuse to run there.
+   The doctor's `node.scope` fails on a server whose token reaches more than a node's.
 
 6. **Check the sandbox**, from the host:
 

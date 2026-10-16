@@ -13,6 +13,7 @@ import { readJson } from "./lib/fs.ts";
 import type { Account } from "../../shared/mcp/lib/accounts.ts";
 import { pkce } from "../../shared/mcp/lib/google.ts";
 import { setSecret } from "../../shared/mcp/lib/vault.ts";
+import { machineHeadless, NODE_ONLY } from "../../shared/mcp/lib/headless.ts";
 import { probeAccount } from "./vault.ts";
 
 type Done = (r: { ok: boolean; message: string }) => void;
@@ -45,6 +46,8 @@ export async function startBrainLogin(
     where?: string;
   } = {},
 ): Promise<string> {
+  // its token is a machine's, the whole brain: a server pairs with a node's instead (ADR 0013, F2)
+  if (await machineHeadless()) throw new Error(NODE_ONLY);
   const accounts = (await readJson<{ accounts: Account[] }>(ACCOUNTS))?.accounts ?? [];
   const a = accounts.find((x) => x.service === "brain" && x.name === account);
   if (!a?.url) throw new Error(`no brain account "${account}" with an address in accounts.json: add it first`);

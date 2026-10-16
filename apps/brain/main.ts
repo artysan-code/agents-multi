@@ -21,7 +21,7 @@ import {
   useZone,
   validZone,
 } from "../../shared/mcp/lib/tasks.ts";
-import { Auth, type Caller, nodeOwnRefusal, scopeAllows, SESSION_SECONDS } from "./auth.ts";
+import { Auth, type Caller, nodeOwnRefusal, scopeAllows, serverAnnounceRefusal, SESSION_SECONDS } from "./auth.ts";
 import { base32Encode } from "./crypto.ts";
 import { boardRoute } from "./board.ts";
 import {
@@ -586,6 +586,10 @@ async function served(req: Request, u: URL, who: Caller): Promise<Response> {
   // the account's machines and the jobs placed on them (fleet.ts, ADR 0012): a machine acts as its token's name
   if (p === "/api/node" || p === "/api/nodes" || p.startsWith("/api/jobs")) {
     const node = who.label.startsWith("token:") ? nodeNameOf(who.label.slice("token:".length)) : null;
+    if (p === "/api/node" && req.method === "PUT") {
+      const refused = serverAnnounceRefusal(who.scope, await req.clone().json().catch(() => null));
+      if (refused) return json({ error: refused }, 403);
+    }
     const r = await fleetRoute(
       req,
       u,

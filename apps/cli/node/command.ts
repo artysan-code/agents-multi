@@ -23,6 +23,7 @@ import { headlessProbe } from "./probe.ts";
 import { nodeTokenFile, readNodeToken, service, writeNodeToken } from "./service.ts";
 import { followLogin, startBrainLogin } from "../brain-login.ts";
 import { brainAccount } from "../../../shared/mcp/lib/brain-tasks.ts";
+import { machineHeadless, NODE_ONLY } from "../../../shared/mcp/lib/headless.ts";
 import { readNodeState } from "./agentd.ts";
 import { bigCode, pairMachine, spinnerFrame } from "./pair.ts";
 import { platformOf } from "../../../shared/mcp/lib/platform.ts";
@@ -108,6 +109,10 @@ export async function nodeCommand(args: string[]): Promise<number> {
     }
     case "login": {
       // this machine's own token: the service names the node after it (ADR 0012), so it is never the vault's
+      if (await machineHeadless()) {
+        console.error(NODE_ONLY);
+        return 1;
+      }
       const account = rest.find((a) => !a.startsWith("--")) ?? brainAccount()?.name;
       if (!account) {
         console.error(
@@ -171,7 +176,12 @@ export async function nodeCommand(args: string[]): Promise<number> {
         console.log(`PAIRED ${name}\n  the node token is in ${nodeTokenFile()}, this machine only\n  ${vault}`);
         return 0;
       }
-      // a code instead of a browser sign-in (ADR 0014): works on a server and for a phone-only owner
+      // a code instead of a browser sign-in (ADR 0014), for a desktop or a phone-only owner: its token is a
+      // machine's, so a server pairs with --server (ADR 0013, F2)
+      if (await machineHeadless()) {
+        console.error(NODE_ONLY);
+        return 1;
+      }
       const account = brainAccount();
       if (!account?.url) {
         console.error(
